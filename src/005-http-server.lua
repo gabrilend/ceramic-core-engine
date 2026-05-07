@@ -1,0 +1,427 @@
+-- Minimal HTTP server for the SoraMech web editor.
+-- Handles file CRUD for map directories. Validates writes against the
+-- schema before touching disk. Closes after each response (HTTP/1.0 style).
+-- Started with: luajit soramech-server.lua <maps-root> [port]
+
+local DIR = "/mnt/mtwo/programs/sora/soramech"
+
+package.path  = DIR .. "/libs/?.lua;"
+             .. DIR .. "/libs/luasocket/share/lua/5.1/?.lua;"
+             .. DIR .. "/src/?.lua;"
+             .. package.path
+package.cpath = DIR .. "/libs/luasocket/lib/lua/5.1/?.so;"
+             .. package.cpath
+
+local socket = require("socket")
+local json   = require("dkjson")
+local schema = require("001-schema")
+
+local M = {}
+
+-- {{{ read_file
+local function read_file(path)
+    local f, err = io.open(path, "r")
+    if not f then return nil, err end
+    local data = f:read("*a")
+    f:close()
+    return data
+end
+-- }}}
+
+-- {{{ write_file_atomic
+local function write_file_atomic(path, data)
+    local tmp = path .. ".tmp"
+    local f, err = io.open(tmp, "w")
+    if not f then return false, err end
+    f:write(data)
+    f:close()
+    local ok, rerr = os.rename(tmp, path)
+    if not ok then return false, rerr end
+    return true
+end
+-- }}}
+
+-- {{{ parse_json_file
+local function parse_json_file(path)
+    local raw, err = read_file(path)
+    if not raw then return nil, err end
+    local obj, _, jerr = json.decode(raw)
+    if not obj then return nil, "JSON error: " .. tostring(jerr) end
+    return obj
+end
+-- }}}
+
+-- {{{ list_dir_json
+local function list_dir_json(dir)
+    local handle = io.popen("ls " .. dir .. "/*.json 2>/dev/null")
+    if not handle then return {} end
+    local listing = handle:read("*a")
+    handle:close()
+    local files = {}
+    for path in listing:gmatch("[^\n]+") do
+        files[#files + 1] = path
+    end
+    return files
+end
+-- }}}
+
+-- {{{ list_subdirs
+local function list_subdirs(dir)
+    local handle = io.popen("ls -d " .. dir .. "/*/ 2>/dev/null")
+    if not handle then return {} end
+    local listing = handle:read("*a")
+    handle:close()
+    local names = {}
+    for path in listing:gmatch("[^\n]+") do
+        local name = path:match("/([^/]+)/$")
+        if name then names[#names + 1] = name end
+    end
+    return names
+end
+-- }}}
+
+-- {{{ safe_path
+-- Returns the resolved path if it is within root, nil otherwise.
+-- Prevents path traversal outside the maps root.
+local function safe_path(root, ...)
+    local parts = { root }
+    for _, p in ipairs({...}) do
+        -- reject any component containing ".."
+        if tostring(p):find("%.%.", 1, true) then return nil end
+        parts[#parts + 1] = p
+    end
+    return table.concat(parts, "/")
+end
+-- }}}
+
+-- {{{ find_references
+-- Scan all box files in a map for any connection referencing the given box id.
+local function find_references(map_dir, box_id)
+    local refs = {}
+    local files = list_dir_json(map_dir .. "/boxes")
+    for _, path in ipairs(files) do
+        local box, _ = parse_json_file(path)
+        if box and box.id ~= box_id then
+            for _, c in ipairs(box.connections or {}) do
+                if c.to_box == box_id or c.from_box == box_id then
+                    refs[#refs + 1] = box.id
+                    break
+                end
+            end
+        end
+    end
+    return refs
+end
+-- }}}
+
+-- {{{ respond
+local function respond(client, status, body, content_type)
+    content_type = content_type or "application/json"
+    local response = table.concat({
+        "HTTP/1.0 " .. status,
+        "Content-Type: " .. content_type,
+        "Content-Length: " .. #body,
+        "Access-Control-Allow-Origin: *",
+        "Access-Control-Allow-Methods: GET, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers: Content-Type",
+        "Connection: close",
+        "",
+        body,
+    }, "\r\n")
+    client:send(response)
+end
+-- }}}
+
+-- {{{ json_ok
+local function json_ok(client, data)
+    respond(client, "200 OK", json.encode(data))
+end
+-- }}}
+
+-- {{{ json_err
+local function json_err(client, status, msg)
+    respond(client, status, json.encode({ error = msg }))
+end
+-- }}}
+
+-- {{{ parse_request
+local function parse_request(client)
+    local line, err = client:receive("*l")
+    if not line then return nil, err end
+
+    local method, path, _ = line:match("^(%u+) ([^ ]+) HTTP")
+    if not method then return nil, "bad request line: " .. line end
+
+    -- read headers
+    local headers = {}
+    local content_length = 0
+    while true do
+        local hline = client:receive("*l")
+        if not hline or hline == "" then break end
+        local k, v = hline:match("^([^:]+):%s*(.+)")
+        if k then
+            headers[k:lower()] = v
+            if k:lower() == "content-length" then
+                content_length = tonumber(v) or 0
+            end
+        end
+    end
+
+    -- read body if present
+    local body = ""
+    if content_length > 0 then
+        body = client:receive(content_length) or ""
+    end
+
+    -- split path into segments
+    local parts = {}
+    for seg in path:gmatch("[^/]+") do parts[#parts + 1] = seg end
+
+    return { method = method, path = path, parts = parts, body = body }
+end
+-- }}}
+
+-- {{{ handle_options
+local function handle_options(client)
+    respond(client, "200 OK", "", "text/plain")
+end
+-- }}}
+
+-- ============================================================
+-- Route handlers
+-- ============================================================
+
+-- {{{ handle_list_maps
+local function handle_list_maps(client, req, maps_root)
+    local names = list_subdirs(maps_root)
+    json_ok(client, names)
+end
+-- }}}
+
+-- {{{ handle_list_boxes
+local function handle_list_boxes(client, req, maps_root)
+    local map_name = req.parts[2]
+    local boxes_dir = safe_path(maps_root, map_name, "boxes")
+    if not boxes_dir then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local files = list_dir_json(boxes_dir)
+    local ids = {}
+    for _, f in ipairs(files) do
+        local id = f:match("/([^/]+)%.json$")
+        if id then ids[#ids + 1] = id end
+    end
+    json_ok(client, ids)
+end
+-- }}}
+
+-- {{{ handle_get_box
+local function handle_get_box(client, req, maps_root)
+    local map_name = req.parts[2]
+    local box_id   = req.parts[4]
+    local path = safe_path(maps_root, map_name, "boxes", box_id .. ".json")
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local raw, err = read_file(path)
+    if not raw then return json_err(client, "404 Not Found", "box not found: " .. tostring(err)) end
+    respond(client, "200 OK", raw)
+end
+-- }}}
+
+-- {{{ handle_put_box
+local function handle_put_box(client, req, maps_root)
+    local map_name = req.parts[2]
+    local box_id   = req.parts[4]
+    local path = safe_path(maps_root, map_name, "boxes", box_id .. ".json")
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local box, _, jerr = json.decode(req.body)
+    if not box then
+        return json_err(client, "400 Bad Request", "invalid JSON: " .. tostring(jerr))
+    end
+
+    local errs = schema.validate_box(box)
+    if #errs > 0 then
+        return json_err(client, "400 Bad Request", "schema error: " .. table.concat(errs, "; "))
+    end
+
+    local ok, werr = write_file_atomic(path, req.body)
+    if not ok then return json_err(client, "500 Internal Server Error", tostring(werr)) end
+    json_ok(client, { ok = true })
+end
+-- }}}
+
+-- {{{ handle_delete_box
+local function handle_delete_box(client, req, maps_root)
+    local map_name = req.parts[2]
+    local box_id   = req.parts[4]
+    local map_dir  = safe_path(maps_root, map_name)
+    local path     = safe_path(maps_root, map_name, "boxes", box_id .. ".json")
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    -- check for references in other boxes before deleting
+    local refs = find_references(map_dir, box_id)
+    if #refs > 0 then
+        return json_err(client, "409 Conflict",
+            "box '" .. box_id .. "' is referenced by: " .. table.concat(refs, ", "))
+    end
+
+    local ok = os.remove(path)
+    if not ok then return json_err(client, "404 Not Found", "box not found") end
+    json_ok(client, { ok = true })
+end
+-- }}}
+
+-- {{{ handle_get_data
+local function handle_get_data(client, req, maps_root)
+    local map_name  = req.parts[2]
+    local file_name = req.parts[4]
+    local path = safe_path(maps_root, map_name, "data", file_name .. ".json")
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local raw, err = read_file(path)
+    if not raw then return json_err(client, "404 Not Found", tostring(err)) end
+    respond(client, "200 OK", raw)
+end
+-- }}}
+
+-- {{{ handle_put_data
+local function handle_put_data(client, req, maps_root)
+    local map_name  = req.parts[2]
+    local file_name = req.parts[4]
+    local path = safe_path(maps_root, map_name, "data", file_name .. ".json")
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    -- validate it's at least valid JSON
+    local _, _, jerr = json.decode(req.body)
+    if jerr then
+        return json_err(client, "400 Bad Request", "invalid JSON: " .. tostring(jerr))
+    end
+
+    local ok, werr = write_file_atomic(path, req.body)
+    if not ok then return json_err(client, "500 Internal Server Error", tostring(werr)) end
+    json_ok(client, { ok = true })
+end
+-- }}}
+
+-- {{{ handle_get_simple
+-- Handles GET for single-file resources: drivers.json, meta.json
+local function handle_get_simple(client, req, maps_root, filename)
+    local map_name = req.parts[2]
+    local path = safe_path(maps_root, map_name, filename)
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local raw, err = read_file(path)
+    if not raw then return json_err(client, "404 Not Found", tostring(err)) end
+    respond(client, "200 OK", raw)
+end
+-- }}}
+
+-- {{{ handle_put_simple
+local function handle_put_simple(client, req, maps_root, filename, validator)
+    local map_name = req.parts[2]
+    local path = safe_path(maps_root, map_name, filename)
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local obj, _, jerr = json.decode(req.body)
+    if not obj then
+        return json_err(client, "400 Bad Request", "invalid JSON: " .. tostring(jerr))
+    end
+
+    if validator then
+        local errs = validator(obj)
+        if #errs > 0 then
+            return json_err(client, "400 Bad Request", table.concat(errs, "; "))
+        end
+    end
+
+    local ok, werr = write_file_atomic(path, req.body)
+    if not ok then return json_err(client, "500 Internal Server Error", tostring(werr)) end
+    json_ok(client, { ok = true })
+end
+-- }}}
+
+-- {{{ dispatch
+local function dispatch(client, req, maps_root)
+    local m = req.method
+    local p = req.parts
+
+    -- OPTIONS preflight
+    if m == "OPTIONS" then return handle_options(client) end
+
+    -- GET /maps
+    if m == "GET" and #p == 1 and p[1] == "maps" then
+        return handle_list_maps(client, req, maps_root)
+    end
+
+    -- GET /maps/<name>/boxes
+    if m == "GET" and #p == 3 and p[1] == "maps" and p[3] == "boxes" then
+        return handle_list_boxes(client, req, maps_root)
+    end
+
+    -- GET/PUT/DELETE /maps/<name>/boxes/<id>
+    if #p == 4 and p[1] == "maps" and p[3] == "boxes" then
+        if m == "GET"    then return handle_get_box(client, req, maps_root) end
+        if m == "PUT"    then return handle_put_box(client, req, maps_root) end
+        if m == "DELETE" then return handle_delete_box(client, req, maps_root) end
+    end
+
+    -- GET/PUT /maps/<name>/data/<filename>
+    if #p == 4 and p[1] == "maps" and p[3] == "data" then
+        if m == "GET" then return handle_get_data(client, req, maps_root) end
+        if m == "PUT" then return handle_put_data(client, req, maps_root) end
+    end
+
+    -- GET/PUT /maps/<name>/drivers
+    if #p == 3 and p[1] == "maps" and p[3] == "drivers" then
+        if m == "GET" then return handle_get_simple(client, req, maps_root, "drivers.json") end
+        if m == "PUT" then return handle_put_simple(client, req, maps_root, "drivers.json", schema.validate_drivers) end
+    end
+
+    -- GET/PUT /maps/<name>/meta
+    if #p == 3 and p[1] == "maps" and p[3] == "meta" then
+        if m == "GET" then return handle_get_simple(client, req, maps_root, "meta.json") end
+        if m == "PUT" then return handle_put_simple(client, req, maps_root, "meta.json", schema.validate_meta) end
+    end
+
+    json_err(client, "404 Not Found", "no route for " .. m .. " " .. req.path)
+end
+-- }}}
+
+-- {{{ serve
+function M.serve(maps_root, port)
+    local server, err = socket.bind("*", port)
+    if not server then
+        io.stderr:write("server: cannot bind to port " .. port .. ": " .. tostring(err) .. "\n")
+        os.exit(1)
+    end
+    server:settimeout(1)  -- 1s accept timeout so we can handle signals cleanly
+
+    print("soramech-server listening on :" .. port .. " (maps: " .. maps_root .. ")")
+
+    while true do
+        local client, cerr = server:accept()
+        if client then
+            client:settimeout(5)
+            local t_start = socket.gettime()
+
+            local req, rerr = parse_request(client)
+            if req then
+                local ok_disp, derr = pcall(dispatch, client, req, maps_root)
+                if not ok_disp then
+                    pcall(json_err, client, "500 Internal Server Error", tostring(derr))
+                end
+                local elapsed = math.floor((socket.gettime() - t_start) * 1000)
+                print(string.format("[%.0f] %s %s (%dms)",
+                    os.time(), req.method, req.path, elapsed))
+            else
+                pcall(json_err, client, "400 Bad Request", tostring(rerr))
+            end
+
+            client:close()
+        end
+        -- cerr is "timeout" on accept timeout — that's normal, keep looping
+    end
+end
+-- }}}
+
+return M
