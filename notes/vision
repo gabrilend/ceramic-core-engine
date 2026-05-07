@@ -1,0 +1,159 @@
+SoraMech — Vision
+=================
+
+A visual editor and execution engine for finite state machines built from
+composable boxes. Each box is a function call. Boxes are wired together by
+explicit data connections. The result is a program you can see, edit in a
+browser, and run from a terminal — without writing a line of control flow.
+
+The primary use case is LLM orchestration: wiring inference calls on the
+SoraMind Alpine cluster into coherent multi-step reasoning pipelines.
+Strings are first-class values. Text flows between boxes like water.
+History is explicit — loaded from disk only when a box needs it.
+
+Why this shape?
+---------------
+
+Most orchestration tools hide the wiring. You write code that calls other
+code, and the shape of the program lives only in your head. SoraMech makes
+the shape visible and editable. The map file IS the program. If you can
+read JSON, you can read the program. If you can draw boxes, you can change
+it.
+
+The second reason is language agnosticism. A box can call a Lua function,
+a C function, a bash script, or a program written in anything the user
+defines a driver for. The engine doesn't care. It invokes a driver, gets
+outputs, threads them to the next box. The map author picks the language;
+the engine picks up the result.
+
+Components
+----------
+
+Three programs share one data format — the map directory:
+
+  soramech-server.lua   — thin HTTP file proxy. Receives edits from the
+                          browser, reads and writes map files on disk.
+                          Started when remote editing is desired. Ignorant
+                          of the runner.
+
+  soramech-runner.lua   — FSM execution engine. Reads a map directory,
+                          walks the graph, invokes language drivers,
+                          threads outputs through wires. Started by the
+                          user from the CLI, a cronjob, or any external
+                          trigger. Ignorant of the server. Writes output
+                          to map-defined locations (data files, /tmp/).
+
+  index.html            — browser editor. Infinite-canvas box diagram.
+                          Reads and writes map files by talking to the
+                          server (local or remote). Never knows whether
+                          the runner is active.
+
+The map directory is the stable interface. Server and runner share nothing
+but the files.
+
+Map file layout
+---------------
+
+Each map lives in its own directory:
+
+  maps/<map-name>/
+    boxes/
+      <id>.json         — one file per box, self-contained, lists both
+                          incoming and outgoing connections
+    data/
+      <name>.json       — persistent data files (lua tables as JSON)
+                          sections are flagged constant: true or false
+    drivers.json        — language driver definitions (how to invoke each
+                          file extension)
+    meta.json           — map name, description, entry box id
+
+  tmp/                  — symlink to /tmp/<map-name>/
+                          holds ephemeral state: run logs, scratch tables,
+                          last-run snapshot
+
+Box file format
+---------------
+
+Each box is a JSON file in boxes/. It contains:
+
+  id          unique string identifier
+  label       human-readable name shown in the UI
+  kind        "call" | "branch" | "data"
+  ref         for "call": path like "src/strings.lua" or "src/trim.sh"
+  fn          for "call": function name (omitted for binary/shell refs)
+  inputs      list of {name, type} — what the box expects
+  outputs     list of {name, type} — what the box returns (tuple order)
+  connections list of {from_output, to_box_id, to_input, predicate?}
+              — written to BOTH endpoint files; runner validates at load
+
+Branch boxes have named output ports instead of positional outputs. Each
+port carries an optional predicate (comparator + literal). An "else" port
+always exists. For LLM-based classification, "else" retries upstream
+(user wires it); for numeric/string predicates, "else" must be explicitly
+handled or the runner refuses to start the map.
+
+Language drivers
+----------------
+
+drivers.json maps file extensions to shell commands. Example:
+
+  {
+    ".lua":  "drivers/lua-driver.sh",
+    ".c":    "drivers/c-driver.sh",
+    ".sh":   "drivers/bash-driver.sh"
+  }
+
+Each driver script receives: file path, function name, arg count, args...
+It returns outputs on stdout, one per line (or as JSON for structured
+values). Lua and C ship as pre-written driver scripts — no special cases
+in the engine. If the user wants Rust, they write a driver script.
+
+The C driver checks whether the source has changed since the last compile
+(by comparing mtime of .c against mtime of cached binary). If changed, it
+compiles before invoking. Cache lives in tmp/.
+
+State and output
+----------------
+
+Persistent data lives in maps/<map-name>/data/ as JSON files. Each file
+is a Lua table serialized with dkjson. A file-level or section-level
+"constant" flag marks read-only data.
+
+Ephemeral state (run logs, scratch variables, last-run snapshot) lives in
+tmp/ which is a symlink to /tmp/<map-name>/. It is fast, in RAM, and
+intentionally discarded on reboot.
+
+Execution model (v1)
+--------------------
+
+The runner is synchronous in v1. Each box invocation is wrapped in a
+task_fn(inputs) -> outputs boundary — the same signature as the 3d-rts
+thread pool's action chain — so the transition to concurrent execution is
+a runtime swap, not a rewrite.
+
+effil-jit is available for threading when the custom thread pool (from
+the 3d-rts project) is ready to be integrated. The target model is:
+boxes whose inputs are all satisfied fire concurrently; boxes that depend
+on a still-running box park until that result arrives.
+
+Multiple maps can run concurrently as separate runner processes. Each map
+is a cohesive program. Maps calling into other maps is a future feature;
+for now they are separate.
+
+Future directions
+-----------------
+
+  — Integration with SoraMind: boxes that call inference endpoints on the
+    Alpine cluster, routing results through the map graph.
+
+  — Concurrent execution via the custom thread pool from 3d-rts,
+    replacing the synchronous v1 runner.
+
+  — Map-to-map calls: a box that invokes another map as a subroutine,
+    passing values across the boundary.
+
+  — Remote runner: a runner process on the Alpine cluster, controlled by
+    the web editor from another machine, results written to shared storage.
+
+  — Visual run trace: replay a completed run in the browser, seeing which
+    boxes fired and what values flowed through each wire.
