@@ -1,0 +1,59 @@
+SoraMech Language Drivers
+=========================
+
+Each file here is a driver script. The SoraMech runner invokes any driver
+identically, regardless of language. Adding support for a new language means
+adding one script to this directory and one entry in drivers.json.
+
+Contract
+--------
+
+The runner calls a driver as:
+
+  <driver-script> <file-path> <fn-name> <arg-count> [<arg> ...]
+
+  file-path   absolute or relative path to the source file
+  fn-name     name of the function to call within that file
+  arg-count   number of arguments that follow
+  args        zero or more argument strings; structured values are JSON strings
+
+On success:
+  - exit code 0
+  - stdout: a JSON array where each element is one return value
+    single-value functions: ["result"]
+    multi-value (tuple) functions: ["val1", "val2", ...]
+
+On failure:
+  - exit code non-zero
+  - stderr: human-readable error message
+  - stdout: empty or ignored
+
+Built-in drivers
+----------------
+
+  lua.sh    — calls a function in a .lua module via luajit
+  bash.sh   — sources a .sh file and calls a bash function
+  c.sh      — compiles a .c file (caches binary in tmp/cache/) and runs it
+
+Registering a driver
+--------------------
+
+In the map's drivers.json:
+
+  { ".rs": "drivers/rust.sh" }
+
+Write drivers/rust.sh following the contract above. The runner has no
+knowledge of any language — it reads the extension, finds the script, calls it.
+
+Writing a driver
+----------------
+
+Minimum viable driver (bash pseudocode):
+
+  FILE="${1}"   FN="${2}"   N="${3}"   shift 3
+  # compile / interpret FILE if needed
+  # invoke FN with "$@" as arguments
+  # print result as JSON array to stdout
+  # exit 0 on success, non-zero on failure
+
+The arg-count field is informational. Drivers may use "$@" directly.
