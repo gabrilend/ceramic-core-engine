@@ -54,6 +54,10 @@ package.path = script_dir .. "/?.lua;" ..
                "/mnt/mtwo/programs/sora/soramech/libs/?.lua;" ..
                package.path
 
+-- expose map root as a global so box functions can access data files without
+-- needing it wired as an explicit input; convention: src/ is one level below root
+SORAMECH_MAP_DIR = script_dir:match("^(.+)/[^/]+$") or script_dir
+
 -- decode args array
 local args_table, _, jerr = json.decode(args_raw)
 if not args_table then

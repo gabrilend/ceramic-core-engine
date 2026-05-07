@@ -4,9 +4,7 @@
   "kind": "call",
   "ref": "src/hello.lua",
   "fn": "hello",
-  "inputs": [
-    { "name": "name", "type": "string" }
-  ],
+  "inputs": [],
   "outputs": [
     { "name": "greeting", "type": "string" }
   ],
