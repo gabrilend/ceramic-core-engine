@@ -1,0 +1,20 @@
+{
+  "id": "write-error",
+  "label": "Write Error",
+  "kind": "call",
+  "ref": "src/error-writer.lua",
+  "fn": "write_error",
+  "inputs": [
+    { "name": "text", "type": "string" }
+  ],
+  "outputs": [],
+  "connections": [
+    {
+      "from_box": "router",
+      "from_port": "else",
+      "to_box": "write-error",
+      "to_input": "text"
+    }
+  ],
+  "ui": { "x": 700, "y": 300 }
+}
