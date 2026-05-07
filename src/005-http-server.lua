@@ -383,6 +383,26 @@ local function dispatch(client, req, maps_root)
         if m == "PUT" then return handle_put_simple(client, req, maps_root, "meta.json", schema.validate_meta) end
     end
 
+    -- GET / and GET /js/* and GET /*.html — serve static assets
+    if m == "GET" then
+        local rel = req.path == "/" and "/index.html" or req.path
+        -- only allow paths that don't escape the assets directory
+        if not rel:find("%.%.", 1, true) then
+            local asset_path = DIR .. "/assets" .. rel
+            local raw, _ = read_file(asset_path)
+            if raw then
+                local ext = rel:match("%.([^./]+)$") or ""
+                local mime = ({
+                    html = "text/html",
+                    js   = "application/javascript",
+                    css  = "text/css",
+                })[ext] or "text/plain"
+                respond(client, "200 OK", raw, mime)
+                return
+            end
+        end
+    end
+
     json_err(client, "404 Not Found", "no route for " .. m .. " " .. req.path)
 end
 -- }}}
