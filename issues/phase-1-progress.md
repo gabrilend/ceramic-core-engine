@@ -14,7 +14,7 @@ Goal: a map you can edit in the browser and execute from the terminal.
 | 106 | web editor: canvas and box rendering      | complete |
 | 107 | web editor: wiring and connection UI      | complete |
 | 108 | branch box and predicate routing          | complete |
-| 109 | data files: persistent and ephemeral      | open     |
+| 109 | data files: persistent and ephemeral      | complete |
 | 110 | phase 1 demo                              | open     |
 
 ## Phase goal checklist
@@ -24,4 +24,4 @@ Goal: a map you can edit in the browser and execute from the terminal.
 - [ ] Run a 3-box map from the CLI and see outputs written to disk
 - [ ] Write a custom driver and have the runner use it
 - [x] Branch box routes correctly based on a predicate
-- [ ] Data file read and write from within a box function
+- [x] Data file read and write from within a box function

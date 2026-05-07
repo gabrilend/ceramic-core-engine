@@ -44,3 +44,8 @@ Read in order for a complete picture of the system.
 ## Libraries
 
 - libs/ — vendored libraries (dkjson, luasocket)
+- [libs/soramech-data.info.md](../libs/soramech-data.info.md) — data.get / data.set / data.load API reference
+
+## Tests
+
+- tests/003-data-test.lua — data library unit tests (run with `luajit tests/003-data-test.lua`)
