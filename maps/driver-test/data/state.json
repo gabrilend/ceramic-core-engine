@@ -1,0 +1,7 @@
+{
+  "constant": false,
+  "fields": {
+    "a": { "constant": false, "value": 3 },
+    "b": { "constant": false, "value": 5 }
+  }
+}

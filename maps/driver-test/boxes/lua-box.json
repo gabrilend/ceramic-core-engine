@@ -4,10 +4,7 @@
   "kind": "call",
   "ref": "src/math-funcs.lua",
   "fn": "add",
-  "inputs": [
-    { "name": "a", "type": "number" },
-    { "name": "b", "type": "number" }
-  ],
+  "inputs": [],
   "outputs": [
     { "name": "sum", "type": "number" }
   ],

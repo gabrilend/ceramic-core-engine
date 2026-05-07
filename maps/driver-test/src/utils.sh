@@ -2,9 +2,11 @@
 # Utility functions for driver-test map.
 
 # {{{ stringify
+# Receives a JSON-encoded number, returns "stringified: N" as a JSON array.
+# Bash driver contract: output must be a JSON array ["<value>"].
 stringify() {
     local value="${1}"
-    # wrap the value as a JSON string for the next box
-    echo "\"${value}\""
+    local text="stringified: ${value}"
+    printf '["%s"]\n' "${text}"
 }
 # }}}
