@@ -1,0 +1,7 @@
+{
+  "constant": false,
+  "fields": {
+    "name": { "constant": false, "value": "world" },
+    "result": { "constant": false, "value": "" }
+  }
+}

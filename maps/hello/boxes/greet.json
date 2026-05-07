@@ -1,0 +1,22 @@
+{
+  "id": "greet",
+  "label": "Greet",
+  "kind": "call",
+  "ref": "src/hello.lua",
+  "fn": "hello",
+  "inputs": [
+    { "name": "name", "type": "string" }
+  ],
+  "outputs": [
+    { "name": "greeting", "type": "string" }
+  ],
+  "connections": [
+    {
+      "from_box": "greet",
+      "from_output": "greeting",
+      "to_box": "write-result",
+      "to_input": "text"
+    }
+  ],
+  "ui": { "x": 100, "y": 200 }
+}

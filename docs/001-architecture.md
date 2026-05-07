@@ -102,6 +102,7 @@ maps/<name>/
   ],
   "connections": [
     {
+      "from_box": "unique-string",
       "from_output": "result",
       "to_box": "next-box-id",
       "to_input": "text"

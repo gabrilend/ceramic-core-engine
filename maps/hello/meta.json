@@ -1,0 +1,5 @@
+{
+  "name": "hello",
+  "description": "Minimal example map: reads a name from a data file, returns a greeting.",
+  "entry_box_id": "greet"
+}
