@@ -307,8 +307,6 @@ function M.execute(graph, map_dir)
         -- fire connections and enqueue newly-ready boxes
         local signal = fire_connections(box, outputs, store, queue, boxes, retry_counts)
         if signal == "retry" then
-            -- unwired else: find the immediate upstream box and re-queue it
-            -- retry_vary is applied in run_task on the next invocation
             local max_retries = box.retry_limit or 3
             retry_counts[id] = (retry_counts[id] or 0) + 1
             if retry_counts[id] > max_retries then
@@ -317,13 +315,34 @@ function M.execute(graph, map_dir)
                     max_retries .. ")"
                 break
             end
-            -- find the box that wired into this branch box and re-queue it
+            -- find the upstream box(es) that feed this branch box and re-queue them
             for src_id, src_box in pairs(boxes) do
                 for _, c in ipairs(src_box.connections or {}) do
-                    if c.from_box == src_id and c.to_box == id then
-                        visited[src_id] = nil
-                        queue[#queue + 1] = src_id
+                    if c.from_box ~= src_id then goto next_src_conn end
+                    if c.to_box ~= id then goto next_src_conn end
+
+                    visited[src_id] = nil
+
+                    -- clear the branch box's input from the store so it
+                    -- re-fills when the upstream box runs again
+                    for _, p in ipairs(box.inputs or {}) do
+                        store[id .. "." .. p.name] = nil
                     end
+
+                    -- apply retry_vary: randomize specified input fields on the
+                    -- upstream box before re-running it
+                    local vary = src_box.retry_vary
+                    if vary then
+                        for field_name, range in pairs(vary) do
+                            local lo = tonumber(range.min) or 0
+                            local hi = tonumber(range.max) or 1
+                            local val = lo + math.random() * (hi - lo)
+                            store[src_id .. "." .. field_name] = val
+                        end
+                    end
+
+                    queue[#queue + 1] = src_id
+                    ::next_src_conn::
                 end
             end
         end

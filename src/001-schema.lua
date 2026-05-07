@@ -85,6 +85,25 @@ local function validate_port_connection(c, i, errors)
 end
 -- }}}
 
+-- {{{ validate_incoming_connection
+local function validate_incoming_connection(c, i, errors)
+    -- reciprocal record written to the receiving end; accept either from_output or from_port
+    -- since we don't know the source box kind here
+    if c.from_box == nil then
+        err(errors, "connection[" .. i .. "] missing 'from_box'")
+    end
+    if c.from_output == nil and c.from_port == nil then
+        err(errors, "connection[" .. i .. "] missing both 'from_output' and 'from_port'")
+    end
+    if c.to_box == nil then
+        err(errors, "connection[" .. i .. "] missing 'to_box'")
+    end
+    if c.to_input == nil then
+        err(errors, "connection[" .. i .. "] missing 'to_input'")
+    end
+end
+-- }}}
+
 -- {{{ validate_box
 function M.validate_box(box)
     local errors = {}
@@ -115,7 +134,13 @@ function M.validate_box(box)
         end
         if box.connections ~= nil then
             for i, c in ipairs(box.connections) do
-                validate_connection(c, i, errors)
+                -- outgoing connections (this box is the source) require from_output;
+                -- incoming reciprocal records accept either from_output or from_port
+                if c.from_box == box.id then
+                    validate_connection(c, i, errors)
+                else
+                    validate_incoming_connection(c, i, errors)
+                end
             end
         end
 
@@ -135,9 +160,18 @@ function M.validate_box(box)
                 err(errors, "branch box missing required 'else' port")
             end
         end
+        if box.retry_limit ~= nil and type(box.retry_limit) ~= "number" then
+            err(errors, "'retry_limit' must be a number")
+        end
         if box.connections ~= nil then
             for i, c in ipairs(box.connections) do
-                validate_port_connection(c, i, errors)
+                -- outgoing connections (this box is the source) require from_port;
+                -- incoming reciprocal records from call boxes use from_output
+                if c.from_box == box.id then
+                    validate_port_connection(c, i, errors)
+                else
+                    validate_incoming_connection(c, i, errors)
+                end
             end
         end
     end

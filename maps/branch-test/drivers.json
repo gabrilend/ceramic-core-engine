@@ -1,0 +1,5 @@
+{
+  ".lua": "/mnt/mtwo/programs/sora/soramech/drivers/lua.sh",
+  ".c":   "/mnt/mtwo/programs/sora/soramech/drivers/c.sh",
+  ".sh":  "/mnt/mtwo/programs/sora/soramech/drivers/bash.sh"
+}

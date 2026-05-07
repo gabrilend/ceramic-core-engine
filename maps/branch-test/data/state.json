@@ -1,0 +1,13 @@
+{
+  "constant":false,
+  "fields":{
+    "result":{
+      "constant":false,
+      "value":"70"
+    },
+    "n":{
+      "constant":false,
+      "value":70
+    }
+  }
+}

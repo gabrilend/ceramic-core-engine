@@ -213,9 +213,12 @@ const Inspector = (() => {
 
     if (box.kind === 'branch') {
       if (!current_box.ports) current_box.ports = [{ name: 'else' }];
+      fields.appendChild(mk_row('retry limit',
+        mk_text_input(String(box.retry_limit ?? 3),
+          v => { current_box.retry_limit = parseInt(v) || 3; })));
       const ports_sec = document.createElement('div');
       ports_sec.className = 'section-label';
-      ports_sec.textContent = 'ports';
+      ports_sec.textContent = 'ports (evaluated top-to-bottom)';
       fields.appendChild(ports_sec);
       fields.appendChild(mk_branch_port_list(current_box.ports, () => {}));
     } else {

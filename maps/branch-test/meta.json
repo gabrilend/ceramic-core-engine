@@ -1,0 +1,5 @@
+{
+  "name": "branch-test",
+  "description": "Tests branch box predicate routing with numeric values.",
+  "entry_box_id": "produce-value"
+}
