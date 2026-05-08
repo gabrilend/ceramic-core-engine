@@ -9,11 +9,13 @@ const Inspector = (() => {
 
   let current_box  = null;
   let on_change_cb = null;
+  let on_delete_cb = null;
 
   // {{{ hide
   function hide() {
     panel.classList.add('hidden');
-    current_box = null;
+    current_box  = null;
+    on_delete_cb = null;
   }
   // }}}
 
@@ -170,12 +172,22 @@ const Inspector = (() => {
   // }}}
 
   // {{{ show
-  function show(box, on_changed) {
+  function show(box, on_changed, on_delete) {
     current_box  = box;
     on_change_cb = on_changed;
+    on_delete_cb = on_delete || null;
     panel.classList.remove('hidden');
     title.textContent = box.id;
     fields.innerHTML  = '';
+
+    // delete button — always visible at the top of the inspector
+    if (on_delete_cb) {
+      const del_btn = document.createElement('button');
+      del_btn.textContent = 'delete box';
+      del_btn.className   = 'delete-box-btn';
+      del_btn.onclick     = () => on_delete_cb();
+      fields.appendChild(del_btn);
+    }
 
     fields.appendChild(mk_row('label',
       mk_text_input(box.label, v => { current_box.label = v; })));
@@ -197,23 +209,21 @@ const Inspector = (() => {
     })()));
 
     if (box.kind === 'call' || box.kind === 'data') {
-      // ref: read-only display + browse button
+      // ref: editable text input + browse button to populate via file browser
       const ref_wrap = document.createElement('div');
       ref_wrap.style.cssText = 'display:flex;gap:4px;align-items:center;';
-      const ref_disp = document.createElement('div');
-      ref_disp.className   = 'field-readonly';
-      ref_disp.style.flex  = '1';
-      ref_disp.style.minWidth = '0';
-      ref_disp.style.overflow = 'hidden';
-      ref_disp.style.textOverflow = 'ellipsis';
-      ref_disp.style.whiteSpace   = 'nowrap';
-      ref_disp.textContent = box.ref || '—';
+      const ref_inp = document.createElement('input');
+      ref_inp.type  = 'text';
+      ref_inp.value = box.ref || '';
+      ref_inp.style.flex = '1';
+      ref_inp.style.minWidth = '0';
+      ref_inp.addEventListener('input', () => { current_box.ref = ref_inp.value; save(); });
       const browse_btn = document.createElement('button');
       browse_btn.className   = 'toolbar-btn';
       browse_btn.textContent = 'browse';
       browse_btn.style.whiteSpace = 'nowrap';
       browse_btn.onclick = open_browser;
-      ref_wrap.appendChild(ref_disp);
+      ref_wrap.appendChild(ref_inp);
       ref_wrap.appendChild(browse_btn);
       fields.appendChild(mk_row('ref', ref_wrap));
 

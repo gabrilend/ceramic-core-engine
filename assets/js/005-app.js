@@ -45,7 +45,7 @@ const App = (() => {
       await API.put_box(id, box);
       Boxes.boxes[id] = box;
       selected_id = id;
-      Inspector.show(box, () => Canvas.mark_dirty());
+      Inspector.show(box, () => Canvas.mark_dirty(), () => delete_box(id));
       Canvas.mark_dirty();
     } catch(e) {
       status_msg('create error: ' + e.message, 'error');
@@ -94,7 +94,7 @@ const App = (() => {
       drag_box_id = box_id;
       const b = Boxes.boxes[box_id];
       drag_offset = { x: w.x - (b.ui?.x ?? 0), y: w.y - (b.ui?.y ?? 0) };
-      Inspector.show(b, () => Canvas.mark_dirty());
+      Inspector.show(b, () => Canvas.mark_dirty(), () => delete_box(box_id));
       Canvas.mark_dirty();
       return;
     }
@@ -166,6 +166,32 @@ const App = (() => {
     }
   });
 
+  // {{{ delete_box
+  // Shared deletion logic used by both the Delete key and the inspector button.
+  async function delete_box(id) {
+    const b = Boxes.boxes[id];
+    if (!b) return;
+    const conns = (b.connections || []).filter(c => c.from_box === id);
+    if (conns.length > 0) {
+      const refs = conns.map(c => c.to_box).join(', ');
+      if (!confirm(`Box "${id}" has connections to: ${refs}.\nDelete anyway?`)) return;
+    }
+    try {
+      await API.delete_box(id);
+      delete Boxes.boxes[id];
+      Inspector.hide();
+      selected_id = null;
+      Canvas.mark_dirty();
+      status_msg('deleted ' + id);
+    } catch(e) {
+      status_msg('delete error: ' + e.message, 'error');
+    }
+  }
+  // }}}
+
+  // expose so Inspector can call it
+  window.App_delete_box = delete_box;
+
   // Delete key: remove selected box or wire
   window.addEventListener('keydown', async e => {
     if (e.code !== 'Delete' && e.code !== 'Backspace') return;
@@ -178,23 +204,7 @@ const App = (() => {
       return;
     }
 
-    if (selected_id) {
-      const b = Boxes.boxes[selected_id];
-      const conns = (b && b.connections || []).filter(c => c.from_box === selected_id);
-      if (conns.length > 0) {
-        const refs = conns.map(c => c.to_box).join(', ');
-        if (!confirm(`Box "${selected_id}" has connections to: ${refs}.\nDelete anyway?`)) return;
-      }
-      try {
-        await API.delete_box(selected_id);
-        delete Boxes.boxes[selected_id];
-        Inspector.hide();
-        selected_id = null;
-        Canvas.mark_dirty();
-      } catch(e) {
-        status_msg('delete error: ' + e.message, 'error');
-      }
-    }
+    if (selected_id) await delete_box(selected_id);
   });
 
   // {{{ init
