@@ -22,15 +22,17 @@ passed as JSON strings and must be decoded by the driver before use.
 
 The driver must:
   - Exit 0 on success, non-zero on failure
-  - Print a single JSON value to stdout on success: either a JSON array
-    (for multi-output / tuple returns) or a single JSON value (for
-    single-output functions)
+  - Print a single JSON value to stdout on success (string, number,
+    boolean, object, or null) — one output wire per box
   - Print an error message to stderr on failure (runner captures and logs
     it)
 
-Nothing else. No side channels. The runner reads stdout, parses JSON,
-and maps the array positions to the box's declared output port names in
-declaration order.
+Nothing else. No side channels. The runner reads stdout, decodes the JSON
+value, and passes it to all wired downstream inputs.
+
+Note: multi-output tuple returns are not supported. Each box has exactly
+one output wire. If multiple values need to travel together, encode them
+as a JSON object or array and decode downstream.
 
 ## Shell script vs. binary caller
 

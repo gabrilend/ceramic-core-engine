@@ -136,8 +136,9 @@ Drivers are shell scripts. The engine invokes them as:
 
   <driver-script> <file-path> <fn-name> <arg-count> [<arg1> <arg2> ...]
 
-Outputs are returned as JSON on stdout. Exit code non-zero = box failure.
-See docs/003-driver-system.md for the full driver contract.
+The single return value is encoded as a JSON value on stdout. Exit code
+non-zero = box failure. Each box has exactly one output wire — multi-return
+tuples are not supported (see docs/003-driver-system.md).
 
 ## Execution model (v1 — synchronous)
 
@@ -145,8 +146,8 @@ The runner walks the graph depth-first from the entry box. Each box call:
 
   1. Collect inputs: read wired output values from predecessor boxes
   2. Invoke driver: shell out to the appropriate driver script
-  3. Collect outputs: parse JSON from driver stdout
-  4. Store outputs: held in runner memory, keyed by box id + output name
+  3. Collect output: decode single JSON value from driver stdout
+  4. Store output: held in runner memory, keyed by box id (one value per box)
   5. Fire connections: enqueue boxes whose input dependencies are now met
 
 Each step is wrapped in a `task_fn` boundary so the runner can be

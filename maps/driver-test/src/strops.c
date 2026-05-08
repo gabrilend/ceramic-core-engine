@@ -33,8 +33,8 @@ static void uppercase(const char *json_in) {
     for (int i = 0; i < len; i++) {
         s[i] = toupper((unsigned char)s[i]);
     }
-    /* output as a JSON string wrapped in an array (driver contract) */
-    printf("[\"%s\"]\n", s);
+    /* output as a single JSON string (driver contract: one value per box) */
+    printf("\"%s\"\n", s);
     free(s);
 }
 /* }}} */

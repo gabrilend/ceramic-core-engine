@@ -12,6 +12,9 @@ Goal: an editor you can actually use to build maps.
 | 204 | visible interaction hints                      | open     |
 | 206 | entry box designation                          | open     |
 | 207 | source file browser and port auto-population   | complete |
+| 211a| unify src/ into same directory pipeline        | complete |
+| 214 | tmp symlink recreation on reboot               | complete |
+| 218 | enforce single-output driver contract          | complete |
 
 ## Phase goal checklist
 

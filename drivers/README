@@ -19,9 +19,9 @@ The runner calls a driver as:
 
 On success:
   - exit code 0
-  - stdout: a JSON array where each element is one return value
-    single-value functions: ["result"]
-    multi-value (tuple) functions: ["val1", "val2", ...]
+  - stdout: a single JSON value (string, number, boolean, object, or null)
+    each box has exactly one output wire; whatever the function returns is
+    encoded as one JSON value and passed downstream
 
 On failure:
   - exit code non-zero
@@ -53,7 +53,7 @@ Minimum viable driver (bash pseudocode):
   FILE="${1}"   FN="${2}"   N="${3}"   shift 3
   # compile / interpret FILE if needed
   # invoke FN with "$@" as arguments
-  # print result as JSON array to stdout
+  # print result as a single JSON value to stdout
   # exit 0 on success, non-zero on failure
 
 The arg-count field is informational. Drivers may use "$@" directly.

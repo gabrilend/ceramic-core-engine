@@ -12,26 +12,6 @@ package.path = DIR .. "/libs/?.lua;" ..
 local json = require("dkjson")
 local M    = {}
 
--- {{{ eval_predicate
-local function eval_predicate(pred, value)
-    -- structured predicates only; no arbitrary lua eval
-    local op  = pred.op
-    local lit = pred.value
-
-    if op == "eq"       then return value == lit
-    elseif op == "lt"   then return value <  lit
-    elseif op == "gt"   then return value >  lit
-    elseif op == "lte"  then return value <= lit
-    elseif op == "gte"  then return value >= lit
-    elseif op == "contains" then
-        return type(value) == "string" and value:find(lit, 1, true) ~= nil
-    elseif op == "matches" then
-        return type(value) == "string" and value:match(lit) ~= nil
-    end
-    return false
-end
--- }}}
-
 -- {{{ shell_quote
 local function shell_quote(s)
     -- wrap a string in single quotes, escaping any embedded single quotes
@@ -52,7 +32,7 @@ end
 
 -- {{{ run_task
 -- The task boundary. In v1: synchronous. Future: hand this signature to
--- the thread pool. Returns outputs table and ok/err.
+-- the thread pool. Returns a single output value and ok/err.
 local function run_task(box, inputs, drivers, map_dir)
     local ref = box.ref
     local fn  = box.fn
@@ -66,7 +46,7 @@ local function run_task(box, inputs, drivers, map_dir)
     -- resolve ref relative to map_dir
     local abs_ref = map_dir .. "/" .. ref
 
-    -- build argument list: file fn arg_count [args...]
+    -- build argument list: each input port's value as a JSON-encoded shell arg
     local args = {}
     for _, port in ipairs(box.inputs or {}) do
         local val = inputs[port.name]
@@ -91,7 +71,6 @@ local function run_task(box, inputs, drivers, map_dir)
     end
 
     -- invoke driver; capture stdout; errors go to stderr (visible in terminal)
-    -- io.popen doesn't support stderr separation; redirect stderr to a tmp file
     local tmpfile = map_dir .. "/tmp/driver-stderr-" .. box.id .. ".txt"
     local full_cmd = "sh -c " .. shell_quote(cmd .. " 2>" .. tmpfile)
     local ph = io.popen(full_cmd, "r")
@@ -112,28 +91,14 @@ local function run_task(box, inputs, drivers, map_dir)
         return nil, err_msg
     end
 
-    -- parse output JSON array from stdout
-    local result_arr, _, jerr = json.decode(stdout)
-    if not result_arr then
+    -- parse single JSON value from stdout; one output wire per box
+    local output_val, _, jerr = json.decode(stdout)
+    if jerr then
         return nil, "box '" .. box.id .. "': driver stdout is not valid JSON: " ..
             tostring(jerr) .. " (got: " .. tostring(stdout):sub(1, 80) .. ")"
     end
-    if type(result_arr) ~= "table" then
-        return nil, "box '" .. box.id .. "': driver output must be a JSON array"
-    end
 
-    -- map positional results to named output ports
-    local outputs = {}
-    for i, port in ipairs(box.outputs or {}) do
-        local raw = result_arr[i]
-        if raw ~= nil then
-            -- each element in the outer array is itself a JSON-encoded value
-            local val, _, aerr = json.decode(raw)
-            outputs[port.name] = aerr and raw or val
-        end
-    end
-
-    return outputs, nil
+    return output_val, nil
 end
 -- }}}
 
@@ -160,58 +125,60 @@ end
 -- }}}
 
 -- {{{ fire_connections
-local function fire_connections(box, outputs, store, queue, boxes, retry_counts)
-    -- for branch boxes: evaluate predicates and fire the first matching port
-    -- for call boxes: push all wired output values directly
-    if box.kind == "branch" then
-        local input_val = outputs["_branch_input"]
-        local fired = false
-        for _, port in ipairs(box.ports or {}) do
-            if port.name == "else" then goto next_port end
-            if port.predicate and eval_predicate(port.predicate, input_val) then
-                -- find and fire connections from this port
-                for _, c in ipairs(box.connections or {}) do
-                    if c.from_box == box.id and c.from_port == port.name then
-                        store[c.to_box .. "." .. c.to_input] = input_val
-                        queue[#queue + 1] = c.to_box
-                    end
-                end
-                fired = true
-                break
-            end
-            ::next_port::
+-- Routes the single output value through wired connections.
+-- If box.comparand is set: compare output against it (must be a number or error).
+-- Otherwise: fire all connections whose from_branch is nil.
+-- Returns nil on success, or an error string.
+local function fire_connections(box, output_val, store, queue, boxes)
+    if box.comparand and box.comparand ~= "" then
+        -- comparator mode: output must be a number
+        local comparand = tonumber(box.comparand)
+        if not comparand then
+            return "box '" .. box.id .. "': comparand '" ..
+                tostring(box.comparand) .. "' is not a valid number"
+        end
+        local num_val = tonumber(output_val)
+        if not num_val then
+            return "box '" .. box.id .. "': output value '" ..
+                tostring(output_val) .. "' is not a number, but comparator is configured"
         end
 
-        if not fired then
-            -- fire "else" port
-            for _, c in ipairs(box.connections or {}) do
-                if c.from_box == box.id and c.from_port == "else" then
-                    store[c.to_box .. "." .. c.to_input] = input_val
+        -- determine which branch to fire
+        local branch
+        if num_val < comparand then
+            branch = "lt"
+        elseif num_val == comparand then
+            branch = "eq"
+        else
+            branch = "gt"
+        end
+
+        for _, c in ipairs(box.connections or {}) do
+            if c.from_box ~= box.id then goto next_cmp_conn end
+            if c.from_branch == branch then
+                store[c.to_box .. "." .. c.to_input] = output_val
+                local target = boxes[c.to_box]
+                if target and inputs_satisfied(target, store) then
                     queue[#queue + 1] = c.to_box
-                    fired = true
                 end
             end
-
-            if not fired then
-                -- unwired else: return signal to re-queue the upstream box
-                return "retry"
-            end
+            ::next_cmp_conn::
         end
-
     else
-        -- call box: push each output value to connected input ports
+        -- single-wire mode: fire connections where from_branch is nil
         for _, c in ipairs(box.connections or {}) do
             if c.from_box ~= box.id then goto next_conn end
-            local val = outputs[c.from_output]
-            store[c.to_box .. "." .. c.to_input] = val
-            -- enqueue target if all its inputs are now satisfied
-            local target = boxes[c.to_box]
-            if target and inputs_satisfied(target, store) then
-                queue[#queue + 1] = c.to_box
+            if c.from_branch == nil then
+                store[c.to_box .. "." .. c.to_input] = output_val
+                local target = boxes[c.to_box]
+                if target and inputs_satisfied(target, store) then
+                    queue[#queue + 1] = c.to_box
+                end
             end
             ::next_conn::
         end
     end
+    return nil
 end
 -- }}}
 
@@ -238,15 +205,16 @@ function M.execute(graph, map_dir)
     -- store: keyed by "box_id.port_name" -> value
     local store = {}
 
-    -- per-box retry counters (for branch box else-retry)
-    local retry_counts = {}
-
-    -- seed entry box: if it has inputs, they must come from data files;
-    -- for v1, entry boxes with inputs are the user's responsibility to pre-seed
-    -- via a data box or by starting with a box that has no inputs
-    local entry_box = boxes[entry_id]
-    if entry_box and #(entry_box.inputs or {}) == 0 then
-        -- no inputs needed; ready immediately
+    -- pre-seed store with any literal values set on input ports;
+    -- wires that fire at runtime will overwrite these, so wires always win
+    for box_id, box in pairs(boxes) do
+        for _, port in ipairs(box.inputs or {}) do
+            if port.value ~= nil and port.value ~= "" then
+                -- try JSON decode first; fall back to raw string
+                local parsed, _, _ = json.decode(port.value)
+                store[box_id .. "." .. port.name] = parsed ~= nil and parsed or port.value
+            end
+        end
     end
 
     local queue   = { entry_id }
@@ -266,35 +234,25 @@ function M.execute(graph, map_dir)
             break
         end
 
-        -- skip boxes whose inputs are not yet satisfied (they'll be re-enqueued)
+        -- skip boxes whose inputs are not yet satisfied
         if not inputs_satisfied(box, store) then
             goto next_iter
         end
 
-        if visited[id] and box.kind ~= "branch" then
+        if visited[id] then
             goto next_iter
         end
         visited[id] = true
 
         local inputs = collect_inputs(box, store)
 
-        -- branch box is handled specially: it doesn't invoke a driver,
-        -- it routes based on its single input value
-        local outputs, task_err
-        if box.kind == "branch" then
-            -- the branch input is the value wired to its single input port
-            local branch_val = inputs[(box.inputs or {})[1] and box.inputs[1].name or "value"]
-            outputs = { _branch_input = branch_val }
-            task_err = nil
-        else
-            outputs, task_err = run_task(box, inputs, drivers, map_dir)
-        end
+        local output_val, task_err = run_task(box, inputs, drivers, map_dir)
 
         run_log[id] = {
-            inputs  = inputs,
-            outputs = outputs or {},
-            status  = task_err and "error" or "ok",
-            error   = task_err,
+            inputs = inputs,
+            output = output_val,
+            status = task_err and "error" or "ok",
+            error  = task_err,
         }
 
         if task_err then
@@ -304,47 +262,13 @@ function M.execute(graph, map_dir)
             break
         end
 
-        -- fire connections and enqueue newly-ready boxes
-        local signal = fire_connections(box, outputs, store, queue, boxes, retry_counts)
-        if signal == "retry" then
-            local max_retries = box.retry_limit or 3
-            retry_counts[id] = (retry_counts[id] or 0) + 1
-            if retry_counts[id] > max_retries then
-                map_ok  = false
-                map_err = "branch box '" .. id .. "' exceeded retry limit (" ..
-                    max_retries .. ")"
-                break
-            end
-            -- find the upstream box(es) that feed this branch box and re-queue them
-            for src_id, src_box in pairs(boxes) do
-                for _, c in ipairs(src_box.connections or {}) do
-                    if c.from_box ~= src_id then goto next_src_conn end
-                    if c.to_box ~= id then goto next_src_conn end
-
-                    visited[src_id] = nil
-
-                    -- clear the branch box's input from the store so it
-                    -- re-fills when the upstream box runs again
-                    for _, p in ipairs(box.inputs or {}) do
-                        store[id .. "." .. p.name] = nil
-                    end
-
-                    -- apply retry_vary: randomize specified input fields on the
-                    -- upstream box before re-running it
-                    local vary = src_box.retry_vary
-                    if vary then
-                        for field_name, range in pairs(vary) do
-                            local lo = tonumber(range.min) or 0
-                            local hi = tonumber(range.max) or 1
-                            local val = lo + math.random() * (hi - lo)
-                            store[src_id .. "." .. field_name] = val
-                        end
-                    end
-
-                    queue[#queue + 1] = src_id
-                    ::next_src_conn::
-                end
-            end
+        -- route output through wired connections
+        local conn_err = fire_connections(box, output_val, store, queue, boxes)
+        if conn_err then
+            map_ok  = false
+            map_err = conn_err
+            io.stderr:write("executor: " .. conn_err .. "\n")
+            break
         end
 
         ::next_iter::
@@ -352,9 +276,9 @@ function M.execute(graph, map_dir)
 
     -- write last-run snapshot to tmp/
     write_last_run(map_dir, {
-        ok     = map_ok,
-        error  = map_err,
-        boxes  = run_log,
+        ok    = map_ok,
+        error = map_err,
+        boxes = run_log,
     })
 
     return map_ok, map_err

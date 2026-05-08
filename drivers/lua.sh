@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Lua/LuaJIT language driver for SoraMech.
 # Loads a .lua module, calls the named function with JSON-decoded arguments,
-# and writes the return value(s) as a JSON array to stdout.
+# and writes the single return value as a JSON value to stdout.
 # Contract: <script> <file-path> <fn-name> <arg-count> [<arg> ...]
 
 DIR="/mnt/mtwo/programs/sora/soramech"
@@ -91,13 +91,9 @@ for i, raw_arg in ipairs(args_table) do
     end
 end
 
--- call the function; collect all return values into a table
-local results = table.pack(fn(table.unpack(call_args)))
+-- call the function; one output wire, so only the first return value matters
+local result = fn(table.unpack(call_args))
 
--- encode results as a JSON array (each return value is one element)
-local encoded = {}
-for i = 1, results.n do
-    encoded[i] = json.encode(results[i])
-end
-print(json.encode(encoded))
+-- encode the single return value as a JSON value
+print(json.encode(result))
 LUASHIM

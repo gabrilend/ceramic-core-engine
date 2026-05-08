@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # C language driver for SoraMech.
 # Compiles the .c file if the source is newer than the cached binary,
-# then invokes the binary with arguments. The binary must write a JSON
-# array to stdout per the driver contract.
+# then invokes the binary with arguments. The binary must write a single
+# JSON value to stdout per the driver contract.
 # Contract: <script> <file-path> <fn-name> <arg-count> [<arg> ...]
 # The fn-name is passed as argv[1] so the binary can dispatch to the right function.
 # Cache location: TMP_DIR/cache/<md5-of-absolute-path>

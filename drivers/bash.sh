@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Bash language driver for SoraMech.
 # Sources the target .sh file, calls the named function with args as
-# positional parameters. The function must echo a JSON value (or array)
-# to stdout. Arguments are passed as plain strings; JSON decode/encode
-# is the function's responsibility.
+# positional parameters. The function must echo a single JSON value to
+# stdout. Arguments are passed as plain strings; JSON decode/encode is
+# the function's responsibility.
 # Contract: <script> <file-path> <fn-name> <arg-count> [<arg> ...]
 
 DIR="/mnt/mtwo/programs/sora/soramech"
