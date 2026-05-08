@@ -2,7 +2,7 @@
 
 ## Status
 
-open
+completed
 
 ## Blockers
 
@@ -36,7 +36,8 @@ soramech-runner.lua, after a successful load/validate, executes the map:
 Each box invocation is wrapped in a task_fn(inputs) -> outputs function.
 This boundary is the future threading integration point. In v1 the task
 function runs synchronously in the main coroutine; in a later phase the
-same function signature is handed to the thread pool or effil-jit.
+same function signature is handed to the 3d-rts thread pool. The intermediate
+path uses coroutines with non-blocking socket I/O.
 
 Error handling: if a driver exits non-zero, the runner logs the box id,
 the driver's stderr, and the exit code to tmp/logs/, then halts. No
@@ -49,7 +50,7 @@ fallback, no skip, no continue-on-error.
    Internally uses a ready-queue (lua table as FIFO).
 2. The task boundary: define a local run_task(box, inputs, driver_table)
    function that invokes the driver and returns {outputs, ok, err}.
-   This function is the swap point for threading later.
+   This function is the swap point for the coroutine scheduler and 3d-rts pool later.
 3. Predicate evaluation: a small local function eval_predicate(pred, value)
    handles op: "eq", "lt", "gt", "lte", "gte", "contains", "matches".
    "matches" is a lua pattern match. No arbitrary lua eval — structured
@@ -58,6 +59,10 @@ fallback, no skip, no continue-on-error.
    { ok=bool, boxes={ [id]={ inputs={}, outputs={}, status="ok"|"error" } } }
 5. Write tests/002-executor-test.lua — runs maps/hello/ end-to-end, asserts
    expected output values in last-run.json.
+
+## Implementation notes
+
+`src/004-executor.lua` implements `execute(graph, map_dir)` using a ready-queue BFS. The task boundary is the local `run_task(box, inputs, driver_table)` function, kept as a clean swap point for the future coroutine scheduler and thread pool. Predicate evaluation handles `eq`, `lt`, `gt`, `lte`, `gte`, `contains`, and `matches` (Lua pattern). Outputs are written to `tmp/last-run.json` on completion; driver failures halt the run immediately with box id and stderr logged.
 
 ## Related documents
 

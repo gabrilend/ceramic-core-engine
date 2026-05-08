@@ -152,7 +152,8 @@ The runner walks the graph depth-first from the entry box. Each box call:
 
 Each step is wrapped in a `task_fn` boundary so the runner can be
 threaded later by substituting the synchronous executor with one backed
-by effil-jit or the custom thread pool from the 3d-rts project.
+by the 3d-rts custom thread pool. The intermediate path is coroutine-based
+non-blocking I/O before the full thread pool is integrated.
 
 ## Data files
 

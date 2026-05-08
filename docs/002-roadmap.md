@@ -32,12 +32,14 @@ visually with correct wiring drawn.
 
 Goal: boxes whose inputs are all satisfied fire concurrently.
 
-- Integrate effil-jit as the threading backend (replacing synchronous
-  depth-first walk)
-- Runner becomes an M:N task scheduler: each box invocation is a task,
-  boxes park when waiting on upstream results
+- Coroutine-based non-blocking executor: the ready-queue becomes a
+  coroutine scheduler; boxes yield while waiting on upstream results
+- Cross-language calls use Unix domain socket servers (one per language
+  runtime per worker), non-blocking on the Lua side via LuaSocket
 - Multiple maps running concurrently share nothing (separate processes)
-- Begin integration path toward the 3d-rts custom thread pool
+- Integration path toward the 3d-rts custom thread pool: the coroutine
+  scheduler and task boundary are designed to swap in the thread pool
+  without changing the box execution model
 
 ## Phase 3 — SoraMind integration
 

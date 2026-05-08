@@ -14,6 +14,10 @@ Goal: an editor you can actually use to build maps.
 | 207 | source file browser and port auto-population   | complete |
 | 211a| unify src/ into same directory pipeline        | complete |
 | 214 | tmp symlink recreation on reboot               | complete |
+| 209 | ollama query library                           | complete |
+| 211 | file browser library directories               | complete |
+| 211a| unify src/ into same directory pipeline        | complete |
+| 214 | tmp symlink recreation on reboot               | complete |
 | 218 | enforce single-output driver contract          | complete |
 | 220 | root run script and entry point cleanup        | complete |
 

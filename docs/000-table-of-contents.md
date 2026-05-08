@@ -11,6 +11,7 @@ Read in order for a complete picture of the system.
 - [docs/001-architecture.md](001-architecture.md) — components, data flow, file format spec
 - [docs/002-roadmap.md](002-roadmap.md) — phases, goals, and sequencing
 - [docs/003-driver-system.md](003-driver-system.md) — language driver interface spec
+- [docs/004-ipc-and-threading.md](004-ipc-and-threading.md) — IPC options, threading roadmap, Unix domain socket model
 
 ## Source
 
