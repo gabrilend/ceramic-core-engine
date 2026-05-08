@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# SoraMech development environment launcher.
+# Starts the HTTP server in the background, waits for it to bind,
+# then opens the visual editor in a browser.
+# Usage: ./run [port]
+
+DIR="/mnt/mtwo/programs/sora/soramech"
+
+PORT="${1:-7700}"
+
+"${DIR}/scripts/start-server.sh" "${PORT}" &
+SERVER_PID="${!}"
+
+# wait for the server to accept connections
+ATTEMPTS=0
+until curl -s "http://localhost:${PORT}/" > /dev/null 2>&1; do
+    ATTEMPTS=$((ATTEMPTS + 1))
+    if [ "${ATTEMPTS}" -ge 20 ]; then
+        echo "run: server did not start after 10 seconds" >&2
+        kill "${SERVER_PID}" 2>/dev/null
+        exit 1
+    fi
+    sleep 0.5
+done
+
+"${DIR}/scripts/open-editor.sh" "http://localhost:${PORT}"
+
+echo "SoraMech running. Server PID: ${SERVER_PID}. Press Ctrl-C to stop."
+wait "${SERVER_PID}"

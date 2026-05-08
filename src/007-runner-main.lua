@@ -1,6 +1,7 @@
--- SoraMech runner — entry point for FSM execution.
--- Loads a map directory, validates the graph, then executes it synchronously.
--- Run: luajit soramech-runner.lua <map-dir>
+-- SoraMech interpreter runner — loads a map and executes it synchronously.
+-- This is the interpreter path. The compiler (issue 219) generates standalone
+-- output that replaces this for deployment.
+-- Run: luajit src/007-runner-main.lua <map-dir>
 -- Output goes to map-dir/tmp/last-run.json; logs to map-dir/tmp/logs/.
 
 local DIR = "/mnt/mtwo/programs/sora/soramech"
@@ -16,10 +17,17 @@ local executor = require("004-executor")
 local function main(args)
     local map_dir = args[1]
     if not map_dir then
-        io.stderr:write("usage: luajit soramech-runner.lua <map-dir>\n")
+        io.stderr:write("usage: luajit src/007-runner-main.lua <map-dir>\n")
         os.exit(1)
     end
 
+    -- if /tmp/ was cleared on reboot, the symlink target is gone; recreate it
+    local rp = io.popen("readlink " .. map_dir .. "/tmp")
+    local tmp_target = rp and rp:read("*l")
+    if rp then rp:close() end
+    if tmp_target then
+        os.execute("mkdir -p " .. tmp_target)
+    end
     -- ensure tmp/logs/ exists (tmp/ is the /tmp/<name>/ symlink from create-map.sh)
     os.execute("mkdir -p " .. map_dir .. "/tmp/logs")
 

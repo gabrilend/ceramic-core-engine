@@ -12,4 +12,4 @@ echo "Maps root: ${DIR}/maps"
 echo "Press Ctrl-C to stop."
 echo ""
 
-luajit "${DIR}/soramech-server.lua" "${DIR}/maps" "${PORT}"
+luajit "${DIR}/src/006-server-main.lua" "${DIR}/maps" "${PORT}"

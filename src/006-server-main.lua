@@ -1,6 +1,6 @@
 -- SoraMech HTTP server entry point.
 -- Thin file CRUD proxy for the web editor. No runner management.
--- Run: luajit soramech-server.lua <maps-root> [port]
+-- Run: luajit src/006-server-main.lua <maps-root> [port]
 
 local DIR = "/mnt/mtwo/programs/sora/soramech"
 
@@ -19,7 +19,7 @@ local function main(args)
     local port      = tonumber(args[2]) or 7700
 
     if not maps_root then
-        io.stderr:write("usage: luajit soramech-server.lua <maps-root> [port]\n")
+        io.stderr:write("usage: luajit src/006-server-main.lua <maps-root> [port]\n")
         os.exit(1)
     end
 

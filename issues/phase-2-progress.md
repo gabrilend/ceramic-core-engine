@@ -15,6 +15,7 @@ Goal: an editor you can actually use to build maps.
 | 211a| unify src/ into same directory pipeline        | complete |
 | 214 | tmp symlink recreation on reboot               | complete |
 | 218 | enforce single-output driver contract          | complete |
+| 220 | root run script and entry point cleanup        | complete |
 
 ## Phase goal checklist
 
