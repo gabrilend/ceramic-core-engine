@@ -22,7 +22,8 @@ const App = (() => {
       const ids = await API.list_boxes();
       const fetches = ids.map(id => API.get_box(id));
       const all = await Promise.all(fetches);
-      Boxes.boxes = {};
+      // mutate the existing object so the draw_all closure sees the new boxes
+      Object.keys(Boxes.boxes).forEach(k => delete Boxes.boxes[k]);
       all.forEach(b => { Boxes.boxes[b.id] = b; });
       Canvas.mark_dirty();
       status_msg('loaded ' + ids.length + ' boxes');

@@ -197,6 +197,84 @@ canvas {
   padding: 4px 10px;
 }
 .toolbar-btn:hover { border-color: #4a9eff; color: #4a9eff; }
+
+/* Read-only field display */
+.field-readonly {
+  background: #0f1117;
+  border: 1px solid #2a2f45;
+  border-radius: 3px;
+  color: #6c72a0;
+  font-family: monospace;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+/* Derived port display (read-only) */
+.port-display { display: flex; flex-direction: column; gap: 2px; }
+.port-display-row {
+  font-size: 11px;
+  color: #9ea3c0;
+  padding: 2px 6px;
+  font-family: monospace;
+}
+.port-display-empty { font-size: 11px; color: #3a3f55; padding: 2px 6px; }
+
+/* File browser */
+.fb-header {
+  font-size: 10px;
+  color: #6c72a0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.fb-back {
+  background: none;
+  border: none;
+  color: #4a9eff;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 11px;
+  padding: 0;
+  margin-bottom: 8px;
+  display: block;
+}
+.fb-back:hover { text-decoration: underline; }
+.fb-file-row {
+  padding: 5px 6px;
+  font-size: 11px;
+  color: #9ea3c0;
+  cursor: pointer;
+  border-radius: 3px;
+  font-family: monospace;
+}
+.fb-file-row:hover { background: #2a2f45; color: #e8eaf6; }
+.fb-fn-row {
+  padding: 6px 8px;
+  border: 1px solid #2a2f45;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  cursor: pointer;
+}
+.fb-fn-row:hover { border-color: #4a9eff; background: #1e2130; }
+.fb-fn-name {
+  font-size: 11px;
+  color: #4a9eff;
+  font-family: monospace;
+  margin-bottom: 3px;
+}
+.fb-fn-ports {
+  font-size: 10px;
+  color: #6c72a0;
+  font-family: monospace;
+  padding-left: 8px;
+}
+.fb-note {
+  font-size: 11px;
+  color: #6c72a0;
+  font-family: monospace;
+  padding: 4px 0;
+}
+.fb-note.error { color: #e91e63; }
 </style>
 </head>
 <body>
@@ -226,6 +304,7 @@ canvas {
 <script src="js/001-canvas.js"></script>
 <script src="js/002-boxes.js"></script>
 <script src="js/003-api.js"></script>
+<script src="js/007-filebrowser.js"></script>
 <script src="js/004-inspector.js"></script>
 <script src="js/006-wires.js"></script>
 <script src="js/005-app.js"></script>

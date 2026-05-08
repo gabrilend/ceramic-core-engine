@@ -1,12 +1,13 @@
 // Inspector sidebar: shows and edits the selected box's fields.
 // Fires PUT to the server on every field change (autosave).
+// For call boxes, ref/fn are set via the file browser; ports are read-only and derived.
 
 const Inspector = (() => {
   const panel  = document.getElementById('inspector');
   const title  = document.getElementById('inspector-title');
   const fields = document.getElementById('inspector-fields');
 
-  let current_box = null;
+  let current_box  = null;
   let on_change_cb = null;
 
   // {{{ hide
@@ -51,60 +52,40 @@ const Inspector = (() => {
   }
   // }}}
 
-  // {{{ mk_port_list
-  function mk_port_list(ports, on_change) {
+  // {{{ mk_readonly
+  function mk_readonly(value) {
+    const el = document.createElement('div');
+    el.className   = 'field-readonly';
+    el.textContent = value || '—';
+    return el;
+  }
+  // }}}
+
+  // {{{ mk_port_display
+  // Read-only list of derived port names.
+  function mk_port_display(ports) {
     const wrap = document.createElement('div');
-    wrap.className = 'port-list';
-
-    const render_ports = () => {
-      wrap.innerHTML = '';
-      ports.forEach((p, i) => {
+    wrap.className = 'port-display';
+    if (!ports || ports.length === 0) {
+      const empty = document.createElement('span');
+      empty.className   = 'port-display-empty';
+      empty.textContent = '(none)';
+      wrap.appendChild(empty);
+    } else {
+      ports.forEach(p => {
         const row = document.createElement('div');
-        row.className = 'port-row';
-
-        const name_inp = document.createElement('input');
-        name_inp.type  = 'text';
-        name_inp.value = p.name || '';
-        name_inp.placeholder = 'name';
-        name_inp.addEventListener('input', () => { ports[i].name = name_inp.value; on_change(); save(); });
-
-        const type_inp = document.createElement('input');
-        type_inp.type  = 'text';
-        type_inp.value = p.type || '';
-        type_inp.placeholder = 'type';
-        type_inp.addEventListener('input', () => { ports[i].type = type_inp.value; on_change(); save(); });
-
-        const del_btn = document.createElement('button');
-        del_btn.textContent = '×';
-        del_btn.className   = 'port-del';
-        del_btn.addEventListener('click', () => { ports.splice(i, 1); render_ports(); on_change(); save(); });
-
-        row.appendChild(name_inp);
-        row.appendChild(type_inp);
-        row.appendChild(del_btn);
+        row.className   = 'port-display-row';
+        row.textContent = p.name + (p.type && p.type !== 'any' ? '  :' + p.type : '');
         wrap.appendChild(row);
       });
-
-      const add_btn = document.createElement('button');
-      add_btn.textContent = '+ port';
-      add_btn.className   = 'add-port';
-      add_btn.addEventListener('click', () => {
-        ports.push({ name: '', type: 'string' });
-        render_ports();
-        on_change();
-        save();
-      });
-      wrap.appendChild(add_btn);
-    };
-
-    render_ports();
+    }
     return wrap;
   }
   // }}}
 
   // {{{ mk_branch_port_list
+  const OPS = ['eq','lt','gt','lte','gte','contains','matches'];
   function mk_branch_port_list(ports, on_change) {
-    const OPS = ['eq','lt','gt','lte','gte','contains','matches'];
     const wrap = document.createElement('div');
     wrap.className = 'port-list';
 
@@ -143,7 +124,6 @@ const Inspector = (() => {
           row.appendChild(val_inp);
         }
 
-        // can't delete the else port
         if (p.name !== 'else') {
           const del_btn = document.createElement('button');
           del_btn.textContent = '×';
@@ -159,7 +139,6 @@ const Inspector = (() => {
       add_btn.textContent = '+ port';
       add_btn.className   = 'add-port';
       add_btn.addEventListener('click', () => {
-        // insert before else
         const else_i = ports.findIndex(p => p.name === 'else');
         const new_port = { name: '', predicate: { op: 'eq', value: '' } };
         if (else_i >= 0) ports.splice(else_i, 0, new_port);
@@ -171,6 +150,22 @@ const Inspector = (() => {
 
     render_ports();
     return wrap;
+  }
+  // }}}
+
+  // {{{ open_browser
+  // Replaces inspector content with the file browser.
+  // On function select: populates ref/fn/inputs/outputs and returns to normal view.
+  function open_browser() {
+    title.textContent = 'browse src/';
+    fields.innerHTML  = '';
+    FileBrowser.render(fields, (filename, fn) => {
+      current_box.ref     = filename;
+      current_box.fn      = fn.name;
+      current_box.inputs  = fn.inputs.map(n  => ({ name: n, type: 'any' }));
+      current_box.outputs = fn.outputs.map(n => ({ name: n, type: 'any' }));
+      save().then(() => show(current_box, on_change_cb));
+    });
   }
   // }}}
 
@@ -193,41 +188,98 @@ const Inspector = (() => {
         if (k === box.kind) opt.selected = true;
         sel.appendChild(opt);
       });
-      sel.addEventListener('change', () => { current_box.kind = sel.value; show(current_box, on_change_cb); save(); });
+      sel.addEventListener('change', () => {
+        current_box.kind = sel.value;
+        show(current_box, on_change_cb);
+        save();
+      });
       return sel;
     })()));
 
     if (box.kind === 'call' || box.kind === 'data') {
-      fields.appendChild(mk_row('ref',
-        mk_text_input(box.ref, v => { current_box.ref = v; })));
-      fields.appendChild(mk_row('fn',
-        mk_text_input(box.fn, v => { current_box.fn = v; })));
-    }
+      // ref: read-only display + browse button
+      const ref_wrap = document.createElement('div');
+      ref_wrap.style.cssText = 'display:flex;gap:4px;align-items:center;';
+      const ref_disp = document.createElement('div');
+      ref_disp.className   = 'field-readonly';
+      ref_disp.style.flex  = '1';
+      ref_disp.style.minWidth = '0';
+      ref_disp.style.overflow = 'hidden';
+      ref_disp.style.textOverflow = 'ellipsis';
+      ref_disp.style.whiteSpace   = 'nowrap';
+      ref_disp.textContent = box.ref || '—';
+      const browse_btn = document.createElement('button');
+      browse_btn.className   = 'toolbar-btn';
+      browse_btn.textContent = 'browse';
+      browse_btn.style.whiteSpace = 'nowrap';
+      browse_btn.onclick = open_browser;
+      ref_wrap.appendChild(ref_disp);
+      ref_wrap.appendChild(browse_btn);
+      fields.appendChild(mk_row('ref', ref_wrap));
 
-    const inputs_sec = document.createElement('div');
-    inputs_sec.className = 'section-label';
-    inputs_sec.textContent = 'inputs';
-    fields.appendChild(inputs_sec);
-    if (!current_box.inputs) current_box.inputs = [];
-    fields.appendChild(mk_port_list(current_box.inputs, () => {}));
+      fields.appendChild(mk_row('fn', mk_readonly(box.fn)));
+
+      const in_sec = document.createElement('div');
+      in_sec.className   = 'section-label';
+      in_sec.textContent = 'inputs';
+      fields.appendChild(in_sec);
+      fields.appendChild(mk_port_display(box.inputs));
+
+      const out_sec = document.createElement('div');
+      out_sec.className   = 'section-label';
+      out_sec.textContent = 'outputs';
+      fields.appendChild(out_sec);
+      fields.appendChild(mk_port_display(box.outputs));
+    }
 
     if (box.kind === 'branch') {
       if (!current_box.ports) current_box.ports = [{ name: 'else' }];
       fields.appendChild(mk_row('retry limit',
         mk_text_input(String(box.retry_limit ?? 3),
           v => { current_box.retry_limit = parseInt(v) || 3; })));
+
+      // branch inputs are manually configured (no source file to parse)
+      const in_sec = document.createElement('div');
+      in_sec.className   = 'section-label';
+      in_sec.textContent = 'inputs';
+      fields.appendChild(in_sec);
+      if (!current_box.inputs) current_box.inputs = [];
+      const in_list = document.createElement('div');
+      in_list.className = 'port-list';
+      (current_box.inputs || []).forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'port-row';
+        const ni = document.createElement('input');
+        ni.type = 'text'; ni.value = p.name || ''; ni.placeholder = 'name';
+        ni.addEventListener('input', () => { current_box.inputs[i].name = ni.value; save(); });
+        const ti = document.createElement('input');
+        ti.type = 'text'; ti.value = p.type || ''; ti.placeholder = 'type';
+        ti.addEventListener('input', () => { current_box.inputs[i].type = ti.value; save(); });
+        const del = document.createElement('button');
+        del.textContent = '×'; del.className = 'port-del';
+        del.addEventListener('click', () => {
+          current_box.inputs.splice(i, 1);
+          show(current_box, on_change_cb);
+          save();
+        });
+        row.appendChild(ni); row.appendChild(ti); row.appendChild(del);
+        in_list.appendChild(row);
+      });
+      const add_in = document.createElement('button');
+      add_in.textContent = '+ input'; add_in.className = 'add-port';
+      add_in.addEventListener('click', () => {
+        current_box.inputs.push({ name: '', type: 'any' });
+        show(current_box, on_change_cb);
+        save();
+      });
+      in_list.appendChild(add_in);
+      fields.appendChild(in_list);
+
       const ports_sec = document.createElement('div');
-      ports_sec.className = 'section-label';
+      ports_sec.className   = 'section-label';
       ports_sec.textContent = 'ports (evaluated top-to-bottom)';
       fields.appendChild(ports_sec);
       fields.appendChild(mk_branch_port_list(current_box.ports, () => {}));
-    } else {
-      if (!current_box.outputs) current_box.outputs = [];
-      const out_sec = document.createElement('div');
-      out_sec.className = 'section-label';
-      out_sec.textContent = 'outputs';
-      fields.appendChild(out_sec);
-      fields.appendChild(mk_port_list(current_box.outputs, () => {}));
     }
   }
   // }}}

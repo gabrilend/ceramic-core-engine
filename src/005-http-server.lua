@@ -271,6 +271,37 @@ local function handle_delete_box(client, req, maps_root)
 end
 -- }}}
 
+-- {{{ handle_list_src
+local function handle_list_src(client, req, maps_root)
+    local map_name = req.parts[2]
+    local src_dir  = safe_path(maps_root, map_name, "src")
+    if not src_dir then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local handle = io.popen("ls " .. src_dir .. "/ 2>/dev/null")
+    if not handle then return json_ok(client, {}) end
+    local listing = handle:read("*a")
+    handle:close()
+    local files = {}
+    for name in listing:gmatch("[^\n]+") do
+        if name ~= "" then files[#files + 1] = name end
+    end
+    json_ok(client, files)
+end
+-- }}}
+
+-- {{{ handle_get_src
+local function handle_get_src(client, req, maps_root)
+    local map_name  = req.parts[2]
+    local file_name = req.parts[4]
+    local path = safe_path(maps_root, map_name, "src", file_name)
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local raw, err = read_file(path)
+    if not raw then return json_err(client, "404 Not Found", tostring(err)) end
+    respond(client, "200 OK", raw, "text/plain")
+end
+-- }}}
+
 -- {{{ handle_get_data
 local function handle_get_data(client, req, maps_root)
     local map_name  = req.parts[2]
@@ -363,6 +394,16 @@ local function dispatch(client, req, maps_root)
         if m == "GET"    then return handle_get_box(client, req, maps_root) end
         if m == "PUT"    then return handle_put_box(client, req, maps_root) end
         if m == "DELETE" then return handle_delete_box(client, req, maps_root) end
+    end
+
+    -- GET /maps/<name>/src
+    if m == "GET" and #p == 3 and p[1] == "maps" and p[3] == "src" then
+        return handle_list_src(client, req, maps_root)
+    end
+
+    -- GET /maps/<name>/src/<file>
+    if m == "GET" and #p == 4 and p[1] == "maps" and p[3] == "src" then
+        return handle_get_src(client, req, maps_root)
     end
 
     -- GET/PUT /maps/<name>/data/<filename>

@@ -65,6 +65,18 @@ const API = (() => {
   }
   // }}}
 
+  // {{{ list_src_files
+  async function list_src_files() {
+    return request('GET', `/maps/${map_name}/src`);
+  }
+  // }}}
+
+  // {{{ get_src_file
+  async function get_src_file(filename) {
+    return request('GET', `/maps/${map_name}/src/${encodeURIComponent(filename)}`);
+  }
+  // }}}
+
   // {{{ get_data
   async function get_data(filename) {
     return request('GET', `/maps/${map_name}/data/${filename}`);
@@ -78,5 +90,6 @@ const API = (() => {
   // }}}
 
   return { init, list_maps, list_boxes, get_box, put_box, delete_box,
-           get_meta, put_meta, get_data, put_data };
+           get_meta, put_meta, get_data, put_data,
+           list_src_files, get_src_file };
 })();
