@@ -55,7 +55,10 @@ canvas {
 #map-label {
   font-size: 11px;
   color: #4a9eff;
+  cursor: pointer;
+  user-select: none;
 }
+#map-label:hover { color: #e8eaf6; }
 
 #inspector {
   flex: 1;
@@ -197,6 +200,7 @@ canvas {
   padding: 4px 10px;
 }
 .toolbar-btn:hover { border-color: #4a9eff; color: #4a9eff; }
+.toolbar-btn.active { border-color: #4a9eff; color: #4a9eff; background: #1e2130; }
 
 /* Read-only field display */
 .field-readonly {
@@ -209,17 +213,76 @@ canvas {
   padding: 4px 6px;
 }
 
-/* Derived port display (read-only) */
+/* Derived port display — name is editable, type is read-only */
 .port-display { display: flex; flex-direction: column; gap: 2px; }
 .port-display-row {
-  font-size: 11px;
-  color: #9ea3c0;
-  padding: 2px 6px;
-  font-family: monospace;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
+.port-name-inp {
+  flex: 1;
+  background: #0f1117;
+  border: 1px solid #2a2f45;
+  border-radius: 3px;
+  color: #e8eaf6;
+  font-family: monospace;
+  font-size: 11px;
+  padding: 3px 5px;
+}
+.port-name-inp:focus { outline: none; border-color: #4a9eff; }
+.port-type {
+  font-size: 10px;
+  color: #4a9eff;
+  font-family: monospace;
+  white-space: nowrap;
+}
+.port-val-inp {
+  width: 72px;
+  background: #0f1117;
+  border: 1px dashed #3a3f55;
+  border-radius: 3px;
+  color: #9ea3c0;
+  font-family: monospace;
+  font-size: 10px;
+  padding: 3px 5px;
+  flex-shrink: 0;
+}
+.port-val-inp:focus { outline: none; border-color: #4a9eff; border-style: solid; color: #e8eaf6; }
+.port-val-inp::placeholder { color: #3a3f55; }
 .port-display-empty { font-size: 11px; color: #3a3f55; padding: 2px 6px; }
 
 /* File browser */
+.fb-add-dir-btn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 1px dashed #3a3f55;
+  border-radius: 3px;
+  color: #6c72a0;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 10px;
+  padding: 4px 6px;
+  margin-bottom: 8px;
+  text-align: left;
+}
+.fb-add-dir-btn:hover { border-color: #4a9eff; color: #4a9eff; }
+.fb-group-hdr {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 3px 0;
+  user-select: none;
+}
+.fb-group-hdr:hover .fb-header { color: #e8eaf6; }
+.fb-group-toggle {
+  font-size: 8px;
+  color: #6c72a0;
+  width: 10px;
+  flex-shrink: 0;
+}
 .fb-header {
   font-size: 10px;
   color: #6c72a0;
@@ -276,6 +339,50 @@ canvas {
 }
 .fb-note.error { color: #e91e63; }
 
+/* Right-click context menu */
+#context-menu {
+  position: fixed;
+  background: #181c28;
+  border: 1px solid #2a2f45;
+  border-radius: 4px;
+  padding: 4px 0;
+  z-index: 1000;
+  min-width: 150px;
+  box-shadow: 0 4px 16px #00000066;
+  display: none;
+}
+.ctx-item {
+  padding: 7px 14px;
+  font-family: monospace;
+  font-size: 11px;
+  color: #9ea3c0;
+  cursor: pointer;
+  user-select: none;
+}
+.ctx-item:hover { background: #2a2f45; color: #e8eaf6; }
+.ctx-item.danger:hover { background: #e91e6322; color: #e91e63; }
+.ctx-sep { height: 1px; background: #2a2f45; margin: 4px 0; }
+
+/* Editable inspector title */
+.inspector-title-inp {
+  background: none;
+  border: none;
+  border-bottom: 1px solid #2a2f45;
+  color: #4a9eff;
+  font-family: monospace;
+  font-size: 12px;
+  width: 100%;
+  outline: none;
+  padding: 0 0 2px;
+}
+.inspector-title-inp:focus { border-bottom-color: #4a9eff; }
+.inspector-id-sub {
+  font-size: 9px;
+  color: #3a3f55;
+  font-family: monospace;
+  margin-top: 3px;
+}
+
 /* Delete box button in inspector */
 .delete-box-btn {
   width: 100%;
@@ -301,6 +408,10 @@ canvas {
   <div id="toolbar">
     <button class="toolbar-btn" onclick="App.load_map()">reload</button>
     <button class="toolbar-btn" onclick="localStorage.clear(); location.reload()">switch map</button>
+    <span style="margin:0 2px;color:#2a2f45;">|</span>
+    <button class="toolbar-btn" id="tool-erase-wire" onclick="App.set_tool_mode('erase-wire')">✕ wire</button>
+    <span style="margin:0 2px;color:#2a2f45;">|</span>
+    <button class="toolbar-btn" onclick="App.export_image()">⬇ png</button>
   </div>
   <div id="status-bar">
     <span id="status" class="status">starting…</span>

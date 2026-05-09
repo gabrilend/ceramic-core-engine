@@ -8,40 +8,55 @@ const Boxes = (() => {
   const PORT_R        = 6;   // port dot radius in world units
   const MIN_BOX_H     = 80;
 
-  const KIND_COLOR = { call: '#4a9eff', branch: '#ff8c42', data: '#4caf7d' };
+  const KIND_COLOR = { call: '#4a9eff', data: '#4caf7d' };
+
+  // Comparator branch colors: lt=orange, eq=blue, gt=green
+  const BRANCH_COLOR = { lt: '#ff8c42', eq: '#4a9eff', gt: '#4caf7d' };
 
   // boxes: { [id]: box_data }
   let boxes = {};
 
   // {{{ box_height
   function box_height(box) {
-    const n = Math.max(
-      (box.inputs || []).length,
-      (box.kind === 'branch' ? (box.ports || []).length : (box.outputs || []).length)
-    );
-    return Math.max(MIN_BOX_H, BOX_HEADER + n * PORT_ROW_H + 8);
+    const n_in  = (box.inputs || []).length;
+    // comparator active: 3 output dots (lt/eq/gt); otherwise: 1 centered dot
+    const n_out = (box.comparand && box.comparand !== '') ? 3 : 1;
+    return Math.max(MIN_BOX_H, BOX_HEADER + Math.max(n_in, n_out) * PORT_ROW_H + 8);
   }
   // }}}
 
   // {{{ port_positions
   // Returns world-space {x,y} for each port dot on a box.
+  // Output side: null-named single dot when no comparand; 'lt'/'eq'/'gt' dots when comparand set.
   function port_positions(box) {
     const bx = box.ui?.x ?? 0;
     const by = box.ui?.y ?? 0;
     const h  = box_height(box);
-    const inputs  = box.inputs  || [];
-    const outputs = box.kind === 'branch' ? (box.ports || []) : (box.outputs || []);
+    const inputs = box.inputs || [];
 
-    const in_pts  = inputs.map((p, i) => ({
+    const in_pts = inputs.map((p, i) => ({
       name: p.name, side: 'input',
       x: bx,
       y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
     }));
-    const out_pts = outputs.map((p, i) => ({
-      name: p.name, side: 'output',
-      x: bx + BOX_W,
-      y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
-    }));
+
+    let out_pts;
+    if (box.comparand && box.comparand !== '') {
+      // three comparator dots
+      out_pts = ['lt', 'eq', 'gt'].map((branch, i) => ({
+        name: branch, side: 'output',
+        x: bx + BOX_W,
+        y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
+      }));
+    } else {
+      // single output dot, vertically centered in the box
+      out_pts = [{
+        name: null, side: 'output',
+        x: bx + BOX_W,
+        y: by + h / 2,
+      }];
+    }
+
     return { inputs: in_pts, outputs: out_pts };
   }
   // }}}
@@ -97,7 +112,7 @@ const Boxes = (() => {
     ctx.font      = '10px monospace';
     ctx.fillStyle = '#9ea3c0';
 
-    in_pts.forEach((p, i) => {
+    in_pts.forEach(p => {
       ctx.beginPath();
       ctx.arc(p.x, p.y, PORT_R, 0, Math.PI * 2);
       ctx.fillStyle   = '#2d3250';
@@ -112,10 +127,9 @@ const Boxes = (() => {
       ctx.fillText(p.name, p.x + PORT_R + 4, p.y);
     });
 
-    // branch ports use palette colors
-    const port_palette = ['#ff8c42','#4a9eff','#4caf7d','#e91e63','#9c27b0','#00bcd4'];
-    out_pts.forEach((p, i) => {
-      const dot_color = (box.kind === 'branch') ? port_palette[i % port_palette.length] : color;
+    out_pts.forEach(p => {
+      // comparator branches use distinct colors; single output uses kind color
+      const dot_color = p.name ? (BRANCH_COLOR[p.name] || color) : color;
       ctx.beginPath();
       ctx.arc(p.x, p.y, PORT_R, 0, Math.PI * 2);
       ctx.fillStyle   = dot_color + '44';
@@ -124,10 +138,14 @@ const Boxes = (() => {
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle  = '#9ea3c0';
-      ctx.textAlign  = 'right';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(p.name, p.x - PORT_R - 4, p.y);
+      // label branch name ('lt'/'eq'/'gt') to the left of the dot; nothing for single wire
+      if (p.name) {
+        ctx.fillStyle  = dot_color;
+        ctx.font       = '9px monospace';
+        ctx.textAlign  = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(p.name, p.x - PORT_R - 4, p.y);
+      }
     });
   }
   // }}}
@@ -142,6 +160,7 @@ const Boxes = (() => {
 
   // {{{ hit_test_port
   // Returns {box_id, port_name, side, x, y} for the port under world point (wx,wy), or null.
+  // For output dots: port_name is null (single wire) or 'lt'/'eq'/'gt' (comparator).
   function hit_test_port(wx, wy) {
     for (const id in boxes) {
       const { inputs, outputs } = port_positions(boxes[id]);

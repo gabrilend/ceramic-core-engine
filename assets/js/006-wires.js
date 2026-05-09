@@ -5,9 +5,11 @@ const Wires = (() => {
   const BEZIER_CTRL_OFFSET = 80;
   const HIT_SAMPLES        = 20;
   const HIT_THRESHOLD_PX   = 8;
-  const PORT_PALETTE = ['#ff8c42','#4a9eff','#4caf7d','#e91e63','#9c27b0','#00bcd4'];
 
-  let _selected_wire = null;  // { from_box, from_port, to_box, to_input }
+  // Colors for comparator branch wires; plain wire uses default
+  const BRANCH_COLOR = { lt: '#ff8c42', eq: '#4a9eff', gt: '#4caf7d' };
+
+  let _selected_wire = null;  // { from_box, from_branch, to_box, to_input }
 
   // {{{ selected_wire
   function selected_wire() { return _selected_wire; }
@@ -35,7 +37,7 @@ const Wires = (() => {
     ctx.bezierCurveTo(cx0, cy0, cx1, cy1, x1, y1);
     ctx.strokeStyle = selected ? '#ffffff' : color;
     ctx.lineWidth   = selected ? 2.5 : 1.5;
-    ctx.setLineDash(selected ? [] : []);
+    ctx.setLineDash([]);
     ctx.stroke();
   }
   // }}}
@@ -50,8 +52,8 @@ const Wires = (() => {
       for (const c of box.connections || []) {
         if (c.from_box !== id) continue;
 
-        const src  = Boxes.get_port_world_pos(c.from_box, c.from_output || c.from_port, 'output');
-        const dst  = Boxes.get_port_world_pos(c.to_box,   c.to_input,                   'input');
+        const src  = Boxes.get_port_world_pos(c.from_box, c.from_branch ?? null, 'output');
+        const dst  = Boxes.get_port_world_pos(c.to_box,   c.to_input,            'input');
         if (!src || !dst) continue;
 
         const cx0 = src.x + BEZIER_CTRL_OFFSET, cy0 = src.y;
@@ -71,31 +73,21 @@ const Wires = (() => {
 
   // {{{ draw_all
   function draw_all(ctx, selected_box_id) {
-    let branch_port_index = {};
-
     for (const id in Boxes.boxes) {
       const box = Boxes.boxes[id];
       for (const c of box.connections || []) {
         if (c.from_box !== id) continue;
 
-        const src = Boxes.get_port_world_pos(c.from_box, c.from_output || c.from_port, 'output');
-        const dst = Boxes.get_port_world_pos(c.to_box,   c.to_input,                   'input');
+        const src = Boxes.get_port_world_pos(c.from_box, c.from_branch ?? null, 'output');
+        const dst = Boxes.get_port_world_pos(c.to_box,   c.to_input,            'input');
         if (!src || !dst) continue;
 
-        // branch boxes get per-port palette colors
-        let color = '#4a6080';
-        if (box.kind === 'branch') {
-          const port_name = c.from_port;
-          if (!branch_port_index[id]) branch_port_index[id] = {};
-          if (branch_port_index[id][port_name] === undefined) {
-            branch_port_index[id][port_name] = Object.keys(branch_port_index[id]).length;
-          }
-          color = PORT_PALETTE[branch_port_index[id][port_name] % PORT_PALETTE.length];
-        }
+        // comparator branches get distinct colors; plain wire uses dim default
+        const color = c.from_branch ? (BRANCH_COLOR[c.from_branch] || '#4a6080') : '#4a6080';
 
         const is_selected = _selected_wire &&
           _selected_wire.from_box    === c.from_box &&
-          _selected_wire.from_output === c.from_output &&
+          _selected_wire.from_branch === c.from_branch &&
           _selected_wire.to_box      === c.to_box &&
           _selected_wire.to_input    === c.to_input;
 
@@ -118,6 +110,9 @@ const Wires = (() => {
     const wire = hit_test_wire(w.x, w.y, Canvas.cam.zoom);
     if (wire) {
       _selected_wire = wire;
+      const branch_str = wire.from_branch ? '.' + wire.from_branch : '';
+      status_msg('wire ' + wire.from_box + branch_str + ' → ' + wire.to_box + '.' +
+        wire.to_input + ' — press Delete to remove');
     } else {
       _selected_wire = null;
     }
@@ -125,8 +120,9 @@ const Wires = (() => {
   });
 
   // {{{ create_connection
+  // from_branch: null (no comparator) or 'lt'/'eq'/'gt'.
   // Fetch-before-PUT: read both boxes, add the connection record, write both.
-  async function create_connection(from_box_id, from_port, to_box_id, to_input) {
+  async function create_connection(from_box_id, from_branch, to_box_id, to_input) {
     try {
       const [src_box, dst_box] = await Promise.all([
         API.get_box(from_box_id),
@@ -135,26 +131,20 @@ const Wires = (() => {
 
       const conn = {
         from_box:    from_box_id,
-        from_output: from_port,
+        from_branch: from_branch ?? null,
         to_box:      to_box_id,
         to_input:    to_input,
       };
-
-      // if source is a branch box the connection uses from_port not from_output
-      const src_local = Boxes.boxes[from_box_id];
-      if (src_local && src_local.kind === 'branch') {
-        conn.from_port   = from_port;
-        delete conn.from_output;
-      }
 
       src_box.connections = src_box.connections || [];
       dst_box.connections = dst_box.connections || [];
 
       // avoid duplicates
       const dup = src_box.connections.some(c =>
-        c.from_box === conn.from_box &&
-        (c.from_output || c.from_port) === from_port &&
-        c.to_box === conn.to_box && c.to_input === conn.to_input
+        c.from_box    === conn.from_box    &&
+        (c.from_branch ?? null) === conn.from_branch &&
+        c.to_box      === conn.to_box      &&
+        c.to_input    === conn.to_input
       );
       if (dup) return;
 
@@ -170,7 +160,8 @@ const Wires = (() => {
       Boxes.boxes[from_box_id] = src_box;
       Boxes.boxes[to_box_id]   = dst_box;
 
-      status_msg('connected ' + from_box_id + '.' + from_port + ' → ' + to_box_id + '.' + to_input);
+      const branch_str = from_branch ? '.' + from_branch : '';
+      status_msg('connected ' + from_box_id + branch_str + ' → ' + to_box_id + '.' + to_input);
       Canvas.mark_dirty();
     } catch(e) {
       status_msg('connect error: ' + e.message, 'error');
@@ -187,9 +178,10 @@ const Wires = (() => {
       ]);
 
       const match = c =>
-        c.from_box === conn.from_box &&
-        (c.from_output || c.from_port) === (conn.from_output || conn.from_port) &&
-        c.to_box === conn.to_box && c.to_input === conn.to_input;
+        c.from_box    === conn.from_box    &&
+        (c.from_branch ?? null) === (conn.from_branch ?? null) &&
+        c.to_box      === conn.to_box      &&
+        c.to_input    === conn.to_input;
 
       src_box.connections = (src_box.connections || []).filter(c => !match(c));
       dst_box.connections = (dst_box.connections || []).filter(c => !match(c));

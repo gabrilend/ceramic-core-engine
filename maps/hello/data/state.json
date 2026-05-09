@@ -1,13 +1,13 @@
 {
   "constant":false,
   "fields":{
-    "result":{
-      "constant":false,
-      "value":"Hello, world!"
-    },
     "name":{
       "constant":false,
       "value":"world"
+    },
+    "result":{
+      "constant":false,
+      "value":"Hello, world!"
     }
   }
 }

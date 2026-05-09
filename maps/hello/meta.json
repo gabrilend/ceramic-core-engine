@@ -1,5 +1,1 @@
-{
-  "name": "hello",
-  "description": "Minimal example map: reads a name from a data file, returns a greeting.",
-  "entry_box_id": "greet"
-}
+{"name":"hello","description":"Minimal example map: reads a name from a data file, returns a greeting.","entry_box_id":"greet","extra_src_dirs":["/home/ritz/programs/sora/soramech/src"],"src_dirs":["/home/ritz/programs/sora/soramech/libs","/home/ritz/scripts"]}

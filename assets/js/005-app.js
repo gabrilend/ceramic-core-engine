@@ -4,15 +4,77 @@ const App = (() => {
   let selected_id   = null;
   let drag_box_id   = null;
   let drag_offset   = { x: 0, y: 0 };
-  let drawing_wire  = null;  // { from_box, from_port, from_side, cur_x, cur_y }
+  let drawing_wire  = null;  // { from_box, from_port, cur_x, cur_y }
   let hover_port    = null;
   let status_el     = document.getElementById('status');
+
+  // tool_mode: 'select' | 'erase-wire'
+  let tool_mode  = 'select';
+  let erasing    = false;
+  let erase_seen = new Set();  // wire signatures already queued for deletion this drag
+
+  // context menu
+  const ctx_menu = document.createElement('div');
+  ctx_menu.id = 'context-menu';
+  document.body.appendChild(ctx_menu);
+
+  function show_ctx_menu(screen_x, screen_y, items) {
+    ctx_menu.innerHTML = '';
+    items.forEach(item => {
+      if (item === 'sep') {
+        const el = document.createElement('div');
+        el.className = 'ctx-sep';
+        ctx_menu.appendChild(el);
+        return;
+      }
+      const el = document.createElement('div');
+      el.className = 'ctx-item' + (item.danger ? ' danger' : '');
+      el.textContent = item.label;
+      el.onclick = () => { hide_ctx_menu(); item.action(); };
+      ctx_menu.appendChild(el);
+    });
+    ctx_menu.style.display = 'block';
+    ctx_menu.style.left = screen_x + 'px';
+    ctx_menu.style.top  = screen_y + 'px';
+    // keep on screen
+    const r = ctx_menu.getBoundingClientRect();
+    if (r.right  > window.innerWidth)  ctx_menu.style.left = (screen_x - r.width)  + 'px';
+    if (r.bottom > window.innerHeight) ctx_menu.style.top  = (screen_y - r.height) + 'px';
+  }
+
+  function hide_ctx_menu() { ctx_menu.style.display = 'none'; }
+
+  // hide context menu on any click or scroll
+  document.addEventListener('click',    hide_ctx_menu);
+  document.addEventListener('keydown',  e => { if (e.key === 'Escape') hide_ctx_menu(); });
 
   // {{{ status_msg
   window.status_msg = function(msg, level = 'info') {
     status_el.textContent = msg;
     status_el.className   = 'status ' + level;
   };
+  // }}}
+
+  // {{{ wire_sig
+  // Stable string key for a connection record, used to prevent double-erase.
+  function wire_sig(c) {
+    return c.from_box + '|' + (c.from_branch || '') + '|' + c.to_box + '|' + c.to_input;
+  }
+  // }}}
+
+  // {{{ set_tool_mode
+  function set_tool_mode(mode) {
+    tool_mode = mode;
+    const era_btn = document.getElementById('tool-erase-wire');
+    if (era_btn) era_btn.classList.toggle('active', mode === 'erase-wire');
+    if (mode === 'erase-wire') {
+      Canvas.el.style.cursor = 'cell';
+      status_msg('click and drag to erase wires');
+    } else {
+      Canvas.el.style.cursor = '';
+      status_msg('');
+    }
+  }
   // }}}
 
   // {{{ load_map
@@ -38,7 +100,7 @@ const App = (() => {
     const id = 'box-' + Date.now().toString(36);
     const box = {
       id, label: 'New Box', kind: 'call',
-      ref: '', fn: '', inputs: [], outputs: [], connections: [],
+      ref: '', fn: '', inputs: [], connections: [],
       ui: { x: Math.round(wx), y: Math.round(wy) },
     };
     try {
@@ -79,7 +141,13 @@ const App = (() => {
     const s = Canvas.mouse_pos(e);
     const w = Canvas.screen_to_world(s.x, s.y);
 
-    // port hit?
+    if (tool_mode === 'erase-wire') {
+      erasing    = true;
+      erase_seen = new Set();
+      return;
+    }
+
+    // select mode: existing port / box / deselect logic
     const port = Boxes.hit_test_port(w.x, w.y);
     if (port && port.side === 'output') {
       drawing_wire = { from_box: port.box_id, from_port: port.port_name,
@@ -87,7 +155,6 @@ const App = (() => {
       return;
     }
 
-    // box hit?
     const box_id = Boxes.hit_test_box(w.x, w.y);
     if (box_id) {
       selected_id = box_id;
@@ -99,7 +166,6 @@ const App = (() => {
       return;
     }
 
-    // click on empty space: deselect
     selected_id = null;
     Inspector.hide();
     Canvas.mark_dirty();
@@ -108,6 +174,28 @@ const App = (() => {
   Canvas.el.addEventListener('mousemove', e => {
     const s = Canvas.mouse_pos(e);
     const w = Canvas.screen_to_world(s.x, s.y);
+
+    if (erasing && tool_mode === 'erase-wire') {
+      const wire = Wires.hit_test_wire(w.x, w.y, Canvas.cam.zoom);
+      if (wire) {
+        const sig = wire_sig(wire);
+        if (!erase_seen.has(sig)) {
+          erase_seen.add(sig);
+          // remove from local cache immediately for instant visual feedback
+          [wire.from_box, wire.to_box].forEach(id => {
+            if (Boxes.boxes[id]) {
+              Boxes.boxes[id].connections = (Boxes.boxes[id].connections || []).filter(
+                c => wire_sig(c) !== sig
+              );
+            }
+          });
+          Canvas.mark_dirty();
+          Wires.delete_connection(wire).catch(e2 =>
+            status_msg('erase error: ' + e2.message, 'error'));
+        }
+      }
+      return;
+    }
 
     if (drawing_wire) {
       drawing_wire.cur_x = w.x;
@@ -129,6 +217,14 @@ const App = (() => {
 
   Canvas.el.addEventListener('mouseup', async e => {
     if (e.button !== 0) return;
+
+    if (erasing) {
+      erasing    = false;
+      erase_seen = new Set();
+      set_tool_mode('select');
+      return;
+    }
+
     const s = Canvas.mouse_pos(e);
     const w = Canvas.screen_to_world(s.x, s.y);
 
@@ -157,26 +253,26 @@ const App = (() => {
     }
   });
 
-  // Double-click to create box
-  Canvas.el.addEventListener('dblclick', async e => {
-    const s = Canvas.mouse_pos(e);
-    const w = Canvas.screen_to_world(s.x, s.y);
-    if (!Boxes.hit_test_box(w.x, w.y)) {
-      await new_box_at(w.x, w.y);
-    }
-  });
-
   // {{{ delete_box
-  // Shared deletion logic used by both the Delete key and the inspector button.
+  // Strips all connection records referencing this box from other boxes first,
+  // then deletes the box. No confirmation — deletion is always immediate.
   async function delete_box(id) {
     const b = Boxes.boxes[id];
     if (!b) return;
-    const conns = (b.connections || []).filter(c => c.from_box === id);
-    if (conns.length > 0) {
-      const refs = conns.map(c => c.to_box).join(', ');
-      if (!confirm(`Box "${id}" has connections to: ${refs}.\nDelete anyway?`)) return;
-    }
     try {
+      // remove all connection records that reference this box from every other box
+      const other_ids = Object.keys(Boxes.boxes).filter(bid => bid !== id);
+      await Promise.all(other_ids.map(async bid => {
+        const box = await API.get_box(bid);
+        const before = (box.connections || []).length;
+        box.connections = (box.connections || []).filter(
+          c => c.from_box !== id && c.to_box !== id
+        );
+        if (box.connections.length !== before) {
+          await API.put_box(bid, box);
+          Boxes.boxes[bid] = box;
+        }
+      }));
       await API.delete_box(id);
       delete Boxes.boxes[id];
       Inspector.hide();
@@ -188,9 +284,6 @@ const App = (() => {
     }
   }
   // }}}
-
-  // expose so Inspector can call it
-  window.App_delete_box = delete_box;
 
   // Delete key: remove selected box or wire
   window.addEventListener('keydown', async e => {
@@ -207,6 +300,176 @@ const App = (() => {
     if (selected_id) await delete_box(selected_id);
   });
 
+  // {{{ save_to_history
+  function save_to_history(server_url, map_name) {
+    const history = JSON.parse(localStorage.getItem('soramech_maps_history') || '[]');
+    // deduplicate: remove existing entry for this server+map combo, then prepend
+    const deduped = history.filter(h => !(h.server_url === server_url && h.map_name === map_name));
+    deduped.unshift({ server_url, map_name });
+    localStorage.setItem('soramech_maps_history', JSON.stringify(deduped.slice(0, 20)));
+  }
+  // }}}
+
+  // {{{ switch_to_map
+  function switch_to_map(server_url, map_name) {
+    const su = server_url || localStorage.getItem('soramech_server');
+    localStorage.setItem('soramech_server', su);
+    localStorage.setItem('soramech_map',    map_name);
+    save_to_history(su, map_name);
+    API.init(su, map_name);
+    document.getElementById('map-label').textContent = map_name;
+    Inspector.hide();
+    load_map();
+  }
+  // }}}
+
+  // {{{ show_map_picker
+  function show_map_picker() {
+    Inspector.show_content('maps', async (container) => {
+      container.innerHTML = '<div class="fb-note">loading…</div>';
+
+      const recent = JSON.parse(localStorage.getItem('soramech_maps_history') || '[]');
+      let available = [];
+      try { available = await API.list_maps(); } catch(e) {}
+
+      container.innerHTML = '';
+
+      // helper: collapsible group with a body element
+      function mk_group(label) {
+        let collapsed = false;
+        const wrap = document.createElement('div');
+        const hdr  = document.createElement('div');
+        hdr.className = 'fb-group-hdr';
+        const toggle = document.createElement('span');
+        toggle.className   = 'fb-group-toggle';
+        toggle.textContent = '▼';
+        hdr.appendChild(toggle);
+        const lbl = document.createElement('span');
+        lbl.className   = 'fb-header';
+        lbl.textContent = label;
+        hdr.appendChild(lbl);
+        const body = document.createElement('div');
+        hdr.onclick = () => {
+          collapsed = !collapsed;
+          toggle.textContent = collapsed ? '▶' : '▼';
+          body.style.display = collapsed ? 'none' : '';
+        };
+        wrap.appendChild(hdr);
+        wrap.appendChild(body);
+        return { wrap, body };
+      }
+
+      // helper: clickable map row
+      function mk_map_row(name, subtitle, onclick) {
+        const row = document.createElement('div');
+        row.className   = 'fb-file-row';
+        row.textContent = name;
+        if (subtitle) {
+          const s = document.createElement('span');
+          s.style.cssText = 'font-size:9px;color:#3a3f55;margin-left:6px;font-family:monospace;';
+          s.textContent   = subtitle;
+          row.appendChild(s);
+        }
+        row.onclick = onclick;
+        return row;
+      }
+
+      const cur_server = localStorage.getItem('soramech_server') || '';
+
+      // recent group
+      if (recent.length > 0) {
+        const g = mk_group('recent');
+        recent.forEach(({ server_url: su, map_name: mn }) => {
+          const sub = su !== cur_server ? su : null;
+          g.body.appendChild(mk_map_row(mn, sub, () => switch_to_map(su, mn)));
+        });
+        container.appendChild(g.wrap);
+      }
+
+      // available on this server
+      if (available.length > 0) {
+        const g = mk_group('on this server');
+        available.forEach(mn => {
+          g.body.appendChild(mk_map_row(mn, null, () => switch_to_map(null, mn)));
+        });
+        container.appendChild(g.wrap);
+      }
+
+      if (recent.length === 0 && available.length === 0) {
+        const note = document.createElement('div');
+        note.className   = 'fb-note';
+        note.textContent = 'no maps found';
+        container.appendChild(note);
+      }
+
+      // new / connect section
+      const sep = document.createElement('div');
+      sep.className   = 'section-label';
+      sep.textContent = 'open map by name';
+      sep.style.marginTop = '10px';
+      container.appendChild(sep);
+
+      const new_wrap = document.createElement('div');
+      new_wrap.style.cssText = 'display:flex;gap:4px;';
+      const new_inp = document.createElement('input');
+      new_inp.type        = 'text';
+      new_inp.placeholder = 'map name';
+      new_inp.style.cssText = 'flex:1;background:#0f1117;border:1px solid #2a2f45;' +
+        'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      const new_btn = document.createElement('button');
+      new_btn.className   = 'toolbar-btn';
+      new_btn.textContent = 'open';
+      new_btn.onclick = () => {
+        const name = new_inp.value.trim();
+        if (name) switch_to_map(null, name);
+      };
+      new_inp.addEventListener('keydown', e => { if (e.key === 'Enter') new_btn.click(); });
+      new_wrap.appendChild(new_inp);
+      new_wrap.appendChild(new_btn);
+      container.appendChild(new_wrap);
+    });
+  }
+  // }}}
+
+  // {{{ export_image
+  function export_image() {
+    const link = document.createElement('a');
+    link.download = 'soramech-' + Date.now() + '.png';
+    link.href     = Canvas.el.toDataURL('image/png');
+    link.click();
+  }
+  // }}}
+
+  // right-click on canvas: context menu
+  Canvas.el.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    hide_ctx_menu();
+
+    const s = Canvas.mouse_pos(e);
+    const w = Canvas.screen_to_world(s.x, s.y);
+
+    const box_id = Boxes.hit_test_box(w.x, w.y);
+    const wire   = !box_id ? Wires.hit_test_wire(w.x, w.y, Canvas.cam.zoom) : null;
+
+    const items = [];
+    if (box_id) {
+      const box   = Boxes.boxes[box_id];
+      const label = (box.label && box.label !== 'New Box') ? '"' + box.label + '"' : box_id;
+      items.push({ label: 'delete ' + label, danger: true, action: () => delete_box(box_id) });
+    } else if (wire) {
+      const branch_str = wire.from_branch ? ' .' + wire.from_branch : '';
+      items.push({
+        label:  'delete wire ' + wire.from_box + branch_str + ' → ' + wire.to_box,
+        danger: true,
+        action: () => Wires.delete_connection(wire),
+      });
+    } else {
+      items.push({ label: 'add box here', action: () => new_box_at(w.x, w.y) });
+    }
+
+    show_ctx_menu(e.clientX, e.clientY, items);
+  });
+
   // {{{ init
   async function init() {
     let server_url = localStorage.getItem('soramech_server') || '';
@@ -215,11 +478,13 @@ const App = (() => {
     if (!server_url || !map_name) {
       server_url = prompt('Server URL:', 'http://localhost:7700') || 'http://localhost:7700';
       map_name   = prompt('Map name:',   'hello')                || 'hello';
-      localStorage.setItem('soramech_server', server_url);
-      localStorage.setItem('soramech_map',    map_name);
     }
 
+    save_to_history(server_url, map_name);
+    localStorage.setItem('soramech_server', server_url);
+    localStorage.setItem('soramech_map',    map_name);
     document.getElementById('map-label').textContent = map_name;
+    document.getElementById('map-label').onclick = show_map_picker;
     API.init(server_url, map_name);
     await load_map();
     requestAnimationFrame(render);
@@ -227,5 +492,5 @@ const App = (() => {
   // }}}
 
   window.addEventListener('DOMContentLoaded', init);
-  return { load_map };
+  return { load_map, set_tool_mode, export_image };
 })();
