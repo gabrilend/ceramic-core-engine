@@ -1,7 +1,18 @@
 # 216 — Read-file box: output contents of a text or data file
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+`libs/files.lua` ships with `M.read_text(path)` and
+`M.read_data(path, key)`. Errors write to stderr and return nil per
+the executor's nil-becomes-empty-string rule. `read_data` handles
+both the soramech-data nested shape (`obj.fields[key].value`) and a
+flat fallback (`obj[key]`); whole-file mode (`key == nil or ""`)
+re-encodes the parsed object so callers always get a JSON string.
+
+`libs/files.lua.info.md` documents both helpers.
 
 ## Current behavior
 No standard box exists for loading text from disk into the wire graph. A user who

@@ -53,7 +53,7 @@ Read in order for a complete picture of the system.
 - 213 — queued inputs and task model (won't implement; phase 3 issue 302 supersedes)
 - 214 — tmp symlink recreation on reboot (complete)
 - 215 — view source button (complete)
-- 216 — read-file box (`libs/files.lua`)
+- 216 — read-file box (`libs/files.lua`) (complete)
 - 223 — syntax highlighting via user-written lexers
 - 224 — editable port names and canvas-side value edit
 - 225 — dir picker shows files and dir/file icons
@@ -97,6 +97,8 @@ TBD.
 
 - libs/ — vendored libraries and shipped helpers (dkjson, luasocket, ollama)
 - [libs/soramech-data.info.md](../libs/soramech-data.info.md) — `data.get` / `data.set` / `data.load` API reference
+- [libs/text.lua.info.md](../libs/text.lua.info.md) — `text.concat` / `text.split` API reference
+- [libs/files.lua.info.md](../libs/files.lua.info.md) — `files.read_text` / `files.read_data` API reference
 
 ## Tests
 

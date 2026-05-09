@@ -29,7 +29,7 @@ model the phase 3 runtime will consume.
 | 226  | hide output controls for no-return functions   | complete |
 | 227  | hide view button when box has no ref           | complete |
 | 228  | self-loop wires routed around the box body     | complete |
-| 216  | read-file box                                  | open     |
+| 216  | read-file box                                  | complete |
 | 217  | concat box and dynamic inputs                  | complete |
 | 218  | enforce single-output driver contract          | complete |
 | 220  | root run script and entry point cleanup        | complete |
