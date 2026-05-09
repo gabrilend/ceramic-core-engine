@@ -19,13 +19,14 @@ model the phase 3 runtime will consume.
 | 211  | file browser library directories               | complete |
 | 211a | unify src/ into same directory pipeline        | complete |
 | 212  | editor interaction modes                       | complete |
-| 213  | queued inputs and task model                   | open     |
+| 213  | queued inputs and task model                   | won't implement |
 | 214  | tmp symlink recreation on reboot               | complete |
 | 215  | view source button                             | complete |
 | 223  | syntax highlighting via user-written lexers    | open     |
 | 224  | editable port names and canvas-side value edit | open     |
 | 225  | dir picker shows files and dir/file icons      | open     |
 | 226  | hide output controls for no-return functions   | open     |
+| 227  | hide view button when box has no ref           | open     |
 | 216  | read-file box                                  | open     |
 | 217  | concat box and dynamic inputs                  | complete |
 | 218  | enforce single-output driver contract          | complete |

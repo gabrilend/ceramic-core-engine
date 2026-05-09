@@ -50,7 +50,7 @@ Read in order for a complete picture of the system.
 - 211 — file browser library directories (complete)
 - 211a — unify src/ into same directory pipeline (complete)
 - 212 — editor interaction modes (complete)
-- 213 — queued inputs and task model
+- 213 — queued inputs and task model (won't implement; phase 3 issue 302 supersedes)
 - 214 — tmp symlink recreation on reboot (complete)
 - 215 — view source button (complete)
 - 216 — read-file box (`libs/files.lua`)
@@ -58,6 +58,7 @@ Read in order for a complete picture of the system.
 - 224 — editable port names and canvas-side value edit
 - 225 — dir picker shows files and dir/file icons
 - 226 — hide output controls for no-return functions
+- 227 — hide view button when box has no ref
 - 217 — concat box and dynamic inputs (complete)
 - 218 — enforce single-output driver contract (complete)
 - 219 — map compiler

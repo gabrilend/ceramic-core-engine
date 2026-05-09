@@ -121,93 +121,110 @@ const Wires = (() => {
 
   // {{{ create_connection
   // from_branch: null (no comparator) or 'lt'/'eq'/'gt'.
-  // Fetch-before-PUT: read both boxes, add the connection record, write both.
+  //
+  // Mutates the cached box objects in place. Replacing the reference
+  // (e.g. with a freshly-fetched copy from API.get_box) used to break
+  // any other module holding a reference to the box — most painfully
+  // the inspector, whose current_box reference would silently go
+  // stale after a wire was created, causing subsequent variadic
+  // operations to operate on out-of-date data and clobber the just-
+  // added wire on save. Mutating in place keeps every reference
+  // valid.
   async function create_connection(from_box_id, from_branch, to_box_id, to_input) {
+    const src_box = Boxes.boxes[from_box_id];
+    const dst_box = Boxes.boxes[to_box_id];
+    if (!src_box || !dst_box) {
+      status_msg('connect error: box not in cache', 'error');
+      return;
+    }
+
+    const conn = {
+      from_box:    from_box_id,
+      from_branch: from_branch ?? null,
+      to_box:      to_box_id,
+      to_input:    to_input,
+    };
+
+    src_box.connections = src_box.connections || [];
+    dst_box.connections = dst_box.connections || [];
+
+    // avoid exact duplicates (same source, branch, dest, input)
+    const dup = src_box.connections.some(c =>
+      c.from_box    === conn.from_box    &&
+      (c.from_branch ?? null) === conn.from_branch &&
+      c.to_box      === conn.to_box      &&
+      c.to_input    === conn.to_input
+    );
+    if (dup) return;
+
+    src_box.connections.push(conn);
+    dst_box.connections.push(conn);
+
     try {
-      const [src_box, dst_box] = await Promise.all([
-        API.get_box(from_box_id),
-        API.get_box(to_box_id),
-      ]);
-
-      const conn = {
-        from_box:    from_box_id,
-        from_branch: from_branch ?? null,
-        to_box:      to_box_id,
-        to_input:    to_input,
-      };
-
-      src_box.connections = src_box.connections || [];
-      dst_box.connections = dst_box.connections || [];
-
-      // avoid duplicates
-      const dup = src_box.connections.some(c =>
-        c.from_box    === conn.from_box    &&
-        (c.from_branch ?? null) === conn.from_branch &&
-        c.to_box      === conn.to_box      &&
-        c.to_input    === conn.to_input
-      );
-      if (dup) return;
-
-      src_box.connections.push(conn);
-      dst_box.connections.push(conn);
-
       await Promise.all([
         API.put_box(from_box_id, src_box),
         API.put_box(to_box_id,   dst_box),
       ]);
-
-      // update local cache
-      Boxes.boxes[from_box_id] = src_box;
-      Boxes.boxes[to_box_id]   = dst_box;
-
-      const branch_str = from_branch ? '.' + from_branch : '';
-      status_msg('connected ' + from_box_id + branch_str + ' → ' + to_box_id + '.' + to_input);
-      Canvas.mark_dirty();
-
-      // Auto-grow the destination box's variadic group when the wire
-      // landed on its last slot (issue 217 part B). Idempotent — the
-      // helper checks first whether to_input is the last slot of its
-      // group and exits if not.
-      if (Inspector.auto_grow_after_set) {
-        await Inspector.auto_grow_after_set(dst_box, to_input);
-      }
-    } catch(e) {
+    } catch (e) {
+      // roll back the push so the in-memory state matches the server
+      src_box.connections.pop();
+      dst_box.connections.pop();
       status_msg('connect error: ' + e.message, 'error');
+      return;
+    }
+
+    const branch_str = from_branch ? '.' + from_branch : '';
+    status_msg('connected ' + from_box_id + branch_str + ' → ' + to_box_id + '.' + to_input);
+    Canvas.mark_dirty();
+
+    // Auto-grow the destination box's variadic group when the wire
+    // landed on its last slot (issue 217 part B). Idempotent — the
+    // helper checks first whether to_input is the last slot of its
+    // group and exits if not.
+    if (Inspector.auto_grow_after_set) {
+      await Inspector.auto_grow_after_set(dst_box, to_input);
     }
   }
   // }}}
 
   // {{{ delete_connection
+  // Same in-place mutation pattern as create_connection — never
+  // replace the cached references.
   async function delete_connection(conn) {
+    const src_box = Boxes.boxes[conn.from_box];
+    const dst_box = Boxes.boxes[conn.to_box];
+    if (!src_box || !dst_box) {
+      status_msg('delete wire error: box not in cache', 'error');
+      return;
+    }
+
+    const match = c =>
+      c.from_box    === conn.from_box    &&
+      (c.from_branch ?? null) === (conn.from_branch ?? null) &&
+      c.to_box      === conn.to_box      &&
+      c.to_input    === conn.to_input;
+
+    const src_before = src_box.connections || [];
+    const dst_before = dst_box.connections || [];
+    src_box.connections = src_before.filter(c => !match(c));
+    dst_box.connections = dst_before.filter(c => !match(c));
+
     try {
-      const [src_box, dst_box] = await Promise.all([
-        API.get_box(conn.from_box),
-        API.get_box(conn.to_box),
-      ]);
-
-      const match = c =>
-        c.from_box    === conn.from_box    &&
-        (c.from_branch ?? null) === (conn.from_branch ?? null) &&
-        c.to_box      === conn.to_box      &&
-        c.to_input    === conn.to_input;
-
-      src_box.connections = (src_box.connections || []).filter(c => !match(c));
-      dst_box.connections = (dst_box.connections || []).filter(c => !match(c));
-
       await Promise.all([
         API.put_box(conn.from_box, src_box),
         API.put_box(conn.to_box,   dst_box),
       ]);
-
-      Boxes.boxes[conn.from_box] = src_box;
-      Boxes.boxes[conn.to_box]   = dst_box;
-
-      _selected_wire = null;
-      status_msg('deleted connection');
-      Canvas.mark_dirty();
-    } catch(e) {
+    } catch (e) {
+      // roll back
+      src_box.connections = src_before;
+      dst_box.connections = dst_before;
       status_msg('delete wire error: ' + e.message, 'error');
+      return;
     }
+
+    _selected_wire = null;
+    status_msg('deleted connection');
+    Canvas.mark_dirty();
   }
   // }}}
 

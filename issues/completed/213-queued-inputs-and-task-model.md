@@ -2,7 +2,34 @@
 
 ## Status
 
-open
+won't implement (in phase 2 — superseded by phase 3 issue 302)
+
+## Resolution
+
+The queue-per-port model described here is the right model. The
+phase 2 implementation in `src/004-executor.lua` would be throwaway
+work because phase 3 (issues 301–311) replaces the synchronous
+runtime wholesale: the C pool runner uses ring-buffer slots in
+shared memory (issue 302) for exactly the queue semantics this
+issue describes.
+
+Phase 3 already incorporates this issue's design — fan-in,
+queue-drain, optional ports, and the "many wires into one input
+port" model. See:
+- `issues/302-wire-value-slot-store.md` — slots are ring buffers;
+  N-cell rings handle queued inputs natively.
+- `issues/304-task-dispatch-layer.md` — the dispatch action drains
+  one value per input from each port queue.
+
+Closing this issue without implementing it in the phase 2 Lua
+runtime. Maps that rely on fan-in (multiple wires to one input
+port) will produce undefined behavior under the phase 2 runner —
+last-wire-wins, with no queue. Once phase 3 ships, fan-in works
+correctly.
+
+This means: don't ship a map that depends on fan-in until phase 3
+lands. The editor allows constructing such maps; they just don't
+run correctly yet.
 
 ## Current behavior
 

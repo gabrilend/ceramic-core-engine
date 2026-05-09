@@ -72,20 +72,25 @@ const Inspector = (() => {
       return [c];
     });
 
-    // Update each upstream box.
+    // Update each upstream box. Mutates the cached object in place;
+    // never replaces the cache reference, so anyone else holding a
+    // reference (including this inspector if it later switches focus)
+    // sees the updates immediately.
     await Promise.all(Array.from(upstream_ids).map(async up_id => {
+      const up = Boxes.boxes[up_id];
+      if (!up) return;
+      const before = up.connections || [];
+      up.connections = before.flatMap(c => {
+        if (c.to_box === my_id && target_names.includes(c.to_input)) {
+          const updated = mut(c);
+          return updated ? [updated] : [];
+        }
+        return [c];
+      });
       try {
-        const up = await API.get_box(up_id);
-        up.connections = (up.connections || []).flatMap(c => {
-          if (c.to_box === my_id && target_names.includes(c.to_input)) {
-            const updated = mut(c);
-            return updated ? [updated] : [];
-          }
-          return [c];
-        });
         await API.put_box(up_id, up);
-        Boxes.boxes[up_id] = up;
       } catch (e) {
+        up.connections = before;   // roll back on PUT failure
         console.error('failed to update upstream ' + up_id + ': ' + e.message);
       }
     }));
@@ -149,64 +154,67 @@ const Inspector = (() => {
   // boxes (this one and any upstream boxes whose connection records
   // referenced the renamed/removed slots), then re-renders the inspector.
 
-  // Toggle a non-variadic input ON: rename `text` → `text_0`, add base
-  // to box.variadic_inputs, update incoming connections.
-  // Special case: a port literally named `...` (Lua variadic that the
-  // file-browser parser left in place) gets renamed to `args_0` with
-  // base `args` — there's no other sensible name we can derive.
+  // Toggle a non-variadic input ON: snip every wire targeting the
+  // port, rename the port `text` → `text_0`, add base to
+  // box.variadic_inputs.
+  //
+  // Snipping (rather than renaming the wire to point at `text_0`)
+  // matches the user's mental model: variadic-on and variadic-off
+  // are different input shapes; switching shapes clears the wires.
+  // The user reconnects after the toggle. This avoids a class of
+  // edge cases where rename + wire-create + auto-grow have to
+  // coordinate.
+  //
+  // Special case: a port literally named `...` (Lua variadic that
+  // the file-browser parser left in place) gets renamed to `args_0`
+  // with base `args` — there's no other sensible name we can derive.
   async function make_variadic(port_name) {
     const idx = current_box.inputs.findIndex(p => p.name === port_name);
     if (idx < 0) return;
 
     const base     = port_name === '...' ? 'args' : port_name;
     const new_name = base + '_0';
-    const old_name = port_name;
 
+    // 1. Drop any wires currently targeting this port.
+    await update_target_connections([port_name], () => null);
+
+    // 2. Rename the port and add base to variadic_inputs.
     current_box.inputs[idx].name = new_name;
     current_box.variadic_inputs  = current_box.variadic_inputs || [];
     if (!current_box.variadic_inputs.includes(base)) {
       current_box.variadic_inputs.push(base);
     }
 
-    await update_target_connections([old_name], c => ({ ...c, to_input: new_name }));
     await save();
     Canvas.mark_dirty();
     show(current_box, on_change_cb, on_delete_cb);
   }
 
   // Toggle a variadic group OFF (collapse to single port `<base>`).
-  // Higher-indexed slots are deleted along with their incoming wires.
+  // Snips every wire targeting any slot in the group, drops higher
+  // slots from box.inputs, renames slot 0 back to base, removes the
+  // base from box.variadic_inputs.
   //
-  // Order matters: connection updates run FIRST, while port objects
-  // still carry their old names. If we rename the port objects before
-  // updating connections, the second update reads `slots[0].port.name`
-  // post-mutation and ends up looking for connections targeting the
-  // already-renamed slot — finds none, leaves a stale `text_0`-pointing
-  // connection record behind, which reappears as a "ghost" wire when
-  // the user toggles variadic back on.
+  // Snipping (rather than keeping slot-0's wire) matches the same
+  // "shape change clears wires" rule as make_variadic. Symmetric.
   async function unmake_variadic(base) {
     const slots = variadic_slots_for(current_box, base);
     if (slots.length === 0) return;
 
-    // Capture old names BEFORE any mutation. drop_names are the higher
-    // slots' names (text_1, text_2, ...); slot_0_old_name is the first
-    // slot's name (text_0) which we'll rename to `base` (text).
+    // Capture all slot names BEFORE mutating port objects.
+    const all_names = slots.map(s => s.port.name);
+
+    // 1. Drop every wire targeting any slot in the group.
+    await update_target_connections(all_names, () => null);
+
+    // 2. Drop higher slots from box.inputs and rename slot 0 to base.
     const slot_0_old_name = slots[0].port.name;
-    const drop_names      = slots.slice(1).map(s => s.port.name);
-
-    // 1. Update connections targeting the old slot-0 name → rename to base.
-    await update_target_connections([slot_0_old_name], c => ({ ...c, to_input: base }));
-    // 2. Drop connections targeting any higher slot.
-    if (drop_names.length > 0) {
-      await update_target_connections(drop_names, () => null);
-    }
-
-    // 3. Now safe to rename / drop the port objects on this box.
     current_box.inputs = current_box.inputs.filter((_, i) =>
       !slots.slice(1).some(s => s.idx === i));
     const new_keep_idx = current_box.inputs.findIndex(p => p.name === slot_0_old_name);
     if (new_keep_idx >= 0) current_box.inputs[new_keep_idx].name = base;
 
+    // 3. Remove base from variadic_inputs.
     current_box.variadic_inputs = (current_box.variadic_inputs || [])
       .filter(n => n !== base);
 
@@ -288,12 +296,14 @@ const Inspector = (() => {
       .filter(c => c.from_box !== my_id);
 
     await Promise.all(Array.from(dest_ids).map(async dst_id => {
+      const dst = Boxes.boxes[dst_id];
+      if (!dst) return;
+      const before = dst.connections || [];
+      dst.connections = before.filter(c => c.from_box !== my_id);
       try {
-        const dst = await API.get_box(dst_id);
-        dst.connections = (dst.connections || []).filter(c => c.from_box !== my_id);
         await API.put_box(dst_id, dst);
-        Boxes.boxes[dst_id] = dst;
       } catch (e) {
+        dst.connections = before;
         console.error('failed to sever wires to ' + dst_id + ': ' + e.message);
       }
     }));
@@ -317,16 +327,16 @@ const Inspector = (() => {
     box.inputs.push({ name: pv.base + '_' + (pv.index + 1), type: 'any' });
     try {
       await API.put_box(box.id, box);
-      Boxes.boxes[box.id] = box;
       Canvas.mark_dirty();
-      // If this was the currently-shown box, refresh the inspector with
-      // the *new* object — current_box is the stale reference from
-      // before the wire-create / value-set, and show() will adopt the
-      // new one as its tracked current_box.
+      // Mutating in place means box === Boxes.boxes[id] === current_box
+      // (when the inspector is showing this box), so re-rendering with
+      // the same reference works.
       if (current_box && current_box.id === box.id) {
-        show(box, on_change_cb, on_delete_cb);
+        show(current_box, on_change_cb, on_delete_cb);
       }
     } catch (e) {
+      // roll back
+      box.inputs.pop();
       status_msg('auto-grow failed: ' + e.message, 'error');
     }
   }
@@ -396,19 +406,21 @@ const Inspector = (() => {
               current_box.connections = current_box.connections.filter(
                 c => !(c.to_box === box_id && c.to_input === port_name)
               );
-              // remove from each source box on the server
+              // remove from each source box (mutate cached object in place)
               await Promise.all(to_break.map(async conn => {
+                const src = Boxes.boxes[conn.from_box];
+                if (!src) return;
+                const before = src.connections || [];
+                src.connections = before.filter(c =>
+                  !(c.from_box === conn.from_box &&
+                    (c.from_branch ?? null) === (conn.from_branch ?? null) &&
+                    c.to_box    === conn.to_box &&
+                    c.to_input  === conn.to_input)
+                );
                 try {
-                  const src = await API.get_box(conn.from_box);
-                  src.connections = (src.connections || []).filter(c =>
-                    !(c.from_box === conn.from_box &&
-                      (c.from_branch ?? null) === (conn.from_branch ?? null) &&
-                      c.to_box    === conn.to_box &&
-                      c.to_input  === conn.to_input)
-                  );
                   await API.put_box(conn.from_box, src);
-                  Boxes.boxes[conn.from_box] = src;
-                } catch(e2) {
+                } catch (e2) {
+                  src.connections = before;
                   console.error('failed to sever wire from ' + conn.from_box + ':', e2.message);
                 }
               }));

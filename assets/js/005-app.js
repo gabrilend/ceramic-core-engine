@@ -285,30 +285,58 @@ const App = (() => {
     status_msg('');
   });
 
+  // last_erase_pos: world-coord of the previous mousemove during an
+  // erase-wire drag. Used to interpolate between events when the user
+  // drags fast enough that the pointer skips over a thin wire between
+  // browser-throttled mousemove ticks.
+  let last_erase_pos = null;
+
   Canvas.el.addEventListener('mousemove', e => {
     const s = Canvas.mouse_pos(e);
     const w = Canvas.screen_to_world(s.x, s.y);
 
     if (erasing && tool_mode === 'erase-wire') {
-      const wire = Wires.hit_test_wire(w.x, w.y, Canvas.cam.zoom);
-      if (wire) {
+      // Sample several points along the line from the previous cursor
+      // position to the current one; hit-test each against every wire.
+      // Without interpolation a fast drag misses thin wires entirely
+      // because mousemove only fires every ~16ms.
+      const erase_at = (px, py) => {
+        const wire = Wires.hit_test_wire(px, py, Canvas.cam.zoom);
+        if (!wire) return;
         const sig = wire_sig(wire);
-        if (!erase_seen.has(sig)) {
-          erase_seen.add(sig);
-          // remove from local cache immediately for instant visual feedback
-          [wire.from_box, wire.to_box].forEach(id => {
-            if (Boxes.boxes[id]) {
-              Boxes.boxes[id].connections = (Boxes.boxes[id].connections || []).filter(
-                c => wire_sig(c) !== sig
-              );
-            }
-          });
-          Canvas.mark_dirty();
-          Wires.delete_connection(wire).catch(e2 =>
-            status_msg('erase error: ' + e2.message, 'error'));
+        if (erase_seen.has(sig)) return;
+        erase_seen.add(sig);
+        // remove from local cache immediately for instant visual feedback
+        [wire.from_box, wire.to_box].forEach(id => {
+          if (Boxes.boxes[id]) {
+            Boxes.boxes[id].connections = (Boxes.boxes[id].connections || []).filter(
+              c => wire_sig(c) !== sig
+            );
+          }
+        });
+        Canvas.mark_dirty();
+        Wires.delete_connection(wire).catch(e2 =>
+          status_msg('erase error: ' + e2.message, 'error'));
+      };
+
+      if (last_erase_pos) {
+        // Sample density: one sample every HIT_THRESHOLD-ish world units
+        // along the segment. Length is in world units; threshold is also.
+        const dx = w.x - last_erase_pos.x;
+        const dy = w.y - last_erase_pos.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const n = Math.max(1, Math.ceil(dist / 4));   // ~one sample per 4 world units
+        for (let i = 1; i <= n; i++) {
+          const t = i / n;
+          erase_at(last_erase_pos.x + dx * t, last_erase_pos.y + dy * t);
         }
+      } else {
+        erase_at(w.x, w.y);
       }
+      last_erase_pos = w;
       return;
+    } else {
+      last_erase_pos = null;
     }
 
     if (drawing_wire) {
@@ -333,8 +361,9 @@ const App = (() => {
     if (e.button !== 0) return;
 
     if (erasing) {
-      erasing    = false;
-      erase_seen = new Set();
+      erasing        = false;
+      erase_seen     = new Set();
+      last_erase_pos = null;
       set_tool_mode('select');
       return;
     }
