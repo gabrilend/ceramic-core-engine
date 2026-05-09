@@ -42,6 +42,66 @@ Effil-jit is not used. The path is synchronous → coroutine → 3d-rts pool.
 
 ---
 
+## Stage 3 detail: pthreads task model
+
+Each box execution in the thread pool is a **task struct** containing:
+
+- **Function pointer** — the language-specific invocation wrapper (a C
+  function, since pthreads requires a C entry point)
+- **Shared memory pointer** — the region holding the input arguments and
+  return value for this invocation
+- **Dependency list** — pointers to the tasks this task is waiting on
+- **Waiting list** — pointers to tasks that are waiting on this task
+- **Counter** (iterator boxes only) — current iteration index, updated
+  in-place when the iterator re-queues itself
+
+Task structs are allocated once at run start, one per box (not one per
+invocation). They live for the entire run.
+
+### Blocking and unblocking — pointer-only transitions
+
+When a task cannot run (upstream output not yet available), it is placed
+in its upstream task's waiting list. This is a pointer move — no
+allocation, no struct copy. The task struct stays exactly where it is.
+
+When an upstream task completes and writes its return value to shared
+memory, it walks its waiting list and re-adds each entry to the main task
+queue. Again, a pointer move only. The unblocked task's struct is
+unchanged; only its position in the queue changes.
+
+This means "blocked", "queued", and "running" are states defined by which
+list a task's pointer currently lives in — not by any field in the struct.
+
+### Per-thread language runtimes
+
+Each worker thread initializes its own language runtimes at startup:
+- **Lua:** one `lua_State` per thread. Lua states are not thread-safe, but
+  one per thread requires no locking. The task wrapper calls the box
+  function via `lua_pcall`.
+- **C:** the compiled box function is called directly through the function
+  pointer. No interpreter, no overhead beyond the call itself.
+- **Bash/other:** a persistent subprocess per thread (Unix domain socket
+  server model — see Option 3 above). The task wrapper sends a request and
+  blocks the thread waiting for the response.
+
+### Iterator self-re-queue
+
+An iterator task does not terminate after one invocation. When it
+completes:
+1. It increments its `counter` field in-place (or wraps to 0).
+2. It checks its input queue for the next pending value.
+3. If a value is waiting: it updates its input pointer and re-adds itself
+   to the main task queue. No allocation — the same task struct re-enters
+   the queue with updated state.
+4. If no value is waiting: it adds itself to the upstream task's waiting
+   list, to be re-added when the next input arrives.
+
+Input values are processed one-at-a-time in arrival order. Ten queued
+inputs means the iterator task visits the queue ten times, advancing the
+counter and firing a different output path each time.
+
+---
+
 ## The three IPC options
 
 ### Option 1 — LuaJIT FFI (Lua ↔ C, in-process)

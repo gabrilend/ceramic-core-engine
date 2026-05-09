@@ -34,15 +34,16 @@ Wrap-around: `counter = (counter + 1) % #iterator_outputs`
 Each language ships a standard iterator function in `libs/`:
 
 ```
-libs/iterator.lua   — M.iterate(data, counter) → data
-libs/iterator.sh    — function iterate() { echo "$1"; }   (first arg is data)
-libs/iterator.c     — trivial: reads argv[2] (data), prints it to stdout
+libs/iterator.lua  — M.iterate(counter, data) → data
+libs/iterator.sh   — function iterate() { local counter="$1"; echo "$2"; }
+libs/iterator.c    — reads argv[2] (counter), argv[3] (data); prints data
 ```
 
-The function is a passthrough. It receives `data` as the first argument
-and `counter` as the second (implicit, injected by the executor). It
-returns `data` unchanged. The counter argument is available to the function
-in case a user wants to inspect it, but the routing decision is entirely
+The counter is the FIRST argument (position 0 in the driver's arg list,
+before the declared inputs). This is intentional: last-arg convention is
+for variadic tails where the count is unknown; the counter is always
+exactly one value and is always findable at position 0 without counting.
+The function returns `data` unchanged. The routing decision is entirely
 in the executor.
 
 The user points the box's `ref` and `fn` at the appropriate language's
@@ -107,13 +108,13 @@ The counter state table lives alongside the existing value store in
 the executor.
 
 ### Driver contract addition
-The executor injects the counter as an additional argument when invoking
-the driver for an iterator box. It is appended after the declared inputs:
+The executor injects the counter as the first argument when invoking the
+driver for an iterator box, before any declared input values:
 
-  `<driver> <file> <fn> <arg_count+1> [data_args...] <counter>`
+  `<driver> <file> <fn> <arg_count+1> <counter> [data_args...]`
 
-The iterator lib functions accept it as the last positional parameter.
-Non-iterator call boxes are unaffected — they never receive the extra arg.
+The counter is always at position 0 in the arg list — no counting required
+to find it. Non-iterator call boxes are unaffected.
 
 ### Inspector changes
 The inspector shows:
@@ -141,6 +142,46 @@ end
 ```
 
 The iterator lib files are bundled alongside other box source files.
+
+### Threading model integration (3d-rts thread pool)
+
+In the pthreads task pool, each box execution is a task struct containing:
+- A function pointer to the language-specific invocation wrapper
+- A pointer to shared memory holding the input arguments and return value
+- A pointer list of dependency tasks (upstream boxes whose output this box
+  needs before it can run)
+- For iterator boxes: a `counter` field (integer, part of the task struct)
+
+**Blocking:** when a task cannot run because its dependencies haven't
+completed, it is placed in the blocking task's waiting list. No memory is
+allocated — the task struct stays alive, only a pointer to it is moved.
+When the blocking task completes and writes its return value to shared
+memory, it walks its waiting list and re-adds each waiting task to the
+main queue (again, pointer move only — no reallocation or struct copying).
+
+**Iterator self-re-add:** when an iterator task completes, it does not
+terminate. Instead:
+1. It increments its own `counter` field (or wraps to 0).
+2. It checks if there is another pending input value in its input queue.
+3. If yes: it updates its input pointer to the next pending value, then
+   re-adds itself to the main task queue. No new allocation.
+4. If no: it adds itself to the waiting list of its upstream dependency,
+   to be re-added when the next input value arrives.
+
+This means the iterator task struct is allocated once and lives for the
+duration of the run, cycling through the queue as many times as there are
+input values to process. Input values are processed one-at-a-time in
+arrival order — if 10 values are queued, the iterator visits the queue 10
+times, each time firing a different output path and advancing the counter.
+
+**C calling Lua:** the per-thread invocation wrapper is a C function
+(pthreads requires a C entry point). Each worker thread initializes its
+own `lua_State` at startup — Lua states are not thread-safe but one per
+thread is fine. The wrapper dispatches on language tag: if Lua, calls
+through the thread's `lua_State` via `lua_pcall`; if native C, calls the
+function pointer directly (no interpreter overhead); if bash, spawns a
+subprocess (the one case that doesn't map cleanly to pthreads — see
+docs/004-ipc-and-threading.md for options).
 
 ## Open questions
 - Should the counter be exposed as a readable data port (wirable to
