@@ -136,6 +136,9 @@ const Boxes = (() => {
     ctx.font      = '10px monospace';
     ctx.fillStyle = '#9ea3c0';
 
+    // Input port labels are rendered as DOM overlays now (issue 224)
+    // so the user can edit them inline. We only draw the dot here;
+    // the overlay positions an editable input next to it.
     in_pts.forEach(p => {
       ctx.beginPath();
       ctx.arc(p.x, p.y, PORT_R, 0, Math.PI * 2);
@@ -144,11 +147,6 @@ const Boxes = (() => {
       ctx.lineWidth   = 1.5;
       ctx.fill();
       ctx.stroke();
-
-      ctx.fillStyle  = '#9ea3c0';
-      ctx.textAlign  = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(p.name, p.x + PORT_R + 4, p.y);
     });
 
     out_pts.forEach(p => {

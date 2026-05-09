@@ -523,11 +523,81 @@ const Inspector = (() => {
   }
   // }}}
 
+  // {{{ rename_port
+  // Rename an input port at index `port_idx` on `box`. Updates the
+  // port name in box.inputs and rewrites `to_input` on every wire
+  // (both endpoints, mutating in place per the stale-cache lesson
+  // from 217). Reverses the read-only-name decision from issue 208;
+  // tradeoff: a typo desynchronizes the box from the function it
+  // calls, but the resulting runtime error surfaces clearly rather
+  // than silently skipping (issue 224).
+  //
+  // Validation: name must be a non-empty identifier-shaped string and
+  // unique within the box's inputs. Variadic-slot names (`base_N`)
+  // are accepted; the editor uses that shape internally and won't
+  // confuse it with a user rename because the variadic operations
+  // own the rename path for those cases.
+  async function rename_port(box, port_idx, new_name) {
+    const port = box.inputs && box.inputs[port_idx];
+    if (!port) return false;
+    const old_name = port.name;
+    if (old_name === new_name) return false;
+
+    if (!new_name || !/^[A-Za-z_]\w*$/.test(new_name)) {
+      status_msg('invalid port name: must start with a letter or _', 'error');
+      return false;
+    }
+    if (box.inputs.some((p, i) => i !== port_idx && p.name === new_name)) {
+      status_msg('duplicate port name "' + new_name + '"', 'error');
+      return false;
+    }
+
+    port.name = new_name;
+
+    // Rewrite every wire that targeted the old name (on both
+    // endpoints).
+    const my_id = box.id;
+    const upstream_ids = new Set();
+    (box.connections || []).forEach(c => {
+      if (c.to_box === my_id && c.to_input === old_name) {
+        c.to_input = new_name;
+        upstream_ids.add(c.from_box);
+      }
+    });
+    for (const up_id of upstream_ids) {
+      const up = Boxes.boxes[up_id];
+      if (!up) continue;
+      (up.connections || []).forEach(c => {
+        if (c.to_box === my_id && c.to_input === old_name) {
+          c.to_input = new_name;
+        }
+      });
+      try { await API.put_box(up_id, up); }
+      catch (e) { console.error('rename: failed to update ' + up_id + ':', e.message); }
+    }
+
+    try { await API.put_box(box.id, box); }
+    catch (e) {
+      status_msg('rename save failed: ' + e.message, 'error');
+      return false;
+    }
+    Canvas.mark_dirty();
+    // Refresh the inspector's read-only name label so it reflects the
+    // new name immediately (it caches text on show — without this the
+    // user would see the old name in the sidebar until they re-clicked
+    // the box).
+    if (current_box && current_box.id === box.id) {
+      show(current_box, on_change_cb, on_delete_cb);
+    }
+    return true;
+  }
+  // }}}
+
   // {{{ mk_port_display
-  // Renders input ports as read-only name labels with an optional literal value field.
-  // Names are derived from source parsing and are not editable here.
-  // Variadic groups (issue 217 part B) get extra controls: a "var" toggle
-  // on the first slot, "+" to add a slot, and "×" to remove non-first slots.
+  // Renders input ports with their variadic toggle / remove buttons.
+  // Port names and literal values now live on the canvas as DOM
+  // overlays (issue 224); the inspector keeps only the controls
+  // that don't fit cleanly next to a port dot.
   function mk_port_display(ports) {
     const wrap = document.createElement('div');
     wrap.className = 'port-display';
@@ -924,5 +994,5 @@ const Inspector = (() => {
   // }}}
 
   return { show, hide, show_content, auto_grow_after_set,
-           auto_grow_iterator_after_connect };
+           auto_grow_iterator_after_connect, rename_port };
 })();

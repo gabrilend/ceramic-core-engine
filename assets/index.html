@@ -252,6 +252,34 @@ canvas {
 .port-val-inp::placeholder { color: #3a3f55; }
 .port-display-empty { font-size: 11px; color: #3a3f55; padding: 2px 6px; }
 
+/* Editable port-name overlays floating next to the box on the canvas
+   (issue 224). Each row is absolutely positioned by Overlays.redraw
+   in screen coordinates, so they don't scale with zoom — text stays
+   legible at any camera setting. */
+.box-overlay-row {
+  position: absolute;
+  pointer-events: auto;
+  font-family: monospace;
+  font-size: 10px;
+}
+.box-overlay-name {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: #9ea3c0;
+  font-family: monospace;
+  font-size: 10px;
+  padding: 1px 4px;
+  width: 90px;
+  outline: none;
+}
+.box-overlay-name:hover { border-color: #2a2f45; }
+.box-overlay-name:focus {
+  border-color: #4a9eff;
+  background: #1e2130;
+  color: #e8eaf6;
+}
+
 /* File browser */
 .fb-add-dir-btn {
   display: block;
@@ -518,6 +546,7 @@ canvas {
 <script src="js/004-inspector.js"></script>
 <script src="js/006-wires.js"></script>
 <script src="js/008-source-view.js"></script>
+<script src="js/009-box-overlays.js"></script>
 <script src="js/005-app.js"></script>
 </body>
 </html>

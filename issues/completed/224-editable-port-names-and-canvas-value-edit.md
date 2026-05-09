@@ -1,7 +1,67 @@
 # 224 — Editable port names and canvas-side value editing
 
 ## Status
-open
+complete (scope adjusted: name-edit moved, value-edit stays)
+
+## Scope adjustment
+
+The value field stays in the inspector. Only the port-name editing
+moved to the canvas overlay — the rest of issue 208's read-only-name
+decision stays reversed (names are now editable), but the overlay
+implementation only carries the name input. Values on the canvas
+were the more disruptive half of the change and the user opted out;
+keeping values in the inspector also keeps the variadic auto-grow
+flow exactly where it already lives.
+
+## Implementation notes
+
+New module `assets/js/009-box-overlays.js` floats an editable
+`<input>` per input port next to its dot. Lifecycle:
+- `Overlays.redraw()` runs in the main render loop after
+  `Boxes.draw_all`, gated by `Canvas.start_frame()` so the cost is
+  tied to actual canvas changes (camera, drag, create/delete).
+- Reconciles overlays with `Boxes.boxes` — creates new ones, tears
+  down orphans.
+- Per-port rows rebuild when port count changes (variadic
+  add/remove); otherwise the `<input>` elements persist so user
+  typing isn't clobbered between frames.
+- Updates skip any input that currently has focus.
+- Each input commits on blur or Enter (Escape reverts). Typing
+  doesn't fire the rename — only commit does — so the wire-rewrite
+  cost is paid once per change.
+
+Inspector exposes `rename_port(box, port_idx, new_name)`:
+- Validation: non-empty, identifier-shaped (`^[A-Za-z_]\w*$`),
+  unique within the box.
+- On rename, rewrites `to_input` on every wire targeting the port
+  (both endpoints, mutating in place per the stale-cache lesson
+  from 217).
+- Re-renders the inspector if the renamed box is the one on
+  display, so the read-only name label in the sidebar tracks the
+  new name without the user having to re-click.
+
+`002-boxes.js::draw_box` no longer renders input port name text —
+the overlay does. Output port labels (comparator branches, iterator
+slot names) still draw on the canvas; those aren't covered by this
+issue.
+
+CSS additions in `assets/index.html`: `.box-overlay-row`,
+`.box-overlay-name` — overlays don't scale with zoom (consistent
+with most node editors so labels stay legible at any zoom).
+
+### Edge cases
+
+- **Variadic slot rename**: rename_port accepts `base_N`-shaped
+  names, so the user can technically rename a non-variadic port to
+  match a variadic-slot pattern. The variadic helpers detect the
+  shape on subsequent operations; if the user creates one by
+  accident the recovery is to rename it back.
+- **Renamed port had a wire**: the wire's `to_input` rewrites on
+  both endpoints; the canvas re-renders with the new label without
+  losing the connection.
+- **Typo'd a name to something the function doesn't expect**: this
+  is the intentional tradeoff from issue 208. The runtime error
+  surfaces clearly rather than silently skipping.
 
 ## Current behavior
 

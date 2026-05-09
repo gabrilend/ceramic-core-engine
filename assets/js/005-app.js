@@ -193,6 +193,12 @@ const App = (() => {
       if (Object.keys(Boxes.boxes).length === 0) {
         draw_empty_hint(ctx);
       }
+
+      // Reposition / reconcile the per-port name overlays after the
+      // canvas has settled (issue 224). Outside start_frame would run
+      // unconditionally; gating on dirty keeps the cost tied to actual
+      // canvas changes.
+      Overlays.redraw();
     }
     requestAnimationFrame(render);
   }

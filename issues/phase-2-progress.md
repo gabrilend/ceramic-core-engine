@@ -24,7 +24,7 @@ model the phase 3 runtime will consume.
 | 214  | tmp symlink recreation on reboot               | complete |
 | 215  | view source button                             | complete |
 | 223  | syntax highlighting via user-written lexers    | open     |
-| 224  | editable port names and canvas-side value edit | open     |
+| 224  | editable port names (canvas) — values stay in inspector | complete |
 | 225  | dir picker shows files and dir/file icons      | complete |
 | 226  | hide output controls for no-return functions   | complete |
 | 227  | hide view button when box has no ref           | complete |
