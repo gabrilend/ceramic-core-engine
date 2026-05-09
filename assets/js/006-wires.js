@@ -163,6 +163,14 @@ const Wires = (() => {
       const branch_str = from_branch ? '.' + from_branch : '';
       status_msg('connected ' + from_box_id + branch_str + ' → ' + to_box_id + '.' + to_input);
       Canvas.mark_dirty();
+
+      // Auto-grow the destination box's variadic group when the wire
+      // landed on its last slot (issue 217 part B). Idempotent — the
+      // helper checks first whether to_input is the last slot of its
+      // group and exits if not.
+      if (Inspector.auto_grow_after_set) {
+        await Inspector.auto_grow_after_set(dst_box, to_input);
+      }
     } catch(e) {
       status_msg('connect error: ' + e.message, 'error');
     }

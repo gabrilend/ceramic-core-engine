@@ -11,6 +11,87 @@ const Inspector = (() => {
   let on_change_cb = null;
   let on_delete_cb = null;
 
+  // {{{ Variadic helpers (issue 217 part B)
+  // Variadic input naming convention:
+  //   - non-variadic input is just `text`
+  //   - variadic group has slots `text_0`, `text_1`, ..., `text_N`
+  //   - the base name `text` is listed in box.variadic_inputs
+  //
+  // These helpers parse and query that convention without mutating
+  // anything; the toggle / add / remove operations live below.
+
+  function parse_variadic_name(name) {
+    const m = /^(.+)_(\d+)$/.exec(name || '');
+    return m ? { base: m[1], index: parseInt(m[2], 10) } : null;
+  }
+
+  function is_variadic_slot(box, port_name) {
+    const p = parse_variadic_name(port_name);
+    if (!p) return false;
+    return (box.variadic_inputs || []).includes(p.base);
+  }
+
+  function variadic_slots_for(box, base) {
+    const out = [];
+    (box.inputs || []).forEach((p, i) => {
+      const pv = parse_variadic_name(p.name);
+      if (pv && pv.base === base) out.push({ port: p, idx: i, n: pv.index });
+    });
+    out.sort((a, b) => a.n - b.n);
+    return out;
+  }
+
+  function last_variadic_index(box, base) {
+    const slots = variadic_slots_for(box, base);
+    return slots.length === 0 ? -1 : slots[slots.length - 1].n;
+  }
+
+  // Bilateral connection update: walk current_box.connections and the
+  // affected upstream boxes, applying `mut` to each connection record
+  // that has `to_box === current_box.id` and `to_input` matching one
+  // of `target_names`. mut returns either an updated record or null
+  // (delete). Persists changes to the server for every box touched.
+  async function update_target_connections(target_names, mut) {
+    if (!current_box) return;
+    const my_id = current_box.id;
+
+    // Collect upstream box ids whose connection records may need to change.
+    const upstream_ids = new Set();
+    (current_box.connections || []).forEach(c => {
+      if (c.to_box === my_id && target_names.includes(c.to_input)) {
+        upstream_ids.add(c.from_box);
+      }
+    });
+
+    // Update this box's connections in-place.
+    current_box.connections = (current_box.connections || []).flatMap(c => {
+      if (c.to_box === my_id && target_names.includes(c.to_input)) {
+        const updated = mut(c);
+        return updated ? [updated] : [];
+      }
+      return [c];
+    });
+
+    // Update each upstream box.
+    await Promise.all(Array.from(upstream_ids).map(async up_id => {
+      try {
+        const up = await API.get_box(up_id);
+        up.connections = (up.connections || []).flatMap(c => {
+          if (c.to_box === my_id && target_names.includes(c.to_input)) {
+            const updated = mut(c);
+            return updated ? [updated] : [];
+          }
+          return [c];
+        });
+        await API.put_box(up_id, up);
+        Boxes.boxes[up_id] = up;
+      } catch (e) {
+        console.error('failed to update upstream ' + up_id + ': ' + e.message);
+      }
+    }));
+  }
+  // }}}
+
   // {{{ hide
   function hide() {
     panel.classList.add('hidden');
@@ -63,9 +144,187 @@ const Inspector = (() => {
   }
   // }}}
 
+  // {{{ Variadic operations (issue 217 part B)
+  // Each operation mutates current_box, persists changes to all affected
+  // boxes (this one and any upstream boxes whose connection records
+  // referenced the renamed/removed slots), then re-renders the inspector.
+
+  // Toggle a non-variadic input ON: rename `text` → `text_0`, add base
+  // to box.variadic_inputs, update incoming connections.
+  // Special case: a port literally named `...` (Lua variadic that the
+  // file-browser parser left in place) gets renamed to `args_0` with
+  // base `args` — there's no other sensible name we can derive.
+  async function make_variadic(port_name) {
+    const idx = current_box.inputs.findIndex(p => p.name === port_name);
+    if (idx < 0) return;
+
+    const base     = port_name === '...' ? 'args' : port_name;
+    const new_name = base + '_0';
+    const old_name = port_name;
+
+    current_box.inputs[idx].name = new_name;
+    current_box.variadic_inputs  = current_box.variadic_inputs || [];
+    if (!current_box.variadic_inputs.includes(base)) {
+      current_box.variadic_inputs.push(base);
+    }
+
+    await update_target_connections([old_name], c => ({ ...c, to_input: new_name }));
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+
+  // Toggle a variadic group OFF (collapse to single port `<base>`).
+  // Higher-indexed slots are deleted along with their incoming wires.
+  async function unmake_variadic(base) {
+    const slots = variadic_slots_for(current_box, base);
+    if (slots.length === 0) return;
+
+    // Drop higher slots from box.inputs.
+    const drop_names = slots.slice(1).map(s => s.port.name);
+
+    current_box.inputs = current_box.inputs.filter((_, i) =>
+      !slots.slice(1).some(s => s.idx === i));
+    // Re-resolve slot 0's index after the filter, then rename it.
+    const new_keep_idx = current_box.inputs.findIndex(p => p.name === slots[0].port.name);
+    if (new_keep_idx >= 0) current_box.inputs[new_keep_idx].name = base;
+
+    current_box.variadic_inputs = (current_box.variadic_inputs || [])
+      .filter(n => n !== base);
+
+    // Rename slot-0 connections, drop higher-slot connections.
+    await update_target_connections([slots[0].port.name], c => ({ ...c, to_input: base }));
+    if (drop_names.length > 0) {
+      await update_target_connections(drop_names, () => null);
+    }
+
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+
+  // Append `<base>_<last+1>` to box.inputs. Idempotent if no slot grows
+  // would be needed (caller checks). Used by the wire-connect and
+  // value-set auto-grow paths and by sibling code in the wires module.
+  async function add_variadic_slot(base) {
+    const next = last_variadic_index(current_box, base) + 1;
+    current_box.inputs.push({ name: base + '_' + next, type: 'any' });
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+
+  // Remove a single variadic slot at `slot_name`. Higher slots in the
+  // same group rename down by one. Connections targeting the removed
+  // slot are dropped; connections targeting renamed slots get their
+  // to_input rewritten on both endpoints.
+  async function remove_variadic_slot(slot_name) {
+    const pv = parse_variadic_name(slot_name);
+    if (!pv) return;
+
+    // The first slot is permanent — un-variadic instead if you want
+    // to remove it entirely.
+    if (pv.index === 0) {
+      status_msg('cannot remove slot 0 — toggle variadic off instead', 'error');
+      return;
+    }
+
+    // Drop the slot.
+    current_box.inputs = current_box.inputs.filter(p => p.name !== slot_name);
+
+    // Rename higher slots down by one.
+    const renames = [];  // [{ old: 'text_3', new: 'text_2' }, ...]
+    current_box.inputs.forEach((p, i) => {
+      const ppv = parse_variadic_name(p.name);
+      if (ppv && ppv.base === pv.base && ppv.index > pv.index) {
+        const new_name = pv.base + '_' + (ppv.index - 1);
+        renames.push({ old: p.name, new: new_name });
+        current_box.inputs[i].name = new_name;
+      }
+    });
+
+    // Drop connections to the removed slot. Renames go in ascending
+    // order so we never collide with an existing slot's name (we just
+    // freed it up by the previous rename).
+    await update_target_connections([slot_name], () => null);
+    renames.sort((a, b) => parse_variadic_name(a.old).index - parse_variadic_name(b.old).index);
+    for (const r of renames) {
+      await update_target_connections([r.old], c => ({ ...c, to_input: r.new }));
+    }
+
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+
+  // Sever every outgoing wire from this box. Used when toggling the
+  // comparator on/off — wires from null-output and lt/eq/gt outputs
+  // can't all be valid at once, so we wipe the slate on either toggle
+  // direction. Also clears any selected wire if it pointed at one of
+  // the removed connections.
+  async function sever_output_wires() {
+    if (!current_box) return;
+    const my_id = current_box.id;
+    const out   = (current_box.connections || []).filter(c => c.from_box === my_id);
+    if (out.length === 0) return;
+
+    // Collect destinations whose connection records also need cleaning.
+    const dest_ids = new Set();
+    out.forEach(c => dest_ids.add(c.to_box));
+
+    current_box.connections = (current_box.connections || [])
+      .filter(c => c.from_box !== my_id);
+
+    await Promise.all(Array.from(dest_ids).map(async dst_id => {
+      try {
+        const dst = await API.get_box(dst_id);
+        dst.connections = (dst.connections || []).filter(c => c.from_box !== my_id);
+        await API.put_box(dst_id, dst);
+        Boxes.boxes[dst_id] = dst;
+      } catch (e) {
+        console.error('failed to sever wires to ' + dst_id + ': ' + e.message);
+      }
+    }));
+
+    status_msg('cleared ' + out.length + ' outgoing wire(s)');
+  }
+
+  // Auto-grow check used by the wire-connect path and the value-set
+  // path. If `slot_name` is the LAST slot of a variadic group on
+  // `box`, append a new empty slot and persist. Idempotent — calling
+  // again on the same slot is a no-op because it's no longer last.
+  // Exported via the Inspector return so other modules (Wires) can call
+  // it after creating a connection.
+  async function auto_grow_after_set(box, slot_name) {
+    const pv = parse_variadic_name(slot_name);
+    if (!pv) return;
+    if (!(box.variadic_inputs || []).includes(pv.base)) return;
+    if (pv.index !== last_variadic_index(box, pv.base)) return;
+
+    box.inputs = box.inputs || [];
+    box.inputs.push({ name: pv.base + '_' + (pv.index + 1), type: 'any' });
+    try {
+      await API.put_box(box.id, box);
+      Boxes.boxes[box.id] = box;
+      Canvas.mark_dirty();
+      // If this was the currently-shown box, refresh the inspector with
+      // the *new* object — current_box is the stale reference from
+      // before the wire-create / value-set, and show() will adopt the
+      // new one as its tracked current_box.
+      if (current_box && current_box.id === box.id) {
+        show(box, on_change_cb, on_delete_cb);
+      }
+    } catch (e) {
+      status_msg('auto-grow failed: ' + e.message, 'error');
+    }
+  }
+  // }}}
+
   // {{{ mk_port_display
   // Renders input ports as read-only name labels with an optional literal value field.
   // Names are derived from source parsing and are not editable here.
+  // Variadic groups (issue 217 part B) get extra controls: a "var" toggle
+  // on the first slot, "+" to add a slot, and "×" to remove non-first slots.
   function mk_port_display(ports) {
     const wrap = document.createElement('div');
     wrap.className = 'port-display';
@@ -78,6 +337,15 @@ const Inspector = (() => {
       ports.forEach((p, i) => {
         const row = document.createElement('div');
         row.className = 'port-display-row';
+
+        // Variadic context for this port (issue 217 part B):
+        //   in_var_group = is part of a variadic group (one of multiple slots)
+        //   pv           = { base, index } parsed from the slot name
+        //   group_last   = the last index in the group (so we know whether
+        //                  to render the "+" button on this row)
+        const pv           = current_box ? parse_variadic_name(p.name) : null;
+        const in_var_group = current_box && is_variadic_slot(current_box, p.name);
+        const group_last   = in_var_group ? last_variadic_index(current_box, pv.base) : -1;
 
         // name is read-only — derived from function signature via file browser
         const name_el = document.createElement('span');
@@ -137,9 +405,55 @@ const Inspector = (() => {
             }
           }
 
+          // Auto-grow the variadic group when a value lands on its last
+          // slot. Idempotent — once the group has grown, this slot is
+          // no longer the last and the call is a no-op.
+          if (new_val !== undefined && current_box && in_var_group &&
+              pv.index === last_variadic_index(current_box, pv.base)) {
+            await auto_grow_after_set(current_box, p.name);
+          }
+
           save();
         });
         row.appendChild(val_inp);
+
+        // Variadic control buttons. Two states a port row can be in:
+        //   1. Plain port (not variadic): show a "var" toggle that turns it on.
+        //   2. First slot of a variadic group (index 0): show "var ×"
+        //      to collapse the group back to a single port.
+        //   3. Non-first slot in a variadic group: show "×" to remove it.
+        //
+        // No "+" button — slots auto-grow when wired or when a value is
+        // set on the last slot.
+        const btn_style = 'background:none;border:1px solid #2a2f45;border-radius:3px;' +
+          'color:#6c72a0;cursor:pointer;font-family:monospace;font-size:9px;' +
+          'padding:1px 5px;line-height:1.4;';
+
+        if (!in_var_group) {
+          // Plain port — offer the variadic toggle.
+          const var_btn = document.createElement('button');
+          var_btn.style.cssText = btn_style;
+          var_btn.textContent   = 'var';
+          var_btn.title         = 'mark this input as variadic (grows to N slots)';
+          var_btn.onclick       = () => make_variadic(p.name);
+          row.appendChild(var_btn);
+        } else if (pv.index === 0) {
+          // First slot of a variadic group: collapse-back toggle.
+          const var_btn = document.createElement('button');
+          var_btn.style.cssText = btn_style + 'border-color:#4a9eff;color:#4a9eff;';
+          var_btn.textContent   = 'var ×';
+          var_btn.title         = 'collapse back to a single non-variadic input';
+          var_btn.onclick       = () => unmake_variadic(pv.base);
+          row.appendChild(var_btn);
+        } else {
+          // Non-first variadic slot: remove this slot.
+          const x_btn = document.createElement('button');
+          x_btn.style.cssText = btn_style;
+          x_btn.textContent   = '×';
+          x_btn.title         = 'remove this slot';
+          x_btn.onclick       = () => remove_variadic_slot(p.name);
+          row.appendChild(x_btn);
+        }
 
         wrap.appendChild(row);
       });
@@ -283,13 +597,21 @@ const Inspector = (() => {
     const cmp_btn = document.createElement('button');
     cmp_btn.className   = 'toolbar-btn';
     cmp_btn.textContent = has_cmp ? 'comparing ×' : 'compare';
-    cmp_btn.onclick = () => {
+    cmp_btn.onclick = async () => {
+      // Toggling the comparator changes the set of valid output ports
+      // (single null wire ↔ three lt/eq/gt wires). Wires from the old
+      // configuration would re-appear if we left them in the
+      // connections array, so clear all outgoing wires on either
+      // toggle direction.
+      await sever_output_wires();
       if (current_box.comparand !== undefined && current_box.comparand !== '') {
         delete current_box.comparand;
       } else {
         current_box.comparand = '0';
       }
-      save().then(() => show(current_box, on_change_cb, on_delete_cb));
+      await save();
+      show(current_box, on_change_cb, on_delete_cb);
+      Canvas.mark_dirty();
     };
     cmp_row.appendChild(cmp_btn);
 
@@ -308,5 +630,5 @@ const Inspector = (() => {
   }
   // }}}
 
-  return { show, hide, show_content };
+  return { show, hide, show_content, auto_grow_after_set };
 })();

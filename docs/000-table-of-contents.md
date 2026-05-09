@@ -55,7 +55,10 @@ Read in order for a complete picture of the system.
 - 215 — view source button (complete)
 - 216 — read-file box (`libs/files.lua`)
 - 223 — syntax highlighting via user-written lexers
-- 217 — concat box and dynamic inputs
+- 224 — editable port names and canvas-side value edit
+- 225 — dir picker shows files and dir/file icons
+- 226 — hide output controls for no-return functions
+- 217 — concat box and dynamic inputs (complete)
 - 218 — enforce single-output driver contract (complete)
 - 219 — map compiler
 - 220 — root run script and entry point cleanup (complete)
