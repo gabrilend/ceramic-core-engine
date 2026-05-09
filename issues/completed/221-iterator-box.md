@@ -1,7 +1,57 @@
 # 221 — Iterator box: editor surface for round-robin output routing
 
 ## Status
-open (editor surface only)
+complete (editor surface only — runtime in 304)
+
+## Implementation notes
+
+The editor side of iterator boxes is in. Phase 3's dispatch layer
+(304) will read `iterator_outputs` and rotate the counter.
+
+Touches:
+- `src/001-schema.lua` — accept `iterator_outputs` (array of
+  strings); when present, `ref` is no longer required
+- `assets/js/002-boxes.js::box_height`,`port_positions` — N output
+  rows when `iterator_outputs` is set; box grows vertically; each
+  slot's name lands on the dot exactly like a comparator branch
+- `assets/js/004-inspector.js` — `is_iterator`, `make_iterator`,
+  `unmake_iterator`, `add_iterator_slot`, `remove_iterator_slot`,
+  `rename_iterator_slot`, `auto_grow_iterator_after_connect`;
+  iterator toggle button next to kind dropdown; when active, the
+  ref/fn/comparator UI is replaced by an editable slot list with
+  per-slot remove and a "+ slot" button at the end
+- `assets/js/006-wires.js::create_connection` — calls the iterator
+  auto-grow helper after a wire from any branch is created (it's a
+  no-op for non-iterators or non-last-slot connections)
+
+### Behavior decisions
+
+- Toggling on snips outgoing wires, strips ref/fn/comparand, seeds
+  one empty slot named `output_0`.
+- Toggling off snips outgoing wires, deletes `iterator_outputs`,
+  restores empty `ref`/`fn` so the schema (which requires ref on
+  non-iterator call boxes) accepts the save. User re-picks via
+  browse to populate.
+- Slot names are user-renamable — placeholder `output_N` only
+  applied on auto-grow / `+ slot`. Existing slots keep their names
+  on add/remove (no compaction; slot names are free-form, not
+  numeric indices like the variadic input pattern).
+- Removing a slot snips outgoing wires whose `from_branch` matched
+  the removed name. Last slot can't be removed — toggle iterator
+  off instead.
+- Renaming a slot rewrites `from_branch` on every outgoing wire on
+  both endpoints (source and destination boxes), so existing wires
+  follow the rename rather than going stale.
+
+### Edge cases verified by inspection
+
+- Self-loop wires (issue 228) on an iterator slot draw with the
+  looped control points: a self-feeding accumulator iterator is
+  the motivating use case.
+- The `data` kind also accepts `iterator_outputs` schema-wise. The
+  editor doesn't constrain by kind; if the user puts iterator on a
+  data box, the runtime will treat it as a routing primitive.
+  Phase 3's loader can refine if it matters.
 
 ## Scope
 

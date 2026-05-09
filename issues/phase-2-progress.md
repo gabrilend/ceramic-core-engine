@@ -33,7 +33,7 @@ model the phase 3 runtime will consume.
 | 217  | concat box and dynamic inputs                  | complete |
 | 218  | enforce single-output driver contract          | complete |
 | 220  | root run script and entry point cleanup        | complete |
-| 221  | iterator box (editor surface only)             | open     |
+| 221  | iterator box (editor surface only)             | complete |
 | 222  | compile button and assets directory            | complete |
 
 ## Phase goal checklist
@@ -46,7 +46,7 @@ model the phase 3 runtime will consume.
 - [x] Empty canvas shows interaction hints
 - [—] Entry box marker (won't implement — phase 3 auto-detects, see 305)
 - [ ] Comparator routing replaces the old branch box (issue 210)
-- [ ] Iterator box with auto-grow output slots (issue 221)
+- [x] Iterator box with auto-grow output slots (editor; runtime in phase 3 / issue 304)
 - [x] Compile button (issue 222) — placeholder UI for the phase 3 build
 
 ## Notes on graph model changes during phase 2

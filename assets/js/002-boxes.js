@@ -19,8 +19,18 @@ const Boxes = (() => {
   // {{{ box_height
   function box_height(box) {
     const n_in  = (box.inputs || []).length;
-    // comparator active: 3 output dots (lt/eq/gt); otherwise: 1 centered dot
-    const n_out = (box.comparand && box.comparand !== '') ? 3 : 1;
+    // Output rows: iterator boxes have N named slots (issue 221);
+    // comparator active: 3 dots (lt/eq/gt); sink: 0; otherwise 1.
+    let n_out;
+    if (box.iterator_outputs) {
+      n_out = box.iterator_outputs.length;
+    } else if (box.has_output === false) {
+      n_out = 0;
+    } else if (box.comparand && box.comparand !== '') {
+      n_out = 3;
+    } else {
+      n_out = 1;
+    }
     return Math.max(MIN_BOX_H, BOX_HEADER + Math.max(n_in, n_out) * PORT_ROW_H + 8);
   }
   // }}}
@@ -45,6 +55,16 @@ const Boxes = (() => {
       // sink box — function has no return values (issue 226). No output
       // port, no wire-grab target, nothing for the inspector to render.
       out_pts = [];
+    } else if (box.iterator_outputs) {
+      // iterator box (issue 221) — N named output dots stacked down
+      // the right edge, one per declared slot. Slot names land in the
+      // `name` field, so the wire's `from_branch` will pick them up
+      // exactly like a comparator branch name.
+      out_pts = box.iterator_outputs.map((slot, i) => ({
+        name: slot, side: 'output',
+        x: bx + BOX_W,
+        y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
+      }));
     } else if (box.comparand && box.comparand !== '') {
       // three comparator dots
       out_pts = ['lt', 'eq', 'gt'].map((branch, i) => ({

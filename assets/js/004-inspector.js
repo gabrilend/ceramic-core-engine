@@ -277,6 +277,187 @@ const Inspector = (() => {
     show(current_box, on_change_cb, on_delete_cb);
   }
 
+  // {{{ Iterator helpers (issue 221)
+  // Iterator boxes are pure routing primitives: input copies straight
+  // to one output, the dispatch layer (phase 3, issue 304) advances a
+  // counter mod #iterator_outputs each call. No ref/fn — the box body
+  // is just the counter + slot list. Each slot has a user-renamable
+  // name; the slot name lands in a connection's `from_branch` field
+  // exactly like a comparator branch name.
+  //
+  // The inspector edits the slot list; the dispatch layer is what
+  // actually rotates between them at runtime.
+
+  function is_iterator(box) {
+    return Array.isArray(box && box.iterator_outputs);
+  }
+
+  // Toggle the box ON as an iterator. Ref/fn/comparand are mutually
+  // exclusive with iterator routing (a routing primitive has no
+  // function to invoke), so they are stripped. All outgoing wires are
+  // dropped because the output shape changes from a single dot (or
+  // lt/eq/gt) to N named slots — same shape-change-clears-wires rule
+  // as the variadic input toggle.
+  async function make_iterator() {
+    if (!current_box) return;
+
+    await sever_output_wires();
+
+    delete current_box.ref;
+    delete current_box.fn;
+    delete current_box.comparand;
+    delete current_box.has_output;
+    current_box.iterator_outputs = ['output_0'];
+
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+
+  // Toggle iterator OFF. Drop the iterator_outputs field; sever
+  // outgoing wires (their from_branch values referenced slot names
+  // that no longer exist). The user re-picks a function via the
+  // browse button to restore ref/fn.
+  async function unmake_iterator() {
+    if (!current_box) return;
+
+    await sever_output_wires();
+    delete current_box.iterator_outputs;
+    // Restore an empty ref/fn so the schema (which requires ref on
+    // non-iterator call boxes) accepts the save. The user picks a
+    // function via the browse button to populate them.
+    if (current_box.ref === undefined) current_box.ref = '';
+    if (current_box.fn  === undefined) current_box.fn  = '';
+
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+
+  // Append a new slot with a placeholder name (`output_N`). The user
+  // can rename it after — placeholder is just to avoid prompting on
+  // every grow. Mirrors the variadic auto-grow pattern.
+  async function add_iterator_slot() {
+    if (!current_box || !is_iterator(current_box)) return;
+    const slots = current_box.iterator_outputs;
+    let n = slots.length;
+    // pick the lowest free `output_N` so renaming + adding doesn't
+    // collide with an existing user-named slot
+    while (slots.includes('output_' + n)) n++;
+    slots.push('output_' + n);
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+
+  // Remove the slot at index `idx`. Outgoing wires whose from_branch
+  // matched the removed slot get severed; remaining slots keep their
+  // names (no rename — slot names are user-defined and free-form, no
+  // need to compact like the variadic numeric indexes).
+  async function remove_iterator_slot(idx) {
+    if (!current_box || !is_iterator(current_box)) return;
+    const slots = current_box.iterator_outputs;
+    if (idx < 0 || idx >= slots.length) return;
+    if (slots.length <= 1) {
+      status_msg('cannot remove last slot — toggle iterator off instead', 'error');
+      return;
+    }
+    const removed = slots[idx];
+
+    // Sever every outgoing wire on this branch.
+    const my_id = current_box.id;
+    const dst_ids = new Set();
+    (current_box.connections || []).forEach(c => {
+      if (c.from_box === my_id && c.from_branch === removed) dst_ids.add(c.to_box);
+    });
+    current_box.connections = (current_box.connections || [])
+      .filter(c => !(c.from_box === my_id && c.from_branch === removed));
+    for (const dst_id of dst_ids) {
+      const dst = Boxes.boxes[dst_id];
+      if (!dst) continue;
+      dst.connections = (dst.connections || [])
+        .filter(c => !(c.from_box === my_id && c.from_branch === removed));
+      try { await API.put_box(dst_id, dst); }
+      catch (e) { console.error('failed to clean wires to ' + dst_id + ': ' + e.message); }
+    }
+
+    slots.splice(idx, 1);
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+
+  // Rename slot at index `idx` to `new_name`. Renames the slot itself
+  // and rewrites `from_branch` on every outgoing wire that used the
+  // old name (both the source-box record and the destination-box
+  // copy). No-op if the name is unchanged or already taken.
+  async function rename_iterator_slot(idx, new_name) {
+    if (!current_box || !is_iterator(current_box)) return;
+    const slots = current_box.iterator_outputs;
+    if (idx < 0 || idx >= slots.length) return;
+    const old_name = slots[idx];
+    if (old_name === new_name) return;
+    if (!new_name) {
+      status_msg('slot name cannot be empty', 'error');
+      return;
+    }
+    if (slots.includes(new_name)) {
+      status_msg('slot name already in use', 'error');
+      return;
+    }
+
+    slots[idx] = new_name;
+
+    const my_id = current_box.id;
+    const dst_ids = new Set();
+    (current_box.connections || []).forEach(c => {
+      if (c.from_box === my_id && c.from_branch === old_name) {
+        c.from_branch = new_name;
+        dst_ids.add(c.to_box);
+      }
+    });
+    for (const dst_id of dst_ids) {
+      const dst = Boxes.boxes[dst_id];
+      if (!dst) continue;
+      (dst.connections || []).forEach(c => {
+        if (c.from_box === my_id && c.from_branch === old_name) {
+          c.from_branch = new_name;
+        }
+      });
+      try { await API.put_box(dst_id, dst); }
+      catch (e) { console.error('failed to rename wires on ' + dst_id + ': ' + e.message); }
+    }
+
+    await save();
+    Canvas.mark_dirty();
+  }
+
+  // Auto-grow check used by the wire-connect path. If `from_branch` is
+  // the LAST slot of an iterator box, append a new placeholder slot
+  // and persist. Idempotent — calling again on the same slot is a
+  // no-op once a newer slot exists below it. Mirrors the variadic
+  // input auto-grow.
+  async function auto_grow_iterator_after_connect(box, from_branch) {
+    if (!is_iterator(box)) return;
+    const slots = box.iterator_outputs;
+    if (slots[slots.length - 1] !== from_branch) return;
+
+    let n = slots.length;
+    while (slots.includes('output_' + n)) n++;
+    slots.push('output_' + n);
+    try {
+      await API.put_box(box.id, box);
+      Canvas.mark_dirty();
+      if (current_box && current_box.id === box.id) {
+        show(current_box, on_change_cb, on_delete_cb);
+      }
+    } catch (e) {
+      slots.pop();
+      status_msg('iterator auto-grow failed: ' + e.message, 'error');
+    }
+  }
+  // }}}
+
   // Sever every outgoing wire from this box. Used when toggling the
   // comparator on/off — wires from null-output and lt/eq/gt outputs
   // can't all be valid at once, so we wipe the slate on either toggle
@@ -577,6 +758,69 @@ const Inspector = (() => {
       return sel;
     })()));
 
+    // iterator toggle (issue 221) — flips between function-backed and
+    // routing-primitive shapes; mutually exclusive with ref/fn/comparator
+    const iter_btn = document.createElement('button');
+    iter_btn.className   = 'toolbar-btn';
+    iter_btn.textContent = is_iterator(box) ? 'iterator ×' : 'iterator';
+    iter_btn.onclick = () => {
+      if (is_iterator(current_box)) unmake_iterator();
+      else make_iterator();
+    };
+    fields.appendChild(mk_row('mode', iter_btn));
+
+    // For iterator boxes, ref/fn/output are all replaced by the slot
+    // list. Inputs still render below (one input wire feeds the
+    // routing primitive). The render flow forks here.
+    if (is_iterator(box)) {
+      // inputs section (same as below; one input is typical but we
+      // accept whatever the user has set)
+      const in_sec = document.createElement('div');
+      in_sec.className   = 'section-label';
+      in_sec.textContent = 'inputs';
+      fields.appendChild(in_sec);
+      fields.appendChild(mk_port_display(box.inputs));
+
+      // outputs: editable list of slot names with × per slot, + at end
+      const out_sec = document.createElement('div');
+      out_sec.className   = 'section-label';
+      out_sec.textContent = 'outputs (round-robin)';
+      fields.appendChild(out_sec);
+
+      const slot_wrap = document.createElement('div');
+      slot_wrap.className = 'port-display';
+      box.iterator_outputs.forEach((slot, i) => {
+        const row = document.createElement('div');
+        row.className = 'port-display-row';
+
+        const inp = document.createElement('input');
+        inp.type      = 'text';
+        inp.value     = slot;
+        inp.className = 'port-name-inp';
+        inp.style.flex = '1';
+        inp.addEventListener('change', () => {
+          rename_iterator_slot(i, inp.value.trim());
+        });
+        row.appendChild(inp);
+
+        const rm = document.createElement('button');
+        rm.className   = 'toolbar-btn';
+        rm.textContent = '×';
+        rm.title       = 'remove slot';
+        rm.onclick     = () => remove_iterator_slot(i);
+        row.appendChild(rm);
+
+        slot_wrap.appendChild(row);
+      });
+      const add_btn = document.createElement('button');
+      add_btn.className   = 'toolbar-btn';
+      add_btn.textContent = '+ slot';
+      add_btn.onclick     = () => add_iterator_slot();
+      slot_wrap.appendChild(add_btn);
+      fields.appendChild(slot_wrap);
+      return;
+    }
+
     // ref: editable text input + browse button to populate via file browser
     const ref_wrap = document.createElement('div');
     ref_wrap.style.cssText = 'display:flex;gap:4px;align-items:center;';
@@ -679,5 +923,6 @@ const Inspector = (() => {
   }
   // }}}
 
-  return { show, hide, show_content, auto_grow_after_set };
+  return { show, hide, show_content, auto_grow_after_set,
+           auto_grow_iterator_after_connect };
 })();

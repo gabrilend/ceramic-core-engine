@@ -58,8 +58,26 @@ function M.validate_box(box)
     end
 
     if box.kind == "call" or box.kind == "data" then
-        if box.ref == nil or type(box.ref) ~= "string" then
-            err(errors, "box missing 'ref'")
+        -- iterator boxes (issue 221) are a pure routing primitive: input
+        -- copies straight to a chosen output, no language function is
+        -- invoked. Such a box has no ref/fn — only `iterator_outputs`,
+        -- an ordered list of output slot names. Otherwise ref is required.
+        local is_iterator = box.iterator_outputs ~= nil
+        if not is_iterator then
+            if box.ref == nil or type(box.ref) ~= "string" then
+                err(errors, "box missing 'ref'")
+            end
+        end
+        if box.iterator_outputs ~= nil then
+            if type(box.iterator_outputs) ~= "table" then
+                err(errors, "'iterator_outputs' must be an array")
+            else
+                for i, name in ipairs(box.iterator_outputs) do
+                    if type(name) ~= "string" then
+                        err(errors, "'iterator_outputs[" .. i .. "]' must be a string")
+                    end
+                end
+            end
         end
         -- fn is optional for binary callers (shell scripts, binaries)
         if box.inputs ~= nil and type(box.inputs) ~= "table" then
