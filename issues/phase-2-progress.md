@@ -30,6 +30,8 @@ model the phase 3 runtime will consume.
 | 227  | hide view button when box has no ref           | complete |
 | 228  | self-loop wires routed around the box body     | complete |
 | 229  | data box as language-agnostic file source / sink | open     |
+| 230  | required inputs and the optional flag           | open     |
+| 231  | move signature parsers into langs/              | open     |
 | 216  | read-file box                                  | complete |
 | 217  | concat box and dynamic inputs                  | complete |
 | 218  | enforce single-output driver contract          | complete |

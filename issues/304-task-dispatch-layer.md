@@ -86,21 +86,25 @@ The action now branches on the box's mode:
 
 - **Plain call box**: proceed to phase 4 (invoke) and phase 5 (write
   output) as below.
-- **Comparator box**: skip invoke entirely. Read the input value,
-  compare to the box's stored threshold, and proceed to phase 7 with
-  the result of the comparison. Comparators have no `ref` / `fn`.
+- **Comparator box**: a call box that *also* carries a `comparand`
+  field. The function still runs (phase 4 + 5 happen), so the box
+  has a `ref` / `fn` like any other call box. The difference shows
+  up at routing time (phase 7): instead of one output wire, three
+  branches `lt` / `eq` / `gt` are available, and the dispatch layer
+  picks which one to fire by comparing the function's *output value*
+  to `comparand`. The function is unchanged from a plain call box's
+  perspective; it just produced the value the routing layer compares.
 - **Iterator box**: skip invoke entirely. Copy the input value
   straight into the output slot, and proceed to phase 7. Iterators
-  have no `ref` / `fn` either; the routing-by-counter is the entire
-  point of the box.
+  have no `ref` / `fn`; the routing-by-counter is the entire point
+  of the box.
 
-Iterator and comparator semantics live in the dispatch layer. The
-language spec interface (issue 303) is only used by plain call boxes.
-This is a change from issue 221's earlier "iterator function as
-passthrough" model — that function was always identity, so we drop
-it. Issue 221 will be updated accordingly.
+Iterator semantics live in the dispatch layer (no spec involvement).
+Comparator semantics live partly in the dispatch layer (the
+output-vs-comparand comparison and branch fire) and partly in the
+spec (the function still runs to produce the value being compared).
 
-### 4. Invoke (plain call boxes only)
+### 4. Invoke (plain call AND comparator call boxes)
 Look up the box's language spec by its `lang` field. Find the
 worker's language handle in `current_worker->handles[lang_idx]`.
 Call `lang->invoke` with:
@@ -159,11 +163,12 @@ the iterator's whole consumption cycle.
 Three cases, dispatched by box mode:
 
 - **Plain call**: fire all outgoing connections unconditionally.
-- **Comparator**: the dispatch layer (not a spec) compared the input
-  to the box's threshold in phase 3 and produced a branch tag (`lt`
-  / `eq` / `gt`). Fire only the connection whose `from_branch`
-  matches. The output slot carries the input value through unchanged
-  — comparators do not transform data.
+- **Comparator**: the dispatch layer compares the *function's
+  output value* (just written to the output slot in phase 5) to
+  the box's `comparand`, producing a branch tag (`lt` / `eq` /
+  `gt`). Fire only the connection whose `from_branch` matches.
+  The output slot carries the function's actual output — downstream
+  boxes on the matching branch see the value the function returned.
 - **Iterator**: fire only the connection whose `from_branch` matches
   `iterator_outputs[counter]`. Then increment `counter` modulo
   `n_iter_outputs` and spawn a successor `dispatch_task_t` with the
