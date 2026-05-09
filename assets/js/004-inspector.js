@@ -242,8 +242,23 @@ const Inspector = (() => {
     browse_btn.textContent = 'browse';
     browse_btn.style.whiteSpace = 'nowrap';
     browse_btn.onclick = open_browser;
+    // "view" button opens a floating, draggable read-only window with
+    // the current ref's source content (issue 215). Disabled when ref
+    // is empty since there's nothing to fetch.
+    const view_btn = document.createElement('button');
+    view_btn.className   = 'toolbar-btn';
+    view_btn.textContent = 'view';
+    view_btn.style.whiteSpace = 'nowrap';
+    view_btn.onclick = () => {
+      if (!current_box || !current_box.ref) {
+        status_msg('view source: no ref set', 'error');
+        return;
+      }
+      SourceView.open_source_view(current_box.ref, current_box);
+    };
     ref_wrap.appendChild(ref_inp);
     ref_wrap.appendChild(browse_btn);
+    ref_wrap.appendChild(view_btn);
     fields.appendChild(mk_row('ref', ref_wrap));
 
     fields.appendChild(mk_row('fn', mk_readonly(box.fn)));

@@ -21,7 +21,8 @@ model the phase 3 runtime will consume.
 | 212  | editor interaction modes                       | complete |
 | 213  | queued inputs and task model                   | open     |
 | 214  | tmp symlink recreation on reboot               | complete |
-| 215  | view source button                             | open     |
+| 215  | view source button                             | complete |
+| 223  | syntax highlighting via user-written lexers    | open     |
 | 216  | read-file box                                  | open     |
 | 217  | concat box and dynamic inputs                  | open     |
 | 218  | enforce single-output driver contract          | complete |

@@ -52,8 +52,9 @@ Read in order for a complete picture of the system.
 - 212 — editor interaction modes (complete)
 - 213 — queued inputs and task model
 - 214 — tmp symlink recreation on reboot (complete)
-- 215 — view source button
+- 215 — view source button (complete)
 - 216 — read-file box (`libs/files.lua`)
+- 223 — syntax highlighting via user-written lexers
 - 217 — concat box and dynamic inputs
 - 218 — enforce single-output driver contract (complete)
 - 219 — map compiler

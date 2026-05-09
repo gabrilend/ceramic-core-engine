@@ -383,6 +383,66 @@ canvas {
   margin-top: 3px;
 }
 
+/* Source-view floating window (issue 215) */
+.source-view-window {
+  position: fixed;
+  background: #181c28;
+  border: 1px solid #2a2f45;
+  border-radius: 4px;
+  box-shadow: 0 6px 20px #00000088;
+  display: flex;
+  flex-direction: column;
+  resize: both;
+  overflow: hidden;
+  min-width: 200px;
+  min-height: 100px;
+  z-index: 100;
+}
+.source-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1e2130;
+  border-bottom: 1px solid #2a2f45;
+  padding: 4px 8px;
+  cursor: move;
+  user-select: none;
+  flex-shrink: 0;
+}
+.source-view-title {
+  font-family: monospace;
+  font-size: 11px;
+  color: #4a9eff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.source-view-close {
+  background: none;
+  border: none;
+  color: #6c72a0;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+  margin-left: 8px;
+}
+.source-view-close:hover { color: #e91e63; }
+.source-view-body {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 10px;
+  margin: 0;
+  background: #0f1117;
+  color: #e8eaf6;
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre;
+  tab-size: 4;
+}
+
 /* Delete box button in inspector */
 .delete-box-btn {
   width: 100%;
@@ -436,6 +496,7 @@ canvas {
 <script src="js/007-filebrowser.js"></script>
 <script src="js/004-inspector.js"></script>
 <script src="js/006-wires.js"></script>
+<script src="js/008-source-view.js"></script>
 <script src="js/005-app.js"></script>
 </body>
 </html>

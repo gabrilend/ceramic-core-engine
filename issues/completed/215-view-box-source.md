@@ -1,7 +1,7 @@
 # 215 — View source code of a box in a draggable canvas window
 
 ## Status
-open
+complete
 
 ## Current behavior
 When a box isn't working as expected, the user has no way to inspect
@@ -48,15 +48,15 @@ independently positioned.
 
 Computed from the file content when the window opens:
 
-- **Width**: the average line length of the file (in characters)
-  plus three, multiplied by the monospace character width. Three
-  extra characters of breathing room past the average. Lines longer
-  than the window scroll horizontally.
-- **Height**: half the canvas's current height. The user resizes if
-  they want more or less.
-
-If the file is empty, fall back to a sensible default (e.g. 40
-characters wide, half-canvas tall).
+- **Width**: the file's longest line clamped to `[80, 120]`
+  characters, multiplied by the monospace character width. Tiny
+  files don't get pointlessly small windows; very long lines don't
+  get pointlessly wide ones. Lines past 120 chars scroll
+  horizontally; the user resizes the window if they want more.
+  *(Earlier draft used average line length, but the average is
+  pulled way down by blank lines and short single-keyword lines, so
+  most files opened too narrow.)*
+- **Height**: half the canvas's current height.
 
 ### Default position
 
@@ -83,54 +83,65 @@ window outside the canvas, clamp to the nearest edge.
 
 ## Implementation notes
 
+The viewer is `assets/js/008-source-view.js`, a new module exposing
+one public function — `SourceView.open_source_view(ref, anchor_box?)`.
+Each call creates an absolutely-positioned DOM window, populates it
+with the fetched file content, and lets the user drag it around.
+
 ### File text fetch
-The same API call as the existing file-browser preview (issue 207's
-`API.get_src_file`). The `ref` field on the box is the file path
-relative to the map. Some refs may be in `libs/` (vendored or
-shipped), some in the map's `src/` — the fetch routes appropriately
-(via `API.get_src_file` for the map's source, `API.get_extra_src_file`
-for libs/extra dirs). The existing browser does this distinction
-already; the source viewer reuses it.
+`fetch_source(ref)` strips a leading `src/` prefix and tries
+`API.get_src_file` first; on failure it walks every directory
+returned by `API.list_extra_src` and tries `API.get_extra_src_file`
+in order. Returns the first hit; throws if nothing matches. Plain
+text — no JSON parsing.
 
-### Average line length
-
-```js
-const lines = text.split('\n');
-const avg = lines.reduce((a, l) => a + l.length, 0) / lines.length;
-const width_chars = Math.ceil(avg) + 3;
-```
-
-Multiply by the monospace character width (computed once via a
-hidden `<span>` measurement at load, or hard-coded as ~7.2px for the
-font we use).
+### Default size
+Width derived from the file's longest line, clamped to
+`[80, 120]` characters and converted to pixels via a one-time
+monospace-character measurement (`measure_char_w` runs at module
+load using a hidden probe span). Height is `canvas_rect().height /
+2`. Both rounded to integers.
 
 ### Drag clamping
-On mousemove during drag:
+The header captures `mousedown` and records anchor positions for
+the mouse and the window. `mousemove` computes a candidate
+`(left, top)` from the anchor delta and runs it through
+`clamp_position(left, top, w, h)` — which restricts the window to
+`canvas_rect()`'s bounds — before applying. Anchor-and-delta math
+(rather than incremental) avoids accumulating error over a long
+drag.
 
-```js
-const canvas_rect = Canvas.el.getBoundingClientRect();
-const win_w = win.offsetWidth;
-const win_h = win.offsetHeight;
-const new_x = clamp(mouse_x - drag_offset_x, canvas_rect.left, canvas_rect.right - win_w);
-const new_y = clamp(mouse_y - drag_offset_y, canvas_rect.top,  canvas_rect.bottom - win_h);
-```
+### Resize clamping
+Native CSS `resize: both` provides the resize handle in the
+bottom-right. A `ResizeObserver` re-applies `clamp_position` after
+each size change so growing the window can't push it off-canvas,
+and caps `width` / `height` at `canvas_rect()` if the user drags
+past those bounds.
 
-Same idea for resize: the new size cannot push the window past the
-canvas edges given its current position.
+### Multiple windows + z-order
+`open_windows[]` tracks every live window. A `z_top` counter
+increments on every `bring_to_front` call (header drag, anywhere
+click) so the just-touched window is always on top.
 
-### Multiple windows
-
-Each window is a separately-tracked DOM node. A small registry
-(`open_source_windows[]`) tracks them so they can all be closed when
-the map is switched, and so a click on a window brings it to the
-front (z-index increment).
+### Default position
+If `anchor_box` is provided, the window is centered over that
+box's screen position (via `Canvas.world_to_screen`). Otherwise
+centered on the canvas. Either way `clamp_position` runs so the
+default never starts off-canvas.
 
 ### CSS
+`.source-view-window`, `.source-view-header`, `.source-view-title`,
+`.source-view-close`, `.source-view-body` in `assets/index.html`.
+Header uses the editor accent color; body uses the editor's
+monospace font and dark background.
 
-Floating window styles are scoped under a class like
-`.source-view-window`. Header bar uses the project's existing accent
-color. The `<pre>` body uses the same monospace font as the
-inspector's existing port labels.
+### Entry points
+- Inspector "view" button next to the ref field in
+  `assets/js/004-inspector.js`. Disabled when ref is empty (status
+  bar reports the issue).
+- Canvas right-click context menu in `assets/js/005-app.js`. The
+  "view source" item appears for boxes that have a ref;
+  the window is anchored to the right-clicked box.
 
 ## Suggested implementation sequence
 
@@ -148,15 +159,15 @@ inspector's existing port labels.
    box) — verify two independent windows. Drag both around. Resize
    both. Confirm clamping at canvas edges.
 
-## Open questions
+## Open questions / future work
 
-- Bring-to-front on click: standard expectation, easy to implement
-  via a global z-counter. Worth doing.
-- Edit support: explicitly out of scope for now. Read-only. Editing
-  source files happens in the user's preferred editor on disk; the
-  viewer just shows what's there. (A future "edit in editor" issue
-  could add a "save back" capability with conflict warnings against
-  on-disk mtime.)
+- Bring-to-front on click: implemented via a global z-counter.
+- Edit support: explicitly out of scope. The viewer is read-only.
+  Editing source files happens in the user's preferred editor on
+  disk; the viewer just shows what's there. (A future "edit in
+  editor" issue could add a "save back" capability with conflict
+  warnings against on-disk mtime.)
+- **Syntax highlighting**: tracked separately as issue 223.
 
 ## Relevant files
 

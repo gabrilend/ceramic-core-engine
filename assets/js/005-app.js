@@ -647,6 +647,14 @@ const App = (() => {
     if (box_id) {
       const box   = Boxes.boxes[box_id];
       const label = (box.label && box.label !== 'New Box') ? '"' + box.label + '"' : box_id;
+      // "view source" appears for any box that has a ref. The window opens
+      // anchored over this box's screen position (issue 215).
+      if (box.ref) {
+        items.push({
+          label:  'view source',
+          action: () => SourceView.open_source_view(box.ref, box),
+        });
+      }
       items.push({ label: 'delete ' + label, danger: true, action: () => delete_box(box_id) });
     } else if (wire) {
       const branch_str = wire.from_branch ? ' .' + wire.from_branch : '';
