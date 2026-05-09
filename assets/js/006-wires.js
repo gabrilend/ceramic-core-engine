@@ -3,6 +3,10 @@
 
 const Wires = (() => {
   const BEZIER_CTRL_OFFSET = 80;
+  // LOOP_OFFSET pulls a self-loop's control points further out and
+  // below the box body, so the curve sweeps around the bottom rather
+  // than cutting straight through the rectangle (issue 228).
+  const LOOP_OFFSET        = 80;
   const HIT_SAMPLES        = 20;
   const HIT_THRESHOLD_PX   = 8;
 
@@ -25,13 +29,32 @@ const Wires = (() => {
   }
   // }}}
 
-  // {{{ draw_bezier
-  function draw_bezier(ctx, x0, y0, x1, y1, color, selected) {
-    const cx0 = x0 + BEZIER_CTRL_OFFSET;
-    const cy0 = y0;
-    const cx1 = x1 - BEZIER_CTRL_OFFSET;
-    const cy1 = y1;
+  // {{{ endpoint_controls
+  // Returns the two cubic-Bezier control points for a wire from src to
+  // dst. For a normal wire the controls jut horizontally out of each
+  // port. For a self-loop (output and input on the same box body), the
+  // controls swing out and below so the curve routes around the
+  // rectangle instead of slicing through it (issue 228).
+  function endpoint_controls(src, dst, self_loop_box) {
+    if (self_loop_box) {
+      const h = Boxes.box_height(self_loop_box);
+      return {
+        cx0: src.x + LOOP_OFFSET, cy0: src.y + h * 0.7,
+        cx1: dst.x - LOOP_OFFSET, cy1: dst.y + h * 0.7,
+      };
+    }
+    return {
+      cx0: src.x + BEZIER_CTRL_OFFSET, cy0: src.y,
+      cx1: dst.x - BEZIER_CTRL_OFFSET, cy1: dst.y,
+    };
+  }
+  // }}}
 
+  // {{{ draw_bezier_cp
+  // Draws a cubic Bezier with explicit control points. The wrapper
+  // draw_bezier (kept for the in-progress wire-drag preview) calls
+  // this with the default straight-out controls.
+  function draw_bezier_cp(ctx, x0, y0, cx0, cy0, cx1, cy1, x1, y1, color, selected) {
     ctx.beginPath();
     ctx.moveTo(x0, y0);
     ctx.bezierCurveTo(cx0, cy0, cx1, cy1, x1, y1);
@@ -39,6 +62,16 @@ const Wires = (() => {
     ctx.lineWidth   = selected ? 2.5 : 1.5;
     ctx.setLineDash([]);
     ctx.stroke();
+  }
+  // }}}
+
+  // {{{ draw_bezier
+  function draw_bezier(ctx, x0, y0, x1, y1, color, selected) {
+    const cx0 = x0 + BEZIER_CTRL_OFFSET;
+    const cy0 = y0;
+    const cx1 = x1 - BEZIER_CTRL_OFFSET;
+    const cy1 = y1;
+    draw_bezier_cp(ctx, x0, y0, cx0, cy0, cx1, cy1, x1, y1, color, selected);
   }
   // }}}
 
@@ -56,8 +89,11 @@ const Wires = (() => {
         const dst  = Boxes.get_port_world_pos(c.to_box,   c.to_input,            'input');
         if (!src || !dst) continue;
 
-        const cx0 = src.x + BEZIER_CTRL_OFFSET, cy0 = src.y;
-        const cx1 = dst.x - BEZIER_CTRL_OFFSET, cy1 = dst.y;
+        // Self-loop wires use the looped control points, so sample
+        // along that same curve — clicks register on the visual wire
+        // path rather than on a phantom straight-through path.
+        const self_box = (c.from_box === c.to_box) ? Boxes.boxes[c.from_box] : null;
+        const { cx0, cy0, cx1, cy1 } = endpoint_controls(src, dst, self_box);
 
         for (let i = 0; i <= HIT_SAMPLES; i++) {
           const t = i / HIT_SAMPLES;
@@ -91,7 +127,12 @@ const Wires = (() => {
           _selected_wire.to_box      === c.to_box &&
           _selected_wire.to_input    === c.to_input;
 
-        draw_bezier(ctx, src.x, src.y, dst.x, dst.y, color, is_selected);
+        // self-loop wires need control points that route around the
+        // box body; everything else uses the default straight-out controls
+        const self_box = (c.from_box === c.to_box) ? box : null;
+        const { cx0, cy0, cx1, cy1 } = endpoint_controls(src, dst, self_box);
+        draw_bezier_cp(ctx, src.x, src.y, cx0, cy0, cx1, cy1, dst.x, dst.y,
+                       color, is_selected);
       }
     }
   }
@@ -164,18 +205,26 @@ const Wires = (() => {
     );
     if (dup) return;
 
+    // For self-loops src_box === dst_box, so push only once; otherwise
+    // both ends record the connection in their respective arrays
+    // (issue 228).
+    const self_loop = src_box === dst_box;
     src_box.connections.push(conn);
-    dst_box.connections.push(conn);
+    if (!self_loop) dst_box.connections.push(conn);
 
     try {
-      await Promise.all([
-        API.put_box(from_box_id, src_box),
-        API.put_box(to_box_id,   dst_box),
-      ]);
+      if (self_loop) {
+        await API.put_box(from_box_id, src_box);
+      } else {
+        await Promise.all([
+          API.put_box(from_box_id, src_box),
+          API.put_box(to_box_id,   dst_box),
+        ]);
+      }
     } catch (e) {
       // roll back the push so the in-memory state matches the server
       src_box.connections.pop();
-      dst_box.connections.pop();
+      if (!self_loop) dst_box.connections.pop();
       status_msg('connect error: ' + e.message, 'error');
       return;
     }
@@ -211,20 +260,27 @@ const Wires = (() => {
       c.to_box      === conn.to_box      &&
       c.to_input    === conn.to_input;
 
-    const src_before = src_box.connections || [];
-    const dst_before = dst_box.connections || [];
+    // Self-loops: src_box === dst_box, so a single filter+PUT covers
+    // both ends of the conceptual connection (issue 228).
+    const self_loop   = src_box === dst_box;
+    const src_before  = src_box.connections || [];
+    const dst_before  = dst_box.connections || [];
     src_box.connections = src_before.filter(c => !match(c));
-    dst_box.connections = dst_before.filter(c => !match(c));
+    if (!self_loop) dst_box.connections = dst_before.filter(c => !match(c));
 
     try {
-      await Promise.all([
-        API.put_box(conn.from_box, src_box),
-        API.put_box(conn.to_box,   dst_box),
-      ]);
+      if (self_loop) {
+        await API.put_box(conn.from_box, src_box);
+      } else {
+        await Promise.all([
+          API.put_box(conn.from_box, src_box),
+          API.put_box(conn.to_box,   dst_box),
+        ]);
+      }
     } catch (e) {
       // roll back
       src_box.connections = src_before;
-      dst_box.connections = dst_before;
+      if (!self_loop) dst_box.connections = dst_before;
       status_msg('delete wire error: ' + e.message, 'error');
       return;
     }

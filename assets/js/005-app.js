@@ -373,8 +373,11 @@ const App = (() => {
 
     if (drawing_wire) {
       const target_port = Boxes.hit_test_port(w.x, w.y);
-      if (target_port && target_port.side === 'input' &&
-          target_port.box_id !== drawing_wire.from_box) {
+      // Self-loops (from_box === to_box) are allowed — the wire renders
+      // around the box body rather than through it (issue 228), and
+      // they are useful with iterator boxes (issue 221) for accumulator
+      // and polling-state patterns.
+      if (target_port && target_port.side === 'input') {
         await Wires.create_connection(
           drawing_wire.from_box, drawing_wire.from_port,
           target_port.box_id, target_port.port_name

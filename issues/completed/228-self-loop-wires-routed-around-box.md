@@ -1,7 +1,46 @@
 # 228 — Self-loop wires: connect a box's output to its own input, routed around the body
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+Went with option 1 (cubic Bezier, off-axis control points). A single
+`endpoint_controls(src, dst, self_loop_box)` helper returns the two
+control points; `null` for the third arg gives the default
+straight-out controls, a box reference gives the around-the-bottom
+loop. Both `draw_all` and `hit_test_wire` route through it, so the
+visual wire and the click-detection curve always agree.
+
+Two surprises I hadn't called out in the original write-up:
+
+1. **`src_box === dst_box` for self-loops.** `create_connection` and
+   `delete_connection` were pushing/filtering both sides of the
+   connection independently; with a self-loop, both sides are the
+   same array, so a wire would land in the array twice. Added a
+   `self_loop = src_box === dst_box` guard so the push and the PUT
+   happen once.
+2. **Wire-release blocked self-loops.** `005-app.js` had an explicit
+   `target_port.box_id !== drawing_wire.from_box` guard preventing
+   the user from ever releasing a wire on the same box. Removed.
+
+### Touches
+
+- `assets/js/006-wires.js` — `endpoint_controls`, `draw_bezier_cp`,
+  `LOOP_OFFSET`, self-loop guards in create/delete
+- `assets/js/005-app.js` — drop the wire-release self-loop block
+
+### Edge cases verified by inspection
+
+- **Box height changes** with a self-loop attached (e.g., variadic
+  slot added growing the box): control points use `box_height(box)`
+  per-frame, so the curve adapts.
+- **Multiple self-loops on a comparator box** (e.g., `lt` and `eq`
+  both routed back): each renders independently against its own
+  branch dot, with branch coloring preserved.
+- **Hit-test under the box body**: samples follow the looped curve,
+  so clicks near the visible wire register; clicks on the box body
+  itself are still consumed by `hit_test_box` first.
 
 ## Current behavior
 
