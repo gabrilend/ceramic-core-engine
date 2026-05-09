@@ -35,12 +35,26 @@ longer triggered. No confirmation dialog is shown.
 
 ## Implementation notes
 
-`set_tool_mode(mode)` exposed from the App closure manages the active button
-class and canvas cursor ('copy' for add-box, 'cell' for erase-wire).
+The shipped behavior diverges from the original spec in one place:
 
-Erase-wire tracks a Set of already-queued wire signatures per drag to avoid
-double-deletes. Connections are removed from the local Boxes cache immediately
-(for instant visual feedback) and then deleted from the server asynchronously.
+- **Box creation** is via the canvas right-click context menu ("add
+  box here") rather than a dedicated `+ box` toolbar mode. One click
+  instead of two, and consistent with how other context-driven
+  actions in the editor work.
+- **Wire erasure** is the dedicated `✕ wire` toolbar tool as
+  originally specced — click the button, hold-and-drag across the
+  canvas, wires under the cursor are erased.
+- `tool_mode` has values `'select' | 'erase-wire'` (no `'add-box'`).
+- **Box deletion** strips connection references from every other box
+  client-side before issuing the server `DELETE`, avoiding the 409
+  reference-guard error.
+
+`set_tool_mode(mode)` (in `005-app.js`) manages the active button
+class and canvas cursor (`'cell'` for erase-wire). Erase-wire tracks
+a Set of already-queued wire signatures per drag to avoid
+double-deletes. Connections are removed from the local Boxes cache
+immediately (for instant visual feedback) and then deleted from the
+server asynchronously.
 
 ## Suggested implementation steps
 

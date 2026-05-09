@@ -11,14 +11,14 @@ model the phase 3 runtime will consume.
 | 202  | fit-to-view on map load                        | open     |
 | 203  | map picker panel                               | open     |
 | 204  | visible interaction hints                      | open     |
-| 206  | entry box designation                          | open     |
+| 206  | entry box designation                          | won't implement |
 | 207  | source file browser and port auto-population   | complete |
 | 208  | port literal values                            | open     |
 | 209  | ollama query library                           | complete |
 | 210  | comparator wire branching                      | open     |
 | 211  | file browser library directories               | complete |
 | 211a | unify src/ into same directory pipeline        | complete |
-| 212  | editor interaction modes                       | open     |
+| 212  | editor interaction modes                       | complete |
 | 213  | queued inputs and task model                   | open     |
 | 214  | tmp symlink recreation on reboot               | complete |
 | 215  | view source button                             | open     |
@@ -38,7 +38,7 @@ model the phase 3 runtime will consume.
 - [ ] Map loads centered on screen (fit-to-view)
 - [ ] Map can be switched from a list, not a text prompt
 - [ ] Empty canvas shows interaction hints
-- [ ] Entry box is visually marked and settable from the editor
+- [—] Entry box marker (won't implement — phase 3 auto-detects, see 305)
 - [ ] Comparator routing replaces the old branch box (issue 210)
 - [ ] Iterator box with auto-grow output slots (issue 221)
 - [ ] Compile button (issue 222) — placeholder UI for the phase 3 build

@@ -2,7 +2,31 @@
 
 ## Status
 
-open
+won't implement
+
+## Resolution
+
+The phase 3 runtime (issue 305) auto-detects entry boxes from graph
+topology: any box with zero inputs, or whose inputs are all wired
+only to `data` boxes, is an entry. A map can have any number of
+entries. There is no singular `main`. The `meta.json entry_box_id`
+field becomes vestigial when phase 3 lands and replaces the phase 2
+synchronous runner.
+
+Implementing the editor UI for `entry_box_id` would be throwaway
+work — UI for a field the next runtime ignores. Closing without
+implementation. The phase 2 runner continues to read
+`meta.json entry_box_id` as it does today; the editor simply does
+not surface it.
+
+If a future need surfaces for marking "this box should fire first"
+in the phase 3 model — for instance, a manual override of the
+auto-detected entry set — a new issue captures that requirement
+against the phase 3 design directly.
+
+See:
+- `issues/305-c-graph-loader.md` — entry-box detection in phase 3
+- `docs/001-architecture.md` — current architecture overview
 
 ## Current behavior
 

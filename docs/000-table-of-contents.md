@@ -42,14 +42,14 @@ Read in order for a complete picture of the system.
 - 202 — fit-to-view on map load
 - 203 — map picker panel
 - 204 — visible interaction hints
-- 206 — entry box designation
+- 206 — entry box designation (won't implement; phase 3 auto-detects)
 - 207 — source file browser and port auto-population (complete)
 - 208 — port literal values
 - 209 — Ollama query library (complete)
 - 210 — comparator wire branching (replaces 108 named ports)
 - 211 — file browser library directories (complete)
 - 211a — unify src/ into same directory pipeline (complete)
-- 212 — editor interaction modes
+- 212 — editor interaction modes (complete)
 - 213 — queued inputs and task model
 - 214 — tmp symlink recreation on reboot (complete)
 - 215 — view source button
