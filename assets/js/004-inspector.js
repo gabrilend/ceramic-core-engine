@@ -574,7 +574,14 @@ const Inspector = (() => {
     ref_inp.value = box.ref || '';
     ref_inp.style.flex = '1';
     ref_inp.style.minWidth = '0';
-    ref_inp.addEventListener('input', () => { current_box.ref = ref_inp.value; save(); });
+    // view button hides until a ref is set — clicking it before then
+    // would only produce a "no ref" error. Toggle on every input event so
+    // the visibility tracks the field live (issue 227).
+    ref_inp.addEventListener('input', () => {
+      current_box.ref = ref_inp.value;
+      view_btn.hidden = !ref_inp.value;
+      save();
+    });
     const browse_btn = document.createElement('button');
     browse_btn.className   = 'toolbar-btn';
     browse_btn.textContent = 'browse';
@@ -587,6 +594,7 @@ const Inspector = (() => {
     view_btn.className   = 'toolbar-btn';
     view_btn.textContent = 'view';
     view_btn.style.whiteSpace = 'nowrap';
+    view_btn.hidden = !box.ref;
     view_btn.onclick = () => {
       if (!current_box || !current_box.ref) {
         status_msg('view source: no ref set', 'error');

@@ -1,7 +1,20 @@
 # 227 — Hide the inspector "view" button when the box has no ref
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+`assets/js/004-inspector.js::show` — the view button now starts
+hidden when `box.ref` is empty (`view_btn.hidden = !box.ref` at
+creation time), and the ref-input `input` listener flips
+`view_btn.hidden` on every keystroke. The file browser's on-select
+path was already re-rendering the inspector via `show(current_box)`
+so its ref-population path naturally takes the correct branch on
+the next render — no separate update needed there.
+
+The browse button stays visible at all times so the user always has
+a path to setting a ref.
 
 ## Current behavior
 

@@ -27,7 +27,7 @@ model the phase 3 runtime will consume.
 | 224  | editable port names and canvas-side value edit | open     |
 | 225  | dir picker shows files and dir/file icons      | open     |
 | 226  | hide output controls for no-return functions   | open     |
-| 227  | hide view button when box has no ref           | open     |
+| 227  | hide view button when box has no ref           | complete |
 | 228  | self-loop wires routed around the box body     | open     |
 | 216  | read-file box                                  | open     |
 | 217  | concat box and dynamic inputs                  | complete |
