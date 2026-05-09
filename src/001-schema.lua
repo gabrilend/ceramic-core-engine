@@ -65,6 +65,21 @@ function M.validate_box(box)
         if box.inputs ~= nil and type(box.inputs) ~= "table" then
             err(errors, "'inputs' must be an array")
         end
+        -- variadic_inputs: optional list of base names; each name must
+        -- correspond to a series of inputs named "<base>_<index>" in
+        -- box.inputs (the editor maintains this; we only check the
+        -- shape here). See issue 217 part B.
+        if box.variadic_inputs ~= nil then
+            if type(box.variadic_inputs) ~= "table" then
+                err(errors, "'variadic_inputs' must be an array")
+            else
+                for i, name in ipairs(box.variadic_inputs) do
+                    if type(name) ~= "string" then
+                        err(errors, "'variadic_inputs[" .. i .. "]' must be a string")
+                    end
+                end
+            end
+        end
         -- comparand: optional; if present it must be a string parseable as number at runtime
         if box.comparand ~= nil and type(box.comparand) ~= "string" then
             err(errors, "'comparand' must be a string")
