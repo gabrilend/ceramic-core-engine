@@ -10,7 +10,7 @@ model the phase 3 runtime will consume.
 | 201  | fix box rendering closure bug                  | complete |
 | 202  | fit-to-view on map load                        | complete |
 | 203  | map picker panel                               | complete |
-| 204  | visible interaction hints                      | open     |
+| 204  | visible interaction hints                      | complete |
 | 206  | entry box designation                          | won't implement |
 | 207  | source file browser and port auto-population   | complete |
 | 208  | port literal values                            | open     |
@@ -37,7 +37,7 @@ model the phase 3 runtime will consume.
 - [x] Ref/fn set by browsing src/ files; ports auto-derived
 - [x] Map loads centered on screen (fit-to-view)
 - [x] Map can be switched from a list, not a text prompt
-- [ ] Empty canvas shows interaction hints
+- [x] Empty canvas shows interaction hints
 - [—] Entry box marker (won't implement — phase 3 auto-detects, see 305)
 - [ ] Comparator routing replaces the old branch box (issue 210)
 - [ ] Iterator box with auto-grow output slots (issue 221)

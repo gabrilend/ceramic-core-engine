@@ -41,7 +41,7 @@ Read in order for a complete picture of the system.
 
 - 202 — fit-to-view on map load (complete)
 - 203 — map picker panel (complete)
-- 204 — visible interaction hints
+- 204 — visible interaction hints (complete)
 - 206 — entry box designation (won't implement; phase 3 auto-detects)
 - 207 — source file browser and port auto-population (complete)
 - 208 — port literal values

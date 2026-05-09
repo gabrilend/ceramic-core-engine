@@ -186,8 +186,63 @@ const App = (() => {
             '#6c72a0', false);
         }
       }
+
+      // Empty-canvas hint overlay: drawn in screen pixels (camera reset)
+      // so the text size and position don't depend on pan/zoom. Hidden as
+      // soon as any box exists; no persistent state needed.
+      if (Object.keys(Boxes.boxes).length === 0) {
+        draw_empty_hint(ctx);
+      }
     }
     requestAnimationFrame(render);
+  }
+  // }}}
+
+  // {{{ draw_empty_hint
+  // Centered, dim, monospace hint listing the editor's main interactions.
+  // Resets the canvas transform to identity so the text is in pure screen
+  // coordinates.
+  function draw_empty_hint(ctx) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const lines = [
+      ['right-click',     'add box · context menu'],
+      ['drag port →',     'wire boxes together'],
+      ['middle / space',  'pan canvas'],
+      ['scroll',          'zoom'],
+    ];
+
+    const cw = Canvas.el.width;
+    const ch = Canvas.el.height;
+
+    ctx.font         = '12px monospace';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle    = '#3a3f55';
+
+    // Compute layout: a two-column block (key | description) centered on canvas.
+    const line_height = 22;
+    const block_h     = lines.length * line_height;
+    const start_y     = ch / 2 - block_h / 2;
+
+    // Find the widest key for column alignment.
+    let key_w = 0;
+    for (const [k] of lines) {
+      const w = ctx.measureText(k).width;
+      if (w > key_w) key_w = w;
+    }
+    const gap         = 24;
+    const desc_w_max  = lines.reduce((m, [, d]) => Math.max(m, ctx.measureText(d).width), 0);
+    const total_w     = key_w + gap + desc_w_max;
+    const start_x     = cw / 2 - total_w / 2;
+
+    lines.forEach(([key, desc], i) => {
+      const y = start_y + i * line_height + line_height / 2;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#6c72a0';
+      ctx.fillText(key, start_x, y);
+      ctx.fillStyle = '#3a3f55';
+      ctx.fillText(desc, start_x + key_w + gap, y);
+    });
   }
   // }}}
 
@@ -208,6 +263,7 @@ const App = (() => {
     if (port && port.side === 'output') {
       drawing_wire = { from_box: port.box_id, from_port: port.port_name,
                        cur_x: w.x, cur_y: w.y };
+      status_msg('drawing wire — release on an input port');
       return;
     }
 
@@ -219,12 +275,14 @@ const App = (() => {
       drag_offset = { x: w.x - (b.ui?.x ?? 0), y: w.y - (b.ui?.y ?? 0) };
       Inspector.show(b, () => Canvas.mark_dirty(), () => delete_box(box_id));
       Canvas.mark_dirty();
+      status_msg('selected: ' + box_id);
       return;
     }
 
     selected_id = null;
     Inspector.hide();
     Canvas.mark_dirty();
+    status_msg('');
   });
 
   Canvas.el.addEventListener('mousemove', e => {
