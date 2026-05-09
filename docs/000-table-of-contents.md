@@ -44,7 +44,7 @@ Read in order for a complete picture of the system.
 - 204 — visible interaction hints (complete)
 - 206 — entry box designation (won't implement; phase 3 auto-detects)
 - 207 — source file browser and port auto-population (complete)
-- 208 — port literal values
+- 208 — port literal values (complete)
 - 209 — Ollama query library (complete)
 - 210 — comparator wire branching (replaces 108 named ports)
 - 211 — file browser library directories (complete)

@@ -13,7 +13,7 @@ model the phase 3 runtime will consume.
 | 204  | visible interaction hints                      | complete |
 | 206  | entry box designation                          | won't implement |
 | 207  | source file browser and port auto-population   | complete |
-| 208  | port literal values                            | open     |
+| 208  | port literal values                            | complete |
 | 209  | ollama query library                           | complete |
 | 210  | comparator wire branching                      | open     |
 | 211  | file browser library directories               | complete |
