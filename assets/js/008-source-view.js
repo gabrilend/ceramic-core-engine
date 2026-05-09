@@ -38,6 +38,50 @@ const SourceView = (() => {
   const CHAR_W = measure_char_w();
   // }}}
 
+  // {{{ Lexer registry (issue 223)
+  // Lazy-loads a per-language tokenizer the first time a viewer asks
+  // for that language. Cached afterwards. Files with an unknown
+  // extension or a missing lexer fall back to plain rendering.
+  const EXT_TO_LANG = { lua: 'lua', sh: 'bash', bash: 'bash', c: 'c', h: 'c' };
+  const lexer_cache = {};   // lang_name → { tokenize } | null (no lexer)
+
+  async function load_lexer(lang) {
+    if (lang in lexer_cache) return lexer_cache[lang];
+    try {
+      const mod = await import('/langs/' + lang + '/lexer.js');
+      lexer_cache[lang] = mod;
+      return mod;
+    } catch (e) {
+      console.warn('no lexer for ' + lang + ':', e.message);
+      lexer_cache[lang] = null;
+      return null;
+    }
+  }
+
+  // Render `text` into `body` with syntax-highlighted spans. Tokens
+  // are gap-free per the lexer contract; we just walk them and emit
+  // one span per token. Plain rendering (no spans) is the fallback
+  // when the lexer can't be loaded or the file extension is unknown.
+  function render_with_lexer(body, text, tokens) {
+    if (!tokens) {
+      body.textContent = text;
+      return;
+    }
+    body.innerHTML = '';
+    for (const t of tokens) {
+      const span = document.createElement('span');
+      span.className   = 'syntax-' + t.type;
+      span.textContent = text.slice(t.start, t.end);
+      body.appendChild(span);
+    }
+  }
+
+  function ext_of(ref) {
+    const m = /\.([^./]+)$/.exec(ref || '');
+    return m ? m[1].toLowerCase() : '';
+  }
+  // }}}
+
   // {{{ fetch_source
   // Resolve a box's `ref` to file content. The ref is just a filename or a
   // path relative to the map; we try the map's main src/ first (stripping
@@ -143,7 +187,21 @@ const SourceView = (() => {
 
     const body = document.createElement('pre');
     body.className   = 'source-view-body';
+    // Plain text first as a guaranteed-correct baseline; the lexer
+    // pass below replaces it asynchronously if a tokenizer is
+    // available for the file's extension (issue 223).
     body.textContent = body_text;
+    const lang = EXT_TO_LANG[ext_of(title)];
+    if (lang) {
+      load_lexer(lang).then(mod => {
+        if (!mod || !mod.tokenize) return;
+        try {
+          render_with_lexer(body, body_text, mod.tokenize(body_text));
+        } catch (e) {
+          console.warn('lexer ' + lang + ' failed:', e.message);
+        }
+      });
+    }
     wrap.appendChild(body);
 
     // Drag-from-header: anchor at mousedown, every mousemove computes

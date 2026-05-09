@@ -1,7 +1,43 @@
 # 223 — Syntax highlighting in the source viewer via user-written lexers
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+Three reference lexers shipped under `langs/<name>/lexer.js` —
+`lua`, `bash`, and `c`. Each is a hand-rolled state machine
+exporting a single `tokenize(text)` function per the spec.
+
+Server-side: `src/005-http-server.lua` adds `/langs/<...>` to the
+static-serve route so the editor can `import()` the lexer modules.
+The path traversal block from the existing static handler still
+applies.
+
+Client-side: `assets/js/008-source-view.js` gained a small lexer
+registry (extension → language → cached module). When opening a
+viewer, the body is set to plain text first as a guaranteed-correct
+baseline; if a lexer is available for the file's extension it
+re-renders the body asynchronously into syntax-highlighted spans.
+Plain rendering is the fallback for any failure (missing lexer,
+extension not in the map, lexer throw).
+
+CSS additions in `assets/index.html`: `.syntax-keyword`,
+`.syntax-comment`, `.syntax-string`, `.syntax-number`,
+`.syntax-operator`, `.syntax-identifier`, `.syntax-plain`,
+`.syntax-default` — colors echo the editor's accent palette.
+
+`docs/005-language-specs.md` documents the lexer interface (token
+shape, type conventions, file location, loading model, reference
+implementations) so users can add lexers for languages that don't
+ship by default.
+
+### Memoization deferred
+
+The open question about caching tokens per-(ref, content-hash) was
+left for later — re-tokenizing on every viewer open is fast enough
+in practice (the lexers are linear-time, no regex backtracking).
+Worth revisiting if someone opens a 10k-line file and feels lag.
 
 ## Current behavior
 

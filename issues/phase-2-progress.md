@@ -23,7 +23,7 @@ model the phase 3 runtime will consume.
 | 219  | map compiler                                   | won't implement (folded into 309) |
 | 214  | tmp symlink recreation on reboot               | complete |
 | 215  | view source button                             | complete |
-| 223  | syntax highlighting via user-written lexers    | open     |
+| 223  | syntax highlighting via user-written lexers    | complete |
 | 224  | editable port names (canvas) — values stay in inspector | complete |
 | 225  | dir picker shows files and dir/file icons      | complete |
 | 226  | hide output controls for no-return functions   | complete |

@@ -599,13 +599,21 @@ local function dispatch(client, req, maps_root)
         if m == "PUT" then return handle_put_simple(client, req, maps_root, "meta.json", schema.validate_meta) end
     end
 
-    -- GET / and GET /js/* and GET /*.html — serve static assets
+    -- GET / and GET /js/* and GET /*.html — serve static assets.
+    -- Also serves /langs/<name>/<file> from the project's langs/
+    -- directory so the editor can load per-language lexers (issue 223)
+    -- alongside the phase 3 runtime specs that share that tree.
     if m == "GET" then
         local rel = req.path == "/" and "/index.html" or req.path
-        -- only allow paths that don't escape the assets directory
+        -- only allow paths that don't escape the asset / langs roots
         if not rel:find("%.%.", 1, true) then
-            local asset_path = DIR .. "/assets" .. rel
-            local raw, _ = read_file(asset_path)
+            local file_path
+            if rel:sub(1, 7) == "/langs/" then
+                file_path = DIR .. rel
+            else
+                file_path = DIR .. "/assets" .. rel
+            end
+            local raw, _ = read_file(file_path)
             if raw then
                 local ext = rel:match("%.([^./]+)$") or ""
                 local mime = ({

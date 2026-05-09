@@ -492,6 +492,18 @@ canvas {
   tab-size: 4;
 }
 
+/* Syntax highlighting tokens (issue 223). Colors echo the editor's
+   accent palette so highlighted code visually belongs. Lexers can
+   emit unknown types — they fall back to .syntax-default. */
+.syntax-keyword    { color: #4a9eff; }
+.syntax-comment    { color: #6c72a0; font-style: italic; }
+.syntax-string     { color: #4caf7d; }
+.syntax-number     { color: #ff8c42; }
+.syntax-operator   { color: #c0c4dd; }
+.syntax-identifier { color: #e8eaf6; }
+.syntax-plain      { color: #9ea3c0; }
+.syntax-default    { color: #9ea3c0; }
+
 /* Delete box button in inspector */
 .delete-box-btn {
   width: 100%;
