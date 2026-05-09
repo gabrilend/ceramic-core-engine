@@ -2,7 +2,7 @@
 
 ## Status
 
-open
+complete
 
 ## Supersedes
 
@@ -48,43 +48,56 @@ Connection schema changes:
 The canvas renders one output dot per box by default. When a comparator is
 active, it renders three stacked dots labelled lt / eq / gt.
 
-## Suggested implementation steps
+## Implementation notes
 
-1. **Box schema** — add optional `comparand` string to the box file format.
-   Remove `outputs` array from call box schema. Remove `ports` array and
-   predicate fields.
+The whole pipeline is in place across schema, loader, executor,
+canvas rendering, wires, inspector, and file browser:
 
-2. **Connection schema** — replace `from_output`/`from_port` with `from_branch`
-   (`null` or `"lt"`/`"eq"`/`"gt"`). Update `src/001-schema.lua` validation
-   and `src/003-loader.lua` connection loading.
+### Box schema — `src/001-schema.lua`
+`comparand` is an optional string field validated by `validate_box`.
+The `outputs` array is not part of the schema (no validation, not
+required, ignored if present in legacy box JSONs). Branch box kind
+and predicate-port fields are gone.
 
-3. **Executor (`src/004-executor.lua`)**:
-   - Remove `branch` and `llm-route` kind handling from the execute loop.
-   - Remove `fire_connections` named-port logic for both kinds.
-   - After a call box runs: if `box.comparand` is set, parse it as number,
-     compare against the output value (`lt`/`eq`/`gt`), and fire only the
-     connection whose `from_branch` matches. If value is not a number, halt
-     with error. If no comparator, fire the one connection whose `from_branch`
-     is null.
+### Connection schema — `src/001-schema.lua` + `src/003-loader.lua`
+Connection records use `from_branch`, validated by `validate_box`
+against `valid_branches = { lt, eq, gt }` plus `nil` (single-wire
+mode). The loader loads connections without any `from_port` /
+`from_output` handling.
 
-4. **Canvas rendering (`assets/js/002-boxes.js`)** — one output dot per box;
-   if `box.comparand` is set, render three stacked dots with labels.
+### Executor — `src/004-executor.lua`
+After a box runs, `fire_connections` checks `box.comparand`:
+- If set: parse as number (halt with error if it isn't), compare
+  against the output (also must be number-coercible), classify as
+  `lt` / `eq` / `gt`, fire only the connection whose `from_branch`
+  matches.
+- If unset: fire every connection whose `from_branch` is nil.
 
-5. **Wire drawing (`assets/js/006-wires.js`)**:
-   - Remove `from_port`/`from_output` dual-field logic.
-   - Use `from_branch` to identify which dot a wire originates from.
-   - Color lt/eq/gt wires distinctly if desired.
+There's no remaining `branch` kind handling or `llm_route_call`
+helper.
 
-6. **Inspector (`assets/js/004-inspector.js`)**:
-   - Remove `branch` and `llm-route` kind options from dropdown.
-   - Remove output port list for call boxes.
-   - Add compare toggle button and comparand input field.
-   - Input port names are read-only (derived from parsing); only literal values
-     are editable (see issue 208).
+### Canvas rendering — `assets/js/002-boxes.js`
+`port_positions` returns three output dots (`lt` / `eq` / `gt`)
+when `box.comparand` is set, otherwise a single centered dot.
+`draw_box` uses `BRANCH_COLOR = { lt, eq, gt }` to color each
+comparator dot and labels them next to the dots.
 
-7. **File browser (`assets/js/007-filebrowser.js`)** — on function select, set
-   `box.inputs` from parsed argument names; do NOT set `box.outputs` (no named
-   outputs).
+### Wire drawing — `assets/js/006-wires.js`
+Connections use `c.from_branch` exclusively. Plain wires use a dim
+default color; comparator branches get distinct colors per branch
+via `BRANCH_COLOR`. `create_connection` takes a `from_branch`
+parameter (null for plain).
+
+### Inspector — `assets/js/004-inspector.js`
+- Read-only port names rendered via `mk_port_display`.
+- Compare toggle button and comparand input field in the output
+  section. No output port list, no branch/llm-route kinds.
+
+### File browser — `assets/js/007-filebrowser.js` (called from
+`004-inspector.js::open_browser`)
+On function select: sets `current_box.ref`, `current_box.fn`, and
+`current_box.inputs` from the parsed signature. Does not set
+`current_box.outputs`.
 
 ## Related documents
 

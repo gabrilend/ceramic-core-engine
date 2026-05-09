@@ -46,7 +46,7 @@ Read in order for a complete picture of the system.
 - 207 — source file browser and port auto-population (complete)
 - 208 — port literal values (complete)
 - 209 — Ollama query library (complete)
-- 210 — comparator wire branching (replaces 108 named ports)
+- 210 — comparator wire branching (complete; replaces 108 named ports)
 - 211 — file browser library directories (complete)
 - 211a — unify src/ into same directory pipeline (complete)
 - 212 — editor interaction modes (complete)

@@ -15,7 +15,7 @@ model the phase 3 runtime will consume.
 | 207  | source file browser and port auto-population   | complete |
 | 208  | port literal values                            | complete |
 | 209  | ollama query library                           | complete |
-| 210  | comparator wire branching                      | open     |
+| 210  | comparator wire branching                      | complete |
 | 211  | file browser library directories               | complete |
 | 211a | unify src/ into same directory pipeline        | complete |
 | 212  | editor interaction modes                       | complete |
@@ -52,10 +52,10 @@ what phase 3 will consume:
 - **Single-output rule** (218, complete): every box has exactly one
   output wire. The driver contract emits one JSON value, not an
   array.
-- **Comparator-based branching** (210): the old `branch` box kind
-  with named ports is removed. A box may carry a `comparand`; the
-  dispatch layer fires the connection whose `from_branch` matches
-  `lt` / `eq` / `gt`.
+- **Comparator-based branching** (210, complete): the old `branch`
+  box kind with named ports is removed. A box may carry a
+  `comparand`; the dispatch layer fires the connection whose
+  `from_branch` matches `lt` / `eq` / `gt`.
 - **Iterator routing** (221): a box with `iterator_outputs` is a
   pure routing primitive; the dispatch layer rotates through the
   declared output names. Iterators have no `ref` / `fn`.
