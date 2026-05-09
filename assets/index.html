@@ -236,6 +236,58 @@ canvas {
   border-color: transparent;
   color: #6c72a0;
 }
+/* Read-only port-name label in the inspector — paired with the
+   variadic toggle on the right and the value field below. */
+.port-name-display {
+  flex: 1;
+  font-family: monospace;
+  font-size: 11px;
+  color: #9ea3c0;
+  padding: 3px 5px;
+}
+/* Read-only ref display in the inspector — shows the basename only.
+   Full path lives on the title attribute for hover (issue 224
+   follow-up). */
+.ref-display {
+  flex: 1;
+  min-width: 0;
+  font-family: monospace;
+  font-size: 11px;
+  color: #e8eaf6;
+  background: #0f1117;
+  border: 1px solid #2a2f45;
+  border-radius: 3px;
+  padding: 3px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Fn entry rendered as a button so the click affordance is clear
+   (the static label was easy to mistake for a non-interactive
+   readonly). */
+.fn-btn {
+  flex: 1;
+  font-family: monospace;
+  font-size: 11px;
+  color: #4a9eff;
+  background: #0f1117;
+  border: 1px solid #2a2f45;
+  border-radius: 3px;
+  padding: 3px 5px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fn-btn:hover:not(:disabled) {
+  border-color: #4a9eff;
+  background: #1e2130;
+}
+.fn-btn:disabled {
+  color: #6c72a0;
+  cursor: default;
+}
 .port-type {
   font-size: 10px;
   color: #4a9eff;

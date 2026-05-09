@@ -475,5 +475,59 @@ const FileBrowser = (() => {
   }
   // }}}
 
-  return { parse_functions, render };
+  // {{{ render_at_fn_list
+  // Public entry point used by the inspector's "fn" button (issue
+  // 224 follow-up). Jumps straight to the function picker for the
+  // file at `ref`, with a back button that unwinds to the full
+  // browser. Useful when the user wants to pick a different function
+  // from the same file without re-walking the directory tree.
+  async function render_at_fn_list(container, ref, on_select) {
+    if (!ref) {
+      // No ref to land on — open the full browser instead.
+      return render(container, on_select);
+    }
+
+    container.innerHTML = '<div class="fb-note">loading…</div>';
+    const stripped = ref.replace(/^src\//, '');
+
+    let content = null;
+    let error_msg = null;
+
+    // Mirror fetch_source's resolution order: main src/ first, then
+    // each extra dir in turn. The first successful fetch wins.
+    try {
+      content = await API.get_src_file(stripped);
+    } catch (e) { /* try extras */ }
+
+    if (content === null) {
+      let extras = [];
+      try { extras = await API.list_extra_src(); } catch (e) {}
+      for (let i = 0; i < (extras || []).length; i++) {
+        try { content = await API.get_extra_src_file(i, stripped); break; }
+        catch (e) {}
+      }
+    }
+
+    if (content === null) {
+      container.innerHTML = '';
+      const note = document.createElement('div');
+      note.className   = 'fb-note error';
+      note.textContent = 'source not found: ' + ref;
+      container.appendChild(note);
+      const back = document.createElement('button');
+      back.className   = 'fb-back';
+      back.textContent = '← browse';
+      back.onclick     = () => render(container, on_select);
+      container.appendChild(back);
+      return;
+    }
+
+    const fns = parse_functions(content, stripped);
+    render_fn_list(container, stripped, fns,
+      (f, fn) => on_select(f, fn),
+      () => render(container, on_select));
+  }
+  // }}}
+
+  return { parse_functions, render, render_at_fn_list };
 })();

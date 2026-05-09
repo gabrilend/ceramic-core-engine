@@ -112,6 +112,11 @@ const Canvas = (() => {
   //     m.x = w.x * zoom + pan_x   →   pan_x = m.x - w.x * zoom
   el.addEventListener('wheel', e => {
     e.preventDefault();
+    // Ignore wheel input while a pan drag is in progress. Middle-click
+    // pans tend to nudge the wheel as a side effect; without this guard
+    // the canvas zooms unexpectedly mid-pan.
+    if (panning) return;
+
     const m = mouse_pos(e);
     const w = screen_to_world(m.x, m.y);
 

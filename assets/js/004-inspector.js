@@ -149,6 +149,18 @@ const Inspector = (() => {
   }
   // }}}
 
+  // {{{ basename_no_ext
+  // Strip the directory components and the final extension from a
+  // path. Used by the ref display so the inspector shows
+  // "write-result" instead of "src/write-result.lua" — the full path
+  // is still on box.ref for the runtime, only the display is short.
+  function basename_no_ext(path) {
+    if (!path) return '';
+    const base = path.split('/').pop();
+    return base.replace(/\.[^.]+$/, '');
+  }
+  // }}}
+
   // {{{ Variadic operations (issue 217 part B)
   // Each operation mutates current_box, persists changes to all affected
   // boxes (this one and any upstream boxes whose connection records
@@ -344,9 +356,11 @@ const Inspector = (() => {
     if (!current_box || !is_iterator(current_box)) return;
     const slots = current_box.iterator_outputs;
     if (idx < 0 || idx >= slots.length) return;
+    // Removing the last remaining slot collapses the iterator entirely
+    // — the user shouldn't have to know there's a separate "toggle off"
+    // button when the visual outcome of "× the last slot" is the same.
     if (slots.length <= 1) {
-      status_msg('cannot remove last slot — toggle iterator off instead', 'error');
-      return;
+      return unmake_iterator();
     }
     const removed = slots[idx];
 
@@ -543,76 +557,6 @@ const Inspector = (() => {
   }
   // }}}
 
-  // {{{ rename_port
-  // Rename an input port at index `port_idx` on `box`. Updates the
-  // port name in box.inputs and rewrites `to_input` on every wire
-  // (both endpoints, mutating in place per the stale-cache lesson
-  // from 217). Reverses the read-only-name decision from issue 208;
-  // tradeoff: a typo desynchronizes the box from the function it
-  // calls, but the resulting runtime error surfaces clearly rather
-  // than silently skipping (issue 224).
-  //
-  // Validation: name must be a non-empty identifier-shaped string and
-  // unique within the box's inputs. Variadic-slot names (`base_N`)
-  // are accepted; the editor uses that shape internally and won't
-  // confuse it with a user rename because the variadic operations
-  // own the rename path for those cases.
-  async function rename_port(box, port_idx, new_name) {
-    const port = box.inputs && box.inputs[port_idx];
-    if (!port) return false;
-    const old_name = port.name;
-    if (old_name === new_name) return false;
-
-    if (!new_name || !/^[A-Za-z_]\w*$/.test(new_name)) {
-      status_msg('invalid port name: must start with a letter or _', 'error');
-      return false;
-    }
-    if (box.inputs.some((p, i) => i !== port_idx && p.name === new_name)) {
-      status_msg('duplicate port name "' + new_name + '"', 'error');
-      return false;
-    }
-
-    port.name = new_name;
-
-    // Rewrite every wire that targeted the old name (on both
-    // endpoints).
-    const my_id = box.id;
-    const upstream_ids = new Set();
-    (box.connections || []).forEach(c => {
-      if (c.to_box === my_id && c.to_input === old_name) {
-        c.to_input = new_name;
-        upstream_ids.add(c.from_box);
-      }
-    });
-    for (const up_id of upstream_ids) {
-      const up = Boxes.boxes[up_id];
-      if (!up) continue;
-      (up.connections || []).forEach(c => {
-        if (c.to_box === my_id && c.to_input === old_name) {
-          c.to_input = new_name;
-        }
-      });
-      try { await API.put_box(up_id, up); }
-      catch (e) { console.error('rename: failed to update ' + up_id + ':', e.message); }
-    }
-
-    try { await API.put_box(box.id, box); }
-    catch (e) {
-      status_msg('rename save failed: ' + e.message, 'error');
-      return false;
-    }
-    Canvas.mark_dirty();
-    // Refresh the inspector's read-only name label so it reflects the
-    // new name immediately (it caches text on show — without this the
-    // user would see the old name in the sidebar until they re-clicked
-    // the box).
-    if (current_box && current_box.id === box.id) {
-      show(current_box, on_change_cb, on_delete_cb);
-    }
-    return true;
-  }
-  // }}}
-
   // {{{ mk_port_display
   // Renders input ports as a two-row block per port: name field +
   // variadic toggle on the top row, value field on the bottom row.
@@ -642,32 +586,15 @@ const Inspector = (() => {
         const pv           = current_box ? parse_variadic_name(p.name) : null;
         const in_var_group = current_box && is_variadic_slot(current_box, p.name);
 
-        // Editable name input. Variadic slots are managed by the
-        // variadic ops (toggle / add / remove), so renaming them
-        // through this field is blocked — the operations rely on the
-        // `<base>_<N>` pattern, and a stray rename would orphan the
-        // slot from its group.
-        const name_inp = document.createElement('input');
-        name_inp.type      = 'text';
-        name_inp.value     = p.name || '';
-        name_inp.className = 'port-name-inp';
-        if (in_var_group) {
-          name_inp.disabled = true;
-          name_inp.title    = 'variadic slot name — toggle off the group to rename';
-        } else {
-          const commit = async () => {
-            const new_name = name_inp.value.trim();
-            if (new_name === p.name) return;
-            const ok = await Inspector.rename_port(current_box, i, new_name);
-            if (!ok) name_inp.value = p.name;
-          };
-          name_inp.addEventListener('blur', commit);
-          name_inp.addEventListener('keydown', e => {
-            if (e.key === 'Enter')  { e.preventDefault(); name_inp.blur(); }
-            if (e.key === 'Escape') { name_inp.value = p.name; name_inp.blur(); }
-          });
-        }
-        top_row.appendChild(name_inp);
+        // Read-only name label. Port names come from the parsed
+        // function signature (file browser populates them); editing
+        // them in the inspector is gone — the original 208 rationale
+        // (prevent typo drift between source and box JSON) holds, and
+        // post-fact rename was just a user tag anyway.
+        const name_el = document.createElement('span');
+        name_el.className   = 'port-name-display';
+        name_el.textContent = p.name || '';
+        top_row.appendChild(name_el);
 
         if (p.type && p.type !== 'any') {
           const type_el = document.createElement('span');
@@ -927,30 +854,24 @@ const Inspector = (() => {
       return;
     }
 
-    // ref: editable text input + browse button to populate via file browser
+    // ref: read-only display showing just the basename (no path, no
+    // extension), plus browse / view buttons. Full path stored on the
+    // box still — the display is just a UI tightening since paths can
+    // be long enough to overflow the sidebar.
     const ref_wrap = document.createElement('div');
     ref_wrap.style.cssText = 'display:flex;gap:4px;align-items:center;';
-    const ref_inp = document.createElement('input');
-    ref_inp.type  = 'text';
-    ref_inp.value = box.ref || '';
-    ref_inp.style.flex = '1';
-    ref_inp.style.minWidth = '0';
-    // view button hides until a ref is set — clicking it before then
-    // would only produce a "no ref" error. Toggle on every input event so
-    // the visibility tracks the field live (issue 227).
-    ref_inp.addEventListener('input', () => {
-      current_box.ref = ref_inp.value;
-      view_btn.hidden = !ref_inp.value;
-      save();
-    });
+    const ref_disp = document.createElement('span');
+    ref_disp.className = 'ref-display';
+    ref_disp.title     = box.ref || '';   // full path on hover
+    ref_disp.textContent = basename_no_ext(box.ref) || '(none)';
     const browse_btn = document.createElement('button');
     browse_btn.className   = 'toolbar-btn';
     browse_btn.textContent = 'browse';
     browse_btn.style.whiteSpace = 'nowrap';
     browse_btn.onclick = open_browser;
     // "view" button opens a floating, draggable read-only window with
-    // the current ref's source content (issue 215). Disabled when ref
-    // is empty since there's nothing to fetch.
+    // the current ref's source content (issue 215). Hidden when ref
+    // is empty since there's nothing to fetch (issue 227).
     const view_btn = document.createElement('button');
     view_btn.className   = 'toolbar-btn';
     view_btn.textContent = 'view';
@@ -963,12 +884,40 @@ const Inspector = (() => {
       }
       SourceView.open_source_view(current_box.ref, current_box);
     };
-    ref_wrap.appendChild(ref_inp);
+    ref_wrap.appendChild(ref_disp);
     ref_wrap.appendChild(browse_btn);
     ref_wrap.appendChild(view_btn);
     fields.appendChild(mk_row('ref', ref_wrap));
 
-    fields.appendChild(mk_row('fn', mk_readonly(box.fn)));
+    // fn: clickable button that jumps the file browser to the
+    // function-list step for the current ref. Lets the user pick a
+    // different fn from the same file, or back-button up to swap files
+    // entirely. Reads as a button rather than a label so the
+    // affordance is unambiguous.
+    const fn_btn = document.createElement('button');
+    fn_btn.className   = 'fn-btn';
+    fn_btn.textContent = box.fn || '(no function)';
+    fn_btn.title       = 'change function — opens file browser at the function list';
+    fn_btn.disabled    = !box.ref;
+    fn_btn.onclick     = () => {
+      title.textContent = 'pick fn';
+      fields.innerHTML  = '';
+      FileBrowser.render_at_fn_list(fields, current_box.ref, async (filename, fn) => {
+        current_box.ref    = filename;
+        current_box.fn     = fn.name;
+        current_box.inputs = fn.inputs.map(n => ({ name: n, type: 'any' }));
+        if (fn.outputs && fn.outputs.length === 0) {
+          current_box.has_output = false;
+          await sever_output_wires();
+        } else {
+          delete current_box.has_output;
+        }
+        await save();
+        show(current_box, on_change_cb, on_delete_cb);
+        Canvas.mark_dirty();
+      });
+    };
+    fields.appendChild(mk_row('fn', fn_btn));
 
     // inputs: read-only names from parsing, editable literal values
     const in_sec = document.createElement('div');
@@ -1030,5 +979,5 @@ const Inspector = (() => {
   // }}}
 
   return { show, hide, show_content, auto_grow_after_set,
-           auto_grow_iterator_after_connect, rename_port };
+           auto_grow_iterator_after_connect };
 })();
