@@ -176,27 +176,39 @@ const Inspector = (() => {
 
   // Toggle a variadic group OFF (collapse to single port `<base>`).
   // Higher-indexed slots are deleted along with their incoming wires.
+  //
+  // Order matters: connection updates run FIRST, while port objects
+  // still carry their old names. If we rename the port objects before
+  // updating connections, the second update reads `slots[0].port.name`
+  // post-mutation and ends up looking for connections targeting the
+  // already-renamed slot — finds none, leaves a stale `text_0`-pointing
+  // connection record behind, which reappears as a "ghost" wire when
+  // the user toggles variadic back on.
   async function unmake_variadic(base) {
     const slots = variadic_slots_for(current_box, base);
     if (slots.length === 0) return;
 
-    // Drop higher slots from box.inputs.
-    const drop_names = slots.slice(1).map(s => s.port.name);
+    // Capture old names BEFORE any mutation. drop_names are the higher
+    // slots' names (text_1, text_2, ...); slot_0_old_name is the first
+    // slot's name (text_0) which we'll rename to `base` (text).
+    const slot_0_old_name = slots[0].port.name;
+    const drop_names      = slots.slice(1).map(s => s.port.name);
 
+    // 1. Update connections targeting the old slot-0 name → rename to base.
+    await update_target_connections([slot_0_old_name], c => ({ ...c, to_input: base }));
+    // 2. Drop connections targeting any higher slot.
+    if (drop_names.length > 0) {
+      await update_target_connections(drop_names, () => null);
+    }
+
+    // 3. Now safe to rename / drop the port objects on this box.
     current_box.inputs = current_box.inputs.filter((_, i) =>
       !slots.slice(1).some(s => s.idx === i));
-    // Re-resolve slot 0's index after the filter, then rename it.
-    const new_keep_idx = current_box.inputs.findIndex(p => p.name === slots[0].port.name);
+    const new_keep_idx = current_box.inputs.findIndex(p => p.name === slot_0_old_name);
     if (new_keep_idx >= 0) current_box.inputs[new_keep_idx].name = base;
 
     current_box.variadic_inputs = (current_box.variadic_inputs || [])
       .filter(n => n !== base);
-
-    // Rename slot-0 connections, drop higher-slot connections.
-    await update_target_connections([slots[0].port.name], c => ({ ...c, to_input: base }));
-    if (drop_names.length > 0) {
-      await update_target_connections(drop_names, () => null);
-    }
 
     await save();
     Canvas.mark_dirty();
