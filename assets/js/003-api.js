@@ -72,8 +72,33 @@ const API = (() => {
   // }}}
 
   // {{{ get_src_file
+  // Returns raw text, not JSON — the request() helper would mis-parse source code.
   async function get_src_file(filename) {
-    return request('GET', `/maps/${map_name}/src/${encodeURIComponent(filename)}`);
+    const res = await fetch(base_url + `/maps/${map_name}/src/${encodeURIComponent(filename)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.text();
+  }
+  // }}}
+
+  // {{{ list_extra_src
+  async function list_extra_src() {
+    return request('GET', `/maps/${map_name}/extrasrc`);
+  }
+  // }}}
+
+  // {{{ get_extra_src_file
+  async function get_extra_src_file(dir_index, filename) {
+    const res = await fetch(base_url + `/maps/${map_name}/extrasrc/${dir_index}/${encodeURIComponent(filename)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.text();
+  }
+  // }}}
+
+  // {{{ list_dirs
+  // Lists immediate subdirectories of an absolute path on the server's filesystem.
+  // Returns { path: string, dirs: string[] }.
+  async function list_dirs(path) {
+    return request('GET', '/fs/dirs?path=' + encodeURIComponent(path));
   }
   // }}}
 
@@ -91,5 +116,7 @@ const API = (() => {
 
   return { init, list_maps, list_boxes, get_box, put_box, delete_box,
            get_meta, put_meta, get_data, put_data,
-           list_src_files, get_src_file };
+           list_src_files, get_src_file,
+           list_extra_src, get_extra_src_file,
+           list_dirs };
 })();

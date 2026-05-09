@@ -33,12 +33,13 @@ mkdir -p "${TMP_TARGET}"
 # tmp/ is a symlink to /tmp/soramech-<name>/ so ephemeral files stay in RAM
 ln -s "${TMP_TARGET}" "${MAP_DIR}/tmp"
 
-# write meta.json with placeholders
+# write meta.json — src_dirs seeds the file browser with this map's own src/ dir
 cat > "${MAP_DIR}/meta.json" << METAJSON
 {
   "name": "${MAP_NAME}",
   "description": "",
-  "entry_box_id": ""
+  "entry_box_id": "",
+  "src_dirs": ["${MAP_DIR}/src"]
 }
 METAJSON
 

@@ -144,13 +144,31 @@ local function json_err(client, status, msg)
 end
 -- }}}
 
+-- {{{ parse_query
+-- Decodes a URL query string into a key→value table.
+local function parse_query(query_str)
+    local params = {}
+    for k, v in (query_str or ""):gmatch("([^=&]+)=([^&]*)") do
+        v = v:gsub("+", " "):gsub("%%(%x%x)", function(h)
+            return string.char(tonumber(h, 16))
+        end)
+        params[k] = v
+    end
+    return params
+end
+-- }}}
+
 -- {{{ parse_request
 local function parse_request(client)
     local line, err = client:receive("*l")
     if not line then return nil, err end
 
-    local method, path, _ = line:match("^(%u+) ([^ ]+) HTTP")
+    local method, raw_path, _ = line:match("^(%u+) ([^ ]+) HTTP")
     if not method then return nil, "bad request line: " .. line end
+
+    -- split query string from path before building parts
+    local path       = raw_path:match("^([^?]*)") or raw_path
+    local query_str  = raw_path:match("^[^?]*%?(.*)") or ""
 
     -- read headers
     local headers = {}
@@ -173,11 +191,12 @@ local function parse_request(client)
         body = client:receive(content_length) or ""
     end
 
-    -- split path into segments
+    -- split clean path into segments
     local parts = {}
     for seg in path:gmatch("[^/]+") do parts[#parts + 1] = seg end
 
-    return { method = method, path = path, parts = parts, body = body }
+    return { method = method, path = path, query = parse_query(query_str),
+             parts = parts, body = body }
 end
 -- }}}
 
@@ -289,6 +308,90 @@ local function handle_list_src(client, req, maps_root)
 end
 -- }}}
 
+-- {{{ resolve_src_dirs
+-- Returns the unified src_dirs list for a map.
+-- Migration: if meta.json has no src_dirs, synthesizes from implicit src/ + extra_src_dirs.
+-- All browseable directories go through this single function; no caller special-cases src/.
+local function resolve_src_dirs(meta, maps_root, map_name)
+    if meta.src_dirs then
+        return meta.src_dirs
+    end
+    -- migrate: implicit src/ dir is the first entry, followed by any previously stored extra dirs
+    local implicit_src = maps_root .. "/" .. map_name .. "/src"
+    local dirs = { implicit_src }
+    for _, d in ipairs(meta.extra_src_dirs or {}) do
+        dirs[#dirs + 1] = d
+    end
+    return dirs
+end
+-- }}}
+
+-- {{{ handle_list_extrasrc
+-- Returns [{index, label, path, files:[]}] for all src_dirs entries.
+-- src/ is no longer special — it is simply the first entry in src_dirs.
+local function handle_list_extrasrc(client, req, maps_root)
+    local map_name = req.parts[2]
+    local meta_path = safe_path(maps_root, map_name, "meta.json")
+    if not meta_path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local meta = {}
+    local raw, _ = read_file(meta_path)
+    if raw then
+        local decoded, _, _ = json.decode(raw)
+        if decoded then meta = decoded end
+    end
+
+    local src_dirs = resolve_src_dirs(meta, maps_root, map_name)
+    local result = {}
+    for i, dir_path in ipairs(src_dirs) do
+        local handle = io.popen("ls " .. dir_path .. "/ 2>/dev/null")
+        local files = {}
+        if handle then
+            local listing = handle:read("*a")
+            handle:close()
+            for name in listing:gmatch("[^\n]+") do
+                if name ~= "" then files[#files + 1] = name end
+            end
+        end
+        local label = dir_path:match("([^/]+)$") or dir_path
+        result[#result + 1] = { index = i - 1, label = label, path = dir_path, files = files }
+    end
+    json_ok(client, result)
+end
+-- }}}
+
+-- {{{ handle_get_extrasrc
+-- Returns the raw text of a file from src_dirs[index].
+local function handle_get_extrasrc(client, req, maps_root)
+    local map_name  = req.parts[2]
+    local dir_index = tonumber(req.parts[4])
+    local file_name = req.parts[5]
+    if not dir_index or not file_name then
+        return json_err(client, "400 Bad Request", "missing dir index or filename")
+    end
+    if file_name:find("%.%.", 1, true) or file_name:find("/", 1, true) then
+        return json_err(client, "400 Bad Request", "invalid filename")
+    end
+
+    local meta_path = safe_path(maps_root, map_name, "meta.json")
+    if not meta_path then return json_err(client, "400 Bad Request", "invalid path") end
+
+    local raw, _ = read_file(meta_path)
+    if not raw then return json_err(client, "404 Not Found", "meta.json not found") end
+    local meta, _, _ = json.decode(raw)
+    if not meta then return json_err(client, "500 Internal Server Error", "bad meta.json") end
+
+    local src_dirs = resolve_src_dirs(meta, maps_root, map_name)
+    local dir_path = src_dirs[dir_index + 1]  -- lua 1-indexed
+    if not dir_path then return json_err(client, "404 Not Found", "no src dir at index " .. dir_index) end
+
+    local file_path = dir_path .. "/" .. file_name
+    local content, ferr = read_file(file_path)
+    if not content then return json_err(client, "404 Not Found", tostring(ferr)) end
+    respond(client, "200 OK", content, "text/plain")
+end
+-- }}}
+
 -- {{{ handle_get_src
 local function handle_get_src(client, req, maps_root)
     local map_name  = req.parts[2]
@@ -371,6 +474,42 @@ local function handle_put_simple(client, req, maps_root, filename, validator)
 end
 -- }}}
 
+-- {{{ handle_list_dirs
+-- Lists immediate (non-hidden) subdirectories of an absolute path.
+-- Query param: path — the absolute directory path to list.
+local function handle_list_dirs(client, req, maps_root)
+    local path = (req.query or {})["path"]
+    if not path or path == "" then
+        return json_err(client, "400 Bad Request", "missing 'path' query parameter")
+    end
+    if path:sub(1, 1) ~= "/" then
+        return json_err(client, "400 Bad Request", "path must be absolute")
+    end
+    if path:find("%.%.", 1, true) then
+        return json_err(client, "400 Bad Request", "path traversal not allowed")
+    end
+    -- normalize: strip trailing slashes; restore bare "/" for root
+    path = path:gsub("/+$", "")
+    if path == "" then path = "/" end
+
+    -- shell-quote the path so spaces and special chars are safe
+    local quoted = "'" .. path:gsub("'", "'\\''") .. "'"
+    local handle = io.popen("ls -d " .. quoted .. "/*/ 2>/dev/null")
+    local dirs = {}
+    if handle then
+        local listing = handle:read("*a")
+        handle:close()
+        for entry in listing:gmatch("[^\n]+") do
+            -- extract the final directory name from the full path
+            local name = entry:match("/([^/]+)/?$")
+            if name then dirs[#dirs + 1] = name end
+        end
+    end
+
+    json_ok(client, { path = path, dirs = dirs })
+end
+-- }}}
+
 -- {{{ dispatch
 local function dispatch(client, req, maps_root)
     local m = req.method
@@ -378,6 +517,11 @@ local function dispatch(client, req, maps_root)
 
     -- OPTIONS preflight
     if m == "OPTIONS" then return handle_options(client) end
+
+    -- GET /fs/dirs?path=...
+    if m == "GET" and #p == 2 and p[1] == "fs" and p[2] == "dirs" then
+        return handle_list_dirs(client, req, maps_root)
+    end
 
     -- GET /maps
     if m == "GET" and #p == 1 and p[1] == "maps" then
@@ -404,6 +548,16 @@ local function dispatch(client, req, maps_root)
     -- GET /maps/<name>/src/<file>
     if m == "GET" and #p == 4 and p[1] == "maps" and p[3] == "src" then
         return handle_get_src(client, req, maps_root)
+    end
+
+    -- GET /maps/<name>/extrasrc  (list all extra dirs + their files)
+    if m == "GET" and #p == 3 and p[1] == "maps" and p[3] == "extrasrc" then
+        return handle_list_extrasrc(client, req, maps_root)
+    end
+
+    -- GET /maps/<name>/extrasrc/<dir_index>/<file>
+    if m == "GET" and #p == 5 and p[1] == "maps" and p[3] == "extrasrc" then
+        return handle_get_extrasrc(client, req, maps_root)
     end
 
     -- GET/PUT /maps/<name>/data/<filename>

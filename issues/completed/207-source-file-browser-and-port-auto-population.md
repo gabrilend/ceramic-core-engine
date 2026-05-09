@@ -23,6 +23,17 @@ click, ref/fn/inputs/outputs are set on the box and saved. Inputs and outputs
 are shown as read-only port-display lists, not editable fields. Branch box
 inputs remain manually editable (no source function to parse).
 
+## Architecture update (2026-05-07)
+
+The output port population step (deriving `box.outputs` from return statement
+names) is removed as part of the single-wire output redesign (see issue 210).
+When a function is selected via the file browser, only `box.inputs` is set —
+`box.outputs` is no longer part of the call box schema.
+
+The file browser's return-statement parser (`parse_lua_returns`) is kept for
+now but the results are no longer applied to the box. It may be removed in a
+future cleanup pass once issue 210 is implemented.
+
 ## Blockers
 
 - 201 (boxes must render for this to be testable)

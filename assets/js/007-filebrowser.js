@@ -3,6 +3,28 @@
 
 const FileBrowser = (() => {
 
+  // {{{ lua_fn_end
+  // Returns the index of the closing 'end'/'until' that matches the function body
+  // starting at body_start. Tracks nesting depth by counting block openers and closers.
+  // Does not attempt to skip string literals — good enough for well-formatted source.
+  function lua_fn_end(content, body_start) {
+    const tok = /\b(function|if|while|for|repeat|do|end|until)\b/g;
+    tok.lastIndex = body_start;
+    let depth = 1;
+    let m;
+    while ((m = tok.exec(content)) !== null) {
+      const kw = m[1];
+      if (kw === 'end' || kw === 'until') {
+        depth--;
+        if (depth === 0) return m.index;
+      } else {
+        depth++;
+      }
+    }
+    return content.length;
+  }
+  // }}}
+
   // {{{ parse_lua_returns
   // Scans a function body for return statements; returns an array of output names.
   function parse_lua_returns(body) {
@@ -12,17 +34,20 @@ const FileBrowser = (() => {
     while ((m = re.exec(body)) !== null) {
       const expr = m[1].replace(/--.*$/, '').trim();
       if (!expr) continue;
-      expr.split(',').forEach((part, i) => {
+      // string literals or concat operator mean the whole expression is complex
+      if (/["']|\.\./.test(expr)) { names.add('result'); continue; }
+      const parts = expr.split(',');
+      parts.forEach(part => {
         part = part.trim();
         // bare identifier → use as port name
         if (/^[a-zA-Z_]\w*$/.test(part) &&
             !['nil','true','false','not','and','or','end'].includes(part)) {
           names.add(part);
-        } else if (expr.split(',').length === 1 && part) {
+        } else if (parts.length === 1 && part) {
           // single complex expression → call it "result"
           names.add('result');
         }
-        // multi-value complex expression: skip unnamed parts
+        // multi-value complex expression with no bare names: skip
       });
     }
     return [...names];
@@ -33,20 +58,17 @@ const FileBrowser = (() => {
   function parse_lua(content) {
     const fns    = [];
     const fn_re  = /^function\s+M\.(\w+)\s*\(([^)]*)\)/mg;
-    const starts = [];
     let m;
     while ((m = fn_re.exec(content)) !== null) {
-      starts.push({ name: m[1], args: m[2], body_start: m.index + m[0].length });
-    }
-    starts.forEach((fn, i) => {
-      const body_end = i + 1 < starts.length ? starts[i + 1].body_start : content.length;
-      const body     = content.slice(fn.body_start, body_end);
-      const inputs   = fn.args.trim()
-        ? fn.args.split(',').map(s => s.trim()).filter(Boolean)
+      const body_start = m.index + m[0].length;
+      const body_end   = lua_fn_end(content, body_start);
+      const body       = content.slice(body_start, body_end);
+      const inputs     = m[2].trim()
+        ? m[2].split(',').map(s => s.trim()).filter(Boolean)
         : [];
-      const outputs  = parse_lua_returns(body);
-      fns.push({ name: fn.name, inputs, outputs });
-    });
+      const outputs    = parse_lua_returns(body);
+      fns.push({ name: m[1], inputs, outputs });
+    }
     return fns;
   }
   // }}}
@@ -160,54 +182,276 @@ const FileBrowser = (() => {
   }
   // }}}
 
+  // {{{ show_dir_picker
+  // Renders a directory browser into container, navigating the server filesystem.
+  // on_select(abs_path) called when the user confirms a directory.
+  // on_cancel() called when the user clicks back.
+  // initial_path: starting directory; defaults to /home if omitted.
+  async function show_dir_picker(container, on_select, on_cancel, initial_path) {
+    let current_path = initial_path || '/home';
+
+    const render_picker = async () => {
+      container.innerHTML = '<div class="fb-note">loading…</div>';
+      let result;
+      try {
+        result = await API.list_dirs(current_path);
+      } catch(e) {
+        container.innerHTML = '<div class="fb-note error">error: ' + e.message + '</div>';
+        return;
+      }
+
+      container.innerHTML = '';
+
+      // back button returns to file list without selecting
+      const cancel_btn = document.createElement('button');
+      cancel_btn.className   = 'fb-back';
+      cancel_btn.textContent = '← cancel';
+      cancel_btn.onclick     = on_cancel;
+      container.appendChild(cancel_btn);
+
+      // current path breadcrumb
+      const path_el = document.createElement('div');
+      path_el.style.cssText = 'font-size:10px;color:#4a9eff;word-break:break-all;' +
+        'margin-bottom:6px;font-family:monospace;';
+      path_el.textContent = result.path;
+      container.appendChild(path_el);
+
+      // "use this directory" confirmation button
+      const sel_btn = document.createElement('button');
+      sel_btn.className   = 'add-port';
+      sel_btn.textContent = '✓ use this directory';
+      sel_btn.style.cssText = 'display:block;width:100%;margin-bottom:8px;' +
+        'color:#4caf7d;border-color:#4caf7d;';
+      sel_btn.onclick = () => on_select(result.path);
+      container.appendChild(sel_btn);
+
+      // parent directory row (except at filesystem root)
+      if (result.path !== '/') {
+        const up_row = document.createElement('div');
+        up_row.className   = 'fb-file-row';
+        up_row.textContent = '..';
+        up_row.onclick = () => {
+          // strip last path component
+          const parent = result.path.replace(/\/[^/]+$/, '') || '/';
+          current_path = parent;
+          render_picker();
+        };
+        container.appendChild(up_row);
+      }
+
+      if (result.dirs.length === 0) {
+        const note = document.createElement('div');
+        note.className   = 'fb-note';
+        note.textContent = '(no subdirectories)';
+        container.appendChild(note);
+      }
+
+      result.dirs.forEach(name => {
+        const row = document.createElement('div');
+        row.className   = 'fb-file-row';
+        row.textContent = name + '/';
+        row.onclick = () => {
+          current_path = result.path === '/' ? '/' + name : result.path + '/' + name;
+          render_picker();
+        };
+        container.appendChild(row);
+      });
+    };
+
+    render_picker();
+  }
+  // }}}
+
+  // {{{ show_fb_ctx_menu
+  // Displays a small floating context menu; reuses .ctx-item CSS from the global stylesheet.
+  // items: [{label, action, danger?}]
+  function show_fb_ctx_menu(screen_x, screen_y, items) {
+    let menu = document.getElementById('fb-ctx-menu');
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id = 'fb-ctx-menu';
+      menu.style.cssText =
+        'position:fixed;background:#181c28;border:1px solid #2a2f45;' +
+        'border-radius:4px;padding:4px 0;z-index:1001;min-width:150px;' +
+        'box-shadow:0 4px 16px #00000066;display:none;';
+      document.body.appendChild(menu);
+      // close on any click or Escape — attached once at creation
+      document.addEventListener('click', () => { menu.style.display = 'none'; });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') menu.style.display = 'none';
+      });
+    }
+    menu.innerHTML = '';
+    items.forEach(item => {
+      const el = document.createElement('div');
+      el.className  = item.danger ? 'ctx-item danger' : 'ctx-item';
+      el.textContent = item.label;
+      // stopPropagation so the document click listener above doesn't immediately close it
+      el.addEventListener('click', e => { e.stopPropagation(); menu.style.display = 'none'; item.action(); });
+      menu.appendChild(el);
+    });
+    menu.style.left    = screen_x + 'px';
+    menu.style.top     = screen_y + 'px';
+    menu.style.display = 'block';
+    const r = menu.getBoundingClientRect();
+    if (r.right  > window.innerWidth)  menu.style.left = (screen_x - r.width)  + 'px';
+    if (r.bottom > window.innerHeight) menu.style.top  = (screen_y - r.height) + 'px';
+  }
+  // }}}
+
   // {{{ render
   // Renders the full file browser into container.
   // on_select(filename, fn_obj) called when the user picks a function.
+  // Groups: [{label, path?, files:[string], fetch_file: async fn(filename)->text}]
   async function render(container, on_select) {
-    container.innerHTML = '<div class="fb-note">loading src/…</div>';
+    container.innerHTML = '<div class="fb-note">loading…</div>';
 
-    let files;
+    // collapsed state: set of group labels
+    const collapsed = new Set();
+
+    // all browseable dirs come from one endpoint — src/ is no longer a special case
+    let src_dirs = [];
     try {
-      files = await API.list_src_files();
+      src_dirs = await API.list_extra_src().catch(() => []);
     } catch (e) {
-      container.innerHTML = '<div class="fb-note error">could not list src/: ' + e.message + '</div>';
+      container.innerHTML = '<div class="fb-note error">load error: ' + e.message + '</div>';
       return;
     }
 
-    if (!files || files.length === 0) {
-      container.innerHTML = '<div class="fb-note">src/ is empty — add source files to the map</div>';
-      return;
-    }
+    // build group list — every entry has a path; no exceptions
+    const groups = [];
+    (src_dirs || []).forEach(d => {
+      if (d.files && d.files.length > 0) {
+        groups.push({
+          label:      d.label + '/',
+          path:       d.path,
+          files:      d.files,
+          fetch_file: f => API.get_extra_src_file(d.index, f),
+        });
+      }
+    });
 
-    // show file list
     const show_file_list = () => {
       container.innerHTML = '';
-      const hdr = document.createElement('div');
-      hdr.className   = 'fb-header';
-      hdr.textContent = 'src/';
-      container.appendChild(hdr);
 
-      files.forEach(filename => {
-        const row = document.createElement('div');
-        row.className   = 'fb-file-row';
-        row.textContent = filename;
-        row.onclick     = async () => {
-          row.textContent = filename + ' …';
-          let content;
-          try {
-            content = await API.get_src_file(filename);
-          } catch (e) {
-            container.innerHTML = '<div class="fb-note error">could not read ' + filename + ': ' + e.message + '</div>';
-            show_file_list();
-            return;
-          }
-          const fns = parse_functions(content, filename);
-          render_fn_list(container, filename, fns,
-            (f, fn) => on_select(f, fn),
-            show_file_list
-          );
+      // add-library-dir button
+      const add_btn = document.createElement('button');
+      add_btn.textContent = '+ library dir';
+      add_btn.className   = 'fb-add-dir-btn';
+      add_btn.onclick = () => {
+        // open picker at parent of last known dir so the user lands near recent work
+        const last = groups.length > 0 ? groups[groups.length - 1].path : null;
+        const initial = last ? (last.replace(/\/[^/]+$/, '') || '/') : '/home';
+        show_dir_picker(container,
+          async (path) => {
+            try {
+              const meta = await API.get_meta();
+              // derive current list from groups, not meta.src_dirs:
+              // groups already reflects the server-migrated state (extra_src_dirs + src/),
+              // whereas meta.src_dirs is absent on old maps and would discard prior entries
+              const current = groups.map(g => g.path);
+              if (!current.includes(path)) {
+                current.push(path);
+                await API.put_meta({ ...meta, src_dirs: current });
+              }
+              render(container, on_select);
+            } catch(e) {
+              show_file_list();
+              const note = document.createElement('div');
+              note.className   = 'fb-note error';
+              note.textContent = 'could not save dir: ' + e.message;
+              container.insertBefore(note, container.firstChild);
+            }
+          },
+          () => show_file_list(),
+          initial
+        );
+      };
+      container.appendChild(add_btn);
+
+      if (groups.length === 0) {
+        const note = document.createElement('div');
+        note.className   = 'fb-note';
+        note.textContent = 'src/ is empty — add source files or a library dir';
+        container.appendChild(note);
+        return;
+      }
+
+      groups.forEach(group => {
+        // use full path as the collapse key for extra dirs so same-named dirs don't share state
+        const collapse_key = group.path || group.label;
+        const is_collapsed = collapsed.has(collapse_key);
+
+        // group header row with toggle
+        const hdr = document.createElement('div');
+        hdr.className = 'fb-group-hdr';
+
+        const toggle = document.createElement('span');
+        toggle.className   = 'fb-group-toggle';
+        toggle.textContent = is_collapsed ? '▶' : '▼';
+        hdr.appendChild(toggle);
+
+        const lbl = document.createElement('span');
+        lbl.className   = 'fb-header';
+        lbl.textContent = group.label;
+        hdr.appendChild(lbl);
+
+        hdr.onclick = () => {
+          if (collapsed.has(collapse_key)) collapsed.delete(collapse_key);
+          else collapsed.add(collapse_key);
+          show_file_list();
         };
-        container.appendChild(row);
+
+        // right-click on any dir header: offer "hide directory"
+        hdr.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          show_fb_ctx_menu(e.clientX, e.clientY, [{
+            label:  'hide directory',
+            danger: true,
+            action: async () => {
+              try {
+                const meta = await API.get_meta();
+                // same migration rationale as add: use groups as source of truth
+                const dirs = groups.map(g => g.path).filter(p => p !== group.path);
+                await API.put_meta({ ...meta, src_dirs: dirs });
+                render(container, on_select);
+              } catch (err) {
+                show_file_list();
+                const note = document.createElement('div');
+                note.className   = 'fb-note error';
+                note.textContent = 'could not hide dir: ' + err.message;
+                container.insertBefore(note, container.firstChild);
+              }
+            },
+          }]);
+        });
+
+        container.appendChild(hdr);
+
+        if (is_collapsed) return;
+
+        group.files.forEach(filename => {
+          const row = document.createElement('div');
+          row.className   = 'fb-file-row';
+          row.textContent = filename;
+          row.onclick     = async () => {
+            row.textContent = filename + ' …';
+            let content;
+            try {
+              content = await group.fetch_file(filename);
+            } catch (e) {
+              container.innerHTML = '<div class="fb-note error">could not read ' + filename + ': ' + e.message + '</div>';
+              show_file_list();
+              return;
+            }
+            const fns = parse_functions(content, filename);
+            render_fn_list(container, group.label + filename, fns,
+              (f, fn) => on_select(f, fn),
+              show_file_list
+            );
+          };
+          container.appendChild(row);
+        });
       });
     };
 
