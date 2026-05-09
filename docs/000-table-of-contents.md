@@ -59,7 +59,7 @@ Read in order for a complete picture of the system.
 - 219 — map compiler
 - 220 — root run script and entry point cleanup (complete)
 - 221 — iterator box: round-robin output routing
-- 222 — compile button and assets directory
+- 222 — compile button and assets directory (complete)
 
 ### Phase 3 — Thread pool runtime (designed, not yet implemented)
 

@@ -28,7 +28,7 @@ model the phase 3 runtime will consume.
 | 219  | map compiler                                   | open     |
 | 220  | root run script and entry point cleanup        | complete |
 | 221  | iterator box                                   | open     |
-| 222  | compile button and assets directory            | open     |
+| 222  | compile button and assets directory            | complete |
 
 ## Phase goal checklist
 
@@ -41,7 +41,7 @@ model the phase 3 runtime will consume.
 - [—] Entry box marker (won't implement — phase 3 auto-detects, see 305)
 - [ ] Comparator routing replaces the old branch box (issue 210)
 - [ ] Iterator box with auto-grow output slots (issue 221)
-- [ ] Compile button (issue 222) — placeholder UI for the phase 3 build
+- [x] Compile button (issue 222) — placeholder UI for the phase 3 build
 
 ## Notes on graph model changes during phase 2
 

@@ -1,7 +1,34 @@
 # 222 — Compile button and assets directory
 
 ## Status
-open
+complete (button placeholder; backend wired by issue 219)
+
+## Implementation notes
+
+The button exists in the toolbar as `⚙ compile`, next to the `⬇ png`
+export. Click handler `App.compile_map` logs `compile clicked` and
+shows a status message noting the backend is not wired up yet —
+that work belongs to issue 219.
+
+The compiled-directory layout is captured in a comment on
+`compile_map` so the structure is in one place when 219 fills it in:
+
+```
+compiled/pool-runner    — the C pool runner binary
+compiled/src/           — copy of every source file the map uses
+compiled/bin/           — per-box compiled .so files (C boxes)
+compiled/langs/         — language spec .so files needed
+compiled/manifest.json  — every box, its language, its artifact path
+```
+
+Open question about disabling the button until an entry box is set
+is moot — issue 206 was closed (won't implement) because phase 3
+auto-detects entry boxes. The button is always enabled.
+
+## Open questions remaining
+None — the second open question (toolbar placement) is resolved by
+putting the button in the right-side group with `⬇ png`, both being
+"output" actions.
 
 ## Current behavior
 The editor has no mechanism to trigger compilation of a map. Maps are only

@@ -558,6 +558,22 @@ const App = (() => {
   }
   // }}}
 
+  // {{{ compile_map
+  // Placeholder for the phase 3 compile pipeline (issue 219). The button
+  // exists so the toolbar layout is settled before the backend is wired
+  // in. When implemented, this will POST to /maps/<name>/compile and
+  // produce a self-contained `compiled/` directory in the map:
+  //   compiled/pool-runner   — the C pool runner binary
+  //   compiled/src/          — copy of every source file the map uses
+  //   compiled/bin/          — per-box compiled .so files (C boxes)
+  //   compiled/langs/        — language spec .so files needed
+  //   compiled/manifest.json — every box, its language, its artifact path
+  function compile_map() {
+    console.log('compile clicked');
+    status_msg('compile is not wired up yet — see issue 219');
+  }
+  // }}}
+
   // right-click on canvas: context menu
   Canvas.el.addEventListener('contextmenu', e => {
     e.preventDefault();
@@ -617,5 +633,5 @@ const App = (() => {
   // }}}
 
   window.addEventListener('DOMContentLoaded', init);
-  return { load_map, fit_to_view, set_tool_mode, export_image };
+  return { load_map, fit_to_view, set_tool_mode, export_image, compile_map };
 })();
