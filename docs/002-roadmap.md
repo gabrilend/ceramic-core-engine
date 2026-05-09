@@ -31,8 +31,8 @@ This phase is editor-focused with some graph-model cleanup:
 - Comparator + iterator are the two routing primitives (issues 210,
   221)
 - Variadic / queued inputs (issues 213, 217)
-- Map compiler (issue 219) and compile button (issue 222) — ties
-  the editor into the phase 3 build path
+- Compile button (issue 222) — placeholder until phase 3's build
+  system (issue 309) ships the backing endpoint
 - Ollama / LLM library (issue 209)
 
 Phase 2 runs on the synchronous Lua interpreter

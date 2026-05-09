@@ -172,6 +172,87 @@ If the user wants to override (custom spec dirs for development),
 `SORAMECH_LANGS_DIR=/path/to/langs ./soramech-pool` overrides the
 auto-detected location.
 
+## Compile and package a map for standalone execution
+
+Folded in from issue 219 (closed). The build system also handles the
+"package a map for deployment" step that the editor's Compile button
+(issue 222) and a CLI tool both invoke.
+
+The compile step turns an editable map directory into a self-contained
+deployable directory:
+
+```
+maps/<name>/compiled/
+    pool-runner          ← copy (or symlink) of soramech-pool
+    src/                 ← every source file the map uses
+    bin/                 ← per-box compiled .so files (C boxes)
+    langs/               ← copy of language spec .so files used
+    manifest.json        ← every box, its language, artifact path, build version
+```
+
+Running `./compiled/pool-runner` executes the map without reference to
+the editor, the live `src/` outside `compiled/`, or any external
+SoraMech installation.
+
+### Steps the compile step performs
+
+1. **Walk the graph.** Reuse the C loader (issue 305) to enumerate
+   boxes, languages, and source files.
+2. **Copy source.** Every file referenced by `box.ref` plus
+   transitively-required libs lands in `compiled/src/`. The map's
+   local `src/` is the only path `package.path` searches at runtime
+   (issue 306), so all dependencies must be present.
+3. **Compile per-box artifacts.** For each language present, invoke
+   that spec's `compile` callback (issue 303). The C spec emits a
+   wrapper from the box's signature into `compiled/bin/` (issue 307).
+   Lua and Bash have no compile step; their files are copied verbatim.
+4. **Copy spec libraries.** `langs/<name>/spec.so` for every language
+   used in the map is copied to `compiled/langs/<name>/spec.so`. The
+   pool runner's spec discovery (above) finds them relative to the
+   binary location.
+5. **Copy or symlink the runner binary.** `--portable` copies; the
+   default symlinks to save disk on the dev machine.
+6. **Write the manifest.** `compiled/manifest.json` lists every box,
+   its language, its compiled artifact path (or source file for
+   interpreted languages), and the SoraMech build version.
+
+### Incremental compile
+
+mtime comparison per artifact: if the source is newer than the
+compiled output, recompile that one; otherwise skip. The C spec's
+`compile` callback (issue 307) implements this per-box; the package
+step inherits it.
+
+### Editor invocation (issue 222)
+
+The Compile button calls `POST /maps/<name>/compile`. The server
+shells out to a `soramech-compile` CLI (or invokes the same code
+in-process). Output streams back to the editor for display. The
+editor itself never runs the compiled output; the user invokes
+`./compiled/pool-runner` from a terminal.
+
+### CLI invocation
+
+Standalone `soramech-compile <map-dir>` runs the same pipeline
+without the server. Used in CI and headless deployment.
+
+### Errors
+
+Any failure aborts the compile and surfaces a precise message:
+which box, which file, what failed. Partial output is left in
+`compiled/` for inspection but the manifest is not written, so the
+deployment is recognizably broken until a clean compile succeeds.
+
+### Open questions (compile step)
+
+- **Multi-architecture**: a directory built on x86_64 won't run on
+  arm64. Out of scope — users compile on the target. Could later
+  add cross-compile if the SoraMind cluster goes mixed-arch.
+- **Source-copy granularity**: copy the file referenced by `box.ref`
+  plus a static-analysis sweep for `require` / `source` /
+  `#include`, or just copy the entire `libs/` tree. Lean toward
+  static analysis with a fallback whole-tree copy if analysis fails.
+
 ## Open questions
 
 - macOS: `.so` becomes `.dylib`, and there's no `/proc/self/exe`.
@@ -219,3 +300,7 @@ auto-detected location.
   `308-bash-language-spec.md` — per-spec build details
 - `issues/311-integration-tests-and-run-output.md` — `make test`
   consumers
+- `issues/222-compile-button-and-assets-directory.md` (completed) —
+  the editor button this compile step services
+- `issues/completed/219-map-compiler.md` — original issue, folded
+  into this one

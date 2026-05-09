@@ -62,9 +62,9 @@ Read in order for a complete picture of the system.
 - 228 — self-loop wires routed around the box body
 - 217 — concat box and dynamic inputs (complete)
 - 218 — enforce single-output driver contract (complete)
-- 219 — map compiler
+- 219 — map compiler (won't implement; folded into 309)
 - 220 — root run script and entry point cleanup (complete)
-- 221 — iterator box: round-robin output routing
+- 221 — iterator box: editor surface (runtime in 304)
 - 222 — compile button and assets directory (complete)
 
 ### Phase 3 — Thread pool runtime (designed, not yet implemented)

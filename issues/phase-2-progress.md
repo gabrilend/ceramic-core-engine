@@ -20,6 +20,7 @@ model the phase 3 runtime will consume.
 | 211a | unify src/ into same directory pipeline        | complete |
 | 212  | editor interaction modes                       | complete |
 | 213  | queued inputs and task model                   | won't implement |
+| 219  | map compiler                                   | won't implement (folded into 309) |
 | 214  | tmp symlink recreation on reboot               | complete |
 | 215  | view source button                             | complete |
 | 223  | syntax highlighting via user-written lexers    | open     |
@@ -31,9 +32,8 @@ model the phase 3 runtime will consume.
 | 216  | read-file box                                  | open     |
 | 217  | concat box and dynamic inputs                  | complete |
 | 218  | enforce single-output driver contract          | complete |
-| 219  | map compiler                                   | open     |
 | 220  | root run script and entry point cleanup        | complete |
-| 221  | iterator box                                   | open     |
+| 221  | iterator box (editor surface only)             | open     |
 | 222  | compile button and assets directory            | complete |
 
 ## Phase goal checklist

@@ -1,53 +1,41 @@
-# 221 — Iterator box: round-robin output routing with per-instance counter
+# 221 — Iterator box: editor surface for round-robin output routing
 
 ## Status
-open
+open (editor surface only)
+
+## Scope
+
+This issue covers the **editor side** of the iterator box: schema
+field, inspector toggle, wires auto-grow, canvas rendering. The
+runtime semantics (counter on `dispatch_task_t`, successor task
+re-spawn, copy-input-to-output without invoking a language spec) are
+specified in issue 304 and implemented as part of phase 3.
+
+The phase 2 synchronous executor (`src/004-executor.lua`) does not
+get an interim iterator implementation — the executor is being
+retired by the phase 3 pool runner, so adding throwaway support
+here is wasted work. Maps with iterator boxes can be authored in
+phase 2 and run in phase 3.
 
 ## Current behavior
+
 No mechanism exists for a box to distribute output across multiple
-downstream paths in sequence. The comparator routes based on a value
-threshold; the iterator routes based on a counter that advances each call.
+downstream paths in sequence. The comparator (issue 210) routes
+based on a value threshold; the iterator routes based on a counter
+that advances each call.
 
-## Intended behavior
+## Intended behavior (editor)
 
-### What it does
-An iterator box receives one input value and routes it to one of N named
-output wires. Which wire fires is determined by an internal counter that
-increments each call and wraps back to 0 after the last output. There is
-no function — the dispatch layer copies input directly to output, no
-language spec is invoked. The iterator is a pure routing primitive.
+### What it is
 
-Useful for distributing work across parallel paths, cycling through a
-list of consumers, or producing round-robin load balancing in the graph.
-
-### Counter model
-The counter is per-box-instance, stored in the executor's in-memory
-state (keyed by box ID). It resets to 0 at the start of each run.
-Persistence across runs is not in scope; that is a separate issue.
-
-In the compiler output (issue 219), the counter becomes a local variable
-in a generated closure — same reset-per-program-start behavior.
-
-Wrap-around: `counter = (counter + 1) % #iterator_outputs`
-
-### No function — pure dispatch primitive
-There is no iterator function in any language. There are no
-`libs/iterator.lua` / `iterator.sh` / `iterator.c` files. The dispatch
-layer (issue 304) recognizes iterator boxes by the presence of
-`iterator_outputs` in the box JSON and handles routing itself:
-
-1. Read the input value from the input slot.
-2. Copy it directly into the output slot.
-3. Fire the connection whose `from_branch` matches
-   `iterator_outputs[counter]`.
-4. Increment counter mod `n_iter_outputs`.
-5. Re-spawn a successor dispatch task with the new counter value.
-
-This replaces the earlier "passthrough function" design. The function
-was always identity, so there was nothing to invoke — the dispatch
-layer does the copy directly and skips the language spec entirely.
+An iterator box has no `ref` / `fn`. It declares an ordered list of
+output names in `iterator_outputs`. The runtime (issue 304) routes
+input → one output per call, advancing a per-instance counter mod
+`#iterator_outputs`. Pure routing primitive: there is no language
+function being invoked.
 
 ### Data model
+
 Box JSON has an `iterator_outputs` field — an ordered array of
 user-defined output path names. Iterator boxes do not carry `ref` or
 `fn`; those fields are absent (or, if present, ignored):
@@ -76,100 +64,77 @@ user-defined output path names. Iterator boxes do not carry `ref` or
 ```
 
 `from_branch` is reused for iterator output names — the same field
-that holds "lt" / "eq" / "gt" for comparators. The dispatch layer
-checks whether the box has `iterator_outputs`; if so, it routes by
-counter as described above.
+that holds `lt` / `eq` / `gt` for comparators. The dispatch layer
+(issue 304) checks whether the box has `iterator_outputs`; if so, it
+routes by counter.
+
+### Inspector
+
+- An "iterator" toggle per box (mirrors the variadic toggle on
+  inputs).
+- When toggled on: the output side of the box renders named slots
+  instead of a single dot; a `+` row at the bottom adds a new slot.
+- Each slot name is editable inline.
+- The `ref` / `fn` / comparator controls hide while the iterator
+  toggle is on (mutually exclusive with a function-backed box).
+- Toggling iterator off restores `ref` / `fn` controls and snips all
+  output wires (same all-wires-snipped behavior as the variadic
+  toggle, per the stale-cache lesson from issue 217).
 
 ### Auto-grow output slots
-Connecting a wire to the last slot of the iterator's output side appends
-a new empty named slot — identical to the auto-grow behavior for variadic
-inputs (issue 217). Connecting to the last slot generates a placeholder
-name (`output_N`) and grows the list immediately — no prompt. The user
-can rename the slot in the inspector if they care, but the default
-flow does not interrupt them. Disconnecting removes the slot and
-compacts (same rename-and-compact logic as variadic inputs).
 
-### Dispatch layer integration
-The dispatch layer (issue 304) is where iterator semantics live. The
-counter is stored on the `dispatch_task_t` for each iterator
-invocation; successor tasks carry the next counter value. There is no
-language driver, no function call, no executor-state table — just the
-counter on the task struct.
+Connecting a wire to the last output slot appends a new empty named
+slot — identical to variadic input auto-grow (issue 217).
+Connecting to the last slot generates a placeholder name (`output_N`)
+and grows the list immediately, no prompt. Disconnecting removes the
+slot and compacts (rename-and-compact mirror of variadic input
+logic).
 
-See issue 304 for the full dispatch flow. The iterator-specific path
-is short: read input slot, copy to output slot, fire the routing
-connection, increment counter, re-spawn.
+### Canvas rendering
 
-### Inspector changes
-The inspector shows:
-- An "iterator" toggle per box (like the variadic toggle on inputs)
-- When toggled on: the output side of the box renders named slots instead
-  of a single dot; a "+" row at the bottom adds a new slot
-- Each slot name is editable inline
-- The current counter value is shown as a read-only display (useful for
-  debugging live runs)
+When `iterator_outputs` is set, the box renders N named output dots
+down the right edge instead of a single dot. Box height grows to
+accommodate. Wire dragging starts from the dot whose slot the cursor
+is over.
 
-### Compiler output (issue 219 integration)
-For an iterator box, the compiler emits a counter variable and a
-routing function — no inner function call, since the iterator does
-not invoke anything:
+## Suggested implementation sequence
 
-```lua
-local router_counter = 0
-local function router(data)
-  local idx = router_counter
-  router_counter = (router_counter + 1) % 3
-  if     idx == 0 then worker_a(data)
-  elseif idx == 1 then worker_b(data)
-  else                 worker_c(data)
-  end
-end
-```
+1. `src/001-schema.lua` — accept `iterator_outputs` (array of
+   strings) on call boxes; when present, `ref` and `fn` are not
+   required.
+2. `assets/js/004-inspector.js` — iterator toggle; editable output
+   slot list; mutual-exclusion with ref/fn/comparator controls;
+   snip-all-wires behavior on toggle (both directions).
+3. `assets/js/002-boxes.js` — render N named output dots when
+   `iterator_outputs` is set; box height accommodates the slot
+   count; `port_positions` returns N output positions.
+4. `assets/js/006-wires.js` — auto-grow output slots on connect;
+   auto-shrink + rename on disconnect (mirror of variadic input).
 
-No iterator lib file is bundled — there is none.
+## Runtime
 
-### Threading model
-Iterator routing in the thread pool runner is fully described in issue
-304. Briefly: each invocation is a `dispatch_task_t` with the current
-counter value; on completion the dispatch action fires the routing
-connection, increments the counter, and submits a successor task. The
-input slot is a queued (multi-cell) ring buffer that persists across
-re-spawns. See issues 302 (slot store) and 304 (dispatch layer) for
-the full picture.
+See issue 304 (task dispatch layer) for the full runtime flow:
+counter on the dispatch task, copy-input-to-output, fire the
+routing connection, increment counter, re-spawn successor task. No
+language driver, no function call, no executor-state table.
 
 ## Open questions
 
-(none currently — earlier questions resolved as follows:)
-
 - Counter exposed as a readable data port: no. Adds complexity most
   users won't need.
-- Auto-grow naming: placeholder (`output_N`) on connect, user renames
-  afterward if they care. No prompt.
-
-## Suggested implementation sequence
-1. `src/001-schema.lua` — add `iterator_outputs` to the box validator;
-   when present, `ref` and `fn` are not required.
-2. `src/004-executor.lua` (phase 2 path) — add per-box counter state;
-   extend `fire_connections` to route by `iterator_outputs[counter]`
-   and copy input → output without invoking a driver.
-3. `assets/js/004-inspector.js` — iterator toggle; editable output slots.
-4. `assets/js/006-wires.js` — auto-grow output slots on connect;
-   auto-shrink + rename on disconnect (mirrors variadic input logic).
-5. `assets/js/002-boxes.js` — render N named output dots when
-   `iterator_outputs` is set (replacing the single-wire dot).
-6. (Phase 3) Implement iterator dispatch in `src/008-pool-runner.c` per
-   issue 304 — counter on `dispatch_task_t`, successor re-spawn.
+- Auto-grow naming: placeholder (`output_N`) on connect, user
+  renames afterward if they care. No prompt.
 
 ## Relevant files
-- `src/004-executor.lua` — phase 2 fire_connections / route-by-counter
+
 - `src/001-schema.lua` — box validator (`iterator_outputs` field)
 - `assets/js/004-inspector.js` — iterator toggle, slot editor
 - `assets/js/006-wires.js` — auto-grow/shrink for output slots
-- `assets/js/002-boxes.js` — box rendering
-- `issues/217-concat-box-and-dynamic-inputs.md` — variadic input model
-  (auto-grow/shrink logic mirrors this)
-- `issues/completed/108-branch-box-and-predicate-routing.md` — comparator
-  model that `from_branch` and the routing pattern extend from
-- `issues/219-map-compiler.md` — compiler integration
-- `issues/304-task-dispatch-layer.md` — phase 3 iterator dispatch (no
-  function invocation; routing only)
+- `assets/js/002-boxes.js` — box rendering, port positions
+- `issues/completed/217-concat-box-and-dynamic-inputs.md` —
+  variadic input model that auto-grow logic mirrors
+- `issues/completed/108-branch-box-and-predicate-routing.md` —
+  comparator model that `from_branch` and routing pattern extend
+- `issues/304-task-dispatch-layer.md` — phase 3 runtime semantics
+- `issues/228-self-loop-wires-routed-around-box.md` — self-loop
+  routing that pairs naturally with iterators
