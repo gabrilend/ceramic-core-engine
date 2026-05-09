@@ -1,61 +1,61 @@
 # 224 — Editable port names and canvas-side value editing
 
 ## Status
-complete (scope adjusted: name-edit moved, value-edit stays)
+complete (canvas-overlay reverted; name editing in inspector,
+value moved below name+variadic row)
 
-## Scope adjustment
+## Scope changed twice
 
-The value field stays in the inspector. Only the port-name editing
-moved to the canvas overlay — the rest of issue 208's read-only-name
-decision stays reversed (names are now editable), but the overlay
-implementation only carries the name input. Values on the canvas
-were the more disruptive half of the change and the user opted out;
-keeping values in the inspector also keeps the variadic auto-grow
-flow exactly where it already lives.
+**First pass** (canvas-overlay version): moved the editable name
+input out of the inspector and onto a DOM overlay floating next to
+the box's input dot.
+
+**Why that was wrong**:
+1. The `<input>` overlay captured pointer events on the box body;
+   users dragging a box from near a port dot landed on the field
+   instead and entered text-edit mode.
+2. The overlay text was frozen at one screen size — it didn't
+   scale with zoom.
+
+**Final design**: keep names on the canvas as plain `ctx.fillText`
+labels (scale with zoom, ignore clicks). Names are also editable in
+the inspector — same identity displayed in two places, so the user
+sees what's there at a glance and can edit when the inspector is
+open. The inspector port row now spans two lines: name + variadic
+toggle on top, value on a wider second line below, so the value
+(often the longest entry) gets the full sidebar width.
 
 ## Implementation notes
 
-New module `assets/js/009-box-overlays.js` floats an editable
-`<input>` per input port next to its dot. Lifecycle:
-- `Overlays.redraw()` runs in the main render loop after
-  `Boxes.draw_all`, gated by `Canvas.start_frame()` so the cost is
-  tied to actual canvas changes (camera, drag, create/delete).
-- Reconciles overlays with `Boxes.boxes` — creates new ones, tears
-  down orphans.
-- Per-port rows rebuild when port count changes (variadic
-  add/remove); otherwise the `<input>` elements persist so user
-  typing isn't clobbered between frames.
-- Updates skip any input that currently has focus.
-- Each input commits on blur or Enter (Escape reverts). Typing
-  doesn't fire the rename — only commit does — so the wire-rewrite
-  cost is paid once per change.
+`assets/js/004-inspector.js::mk_port_display` rebuilt:
+- Top row: name `<input>` + optional `:type` span + variadic button.
+- Bottom row: full-width value `<input>`.
+- Variadic-slot names disable the name input — variadic ops own
+  the `<base>_<N>` pattern, and freeform renames break the group's
+  membership tracking. The disabled state visually softens the
+  field (no border, dim color) so it reads as "managed by the
+  toggle" rather than "broken."
+- Name commit on blur / Enter; Escape reverts to the saved name.
 
-Inspector exposes `rename_port(box, port_idx, new_name)`:
+`004-inspector.js` exports `rename_port(box, port_idx, new_name)`:
 - Validation: non-empty, identifier-shaped (`^[A-Za-z_]\w*$`),
   unique within the box.
-- On rename, rewrites `to_input` on every wire targeting the port
-  (both endpoints, mutating in place per the stale-cache lesson
-  from 217).
+- Rewrites `to_input` on every wire targeting the port (both
+  endpoints, mutating in place per the stale-cache lesson from 217).
 - Re-renders the inspector if the renamed box is the one on
-  display, so the read-only name label in the sidebar tracks the
-  new name without the user having to re-click.
+  display.
 
-`002-boxes.js::draw_box` no longer renders input port name text —
-the overlay does. Output port labels (comparator branches, iterator
-slot names) still draw on the canvas; those aren't covered by this
-issue.
+`002-boxes.js::draw_box` keeps the canvas-rendered port name label
+(it was briefly removed during the overlay experiment).
 
-CSS additions in `assets/index.html`: `.box-overlay-row`,
-`.box-overlay-name` — overlays don't scale with zoom (consistent
-with most node editors so labels stay legible at any zoom).
+`assets/js/009-box-overlays.js` and the matching CSS removed; the
+overlay layer is gone.
 
 ### Edge cases
 
-- **Variadic slot rename**: rename_port accepts `base_N`-shaped
-  names, so the user can technically rename a non-variadic port to
-  match a variadic-slot pattern. The variadic helpers detect the
-  shape on subsequent operations; if the user creates one by
-  accident the recovery is to rename it back.
+- **Variadic slots can't be renamed in-inspector** — the field is
+  disabled. Toggle the group off if you need to break out of the
+  pattern.
 - **Renamed port had a wire**: the wire's `to_input` rewrites on
   both endpoints; the canvas re-renders with the new label without
   losing the connection.
