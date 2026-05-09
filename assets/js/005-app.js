@@ -380,17 +380,15 @@ const App = (() => {
   // }}}
 
   // {{{ show_map_picker
+  // Renders the map picker into the inspector sidebar. Used for both
+  // first-time load (no map stored yet) and switching maps later. The
+  // picker carries its own server-URL input so it works before any
+  // server has been configured; nothing here reads from API state.
   function show_map_picker() {
-    Inspector.show_content('maps', async (container) => {
-      container.innerHTML = '<div class="fb-note">loading…</div>';
-
-      const recent = JSON.parse(localStorage.getItem('soramech_maps_history') || '[]');
-      let available = [];
-      try { available = await API.list_maps(); } catch(e) {}
-
+    Inspector.show_content('maps', (container) => {
       container.innerHTML = '';
 
-      // helper: collapsible group with a body element
+      // -- helper: collapsible group with a body element
       function mk_group(label) {
         let collapsed = false;
         const wrap = document.createElement('div');
@@ -415,7 +413,7 @@ const App = (() => {
         return { wrap, body };
       }
 
-      // helper: clickable map row
+      // -- helper: clickable map row
       function mk_map_row(name, subtitle, onclick) {
         const row = document.createElement('div');
         row.className   = 'fb-file-row';
@@ -430,59 +428,123 @@ const App = (() => {
         return row;
       }
 
-      const cur_server = localStorage.getItem('soramech_server') || '';
+      // -- server URL input row at the top.
+      // The input is the source of truth for "which server are we
+      // talking to right now". All map-row click handlers read from it.
+      const stored_server = localStorage.getItem('soramech_server') || 'http://localhost:7700';
 
-      // recent group
-      if (recent.length > 0) {
-        const g = mk_group('recent');
-        recent.forEach(({ server_url: su, map_name: mn }) => {
-          const sub = su !== cur_server ? su : null;
-          g.body.appendChild(mk_map_row(mn, sub, () => switch_to_map(su, mn)));
-        });
-        container.appendChild(g.wrap);
-      }
+      const server_label = document.createElement('div');
+      server_label.className   = 'section-label';
+      server_label.textContent = 'server';
+      container.appendChild(server_label);
 
-      // available on this server
-      if (available.length > 0) {
-        const g = mk_group('on this server');
-        available.forEach(mn => {
-          g.body.appendChild(mk_map_row(mn, null, () => switch_to_map(null, mn)));
-        });
-        container.appendChild(g.wrap);
-      }
-
-      if (recent.length === 0 && available.length === 0) {
-        const note = document.createElement('div');
-        note.className   = 'fb-note';
-        note.textContent = 'no maps found';
-        container.appendChild(note);
-      }
-
-      // new / connect section
-      const sep = document.createElement('div');
-      sep.className   = 'section-label';
-      sep.textContent = 'open map by name';
-      sep.style.marginTop = '10px';
-      container.appendChild(sep);
-
-      const new_wrap = document.createElement('div');
-      new_wrap.style.cssText = 'display:flex;gap:4px;';
-      const new_inp = document.createElement('input');
-      new_inp.type        = 'text';
-      new_inp.placeholder = 'map name';
-      new_inp.style.cssText = 'flex:1;background:#0f1117;border:1px solid #2a2f45;' +
+      const server_row = document.createElement('div');
+      server_row.style.cssText = 'display:flex;gap:4px;margin-bottom:10px;';
+      const server_inp = document.createElement('input');
+      server_inp.type        = 'text';
+      server_inp.value       = stored_server;
+      server_inp.placeholder = 'http://host:port';
+      server_inp.style.cssText = 'flex:1;background:#0f1117;border:1px solid #2a2f45;' +
         'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
-      const new_btn = document.createElement('button');
-      new_btn.className   = 'toolbar-btn';
-      new_btn.textContent = 'open';
-      new_btn.onclick = () => {
-        const name = new_inp.value.trim();
-        if (name) switch_to_map(null, name);
-      };
-      new_inp.addEventListener('keydown', e => { if (e.key === 'Enter') new_btn.click(); });
-      new_wrap.appendChild(new_inp);
-      new_wrap.appendChild(new_btn);
-      container.appendChild(new_wrap);
+      const connect_btn = document.createElement('button');
+      connect_btn.className   = 'toolbar-btn';
+      connect_btn.textContent = '→';
+      server_row.appendChild(server_inp);
+      server_row.appendChild(connect_btn);
+      container.appendChild(server_row);
+
+      // -- maps list section: re-renders on connect.
+      const maps_section = document.createElement('div');
+      container.appendChild(maps_section);
+
+      function current_server() { return server_inp.value.trim().replace(/\/$/, ''); }
+
+      async function refresh_maps() {
+        maps_section.innerHTML = '<div class="fb-note">loading…</div>';
+
+        const recent = JSON.parse(localStorage.getItem('soramech_maps_history') || '[]');
+        const url    = current_server();
+
+        let available = [];
+        let err = null;
+        if (url) {
+          try {
+            const r = await fetch(url + '/maps');
+            if (r.ok) available = await r.json();
+            else      err = 'server returned ' + r.status;
+          } catch(e) {
+            err = e.message || 'unreachable';
+          }
+        } else {
+          err = 'enter a server URL';
+        }
+
+        maps_section.innerHTML = '';
+
+        // recent group: shows every distinct (server, map) pair from
+        // history. Subtitle shows the server URL when it differs from
+        // the current picker URL.
+        if (recent.length > 0) {
+          const g = mk_group('recent');
+          recent.forEach(({ server_url: su, map_name: mn }) => {
+            const sub = su !== url ? su : null;
+            g.body.appendChild(mk_map_row(mn, sub, () => switch_to_map(su, mn)));
+          });
+          maps_section.appendChild(g.wrap);
+        }
+
+        // available group / error: maps fetched from the picker URL.
+        if (err) {
+          const note = document.createElement('div');
+          note.className   = 'fb-note error';
+          note.textContent = 'cannot reach server: ' + err;
+          maps_section.appendChild(note);
+        } else if (available.length > 0) {
+          const g = mk_group('on this server');
+          available.forEach(mn => {
+            g.body.appendChild(mk_map_row(mn, null, () => switch_to_map(url, mn)));
+          });
+          maps_section.appendChild(g.wrap);
+        } else if (recent.length === 0) {
+          const note = document.createElement('div');
+          note.className   = 'fb-note';
+          note.textContent = 'no maps on this server';
+          maps_section.appendChild(note);
+        }
+
+        // open-map-by-name section.
+        const sep = document.createElement('div');
+        sep.className   = 'section-label';
+        sep.textContent = 'open map by name';
+        sep.style.marginTop = '10px';
+        maps_section.appendChild(sep);
+
+        const new_wrap = document.createElement('div');
+        new_wrap.style.cssText = 'display:flex;gap:4px;';
+        const new_inp = document.createElement('input');
+        new_inp.type        = 'text';
+        new_inp.placeholder = 'map name';
+        new_inp.style.cssText = 'flex:1;background:#0f1117;border:1px solid #2a2f45;' +
+          'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+        const new_btn = document.createElement('button');
+        new_btn.className   = 'toolbar-btn';
+        new_btn.textContent = 'open';
+        new_btn.onclick = () => {
+          const name = new_inp.value.trim();
+          if (name) switch_to_map(current_server(), name);
+        };
+        new_inp.addEventListener('keydown', e => { if (e.key === 'Enter') new_btn.click(); });
+        new_wrap.appendChild(new_inp);
+        new_wrap.appendChild(new_btn);
+        maps_section.appendChild(new_wrap);
+      }
+
+      connect_btn.onclick = refresh_maps;
+      server_inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') refresh_maps();
+      });
+
+      refresh_maps();
     });
   }
   // }}}
@@ -528,22 +590,29 @@ const App = (() => {
 
   // {{{ init
   async function init() {
-    let server_url = localStorage.getItem('soramech_server') || '';
-    let map_name   = localStorage.getItem('soramech_map')    || '';
+    const server_url = localStorage.getItem('soramech_server') || '';
+    const map_name   = localStorage.getItem('soramech_map')    || '';
+
+    // Wire the map-label click handler before either path: it stays
+    // valid through the picker flow and any later switch.
+    document.getElementById('map-label').onclick = show_map_picker;
+
+    // Render loop runs regardless of whether a map is loaded yet.
+    requestAnimationFrame(render);
 
     if (!server_url || !map_name) {
-      server_url = prompt('Server URL:', 'http://localhost:7700') || 'http://localhost:7700';
-      map_name   = prompt('Map name:',   'hello')                || 'hello';
+      // First-time load: no stored map. Show the picker; selection
+      // there saves to localStorage and triggers load_map via
+      // switch_to_map.
+      document.getElementById('map-label').textContent = '';
+      show_map_picker();
+      return;
     }
 
     save_to_history(server_url, map_name);
-    localStorage.setItem('soramech_server', server_url);
-    localStorage.setItem('soramech_map',    map_name);
     document.getElementById('map-label').textContent = map_name;
-    document.getElementById('map-label').onclick = show_map_picker;
     API.init(server_url, map_name);
     await load_map();
-    requestAnimationFrame(render);
   }
   // }}}
 
