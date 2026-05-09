@@ -59,6 +59,7 @@ Read in order for a complete picture of the system.
 - 225 — dir picker shows files and dir/file icons
 - 226 — hide output controls for no-return functions
 - 227 — hide view button when box has no ref
+- 228 — self-loop wires routed around the box body
 - 217 — concat box and dynamic inputs (complete)
 - 218 — enforce single-output driver contract (complete)
 - 219 — map compiler
