@@ -100,6 +100,44 @@ Input values are processed one-at-a-time in arrival order. Ten queued
 inputs means the iterator task visits the queue ten times, advancing the
 counter and firing a different output path each time.
 
+### Blocking semantics for long-running operations
+
+The pool's parallelism comes from running N worker threads concurrently
+on N cores. Each worker is sitting inside a single dispatch task at any
+given moment. If a box function does something that takes a long time —
+`sleep`, blocking I/O, a synchronous network request, waiting on a long-
+running subprocess — **the worker thread is occupied for the full
+duration**. It cannot pick up other tasks while it waits.
+
+Concretely:
+- 16-worker pool, 1 box sleeping 10 seconds → the other 15 workers
+  continue normally.
+- 16-worker pool, 16 boxes all sleeping → all workers parked, no other
+  task runs until a sleep finishes.
+- The pool size is also the budget for "blocking activities". Heavy
+  use of `sleep`-style boxes means raising `SORAMECH_WORKERS`.
+
+Why the runtime does not have a scheduler: SoraMech is deliberately not
+in the business of "park this task and wake it at time T." There is no
+delayed-spawn primitive, no timer thread, no polling loop. Adding one
+would mean a second concurrency model alongside the pool, with its own
+synchronization story. Instead, we lean on the pool's existing
+mechanism: a task either runs (occupying a worker) or is blocked on a
+slot waiting for a value (parked, no worker held). Long sleeps are an
+"occupying a worker" case.
+
+For users who need many concurrent waits without burning workers, the
+graph-level pattern is cooperative: split the operation into "kick off
+the thing" (returns immediately) and "check whether the thing is done"
+(returns immediately, returns a status), and wire them through an
+iterator with a queued input. The iterator polls. No individual box
+blocks for long. Each box completes quickly, freeing its worker.
+
+This is a documented constraint, not a bug. Box authors should know
+that an unbounded `sleep` inside a function is the equivalent of
+holding a worker hostage. The cooperative pattern is the way around
+it.
+
 ---
 
 ## The three IPC options

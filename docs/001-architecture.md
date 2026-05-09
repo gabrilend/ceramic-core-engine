@@ -2,108 +2,124 @@
 
 ## Three programs, one data format
 
-SoraMech is three independent programs that share a common on-disk format:
-the map directory. None of the three knows about the others at runtime.
+SoraMech is three independent programs that share a common on-disk
+format: the map directory. None of the three knows about the others
+at runtime.
 
 ```
-  Browser (index.html)
+  Browser (assets/index.html)
        |  HTTP (file CRUD)
        v
-  soramech-server.lua          [map directory]
-                               maps/<name>/
-                                 boxes/
-                                 data/
-                                 drivers.json
-                                 meta.json
-                                 tmp/ -> /tmp/<name>/
+  src/006-server-main.lua       [map directory]
+                                maps/<name>/
+                                  meta.json
+                                  boxes/
+                                  data/
+                                  src/
+                                  compiled/   (after compile button)
+                                  tmp/ -> /tmp/<name>/
        ^
        | reads & writes
-  soramech-runner.lua
+  Runner (one of):
+    src/007-runner-main.lua     ← phase 2, synchronous Lua interpreter
+    soramech-pool (binary)      ← phase 3, C thread pool runner
 ```
 
-### soramech-server.lua
+### src/006-server-main.lua (the editor's HTTP backend)
 
-Thin HTTP proxy. Receives JSON requests from the browser and translates
-them into file reads and writes on the map directory. No logic beyond
-path validation and basic consistency checks (e.g., reject a delete if
-the box is still referenced by another box's connection list).
+Thin file CRUD proxy. Receives JSON requests from the browser and
+translates them into reads and writes on the map directory. No logic
+beyond path validation and basic consistency checks (e.g. reject a
+delete if the box is still referenced by another box's connection
+list).
 
-Started with: `luajit soramech-server.lua <maps-root> [port]`
-Default port: 7700
+Started with: `luajit src/006-server-main.lua [port]` (default 7700).
+The `run` script at the project root starts the server and opens the
+editor.
 
-Endpoints (all operate on map files):
-  GET  /maps                        list maps
-  GET  /maps/<name>/boxes           list box IDs
-  GET  /maps/<name>/boxes/<id>      read box file
-  PUT  /maps/<name>/boxes/<id>      write box file
-  DELETE /maps/<name>/boxes/<id>    remove box (validates no dangling refs)
-  GET  /maps/<name>/data/<name>     read data file
-  PUT  /maps/<name>/data/<name>     write data file
-  GET  /maps/<name>/drivers         read drivers.json
-  PUT  /maps/<name>/drivers         write drivers.json
-  GET  /maps/<name>/meta            read meta.json
+The editor is editor-only — no run button, no run results display.
+The runner is invoked separately, by command line. `last-run.jsonl`
+(issue 311) is the runner's output, consumed by external tooling, not
+by the editor.
 
-### soramech-runner.lua
+### Phase 2 runner — `src/007-runner-main.lua`
 
-FSM execution engine. Loads a map directory, validates the graph, then
-executes boxes in dependency order. Each box invocation is wrapped in a
-`task_fn(inputs) -> outputs` call — matching the 3d-rts thread pool's
-action chain signature for future threading compatibility.
+Synchronous Lua interpreter. Loads a map directory, validates the
+graph, walks boxes in dependency order, invokes language drivers per
+box (`drivers/lua.sh`, `drivers/c.sh`, `drivers/bash.sh`). Each box
+invocation is wrapped in a `task_fn(inputs) -> outputs` boundary that
+matches the phase 3 thread pool's action signature.
 
-Started with: `luajit soramech-runner.lua <map-dir>`
+This is the development target while the editor is being built out.
 
-Execution steps:
-  1. Read all box files from boxes/
-  2. Validate: all connection endpoints exist, branch "else" handled
-  3. Determine entry box from meta.json
-  4. Execute: resolve inputs, invoke driver, collect outputs, fire wires
-  5. On completion, write last-run snapshot to tmp/last-run.json
+### Phase 3 runner — `soramech-pool` (planned, issues 301–311)
 
-### index.html
+C binary that owns a 3d-rts thread pool. Each box invocation is a
+pool task; worker threads run them concurrently. Language code is
+called through **language specs** (issue 303), shared libraries
+(`langs/<name>/spec.so`) loaded via `dlopen` at startup. Lua and C
+specs are in-process; the Bash spec talks to a persistent subprocess
+over a Unix domain socket. Wire values live in **slots** in process
+heap memory (issue 302) — fixed-size with reference counting, plus a
+large-value heap for variable-size payloads.
+
+Phase 3 replaces the phase 2 runner wholesale. The synchronous path
+does not survive into phase 3; the editor and the map directory
+format are unchanged across the cutover.
+
+### assets/index.html (the editor)
 
 Static HTML + vanilla JS. Infinite-scroll canvas. Box diagram editor.
-Talks to soramech-server.lua for all file operations. No run button —
-the user starts the runner separately from the terminal.
+Talks to `src/006-server-main.lua` for all file operations. No run
+button, no compile button (yet — issue 222 adds a placeholder
+"Compile" button as part of phase 2). The runner is invoked
+separately.
 
 ## Map directory format
 
 ```
 maps/<name>/
-  meta.json          — { name, description, entry_box_id }
-  drivers.json       — { ".lua": "drivers/lua.sh", ".c": "drivers/c.sh", ... }
+  meta.json          — { name, description, entry_box_id, src_dirs?, lang? }
   boxes/
     <id>.json        — one file per box (see Box file format below)
   data/
-    <name>.json      — lua table as JSON; sections have "constant": bool
-  drivers/
-    lua.sh           — built-in lua driver (shipped with soramech)
-    c.sh             — built-in C driver
-    bash.sh          — built-in bash driver
+    <name>.json      — Lua table as JSON; sections have "constant": bool
+  src/
+    *.lua, *.c, *.sh — box function source files
+  compiled/          — produced by the compile button (issue 222)
+    pool-runner      — the compiled C entry point for this map
+    src/             — copy of every source file the map uses
+    bin/             — compiled .so files (C boxes via the C language spec)
+    manifest.json    — every box, its language, its compiled artifact path
   tmp/               — symlink to /tmp/<name>/
-    last-run.json    — snapshot of last run (ephemeral)
-    logs/            — run logs
-    cache/           — compiled binaries (C driver cache)
+    last-run.json    — phase 2 run snapshot (single document)
+    last-run.jsonl   — phase 3 run log (JSON Lines, issue 311)
+    logs/            — additional run logs
 ```
+
+Note: the phase 2 `drivers.json` file is gone. Language selection in
+phase 2 is by file extension via the `drivers/` directory; in phase 3
+the spec registry resolves languages by `box.lang` against
+`langs/<name>/spec.so` — no map-local config file needed.
 
 ## Box file format
 
 ```json
 {
-  "id": "unique-string",
-  "label": "Human name",
+  "id": "trim",
+  "label": "Trim whitespace",
   "kind": "call",
+  "lang": "lua",
   "ref": "src/strings.lua",
   "fn": "trim",
   "inputs": [
     { "name": "text", "type": "string" }
   ],
-  "outputs": [
-    { "name": "result", "type": "string" }
-  ],
+  "output_capacity": 4096,
   "connections": [
     {
-      "from_box": "unique-string",
-      "from_output": "result",
+      "from_box": "trim",
+      "from_branch": null,
       "to_box": "next-box-id",
       "to_input": "text"
     }
@@ -112,52 +128,125 @@ maps/<name>/
 }
 ```
 
-For branch boxes (`"kind": "branch"`):
+Every box has exactly **one output wire**. There is no `outputs`
+array. Whatever the function returns travels down the single output
+wire as one value (issue 218). Multiple values that need to travel
+together are encoded as JSON or a struct and decoded downstream.
+
+`output_capacity` declares the maximum number of bytes the slot
+allocator (issue 302) reserves for the output. `0` (or omitted) means
+variable-size — the slot stores a handle into the large-value heap.
+
+### Comparator boxes
+A box may carry a `comparand` field (a literal number as a string).
+When set, the dispatch layer compares the input value to the
+comparand and fires only the connection whose `from_branch` matches
+`"lt"` / `"eq"` / `"gt"`. Comparators have no `ref` / `fn` — the
+routing logic lives in the dispatch layer (issue 304). The output
+slot carries the input value through unchanged.
+
 ```json
 {
   "id": "classify",
-  "kind": "branch",
-  "inputs": [{ "name": "value", "type": "string" }],
-  "ports": [
-    { "name": "rogue", "predicate": { "op": "eq", "value": "rogue" } },
-    { "name": "wizard", "predicate": { "op": "eq", "value": "wizard" } },
-    { "name": "else" }
-  ],
-  "connections": [...]
+  "kind": "call",
+  "comparand": "0",
+  "inputs": [{ "name": "value", "type": "number" }],
+  "connections": [
+    { "from_box": "classify", "from_branch": "lt", "to_box": "negative", "to_input": "n" },
+    { "from_box": "classify", "from_branch": "eq", "to_box": "zero",     "to_input": "n" },
+    { "from_box": "classify", "from_branch": "gt", "to_box": "positive", "to_input": "n" }
+  ]
 }
 ```
 
-Connections are written to BOTH endpoint box files. The runner validates
-at load time that both ends agree. Disagreement is a hard error.
+The earlier `branch` box kind with named ports is removed (see issue
+210). Comparator + `from_branch` is the only branching mechanism.
 
-## Language driver interface
+### Iterator boxes
+A box may carry an `iterator_outputs` field — an ordered array of
+output slot names. The dispatch layer routes the input value to the
+slot named `iterator_outputs[counter]`, advances the counter (mod
+length), and re-spawns itself to consume the next queued input. No
+function is invoked — iterators are pure routing primitives. Issue
+221 covers the model; 213 covers the queued-input semantics.
 
-Drivers are shell scripts. The engine invokes them as:
+### Connections
+Connections are written to BOTH endpoint box files. The runner
+validates at load time that both ends agree. Disagreement is a hard
+error.
 
-  <driver-script> <file-path> <fn-name> <arg-count> [<arg1> <arg2> ...]
+```json
+{ "from_box": "...", "from_branch": null|"lt"|"eq"|"gt"|"<iter-slot>",
+  "to_box": "...",   "to_input": "..." }
+```
 
-The single return value is encoded as a JSON value on stdout. Exit code
-non-zero = box failure. Each box has exactly one output wire — multi-return
-tuples are not supported (see docs/003-driver-system.md).
+`from_branch` is `null` for plain call boxes (single output wire).
 
-## Execution model (v1 — synchronous)
+## Language spec system (phase 3)
 
-The runner walks the graph depth-first from the entry box. Each box call:
+Each language is a **spec** — a `.so` library at
+`langs/<name>/spec.so` that exports a `lang_spec_t` symbol with
+`init` / `teardown` / `compile` / `invoke` callbacks. The pool runner
+loads every `langs/*/spec.so` at startup via `dlopen`. The spec
+contract (issue 303) is uniform across languages; no language is
+privileged.
 
-  1. Collect inputs: read wired output values from predecessor boxes
-  2. Invoke driver: shell out to the appropriate driver script
-  3. Collect output: decode single JSON value from driver stdout
-  4. Store output: held in runner memory, keyed by box id (one value per box)
-  5. Fire connections: enqueue boxes whose input dependencies are now met
+Reference specs ship with SoraMech:
+- `langs/lua/spec.so` — in-process via `lua_State`, no compile step (issue 306)
+- `langs/c/spec.so`   — in-process via `dlopen`, with a compile step that generates a wrapper (issue 307)
+- `langs/bash/spec.so`— out-of-process via Unix domain socket to a persistent subprocess (issue 308)
+
+A user adds a new language (Python, Rust, anything) by writing a new
+spec under `langs/<name>/`. SoraMech itself does not transpile or
+convert source between languages.
+
+The phase 2 `drivers/*.sh` scripts retire when phase 3 lands. They
+implement the same idea (one process per call, stdout as channel)
+that the spec system replaces with persistent runtimes and
+length-prefix-framed sockets / direct function pointers.
+
+## Execution model — phase 2 (synchronous)
+
+The runner walks the graph depth-first from the entry box. Each box
+call:
+
+1. Collect inputs: read wired output values from predecessor boxes.
+2. Invoke driver: shell out to the appropriate driver script.
+3. Collect output: decode single JSON value from driver stdout.
+4. Store output: held in runner memory, keyed by box id.
+5. Fire connections: enqueue boxes whose input dependencies are now
+   met.
 
 Each step is wrapped in a `task_fn` boundary so the runner can be
-threaded later by substituting the synchronous executor with one backed
-by the 3d-rts custom thread pool. The intermediate path is coroutine-based
-non-blocking I/O before the full thread pool is integrated.
+swapped for the phase 3 pool runner without changing the box
+execution model. Phase 2 is single-threaded.
+
+## Execution model — phase 3 (thread pool)
+
+The C pool runner owns a 3d-rts task pool with N worker threads.
+Each box invocation is a task. The dispatch layer (issue 304) is the
+worker-side action: read inputs from slots → invoke the language
+spec (or route, for comparators / iterators) → write output to a
+slot → unref consumed inputs → fire downstream connections.
+
+Slots are per-task ring buffers with reference-counted lifetime
+(issue 302). Wires hold references; producers push, consumers peek
+or pop. The wait list on each slot is the synchronization primitive
+that parks blocked tasks until a producer fills the slot.
+
+The pool runner has no embedded Lua. It is C from `main` down to the
+language spec boundary; only inside a Lua spec's `invoke` does Lua
+code run, and only inside that worker's `lua_State`. The graph
+loader is also pure C (issue 305) — phase 2's
+`src/003-loader.lua` retires.
+
+See `docs/004-ipc-and-threading.md` for the full IPC and threading
+discussion, including the blocking-semantics constraint on long-
+running operations.
 
 ## Data files
 
-Persistent data lives in data/<name>.json. Format:
+Persistent data lives in `data/<name>.json`. Format:
 
 ```json
 {
@@ -169,9 +258,10 @@ Persistent data lives in data/<name>.json. Format:
 }
 ```
 
-Top-level `constant: true` makes the whole file read-only. Individual
-fields can be flagged constant within an otherwise mutable file.
+Top-level `constant: true` makes the whole file read-only.
+Individual fields can be flagged constant within an otherwise
+mutable file. Accessed via `libs/soramech-data.lua`.
 
-Ephemeral state (scratch tables, logs, last-run snapshot) goes to tmp/,
-which is a symlink to /tmp/<map-name>/. It survives the run but not a
-reboot — intentionally.
+Ephemeral state (scratch tables, run logs, the `last-run.jsonl`
+output) goes to `tmp/`, a symlink to `/tmp/<map-name>/`. Survives
+the run but not a reboot — intentionally.

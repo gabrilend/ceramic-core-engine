@@ -1,25 +1,34 @@
 # Phase 2 Progress
 
-Goal: an editor you can actually use to build maps.
+Goal: an editor you can actually use to build maps, plus the graph
+model the phase 3 runtime will consume.
 
 ## Issues
 
-| ID  | Title                                          | Status   |
-|-----|------------------------------------------------|----------|
-| 201 | fix box rendering closure bug                  | complete |
-| 202 | fit-to-view on map load                        | open     |
-| 203 | map picker panel                               | open     |
-| 204 | visible interaction hints                      | open     |
-| 206 | entry box designation                          | open     |
-| 207 | source file browser and port auto-population   | complete |
-| 211a| unify src/ into same directory pipeline        | complete |
-| 214 | tmp symlink recreation on reboot               | complete |
-| 209 | ollama query library                           | complete |
-| 211 | file browser library directories               | complete |
-| 211a| unify src/ into same directory pipeline        | complete |
-| 214 | tmp symlink recreation on reboot               | complete |
-| 218 | enforce single-output driver contract          | complete |
-| 220 | root run script and entry point cleanup        | complete |
+| ID   | Title                                          | Status   |
+|------|------------------------------------------------|----------|
+| 201  | fix box rendering closure bug                  | complete |
+| 202  | fit-to-view on map load                        | open     |
+| 203  | map picker panel                               | open     |
+| 204  | visible interaction hints                      | open     |
+| 206  | entry box designation                          | open     |
+| 207  | source file browser and port auto-population   | complete |
+| 208  | port literal values                            | open     |
+| 209  | ollama query library                           | complete |
+| 210  | comparator wire branching                      | open     |
+| 211  | file browser library directories               | complete |
+| 211a | unify src/ into same directory pipeline        | complete |
+| 212  | editor interaction modes                       | open     |
+| 213  | queued inputs and task model                   | open     |
+| 214  | tmp symlink recreation on reboot               | complete |
+| 215  | view source button                             | open     |
+| 216  | read-file box                                  | open     |
+| 217  | concat box and dynamic inputs                  | open     |
+| 218  | enforce single-output driver contract          | complete |
+| 219  | map compiler                                   | open     |
+| 220  | root run script and entry point cleanup        | complete |
+| 221  | iterator box                                   | open     |
+| 222  | compile button and assets directory            | open     |
 
 ## Phase goal checklist
 
@@ -30,3 +39,24 @@ Goal: an editor you can actually use to build maps.
 - [ ] Map can be switched from a list, not a text prompt
 - [ ] Empty canvas shows interaction hints
 - [ ] Entry box is visually marked and settable from the editor
+- [ ] Comparator routing replaces the old branch box (issue 210)
+- [ ] Iterator box with auto-grow output slots (issue 221)
+- [ ] Compile button (issue 222) — placeholder UI for the phase 3 build
+
+## Notes on graph model changes during phase 2
+
+These are not new features so much as model corrections that shape
+what phase 3 will consume:
+
+- **Single-output rule** (218, complete): every box has exactly one
+  output wire. The driver contract emits one JSON value, not an
+  array.
+- **Comparator-based branching** (210): the old `branch` box kind
+  with named ports is removed. A box may carry a `comparand`; the
+  dispatch layer fires the connection whose `from_branch` matches
+  `lt` / `eq` / `gt`.
+- **Iterator routing** (221): a box with `iterator_outputs` is a
+  pure routing primitive; the dispatch layer rotates through the
+  declared output names. Iterators have no `ref` / `fn`.
+- **Connection schema**: `from_branch` field replaces the old
+  `from_output` / `from_port` dual-field design.

@@ -73,8 +73,8 @@ When a wire is disconnected from any slot of a variadic input:
 2. Rename all subsequent slots down by one (`text_2` → `text_1`, etc.).
 3. Update every connection that referenced a renamed slot:
    - `to_input` in the connection record on this box
-   - The corresponding `from_output` side on the source box (connections are stored
-     in both endpoint files; both must be updated atomically).
+   - The corresponding side on the source box (connections are stored in both
+     endpoint files; both must be updated atomically).
 4. Keep at least one slot for the variadic input (never shrink below `text_0`).
 
 Middle-port removal is handled by the same rename-and-compact step: remove the cut

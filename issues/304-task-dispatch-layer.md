@@ -1,0 +1,247 @@
+# 304 — Task dispatch layer (C, replaces synchronous executor)
+
+## Status
+open
+
+## Current behavior
+The synchronous executor at `src/004-executor.lua` walks the graph in
+dependency order, calling each box's driver, capturing stdout, decoding
+JSON, and propagating values to downstream boxes. Single-threaded,
+blocking, runs in Lua coroutines.
+
+## Concept
+
+The task dispatch layer is the C component that runs inside each pool
+worker. The pool calls a single C action — `dispatch_action` — per
+task. That action is the one place in the runtime that:
+
+- Reads from and writes to slots
+- Calls `lang_spec->invoke`
+- Manages slot refcounts on consumed inputs
+- Implements iterator routing and self-rescheduling
+- Implements comparator branch routing
+- Spawns successor tasks when its box's outputs feed downstream boxes
+
+There is no Lua-level executor in the phase 3 path. `004-executor.lua`
+is replaced wholesale.
+
+## Task struct
+
+The dispatch layer's per-task state lives in a `dispatch_task_t`
+allocated when the task is submitted to the pool:
+
+```c
+typedef struct {
+    int           box_id;          // index into the graph's box array
+    int           n_inputs;
+    slot_id_t    *input_slots;     // array of n_inputs slot IDs
+    slot_id_t     output_slot;     // single output slot
+    int           counter;         // iterator only; ignored otherwise
+} dispatch_task_t;
+```
+
+The pool passes this pointer to the action via `task_ctx_t.args`.
+Multiple successor invocations of an iterator produce multiple
+`dispatch_task_t`s (with new counter values), each with its own output
+slot.
+
+## The dispatch action
+
+```c
+action_result_t dispatch_action(task_ctx_t *ctx, void *arg);
+```
+
+Phases, in order:
+
+### 1. Check inputs
+Walk `input_slots`. For each, ask the slot store whether a value is
+available (`tail > head`, cell filled).
+
+If any input is unavailable, the dispatch action returns `ACT_BLOCK`
+with `ctx->block_on` set to a wait handle for that slot. The pool
+parks the task on **the slot's** wait list — not on a wire's list and
+not on the upstream box's list. The slot owns the wait list because
+the slot is the thing that gets filled; whoever pushes into the slot
+walks its wait list and wakes everyone parked there. When the action
+is re-run, it starts again at phase 1, checks the next input, blocks
+again if needed.
+
+### 2. Read inputs into byte buffers
+For each input:
+- Single-value slot (`n_cells = 1`): `slot_peek` into the input
+  buffer. The cell is not drained — fan-out consumers all peek.
+- Queued slot (`n_cells > 1`): `slot_pop` into the input buffer. The
+  head cell is drained.
+
+Buffer ownership: the action allocates the input buffer on the heap,
+sized exactly to the slot's `cell_capacity`. There is no fixed cap —
+a slot whose cell holds 4 KB gets a 4 KB buffer, a slot whose cell
+points into the large-value heap (variable-size payloads, issue 302)
+gets enough buffer to hold the handle, and the spec is given the
+handle to follow if it needs the bytes. The buffer is freed when the
+action ends.
+
+### 3. Dispatch by box mode
+The action now branches on the box's mode:
+
+- **Plain call box**: proceed to phase 4 (invoke) and phase 5 (write
+  output) as below.
+- **Comparator box**: skip invoke entirely. Read the input value,
+  compare to the box's stored threshold, and proceed to phase 7 with
+  the result of the comparison. Comparators have no `ref` / `fn`.
+- **Iterator box**: skip invoke entirely. Copy the input value
+  straight into the output slot, and proceed to phase 7. Iterators
+  have no `ref` / `fn` either; the routing-by-counter is the entire
+  point of the box.
+
+Iterator and comparator semantics live in the dispatch layer. The
+language spec interface (issue 303) is only used by plain call boxes.
+This is a change from issue 221's earlier "iterator function as
+passthrough" model — that function was always identity, so we drop
+it. Issue 221 will be updated accordingly.
+
+### 4. Invoke (plain call boxes only)
+Look up the box's language spec by its `lang` field. Find the
+worker's language handle in `current_worker->handles[lang_idx]`.
+Call `lang->invoke` with:
+- `handle` — the per-worker language runtime state
+- `file_path`, `fn_name` — the box's function source
+- `input_data[]`, `input_sizes[]` — pointers and sizes for each
+  input buffer
+- `out_buf`, `out_buf_capacity`, `*out_size` — the output buffer the
+  spec writes into
+
+The spec is the bridge between the language's native call convention
+and bytes. Inside `invoke` it:
+1. Loads the function (cached: e.g. `luaL_loadfile` once per file,
+   `dlsym` once per function).
+2. Pushes the input bytes into the language's native types (Lua
+   strings on the Lua stack, C pointers in registers, etc.).
+3. Calls the function and receives the return value in the language's
+   native form.
+4. Serializes the return value back into bytes in `out_buf` and
+   sets `*out_size`.
+5. Returns 0 for success, nonzero for any failure.
+
+Nonzero return aborts the program (issue 303).
+
+The output buffer for `invoke` is heap-allocated to the box's
+declared maximum output size. If the box's output is variable-size
+(uses the large-value heap, issue 302), the spec writes into that
+heap and stores the handle in `out_buf`.
+
+### 5. Write output
+`slot_push(output_slot, output_buf, output_size)`. The slot store
+performs the memory barrier and walks the slot's wait list to wake
+any consumers parked on this slot.
+
+### 6. Unref consumed inputs
+For each single-value input slot (`n_cells = 1`), the dispatch action
+calls `slot_unref` after peeking. Each fan-out wire holds one ref; as
+each consumer reads and unrefs, the count decrements. When the last
+consumer unrefs, the slot is freed.
+
+Queued input slots are different. They are not unref'd at the end of
+each invocation. The same queue persists across multiple invocations
+of the same iterator: an iterator pops one value, runs, re-spawns
+itself with a new dispatch_task_t, and the new task uses the **same**
+queued-input slot to pop the next value. The slot stays alive
+because:
+- Each upstream producer holds a ref while the producer is alive.
+- The consumer (iterator) holds a ref while it is still consuming.
+- The slot is freed when all upstream producers have ended (their
+  refs dropped) and the iterator has ended (its ref dropped).
+
+So the slot's lifetime ≠ one invocation; it equals the duration of
+the iterator's whole consumption cycle.
+
+### 7. Post-action: routing
+Three cases, dispatched by box mode:
+
+- **Plain call**: fire all outgoing connections unconditionally.
+- **Comparator**: the dispatch layer (not a spec) compared the input
+  to the box's threshold in phase 3 and produced a branch tag (`lt`
+  / `eq` / `gt`). Fire only the connection whose `from_branch`
+  matches. The output slot carries the input value through unchanged
+  — comparators do not transform data.
+- **Iterator**: fire only the connection whose `from_branch` matches
+  `iterator_outputs[counter]`. Then increment `counter` modulo
+  `n_iter_outputs` and spawn a successor `dispatch_task_t` with the
+  same input slot pointers and the new counter value. The successor
+  immediately blocks on the input queue if empty; otherwise it picks
+  up the next queued value on its first wake.
+
+"Firing" a connection means submitting a `dispatch_task_t` for the
+downstream box, with `input_slots[i]` set to the upstream's
+`output_slot` for the wired input position. Refcount on the upstream
+slot is incremented per fan-out wire at firing time.
+
+### 8. Return ACT_DONE
+The action completes. The pool decrements the active-task counter
+(issue 301). If the counter reaches zero and the runner is waiting,
+the run ends.
+
+## Initial submission
+
+The pool runner walks the graph at startup to find entry-point boxes
+— boxes with no inputs, or with inputs that come only from `data`
+boxes (literal values). It builds and submits a `dispatch_task_t` per
+entry box. From that point, all further submissions come from
+post-action firing.
+
+## Comparator vs iterator vs plain call
+
+Three box modes drive routing differently:
+
+| Mode        | Output kind   | Invoke spec? | Routing behavior                                                    |
+|-------------|---------------|--------------|---------------------------------------------------------------------|
+| Plain call  | single value  | yes          | fire all outgoing connections                                       |
+| Comparator  | passthrough   | no           | dispatch layer compares input to threshold, fires lt / eq / gt only |
+| Iterator    | passthrough   | no           | fire connection matching counter, increment counter, re-spawn       |
+
+The dispatch action branches on box mode early (phase 3) and
+dispatches into the appropriate helper. Three small functions, not a
+single switch, keep each mode's logic isolated.
+
+## Open questions
+
+(none currently — earlier questions resolved as follows:)
+
+- Output buffer sizing: heap-allocated to the box's declared output
+  size at runtime. No fixed cap. Variable-size outputs go through the
+  large-value heap (issue 302).
+- Queued-input slot lifetime: producers hold refs while alive,
+  consumer holds a ref while consuming, slot freed when all drop.
+  References are the producer-liveness tracking mechanism.
+- Comparator output encoding: dispatch layer handles comparison
+  semantics directly. No spec involvement, no encoded "branch tag" in
+  the slot — the branch is a routing-time value computed by the
+  dispatch layer from the input.
+
+## Suggested implementation sequence
+
+1. Define `dispatch_task_t` and the `dispatch_action` skeleton.
+2. Implement phase 1 (input check + ACT_BLOCK on slot wait list).
+3. Implement phase 2 (input read into heap-allocated buffers).
+4. Implement phase 4 (invoke for plain call boxes).
+5. Implement phase 5 (output write via slot_push).
+6. Implement phase 6 (unref consumed single-value inputs).
+7. Smoke test: `hello` map (one plain call box, no routing) end-to-end
+   through the pool. Assert the output slot contains the expected
+   value.
+8. Implement plain-call fan-out firing (phase 7, plain case).
+9. Implement comparator routing (phase 3 + phase 7 comparator case).
+   Test `branch-test` map.
+10. Implement iterator routing and self-respawn (phase 3 + phase 7
+    iterator case). Test an iterator map.
+11. Wire up entry-box initial submission in the pool runner.
+
+## Relevant files
+
+- `src/004-executor.lua` — synchronous executor that this layer replaces
+- `issues/301-pool-lifecycle-and-worker-init.md` — pool that runs this action
+- `issues/302-wire-value-slot-store.md` — slot API used here
+- `issues/303-language-runtime-spec.md` — `invoke` interface called here
+- `issues/221-iterator-box.md` — iterator routing and self-rescheduling
+- `issues/completed/108-branch-box-and-predicate-routing.md` — comparator routing
+- `issues/213-queued-inputs-and-task-model.md` — queued-input slot semantics
