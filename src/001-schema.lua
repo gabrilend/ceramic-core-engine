@@ -84,6 +84,13 @@ function M.validate_box(box)
         if box.comparand ~= nil and type(box.comparand) ~= "string" then
             err(errors, "'comparand' must be a string")
         end
+        -- has_output: optional; absence means "true" (default behavior).
+        -- false marks a sink box whose function has no return values
+        -- (issue 226); the runtime treats such boxes as terminal and the
+        -- editor hides the output port and inspector output section.
+        if box.has_output ~= nil and type(box.has_output) ~= "boolean" then
+            err(errors, "'has_output' must be a boolean")
+        end
         if box.connections ~= nil then
             for i, c in ipairs(box.connections) do
                 validate_connection(c, i, errors)

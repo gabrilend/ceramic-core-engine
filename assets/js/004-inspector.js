@@ -492,12 +492,23 @@ const Inspector = (() => {
   function open_browser() {
     title.textContent = 'browse src/';
     fields.innerHTML  = '';
-    FileBrowser.render(fields, (filename, fn) => {
+    FileBrowser.render(fields, async (filename, fn) => {
       current_box.ref    = filename;
       current_box.fn     = fn.name;
       current_box.inputs = fn.inputs.map(n => ({ name: n, type: 'any' }));
-      // outputs are not set — all boxes have exactly one output wire
-      save().then(() => show(current_box, on_change_cb, on_delete_cb));
+      // outputs are not set — all boxes have exactly one output wire.
+      // When the parsed function has zero return statements, mark the
+      // box as a sink (issue 226). Outgoing wires are dropped because
+      // the canvas would no longer have an output port to host them.
+      if (fn.outputs && fn.outputs.length === 0) {
+        current_box.has_output = false;
+        await sever_output_wires();
+      } else {
+        delete current_box.has_output;
+      }
+      await save();
+      show(current_box, on_change_cb, on_delete_cb);
+      Canvas.mark_dirty();
     });
   }
   // }}}
@@ -616,7 +627,13 @@ const Inspector = (() => {
     fields.appendChild(in_sec);
     fields.appendChild(mk_port_display(box.inputs));
 
-    // output: single wire; optional comparator splits into lt/eq/gt
+    // output: single wire; optional comparator splits into lt/eq/gt.
+    // Skipped entirely for sink boxes (functions with no return values,
+    // issue 226) — no output dot, no comparator toggle, nothing to wire.
+    if (box.has_output === false) {
+      return;
+    }
+
     const out_sec = document.createElement('div');
     out_sec.className   = 'section-label';
     out_sec.textContent = 'output';

@@ -1,7 +1,32 @@
 # 226 — Hide output port and inspector output section when the function returns nothing
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+Went with option 1 (`box.has_output: false` field; absence means
+"true"). The signal flows from the Lua/Bash parsers in
+`007-filebrowser.js` (`fn.outputs.length === 0`) through the
+inspector's `open_browser` on-select handler, which sets the field
+and severs any pre-existing outgoing wires before saving. Re-picking
+a function with returns deletes the field and the box returns to
+normal output behavior.
+
+Touches:
+- `assets/js/004-inspector.js::open_browser` — set/delete
+  `current_box.has_output`; await `sever_output_wires()` when
+  flipping false to drop wires the canvas would no longer host
+- `assets/js/004-inspector.js::show` — early-return after the
+  inputs section when `box.has_output === false`, skipping the
+  comparator UI and output area entirely
+- `assets/js/002-boxes.js::port_positions` — return `outputs: []`
+  when sink, so the canvas draws no output dot and wire-drag has
+  nothing to grab from
+- `assets/js/006-wires.js::create_connection` — defensive early
+  return if a caller somehow tries to wire from a sink box's
+  (non-existent) output
+- `src/001-schema.lua` — accept the optional boolean field
 
 ## Current behavior
 

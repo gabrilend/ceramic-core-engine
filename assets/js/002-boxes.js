@@ -41,7 +41,11 @@ const Boxes = (() => {
     }));
 
     let out_pts;
-    if (box.comparand && box.comparand !== '') {
+    if (box.has_output === false) {
+      // sink box — function has no return values (issue 226). No output
+      // port, no wire-grab target, nothing for the inspector to render.
+      out_pts = [];
+    } else if (box.comparand && box.comparand !== '') {
       // three comparator dots
       out_pts = ['lt', 'eq', 'gt'].map((branch, i) => ({
         name: branch, side: 'output',

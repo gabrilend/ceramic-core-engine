@@ -137,6 +137,13 @@ const Wires = (() => {
       status_msg('connect error: box not in cache', 'error');
       return;
     }
+    // Defensive: a sink box has no output port (issue 226), so the
+    // canvas wouldn't hand us a wire start from it. Refuse anyway in
+    // case some other path tries to fabricate one.
+    if (src_box.has_output === false) {
+      status_msg('connect error: source box is a sink', 'error');
+      return;
+    }
 
     const conn = {
       from_box:    from_box_id,
