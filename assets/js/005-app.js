@@ -87,11 +87,67 @@ const App = (() => {
       // mutate the existing object so the draw_all closure sees the new boxes
       Object.keys(Boxes.boxes).forEach(k => delete Boxes.boxes[k]);
       all.forEach(b => { Boxes.boxes[b.id] = b; });
-      Canvas.mark_dirty();
+      fit_to_view();
       status_msg('loaded ' + ids.length + ' boxes');
     } catch(e) {
       status_msg('load error: ' + e.message, 'error');
     }
+  }
+  // }}}
+
+  // {{{ fit_to_view
+  // Center the camera on the bounding box of all boxes, picking a zoom
+  // that fits the whole graph with a screen-pixel margin. Empty map
+  // resets to origin / zoom 1.
+  //
+  // The new canvas viewport (001-canvas.js) uses screen-pixel pan
+  // offsets, so the math here is one-to-one with what's drawn:
+  //   sx = wx * zoom + pan_x
+  // Solve for pan so the bounding-box center lands at the canvas center.
+  function fit_to_view() {
+    const ids = Object.keys(Boxes.boxes);
+    if (ids.length === 0) {
+      Canvas.cam.zoom = 1;
+      Canvas.cam.x    = 0;
+      Canvas.cam.y    = 0;
+      return;
+    }
+
+    let min_x =  Infinity, min_y =  Infinity;
+    let max_x = -Infinity, max_y = -Infinity;
+    for (const id of ids) {
+      const b = Boxes.boxes[id];
+      const x = b.ui?.x ?? 0;
+      const y = b.ui?.y ?? 0;
+      const w = Boxes.BOX_W;
+      const h = Boxes.box_height(b);
+      if (x     < min_x) min_x = x;
+      if (y     < min_y) min_y = y;
+      if (x + w > max_x) max_x = x + w;
+      if (y + h > max_y) max_y = y + h;
+    }
+
+    const margin = 60;
+    const cw     = Canvas.el.width;
+    const ch     = Canvas.el.height;
+    const bb_w   = max_x - min_x;
+    const bb_h   = max_y - min_y;
+
+    // Pick the largest zoom that fits the bounding box with margin on
+    // each side. Clamp to a comfortable range.
+    let zoom = 1;
+    if (bb_w > 0 && bb_h > 0) {
+      const zx = (cw - 2 * margin) / bb_w;
+      const zy = (ch - 2 * margin) / bb_h;
+      zoom = Math.max(0.25, Math.min(1.5, Math.min(zx, zy)));
+    }
+
+    // Center the bounding box: canvas_center = bb_center * zoom + pan
+    const center_wx = min_x + bb_w / 2;
+    const center_wy = min_y + bb_h / 2;
+    Canvas.cam.zoom = zoom;
+    Canvas.cam.x    = cw / 2 - center_wx * zoom;
+    Canvas.cam.y    = ch / 2 - center_wy * zoom;
   }
   // }}}
 
@@ -492,5 +548,5 @@ const App = (() => {
   // }}}
 
   window.addEventListener('DOMContentLoaded', init);
-  return { load_map, set_tool_mode, export_image };
+  return { load_map, fit_to_view, set_tool_mode, export_image };
 })();

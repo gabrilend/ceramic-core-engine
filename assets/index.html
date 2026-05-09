@@ -407,6 +407,7 @@ canvas {
   <canvas id="canvas"></canvas>
   <div id="toolbar">
     <button class="toolbar-btn" onclick="App.load_map()">reload</button>
+    <button class="toolbar-btn" onclick="App.fit_to_view()">⊡ fit</button>
     <button class="toolbar-btn" onclick="localStorage.clear(); location.reload()">switch map</button>
     <span style="margin:0 2px;color:#2a2f45;">|</span>
     <button class="toolbar-btn" id="tool-erase-wire" onclick="App.set_tool_mode('erase-wire')">✕ wire</button>

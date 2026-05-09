@@ -39,7 +39,7 @@ Read in order for a complete picture of the system.
 
 ### Phase 2 — Editor & graph model (current)
 
-- 202 — fit-to-view on map load
+- 202 — fit-to-view on map load (complete)
 - 203 — map picker panel
 - 204 — visible interaction hints
 - 206 — entry box designation (won't implement; phase 3 auto-detects)
