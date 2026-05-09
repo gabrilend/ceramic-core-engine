@@ -311,6 +311,27 @@ canvas {
   font-family: monospace;
 }
 .fb-file-row:hover { background: #2a2f45; color: #e8eaf6; }
+/* Directory rows in the dir picker (issue 225) — clickable, accent
+   blue, prefixed with `>` so they're distinguishable from files even
+   without color. */
+.fb-dir-row {
+  padding: 5px 6px;
+  font-size: 11px;
+  color: #4a9eff;
+  cursor: pointer;
+  border-radius: 3px;
+  font-family: monospace;
+}
+.fb-dir-row:hover { background: #2a2f45; color: #82c4ff; }
+/* File rows shown for confirmation only — dimmed, no hover, no
+   pointer cursor (issue 225). */
+.fb-file-readonly {
+  padding: 4px 6px;
+  font-size: 11px;
+  color: #6c72a0;
+  font-family: monospace;
+  cursor: default;
+}
 .fb-fn-row {
   padding: 6px 8px;
   border: 1px solid #2a2f45;

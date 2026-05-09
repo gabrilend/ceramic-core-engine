@@ -20,78 +20,13 @@ Read in order for a complete picture of the system.
 
 ## Issues
 
+Per-issue files live under `issues/` (open) and `issues/completed/`
+(done). The progress files below are the canonical index — read them
+for the live status of each phase.
+
 - [issues/phase-1-progress.md](../issues/phase-1-progress.md) — phase 1 status (complete)
 - [issues/phase-2-progress.md](../issues/phase-2-progress.md) — phase 2 status
 - [issues/phase-3-progress.md](../issues/phase-3-progress.md) — phase 3 status
-
-### Phase 1 — Foundation (complete)
-
-- 101 — project scaffold and map directory format
-- 102 — language driver interface
-- 103 — runner: graph loader and validator
-- 104 — runner: synchronous executor (task boundary)
-- 105 — HTTP server: file CRUD API
-- 106 — web editor: canvas and box rendering
-- 107 — web editor: wiring and connection UI
-- 108 — branch box and predicate routing (later superseded by 210)
-- 109 — data files: persistent and ephemeral storage
-- 110 — phase 1 demo
-
-### Phase 2 — Editor & graph model (current)
-
-- 202 — fit-to-view on map load (complete)
-- 203 — map picker panel (complete)
-- 204 — visible interaction hints (complete)
-- 206 — entry box designation (won't implement; phase 3 auto-detects)
-- 207 — source file browser and port auto-population (complete)
-- 208 — port literal values (complete)
-- 209 — Ollama query library (complete)
-- 210 — comparator wire branching (complete; replaces 108 named ports)
-- 211 — file browser library directories (complete)
-- 211a — unify src/ into same directory pipeline (complete)
-- 212 — editor interaction modes (complete)
-- 213 — queued inputs and task model (won't implement; phase 3 issue 302 supersedes)
-- 214 — tmp symlink recreation on reboot (complete)
-- 215 — view source button (complete)
-- 216 — read-file box (`libs/files.lua`) (complete)
-- 223 — syntax highlighting via user-written lexers
-- 224 — editable port names and canvas-side value edit
-- 225 — dir picker shows files and dir/file icons
-- 226 — hide output controls for no-return functions (complete)
-- 227 — hide view button when box has no ref (complete)
-- 228 — self-loop wires routed around the box body (complete)
-- 217 — concat box and dynamic inputs (complete)
-- 218 — enforce single-output driver contract (complete)
-- 219 — map compiler (won't implement; folded into 309)
-- 220 — root run script and entry point cleanup (complete)
-- 221 — iterator box: editor surface (complete; runtime in 304)
-- 222 — compile button and assets directory (complete)
-
-### Phase 3 — Thread pool runtime (designed, not yet implemented)
-
-- 301 — thread pool lifecycle and per-worker initialization
-- 302 — per-task slot store with wire-held references
-- 303 — language runtime spec (pluggable per-language invocation)
-- 304 — task dispatch layer (C, replaces synchronous executor)
-- 305 — C graph loader (replaces `003-loader.lua`)
-- 306 — Lua language spec implementation
-- 307 — C language spec implementation
-- 308 — Bash language spec implementation
-- 309 — build system & Makefile orchestration
-- 310 — priority queue: wired in, no-op behaviorally
-- 311 — integration tests & run output (`last-run.jsonl`)
-
-### Phase 4 — SoraMind integration (planned)
-
-TBD after phase 3 completes.
-
-### Phase 5 — Map-to-map calls (planned)
-
-TBD.
-
-### Phase 6 — Remote runner (planned)
-
-TBD.
 
 ## Libraries
 

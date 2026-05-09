@@ -1,7 +1,30 @@
 # 225 — Directory picker: show files alongside dirs, distinguish them visually
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+Server-side: `handle_list_dirs` in `src/005-http-server.lua` now
+returns `{ path, dirs, files }` — files filtered to the small phase 2
+allowlist (`.lua`, `.c`, `.sh`) via `find -maxdepth 1`. Phase 3 will
+swap the hard-coded list for whatever the language specs declare.
+
+Client-side:
+- `assets/js/007-filebrowser.js::show_dir_picker` renders dirs and
+  files separately. Dirs use `.fb-dir-row` (accent blue, `>` prefix,
+  click navigates); files use `.fb-file-readonly` (dim gray, `·`
+  prefix, no hover, no pointer cursor).
+- The parent-dir `..` row also gets the dir-row treatment so it
+  matches the look of other navigation targets.
+- The main file list (`.fb-file-row`) gets the same `·` glyph
+  prefix for visual consistency between the picker and the post-pick
+  view; the click handler still uses the closed-over `filename`
+  variable so the cosmetic prefix doesn't leak into the lookup.
+- New CSS classes added in `assets/index.html`.
+
+Empty-directory message expanded to "(empty directory)" — covers
+both no-subdirs and no-files cases.
 
 ## Current behavior
 

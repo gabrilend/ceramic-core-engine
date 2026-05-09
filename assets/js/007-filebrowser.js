@@ -225,11 +225,13 @@ const FileBrowser = (() => {
       sel_btn.onclick = () => on_select(result.path);
       container.appendChild(sel_btn);
 
-      // parent directory row (except at filesystem root)
+      // parent directory row (except at filesystem root). It's a
+      // directory navigation target, so it gets the dir-row treatment
+      // (issue 225).
       if (result.path !== '/') {
         const up_row = document.createElement('div');
-        up_row.className   = 'fb-file-row';
-        up_row.textContent = '..';
+        up_row.className   = 'fb-dir-row';
+        up_row.textContent = '> ..';
         up_row.onclick = () => {
           // strip last path component
           const parent = result.path.replace(/\/[^/]+$/, '') || '/';
@@ -239,21 +241,33 @@ const FileBrowser = (() => {
         container.appendChild(up_row);
       }
 
-      if (result.dirs.length === 0) {
+      if (result.dirs.length === 0 && (result.files || []).length === 0) {
         const note = document.createElement('div');
         note.className   = 'fb-note';
-        note.textContent = '(no subdirectories)';
+        note.textContent = '(empty directory)';
         container.appendChild(note);
       }
 
+      // Directories: clickable, navigate on click, prefixed with `>`
+      // and styled in the editor's accent blue.
       result.dirs.forEach(name => {
         const row = document.createElement('div');
-        row.className   = 'fb-file-row';
-        row.textContent = name + '/';
+        row.className   = 'fb-dir-row';
+        row.textContent = '> ' + name + '/';
         row.onclick = () => {
           current_path = result.path === '/' ? '/' + name : result.path + '/' + name;
           render_picker();
         };
+        container.appendChild(row);
+      });
+
+      // Files: read-only confirmation list — these are what the user
+      // would import if they pick this directory. Prefixed with `·`,
+      // dimmed, no click handler.
+      (result.files || []).forEach(name => {
+        const row = document.createElement('div');
+        row.className   = 'fb-file-readonly';
+        row.textContent = '· ' + name;
         container.appendChild(row);
       });
     };
@@ -433,7 +447,9 @@ const FileBrowser = (() => {
         group.files.forEach(filename => {
           const row = document.createElement('div');
           row.className   = 'fb-file-row';
-          row.textContent = filename;
+          // Prefix matches the dir picker's `·` for files so the same
+          // glyph means the same thing across both views (issue 225).
+          row.textContent = '· ' + filename;
           row.onclick     = async () => {
             row.textContent = filename + ' …';
             let content;

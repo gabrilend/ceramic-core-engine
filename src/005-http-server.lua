@@ -506,7 +506,28 @@ local function handle_list_dirs(client, req, maps_root)
         end
     end
 
-    json_ok(client, { path = path, dirs = dirs })
+    -- Source files in the same directory (issue 225). The picker uses
+    -- this to confirm "yes, this is the directory I meant" without the
+    -- user having to commit and re-render the main file list. Filtered
+    -- by the small set of language extensions phase 2 understands;
+    -- phase 3 will replace the hard-coded list with whatever the
+    -- language specs declare via their `file_ext` field.
+    local files = {}
+    local f_handle = io.popen(
+        "find " .. quoted .. " -maxdepth 1 -type f " ..
+        "\\( -name '*.lua' -o -name '*.c' -o -name '*.sh' \\) " ..
+        "2>/dev/null")
+    if f_handle then
+        local listing = f_handle:read("*a")
+        f_handle:close()
+        for entry in listing:gmatch("[^\n]+") do
+            local name = entry:match("/([^/]+)$")
+            if name then files[#files + 1] = name end
+        end
+        table.sort(files)
+    end
+
+    json_ok(client, { path = path, dirs = dirs, files = files })
 end
 -- }}}
 

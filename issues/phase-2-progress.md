@@ -25,7 +25,7 @@ model the phase 3 runtime will consume.
 | 215  | view source button                             | complete |
 | 223  | syntax highlighting via user-written lexers    | open     |
 | 224  | editable port names and canvas-side value edit | open     |
-| 225  | dir picker shows files and dir/file icons      | open     |
+| 225  | dir picker shows files and dir/file icons      | complete |
 | 226  | hide output controls for no-return functions   | complete |
 | 227  | hide view button when box has no ref           | complete |
 | 228  | self-loop wires routed around the box body     | complete |
