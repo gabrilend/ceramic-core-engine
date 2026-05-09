@@ -70,8 +70,7 @@ end
 -- }}}
 
 -- {{{ detect_cycles
--- depth-first search from start_id; branch boxes are cycle-break nodes
--- (a cycle that passes through a branch box is the retry pattern — allowed)
+-- depth-first search from start_id; all cycles are errors
 local function detect_cycles(boxes, start_id)
     local visited  = {}
     local in_stack = {}
@@ -79,8 +78,7 @@ local function detect_cycles(boxes, start_id)
 
     local function dfs(id)
         if in_stack[id] then
-            errors[#errors + 1] = "cycle detected at box '" .. id ..
-                "' that does not pass through a branch box"
+            errors[#errors + 1] = "cycle detected at box '" .. id .. "'"
             return
         end
         if visited[id] then return end
@@ -89,12 +87,6 @@ local function detect_cycles(boxes, start_id)
 
         local box = boxes[id]
         if not box then
-            in_stack[id] = false
-            return
-        end
-
-        -- branch boxes break cycles — stop DFS at them (retry loops are valid)
-        if box.kind == "branch" then
             in_stack[id] = false
             return
         end
@@ -187,8 +179,8 @@ function M.validate_graph(graph)
 
             local found = false
             for _, tc in ipairs(target.connections or {}) do
-                if tc.from_box    == c.from_box   and
-                   tc.from_output == c.from_output and
+                if tc.from_box    == c.from_box    and
+                   tc.from_branch == c.from_branch and
                    tc.to_box      == c.to_box      and
                    tc.to_input    == c.to_input    then
                     found = true
@@ -196,8 +188,9 @@ function M.validate_graph(graph)
                 end
             end
             if not found then
+                local branch_str = c.from_branch and ("." .. c.from_branch) or ""
                 errors[#errors + 1] = "box '" .. id .. "': connection " ..
-                    c.from_box .. "." .. (c.from_output or c.from_port) ..
+                    c.from_box .. branch_str ..
                     " -> " .. c.to_box .. "." .. c.to_input ..
                     " not reciprocated in target"
             end
@@ -205,24 +198,13 @@ function M.validate_graph(graph)
             ::next_conn::
         end
 
-        -- driver must exist for call boxes with a ref
-        if box.kind == "call" and box.ref then
+        -- driver must exist for call/data boxes with a ref
+        if (box.kind == "call" or box.kind == "data") and box.ref then
             local ext = extension_of(box.ref)
             -- binary callers (no fn) don't need a driver — they are the driver
             if box.fn and ext ~= "" and not drivers[ext] then
                 errors[#errors + 1] = "box '" .. id ..
                     "': no driver defined for extension '" .. ext .. "'"
-            end
-        end
-
-        -- branch box: else port must exist; unwired else is warned (not errored here)
-        if box.kind == "branch" then
-            local has_else = false
-            for _, p in ipairs(box.ports or {}) do
-                if p.name == "else" then has_else = true end
-            end
-            if not has_else then
-                errors[#errors + 1] = "branch box '" .. id .. "' missing 'else' port"
             end
         end
     end

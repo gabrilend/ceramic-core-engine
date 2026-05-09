@@ -8,14 +8,12 @@ local DIR = "/mnt/mtwo/programs/sora/soramech"
 local M = {}
 
 -- {{{ valid_kinds
-local valid_kinds = { call = true, branch = true, data = true }
+local valid_kinds = { call = true, data = true }
 -- }}}
 
--- {{{ valid_ops
-local valid_ops = {
-    eq = true, lt = true, gt = true,
-    lte = true, gte = true, contains = true, matches = true
-}
+-- {{{ valid_branches
+-- null/nil means no comparator (single wire); the three strings are comparator outputs.
+local valid_branches = { lt = true, eq = true, gt = true }
 -- }}}
 
 -- {{{ err
@@ -24,76 +22,14 @@ local function err(errors, msg)
 end
 -- }}}
 
--- {{{ validate_port
-local function validate_port(port, i, errors)
-    -- "else" port has no predicate; all others require one
-    if port.name == nil then
-        err(errors, "port[" .. i .. "] missing 'name'")
-        return
-    end
-    if port.name == "else" then return end
-    if port.predicate == nil then
-        err(errors, "port '" .. port.name .. "' missing predicate (only 'else' may omit it)")
-        return
-    end
-    local p = port.predicate
-    if p.op == nil then
-        err(errors, "port '" .. port.name .. "' predicate missing 'op'")
-    elseif not valid_ops[p.op] then
-        err(errors, "port '" .. port.name .. "' predicate has unknown op '" .. p.op .. "'")
-    end
-    if p.value == nil then
-        err(errors, "port '" .. port.name .. "' predicate missing 'value'")
-    end
-end
--- }}}
-
 -- {{{ validate_connection
 local function validate_connection(c, i, errors)
-    -- all four fields must be present; both endpoint files store the same record
+    -- from_branch is nil (no comparator) or one of "lt"/"eq"/"gt"
     if c.from_box == nil then
         err(errors, "connection[" .. i .. "] missing 'from_box'")
     end
-    if c.from_output == nil then
-        err(errors, "connection[" .. i .. "] missing 'from_output'")
-    end
-    if c.to_box == nil then
-        err(errors, "connection[" .. i .. "] missing 'to_box'")
-    end
-    if c.to_input == nil then
-        err(errors, "connection[" .. i .. "] missing 'to_input'")
-    end
-end
--- }}}
-
--- {{{ validate_port_connection
-local function validate_port_connection(c, i, errors)
-    -- branch box connections use from_port instead of from_output;
-    -- from_box and to_box/to_input are still required for the reciprocal check
-    if c.from_box == nil then
-        err(errors, "branch connection[" .. i .. "] missing 'from_box'")
-    end
-    if c.from_port == nil then
-        err(errors, "branch connection[" .. i .. "] missing 'from_port'")
-    end
-    if c.to_box == nil then
-        err(errors, "branch connection[" .. i .. "] missing 'to_box'")
-    end
-    if c.to_input == nil then
-        err(errors, "branch connection[" .. i .. "] missing 'to_input'")
-    end
-end
--- }}}
-
--- {{{ validate_incoming_connection
-local function validate_incoming_connection(c, i, errors)
-    -- reciprocal record written to the receiving end; accept either from_output or from_port
-    -- since we don't know the source box kind here
-    if c.from_box == nil then
-        err(errors, "connection[" .. i .. "] missing 'from_box'")
-    end
-    if c.from_output == nil and c.from_port == nil then
-        err(errors, "connection[" .. i .. "] missing both 'from_output' and 'from_port'")
+    if c.from_branch ~= nil and not valid_branches[c.from_branch] then
+        err(errors, "connection[" .. i .. "] 'from_branch' must be nil, 'lt', 'eq', or 'gt'")
     end
     if c.to_box == nil then
         err(errors, "connection[" .. i .. "] missing 'to_box'")
@@ -118,60 +54,24 @@ function M.validate_box(box)
         err(errors, "missing or non-string 'label'")
     end
     if box.kind == nil or not valid_kinds[box.kind] then
-        err(errors, "missing or invalid 'kind' (must be call, branch, or data)")
+        err(errors, "missing or invalid 'kind' (must be 'call' or 'data')")
     end
 
-    if box.kind == "call" then
+    if box.kind == "call" or box.kind == "data" then
         if box.ref == nil or type(box.ref) ~= "string" then
-            err(errors, "call box missing 'ref'")
+            err(errors, "box missing 'ref'")
         end
         -- fn is optional for binary callers (shell scripts, binaries)
         if box.inputs ~= nil and type(box.inputs) ~= "table" then
             err(errors, "'inputs' must be an array")
         end
-        if box.outputs ~= nil and type(box.outputs) ~= "table" then
-            err(errors, "'outputs' must be an array")
+        -- comparand: optional; if present it must be a string parseable as number at runtime
+        if box.comparand ~= nil and type(box.comparand) ~= "string" then
+            err(errors, "'comparand' must be a string")
         end
         if box.connections ~= nil then
             for i, c in ipairs(box.connections) do
-                -- outgoing connections (this box is the source) require from_output;
-                -- incoming reciprocal records accept either from_output or from_port
-                if c.from_box == box.id then
-                    validate_connection(c, i, errors)
-                else
-                    validate_incoming_connection(c, i, errors)
-                end
-            end
-        end
-
-    elseif box.kind == "branch" then
-        if box.inputs == nil or type(box.inputs) ~= "table" then
-            err(errors, "branch box missing 'inputs'")
-        end
-        if box.ports == nil or type(box.ports) ~= "table" or #box.ports == 0 then
-            err(errors, "branch box missing 'ports' array")
-        else
-            local has_else = false
-            for i, p in ipairs(box.ports) do
-                validate_port(p, i, errors)
-                if p.name == "else" then has_else = true end
-            end
-            if not has_else then
-                err(errors, "branch box missing required 'else' port")
-            end
-        end
-        if box.retry_limit ~= nil and type(box.retry_limit) ~= "number" then
-            err(errors, "'retry_limit' must be a number")
-        end
-        if box.connections ~= nil then
-            for i, c in ipairs(box.connections) do
-                -- outgoing connections (this box is the source) require from_port;
-                -- incoming reciprocal records from call boxes use from_output
-                if c.from_box == box.id then
-                    validate_port_connection(c, i, errors)
-                else
-                    validate_incoming_connection(c, i, errors)
-                end
+                validate_connection(c, i, errors)
             end
         end
     end

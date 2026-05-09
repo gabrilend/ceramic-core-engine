@@ -110,3 +110,19 @@ needs complex retry logic (backoff, multiple retries with different
 strategies), they should model it with explicit boxes wired in a cycle
 through a branch box. The built-in retry is for the common case of
 "ask the LLM again with a different temperature."
+
+## Architecture update (2026-05-07)
+
+The `branch` box kind is removed as part of the single-wire output redesign.
+Conditional routing is now handled by an optional **comparator** on any box
+(see issue 210): when active, the output wire splits into lt / eq / gt paths
+compared against a literal number. Non-number values are a hard error.
+
+The named-port model (`box.ports`, `from_port` in connections, predicate
+objects, retry_vary) is fully removed. The retry mechanism goes away with it —
+the loop-through-a-branch-box pattern is the recommended alternative if
+retry logic is needed.
+
+All executor code specific to the branch kind (`fire_connections` branch
+section, `retry_counts`, `retry_vary` application) should be reverted when
+issue 210 is implemented.
