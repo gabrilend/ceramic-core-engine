@@ -1,0 +1,30 @@
+# RAM-backed ephemeral dir (per CLAUDE.md: tmp/ is symlinked to a
+# system tmp directory for logs and other ephemeral output)
+tmp/
+tmp
+
+# Phase 3 build artifacts (issue 309)
+build/
+*.o
+*.so
+*.dylib
+soramech-pool
+
+# Per-map compiled output (issue 309's compile step)
+maps/*/compiled/
+
+# Per-map runtime output (issue 311)
+maps/*/last-run.jsonl
+maps/*/last-run.json
+
+# Editor / IDE / OS temp files
+*.tmp
+*.tmp.*
+*~
+*.swp
+*.bak
+.DS_Store
+Thumbs.db
+
+# Lua bytecode
+*.luac
