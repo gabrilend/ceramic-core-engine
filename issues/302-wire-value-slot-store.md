@@ -91,14 +91,13 @@ bytes. The header tracks ring-buffer state and lifetime:
 Slot header
 Offset  Size  Field
 ------  ----  -----
-0       4     refcount        (atomic int32; lifetime counter)
-4       4     cell_capacity   (bytes per cell, set at allocation)
-8       4     n_cells         (ring size, set at allocation; 1 for single-value)
-12      4     head            (read index, mod n_cells)
-16      4     tail            (write index, mod n_cells; cells_filled = tail - head)
-20      1     touched         (per-slot lock: 0=free, 1=another thread mutating)
-21      3     _pad
-24      …     cells           (n_cells * (4-byte size + cell_capacity bytes))
+0       4     cell_capacity   (bytes per cell, set at allocation)
+4       4     n_cells         (ring size, set at allocation)
+8       4     head            (read index, mod n_cells)
+12      4     tail            (write index, mod n_cells; cells_filled = tail - head)
+16      1     touched         (per-slot lock: 0=free, 1=another thread mutating)
+17      3     _pad
+20      …     cells           (n_cells * (4-byte size + cell_capacity bytes))
 ```
 
 Each cell stores a 4-byte filled-size followed by `cell_capacity`
@@ -143,11 +142,13 @@ This replaces the per-slot refcount machinery. The "are upstreams
 still alive" check is done at the producer-set level, which is
 cheaper and avoids the contention of refcount churn on hot paths.
 
-### Wait list
-Each slot also owns a wait list — pointers to tasks parked on the
-slot waiting for a value. When a producer pushes, the slot walks the
-wait list and tells the pool to re-run those tasks. The wait list is
-attached to the slot, not to the producer or the consumer.
+### No wait lists
+
+Tasks never park on slots. Tasks are spawned by the dispatch
+layer's spawn-on-input-arrival rule and run to completion; they
+never block. A slot that has no value yet simply means the
+spawn rule hasn't fired for that consumer yet. No wait list,
+no per-slot wake-up traversal — just a check after each push.
 
 ## Backing store
 
@@ -158,9 +159,9 @@ sufficient — every worker thread in the process can read and write
 it, and no spec ever needs to access it from a child process.
 
 Synchronization within a slot uses the per-slot `touched` flag for
-header mutations and a per-slot wait list (above) for blocked tasks.
-There is no allocator-wide mutex on the read/write path; only the
-per-size-class free lists in the allocator have their own locks.
+header mutations. There is no allocator-wide mutex on the
+read/write path; only the per-size-class free lists in the
+allocator have their own locks.
 
 ## Slot creation
 
