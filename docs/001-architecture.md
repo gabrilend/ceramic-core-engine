@@ -54,14 +54,16 @@ This is the development target while the editor is being built out.
 
 ### Phase 3 runner — `soramech-pool` (planned, issues 301–311)
 
-C binary that owns a 3d-rts thread pool. Each box invocation is a
-pool task; worker threads run them concurrently. Language code is
+C binary that owns a SoraMech-built thread pool (3d-rts is the
+design reference, not vendored). Each box invocation is a pool
+task; worker threads run them concurrently. Language code is
 called through **language specs** (issue 303), shared libraries
 (`langs/<name>/spec.so`) loaded via `dlopen` at startup. Lua and C
-specs are in-process; the Bash spec talks to a persistent subprocess
-over a Unix domain socket. Wire values live in **slots** in process
-heap memory (issue 302) — fixed-size with reference counting, plus a
-large-value heap for variable-size payloads.
+specs are in-process; the Bash spec talks to a persistent
+subprocess over a Unix domain socket. Wire values live in
+**per-input-port slots** in process heap memory (issue 302) — ring
+buffers durable for the run, plus a large-value heap for
+variable-size payloads.
 
 Phase 3 replaces the phase 2 runner wholesale. The synchronous path
 does not survive into phase 3; the editor and the map directory
@@ -223,16 +225,22 @@ execution model. Phase 2 is single-threaded.
 
 ## Execution model — phase 3 (thread pool)
 
-The C pool runner owns a 3d-rts task pool with N worker threads.
-Each box invocation is a task. The dispatch layer (issue 304) is the
-worker-side action: read inputs from slots → invoke the language
-spec (or route, for comparators / iterators) → write output to a
-slot → unref consumed inputs → fire downstream connections.
+The C pool runner owns a SoraMech-built thread pool with N worker
+threads (3d-rts is the design reference, not vendored). Each box
+invocation is a task. The dispatch layer (issue 304) is the
+worker-side action: read inputs from slots → branch on box mode
+→ invoke the language spec (or route directly, for comparators /
+iterators) → push output to downstream input slots.
 
-Slots are per-task ring buffers with reference-counted lifetime
-(issue 302). Wires hold references; producers push, consumers peek
-or pop. The wait list on each slot is the synchronization primitive
-that parks blocked tasks until a producer fills the slot.
+Slots are **per-input-port** ring buffers (issue 302), allocated
+at graph load and durable for the run. 1-cell slots use peek
+(literals, single-push wires); N-cell slots use pop (multi-push
+wires, queues from iterators). Iterator counter is per-box state,
+incremented atomically at task spawn time so iterator tasks can
+parallelize across workers; pushes carry counter tags so consumer
+slots preserve invocation order. Run termination is governed by
+the pool's active-task counter — when it hits zero with no
+pending spawns, the run is over.
 
 The pool runner has no embedded Lua. It is C from `main` down to the
 language spec boundary; only inside a Lua spec's `invoke` does Lua

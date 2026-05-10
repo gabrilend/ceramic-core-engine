@@ -21,8 +21,8 @@ A top-level `Makefile` at the project root orchestrates the entire
 phase 3 build. It builds:
 
 1. The pool runner binary: `soramech-pool` (statically links the
-   3d-rts task pool, the vendored JSON parser, the slot store, the
-   graph loader, the dispatch layer, the spec registry).
+   SoraMech-owned task pool, the vendored JSON parser, the slot
+   store, the graph loader, the dispatch layer, the spec registry).
 2. Each language spec: `langs/<name>/spec.so`, built by a small
    per-spec Makefile.
 3. (Optional) Unit test binaries.
@@ -44,9 +44,9 @@ soramech/
 │   ├── dispatch.c / .h            ← dispatch action (issue 304)
 │   └── spec-registry.c / .h       ← spec dlopen/registry (issue 303)
 ├── libs/
-│   ├── task-pool/                 ← vendored 3d-rts pool
-│   │   ├── 900-task-pool.h
-│   │   └── 900-task-pool.c
+│   ├── task-pool/                 ← SoraMech-built thread pool
+│   │   ├── pool.h
+│   │   └── pool.c
 │   └── json/                      ← vendored JSON parser (cJSON, jsmn, etc.)
 │       ├── cjson.h
 │       └── cjson.c
@@ -150,7 +150,7 @@ vendored directory carries a small `VENDOR.md` noting the upstream
 source and the version that was copied.
 
 Initial vendored libraries:
-- `libs/task-pool/` — 3d-rts task pool (issue 301)
+- `libs/task-pool/` — SoraMech-built thread pool (issue 301)
 - `libs/json/` — JSON parser (issue 305 picks cJSON or similar)
 
 Future additions land alongside these.
@@ -272,7 +272,8 @@ deployment is recognizably broken until a clean compile succeeds.
 1. Write the top-level Makefile with empty `runner`, `specs`,
    `clean` targets. Verify `make` succeeds against an empty source
    tree.
-2. Vendor the 3d-rts task pool into `libs/task-pool/`. Add a
+2. Build the SoraMech thread pool into `libs/task-pool/` (3d-rts
+   referenced as design inspiration). Add a
    `VENDOR.md`.
 3. Vendor cJSON (or chosen JSON parser) into `libs/json/`. Add a
    `VENDOR.md`.

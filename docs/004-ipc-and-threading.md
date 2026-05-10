@@ -33,12 +33,16 @@ LuaSocket non-blocking I/O lets the scheduler run other boxes while one is
 waiting for a response. No true parallelism yet, but the graph's natural
 concurrency is exploited without blocking the whole process.
 
-**Stage 3 — 3d-rts thread pool.** The `task_fn` boundary swaps in the thread
-pool. Worker threads pull tasks from the pool; the coroutine scheduler is
-replaced by OS-level scheduling. Cross-language calls block a worker thread
-while other threads continue. True parallelism across cores.
+**Stage 3 — SoraMech-owned thread pool.** A pool implementation
+written for SoraMech, with the 3d-rts pool design as a reference.
+The `task_fn` boundary swaps in the thread pool. Worker threads pull
+tasks from the pool; OS-level scheduling replaces any single-threaded
+ordering. Cross-language calls block a worker thread while other
+threads continue. True parallelism across cores.
 
-Effil-jit is not used. The path is synchronous → coroutine → 3d-rts pool.
+Effil-jit is not used. Coroutines are not used. The path goes
+straight from synchronous (phase 2) to the C pool (phase 3) — no
+intermediate coroutine stage.
 
 ---
 
@@ -257,7 +261,7 @@ call does this:
 The cross-language call never blocks the main Lua thread. Other boxes run in
 other coroutines while the bash/C server is processing.
 
-**Integration with the 3d-rts thread pool (Stage 3):**
+**Integration with the SoraMech thread pool (Stage 3):**
 
 Each worker thread owns its set of language server sockets. When `run_task` calls
 a cross-language box, it sends to the socket and blocks on the read — the thread

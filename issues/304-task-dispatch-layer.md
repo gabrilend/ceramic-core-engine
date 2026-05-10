@@ -64,19 +64,22 @@ Phases, in order:
 
 ### 1. Read inputs into byte buffers
 
-Tasks are spawned only when every input port has at least one
-value (issue 302's spawn-on-input-ready rule), so the action does
-not need to check or block — input availability is the spawn
+Tasks are spawned only when every input port has a value
+available (issue 302's spawn-on-input-ready rule), so the action
+does not need to check or block — input availability is the spawn
 precondition.
 
-For each input port: `slot_pop` from the box's input slot into a
-heap-allocated buffer sized to the slot's `cell_capacity`. Pop
-drains one cell from the front of the ring; subsequent values
-behind it are still queued and will spawn further tasks.
+For each input port:
+- **Peek-mode (1-cell) port**: `slot_peek` into a heap buffer.
+  The cell is not drained; subsequent tasks on this box read the
+  same value.
+- **Pop-mode (N-cell) port**: `slot_pop` into a heap buffer. One
+  cell drains; values queued behind it remain. For tagged slots,
+  pop returns the lowest-tag cell; for untagged, FIFO.
 
 Variable-size payloads work via the large-value heap (issue 302):
-the popped cell holds a `{size, offset}` handle that points into
-the heap; the spec follows the handle if it needs the bytes.
+the cell holds a `{size, offset}` handle that points into the
+heap; the spec follows the handle if it needs the bytes.
 
 Buffers are freed when the action ends.
 
@@ -149,39 +152,19 @@ After each push, the spawn-on-input-ready check (issue 302) fires
 on the receiving box. If that push completes its input set, a
 fresh task spawns for the consumer.
 
-### 6. End-of-stream propagation
+### 6. (No phase 6)
 
-Slots are durable for the life of the run; there is no per-task
-unref step. Instead, the action checks whether the **producer set**
-on each pushed-to slot has changed: if this push was the last
-push from a producer that's now finished, the producer is removed
-from each of that consumer's input slots' producer sets. When a
-consumer's producer set goes empty AND its slot is drained, the
-consumer is at end-of-stream on that port.
+Slots are durable for the run; tasks don't unref. Run termination
+is governed by the pool's active-task counter (issue 301). The
+dispatch action goes from phase 5 directly to phase 7.
 
-For an iterator, "end-of-stream on the input" is what tells the
-dispatch layer to stop spawning successor tasks. For a non-iterator
-that's done with all its expected invocations, the same condition
-applies — no further pushes will arrive, no more tasks spawn.
+### 7. Post-action: nothing for the action itself
 
-### 7. Post-action: counter advancement (iterators only)
-
-Routing already happened in phase 5 — pushes targeted the right
-downstream input slots based on the box's mode. The remaining
-post-action work is iterator-specific:
-
-- **Iterator**: increment `box_runtime_state[box_id].counter`
-  modulo `n_iter_outputs`. The next iterator task spawned for this
-  box (when its input slot has another value) will read the
-  updated counter value from the box state.
-
-There is no "successor task" spawned by the iterator itself. The
-spawn-on-input-ready rule in issue 302 handles iterator
-re-invocation the same way it handles every other box: the
-iterator's input slot has further values queued, the spawn rule
-fires again automatically.
-
-Plain call and comparator boxes do nothing in phase 7.
+Routing happened in phase 5. The iterator counter was already
+incremented at task **spawn** time, not here — the spawn-time
+atomic increment is what makes parallel iterator tasks possible
+(see "Iterator counter and parallel iteration" below). All boxes
+do nothing in phase 7.
 
 ### 8. Return ACT_DONE
 The action completes. The pool decrements the active-task counter
@@ -201,25 +184,66 @@ the regular phase-5 push → spawn-check chain.
 Iterator counter state starts at 0; literal-only entry iterators
 spawn their first task at startup and increment from there.
 
-## Cross-iterator pairing
+## Iterator counter and parallel iteration
 
-When a non-iterator consumer C has two input ports wired from two
-different iterators A and B, each input port has its own queue.
-Tasks for C spawn FIFO: task 1 pops the first value from each
-queue; task 2 pops the second from each; etc.
+The iterator's per-box counter is read and incremented **at task
+spawn time**, atomically:
 
-Pairing is deterministic **as long as A and B push in deterministic
-order**. In a single-threaded run that's automatic. In a parallel
-run where A and B run on different workers and push concurrently,
-the pairing depends on push ordering — which is non-deterministic
-across runs.
+```c
+int counter_for_this_task = atomic_fetch_add(&box->counter, 1) % n_iter_outputs;
+spawn(task{ box_id, counter_for_this_task });
+```
 
-For phase 3, FIFO pairing is the policy. If a workload needs
-strict pairing (a_i with b_i regardless of push race), the right
-fix is per-invocation index tags on the values: each iterator
-push tags its value with its counter, the consumer's queues sort
-by tag before popping. That's a follow-on issue (no number yet),
-opened only if a real workload needs it.
+The counter is snapshotted into the task struct. The atomic
+fetch-add means concurrent spawns get distinct counter values, so
+**iterator tasks can run in parallel** on different workers — each
+has its own counter, picks its own output branch independently.
+Sibling iterator tasks don't share runtime state.
+
+The serial dependency is reduced to one atomic op per spawn (cheap)
+rather than a serialized task chain.
+
+## Cross-iterator pairing under parallel iteration
+
+With parallel iterator tasks, push ordering at the consumer is
+non-deterministic — task 6 of iterator A may push to consumer C
+before task 5 if 6 happened to land on a faster worker. FIFO pop
+at C would consume them out of iteration order.
+
+The fix is **counter-tagged pushes**. Each iterator push (in phase
+5) carries the counter value snapshotted at spawn:
+
+```c
+slot_push(downstream.input_slot, output_buf, output_size,
+          /* tag = */ task->counter);
+```
+
+Consumer slots downstream of iterators are allocated with the
+`SLOT_TAGGED` flag (issue 302). `slot_pop` on a tagged slot
+returns the cell with the lowest tag — preserving iterator-counter
+order regardless of push race.
+
+Compile-time analysis decides which slots are tagged: any slot
+whose feeding wire originates (transitively, through a fan-out
+chain) at an iterator branch gets tagged. Slots not downstream of
+iterators are untagged and pop FIFO at no extra cost.
+
+Plain-call and comparator pushes carry tag = 0 (or the snapshot of
+their own iterator-ancestor's counter, if applicable, propagated
+through their phase-5 pushes). Tags compose naturally through
+multi-hop chains.
+
+### Cross-iterator pairing of multiple iterator inputs
+
+When non-iterator consumer C has two input ports wired from two
+different iterators A and B, each input port has its own tagged
+queue. Both queues pop in tag order independently:
+- C's task K pops the K-th tag from A's queue (which equals A's
+  K-th invocation's value).
+- The same K-th tag from B's queue.
+
+Pairing by tag = `(A_K, B_K)` for every K, deterministic
+regardless of which iterator's tasks run faster.
 
 ## Comparator vs iterator vs plain call
 

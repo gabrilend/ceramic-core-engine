@@ -28,7 +28,7 @@ and update this file.
 
 ## Phase goal checklist
 
-- [ ] Vendored 3d-rts task pool builds clean
+- [ ] SoraMech-owned task pool builds clean (3d-rts as design reference)
 - [ ] Slot store unit-tested (single-value + ring buffer + refcounting)
 - [ ] C graph loader passes phase 2's existing maps
 - [ ] Lua spec runs `maps/hello` end-to-end

@@ -57,25 +57,59 @@ task does:
   the return against `comparand`, route to the matching `lt` /
   `eq` / `gt` branch.
 
-### All slots are ring buffers
+### All slots are ring buffers; read mode varies
 
 There is one slot type. It is a ring buffer of `n_cells` cells,
-each of `cell_capacity` bytes. Every input port has a ring buffer
-of compile-time-determined size:
+each of `cell_capacity` bytes. The number of cells (`n_cells`) and
+the read mode are both compile-time properties of the input port:
 
-- **Default size**: enough cells to absorb the maximum number of
-  pushes that can happen before the box can drain. For a port fed
-  by a single non-iterator producer, that's 1. For a port fed by
-  an iterator, it's the iterator's worst-case backlog (statically
-  inferred or capped at a high default like 64 with growth).
-- **Upper bound**: lists grow if backlog exceeds the pre-allocated
-  size, so n_cells isn't a hard cap on correctness — only on
-  pre-allocation efficiency.
+- **1-cell + peek mode**: the value the producer wrote stays in the
+  cell. Tasks read via `slot_peek` — read without draining — and
+  every subsequent task on this consumer reads the same value
+  unless the producer overwrites it. Used for **single-push wires**
+  (a literal, or a wire from a producer box whose invocation count
+  is exactly 1). Multiple consumer tasks read the value as many
+  times as needed; the cell is never empty.
+- **N-cell + pop mode**: a queue. Producers push; consumers
+  `slot_pop` — drain one cell per task. Used for **multi-push wires**:
+  any wire whose producer has more than one task invocation
+  during the run. The producer's pushes accumulate, the consumer
+  drains in pop order.
 
-The producer pushes one cell per fan-out path; the consumer pops
-one cell per invocation. Fan-in is multiple producers pushing into
-the same input slot in arrival order; the consumer pops in FIFO
-order.
+Compile-time analysis classifies each wire. A producer is
+"runs-once" if no transitive ancestor is an iterator; otherwise
+it's "runs-N-times." Wires from runs-once producers get 1-cell
+peek slots; wires from runs-N-times producers get N-cell pop slots.
+
+`n_cells` for pop slots is sized for worst-case backlog (or a
+default like 64 with growth on demand). Lists grow if the producer
+outruns the consumer past the pre-allocation.
+
+Fan-in: multiple producers pushing into the same N-cell pop slot
+land in arrival order. The consumer pops FIFO unless the cell
+carries an ordering tag (see "Cell tagging" below).
+
+### Cell tagging (for parallel-iterator ordering)
+
+A cell can optionally carry a 4-byte ordering tag alongside its
+size and data:
+
+```
+Cell layout (N-cell pop slot)
+Offset  Size  Field
+------  ----  -----
+0       4     filled_size
+4       4     tag      (0 if untagged; iterator counter snapshot otherwise)
+8       …     data
+```
+
+Slots created for wires from parallel iterators (issue 304) are
+tagged. Pop on a tagged slot returns the cell with the lowest tag,
+not the head cell — preserving iterator-counter order across pushes
+that arrived out of order from parallel iterator workers.
+
+Untagged slots default tag to 0 and pop FIFO at no extra cost. The
+tag-aware pop is a per-slot mode flag set at allocation time.
 
 ### Asynchrony
 The store is fully asynchronous. Slots are allocated, filled, read, and
@@ -116,31 +150,17 @@ Writes to a cell complete with a memory barrier before `tail` is
 advanced, so a reader that observes `head < tail` is guaranteed to
 see the complete value at the head cell.
 
-## Lifetime and end-of-stream
+## Lifetime
 
 Slots are owned by the box that holds the input port. They live
 from graph load until run end. There is no per-slot reference
-counting — the slot is freed when the run ends, alongside its
-owning box.
+counting and no end-of-stream propagation — the slot is freed
+when the run ends, alongside its owning box.
 
-### End-of-stream detection (replacing producer refcounts)
-
-Each slot tracks the set of upstream producer boxes that may still
-push into it. When a producer's "no more pushes" condition fires
-— either it has finished all its invocations, or it transitively
-depends only on producers that have finished — the dispatch layer
-removes that producer from the slot's producer set.
-
-When the producer set is empty AND the slot's queue is drained,
-the consumer box has reached end-of-stream on that port. For an
-iterator, this is what tells the iterator to stop re-spawning. For
-a non-iterator, this means no further invocations are coming;
-combined with the same condition on its other input ports, the
-box itself is done.
-
-This replaces the per-slot refcount machinery. The "are upstreams
-still alive" check is done at the producer-set level, which is
-cheaper and avoids the contention of refcount churn on hot paths.
+Run termination is governed entirely by the pool's active-task
+counter (issue 301): when no task is running and no further spawns
+are pending, the run is over. There's nothing the slot store needs
+to track to make this work.
 
 ### No wait lists
 
@@ -186,52 +206,63 @@ ring grows — see "Allocation strategy" below.
 ## C API surface
 
 ```c
-slot_id_t slot_alloc (slot_store_t *s, int cell_capacity, int n_cells);
-void      slot_push  (slot_store_t *s, slot_id_t id, const void *data, int size);
-int       slot_peek  (slot_store_t *s, slot_id_t id, void *buf, int buf_size); // non-destructive: read head, leave it
-int       slot_pop   (slot_store_t *s, slot_id_t id, void *buf, int buf_size); // destructive: read head, advance head
-void      slot_wait  (slot_store_t *s, slot_id_t id); // blocks until tail > head
-void      slot_ref   (slot_store_t *s, slot_id_t id);
-void      slot_unref (slot_store_t *s, slot_id_t id); // frees backing memory when refcount → 0
+slot_id_t slot_alloc (slot_store_t *s, int cell_capacity, int n_cells, int flags);
+void      slot_push  (slot_store_t *s, slot_id_t id, const void *data, int size, uint32_t tag);
+int       slot_peek  (slot_store_t *s, slot_id_t id, void *buf, int buf_size); // 1-cell: read without draining
+int       slot_pop   (slot_store_t *s, slot_id_t id, void *buf, int buf_size); // N-cell: drain head (or lowest-tag)
+int       slot_has_value(slot_store_t *s, slot_id_t id);                       // for spawn-rule check
 ```
 
-Single-value (1-cell) slot use: producer `push` once, each consumer
-`peek` once, then `unref`. Cells are not popped — fan-out consumers
-all read the same value, and the slot is freed when the last consumer
-unrefs.
+Flags include `SLOT_TAGGED` (cells carry ordering tags; pop returns
+lowest-tag cell). Push always takes a `tag` argument; untagged
+slots ignore it (or treat 0 as "no order").
 
-Queued-input (N-cell) slot use: producers `push` repeatedly, the
-consumer `pop`s in arrival order. The consumer holds the only ref.
-When the consumer task is done with its queue, it `unref`s and the
-slot is freed.
+1-cell peek slot use: producer `push` once at startup (literal) or
+when its single invocation completes (single-push wire). All
+consumer tasks `peek` to read the value as many times as their box
+runs. The cell is never empty after the initial push.
+
+N-cell pop slot use: producers `push` repeatedly. Consumer tasks
+`pop` one cell each. For tagged slots, `pop` returns the
+lowest-tag cell; for untagged, FIFO. Pop on an empty slot is a
+bug — the spawn rule guarantees the slot is non-empty before a
+task spawns.
+
+There is no `slot_ref` / `slot_unref` — slot lifetime is the run.
 
 ## Submission timing
 
-Tasks are spawned dynamically in response to slot pushes, not at
-graph-load time. Each box has a small per-box state used by the
-dispatch layer to decide when to spawn:
+Tasks are spawned dynamically in response to slot pushes. Each box
+has small per-box state used by the dispatch layer:
 
 ```
 box_runtime_state {
     slot_id_t  *input_slots;     // one per input port (set at load)
+    int        *port_modes;      // PEEK or POP, per input port
     int         n_inputs;
-    int         pending_invocations;  // counter; >0 means a task is queued
     int         counter;         // iterator only; 0 otherwise
 };
 ```
 
 The spawning rule:
 - When a producer pushes to one of a box's input slots, the
-  dispatch layer checks **does every input slot now hold at least
-  one value?** If yes, spawn a task. The task pops one cell from
-  each input slot when it runs.
-- If multiple input slots get pushed concurrently, one task spawns
-  per "all inputs available" event — the pending_invocations
-  counter prevents over-spawning.
+  dispatch layer checks **does every input slot have a value
+  available?** "Available" means:
+  - For peek-mode (1-cell) slots: cell has been written at least
+    once. Once a peek slot is filled, it stays available — every
+    subsequent spawn-check on this box passes the peek-port check.
+  - For pop-mode (N-cell) slots: queue is non-empty.
+- If yes, spawn a `dispatch_task_t` and submit to the pool. The
+  task pops (or peeks) one value from each input slot when it
+  runs.
+- Each push that completes the input set triggers exactly one
+  spawn. Multiple pushes accumulate in pop slots; each pop
+  consumes one, and if more remain, the next push (or check)
+  re-fires the spawn rule.
 
 This makes the pool's queue the rate buffer: pushes accumulate
-(possibly multiple per slot), and one task per accumulated set
-gets spawned in arrival order.
+in pop slots (possibly multiple per slot), and one task per
+accumulated value gets spawned.
 
 Tasks never block on slots. They're spawned after inputs are
 ready, run to completion, and disappear. Blocking-and-waking

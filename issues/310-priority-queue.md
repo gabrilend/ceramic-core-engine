@@ -4,7 +4,8 @@
 open
 
 ## Current behavior
-The 3d-rts task pool's `pool_spawn` takes a priority parameter:
+The SoraMech thread pool's `pool_spawn` (modeled on 3d-rts's API)
+takes a priority parameter:
 
 ```c
 task_id_t pool_spawn(task_pool_t *pool,

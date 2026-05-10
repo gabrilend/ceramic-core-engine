@@ -127,14 +127,15 @@ Execution model (v1)
 --------------------
 
 The runner is synchronous in v1. Each box invocation is wrapped in a
-task_fn(inputs) -> outputs boundary — the same signature as the 3d-rts
-thread pool's action chain — so the transition to concurrent execution is
-a runtime swap, not a rewrite.
+task_fn(inputs) -> outputs boundary — matching the action signature of
+SoraMech's own thread pool (whose design references the 3d-rts pool) —
+so the transition to concurrent execution is a runtime swap, not a
+rewrite.
 
-effil-jit is available for threading when the custom thread pool (from
-the 3d-rts project) is ready to be integrated. The target model is:
-boxes whose inputs are all satisfied fire concurrently; boxes that depend
-on a still-running box park until that result arrives.
+The phase 3 thread pool is SoraMech-built; 3d-rts serves as the design
+reference. The target model is: boxes whose inputs are all satisfied
+fire concurrently; iterators parallelize across workers via atomic
+counter snapshots and counter-tagged pushes.
 
 Multiple maps can run concurrently as separate runner processes. Each map
 is a cohesive program. Maps calling into other maps is a future feature;
@@ -146,8 +147,8 @@ Future directions
   — Integration with SoraMind: boxes that call inference endpoints on the
     Alpine cluster, routing results through the map graph.
 
-  — Concurrent execution via the custom thread pool from 3d-rts,
-    replacing the synchronous v1 runner.
+  — Concurrent execution via SoraMech's own thread pool (3d-rts as
+    design reference), replacing the synchronous v1 runner.
 
   — Map-to-map calls: a box that invokes another map as a subroutine,
     passing values across the boundary.

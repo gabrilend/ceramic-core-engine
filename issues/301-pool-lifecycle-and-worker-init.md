@@ -37,12 +37,26 @@ on equal footing with C, Bash, and any future language.
 ## Intended behavior
 
 ### Pool source
-The thread pool is the 3d-rts pool library at
+The thread pool is **SoraMech-owned**, written from scratch under
+`libs/task-pool/`. The 3d-rts pool at
 `/home/ritz/programming/ai-stuff/games/3d-rts/libs/900-task-pool.h`
-(and its `.c` companion). It is vendored into SoraMech — copied, not
-symlinked — so SoraMech's compilation does not depend on the 3d-rts
-working tree. Vendored copy lives at `libs/task-pool/900-task-pool.h`
-and `libs/task-pool/900-task-pool.c`.
+is the **design reference**, not a dependency. We need full control
+over the spawn primitive, the worker context, the init barrier
+(below), and iterator-pinning extensions — all reasons not to inherit
+an external implementation.
+
+The pool exposes (at minimum):
+
+```c
+pool_t *pool_create(int n_workers);
+void    pool_destroy(pool_t *p);
+void    pool_spawn(pool_t *p, action_fn_t fn, void *arg);
+void    pool_wait_quiescent(pool_t *p);   // blocks until active count hits zero
+void    pool_init_barrier(pool_t *p);     // see "Init barrier" below
+```
+
+3d-rts's frame-ring + park-on-slot machinery is referenced for
+patterns; we don't reimplement features we don't need.
 
 ### Where the pool lives in the process
 The pool is owned by the map runner's C entry point. One pool per map
@@ -56,14 +70,43 @@ int main(int argc, char **argv) {
     // 1. parse map path from argv
     // 2. load and validate graph (C loader, no Lua involved)
     // 3. determine which language runtimes the map uses
-    // 4. pool = pool_create(n_workers)
-    // 5. init per-worker language runtime handles for each language present
-    // 6. submit tasks for all entry-point boxes
-    // 7. wait for active task count to reach zero
-    // 8. pool_destroy(pool)
-    // 9. write last-run.json
+    // 4. allocate per-input-port slots for every box (issue 302)
+    // 5. pool = pool_create(n_workers)
+    // 6. init per-worker language runtime handles for each language present
+    // 7. pool_init_barrier(pool)  ← block until every worker is fully initialized
+    // 8. push every input port's literal value into its slot
+    // 9. spawn tasks for boxes whose input set is now satisfied
+    // 10. pool_wait_quiescent(pool)
+    // 11. write last-run.jsonl
+    // 12. pool_destroy(pool)
 }
 ```
+
+### Init barrier
+
+Workers are not safe to dispatch tasks to until **every worker has
+fully completed init for every language spec the map uses**. If the
+main thread spawns a task before a worker's `lua_State` is up, the
+task lands on a null handle.
+
+`pool_init_barrier` is the join point:
+
+1. Each worker's startup runs all `lang->init(worker_idx)` calls in
+   a defined order, populating its `worker_ctx_t.handles[]`.
+2. After completing its inits, each worker increments a shared
+   atomic `workers_ready` counter and blocks on a condition
+   variable.
+3. The main thread waits until `workers_ready == n_workers`.
+4. Main thread broadcasts the condition variable; all workers
+   release simultaneously and begin pulling tasks.
+
+This is a one-shot barrier — it runs once at pool startup. After
+quiescence it doesn't re-engage; teardown takes a different path.
+
+The barrier also protects against partial init failures: if any
+worker's `init` returns an error, the barrier never completes and
+the main thread can detect it via a timeout or per-worker status
+flag.
 
 ### Graph loading: ported to C
 The graph loader is ported from `src/003-loader.lua` to C and lives
@@ -113,13 +156,12 @@ Number of worker threads defaults to the number of logical CPUs
 (`MAX_WORKERS`, initially 16). Can be overridden by an environment
 variable `SORAMECH_WORKERS=N`.
 
-### Slots are owned by tasks (issue 302)
-Slots are allocated when a task is created, not pre-allocated at
-startup. A task allocates its output slot(s) at submission time, with
-size specified by the task's language and function. The pool runner
-does not own a slot region — slots are per-task allocations that
-outlive the task only as long as wires hold references to them. See
-issue 302 for the slot lifecycle.
+### Slots are owned by input ports (issue 302)
+Each box has one ring-buffer slot per input port, allocated at
+graph load time and durable for the run. The pool runner walks
+every box during the load step and populates a per-box slot table.
+Slots are not allocated per-task; tasks pop and push but never
+allocate. See issue 302 for the slot lifecycle and lifetime model.
 
 ### Quiescence
 The runner tracks an active-task counter, incremented on `pool_spawn`
@@ -154,11 +196,12 @@ zero with the iterator parked, the run ends cleanly.
    written. No task graph complexity yet.
 
 ## Relevant files
-- `/home/ritz/programming/ai-stuff/games/3d-rts/libs/900-task-pool.h` — pool API
+- `libs/task-pool/` — SoraMech-built pool (to be created)
+- `/home/ritz/programming/ai-stuff/games/3d-rts/libs/900-task-pool.h` — design reference only
 - `src/003-loader.lua` — current Lua loader, to be ported to C
 - `src/004-executor.lua` — current synchronous executor, to be replaced
 - `src/007-runner-main.lua` — current Lua runner, to be replaced
-- `issues/302-wire-value-slot-store.md` — per-task slot lifecycle
+- `issues/302-wire-value-slot-store.md` — per-port slot model
 - `issues/303-language-runtime-spec.md` — per-language init/call/teardown
 - `issues/304-task-dispatch-layer.md` — replaces 004-executor.lua
 - `docs/004-ipc-and-threading.md` — threading roadmap and IPC options
