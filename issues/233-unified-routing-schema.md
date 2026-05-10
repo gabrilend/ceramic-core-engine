@@ -3,23 +3,29 @@
 ## Status
 open
 
-## Current behavior
+## Concept
 
-Two different ways to express "this box has multiple output
-branches and only fires one per invocation," depending on which
-flavor:
+A "branching box" is a regular call box whose output, after the
+function runs, is sent to **one of several** downstream
+destinations rather than to all of them. Same function, same
+inputs, same output value — only the routing decision differs.
+Currently we have two flavors:
 
-- **Comparator**: per-box `comparand: "<number>"` field. Output
-  branches are fixed `lt` / `eq` / `gt`. The function still runs;
-  the dispatch layer compares the function's output against
-  `comparand` to pick a branch.
-- **Iterator**: per-box `iterator_outputs: ["a","b","c"]` field.
-  Output branches are user-named. No function runs; the dispatch
-  layer routes the input to `outputs[counter % N]` (counter from a
-  `SLOT_ATOMIC_COUNTER` slot, issue 302).
+- **Comparator**: routes the function's output by comparing it
+  to a stored threshold. Three fixed branches (`lt` / `eq` /
+  `gt`).
+- **Iterator**: routes the function's output to one of N branches
+  in round-robin fashion, advancing a counter on every call.
 
-Both are "branching boxes" with different routing rules. The
-schema makes them look like unrelated features.
+The two are the same shape (function runs → output gets routed)
+with different rules for picking the branch. The current schema
+has them as separate top-level fields (`comparand` and
+`iterator_outputs`), which makes them look like unrelated
+features. They aren't.
+
+(For "send the same value to multiple destinations," the user
+just pulls multiple wires out of a single output port — fan-out
+already works on plain call boxes. No routing decision needed.)
 
 ## Intended behavior
 
@@ -35,7 +41,8 @@ parameters:
 
 { "id": "round-robin",
   "kind": "call",
-  "routing": { "kind": "iterator", "outputs": ["worker_a","worker_b","worker_c"] } }
+  "ref": "src/dispatch_msg.lua", "fn": "dispatch_msg",
+  "routing": { "kind": "iterator", "n_outputs": 3 } }
 
 { "id": "plain-call",
   "kind": "call",
@@ -44,88 +51,180 @@ parameters:
   // no routing field — single output wire, fires unconditionally
 ```
 
-Absence of `routing` means plain call (single unconditional output
-wire). Presence means branched output, with the routing kind
-deciding how the branch is picked.
+Absence of `routing` means plain call: one output wire, fires
+unconditionally on every invocation. Presence means branched
+output, with `routing.kind` deciding which branch fires per call.
 
-### Comparator: kind="comparator"
+**The function always runs**, regardless of routing kind. The
+function produces the value; routing decides where the value
+goes.
 
-```json
-"routing": { "kind": "comparator", "comparand": "<number-as-string>" }
-```
-
-Function runs. Dispatch compares the function's output against
-`comparand`; fires `lt` / `eq` / `gt` branch.
-
-### Iterator: kind="iterator"
+### kind="comparator"
 
 ```json
-"routing": { "kind": "iterator", "outputs": ["a","b","c"] }
+"routing": { "kind": "comparator", "comparand": "<number>" }
 ```
 
-No function runs (or function runs and its output passes through
-— design decision below). Dispatch reads a `SLOT_ATOMIC_COUNTER`
-slot via `slot_read_inc(counter_slot, len(outputs))`; fires the
-named branch at that index.
+Three output ports: `lt`, `eq`, `gt` (fixed names; ports aren't
+renameable per the editor's port-immutability rule). The
+function's output value is compared to `comparand`; the matching
+branch fires.
+
+#### Multi-band comparator (planned brainstorm)
+
+The current 3-branch lt/eq/gt design is a special case of "value
+falls into a numeric range, fire the corresponding branch." A
+generalization:
+
+```json
+"routing": {
+  "kind": "comparator",
+  "thresholds": [3, 7, 11, 17]
+}
+```
+
+Five output ports get named by the threshold positions —
+`below_3`, `between_3_7`, `between_7_11`, `between_11_17`,
+`above_17`. With `thresholds: [4]` this becomes the current
+3-branch lt/eq/gt (with `eq` being "exactly 4"), so the legacy
+shape is one configuration of the new one.
+
+Equality cases (`x == 3` exactly) fall to the lower band by
+convention; an explicit `eq` band could be added per threshold
+if needed.
+
+Defer the schema specifics — the existing 3-branch case ships
+first; multi-band is a follow-on once we have a use case that
+actually needs more than three.
+
+### kind="iterator"
+
+```json
+"routing": { "kind": "iterator", "n_outputs": 3 }
+```
+
+`n_outputs` output ports, named conventionally (`out_0`, `out_1`,
+…). Every invocation reads the box's `SLOT_ATOMIC_COUNTER` slot
+via `slot_read_inc(counter_slot, n_outputs)`; that index picks
+the branch.
+
+The function still runs and produces the routed value. Iterator
+defaults the function to a passthrough identity if the user
+hasn't picked a `ref` / `fn` — but the user is free to attach
+any function whose output should be round-robin-distributed.
+
+### kind="randomizer"
+
+```json
+"routing": { "kind": "randomizer", "n_outputs": 4 }
+```
+
+Picks a branch uniformly at random per invocation.
+Implementation: hash the counter-slot value into the branch
+index, so the distribution is deterministic-given-seed but
+spread across branches.
+
+```c
+uint32_t i = slot_read_inc(counter_slot, UINT32_MAX);
+uint32_t branch = hash(i) % n_outputs;
+```
+
+`hash` is a cheap mixing function (xorshift, FNV); not
+cryptographic. The point is breaking up the monotonic counter so
+consecutive calls don't go to consecutive branches.
+
+### kind="weighted"
+
+```json
+"routing": {
+  "kind":    "weighted",
+  "weights": [0.8, 0.2]
+}
+```
+
+Probability-based distribution. With `[0.8, 0.2]` and two output
+ports, 80% of invocations fire branch 0, 20% fire branch 1.
+
+Implementation: at compile time, weights are normalized into a
+cumulative table on a `0..PRECISION-1` integer scale (e.g.
+`PRECISION = 1000`). Per call:
+
+```c
+uint32_t r = slot_read_inc(counter_slot, PRECISION);
+// pre-computed cumulative: [0..799] → branch 0, [800..999] → branch 1
+uint32_t branch = lookup_band(r, cumulative_table);
+```
+
+Same counter-slot machinery as iterator and randomizer; the
+difference is the mapping from counter to branch.
+
+### kind="distributor" (load-aware)
+
+```json
+"routing": { "kind": "distributor", "n_outputs": 3 }
+```
+
+Sends the value to the **least-busy** downstream consumer:
+inspects the fill levels of the input slots wired to each branch
+and picks the branch whose downstream slot has the fewest queued
+values.
+
+Implementation: dispatch action peeks the `tail - head` count on
+each downstream input slot and picks the minimum. Tied branches
+fall back to atomic-counter round-robin so ties don't always go
+to the same branch.
+
+This is the only routing kind that's not purely
+self-contained — it reads downstream slot state — but it doesn't
+add any new dispatch-layer concept beyond querying slot fill
+(which the slot store already knows).
 
 ### Future kinds
 
-- `kind: "function_decided"`: function returns `(value, branch_tag)`;
-  dispatch fires the branch tagged. Reserved name; not implemented
-  by phase 3 unless we need it.
-- `kind: "user_router"`: spec callback decides the branch given
-  inputs and current state. Reserved.
+The pattern is: any new routing kind plugs in at one place
+(`routing.kind` value + dispatch-layer branch picker). All
+existing kinds and any future ones live entirely in the dispatch
+layer + slot store + editor — never in language specs, never in
+user-written functions.
 
-The `routing.kind` field is the one place new routing types plug
-in.
+## Iterator + function: ships as "function always runs"
 
-## Iterator + function: open question
-
-Currently iterator boxes have no `ref` / `fn` — they're routing-
-only. The user has expressed interest in "functions iterating
-their own outputs" (a function-backed iterator). Two possible
-semantics under the unified schema:
-
-1. **Iterator passes input through unchanged** (current). The
-   function would be a no-op; not allowed. Box has no `ref`/`fn`.
-2. **Iterator runs function, routes function's output** (new).
-   Box has `ref`/`fn`; function runs; output goes to
-   `outputs[counter % N]`. Counter still drives routing, but the
-   value being routed is the function's return.
-
-(2) is more general and includes (1) as a special case (identity
-function). It composes with comparator's structure (function runs,
-output gets routed). The dispatch action becomes:
+Iterator boxes always run their function. The dispatch action
+becomes uniform across routing kinds:
 
 ```
-1. Read inputs.
-2. If box has ref/fn: invoke spec, take output.
-   Else (iterator-only): take the popped input value.
+1. Read inputs (pop / peek per port mode).
+2. Invoke spec (always — function runs regardless of routing kind).
 3. Pick branch via routing.kind:
-     comparator → compare(value, comparand) → lt/eq/gt
-     iterator   → slot_read_inc(counter_slot, N)
-4. Push value to outputs[picked branch].
+     comparator   → compare(output, comparand)
+     iterator     → slot_read_inc(counter_slot, n_outputs)
+     randomizer   → hash(slot_read_inc(counter_slot, MAX)) % n_outputs
+     weighted     → cumulative lookup
+     distributor  → argmin(downstream fill)
+     (no routing) → fan to all outgoing wires
+4. Push function output to outputs[picked branch] (or all wires if
+   no routing).
 ```
 
-This unifies both paths and makes iterator-with-function natural.
-
-Recommendation: ship (2). The editor can default new iterator
-boxes to no-function (the simple case), but allow attaching a
-function via the existing `ref`/`fn` controls.
+A single dispatch path for all branching boxes; the routing rule
+plugs into step 3.
 
 ## Schema migration
 
-Existing maps:
-- Boxes with `comparand` and no `routing` field → migrate to
-  `routing: { kind: "comparator", comparand }` at load time.
-- Boxes with `iterator_outputs` and no `routing` field → migrate
-  to `routing: { kind: "iterator", outputs: iterator_outputs }`.
-- Plain call boxes (no `comparand`, no `iterator_outputs`) → no
-  routing field, no migration needed.
+Few enough existing maps that we can hand-migrate them. The
+loader does **not** carry a legacy-shape adapter; once this
+ships, all map files are expected to use the `routing` field. If
+a map with the old shape is opened, the schema validator rejects
+it and the user (or a one-off migration script) updates it.
 
-Migration runs in the loader, in memory. Editor saves migrated
-boxes back to disk on next edit. Old `comparand` / `iterator_outputs`
-fields are accepted on read (legacy) but written under `routing`.
+If we end up wanting a one-off script, it walks `maps/<name>/boxes/*.json`
+and rewrites:
+- `comparand: X` → `routing: { kind: "comparator", comparand: X }`
+- `iterator_outputs: [...]` → `routing: { kind: "iterator", n_outputs: len(...) }`
+- everything else → no change
+
+But for the current map count, manual edits are faster than
+writing the script.
 
 ## Inspector UI
 
@@ -133,34 +232,40 @@ A `routing` selector in the inspector replaces the separate
 `compare` toggle and `iterator` toggle:
 
 ```
-mode:    [plain ▾ | comparator | iterator]
+mode:    [plain ▾ | comparator | iterator | randomizer | weighted | distributor]
 ```
 
-When `comparator` selected: show `comparand` text input + lt/eq/gt
-output dots.
-When `iterator` selected: show editable `outputs` slot list with
-auto-grow (current iterator UI). Optionally allow ref/fn (for the
-function-backed iterator semantics if option (2) ships).
+Per-kind controls below the dropdown:
+- **plain**: nothing extra.
+- **comparator**: numeric `comparand` input. (Multi-band UI is
+  the brainstorm above; ships single-threshold first.)
+- **iterator**: `n_outputs` integer input.
+- **randomizer**: `n_outputs` integer input.
+- **weighted**: editable list of weight values (one per output);
+  N derived from list length.
+- **distributor**: `n_outputs` integer input.
+
+Output ports re-render to match the routing kind: 1 dot for
+plain, 3 fixed dots (lt/eq/gt) for comparator, N dots for the
+counter-based kinds. Port names follow the routing kind's
+convention; not user-renameable (issue 224's read-only-port-name
+rule).
 
 ## Suggested implementation sequence
 
-1. `src/001-schema.lua`: accept `routing` field; legacy `comparand`
-   and `iterator_outputs` accepted on read, validated as
-   equivalent.
-2. `src/003-loader.lua` (phase 2 path): migrate legacy fields into
-   `routing` on load.
-3. `src/005-http-server.lua`: PUT handler accepts both shapes
-   (canonical and legacy) and stores canonical.
-4. Phase 3 graph loader (issue 305): same migration.
-5. `assets/js/004-inspector.js`: new mode dropdown replacing the
-   two separate toggles. Conditional UI per `routing.kind`.
-6. `assets/js/002-boxes.js`: render branches based on
+1. `src/001-schema.lua`: accept `routing` field; reject legacy
+   `comparand` and `iterator_outputs` shapes.
+2. `assets/js/004-inspector.js`: mode dropdown replacing the two
+   toggles; per-kind controls.
+3. `assets/js/002-boxes.js`: render branches based on
    `routing.kind`.
-7. `assets/js/006-wires.js`: connection's `from_branch` matches
-   `routing.outputs[i]` or `lt`/`eq`/`gt`.
-8. Phase 3 dispatch (issue 304): branch on `routing.kind` for the
-   branch-selection step. Routing logic consolidates from two
-   paths to one.
+4. `assets/js/006-wires.js`: connection's `from_branch` matches
+   the routing kind's port naming.
+5. Phase 3 dispatch (issue 304): branch on `routing.kind` for the
+   branch-selection step. Five rule paths (one per kind shipped),
+   plus the no-routing-field plain path.
+
+Hand-migrate existing maps before merging.
 
 ## Why now
 
@@ -170,36 +275,68 @@ function-backed iterator semantics if option (2) ships).
 - Phase 3 dispatch will naturally have a "select branch" step;
   routing it through `routing.kind` is the same code regardless
   of whether we ship Level B now or refactor later.
-- Schema migration is cheap to do once, expensive to leave for
-  later when more maps exist.
+- The new routing kinds (randomizer, weighted, distributor) only
+  make sense in the unified schema. Adding them as separate
+  top-level fields would be unmaintainable.
 
 ## Relevant files
 
 - `src/001-schema.lua` — schema accepts new field
-- `src/003-loader.lua` — legacy migration on load
-- `src/005-http-server.lua` — PUT handler accepts both shapes
 - `assets/js/004-inspector.js` — mode dropdown
 - `assets/js/002-boxes.js` — branch rendering
 - `assets/js/006-wires.js` — branch matching
 - `issues/302-wire-value-slot-store.md` — counter slot mechanism
-- `issues/304-task-dispatch-layer.md` — dispatch layer reads
-  `routing.kind`
-- `issues/completed/210-comparator-wire-branching.md` — original
-  comparator design (likely missing/named differently; dig the
-  history)
-- `issues/completed/221-iterator-box.md` — original iterator
-  design
+  used by iterator / randomizer / weighted
+- `issues/304-task-dispatch-layer.md` — dispatch layer's branch
+  picker dispatches on `routing.kind`
 
 ## Open questions
 
-- **Function-backed iterator** semantics — (1) or (2) above.
-  Recommendation: (2). Defer to implementation; a simple flag
-  `routing.passthrough: true` could opt out per box if needed.
-- **Output port order** for comparator — currently fixed
-  lt/eq/gt. With unified schema, could `routing.outputs` be
-  user-named for comparators too? E.g., `["small","exact","big"]`.
-  Probably yes — the comparator's "lt/eq/gt" names are
-  conventions, not load-bearing. Editor still defaults to those.
-- **Level C deferred**: a full unified router (one dispatch path,
-  routing rules as data) is the natural next step. Not blocked by
-  this issue; just bigger. Open separately when needed.
+- **Distributor under fan-out**: if a branch wire goes to
+  multiple consumers (fan-out), the "fill level" of that branch
+  is ambiguous. Use the max of the consumers' fills, or the sum,
+  or something else. Probably max — the bottleneck is the
+  slowest consumer.
+- **Multi-band comparator threshold edges**: `x == threshold`
+  goes to which side of the cut? Lean toward "less-than-or-equal"
+  for consistency. Need to nail down before implementation.
+- **Weighted ties**: floating-point weights summing to `1.0`
+  doesn't always discretize cleanly. Compile-time normalization
+  picks an integer scale (1000) and rounds; the last band
+  absorbs any leftover so the ranges always sum to PRECISION.
+
+## Level C example (deferred)
+
+The big follow-on after this issue ships is a fully data-driven
+router: one dispatch path that reads a small rule expression
+from the box JSON and evaluates it. Example shape:
+
+```json
+"routing": {
+  "kind": "rules",
+  "rules": [
+    { "when": "output < 3",                   "to": "small" },
+    { "when": "output >= 3 and output < 7",   "to": "medium" },
+    { "when": "output >= 7",                  "to": "large" }
+  ]
+}
+```
+
+The dispatch layer ships a small expression evaluator (a few
+dozen lines: variables = `output`, `counter`, `fill[i]`;
+operators = comparisons, boolean conjunction, arithmetic). Every
+existing routing kind reduces to a "rules" expression:
+
+- comparator → three rules with `when: output < c / output == c / output > c`
+- iterator → one rule using `counter % N` as the band index
+- randomizer → one rule using `hash(counter) % N`
+- weighted → cumulative-band rules
+
+The benefit: one code path in dispatch instead of five. Custom
+routing without writing a spec callback or modifying user
+functions. The cost: a small evaluator (still entirely in C, no
+spec involvement).
+
+Worth pursuing once Level B has shipped and we have real maps
+using the kinds — at that point the consolidation is concrete
+rather than speculative. Open as a separate issue when ready.

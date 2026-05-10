@@ -17,10 +17,9 @@ task. That action is the one place in the runtime that:
 
 - Reads from and writes to slots
 - Calls `lang_spec->invoke`
-- Manages slot refcounts on consumed inputs
-- Implements iterator routing and self-rescheduling
-- Implements comparator branch routing
-- Spawns successor tasks when its box's outputs feed downstream boxes
+- Picks the output branch per `routing.kind` (issue 233)
+- Pushes the function's output to the picked branch's downstream
+  input slots, triggering downstream task spawns
 
 There is no Lua-level executor in the phase 3 path. `004-executor.lua`
 is replaced wholesale.
@@ -85,30 +84,30 @@ heap; the spec follows the handle if it needs the bytes.
 
 Buffers are freed when the action ends.
 
-### 3. Dispatch by box mode
-The action now branches on the box's mode:
+### 3. Dispatch is uniform across routing kinds
 
-- **Plain call box**: proceed to phase 4 (invoke) and phase 5 (write
-  output) as below.
-- **Comparator box**: a call box that *also* carries a `comparand`
-  field. The function still runs (phase 4 + 5 happen), so the box
-  has a `ref` / `fn` like any other call box. The difference shows
-  up at routing time (phase 7): instead of one output wire, three
-  branches `lt` / `eq` / `gt` are available, and the dispatch layer
-  picks which one to fire by comparing the function's *output value*
-  to `comparand`. The function is unchanged from a plain call box's
-  perspective; it just produced the value the routing layer compares.
-- **Iterator box**: skip invoke entirely. Copy the input value
-  straight into the output slot, and proceed to phase 7. Iterators
-  have no `ref` / `fn`; the routing-by-counter is the entire point
-  of the box.
+Every call box runs its function (phase 4) and pushes the
+function's output (phase 5). The only thing that varies is which
+downstream branch receives the push (phase 5b — the branch-pick).
 
-Iterator semantics live in the dispatch layer (no spec involvement).
-Comparator semantics live partly in the dispatch layer (the
-output-vs-comparand comparison and branch fire) and partly in the
-spec (the function still runs to produce the value being compared).
+Boxes carry an optional `routing` field (issue 233):
+- No `routing`: plain call. Function runs; output fans to all
+  outgoing wires unconditionally.
+- `routing.kind: "comparator"`: function runs; output is
+  compared to `comparand`; only the matching `lt` / `eq` / `gt`
+  branch fires.
+- `routing.kind: "iterator"`: function runs; output is routed to
+  `outputs[slot_read_inc(counter_slot, n_outputs)]`.
+- `routing.kind: "randomizer" / "weighted" / "distributor"`:
+  function runs; output is routed by the kind-specific rule.
 
-### 4. Invoke (plain call AND comparator call boxes)
+The function always runs. There is no "iterator skips invoke"
+case — the iterator differs from a plain call only in how the
+function's output is routed, not in whether the function runs.
+Iterators that want passthrough behavior use an identity function
+(or the editor defaults to one when no `ref`/`fn` is set).
+
+### 4. Invoke (every call box)
 Look up the box's language spec by its `lang` field. Find the
 worker's language handle in `current_worker->handles[lang_idx]`.
 Call `lang->invoke` with:
@@ -140,15 +139,22 @@ heap and stores the handle in `out_buf`.
 
 ### 5. Write output (push to downstream input slots)
 
-Output is a routing event. The action walks the box's outgoing
-connection list and calls `slot_push(downstream.input_slot,
-output_buf, output_size)` for each one — copying the output bytes
-into every consumer's input slot.
+The action picks the branch (or branches) and pushes the
+function's output. Branch picking dispatches on `routing.kind`:
 
-For comparator boxes: only push to the connection whose
-`from_branch` matches the lt/eq/gt result. For iterator boxes:
-only push to the connection whose `from_branch` matches
-`iterator_outputs[counter]`.
+- **No routing field** (plain call): push to every outgoing
+  connection.
+- **comparator**: compare output to `comparand`, push to the
+  matching `lt` / `eq` / `gt` connection only.
+- **iterator**: `idx = slot_read_inc(box->counter_slot,
+  n_outputs)`; push to the connection at branch `out_idx`.
+- **randomizer / weighted / distributor**: kind-specific rule,
+  same shape (compute `idx`, push to that one connection). See
+  issue 233 for the rules.
+
+For routing kinds that derive an order tag (iterator,
+randomizer, weighted), the push carries `tag = idx` so consumers
+downstream of parallel iterators preserve order.
 
 After each push, the spawn-on-input-ready check (issue 302) fires
 on the receiving box. If that push completes its input set, a
@@ -162,11 +168,10 @@ dispatch action goes from phase 5 directly to phase 7.
 
 ### 7. Post-action: nothing for the action itself
 
-Routing happened in phase 5. The iterator counter was already
-incremented at task **spawn** time, not here — the spawn-time
-atomic increment is what makes parallel iterator tasks possible
-(see "Iterator counter and parallel iteration" below). All boxes
-do nothing in phase 7.
+Routing already happened in phase 5. Counter advancement, where
+applicable, happened inside `slot_read_inc` during phase 5 (the
+read-and-increment is the same op). No box-level mutable state
+needs touching here.
 
 ### 8. Return ACT_DONE
 The action completes. The pool decrements the active-task counter
@@ -250,19 +255,25 @@ queue. Both queues pop in tag order independently:
 Pairing by tag = `(A_K, B_K)` for every K, deterministic
 regardless of which iterator's tasks run faster.
 
-## Comparator vs iterator vs plain call
+## Routing kinds (issue 233)
 
-Three box modes drive routing differently:
+Every call box runs its function. Routing kinds differ only in
+how the function's output is dispatched to downstream
+connections:
 
-| Mode        | Output kind   | Invoke spec? | Routing behavior                                                    |
-|-------------|---------------|--------------|---------------------------------------------------------------------|
-| Plain call  | single value  | yes          | fire all outgoing connections                                       |
-| Comparator  | passthrough   | no           | dispatch layer compares input to threshold, fires lt / eq / gt only |
-| Iterator    | passthrough   | no           | fire connection matching counter, increment counter, re-spawn       |
+| `routing.kind`   | Output ports        | Branch picker                                                |
+|------------------|---------------------|--------------------------------------------------------------|
+| (absent / plain) | single port         | fan to all outgoing connections                              |
+| `comparator`     | `lt` / `eq` / `gt`  | compare(output, comparand) → lt/eq/gt                        |
+| `iterator`       | `out_0` … `out_N-1` | `slot_read_inc(counter_slot, N)`                             |
+| `randomizer`     | `out_0` … `out_N-1` | `hash(slot_read_inc(counter_slot, MAX)) % N`                 |
+| `weighted`       | `out_0` … `out_N-1` | cumulative-band lookup against a counter scaled to PRECISION |
+| `distributor`    | `out_0` … `out_N-1` | argmin over downstream slot fill levels                      |
 
-The dispatch action branches on box mode early (phase 3) and
-dispatches into the appropriate helper. Three small functions, not a
-single switch, keep each mode's logic isolated.
+Plain call (no `routing` field) skips the branch picker entirely
+— phase 5 fans the output to all wires. The function still runs
+the same as for any branched call. Issue 233 carries the schema
+and the per-kind UI.
 
 ## Open questions
 
