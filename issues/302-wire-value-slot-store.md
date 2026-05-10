@@ -89,6 +89,31 @@ Fan-in: multiple producers pushing into the same N-cell pop slot
 land in arrival order. The consumer pops FIFO unless the cell
 carries an ordering tag (see "Cell tagging" below).
 
+### Atomic-counter slot mode
+
+A slot allocated with `SLOT_ATOMIC_COUNTER` carries a single
+4-byte unsigned integer cell, read via a special op:
+
+```c
+uint32_t slot_read_inc(slot_store_t *s, slot_id_t id, uint32_t mod);
+// Returns the current value mod `mod`, then atomically increments
+// the underlying counter. Concurrent readers each get a distinct
+// value. Counter wraps at 2^32; mod handles N-branch routing.
+```
+
+Used for iterator counters (issue 304): the iterator box has an
+auto-allocated `SLOT_ATOMIC_COUNTER` slot at load time; the
+dispatch action calls `slot_read_inc(counter_slot, n_branches)`
+to pick its output branch. Multiple iterator tasks can read
+concurrently from the same counter slot in parallel — each gets a
+unique routing index — without any per-box mutable state and
+without the serial dependency of a self-push counter.
+
+The slot's "cell" is just an `atomic_uint32_t`. No push is ever
+performed; reads do the work. From the dispatch action's
+perspective it's just another slot; from the slot store's
+perspective the read op is special-cased.
+
 ### Cell tagging (for parallel-iterator ordering)
 
 A cell can optionally carry a 4-byte ordering tag alongside its
@@ -206,16 +231,23 @@ ring grows — see "Allocation strategy" below.
 ## C API surface
 
 ```c
-slot_id_t slot_alloc (slot_store_t *s, int cell_capacity, int n_cells, int flags);
-void      slot_push  (slot_store_t *s, slot_id_t id, const void *data, int size, uint32_t tag);
-int       slot_peek  (slot_store_t *s, slot_id_t id, void *buf, int buf_size); // 1-cell: read without draining
-int       slot_pop   (slot_store_t *s, slot_id_t id, void *buf, int buf_size); // N-cell: drain head (or lowest-tag)
-int       slot_has_value(slot_store_t *s, slot_id_t id);                       // for spawn-rule check
+slot_id_t slot_alloc       (slot_store_t *s, int cell_capacity, int n_cells, int flags);
+void      slot_push        (slot_store_t *s, slot_id_t id, const void *data, int size, uint32_t tag);
+int       slot_peek        (slot_store_t *s, slot_id_t id, void *buf, int buf_size); // 1-cell: read without draining
+int       slot_pop         (slot_store_t *s, slot_id_t id, void *buf, int buf_size); // N-cell: drain head (or lowest-tag)
+uint32_t  slot_read_inc    (slot_store_t *s, slot_id_t id, uint32_t mod);            // SLOT_ATOMIC_COUNTER only
+int       slot_has_value   (slot_store_t *s, slot_id_t id);                          // for spawn-rule check
 ```
 
-Flags include `SLOT_TAGGED` (cells carry ordering tags; pop returns
-lowest-tag cell). Push always takes a `tag` argument; untagged
-slots ignore it (or treat 0 as "no order").
+Flags include:
+- `SLOT_TAGGED`: cells carry ordering tags; `slot_pop` returns the
+  lowest-tag cell.
+- `SLOT_ATOMIC_COUNTER`: slot holds a single atomic uint32; reads
+  via `slot_read_inc` only. `slot_push` / `slot_peek` / `slot_pop`
+  are not valid on atomic-counter slots.
+
+Push always takes a `tag` argument; untagged slots ignore it (or
+treat 0 as "no order").
 
 1-cell peek slot use: producer `push` once at startup (literal) or
 when its single invocation completes (single-push wire). All
@@ -240,7 +272,8 @@ box_runtime_state {
     slot_id_t  *input_slots;     // one per input port (set at load)
     int        *port_modes;      // PEEK or POP, per input port
     int         n_inputs;
-    int         counter;         // iterator only; 0 otherwise
+    slot_id_t   counter_slot;    // iterator only: SLOT_ATOMIC_COUNTER slot;
+                                 // 0 / unused otherwise
 };
 ```
 

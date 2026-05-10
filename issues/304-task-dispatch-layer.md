@@ -28,31 +28,33 @@ is replaced wholesale.
 ## Task struct
 
 A task is one ephemeral invocation of a box. Its struct carries
-just enough to point the action at the box and the snapshot of its
-counter at spawn time:
+just the box ID:
 
 ```c
 typedef struct {
     int  box_id;          // index into the graph's box array
-    int  counter;         // iterator only; snapshot at spawn time
 } dispatch_task_t;
 ```
 
-There is no `input_slots` array on the task — the box's input
-slots are durable per-box state (see issue 302). The action looks
-up the input and output slots through `box_runtime_state[box_id]`.
+There is no per-task counter. Iterator counter state lives in a
+`SLOT_ATOMIC_COUNTER` slot owned by the box (see issue 302); the
+action reads and atomically increments it via `slot_read_inc`
+when it needs the routing index.
 
-There is no `output_slot` either — output is a routing event, not
-a stored value. When the action finishes, it pushes copies of the
-return value into the input slots of every downstream box wired
-to this output (and only the matching branch for comparators and
-iterators).
+There is no `input_slots` or `output_slot` array on the task —
+the box's input slots are durable per-box state (see issue 302).
+The action looks them up through `box_runtime_state[box_id]`.
+
+Output is a routing event, not a stored value. When the action
+finishes, it pushes copies of the return value into the input
+slots of every downstream box wired to this output (or only the
+matching branch for comparators and iterators).
 
 Tasks are spawned by the dispatch layer's "spawn on input ready"
 rule (issue 302). Each spawn allocates a fresh `dispatch_task_t`
-on the pool's task allocator, pre-populated with the box ID and
-counter value. The action's first read of the input slots is what
-drains them — pop one cell per input port.
+on the pool's task allocator, pre-populated with the box ID. The
+action's first read of the input slots is what drains them — pop
+or peek one cell per input port, per the port's mode.
 
 ## The dispatch action
 
@@ -186,22 +188,25 @@ spawn their first task at startup and increment from there.
 
 ## Iterator counter and parallel iteration
 
-The iterator's per-box counter is read and incremented **at task
-spawn time**, atomically:
+The iterator's counter lives in a `SLOT_ATOMIC_COUNTER` slot
+allocated for the box at graph load time (issue 302). The
+dispatch action reads and increments it atomically, mid-action:
 
 ```c
-int counter_for_this_task = atomic_fetch_add(&box->counter, 1) % n_iter_outputs;
-spawn(task{ box_id, counter_for_this_task });
+uint32_t branch_idx = slot_read_inc(box->counter_slot, n_iter_outputs);
+slot_push(downstream[branch_idx].input_slot, output_buf, output_size,
+          /* tag = */ branch_idx);
 ```
 
-The counter is snapshotted into the task struct. The atomic
-fetch-add means concurrent spawns get distinct counter values, so
-**iterator tasks can run in parallel** on different workers — each
-has its own counter, picks its own output branch independently.
-Sibling iterator tasks don't share runtime state.
+`slot_read_inc` returns the current counter value `mod
+n_iter_outputs` and atomically advances the underlying counter.
+Concurrent iterator tasks on different workers each call
+`slot_read_inc` independently and each get a unique value —
+**iterator tasks parallelize across workers**, picking distinct
+branches without coordination.
 
-The serial dependency is reduced to one atomic op per spawn (cheap)
-rather than a serialized task chain.
+No box-side mutable state, no per-task counter snapshot. The
+counter is just data in a slot the dispatch layer reads.
 
 ## Cross-iterator pairing under parallel iteration
 
@@ -211,11 +216,11 @@ before task 5 if 6 happened to land on a faster worker. FIFO pop
 at C would consume them out of iteration order.
 
 The fix is **counter-tagged pushes**. Each iterator push (in phase
-5) carries the counter value snapshotted at spawn:
+5) carries the counter value the action read for this invocation:
 
 ```c
 slot_push(downstream.input_slot, output_buf, output_size,
-          /* tag = */ task->counter);
+          /* tag = */ branch_idx_or_counter_snapshot);
 ```
 
 Consumer slots downstream of iterators are allocated with the
