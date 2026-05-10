@@ -10,42 +10,72 @@ accessibility. Each value vanishes once the pipe is drained.
 
 ## Concept
 
-### Slots belong to tasks, not wires
-A **slot** is the memory region that holds a task's output. Slots are
-created when tasks are created. A box that runs once produces one slot;
-a box that runs ten times (an iterator) produces ten slots, one per
-invocation. Slots live in process heap memory, accessible to every
-worker thread in the process. Cross-process visibility is not required:
-language specs (issue 303) only ever receive byte pointers — never
-raw slot addresses — so out-of-process specs (Bash) work via sockets,
-not shared memory.
+### Slots belong to input ports, not tasks
 
-A **wire** is the relationship between two tasks: it says "task B's input
-N reads from task A's output M." Wires hold references to slots. They
-are the timing mechanism — a task does not become ready until every
-input wire reports its source slot is filled. They are also the lifetime
-mechanism — a slot is freed only after every wire that referenced it has
-released it.
+Each box has **one slot per input port**, allocated when the graph
+loads and persisting for the life of the run. A wire is a routing
+declaration: "the producer's output port pushes a copy of its value
+into this consumer's named input slot." The producer never owns a
+slot — its output is a routing event, not a stored value.
 
-The wire is the arbiter. The slot is just memory.
+When a producer fires, the dispatch layer copies the value into
+every downstream input slot wired to that output. Fan-out is N
+pushes (one per consumer); fan-in is N producers all pushing into
+the same consumer's slot. Both behaviors fall out of the same
+push-into-input-slot mechanic.
+
+Slots live in process heap memory, accessible to every worker
+thread. Cross-process visibility is not required: language specs
+(issue 303) only ever receive byte pointers — never raw slot
+addresses — so out-of-process specs (Bash) work via sockets, not
+shared memory.
+
+### Tasks are ephemeral; box state is durable
+
+A **task** is one invocation: pop one value from each of the box's
+input slots, run the box's logic, push the output to every
+downstream input slot. Tasks have no persistent identity — they're
+just stack frames on workers. Tasks are spawned dynamically by the
+dispatch layer when a box's input set is ready (every input slot
+holds at least one value).
+
+The **box** is the durable thing: it owns its input port slots, any
+counter state (for iterators), its language spec handle, and so
+on. The box exists from graph load until run end. Tasks come and
+go.
+
+This is uniform across iterator and non-iterator boxes. Both run N
+times where N depends on how many invocations their inputs supply
+(possibly 1, possibly thousands). The difference is just what the
+task does:
+- **Plain call task**: invoke spec on the popped values, push the
+  return to outputs.
+- **Iterator task**: read box's counter, route the popped value to
+  output port `iterator_outputs[counter]`, increment counter mod N.
+  No spec invocation.
+- **Comparator task**: invoke spec on the popped values, compare
+  the return against `comparand`, route to the matching `lt` /
+  `eq` / `gt` branch.
 
 ### All slots are ring buffers
-There is one slot type. It is a ring buffer of `n_cells` cells, each
-of `cell_capacity` bytes. The `n_cells = 1` case is the trivial ring
-holding a single value; the `n_cells = N` case is a queue.
 
-A single-output box allocates a 1-cell ring. The producer pushes once,
-consumers read the head. An iterator that produces 10 outputs over its
-lifetime allocates 10 separate 1-cell rings (one per invocation, per
-the box-not-wire-is-the-slot model below).
+There is one slot type. It is a ring buffer of `n_cells` cells,
+each of `cell_capacity` bytes. Every input port has a ring buffer
+of compile-time-determined size:
 
-A box with a queued input allocates a multi-cell ring as the input's
-holding pen — many upstream wires push into it, the consumer drains it
-in arrival order.
+- **Default size**: enough cells to absorb the maximum number of
+  pushes that can happen before the box can drain. For a port fed
+  by a single non-iterator producer, that's 1. For a port fed by
+  an iterator, it's the iterator's worst-case backlog (statically
+  inferred or capped at a high default like 64 with growth).
+- **Upper bound**: lists grow if backlog exceeds the pre-allocated
+  size, so n_cells isn't a hard cap on correctness — only on
+  pre-allocation efficiency.
 
-Same data structure, same API, same per-slot lock. The dispatch layer
-parameterizes `n_cells` based on whether the slot is being used for
-fan-out or fan-in.
+The producer pushes one cell per fan-out path; the consumer pops
+one cell per invocation. Fan-in is multiple producers pushing into
+the same input slot in arrival order; the consumer pops in FIFO
+order.
 
 ### Asynchrony
 The store is fully asynchronous. Slots are allocated, filled, read, and
@@ -87,35 +117,31 @@ Writes to a cell complete with a memory barrier before `tail` is
 advanced, so a reader that observes `head < tail` is guaranteed to
 see the complete value at the head cell.
 
-## Reference counting protocol
+## Lifetime and end-of-stream
 
-Every party that may still touch a slot holds a reference. The slot is
-freed when the count reaches zero. The references themselves are how
-we track liveness — there is no separate "is this producer / consumer
-still alive" mechanism.
+Slots are owned by the box that holds the input port. They live
+from graph load until run end. There is no per-slot reference
+counting — the slot is freed when the run ends, alongside its
+owning box.
 
-### Single-output (1-cell) slot
-1. Task allocates its output slot with `refcount = 0`.
-2. For each fan-out wire reading from the slot, `slot_ref` is called.
-   The wire holds that reference until its consumer is done reading.
-3. After the consumer reads (peek), it calls `slot_unref`.
-4. When refcount reaches zero, the unrefing task frees the slot.
+### End-of-stream detection (replacing producer refcounts)
 
-### Queued (N-cell) slot
-The consumer's input queue. Producers and the consumer all hold refs:
-1. The consumer task allocates the queue slot with one ref for itself.
-2. Each producer that may push into the queue increments the refcount
-   when it is constructed; the ref is dropped when that producer's
-   box function ends.
-3. The consumer drops its ref when its own box function ends (i.e.
-   when the iterator stops re-spawning because no more inputs are
-   coming).
-4. When the last ref drops, the queue is freed.
+Each slot tracks the set of upstream producer boxes that may still
+push into it. When a producer's "no more pushes" condition fires
+— either it has finished all its invocations, or it transitively
+depends only on producers that have finished — the dispatch layer
+removes that producer from the slot's producer set.
 
-The producer-side ref is what makes "no more inputs are coming"
-detectable: when the queue's refcount equals 1 (only the consumer
-holds it) and the queue is empty, no upstream task can push again,
-so the iterator's natural end-of-stream condition fires.
+When the producer set is empty AND the slot's queue is drained,
+the consumer box has reached end-of-stream on that port. For an
+iterator, this is what tells the iterator to stop re-spawning. For
+a non-iterator, this means no further invocations are coming;
+combined with the same condition on its other input ports, the
+box itself is done.
+
+This replaces the per-slot refcount machinery. The "are upstreams
+still alive" check is done at the producer-set level, which is
+cheaper and avoids the contention of refcount churn on hot paths.
 
 ### Wait list
 Each slot also owns a wait list — pointers to tasks parked on the
@@ -138,18 +164,23 @@ per-size-class free lists in the allocator have their own locks.
 
 ## Slot creation
 
-Slot creation happens inside the dispatch layer at task submission. The
-caller specifies the cell capacity (bytes per value) and the ring size
-(number of cells, 1 for single-value):
+Slot creation happens at **graph load**, not per task. The graph
+loader walks every box, allocates one ring buffer per input port,
+and parks the slot on the box's per-port slot table. The dispatch
+layer never allocates new slots at runtime in the steady state —
+all slots that will ever exist are created up front.
 
 ```c
 slot_id_t slot_alloc(slot_store_t *store, int cell_capacity, int n_cells);
 ```
 
-The slot is created with `refcount = 0`, `head = tail = 0`. The
-dispatch layer then increments the refcount once per consumer (one ref
-per fan-out wire for a 1-cell slot; one ref for the consumer task on a
-queued-input slot) before the task is exposed.
+`cell_capacity` and `n_cells` come from compile-time analysis of
+the graph. Boxes downstream of iterators get larger `n_cells` to
+absorb the iterator's worst-case backlog.
+
+If a slot's pre-allocated `n_cells` proves too small at runtime
+(producer outpaces consumer beyond the pre-allocation), the slot's
+ring grows — see "Allocation strategy" below.
 
 ## C API surface
 
@@ -175,22 +206,39 @@ slot is freed.
 
 ## Submission timing
 
-The dispatch layer builds the task struct as soon as the graph asks
-for it — output slots allocated, all known data filled in, input wire
-references attached. It is then submitted directly to the pool. The
-pool's existing block-and-wake machinery handles the rest:
+Tasks are spawned dynamically in response to slot pushes, not at
+graph-load time. Each box has a small per-box state used by the
+dispatch layer to decide when to spawn:
 
-- If any input slots are unfilled at the moment of submission, the
-  dispatch action immediately `ACT_BLOCK`s on the first unfilled
-  input. The pool parks the task on that slot's wait list.
-- When the upstream producer pushes, it walks the wait list and wakes
-  the parked tasks. The action re-runs from the top, checks the next
-  input, blocks again if needed.
-- When all inputs are present, the action proceeds to invoke the box.
+```
+box_runtime_state {
+    slot_id_t  *input_slots;     // one per input port (set at load)
+    int         n_inputs;
+    int         pending_invocations;  // counter; >0 means a task is queued
+    int         counter;         // iterator only; 0 otherwise
+};
+```
 
-There is no separate "blocked tasks" set held by the dispatch layer.
-The pool is the only thing that tracks blocked tasks. This avoids
-duplicating the wait-list machinery the pool already has.
+The spawning rule:
+- When a producer pushes to one of a box's input slots, the
+  dispatch layer checks **does every input slot now hold at least
+  one value?** If yes, spawn a task. The task pops one cell from
+  each input slot when it runs.
+- If multiple input slots get pushed concurrently, one task spawns
+  per "all inputs available" event — the pending_invocations
+  counter prevents over-spawning.
+
+This makes the pool's queue the rate buffer: pushes accumulate
+(possibly multiple per slot), and one task per accumulated set
+gets spawned in arrival order.
+
+Tasks never block on slots. They're spawned after inputs are
+ready, run to completion, and disappear. Blocking-and-waking
+machinery is unnecessary — the spawn-on-arrival rule is the
+synchronization primitive.
+
+The pool's queue is the only queue. There is no separate "blocked
+tasks" structure.
 
 ## Allocation strategy: size-class free lists with coalescing fallback
 

@@ -192,6 +192,18 @@ wire-level fast path in this issue is the immediate, smaller win.
   bytes; the format negotiation is at the spec layer, not the
   store
 
+## Implementation note: ask the user about type-annotated cross-language encodings
+
+Before implementing this issue, the implementer must ask the user
+to decide on **type-annotated wire encodings** for cross-language
+hops — primitives go raw bytes (4-byte int as 4 bytes, not as the
+JSON string `"42"`), strings go length-prefixed UTF-8, structured
+types go JSON. That decision affects the spec interface (whether
+`json_to_native` is enough or whether we need a `decode_wire(type,
+bytes)` shape) and the wire-format byte layout. Don't proceed with
+the implementation without explicit user direction on this; the
+two designs aren't trivially interchangeable later.
+
 ## Open questions
 
 - **Whether a spec must implement `invoke_json`**: leaning yes, so

@@ -27,23 +27,32 @@ is replaced wholesale.
 
 ## Task struct
 
-The dispatch layer's per-task state lives in a `dispatch_task_t`
-allocated when the task is submitted to the pool:
+A task is one ephemeral invocation of a box. Its struct carries
+just enough to point the action at the box and the snapshot of its
+counter at spawn time:
 
 ```c
 typedef struct {
-    int           box_id;          // index into the graph's box array
-    int           n_inputs;
-    slot_id_t    *input_slots;     // array of n_inputs slot IDs
-    slot_id_t     output_slot;     // single output slot
-    int           counter;         // iterator only; ignored otherwise
+    int  box_id;          // index into the graph's box array
+    int  counter;         // iterator only; snapshot at spawn time
 } dispatch_task_t;
 ```
 
-The pool passes this pointer to the action via `task_ctx_t.args`.
-Multiple successor invocations of an iterator produce multiple
-`dispatch_task_t`s (with new counter values), each with its own output
-slot.
+There is no `input_slots` array on the task — the box's input
+slots are durable per-box state (see issue 302). The action looks
+up the input and output slots through `box_runtime_state[box_id]`.
+
+There is no `output_slot` either — output is a routing event, not
+a stored value. When the action finishes, it pushes copies of the
+return value into the input slots of every downstream box wired
+to this output (and only the matching branch for comparators and
+iterators).
+
+Tasks are spawned by the dispatch layer's "spawn on input ready"
+rule (issue 302). Each spawn allocates a fresh `dispatch_task_t`
+on the pool's task allocator, pre-populated with the box ID and
+counter value. The action's first read of the input slots is what
+drains them — pop one cell per input port.
 
 ## The dispatch action
 
@@ -53,33 +62,23 @@ action_result_t dispatch_action(task_ctx_t *ctx, void *arg);
 
 Phases, in order:
 
-### 1. Check inputs
-Walk `input_slots`. For each, ask the slot store whether a value is
-available (`tail > head`, cell filled).
+### 1. Read inputs into byte buffers
 
-If any input is unavailable, the dispatch action returns `ACT_BLOCK`
-with `ctx->block_on` set to a wait handle for that slot. The pool
-parks the task on **the slot's** wait list — not on a wire's list and
-not on the upstream box's list. The slot owns the wait list because
-the slot is the thing that gets filled; whoever pushes into the slot
-walks its wait list and wakes everyone parked there. When the action
-is re-run, it starts again at phase 1, checks the next input, blocks
-again if needed.
+Tasks are spawned only when every input port has at least one
+value (issue 302's spawn-on-input-ready rule), so the action does
+not need to check or block — input availability is the spawn
+precondition.
 
-### 2. Read inputs into byte buffers
-For each input:
-- Single-value slot (`n_cells = 1`): `slot_peek` into the input
-  buffer. The cell is not drained — fan-out consumers all peek.
-- Queued slot (`n_cells > 1`): `slot_pop` into the input buffer. The
-  head cell is drained.
+For each input port: `slot_pop` from the box's input slot into a
+heap-allocated buffer sized to the slot's `cell_capacity`. Pop
+drains one cell from the front of the ring; subsequent values
+behind it are still queued and will spawn further tasks.
 
-Buffer ownership: the action allocates the input buffer on the heap,
-sized exactly to the slot's `cell_capacity`. There is no fixed cap —
-a slot whose cell holds 4 KB gets a 4 KB buffer, a slot whose cell
-points into the large-value heap (variable-size payloads, issue 302)
-gets enough buffer to hold the handle, and the spec is given the
-handle to follow if it needs the bytes. The buffer is freed when the
-action ends.
+Variable-size payloads work via the large-value heap (issue 302):
+the popped cell holds a `{size, offset}` handle that points into
+the heap; the spec follows the handle if it needs the bytes.
+
+Buffers are freed when the action ends.
 
 ### 3. Dispatch by box mode
 The action now branches on the box's mode:
@@ -134,52 +133,55 @@ declared maximum output size. If the box's output is variable-size
 (uses the large-value heap, issue 302), the spec writes into that
 heap and stores the handle in `out_buf`.
 
-### 5. Write output
-`slot_push(output_slot, output_buf, output_size)`. The slot store
-performs the memory barrier and walks the slot's wait list to wake
-any consumers parked on this slot.
+### 5. Write output (push to downstream input slots)
 
-### 6. Unref consumed inputs
-For each single-value input slot (`n_cells = 1`), the dispatch action
-calls `slot_unref` after peeking. Each fan-out wire holds one ref; as
-each consumer reads and unrefs, the count decrements. When the last
-consumer unrefs, the slot is freed.
+Output is a routing event. The action walks the box's outgoing
+connection list and calls `slot_push(downstream.input_slot,
+output_buf, output_size)` for each one — copying the output bytes
+into every consumer's input slot.
 
-Queued input slots are different. They are not unref'd at the end of
-each invocation. The same queue persists across multiple invocations
-of the same iterator: an iterator pops one value, runs, re-spawns
-itself with a new dispatch_task_t, and the new task uses the **same**
-queued-input slot to pop the next value. The slot stays alive
-because:
-- Each upstream producer holds a ref while the producer is alive.
-- The consumer (iterator) holds a ref while it is still consuming.
-- The slot is freed when all upstream producers have ended (their
-  refs dropped) and the iterator has ended (its ref dropped).
+For comparator boxes: only push to the connection whose
+`from_branch` matches the lt/eq/gt result. For iterator boxes:
+only push to the connection whose `from_branch` matches
+`iterator_outputs[counter]`.
 
-So the slot's lifetime ≠ one invocation; it equals the duration of
-the iterator's whole consumption cycle.
+After each push, the spawn-on-input-ready check (issue 302) fires
+on the receiving box. If that push completes its input set, a
+fresh task spawns for the consumer.
 
-### 7. Post-action: routing
-Three cases, dispatched by box mode:
+### 6. End-of-stream propagation
 
-- **Plain call**: fire all outgoing connections unconditionally.
-- **Comparator**: the dispatch layer compares the *function's
-  output value* (just written to the output slot in phase 5) to
-  the box's `comparand`, producing a branch tag (`lt` / `eq` /
-  `gt`). Fire only the connection whose `from_branch` matches.
-  The output slot carries the function's actual output — downstream
-  boxes on the matching branch see the value the function returned.
-- **Iterator**: fire only the connection whose `from_branch` matches
-  `iterator_outputs[counter]`. Then increment `counter` modulo
-  `n_iter_outputs` and spawn a successor `dispatch_task_t` with the
-  same input slot pointers and the new counter value. The successor
-  immediately blocks on the input queue if empty; otherwise it picks
-  up the next queued value on its first wake.
+Slots are durable for the life of the run; there is no per-task
+unref step. Instead, the action checks whether the **producer set**
+on each pushed-to slot has changed: if this push was the last
+push from a producer that's now finished, the producer is removed
+from each of that consumer's input slots' producer sets. When a
+consumer's producer set goes empty AND its slot is drained, the
+consumer is at end-of-stream on that port.
 
-"Firing" a connection means submitting a `dispatch_task_t` for the
-downstream box, with `input_slots[i]` set to the upstream's
-`output_slot` for the wired input position. Refcount on the upstream
-slot is incremented per fan-out wire at firing time.
+For an iterator, "end-of-stream on the input" is what tells the
+dispatch layer to stop spawning successor tasks. For a non-iterator
+that's done with all its expected invocations, the same condition
+applies — no further pushes will arrive, no more tasks spawn.
+
+### 7. Post-action: counter advancement (iterators only)
+
+Routing already happened in phase 5 — pushes targeted the right
+downstream input slots based on the box's mode. The remaining
+post-action work is iterator-specific:
+
+- **Iterator**: increment `box_runtime_state[box_id].counter`
+  modulo `n_iter_outputs`. The next iterator task spawned for this
+  box (when its input slot has another value) will read the
+  updated counter value from the box state.
+
+There is no "successor task" spawned by the iterator itself. The
+spawn-on-input-ready rule in issue 302 handles iterator
+re-invocation the same way it handles every other box: the
+iterator's input slot has further values queued, the spawn rule
+fires again automatically.
+
+Plain call and comparator boxes do nothing in phase 7.
 
 ### 8. Return ACT_DONE
 The action completes. The pool decrements the active-task counter
@@ -188,11 +190,36 @@ the run ends.
 
 ## Initial submission
 
-The pool runner walks the graph at startup to find entry-point boxes
-— boxes with no inputs, or with inputs that come only from `data`
-boxes (literal values). It builds and submits a `dispatch_task_t` per
-entry box. From that point, all further submissions come from
-post-action firing.
+At startup, the pool runner walks the graph and pushes the
+literal-input values (from `value` fields on input ports) directly
+into the corresponding input slots. Boxes whose input set becomes
+fully populated by literals — entry-point boxes — immediately
+satisfy the spawn-on-input-ready condition, and their first task
+gets queued. From there, every subsequent task spawn follows from
+the regular phase-5 push → spawn-check chain.
+
+Iterator counter state starts at 0; literal-only entry iterators
+spawn their first task at startup and increment from there.
+
+## Cross-iterator pairing
+
+When a non-iterator consumer C has two input ports wired from two
+different iterators A and B, each input port has its own queue.
+Tasks for C spawn FIFO: task 1 pops the first value from each
+queue; task 2 pops the second from each; etc.
+
+Pairing is deterministic **as long as A and B push in deterministic
+order**. In a single-threaded run that's automatic. In a parallel
+run where A and B run on different workers and push concurrently,
+the pairing depends on push ordering — which is non-deterministic
+across runs.
+
+For phase 3, FIFO pairing is the policy. If a workload needs
+strict pairing (a_i with b_i regardless of push race), the right
+fix is per-invocation index tags on the values: each iterator
+push tags its value with its counter, the consumer's queues sort
+by tag before popping. That's a follow-on issue (no number yet),
+opened only if a real workload needs it.
 
 ## Comparator vs iterator vs plain call
 
