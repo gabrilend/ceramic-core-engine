@@ -23,6 +23,7 @@ and update this file.
 | 309 | build system & Makefile orchestration                       | designed |
 | 310 | priority queue: wired in, no-op behaviorally                | designed |
 | 311 | integration tests & run output (`last-run.jsonl`)           | designed |
+| 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | designed |
 
 ## Phase goal checklist
 
