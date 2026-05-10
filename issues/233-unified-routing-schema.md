@@ -27,12 +27,35 @@ features. They aren't.
 just pulls multiple wires out of a single output port — fan-out
 already works on plain call boxes. No routing decision needed.)
 
+### Branch-level fan-out
+
+Fan-out applies on a per-branch basis even for branched boxes. If
+the comparator's `lt` port has three wires going to three
+different consumers, then each time the routing decision picks
+`lt`, all three wires receive the value (a copy is pushed into
+each consumer's input slot). On a subsequent invocation that
+picks `eq`, only the wires hanging off the `eq` port fire.
+
+Each branch port acts like its own little plain-call output port
+when it fires. The routing decision picks **which branch** fires;
+the branch's own fan-out picks **which consumers** receive the
+value when it does.
+
 ## Intended behavior
 
-A single `routing` field on the box, with kind-specific
-parameters:
+Every call box carries a `routing` field. No implicit defaulting:
+plain boxes have `routing: { "kind": "plain" }`, the same way
+branched boxes carry their own kind. Explicit and consistent —
+no "what if I forget the routing field" surprises at validation
+time.
 
 ```json
+{ "id": "plain-call",
+  "kind": "call",
+  "ref": "...", "fn": "...",
+  "inputs": [...],
+  "routing": { "kind": "plain" } }
+
 { "id": "score-router",
   "kind": "call",
   "ref": "src/score.lua", "fn": "score",
@@ -43,21 +66,37 @@ parameters:
   "kind": "call",
   "ref": "src/dispatch_msg.lua", "fn": "dispatch_msg",
   "routing": { "kind": "iterator", "n_outputs": 3 } }
-
-{ "id": "plain-call",
-  "kind": "call",
-  "ref": "...", "fn": "...",
-  "inputs": [...] }
-  // no routing field — single output wire, fires unconditionally
 ```
 
-Absence of `routing` means plain call: one output wire, fires
-unconditionally on every invocation. Presence means branched
-output, with `routing.kind` deciding which branch fires per call.
+Routing kinds defined in this design: `plain`, `comparator`,
+`iterator`, `randomizer`, `weighted`, `distributor`. Of those,
+**this issue ships `plain`, `comparator`, and `iterator` only**
+— that's the surface area already in production, just unified
+under one schema. The other three (`randomizer`, `weighted`,
+`distributor`) are designed below for context but split into
+their own follow-on issue files when this one is implemented, so
+each ships independently.
+
+The `routing.kind` field picks which dispatch-layer rule decides
+the branch. Schema validates the kind value and the kind-specific
+parameters together.
 
 **The function always runs**, regardless of routing kind. The
 function produces the value; routing decides where the value
 goes.
+
+### kind="plain"
+
+```json
+"routing": { "kind": "plain" }
+```
+
+One output port. The function's output value fans to every wire
+attached to that port unconditionally. No routing decision; the
+dispatch layer skips the branch picker and pushes to all wires.
+
+This is the default for new boxes; the editor sets it
+automatically when a box is created.
 
 ### kind="comparator"
 
@@ -89,11 +128,22 @@ Five output ports get named by the threshold positions —
 3-branch lt/eq/gt (with `eq` being "exactly 4"), so the legacy
 shape is one configuration of the new one.
 
-Equality cases (`x == 3` exactly) fall to the lower band by
-convention; an explicit `eq` band could be added per threshold
-if needed.
+**Equality bands via doubled thresholds.** Encode the current
+`eq` semantics by repeating a threshold value: `thresholds: [3, 3]`
+means "less than 3, exactly 3, greater than 3" — three bands, the
+middle one being a zero-width point that fires only on exact
+equality. With `thresholds: [3, 3, 7, 7]` you get five bands:
+`< 3`, `== 3`, `3 < x < 7`, `== 7`, `> 7`. The editor sees a
+list of thresholds; the runtime sees doubled values as
+"point bands."
 
-Defer the schema specifics — the existing 3-branch case ships
+This means the legacy 3-branch lt/eq/gt is exactly
+`thresholds: [c, c]` — the eq case is just a zero-width band at
+the comparand. Behind the scenes the editor can present the
+single-comparand UI but store `[c, c]` so the dispatch layer has
+one consistent representation.
+
+Defer the schema specifics — the single-comparand case ships
 first; multi-band is a follow-on once we have a use case that
 actually needs more than three.
 
@@ -157,6 +207,23 @@ uint32_t branch = lookup_band(r, cumulative_table);
 
 Same counter-slot machinery as iterator and randomizer; the
 difference is the mapping from counter to branch.
+
+**Inspector UI for weighted routing**: a horizontal slider with
+N knobs dividing it into N+1 segments — except really N segments
+since each knob is the boundary between adjacent segments. A
+wider segment means a larger fraction of invocations flow down
+that path. Below the slider, one line per output port:
+
+```
+out_0    [▓▓▓▓▓▓▓▓░░░░░░░░░░░░]    80%
+out_1    [░░░░░░░░░░░░░░░░▓▓▓▓]    20%
+```
+
+Each line shows the output port name on the left, a visual band
+in the middle indicating its slice of the distribution, and the
+percentage on the right. Adjusting the slider knobs updates the
+percentages live; the percentages are also editable directly
+(typing `30` into the right column shifts the relevant knob).
 
 ### kind="distributor" (load-aware)
 
@@ -229,43 +296,51 @@ writing the script.
 ## Inspector UI
 
 A `routing` selector in the inspector replaces the separate
-`compare` toggle and `iterator` toggle:
+`compare` toggle and `iterator` toggle. The dropdown's options
+expand as new routing kinds ship:
 
 ```
-mode:    [plain ▾ | comparator | iterator | randomizer | weighted | distributor]
+mode:    [plain ▾ | comparator | iterator]
 ```
 
-Per-kind controls below the dropdown:
+Per-kind controls below the dropdown — for the kinds shipped in
+this issue:
 - **plain**: nothing extra.
 - **comparator**: numeric `comparand` input. (Multi-band UI is
-  the brainstorm above; ships single-threshold first.)
+  the brainstorm above, lands in its own issue.)
 - **iterator**: `n_outputs` integer input.
-- **randomizer**: `n_outputs` integer input.
-- **weighted**: editable list of weight values (one per output);
-  N derived from list length.
-- **distributor**: `n_outputs` integer input.
 
 Output ports re-render to match the routing kind: 1 dot for
-plain, 3 fixed dots (lt/eq/gt) for comparator, N dots for the
-counter-based kinds. Port names follow the routing kind's
-convention; not user-renameable (issue 224's read-only-port-name
-rule).
+plain, 3 fixed dots (lt/eq/gt) for comparator, N dots for
+iterator. Port names follow the routing kind's convention; not
+user-renameable (issue 224's read-only-port-name rule).
 
 ## Suggested implementation sequence
 
-1. `src/001-schema.lua`: accept `routing` field; reject legacy
-   `comparand` and `iterator_outputs` shapes.
+This issue ships `plain`, `comparator`, and `iterator` only —
+the existing surface area unified under one schema. The other
+kinds get follow-on issue files (one per kind: randomizer,
+weighted, distributor, multi-band-comparator) opened when this
+issue is implemented.
+
+1. `src/001-schema.lua`: accept `routing` field with `kind` ∈
+   `{plain, comparator, iterator}`; reject legacy `comparand` /
+   `iterator_outputs`. Schema also rejects unknown `kind` values
+   so future kinds gate on their own implementation.
 2. `assets/js/004-inspector.js`: mode dropdown replacing the two
-   toggles; per-kind controls.
+   toggles; per-kind controls (none for plain, `comparand` input
+   for comparator, `n_outputs` for iterator).
 3. `assets/js/002-boxes.js`: render branches based on
    `routing.kind`.
 4. `assets/js/006-wires.js`: connection's `from_branch` matches
    the routing kind's port naming.
 5. Phase 3 dispatch (issue 304): branch on `routing.kind` for the
-   branch-selection step. Five rule paths (one per kind shipped),
-   plus the no-routing-field plain path.
+   branch-selection step. Three rule paths shipped here; new
+   kinds add their own paths in their own issues.
 
-Hand-migrate existing maps before merging.
+Hand-migrate existing maps before merging. Open the follow-on
+issues for randomizer / weighted / distributor / multi-band
+comparator at merge time so their designs aren't lost.
 
 ## Why now
 
