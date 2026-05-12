@@ -1,0 +1,20 @@
+{
+  "id": "classify",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/classify.lua",
+  "fn": "score",
+  "routing": { "kind": "comparator", "comparand": 5 },
+  "inputs": [
+    { "name": "value", "type": "string" }
+  ],
+  "connections": [
+    { "from_box": "classify", "from_branch": "lt",
+      "to_box": "small", "to_input": "v" },
+    { "from_box": "classify", "from_branch": "eq",
+      "to_box": "exact", "to_input": "v" },
+    { "from_box": "classify", "from_branch": "gt",
+      "to_box": "big", "to_input": "v" }
+  ],
+  "ui": { "x": 300, "y": 100 }
+}

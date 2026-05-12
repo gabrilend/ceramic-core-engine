@@ -10,11 +10,13 @@ build/
 *.dylib
 soramech-pool
 
-# Map directories — user content, not part of the project source.
-# Editor / runner state lives here per design; nothing in maps/ is
-# tracked. Includes compiled/ artifacts (issue 309) and run logs
-# (issue 311).
-maps/
+# Map directories at the project root — user content, not part of
+# project source. Editor / runner state lives here per design.
+# Includes compiled/ artifacts (issue 309) and run logs (issue 311).
+#
+# Path is anchored with `/` so test fixtures under tests/maps/ (used
+# by issue 311's integration tests) remain tracked.
+/maps/
 
 # Editor / IDE / OS temp files
 *.tmp

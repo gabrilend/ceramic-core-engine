@@ -1,0 +1,14 @@
+{
+  "id": "greet",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/hello.lua",
+  "fn": "greet",
+  "inputs": [
+    { "name": "name", "type": "string" },
+    { "name": "salutation", "type": "string", "value": "Hello", "optional": true }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 256,
+  "ui": { "x": 300, "y": 100 }
+}

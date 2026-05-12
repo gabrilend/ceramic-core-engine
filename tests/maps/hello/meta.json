@@ -1,0 +1,6 @@
+{
+  "name": "hello",
+  "description": "Loader fixture: one call box, one data source, one connection.",
+  "entry_box_id": "greet",
+  "src_dirs": ["tests/maps/hello/src"]
+}

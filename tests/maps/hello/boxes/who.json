@@ -1,0 +1,10 @@
+{
+  "id": "who",
+  "kind": "data",
+  "path": "names.txt",
+  "ui": { "x": 100, "y": 100 },
+  "connections": [
+    { "from_box": "who", "from_branch": null,
+      "to_box": "greet", "to_input": "name" }
+  ]
+}

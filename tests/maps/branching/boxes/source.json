@@ -1,0 +1,10 @@
+{
+  "id": "source",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/source.lua",
+  "fn": "pick",
+  "routing": { "kind": "iterator", "n_outputs": 3 },
+  "inputs": [],
+  "ui": { "x": 100, "y": 100 }
+}

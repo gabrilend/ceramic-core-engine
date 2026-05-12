@@ -115,8 +115,10 @@ $(BUILD_DIR)/%.o: $(DIR)/%.c
 # the .o files for the source(s) it exercises. As each test lands,
 # add one line here naming the dependencies (no globbing — explicit
 # is clearer than clever for tests).
-$(BUILD_DIR)/tests/009-slot-store-test: $(BUILD_DIR)/src/009-slot-store.o
-$(BUILD_DIR)/tests/314-json-test:       $(BUILD_DIR)/libs/json/json.o
+$(BUILD_DIR)/tests/009-slot-store-test:   $(BUILD_DIR)/src/009-slot-store.o
+$(BUILD_DIR)/tests/010-graph-loader-test: $(BUILD_DIR)/src/010-graph-loader.o \
+                                          $(BUILD_DIR)/libs/json/json.o
+$(BUILD_DIR)/tests/314-json-test:         $(BUILD_DIR)/libs/json/json.o
 
 # Pattern: link a test binary. $^ collects the .o files declared
 # above plus the test's own .o file.

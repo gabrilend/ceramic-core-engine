@@ -1,0 +1,313 @@
+/* tests/010-graph-loader-test.c — unit tests for the graph loader.
+ *
+ * Exercises the phase 1 + phase 2 + early phase 3 work shipped in
+ * this iteration: directory walk, JSON parse, per-box schema
+ * validation. Topology / cycle / language-enumeration tests land
+ * with their iterations.
+ *
+ * Fixtures live under tests/maps/. Tests cd to the project root so
+ * relative paths work regardless of where the test binary is run.
+ */
+
+#include "010-graph-loader.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+/* {{{ Test harness */
+static int g_pass = 0;
+static int g_fail = 0;
+
+#define ASSERT(cond) \
+    do { if (!(cond)) { \
+        fprintf(stderr, "      %s:%d: %s\n", __FILE__, __LINE__, #cond); \
+        return 0; \
+    } } while (0)
+
+#define RUN(name) \
+    do { \
+        fprintf(stdout, "  %-44s ", #name); fflush(stdout); \
+        if (test_##name()) { fprintf(stdout, "ok\n"); g_pass++; } \
+        else                { fprintf(stdout, "FAIL\n"); g_fail++; } \
+    } while (0)
+/* }}} */
+
+/* {{{ Path resolution — find tests/maps/ relative to cwd */
+static const char *FIXTURE_DIR = "tests/maps";
+
+/* If tests are run from project root: tests/maps/ exists.
+ * If run from build/tests/: the binary was started by make test,
+ * which cd's to project root first. We don't try to be clever here. */
+static int has_fixtures(void)
+{
+    struct stat st;
+    return stat(FIXTURE_DIR, &st) == 0 && S_ISDIR(st.st_mode);
+}
+/* }}} */
+
+/* {{{ test_load_hello() */
+static int test_load_hello(void)
+{
+    char *err = NULL;
+    graph_t *g = graph_load("tests/maps/hello", &err);
+    if (!g) {
+        fprintf(stderr, "      graph_load failed: %s\n", err ? err : "(null)");
+        free(err);
+        return 0;
+    }
+
+    ASSERT(strcmp(graph_name(g), "hello") == 0);
+    ASSERT(strcmp(graph_entry_box_id(g), "greet") == 0);
+    ASSERT(graph_description(g) != NULL);
+    ASSERT(graph_n_boxes(g) == 2);
+
+    /* greet box */
+    const box_t *greet = graph_box_by_id(g, "greet");
+    ASSERT(greet != NULL);
+    ASSERT(greet->kind == BOX_CALL);
+    ASSERT(strcmp(greet->lang, "lua") == 0);
+    ASSERT(strcmp(greet->ref,  "src/hello.lua") == 0);
+    ASSERT(strcmp(greet->fn,   "greet") == 0);
+    ASSERT(greet->routing.kind == ROUTING_PLAIN);
+    ASSERT(greet->output_capacity == 256);
+    ASSERT(greet->n_inputs == 2);
+    ASSERT(strcmp(greet->inputs[0].name, "name") == 0);
+    ASSERT(greet->inputs[0].literal == NULL);
+    ASSERT(greet->inputs[0].optional == 0);
+    ASSERT(strcmp(greet->inputs[1].name, "salutation") == 0);
+    ASSERT(strcmp(greet->inputs[1].literal, "Hello") == 0);
+    ASSERT(greet->inputs[1].optional == 1);
+
+    /* who box */
+    const box_t *who = graph_box_by_id(g, "who");
+    ASSERT(who != NULL);
+    ASSERT(who->kind == BOX_DATA);
+    ASSERT(strcmp(who->path, "names.txt") == 0);
+    ASSERT(who->n_connections == 1);
+    ASSERT(strcmp(who->connections[0].to_box,   "greet") == 0);
+    ASSERT(strcmp(who->connections[0].to_input, "name")  == 0);
+    ASSERT(who->connections[0].from_branch == NULL);
+
+    graph_destroy(g);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_load_branching() — comparator + iterator routing kinds */
+static int test_load_branching(void)
+{
+    char *err = NULL;
+    graph_t *g = graph_load("tests/maps/branching", &err);
+    if (!g) {
+        fprintf(stderr, "      graph_load failed: %s\n", err ? err : "(null)");
+        free(err);
+        return 0;
+    }
+    ASSERT(graph_n_boxes(g) == 2);
+
+    const box_t *src = graph_box_by_id(g, "source");
+    ASSERT(src != NULL);
+    ASSERT(src->routing.kind == ROUTING_ITERATOR);
+    ASSERT(src->routing.n_outputs == 3);
+
+    const box_t *cls = graph_box_by_id(g, "classify");
+    ASSERT(cls != NULL);
+    ASSERT(cls->routing.kind == ROUTING_COMPARATOR);
+    ASSERT(cls->routing.comparand == 5.0);
+    ASSERT(cls->n_connections == 3);
+    /* All three branches reachable. */
+    int seen_lt = 0, seen_eq = 0, seen_gt = 0;
+    for (int i = 0; i < cls->n_connections; i++) {
+        const char *b = cls->connections[i].from_branch;
+        if      (b && strcmp(b, "lt") == 0) seen_lt = 1;
+        else if (b && strcmp(b, "eq") == 0) seen_eq = 1;
+        else if (b && strcmp(b, "gt") == 0) seen_gt = 1;
+    }
+    ASSERT(seen_lt && seen_eq && seen_gt);
+
+    graph_destroy(g);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_missing_map_dir() */
+static int test_missing_map_dir(void)
+{
+    char *err = NULL;
+    graph_t *g = graph_load("tests/maps/does-not-exist", &err);
+    ASSERT(g == NULL);
+    ASSERT(err != NULL);
+    /* Error mentions the path. */
+    ASSERT(strstr(err, "does-not-exist") != NULL);
+    free(err);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_null_argument() */
+static int test_null_argument(void)
+{
+    char *err = NULL;
+    graph_t *g = graph_load(NULL, &err);
+    ASSERT(g == NULL);
+    ASSERT(err != NULL);
+    free(err);
+    return 1;
+}
+/* }}} */
+
+/* {{{ Helpers for malformed-fixture tests */
+/* Make a temp map directory with a given meta.json and a single
+ * box file. Caller frees `out_dir` (or just lets it leak — tests
+ * are short-lived). */
+static int make_temp_map(const char *meta_json,
+                         const char *box_name,
+                         const char *box_json,
+                         char **out_dir)
+{
+    char tmpl[] = "/tmp/soramech-loader-test-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    if (!dir) return -1;
+    *out_dir = strdup(dir);
+
+    char path[4096];
+    snprintf(path, sizeof path, "%s/meta.json", dir);
+    FILE *fp = fopen(path, "w"); if (!fp) return -1;
+    fputs(meta_json, fp); fclose(fp);
+
+    snprintf(path, sizeof path, "%s/boxes", dir);
+    mkdir(path, 0755);
+
+    snprintf(path, sizeof path, "%s/boxes/%s.json", dir, box_name);
+    fp = fopen(path, "w"); if (!fp) return -1;
+    fputs(box_json, fp); fclose(fp);
+
+    return 0;
+}
+
+static void cleanup_temp_map(const char *dir, const char *box_name)
+{
+    char p[4096];
+    snprintf(p, sizeof p, "%s/boxes/%s.json", dir, box_name); unlink(p);
+    snprintf(p, sizeof p, "%s/meta.json", dir);              unlink(p);
+    snprintf(p, sizeof p, "%s/boxes", dir);                  rmdir(p);
+    rmdir(dir);
+}
+/* }}} */
+
+/* {{{ test_unknown_kind() */
+static int test_unknown_kind(void)
+{
+    char *dir = NULL;
+    ASSERT(make_temp_map(
+        "{\"name\":\"t\",\"entry_box_id\":\"x\"}",
+        "x",
+        "{\"id\":\"x\",\"kind\":\"frobnicate\"}",
+        &dir) == 0);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g == NULL);
+    ASSERT(err != NULL);
+    ASSERT(strstr(err, "frobnicate") != NULL);
+
+    free(err);
+    cleanup_temp_map(dir, "x");
+    free(dir);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_missing_routing() */
+static int test_missing_routing(void)
+{
+    char *dir = NULL;
+    ASSERT(make_temp_map(
+        "{\"name\":\"t\",\"entry_box_id\":\"x\"}",
+        "x",
+        "{\"id\":\"x\",\"kind\":\"call\",\"ref\":\"foo.lua\",\"fn\":\"foo\"}",
+        &dir) == 0);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g == NULL);
+    ASSERT(err != NULL);
+    ASSERT(strstr(err, "routing") != NULL);
+
+    free(err);
+    cleanup_temp_map(dir, "x");
+    free(dir);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_duplicate_id() */
+static int test_duplicate_id(void)
+{
+    /* Use a temp dir with two boxes whose JSON declares the same id. */
+    char tmpl[] = "/tmp/soramech-dup-test-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char path[4096];
+    snprintf(path, sizeof path, "%s/meta.json", dir);
+    FILE *fp = fopen(path, "w");
+    fputs("{\"name\":\"t\",\"entry_box_id\":\"x\"}", fp);
+    fclose(fp);
+
+    snprintf(path, sizeof path, "%s/boxes", dir);
+    mkdir(path, 0755);
+
+    snprintf(path, sizeof path, "%s/boxes/a.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"x\",\"kind\":\"call\",\"ref\":\"f.lua\",\"fn\":\"f\","
+          "\"routing\":{\"kind\":\"plain\"}}", fp);
+    fclose(fp);
+
+    snprintf(path, sizeof path, "%s/boxes/b.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"x\",\"kind\":\"call\",\"ref\":\"g.lua\",\"fn\":\"g\","
+          "\"routing\":{\"kind\":\"plain\"}}", fp);
+    fclose(fp);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g == NULL);
+    ASSERT(err && strstr(err, "duplicate") != NULL);
+    free(err);
+
+    /* Cleanup. */
+    snprintf(path, sizeof path, "%s/boxes/a.json", dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes/b.json", dir); unlink(path);
+    snprintf(path, sizeof path, "%s/meta.json",   dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes",       dir); rmdir(path);
+    rmdir(dir);
+
+    return 1;
+}
+/* }}} */
+
+/* {{{ main() */
+int main(void)
+{
+    /* The test runner is invoked from the project root by `make test`. */
+    if (!has_fixtures()) {
+        fprintf(stderr, "010-graph-loader-test: tests/maps/ not found; "
+                        "run from project root\n");
+        return 2;
+    }
+    printf("010-graph-loader-test:\n");
+    RUN(load_hello);
+    RUN(load_branching);
+    RUN(missing_map_dir);
+    RUN(null_argument);
+    RUN(unknown_kind);
+    RUN(missing_routing);
+    RUN(duplicate_id);
+    printf("\n  %d passed, %d failed\n", g_pass, g_fail);
+    return g_fail == 0 ? 0 : 1;
+}
+/* }}} */

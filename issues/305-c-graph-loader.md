@@ -277,3 +277,63 @@ to avoid mid-load realloc. Chunk-list is the standard answer.
 - `issues/219-map-compiler.md` — the compiler is the other consumer of
   the same validation logic; the C loader and the compiler should
   share validation code if possible
+
+## Implementation log
+
+### Phase 1 + 2 + early phase 3 — 2026-05-12
+
+What shipped:
+- `src/010-graph-loader.h` — public types and API. `graph_t` is
+  opaque; the box / connection / input declaration shapes are
+  public so the dispatch layer (issue 304) can walk them directly.
+  Routing kinds align with issue 233 — `routing_t` with `kind`
+  plus per-kind parameters, no legacy `comparand` /
+  `iterator_outputs` top-level fields.
+- `src/010-graph-loader.c` — implementation. Pipeline: open the
+  map dir, parse `meta.json` via the project JSON parser
+  (issue 314), walk every `.json` under `boxes/`, parse each into
+  a `box_t`, enforce kind-specific required fields (ref/routing
+  for call; path for data; inputs only for file_write), validate
+  id uniqueness across boxes. Errors return a malloc'd
+  `<file>:<line>: <message>` diagnostic via the `**err`
+  out-parameter; the pool runner's main is expected to print and
+  abort.
+- `tests/maps/hello/` and `tests/maps/branching/` — fixture maps
+  exercising the call/data combo, comparator routing (lt/eq/gt
+  branches all present), and iterator routing (n_outputs=3).
+- `tests/010-graph-loader-test.c` — 7 unit tests covering
+  successful loads of both fixtures, missing map directory,
+  NULL argument, unknown box kind, missing routing, and
+  duplicate box id. Malformed-shape tests use mkdtemp scratch
+  dirs so the tracked fixtures stay valid.
+- Memory model: one `json_arena_t` per loaded graph holds every
+  string and every parsed tree from every file; the box,
+  connection, and input declaration arrays are plain malloc.
+  `graph_destroy` releases all of it.
+- `.gitignore` anchored to `/maps/` so `tests/maps/` is tracked.
+- Makefile per-test dependency line for `010-graph-loader-test`
+  linking the loader and the JSON parser.
+
+Verified `make STRICT=1` builds cleanly; 33 tests across three
+suites (slot store 12, graph loader 7, JSON 14) all pass.
+
+What's deferred to follow-on iterations within 305:
+- **Phase 4 — topology validation.** Connection endpoints store
+  string refs only. The next pass resolves `to_box` to integer
+  indices, verifies endpoints exist, and detects non-iterator
+  cycles via DFS.
+- **Phase 5 — slot size class enumeration.** The loader needs to
+  walk every box output and produce the distinct `cell_capacity`
+  values the slot store's allocator pre-populates.
+- **Phase 6 — entry-box detection.** A box with zero inputs or
+  with all inputs fed only by `data` boxes is an entry. The pool
+  runner spawns initial tasks for these.
+- **Phase 7 — language enumeration.** Distinct `lang` values
+  across call boxes, handed to the spec registry (issue 303).
+- The remaining routing kinds from issue 233 (randomizer,
+  weighted, distributor) — the parser currently rejects them with
+  a precise message.
+
+None of those block 301 / 303 / 306. Topology and language
+enumeration land before 304 (the dispatch layer) since the
+dispatch action needs both.

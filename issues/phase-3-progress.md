@@ -18,7 +18,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 302 | per-task slot store with wire-held references               | in progress · core complete |
 | 303 | language runtime spec (pluggable per-language invocation)   | designed |
 | 304 | task dispatch layer (C, replaces synchronous executor)      | designed |
-| 305 | C graph loader (replaces `003-loader.lua`)                  | designed |
+| 305 | C graph loader (replaces `003-loader.lua`)                  | in progress · parse + per-box schema done |
 | 306 | Lua language spec implementation                            | designed |
 | 307 | C language spec implementation                              | designed |
 | 308 | Bash language spec implementation                           | designed |
