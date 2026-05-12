@@ -27,6 +27,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 311 | integration tests & run output (`last-run.jsonl`)           | designed |
 | 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | designed |
 | 313 | research: whole-program same-language merge                 | research / blocked |
+| 314 | small C JSON parser written for this project                | in progress · parser complete, writer deferred |
 
 ## Phase goal checklist
 
