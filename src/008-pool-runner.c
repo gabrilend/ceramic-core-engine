@@ -4,27 +4,18 @@
  * stands up the thread pool, lets the dispatch layer run every box
  * to quiescence, and writes the JSONL run log on the way out.
  *
- * Designed in issue 301. Current state: scaffold. The eventual main
- * body, in pseudocode (see docs/HTML/001-architecture.html):
- *
- *   1.  parse map path from argv
- *   2.  load and validate graph    (issue 305 graph loader)
- *   3.  determine languages used   (issue 305)
- *   4.  allocate per-port slots    (issue 302 slot store)
- *   5.  pool = pool_create(N)      (issue 301 pool lifecycle)
- *   6.  init per-worker handles    (issue 303 spec registry)
- *   7.  pool_init_barrier(pool)    (issue 301)
- *   8.  push literal input values  (issue 304 dispatch)
- *   9.  spawn entry-box tasks      (issue 304)
- *   10. pool_wait_quiescent(pool)  (issue 301)
- *   11. write last-run.jsonl       (issue 311)
- *   12. pool_destroy(pool)         (issue 301)
- *
- * At this scaffolding stage we just parse argv, print a banner so
- * the build link is verified end-to-end, and exit 0.
+ * Current state: loads the graph (issue 305) and stands up the pool
+ * (issue 301); the dispatch layer (issue 304) and the JSONL writer
+ * (issue 311) still need to land before the runner actually runs
+ * anything. Spawning + quiescence work — verifiable by running the
+ * binary against tests/maps/hello.
  */
 
+#include "010-graph-loader.h"
+#include "pool.h"
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* {{{ usage() */
@@ -34,10 +25,7 @@ static void usage(const char *progname)
         "usage: %s <map-directory>\n"
         "\n"
         "Runs a SoraMech map. The map directory must contain meta.json\n"
-        "and a boxes/ subdirectory.\n"
-        "\n"
-        "Phase 3 runtime is still under construction; this binary is\n"
-        "currently a scaffold and prints what it would do.\n",
+        "and a boxes/ subdirectory.\n",
         progname);
 }
 /* }}} */
@@ -52,11 +40,35 @@ int main(int argc, char **argv)
 
     const char *map_dir = argv[1];
 
-    fprintf(stderr, "soramech-pool: scaffold build.\n");
-    fprintf(stderr, "  map directory: %s\n", map_dir);
-    fprintf(stderr, "  runtime: not yet implemented (issues 301–311 pending).\n");
-    fprintf(stderr, "  link verification: ok.\n");
+    char *err = NULL;
+    graph_t *g = graph_load(map_dir, &err);
+    if (!g) {
+        fprintf(stderr, "soramech-pool: %s\n", err ? err : "load failed");
+        free(err);
+        return 1;
+    }
 
+    pool_t *p = pool_create(0);   /* default n_workers */
+    if (!p) {
+        fprintf(stderr, "soramech-pool: cannot create thread pool\n");
+        graph_destroy(g);
+        return 1;
+    }
+    pool_init_barrier(p);
+
+    fprintf(stderr,
+        "soramech-pool: '%s' loaded — %d box(es), entry %s, %d worker(s)\n",
+        graph_name(g),
+        graph_n_boxes(g),
+        graph_entry_box_id(g) ? graph_entry_box_id(g) : "(none)",
+        pool_n_workers(p));
+    fprintf(stderr,
+        "soramech-pool: dispatch layer not yet wired (issue 304); "
+        "quiescing with no tasks.\n");
+
+    pool_wait_quiescent(p);
+    pool_destroy(p);
+    graph_destroy(g);
     return 0;
 }
 /* }}} */

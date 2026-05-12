@@ -118,6 +118,7 @@ $(BUILD_DIR)/%.o: $(DIR)/%.c
 $(BUILD_DIR)/tests/009-slot-store-test:   $(BUILD_DIR)/src/009-slot-store.o
 $(BUILD_DIR)/tests/010-graph-loader-test: $(BUILD_DIR)/src/010-graph-loader.o \
                                           $(BUILD_DIR)/libs/json/json.o
+$(BUILD_DIR)/tests/301-pool-test:         $(BUILD_DIR)/libs/task-pool/pool.o
 $(BUILD_DIR)/tests/314-json-test:         $(BUILD_DIR)/libs/json/json.o
 
 # Pattern: link a test binary. $^ collects the .o files declared

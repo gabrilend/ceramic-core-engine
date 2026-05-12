@@ -205,3 +205,38 @@ zero with the iterator parked, the run ends cleanly.
 - `issues/303-language-runtime-spec.md` — per-language init/call/teardown
 - `issues/304-task-dispatch-layer.md` — replaces 004-executor.lua
 - `docs/004-ipc-and-threading.md` — threading roadmap and IPC options
+
+## Implementation log
+
+### Pool skeleton — 2026-05-12
+
+What shipped:
+- `libs/task-pool/pool.h` + `pool.c` — SoraMech-owned pool with N
+  pthread workers, a singly-linked FIFO queue under one mutex,
+  atomic active-task counter with its own cv for quiescence wait,
+  one-shot init barrier with workers_ready / init_released
+  predicates under a third mutex. Worker count defaults to logical
+  CPUs (capped at `POOL_MAX_WORKERS=16`), overridable via
+  `SORAMECH_WORKERS=N`. Recursive `pool_spawn` from inside an
+  action works — the queue mutex is re-entered cleanly.
+- TLS `pool_current_worker` for actions that need their worker
+  index or the back-pointer to the pool.
+- `tests/301-pool-test.c` — 8 unit tests: create/destroy with no
+  tasks, default worker count, cap-at-max, single spawn, 1000-task
+  spawn-and-quiesce, TLS context observable from inside actions,
+  recursive spawn (depth 10 → 11 invocations), and 8 concurrent
+  producer threads each pushing 500 tasks while 4 workers drain
+  (4000 total). All pass under STRICT.
+- `src/008-pool-runner.c` now loads the graph via 305 and stands up
+  the pool: `./soramech-pool tests/maps/hello` prints the box count,
+  entry box, and worker count, then quiesces cleanly with no tasks.
+
+What's deferred to follow-ons within 301:
+- **Per-worker spec init** between `pool_create` and
+  `pool_init_barrier`. The hook is documented in `worker_main`;
+  lands with issue 303 once specs can be `dlopen`ed and
+  per-worker handles allocated.
+- **Priority queue.** Issue 310 covers the "wired in, no-op
+  behaviorally" upgrade. Current queue is plain FIFO.
+
+Neither blocks 304 (dispatch) from starting.

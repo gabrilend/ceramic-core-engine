@@ -14,7 +14,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 
 | ID  | Title                                                       | Status   |
 |-----|-------------------------------------------------------------|----------|
-| 301 | thread pool lifecycle and per-worker initialization         | designed |
+| 301 | thread pool lifecycle and per-worker initialization         | in progress · pool skeleton done |
 | 302 | per-task slot store with wire-held references               | in progress · core complete |
 | 303 | language runtime spec (pluggable per-language invocation)   | designed |
 | 304 | task dispatch layer (C, replaces synchronous executor)      | designed |
