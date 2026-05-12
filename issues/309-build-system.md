@@ -305,3 +305,43 @@ deployment is recognizably broken until a clean compile succeeds.
   the editor button this compile step services
 - `issues/completed/219-map-compiler.md` — original issue, folded
   into this one
+
+## Implementation log
+
+### Scaffolding milestone — 2026-05-12
+
+What's in place:
+- `Makefile` at the project root with `all` / `runner` / `specs` /
+  `clean` / `test` / `help` targets, and `DEBUG=1` / `STRICT=1`
+  build modes. Source discovery is wildcard-based across
+  `src/*.c`, `libs/task-pool/*.c`, `libs/json/*.c` — additional C
+  sources land as future issues compile them in automatically.
+- `src/008-pool-runner.c` — minimal `main()` that parses argv,
+  prints usage on `--help`, prints a "scaffold build" banner and
+  exits 0 on a map-dir argument. Plus `src/008-pool-runner.info.md`.
+- `langs/lang-spec.h` — the public `lang_spec_t` C contract from
+  issue 303 (the four basic callbacks; the fast-path callbacks
+  from issue 312 land later).
+- `langs/{lua,c,bash}/spec.c` + `Makefile` + `spec.info.md` — each
+  builds a `spec.so` that exports `soramech_lang_spec` with all
+  callbacks `NULL`. Verified with `nm -D langs/*/spec.so` — the
+  symbol is exported at `0x4020 D` in every spec.
+- `.clangd` config so the editor LSP resolves the include path the
+  same way the Makefile does.
+- `.file-index-counter` set to `008`.
+
+Verified `make` clean → build → run cycle works in default,
+`DEBUG=1`, and `STRICT=1` modes.
+
+What's still ahead inside 309:
+- Vendoring `libs/task-pool/` (lands with 301).
+- Vendoring `libs/json/` (lands with 305 — choice of cJSON / jsmn
+  decided at implementation time).
+- Spec discovery via `/proc/self/exe` (lands with 303's spec
+  registry).
+- Compile / package step for standalone `compiled/pool-runner`
+  (lands with 305 + 307).
+- Real `make test` (lands with 311).
+
+These follow-ons depend on their respective issues; this issue
+stays open until they're all wired in.

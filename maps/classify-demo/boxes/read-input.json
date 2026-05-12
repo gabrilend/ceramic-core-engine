@@ -1,1 +1,0 @@
-{"id":"read-input","label":"Read Input","kind":"call","ref":"src/input-reader.lua","fn":"hello","inputs":[],"outputs":[{"name":"greeting","type":"string"}],"connections":[{"from_box":"read-input","from_output":"greeting","to_box":"stamp","to_input":"text"}],"ui":{"x":72,"y":199}}

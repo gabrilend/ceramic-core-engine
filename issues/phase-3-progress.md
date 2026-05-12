@@ -3,24 +3,26 @@
 Goal: replace the Lua synchronous runner with a C thread pool runner
 that executes box graphs in parallel.
 
-The phase is fully designed; implementation has not yet started.
-Issues 301–311 are the architectural specification. When
-implementation begins, mark each issue as in progress, then complete,
-and update this file.
+The phase is fully designed; implementation is now underway.
+Issues 301–313 are the architectural specification. As each issue
+moves into implementation, its row is marked "in progress"; on
+completion it's moved to `issues/completed/`.
+
+Implementation began **2026-05-12** with the 309 build scaffolding.
 
 ## Issues
 
 | ID  | Title                                                       | Status   |
 |-----|-------------------------------------------------------------|----------|
 | 301 | thread pool lifecycle and per-worker initialization         | designed |
-| 302 | per-task slot store with wire-held references               | designed |
+| 302 | per-task slot store with wire-held references               | in progress · core complete |
 | 303 | language runtime spec (pluggable per-language invocation)   | designed |
 | 304 | task dispatch layer (C, replaces synchronous executor)      | designed |
 | 305 | C graph loader (replaces `003-loader.lua`)                  | designed |
 | 306 | Lua language spec implementation                            | designed |
 | 307 | C language spec implementation                              | designed |
 | 308 | Bash language spec implementation                           | designed |
-| 309 | build system & Makefile orchestration                       | designed |
+| 309 | build system & Makefile orchestration                       | in progress · scaffolding done |
 | 310 | priority queue: wired in, no-op behaviorally                | designed |
 | 311 | integration tests & run output (`last-run.jsonl`)           | designed |
 | 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | designed |

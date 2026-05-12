@@ -1,1 +1,0 @@
-{"id":"write-result","label":"Write Result","kind":"call","ref":"src/result-writer.lua","fn":"write_result","inputs":[{"name":"text","type":"string"}],"outputs":[],"connections":[{"from_box":"router","from_port":"greeting","to_box":"write-result","to_input":"text"}],"ui":{"x":700,"y":120}}

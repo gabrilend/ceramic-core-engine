@@ -1,1 +1,0 @@
-{"id":"c-box","label":"C Uppercase","kind":"call","ref":"src/strops.c","fn":"uppercase","inputs":[{"name":"text","type":"string"}],"outputs":[{"name":"result","type":"string"}],"connections":[{"from_box":"bash-box","from_output":"text","to_box":"c-box","to_input":"text"}],"ui":{"x":600,"y":200}}

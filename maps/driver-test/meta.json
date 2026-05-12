@@ -1,5 +1,0 @@
-{
-  "name": "driver-test",
-  "description": "Tests all three built-in drivers end-to-end.",
-  "entry_box_id": "lua-box"
-}

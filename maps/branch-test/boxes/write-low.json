@@ -1,1 +1,0 @@
-{"id":"write-low","label":"Write Low","kind":"call","ref":"src/values.lua","fn":"write_result","inputs":[{"name":"n","type":"number"}],"outputs":[],"connections":[{"from_box":"router","from_port":"low","to_box":"write-low","to_input":"n"},{"from_box":"router","from_port":"else","to_box":"write-low","to_input":"n"}],"ui":{"x":581,"y":130}}

@@ -455,3 +455,46 @@ else. Removed the type-tag field from the header for that reason.
 - `issues/213-queued-inputs-and-task-model.md` — queued input model that
   ring-buffer slots implement
 - `docs/004-ipc-and-threading.md` — IPC options; shm_open + mmap is Option 2
+
+## Implementation log
+
+### Core milestone — 2026-05-12
+
+What shipped:
+- `src/009-slot-store.h` — the public API exactly as the design
+  describes: `slot_alloc` / `slot_push` / `slot_peek` / `slot_pop` /
+  `slot_read_inc` / `slot_has_value` / `slot_fill_count`. Plus the
+  store lifecycle pair and a small inspection helper for tests.
+- `src/009-slot-store.c` — implementation. Plain-malloc per slot
+  (size-class free lists deferred); ring slots and atomic-counter
+  slots both supported; the SLOT_FLAG_TAGGED variant of pop scans
+  for the lowest-tag filled cell. Per-slot spinlock via
+  `atomic_flag`. Atomic counter via `atomic_fetch_add_explicit`,
+  no lock.
+- `tests/009-slot-store-test.c` — 12 unit tests covering peek
+  semantics, FIFO pop, tagged pop ordering (in-order and
+  interleaved), atomic counter (sequential + 8-thread concurrent),
+  bad-argument paths, ring-full / empty edge cases, and a
+  multi-thread producer/consumer race over 5000 values.
+- Makefile additions: `test` target builds test binaries via a
+  pattern rule and runs them. Per-test prerequisites listed
+  explicitly so each binary links the minimal set of source `.o`s.
+- File index counter advanced to `009`.
+
+Verified clean build and 12/12 tests pass in `make STRICT=1`
+(`-Werror -Wextra -Wpedantic`).
+
+What's deferred to a follow-on within 302:
+- **Size-class free lists with coalescing.** The current
+  implementation `malloc`s each slot independently. That's correct
+  but unoptimized. Slots are allocated once at graph load and never
+  freed until run end, so under the current usage pattern free-list
+  reuse buys nothing. Lands once profiling justifies it (or once
+  long-running maps surface allocation pressure).
+- **Large-value heap for variable-size payloads.** Slots currently
+  store fixed-size cells; very large outputs (multi-MB LLM
+  responses, dynamically-sized arrays) will need the two-tier
+  scheme described under "Large-value heap" above. Blocks no
+  in-flight phase 3 work until a graph wants variable-size outputs.
+
+Neither deferred item blocks 301 / 304 / 305 / 306 / 307 / 308.

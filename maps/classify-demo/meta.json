@@ -1,5 +1,0 @@
-{
-  "name": "classify-demo",
-  "description": "Phase 1 demo. Reads a name, stamps a greeting, routes on content, writes result.",
-  "entry_box_id": "read-input"
-}

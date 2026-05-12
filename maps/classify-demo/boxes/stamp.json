@@ -1,1 +1,0 @@
-{"id":"stamp","label":"Stamp Time","kind":"call","ref":"src/stamp.sh","fn":"stamp","inputs":[{"name":"text","type":"string"}],"outputs":[{"name":"stamped","type":"string"}],"connections":[{"from_box":"read-input","from_output":"greeting","to_box":"stamp","to_input":"text"},{"from_box":"stamp","from_output":"stamped","to_box":"router","to_input":"text"}],"ui":{"x":280,"y":200}}

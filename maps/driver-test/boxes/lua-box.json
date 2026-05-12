@@ -1,1 +1,0 @@
-{"id":"lua-box","label":"Lua Add","kind":"call","ref":"src/math-funcs.lua","fn":"add","inputs":[],"outputs":[{"name":"sum","type":"number"}],"connections":[{"from_box":"lua-box","from_output":"sum","to_box":"bash-box","to_input":"value"}],"ui":{"x":80,"y":200}}

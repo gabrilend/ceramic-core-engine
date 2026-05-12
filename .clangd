@@ -1,0 +1,18 @@
+# clangd config — matches the include paths used by the top-level
+# Makefile so editor LSP integrations resolve `#include "..."` the
+# same way the build does.
+#
+# Paths in CompileFlags.Add are passed verbatim to the compiler, so
+# we use absolute paths to be unambiguous regardless of which working
+# directory the editor launches clangd in. If you check the repo out
+# at a different prefix, edit this file (or symlink it) to match.
+#
+# The Makefile is authoritative; this file is purely for tooling.
+
+CompileFlags:
+  Add:
+    - -I/mnt/mtwo/programs/sora/soramech/src
+    - -I/mnt/mtwo/programs/sora/soramech/langs
+    - -I/mnt/mtwo/programs/sora/soramech/libs/task-pool
+    - -I/mnt/mtwo/programs/sora/soramech/libs/json
+    - -I/usr/include/luajit-2.1
