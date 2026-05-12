@@ -8,6 +8,8 @@ Read in order for a complete picture of the system.
 
 ## Documentation
 
+An HTML rendering of every doc on this page lives at [docs/HTML/](HTML/index.html) — same content, interactive demos, persistent sidebar TOC. Markdown remains authoritative.
+
 - [docs/001-architecture.md](001-architecture.md) — components, data flow, file format spec
 - [docs/002-roadmap.md](002-roadmap.md) — phases, goals, and sequencing
 - [docs/003-driver-system.md](003-driver-system.md) — phase 2 driver scripts; phase 3 language spec overview

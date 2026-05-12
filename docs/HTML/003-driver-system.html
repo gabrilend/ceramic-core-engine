@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>§ 03 · Driver System — SoraMech</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script defer src="assets/nav.js"></script>
+  <script defer src="assets/demos.js"></script>
+</head>
+<body data-page="003-driver-system.html">
+  <div class="shell">
+    <aside class="sidebar"></aside>
+    <main>
+      <div class="content">
+        <div class="page-head">
+          <div class="doc-num">§ 03 · Language Driver System</div>
+          <h1>Two <em>systems</em>, one filename.</h1>
+          <p class="lede">Phase 2 used driver scripts — shell wrappers that the synchronous runner invoked, one process per box call. Phase 3 uses language specs — <span class="mono">.so</span> libraries loaded by the C pool runner via <span class="mono">dlopen</span>, with persistent per-worker runtimes.</p>
+        </div>
+
+        <p>Same idea, different mechanism. Phase 3 replaces phase 2 wholesale when it lands. This document covers both, since the project lives in phase 2 today and the phase 3 design is fully specified.</p>
+
+        <div data-demo="driverVsSpec"></div>
+
+        <h2 id="phase-2">Phase 2 — Driver scripts (current)</h2>
+        <p>A driver is a shell script. It knows how to invoke a function in one language. The synchronous runner looks up the file extension, finds the driver script, and calls it.</p>
+
+        <h3 id="driver-contract">Driver contract</h3>
+        <p>The runner invokes a driver as:</p>
+<pre data-lang="shell">&lt;driver-script&gt; &lt;file-path&gt; &lt;fn-name&gt; &lt;arg-count&gt; [&lt;arg&gt; ...]</pre>
+        <p>Arguments are always strings. Structured values (tables, arrays) are passed as JSON strings and decoded by the driver.</p>
+        <p>The driver must:</p>
+        <ul>
+          <li>Exit 0 on success, nonzero on failure</li>
+          <li>Print one JSON value to stdout — string, number, boolean, object, or null. One output wire per box.</li>
+          <li>Print error messages to stderr on failure</li>
+        </ul>
+        <p>Multi-output tuple returns are not supported. Each box has exactly one output wire (issue 218).</p>
+
+        <h3 id="built-in-drivers">Built-in driver scripts</h3>
+        <p>Shipped in the project's <code>drivers/</code> directory:</p>
+        <ul>
+          <li><code>drivers/lua.sh</code> — invokes a Lua function via <code>luajit</code></li>
+          <li><code>drivers/c.sh</code> — compiles <code>.c</code> (mtime cache) and runs the binary</li>
+          <li><code>drivers/bash.sh</code> — sources the <code>.sh</code> and calls the function</li>
+        </ul>
+        <p>User-added drivers go in the same directory and are picked up by extension.</p>
+
+        <h3 id="problems">What's wrong with this model</h3>
+        <p>Process spawn cost dominates each call (1–10 ms per language). Stdout is a fragile channel — debug prints inside box code corrupt the wire value. Each invocation is its own fresh interpreter; there is no persistent runtime between calls. These are the limitations phase 3 fixes.</p>
+
+        <h2 id="phase-3">Phase 3 — Language specs (planned)</h2>
+        <p>Each language is a small C library implementing the spec interface defined in issue 303. The pool runner loads every <code>langs/&lt;name&gt;/spec.so</code> at startup; the spec interface is uniform across languages, with no privileged language.</p>
+
+        <h3 id="spec-interface">Spec interface</h3>
+<pre data-lang="c">typedef struct {
+    const char *name;
+    const char *file_ext;
+
+    void *(*init)(int worker_idx);
+    void  (*teardown)(void *handle);
+    int   (*compile)(const char *src_path, const char *out_path,
+                     const box_t *box);
+    int   (*invoke)(void *handle,
+                    const char *file_path, const char *fn_name,
+                    const void **input_data, const int *input_sizes,
+                    int n_inputs,
+                    void *out_buf, int out_buf_capacity,
+                    int *out_size);
+} lang_spec_t;</pre>
+        <p><code>init</code> runs once per worker thread at pool startup. <code>teardown</code> runs at shutdown. <code>compile</code> runs at map load time for languages that need it (C). <code>invoke</code> runs once per box invocation.</p>
+        <p>The spec receives input bytes and writes output bytes — never interacts with slot IDs. The dispatch layer (issue 304) reads inputs from slots into byte buffers, hands them to <code>invoke</code>, takes back bytes, writes them to the output slot.</p>
+
+        <h3 id="reference-specs">Reference specs</h3>
+        <ul>
+          <li><strong>Lua</strong> (issue 306) — handle is a <code>lua_State</code> per worker. <code>invoke</code> loads the box file (cached in the registry), pushes typed arguments, calls via <code>lua_pcall</code>, serializes the return value.</li>
+          <li><strong>C</strong> (issue 307) — handle is a <code>dlopen</code>-cache per worker. <code>compile</code> generates a wrapper from the box's declared inputs and return type, then runs <code>cc</code> to produce the <code>.so</code>. <code>invoke</code> does <code>dlsym</code> and a direct function-pointer call.</li>
+          <li><strong>Bash</strong> (issue 308) — handle is a Unix domain socket connected to a persistent <code>bash-server.sh</code> subprocess. <code>invoke</code> sends a framed request, reads a framed response.</li>
+        </ul>
+        <p>The Lua and C specs are in-process (Option 1 in <a href="004-ipc-and-threading.html">IPC &amp; Threading</a>). The Bash spec is out-of-process (Option 3) — proof that the spec interface accommodates languages that cannot be embedded.</p>
+
+        <h3 id="add-language">Adding a new language</h3>
+        <p>A user adds Python, Rust, or anything else by writing a new spec:</p>
+        <ol>
+          <li>Create <code>langs/&lt;name&gt;/spec.c</code> implementing the four callbacks.</li>
+          <li>Create <code>langs/&lt;name&gt;/Makefile</code> that builds <code>spec.so</code>.</li>
+          <li>Add the language to <code>meta.json src_dirs</code> if necessary so the editor's file browser can see source files.</li>
+        </ol>
+        <p>The pool runner picks up the new spec at the next startup. No SoraMech code change required.</p>
+        <p>For full implementation guidance, see <a href="005-language-specs.html">§ 05 · Language Specs</a>. For the spec contract itself, issue 303.</p>
+
+        <h2 id="migration">Migration: phase 2 → phase 3</h2>
+        <p>When phase 3 lands:</p>
+
+        <table>
+          <thead><tr><th>Phase 2</th><th>Phase 3</th></tr></thead>
+          <tbody>
+            <tr><td><code>drivers/lua.sh</code></td>          <td><code>langs/lua/spec.so</code></td></tr>
+            <tr><td><code>drivers/c.sh</code></td>            <td><code>langs/c/spec.so</code></td></tr>
+            <tr><td><code>drivers/bash.sh</code></td>         <td><code>langs/bash/spec.so</code></td></tr>
+            <tr><td><code>drivers.json</code> (per-map)</td>  <td>(none — spec registry is global)</td></tr>
+            <tr><td>stdout as channel</td>                    <td>direct function call / Unix socket</td></tr>
+            <tr><td>One process per call</td>                 <td>Persistent runtimes</td></tr>
+            <tr><td>Single output wire (JSON-encoded)</td>    <td>Single output slot (typed bytes)</td></tr>
+          </tbody>
+        </table>
+        <p>Box JSON does not change shape — <code>lang</code>, <code>ref</code>, <code>fn</code>, <code>inputs</code> remain. Phase 3 reads the same files phase 2 reads. The runtime mechanism beneath the box is what changes.</p>
+
+        <h2 id="issues">Relevant issues</h2>
+        <ul>
+          <li><code>102</code> (completed) — phase 2 driver interface</li>
+          <li><code>218</code> (completed) — single-output driver contract</li>
+          <li><code>303</code> — phase 3 language spec contract</li>
+          <li><code>306</code> — Lua language spec</li>
+          <li><code>307</code> — C language spec</li>
+          <li><code>308</code> — Bash language spec</li>
+        </ul>
+
+        <div class="page-nav">
+          <a href="002-roadmap.html"><span class="dir">◂ back</span><span class="title">Roadmap</span></a>
+          <a href="004-ipc-and-threading.html" class="next"><span class="dir">next ▸</span><span class="title">IPC & Threading</span></a>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

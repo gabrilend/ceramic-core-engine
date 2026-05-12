@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>§ 01 · Architecture — SoraMech</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script defer src="assets/nav.js"></script>
+  <script defer src="assets/demos.js"></script>
+</head>
+<body data-page="001-architecture.html">
+  <div class="shell">
+    <aside class="sidebar"></aside>
+    <main>
+      <div class="content">
+        <div class="page-head">
+          <div class="doc-num">§ 01 · Architecture</div>
+          <h1>Three <em>programs</em>, one data format.</h1>
+          <p class="lede">A visual FSM and execution engine. None of the three programs knows about the others at runtime; the map directory is the only contract they share.</p>
+        </div>
+
+        <div data-demo="threeProgram"></div>
+
+        <h2 id="programs">The three programs</h2>
+
+        <h3 id="server">src/006-server-main.lua — the editor's HTTP backend</h3>
+        <p>Thin file CRUD proxy. Receives JSON requests from the browser and translates them into reads and writes on the map directory. No logic beyond path validation and basic consistency checks (e.g. reject a delete if the box is still referenced by another box's connection list).</p>
+        <p>Started with <code>luajit src/006-server-main.lua [port]</code> (default 7700). The <code>run</code> script at the project root starts the server and opens the editor.</p>
+        <p>The editor is editor-only — no run button, no run results display. The runner is invoked separately, by command line. <code>last-run.jsonl</code> is the runner's output, consumed by external tooling, not by the editor.</p>
+
+        <h3 id="runner-2">Phase 2 runner — src/007-runner-main.lua</h3>
+        <p>Synchronous Lua interpreter. Loads a map directory, validates the graph, walks boxes in dependency order, invokes language drivers per box (<code>drivers/lua.sh</code>, <code>drivers/c.sh</code>, <code>drivers/bash.sh</code>). Each box invocation is wrapped in a <code>task_fn(inputs) -&gt; outputs</code> boundary that matches the phase 3 thread pool's action signature.</p>
+        <p>This is the development target while the editor is being built out. Phase 2 retires wholesale when phase 3 lands; the editor and the map-directory format are unchanged across the cutover.</p>
+
+        <h3 id="runner-3">Phase 3 runner — soramech-pool (src/008-pool-runner.c)</h3>
+        <p>The phase 3 runner is a single C binary. It owns:</p>
+        <ul>
+          <li>A <strong>SoraMech-built thread pool</strong> under <code>libs/task-pool/</code>. The 3d-rts pool at <code>/home/ritz/programming/ai-stuff/games/3d-rts/libs/900-task-pool.h</code> is the design reference, not vendored.</li>
+          <li>A <strong>C graph loader</strong> (<code>src/graph-loader.c</code>) — replaces <code>src/003-loader.lua</code>. The runner has no embedded Lua state at the top level; Lua only appears inside a Lua language spec's per-worker handle.</li>
+          <li>A <strong>per-input-port slot store</strong> (<code>src/slot-store.c</code>) — ring-buffer cells in process heap, durable for the run, plus a large-value heap for variable-size payloads.</li>
+          <li>A <strong>dispatch layer</strong> (<code>src/dispatch.c</code>) — the single worker-side action: read inputs → invoke spec → pick branch → push outputs.</li>
+          <li>A <strong>language spec registry</strong> (<code>src/spec-registry.c</code>) — <code>dlopen</code>s every <code>langs/&lt;name&gt;/spec.so</code> at startup and registers it by name and file extension.</li>
+          <li>A <strong>run-output writer</strong> — a dedicated thread that drains a multi-producer-single-consumer ring of events and appends one JSON line per event to <code>tmp/last-run.jsonl</code>.</li>
+        </ul>
+        <p>One pool per map run. Created after the graph loads and validates; destroyed after the active-task counter reaches zero. Worker count defaults to logical CPUs (capped at <code>MAX_WORKERS=16</code>), overridable via <code>SORAMECH_WORKERS=N</code>.</p>
+
+        <h3 id="editor">assets/index.html — the editor</h3>
+        <p>Static HTML + vanilla JS. Infinite-scroll canvas. Box diagram editor. Talks to the server for all file operations. No run button. The Compile button (added in phase 2 as UI only) wires into the phase 3 build/package pipeline once it lands.</p>
+
+        <h2 id="map">Map directory format</h2>
+<pre data-lang="layout">maps/&lt;name&gt;/
+  meta.json          — { name, description, src_dirs?, lang? }
+  boxes/
+    &lt;id&gt;.json        — one file per box (see Box file format below)
+  data/
+    &lt;name&gt;.json      — soramech-data tables; section-level "constant" flag
+  src/
+    *.lua, *.c, *.sh — box function source files
+  compiled/          — produced by the compile pipeline (issue 309)
+    pool-runner      — copy or symlink of soramech-pool
+    src/             — every source file the map uses
+    bin/             — compiled .so files (C boxes)
+    langs/&lt;name&gt;/    — copy of each language spec .so the map uses
+    manifest.json    — every box, its language, its artifact path, build version
+  tmp/               — symlink to /tmp/&lt;name&gt;/
+    last-run.jsonl   — phase 3 run log (JSON Lines)
+    logs/            — additional run logs</pre>
+        <p>A compiled map runs standalone: <code>./compiled/pool-runner</code> looks up its specs in <code>compiled/langs/</code>, reads <code>manifest.json</code>, and executes without any reference to the live editor source tree.</p>
+        <div class="callout">
+          <strong>Note. </strong>The <code>data/</code> directory is for <code>soramech-data</code> storage (see "Data files" below). It is <em>not</em> where file-source boxes read from — those read arbitrary paths via the <code>data</code> box kind.
+        </div>
+
+        <h2 id="box">Box file format</h2>
+        <p>Every box is a single JSON file under <code>boxes/&lt;id&gt;.json</code>. Every box has exactly <strong>one output wire</strong> (issue 218). There is no <code>outputs</code> array. Whatever the function returns travels down the single output wire as one value; multi-value returns are encoded as JSON (or a language-native struct on a same-language wire) and decoded downstream.</p>
+
+        <h3 id="box-kinds">Box kinds</h3>
+        <table>
+          <thead><tr><th>kind</th><th>Runs a function?</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code>call</code></td><td>yes</td><td>Plain call, comparator, iterator, etc. — see <code>routing</code> below.</td></tr>
+            <tr><td><code>data</code></td><td>no</td><td>Language-agnostic <strong>file source</strong>. Reads <code>path</code> at dispatch.</td></tr>
+            <tr><td><code>file_write</code></td><td>no</td><td>Language-agnostic <strong>file sink</strong>. Writes inputs to disk.</td></tr>
+          </tbody>
+        </table>
+        <p><code>data</code> and <code>file_write</code> are dispatch-layer primitives — the runtime reads/writes the file directly, no language spec is invoked. Both follow atomic-write semantics where it matters (write to <code>path.tmp</code>, fsync, rename).</p>
+<pre data-lang="json">{ "id": "config", "kind": "data", "path": "config.json",
+  "ui": { "x": 100, "y": 100 } }
+
+{ "id": "save",   "kind": "file_write",
+  "inputs": [
+    { "name": "path", "type": "string" },
+    { "name": "text", "type": "string" }
+  ],
+  "ui": { "x": 400, "y": 100 } }</pre>
+
+        <h3 id="routing">Call boxes and the <code>routing</code> field</h3>
+        <p>A <code>call</code> box runs a function (<code>ref</code> + <code>fn</code>) and produces one output value. The <code>routing</code> field decides where that value goes. Every call box carries <code>routing</code> explicitly — there is no implicit default.</p>
+<pre data-lang="json">{ "id": "plain-call", "kind": "call",
+  "ref": "src/strings.lua", "fn": "trim",
+  "inputs": [{ "name": "text", "type": "string" }],
+  "routing": { "kind": "plain" },
+  "connections": [
+    { "from_box": "plain-call", "from_branch": null,
+      "to_box": "next", "to_input": "text" }
+  ],
+  "ui": { "x": 120, "y": 340 } }</pre>
+        <p>The function <strong>always runs</strong>, regardless of routing kind. Routing decides which downstream branch receives the function's output; the function itself doesn't know.</p>
+
+        <h4>Routing kinds</h4>
+        <table>
+          <thead><tr><th>routing.kind</th><th>Output ports</th><th>Branch picker</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td><code>plain</code></td>       <td>single port</td>          <td>fan to all outgoing wires</td>                                              <td><span class="pill done">shipped</span></td></tr>
+            <tr><td><code>comparator</code></td>  <td><code>lt</code> / <code>eq</code> / <code>gt</code></td><td><code>compare(output, comparand)</code> → lt/eq/gt</td>                                <td><span class="pill done">shipped</span></td></tr>
+            <tr><td><code>iterator</code></td>    <td><code>out_0 … out_N-1</code></td>            <td><code>slot_read_inc(counter_slot, N)</code></td>                                       <td><span class="pill done">shipped</span></td></tr>
+            <tr><td><code>randomizer</code></td>  <td><code>out_0 … out_N-1</code></td>            <td><code>hash(counter) % N</code></td>                                                    <td><span class="pill planned">follow-on</span></td></tr>
+            <tr><td><code>weighted</code></td>    <td><code>out_0 … out_N-1</code></td>            <td>cumulative-band lookup against a scaled counter</td>                                  <td><span class="pill planned">follow-on</span></td></tr>
+            <tr><td><code>distributor</code></td> <td><code>out_0 … out_N-1</code></td>            <td>argmin over downstream slot fill levels</td>                                          <td><span class="pill planned">follow-on</span></td></tr>
+          </tbody>
+        </table>
+
+        <div data-demo="routingExplorer"></div>
+
+        <p><strong>Branch-level fan-out</strong>: for <code>comparator</code> / <code>iterator</code> / etc., each branch port acts like a small plain output of its own. If the comparator's <code>lt</code> port has three wires going to three consumers, then on every invocation where the routing decision picks <code>lt</code>, all three of those wires fire. The routing decision picks <em>which branch</em>; fan-out picks <em>which consumers</em> on that branch receive the value.</p>
+
+        <p>Plain output port can fan freely too — multiple connections from <code>from_branch: null</code> send copies to every wired consumer. Pulling multiple wires from a single output is not a routing decision.</p>
+
+        <div data-demo="weighted"></div>
+
+        <h3 id="ports">Input ports</h3>
+<pre data-lang="json">"inputs": [
+  { "name": "text",        "type": "string" },
+  { "name": "config_path", "type": "string", "optional": true,
+    "value": "config.json" }
+]</pre>
+        <p>Every input port is in one of three states at compile time:</p>
+        <ol>
+          <li>A wire is connected to it.</li>
+          <li>A literal <code>value</code> is set on it.</li>
+          <li>It carries <code>optional: true</code>.</li>
+        </ol>
+        <p><strong>Compile fails</strong> when any port is in none of those states. The error is precise: which box, which port. Enforced at the Compile button (phase 2 UI / phase 3 build) and again in the C graph loader at runtime — belt and suspenders against hand-edited maps.</p>
+
+        <div class="callout">
+          <strong>Optional ≠ null. </strong><code>optional: true</code> does not mean &ldquo;pass null&rdquo; — it means the argument doesn't have to be passed. The dispatch layer assembles <code>input_data[]</code> / <code>input_sizes[]</code> from the slots that actually have values; an absent optional port shortens <code>n_inputs</code> by one and the language's native short-arg convention handles the rest.
+        </div>
+
+        <p>Null as an <strong>explicit</strong> value (typed <code>null</code> into the literal field) is a different thing: it arrives through the function call as a real argument, mapped to the language's native null (Lua <code>nil</code>, Bash empty string <code>""</code>, C <code>NULL</code>).</p>
+
+        <h3 id="connections">Connections</h3>
+        <p>Connections are written to <strong>both</strong> endpoint box files. The loader validates at load time that both ends agree — disagreement is a hard error.</p>
+<pre data-lang="json">{ "from_box": "...",
+  "from_branch": null | "lt" | "eq" | "gt" | "out_0" | ...,
+  "to_box":   "...",
+  "to_input": "..." }</pre>
+        <p><code>from_branch</code> is <code>null</code> for <code>routing: plain</code> and for boxes without a routing field; otherwise it names the branch port the wire leaves from.</p>
+
+        <h2 id="specs">Language spec system (phase 3)</h2>
+        <p>Each language is a <strong>spec</strong> — a <code>.so</code> library at <code>langs/&lt;name&gt;/spec.so</code> that exports a <code>lang_spec_t</code> symbol. The pool runner loads every <code>langs/*/spec.so</code> at startup via <code>dlopen</code> and registers it by <code>name</code> (for box lookup) and <code>file_ext</code> (for source resolution). The spec contract is uniform across languages; no language is privileged. The runner itself does not link to liblua, libc++, or any language-specific runtime — only specs do.</p>
+
+        <h3 id="spec-struct">lang_spec_t</h3>
+<pre data-lang="c">typedef struct {
+    const char *name;       // "lua", "bash", "c", "python", ...
+    const char *file_ext;   // ".lua", ".sh", ".c", ".py"
+
+    // Once-per-worker. Pool startup calls init() for every spec on
+    // every worker before unblocking the init barrier; teardown()
+    // runs at shutdown.
+    void *(*init)    (int worker_idx);
+    void  (*teardown)(void *handle);
+
+    // Optional: at map-compile time. C uses this to gcc -shared -fPIC.
+    // Lua and Bash leave this NULL.
+    int   (*compile) (const char *src_path, const char *out_path);
+
+    // Universal invoke path: JSON bytes in, JSON bytes out.
+    // Used across every cross-language wire.
+    int   (*invoke_json)  (void *handle, /* common args */);
+
+    // Fast invoke path: language-native bytes in, language-native bytes out.
+    // Used when producer and consumer share a language.
+    int   (*invoke_native)(void *handle, /* common args */);
+
+    // Bridges used when a value crosses a language boundary.
+    int   (*native_to_json)(...);
+    int   (*json_to_native)(...);
+} lang_spec_t;
+
+extern lang_spec_t soramech_lang_spec;</pre>
+        <p>A nonzero return from <code>invoke_*</code> is a fatal error. The dispatch layer prints the context (box id, function name, language) and aborts. No recovery, no retry, no per-task "failed" state. Bugs do not belong in production.</p>
+
+        <h3 id="init-barrier">Init barrier</h3>
+        <p>Workers are not safe to dispatch to until every worker has completed <code>init</code> for every spec the map uses. Pool startup runs each worker's <code>init</code> calls, increments a shared <code>workers_ready</code> atomic, and blocks on a condition variable. The main thread waits for <code>workers_ready == n_workers</code>, then broadcasts — all workers release together and begin pulling tasks. One-shot; doesn't re-engage.</p>
+
+        <h3 id="fast-path">Same-language wire fast path</h3>
+        <p>Wire format defaults to JSON. At compile time, every wire is classified <code>fast_path: true</code> (same language at both ends) or <code>false</code> (crosses a language boundary). The compile step also records the producer's <code>output_format</code> per box — <code>native</code> if <strong>all</strong> consumers of its output share its language, <code>json</code> if any consumer is different.</p>
+
+        <p>Per-language native forms:</p>
+        <ul>
+          <li><strong>Lua</strong> — <code>lua_dump</code> for closures, <code>cjson</code> or msgpack for tables, raw bytes for strings/numbers.</li>
+          <li><strong>C</strong> — <code>memcpy</code> of the typed struct (the C spec's <code>compile</code> callback knows the types).</li>
+          <li><strong>Bash</strong> — strings only; the fast path is an alias of the JSON path.</li>
+        </ul>
+
+        <h3 id="shipped-specs">Shipped specs</h3>
+        <p><code>langs/lua/spec.so</code>, <code>langs/c/spec.so</code>, <code>langs/bash/spec.so</code> ship as reference implementations:</p>
+        <ul>
+          <li><strong>Lua</strong> — <code>init</code> constructs a <code>lua_State</code>; <code>invoke_*</code> does <code>luaL_loadfile</code> (cached) + <code>lua_pcall</code>.</li>
+          <li><strong>C</strong> — <code>compile</code> runs <code>gcc -shared -fPIC -o &lt;out&gt; &lt;src&gt;</code> (caching by mtime); <code>invoke_*</code> does <code>dlsym</code> + direct call through a wrapper the compile step generates from the box signature.</li>
+          <li><strong>Bash</strong> — <code>init</code> spawns a persistent bash subprocess and connects to it over a Unix domain socket. <code>invoke_*</code> sends a framed request, reads a framed response. The same shape every future non-embeddable-runtime language uses.</li>
+        </ul>
+        <p>A user adds a new language by writing a <code>langs/&lt;name&gt;/spec.c</code> and a small Makefile. SoraMech itself does not transpile box source between languages.</p>
+
+        <h2 id="exec-2">Execution model — phase 2 (synchronous)</h2>
+        <p>The runner walks the graph depth-first from the boxes that have all their inputs satisfied. Each box call:</p>
+        <ol>
+          <li>Read wired output values from predecessor boxes.</li>
+          <li>Shell out to the appropriate driver script (<code>drivers/&lt;lang&gt;.sh</code>).</li>
+          <li>Decode the single JSON value from driver stdout.</li>
+          <li>Hold the output in runner memory, keyed by box id.</li>
+          <li>Fire connections — enqueue boxes whose inputs are now met.</li>
+        </ol>
+        <p>Single-threaded; one process per box call. The <code>task_fn</code> boundary matches the phase 3 dispatch action signature, so the executor can be swapped without changing the box execution model.</p>
+
+        <h2 id="exec-3">Execution model — phase 3 (thread pool)</h2>
+        <p>Tasks are ephemeral; box state is durable. Each box owns one slot per input port plus optional state (iterator counter, language handle). A <strong>task</strong> is one stack frame on a worker — <code>box_id</code> is all it carries. Tasks come and go; boxes persist for the run.</p>
+
+        <h3 id="slots">Slots</h3>
+        <p>Every input port has exactly one slot, allocated at graph load and freed at run end. A wire is a routing declaration; the producer doesn't own a slot — its output is a push event into every downstream input slot it's wired to. Fan-out is N pushes; fan-in is N producers pushing into one slot.</p>
+
+        <table>
+          <thead><tr><th>Mode</th><th>Cells</th><th>Reads via</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr><td>1-cell peek</td>           <td>1</td>     <td><code>slot_peek</code></td>      <td>Literals; wires from runs-once producers</td></tr>
+            <tr><td>N-cell pop</td>            <td>N</td>     <td><code>slot_pop</code></td>       <td>Wires whose producer runs many times</td></tr>
+            <tr><td><code>SLOT_ATOMIC_COUNTER</code></td><td>1 atom</td><td><code>slot_read_inc</code></td><td>Iterator / randomizer / weighted counters</td></tr>
+          </tbody>
+        </table>
+
+        <div data-demo="slotStore"></div>
+
+        <p>Compile-time analysis decides per wire: a producer is &ldquo;runs-once&rdquo; if no transitive ancestor is an iterator, else &ldquo;runs-N-times.&rdquo; The former gets a 1-cell peek slot (subsequent consumer tasks re-read the same value); the latter gets an N-cell ring (FIFO drain, one cell per consumer task).</p>
+        <p>Variable-size payloads (long LLM outputs, dynamically-sized arrays) live in a separate <strong>large-value heap</strong>. The slot then holds a small fixed-size handle <code>{ uint32_t size; uint32_t offset; }</code>. The slot allocator only ever sees fixed-size slots; the two-tier scheme keeps the hot path simple while supporting unbounded values.</p>
+
+        <h3 id="tagging">Cell tagging for parallel iterators</h3>
+        <p>Each cell optionally carries a 4-byte ordering tag alongside its data. Iterator pushes carry their counter value as the tag; slots downstream of an iterator are allocated with <code>SLOT_TAGGED</code>, and <code>slot_pop</code> on a tagged slot returns the <strong>lowest-tag</strong> cell — not the head. This preserves iteration order across parallel iterator workers.</p>
+
+        <div data-demo="cellTagging"></div>
+
+        <p>When a consumer has two tagged inputs from two iterators, each port pops in tag order independently — pairing falls out as <code>(A_K, B_K)</code> for every K.</p>
+
+        <h3 id="dispatch-action">The dispatch action</h3>
+        <p>One C function, one phase per worker per task:</p>
+        <ol>
+          <li><strong>Read inputs.</strong> For each input port: <code>slot_peek</code> (peek mode) or <code>slot_pop</code> (pop mode) into a heap buffer. Tasks are spawned only when every input slot has a value (spawn-on-input-ready rule), so no waiting is needed.</li>
+          <li><strong>Invoke spec.</strong> Look up the box's <code>lang</code>, find the worker's handle for it, call <code>invoke_native</code> or <code>invoke_json</code> (per the wire's fast-path classification).</li>
+          <li><strong>Pick the branch.</strong> Dispatch on <code>routing.kind</code>: plain (fan to all), comparator (compare to comparand), iterator (atomic counter read), randomizer / weighted / distributor (kind-specific rule).</li>
+          <li><strong>Push.</strong> For each firing wire, <code>slot_push</code> into the consumer's input slot. The push carries the appropriate ordering tag. Each push triggers a spawn-on-input-ready check on the consumer.</li>
+          <li><strong>Done.</strong> The action returns; the pool decrements the active-task counter. The action does not block, does not wait, does not park.</li>
+        </ol>
+
+        <div data-demo="iterator"></div>
+
+        <h3 id="startup">Startup, quiescence, termination</h3>
+        <p><strong>Startup:</strong> the pool runner pushes literal-input values into the corresponding slots, then spawns first tasks for boxes whose input sets are now satisfied. Iterator counter slots start at 0.</p>
+        <p><strong>Quiescence:</strong> the main thread waits on a condition variable that signals when the pool's active-task counter reaches zero with no pending spawns. That's the run-over signal. The graph validator at load time rejects non-iterator cycles, so the run cannot deadlock — an iterator with no upstream pushes simply contributes nothing further, and once the counter drains, termination fires.</p>
+        <p><strong>Hard-crash error policy:</strong> a nonzero <code>invoke_*</code> return aborts the process. No retry, no per-task failed state, no fallback executor.</p>
+
+        <h3 id="blocking">Blocking-aware iterator pattern</h3>
+        <p>Long-running operations (network calls, LLM inference) hold their worker for the duration. Pool size is the budget. The cooperative pattern for not holding a worker for minutes: split the call into a &ldquo;kickoff&rdquo; box and a &ldquo;check-done&rdquo; iterator that polls. Each pass through the iterator releases the worker between checks. Documented fully in <a href="004-ipc-and-threading.html">§ 04 · IPC & Threading</a>.</p>
+
+        <h2 id="run-output">Run output — <code>tmp/last-run.jsonl</code></h2>
+        <p>Phase 3 writes one JSON object per event, one event per line. The format decouples the runner from the editor — the editor never displays run results; the file is for LLM consumption, CLI viewers, and the integration test harness.</p>
+<pre data-lang="jsonl">{"event":"run_start", "ts":..., "map":"maps/&lt;name&gt;", "n_workers":16}
+{"event":"task_submit", "ts":..., "task_id":42, "box_id":"classify"}
+{"event":"task_start",  "ts":..., "task_id":42, "worker_idx":3}
+{"event":"task_end",    "ts":..., "task_id":42, "duration_us":127, "output_size":12}
+{"event":"slot_alloc",  "ts":..., "slot_id":5, "size":256, "n_cells":1}   // SORAMECH_LOG_SLOTS=1
+{"event":"slot_free",   "ts":..., "slot_id":5}                              // SORAMECH_LOG_SLOTS=1
+{"event":"run_end",     "ts":..., "duration_us":1850, "n_tasks":7}</pre>
+        <p><strong>Mechanism:</strong> a dedicated writer thread drains a multi-producer single-consumer ring buffer of fixed-size event records, serializes each to JSON, and appends to the file. Workers push records into the ring without contending on a file mutex. The writer joins before <code>pool_destroy</code>, including a final <code>run_end</code> summary.</p>
+        <p>Inputs/outputs per task are off by default (<code>SORAMECH_LOG_VALUES=1</code> to enable; truncated past 4 KB). Slot allocator events are off by default (<code>SORAMECH_LOG_SLOTS=1</code>). Timestamps are Unix epoch floats. The file is overwritten on every run.</p>
+
+        <h2 id="build">Build & compile pipeline</h2>
+        <p>A top-level <code>Makefile</code> builds:</p>
+        <ol>
+          <li><code>soramech-pool</code> — statically links the pool, JSON parser, slot store, graph loader, dispatch layer, spec registry.</li>
+          <li><code>langs/&lt;name&gt;/spec.so</code> — per-spec, via the per-language Makefile (Lua links LuaJIT; C links <code>-ldl</code>; Bash links nothing extra).</li>
+        </ol>
+        <p>Modes: <code>make</code> (release, <code>-O2 -Wall</code>), <code>make DEBUG=1</code> (<code>-O0 -g</code>), <code>make STRICT=1</code> (release + <code>-Werror -Wextra -Wpedantic</code>).</p>
+        <p>Vendored dependencies (the task pool, the JSON parser) live under <code>libs/</code> as plain source — no submodules, no fetches at build time.</p>
+        <p>Spec discovery at runtime: the runner reads <code>/proc/self/exe</code>, follows the symlink, and scans for <code>langs/</code> next to its own binary. <code>SORAMECH_LANGS_DIR=/path/to/langs</code> overrides for development.</p>
+
+        <h3 id="compile-pkg">Compile a map for standalone execution</h3>
+        <p><code>./compiled/pool-runner</code> runs a map independently of the editor and the surrounding source tree. The compile step (Compile button in the editor, or <code>soramech-compile &lt;map-dir&gt;</code> from the CLI) produces:</p>
+<pre data-lang="layout">maps/&lt;name&gt;/compiled/
+  pool-runner          ← copy or symlink of soramech-pool
+  src/                 ← every source file the map uses
+  bin/                 ← per-box compiled .so files (C boxes)
+  langs/&lt;name&gt;/spec.so ← one per language the map uses
+  manifest.json        ← every box, its language, artifact path, build version</pre>
+        <p>Steps: walk the graph (reusing the C loader's validation); copy source files and transitive <code>require</code> / <code>#include</code> dependencies; invoke each spec's <code>compile</code> callback for boxes whose language needs it; copy the spec <code>.so</code> files used by the map; copy or symlink the runner binary; write the manifest. Per-box artifacts mtime-compare so a re-compile recompiles only what changed. Any failure aborts the step and leaves the partial output for inspection but does not write the manifest, so the deployment is recognizably broken until a clean compile succeeds.</p>
+
+        <h2 id="data-files">Data files</h2>
+        <p>Persistent data lives in <code>data/&lt;name&gt;.json</code> and is accessed via <code>libs/soramech-data.lua</code> (<code>data.get</code> / <code>data.set</code> / <code>data.load</code>). Format:</p>
+<pre data-lang="json">{
+  "constant": false,
+  "fields": {
+    "history": [],
+    "config": { "constant": true,
+                "value": { "model": "soramind-default" } }
+  }
+}</pre>
+        <p>Top-level <code>constant: true</code> makes the whole file read-only; field-level <code>constant</code> flags individual fields within an otherwise mutable file. This is <strong>separate</strong> from the <code>data</code> box kind (which reads arbitrary files at the dispatch layer).</p>
+        <p>Ephemeral state (scratch tables, run logs, <code>last-run.jsonl</code>) goes to <code>tmp/</code>, a symlink to <code>/tmp/&lt;map-name&gt;/</code>. Survives the run but not a reboot — intentionally.</p>
+
+        <div class="page-nav">
+          <a href="index.html"><span class="dir">◂ back</span><span class="title">Contents</span></a>
+          <a href="002-roadmap.html" class="next"><span class="dir">next ▸</span><span class="title">Roadmap</span></a>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

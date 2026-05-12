@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>§ 05 · Language Specs — SoraMech</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script defer src="assets/nav.js"></script>
+  <script defer src="assets/demos.js"></script>
+</head>
+<body data-page="005-language-specs.html">
+  <div class="shell">
+    <aside class="sidebar"></aside>
+    <main>
+      <div class="content">
+        <div class="page-head">
+          <div class="doc-num">§ 05 · Writing a Language Spec</div>
+          <h1>How to add a <em>new language</em> to the runtime.</h1>
+          <p class="lede">Stub. Filled out as the phase 3 specs are implemented (issues 306–308). For the formal contract, see issue 303. For the existing overview, see <a href="003-driver-system.html">§ 03 · Driver System</a>.</p>
+        </div>
+
+        <div class="callout">
+          <strong>Status: stub. </strong>This page exists to establish file paths and outline so cross-references resolve. The full content is written incrementally as the reference specs are implemented and there is real code to walk through.
+        </div>
+
+        <h2 id="interface">The contract</h2>
+        <p>Every language spec implements the same C struct. Click a callback to see when it runs:</p>
+
+        <div data-demo="langSpec"></div>
+
+        <h2 id="outline">What this doc will cover</h2>
+        <p>A walk-through of writing a new language spec, intended for a user adding Python, Rust, Haskell, or any language not shipped by default. Sections to fill in once the reference specs are written:</p>
+        <ul>
+          <li><strong>The contract.</strong> What <code>lang_spec_t</code> requires you to provide (<code>init</code>, <code>teardown</code>, <code>compile</code>, <code>invoke</code>). Pointer to issue 303.</li>
+          <li><strong>In-process vs out-of-process.</strong> Lua and C run in the worker thread directly; Bash talks to a persistent subprocess over a socket. Which model fits your language depends on whether it has an embeddable runtime. Pointer to <a href="004-ipc-and-threading.html">§ 04 · IPC &amp; Threading</a>.</li>
+          <li><strong>Walkthrough: the Lua spec.</strong> The simplest reference. Covers per-worker <code>lua_State</code>, registry-based file caching, typed input marshalling, return-value serialization. Pointer to issue 306.</li>
+          <li><strong>Walkthrough: the C spec.</strong> Adds compile-time wrapper generation for arbitrary user functions. Pointer to issue 307.</li>
+          <li><strong>Walkthrough: the Bash spec.</strong> The out-of-process model. Wire protocol, framed length-prefix messages, persistent subprocess lifecycle. Pointer to issue 308.</li>
+          <li><strong>Adding a new language.</strong> Directory layout, Makefile, the bare minimum to link against the spec interface, dropping the result into <code>langs/&lt;name&gt;/</code>.</li>
+          <li><strong>Thread safety.</strong> Per-worker state isolation. The C spec's <code>static</code> and <code>globals</code> race story (issue 307); cooperative patterns for languages with mutable global state.</li>
+          <li><strong>Error handling.</strong> Hard-crash policy (issue 303). What language-level errors look like at the spec boundary. How to catch them without losing context.</li>
+        </ul>
+
+        <h2 id="lexer">Editor lexer (langs/&lt;name&gt;/lexer.js)</h2>
+        <p>Independent of the runtime spec, each language carries an editor lexer that the source viewer (issue 215) uses to syntax-highlight file content. The lexer ships in the same <code>langs/&lt;name&gt;/</code> directory as the runtime spec — co-located by language, not by concern.</p>
+
+        <h3 id="lexer-contract">Contract</h3>
+        <p>A lexer is an ES module that exports a single function:</p>
+<pre data-lang="js">export function tokenize(text) {
+  return [
+    { type: 'keyword', start: 0,  end: 5 },
+    { type: 'plain',   start: 5,  end: 6 },
+    { type: 'string',  start: 6,  end: 17 },
+    // ...
+  ];
+}</pre>
+        <p>The returned tokens must be ordered, gap-free, and cover the entire input. Each token's <code>type</code> is a free-form string; the viewer applies a CSS class <code>syntax-&lt;type&gt;</code>. The standard set:</p>
+
+        <table>
+          <thead><tr><th>type</th><th>typical use</th></tr></thead>
+          <tbody>
+            <tr><td><code>keyword</code></td>   <td>language keywords</td></tr>
+            <tr><td><code>comment</code></td>   <td>line and block comments</td></tr>
+            <tr><td><code>string</code></td>    <td>quoted strings, char literals, here-docs</td></tr>
+            <tr><td><code>number</code></td>    <td>numeric literals</td></tr>
+            <tr><td><code>operator</code></td>  <td><code>+ - == = : .</code></td></tr>
+            <tr><td><code>identifier</code></td><td>variable / function names</td></tr>
+            <tr><td><code>plain</code></td>     <td>whitespace and unclassified runs</td></tr>
+          </tbody>
+        </table>
+
+        <p>Unknown types fall back to <code>syntax-default</code>. Lexers are free to introduce custom types (<code>regex</code>, <code>annotation</code>, <code>decorator</code>); the viewer just renders them with the default style unless someone adds matching CSS.</p>
+
+        <div data-demo="lexerDemo"></div>
+
+        <h3 id="lexer-loading">Loading</h3>
+        <p>The viewer maps a file's extension to a language name (e.g. <code>.lua</code> → <code>lua</code>, <code>.sh</code> → <code>bash</code>, <code>.c</code> / <code>.h</code> → <code>c</code>) and dynamically imports <code>/langs/&lt;name&gt;/lexer.js</code> on first use. Result is cached for the rest of the session. Files with an unknown extension or a missing lexer fall back to plain rendering.</p>
+
+        <h3 id="lexer-references">Reference implementations</h3>
+        <ul>
+          <li><code>langs/lua/lexer.js</code> — hand-rolled state machine, ~150 lines. Covers <code>--</code> and <code>--[[ ]]</code> comments, single/double/long-bracket strings, hex / decimal / exponent numbers, identifiers, multi-char operators.</li>
+          <li><code>langs/bash/lexer.js</code> — same shape, with <code>$var</code> / <code>${...}</code> / <code>$(...)</code> expansions tagged as identifiers and <code>#</code> line comments detected only at line-start or after whitespace.</li>
+          <li><code>langs/c/lexer.js</code> — <code>//</code> line and <code>/* */</code> block comments, <code>#directive</code> lines tagged as keyword spans, hex and float literals with C suffix support.</li>
+        </ul>
+        <p>The reference lexers are starting points — extend or replace as needed for languages with subtler syntax (regex literals, nested template strings, indentation-sensitive parsing).</p>
+
+        <h2 id="why-stub">Why a stub now</h2>
+        <p>Issues 303, 306, 307, and 308 reference this document. Creating a placeholder establishes the file path and the table of contents above so cross-references resolve. The full content is written incrementally as the reference specs are implemented and there is real code to walk through.</p>
+
+        <h2 id="issues">Relevant issues</h2>
+        <ul>
+          <li><code>303</code> — language runtime spec (the contract)</li>
+          <li><code>306</code> — Lua language spec</li>
+          <li><code>307</code> — C language spec</li>
+          <li><code>308</code> — Bash language spec</li>
+          <li><a href="003-driver-system.html">§ 03 · Driver System</a> — phase 2 driver overview, phase 3 spec overview</li>
+          <li><a href="004-ipc-and-threading.html">§ 04 · IPC &amp; Threading</a> — IPC options and threading roadmap</li>
+        </ul>
+
+        <div class="page-nav">
+          <a href="004-ipc-and-threading.html"><span class="dir">◂ back</span><span class="title">IPC & Threading</span></a>
+          <a href="index.html" class="next"><span class="dir">↺ top</span><span class="title">Contents</span></a>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

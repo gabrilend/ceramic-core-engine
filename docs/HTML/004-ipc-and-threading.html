@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>§ 04 · IPC & Threading — SoraMech</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script defer src="assets/nav.js"></script>
+  <script defer src="assets/demos.js"></script>
+</head>
+<body data-page="004-ipc-and-threading.html">
+  <div class="shell">
+    <aside class="sidebar"></aside>
+    <main>
+      <div class="content">
+        <div class="page-head">
+          <div class="doc-num">§ 04 · IPC & Threading Model</div>
+          <h1>How <em>values</em> cross between languages, and how the runner becomes a pool.</h1>
+          <p class="lede">Phase 2 spawns a process per call and pipes stdout. Phase 3 owns a C thread pool, persists per-worker language runtimes, and routes values through addressable slots. Two ends of the rewrite arc, plus the IPC options that informed the choice.</p>
+        </div>
+
+        <h2 id="problem">The problem</h2>
+        <p>The current executor runs boxes sequentially. Each box invocation shells out to a driver script, which starts a new process, runs the function, and exits. The return value passes through stdout. This works but has two structural problems:</p>
+        <ol>
+          <li><strong>Process-per-call cost.</strong> Spawning a process takes roughly 1–10 ms depending on the runtime. For a map with ten boxes, that's dominated by spawn overhead, not by the actual work.</li>
+          <li><strong>stdout is the wrong channel.</strong> A box function that prints debug output corrupts the wire value. Values are transient — they vanish once the pipe is drained. The channel has no addressing, no framing, and no backpressure.</li>
+        </ol>
+        <p>The goal is a design where cross-language calls are fast, values are addressable, and the execution model is ready to parallelize without redesign.</p>
+
+        <h2 id="roadmap">The threading roadmap</h2>
+        <p>Three stages, each building on the last:</p>
+        <ul>
+          <li><strong>Stage 1 — Synchronous (current).</strong> A single-threaded ready-queue walks the graph in dependency order. <code>run_task(box, inputs)</code> in <code>src/004-executor.lua</code> is the task boundary. It blocks until the driver responds.</li>
+          <li><strong>Stage 2 — Coroutine-based non-blocking <span class="pill planned">skipped</span>.</strong> Originally planned as a coroutine scheduler with LuaSocket non-blocking I/O. Skipped — the path goes straight from stage 1 to stage 3.</li>
+          <li><strong>Stage 3 — SoraMech-owned thread pool.</strong> A pool implementation written for SoraMech, with the 3d-rts pool design as a reference. The <code>task_fn</code> boundary swaps in the thread pool. Worker threads pull tasks from the pool; OS-level scheduling replaces any single-threaded ordering. Cross-language calls block a worker thread while other threads continue. True parallelism across cores.</li>
+        </ul>
+        <div class="callout copper">
+          <strong>Note. </strong>Effil-jit is not used. Coroutines are not used. The path goes straight from synchronous (phase 2) to the C pool (phase 3) — no intermediate coroutine stage.
+        </div>
+
+        <h2 id="stage-3">Stage 3 detail — pthreads task model</h2>
+        <p>Each box execution in the thread pool is a <strong>task struct</strong> containing:</p>
+        <ul>
+          <li><strong>Function pointer</strong> — the language-specific invocation wrapper (a C function, since pthreads requires a C entry point)</li>
+          <li><strong>Shared memory pointer</strong> — the region holding the input arguments and return value for this invocation</li>
+          <li><strong>Dependency list</strong> — pointers to the tasks this task is waiting on</li>
+          <li><strong>Waiting list</strong> — pointers to tasks that are waiting on this task</li>
+          <li><strong>Counter</strong> (iterator boxes only) — current iteration index, updated in-place when the iterator re-queues itself</li>
+        </ul>
+        <p>Task structs are allocated once at run start, one per box (not one per invocation). They live for the entire run.</p>
+
+        <h3 id="blocking-states">Blocking and unblocking — pointer-only transitions</h3>
+        <p>When a task cannot run (upstream output not yet available), it is placed in its upstream task's waiting list. This is a pointer move — no allocation, no struct copy. The task struct stays exactly where it is.</p>
+        <p>When an upstream task completes and writes its return value to shared memory, it walks its waiting list and re-adds each entry to the main task queue. Again, a pointer move only. The unblocked task's struct is unchanged; only its position in the queue changes.</p>
+        <p>This means &ldquo;blocked&rdquo;, &ldquo;queued&rdquo;, and &ldquo;running&rdquo; are states defined by which list a task's pointer currently lives in — not by any field in the struct.</p>
+
+        <h3 id="per-thread-runtimes">Per-thread language runtimes</h3>
+        <p>Each worker thread initializes its own language runtimes at startup:</p>
+        <ul>
+          <li><strong>Lua:</strong> one <code>lua_State</code> per thread. Lua states are not thread-safe, but one per thread requires no locking. The task wrapper calls the box function via <code>lua_pcall</code>.</li>
+          <li><strong>C:</strong> the compiled box function is called directly through the function pointer. No interpreter, no overhead beyond the call itself.</li>
+          <li><strong>Bash/other:</strong> a persistent subprocess per thread (Unix domain socket server model — see Option 3 below). The task wrapper sends a request and blocks the thread waiting for the response.</li>
+        </ul>
+
+        <h3 id="iterator-requeue">Iterator self-re-queue</h3>
+        <p>An iterator task does not terminate after one invocation. When it completes:</p>
+        <ol>
+          <li>It increments its <code>counter</code> field in-place (or wraps to 0).</li>
+          <li>It checks its input queue for the next pending value.</li>
+          <li>If a value is waiting: it updates its input pointer and re-adds itself to the main task queue. No allocation — the same task struct re-enters the queue with updated state.</li>
+          <li>If no value is waiting: it adds itself to the upstream task's waiting list, to be re-added when the next input arrives.</li>
+        </ol>
+        <p>Input values are processed one-at-a-time in arrival order. Ten queued inputs means the iterator task visits the queue ten times, advancing the counter and firing a different output path each time.</p>
+
+        <h2 id="blocking">Blocking semantics for long-running operations</h2>
+        <p>The pool's parallelism comes from running N worker threads concurrently on N cores. Each worker is sitting inside a single dispatch task at any given moment. If a box function does something that takes a long time — <code>sleep</code>, blocking I/O, a synchronous network request, waiting on a long-running subprocess — <strong>the worker thread is occupied for the full duration</strong>. It cannot pick up other tasks while it waits.</p>
+
+        <div data-demo="threadPool"></div>
+
+        <p>Concretely:</p>
+        <ul>
+          <li>16-worker pool, 1 box sleeping 10 seconds → the other 15 workers continue normally.</li>
+          <li>16-worker pool, 16 boxes all sleeping → all workers parked, no other task runs until a sleep finishes.</li>
+          <li>The pool size is also the budget for &ldquo;blocking activities&rdquo;. Heavy use of <code>sleep</code>-style boxes means raising <code>SORAMECH_WORKERS</code>.</li>
+        </ul>
+
+        <p><strong>Why the runtime does not have a scheduler:</strong> SoraMech is deliberately not in the business of &ldquo;park this task and wake it at time T.&rdquo; There is no delayed-spawn primitive, no timer thread, no polling loop. Adding one would mean a second concurrency model alongside the pool, with its own synchronization story. Instead, we lean on the pool's existing mechanism: a task either runs (occupying a worker) or is blocked on a slot waiting for a value (parked, no worker held). Long sleeps are an &ldquo;occupying a worker&rdquo; case.</p>
+
+        <div class="callout">
+          <strong>Cooperative pattern. </strong>For users who need many concurrent waits without burning workers, split the operation into &ldquo;kick off the thing&rdquo; (returns immediately) and &ldquo;check whether the thing is done&rdquo; (returns immediately, returns a status), and wire them through an iterator with a queued input. The iterator polls. Each box completes quickly, freeing its worker.
+        </div>
+
+        <h2 id="ipc">The three IPC options</h2>
+
+        <div data-demo="ipcOptions"></div>
+
+        <h3 id="ffi">Option 1 — LuaJIT FFI (Lua ↔ C, in-process)</h3>
+        <p>The Foreign Function Interface lets Lua call C functions that live in a shared library (<code>.so</code>) directly, in the same process, with no subprocess and no channel. You provide a C declaration (<code>ffi.cdef[[ int add(int a, int b); ]]</code>), load the compiled library (<code>ffi.load("./mybox.so")</code>), and call <code>lib.add(3, 4)</code> — the CPU jumps into native code and returns. Overhead is nanoseconds.</p>
+        <p>Since the executor already does mtime-based dynamic compilation (see <code>drivers/c.sh</code>), compiling to a <code>.so</code> instead of a binary is just a flag change (<code>-shared -fPIC</code>). The box function signature changes from <code>main(argc, argv)</code> to a named function with typed arguments — which is strictly cleaner.</p>
+        <p><strong>Limitation:</strong> FFI only works for languages that compile to a C-compatible ABI. Bash cannot. Python can (via <code>ctypes</code> on the other side), but it's awkward. FFI is the right answer for Lua ↔ C only.</p>
+        <p><strong>Cross-platform:</strong> LuaJIT FFI works on Linux, macOS, and Windows. <code>.so</code> becomes <code>.dylib</code> on macOS and <code>.dll</code> on Windows.</p>
+
+        <h3 id="shm">Option 2 — Shared memory (shm_open + mmap)</h3>
+        <p><code>shm_open("/soramech-wire-0", ...)</code> creates a named memory segment managed by the kernel — not a file on disk, but a named object in RAM. <code>mmap()</code> maps it into the calling process's address space. Any other process that opens the same name gets access to the <em>same physical memory</em>. A write in one process is immediately visible in another — no copy, no syscall per access after setup.</p>
+        <p>For SoraMech, each wire between two boxes would correspond to a named shared memory slot. The compiler generates the slot names and the read/write calls. Any language that can call POSIX can participate:</p>
+        <ul>
+          <li>Lua: via LuaJIT FFI calling <code>shm_open</code> + <code>mmap</code> from libc</li>
+          <li>C: natively</li>
+          <li>Bash: via <code>/dev/shm/&lt;name&gt;</code> — on Linux, the tmpfs backing shared memory is exposed as a filesystem path, so bash can <code>cat /dev/shm/soramech-wire-0</code></li>
+        </ul>
+        <p><strong>Performance:</strong> After the initial <code>mmap()</code> setup, reads and writes are pointer dereferences — no syscalls, no copies.</p>
+        <p><strong>Complication:</strong> Shared memory is untyped raw bytes. You need a size header, a type tag, and a synchronization mechanism. None of these are hard but the compiler must generate all of it correctly for every wire.</p>
+        <p><strong>Cross-platform:</strong> Linux full; macOS partial (<code>shm_open</code> works, <code>/dev/shm/</code> doesn't); Windows different API.</p>
+
+        <h3 id="usock">Option 3 — Unix domain socket servers <span class="amber">(chosen)</span></h3>
+        <p>A Unix domain socket is a socket addressed by a filesystem path instead of an IP address and port. <code>/tmp/soramech-bash.sock</code> is a special file; any process on the same machine connects to it with the standard socket API. The kernel routes data directly between processes in memory — no network stack, no loopback, no protocol headers. Performance is bounded by memory bandwidth.</p>
+        <p>Each language runtime runs as a persistent socket server. One server instance per language per worker thread:</p>
+<pre data-lang="paths">/tmp/soramech-bash-0.sock   ← worker thread 0's bash runtime
+/tmp/soramech-bash-1.sock   ← worker thread 1's bash runtime
+/tmp/soramech-c-0.sock      ← worker thread 0's C runtime</pre>
+        <p><strong>Wire protocol:</strong> Length-prefix framing. The sender writes a 4-byte big-endian integer (the message length in bytes), then that many bytes of content. The receiver reads 4 bytes, then reads exactly that many bytes. This handles values containing newlines or null bytes without ambiguity.</p>
+        <p><strong>Cost of idle servers:</strong> An idle server process is blocked on <code>accept()</code> — zero CPU, approximately 3–5 MB RSS for a bash process. For 10 languages × 4 threads = 40 processes ≈ 150–200 MB. Acceptable.</p>
+        <p><strong>Integration with the SoraMech thread pool:</strong></p>
+        <p>Each worker thread owns its set of language server sockets. When <code>run_task</code> calls a cross-language box, it sends to the socket and blocks on the read — the thread blocks, not the whole program. Other workers continue processing other boxes on other cores. The server processes run concurrently on whatever cores the OS schedules them to. This gives real parallelism: a bash box and a C box assigned to different workers can run simultaneously.</p>
+        <p><strong>Cross-platform:</strong> Linux full; macOS full; Windows 10 1803+ (2018) supported.</p>
+
+        <h2 id="summary">Summary comparison</h2>
+        <table>
+          <thead><tr><th>Property</th><th>FFI (.so)</th><th>Shared memory</th><th>Unix domain socket</th></tr></thead>
+          <tbody>
+            <tr><td>Speed (per call)</td>      <td>nanoseconds</td>    <td>nanoseconds*</td>      <td>microseconds</td></tr>
+            <tr><td>Languages supported</td>   <td>C-ABI only</td>     <td>any (with caveats)</td><td>any</td></tr>
+            <tr><td>Parallel connections</td>  <td>N/A (in-process)</td><td>yes (with sync)</td>  <td>yes (natural)</td></tr>
+            <tr><td>Linux</td>                 <td>yes</td>            <td>yes</td>               <td>yes</td></tr>
+            <tr><td>macOS</td>                 <td>yes</td>            <td>partial†</td>          <td>yes</td></tr>
+            <tr><td>Windows</td>               <td>yes (.dll)</td>     <td>no (different API)</td><td>yes (Win10+)</td></tr>
+            <tr><td>Complexity</td>            <td>low</td>            <td>medium</td>            <td>low-medium</td></tr>
+          </tbody>
+        </table>
+        <p class="tiny dim">*After initial mmap setup. †shm_open works; /dev/shm filesystem path does not.</p>
+
+        <p>The compiler (issue 219, folded into issue 309) uses FFI for Lua ↔ C wires where the C source is compiled to a <code>.so</code>, and Unix domain sockets for all other cross-language wires. Same-language Lua wires are direct function calls — no IPC at all.</p>
+
+        <h2 id="related">Relevant files</h2>
+        <ul>
+          <li><code>src/004-executor.lua</code> — <code>run_task</code> boundary, ready-queue</li>
+          <li><code>src/007-runner-main.lua</code> — entry point for the interpreter path</li>
+          <li>issue <code>219</code> — compiler that generates the IPC calls (folded into 309)</li>
+          <li>issue <code>104</code> — task boundary design</li>
+          <li>issue <code>213</code> — queue-per-port, thread pool notes</li>
+          <li><a href="002-roadmap.html">§ 02 · Roadmap</a> — phase plan for threading stages</li>
+        </ul>
+
+        <div class="page-nav">
+          <a href="003-driver-system.html"><span class="dir">◂ back</span><span class="title">Driver System</span></a>
+          <a href="005-language-specs.html" class="next"><span class="dir">next ▸</span><span class="title">Language Specs</span></a>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

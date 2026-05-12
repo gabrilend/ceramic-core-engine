@@ -9,6 +9,6 @@ via a ready-queue: a box is enqueued when all its input ports are filled.
 Each box invocation calls run_task() — the future thread pool swap point.
 
 On completion writes tmp/last-run.json:
-  { ok, error, boxes={ [id]={ inputs, outputs, status, error } } }
+  { ok, error, boxes={ [id]={ inputs, output, status, error } } }
 
 Returns true/nil on success, false/error-string on first failure (halts).

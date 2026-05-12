@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>§ 02 · Roadmap — SoraMech</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script defer src="assets/nav.js"></script>
+  <script defer src="assets/demos.js"></script>
+</head>
+<body data-page="002-roadmap.html">
+  <div class="shell">
+    <aside class="sidebar"></aside>
+    <main>
+      <div class="content">
+        <div class="page-head">
+          <div class="doc-num">§ 02 · Roadmap</div>
+          <h1>Six <em>phases</em>, no deadlines.</h1>
+          <p class="lede">Each phase produces a runnable artifact. Phase 1 is the foundation; phase 3 is the rewrite that earns the rest. Phases 4–6 are scoped only briefly here — concrete planning happens once phase 3 is done.</p>
+        </div>
+
+        <div data-demo="phaseTimeline"></div>
+
+        <h2 id="phase-1">Phase 1 — Foundation <span class="pill done">complete</span></h2>
+        <p>Goal: a map you can edit in the browser and execute from the terminal.</p>
+        <p>At the end of phase 1, the user can:</p>
+        <ul>
+          <li>Open the editor at <code>http://localhost:7700/</code>, see a canvas, create boxes, set their <code>ref</code> / <code>fn</code> / <code>inputs</code>, wire them together.</li>
+          <li>Save edits as box files on disk via the HTTP file CRUD server.</li>
+          <li>Run <code>luajit src/007-runner-main.lua &lt;map-dir&gt;</code> to execute the map.</li>
+          <li>Add a custom language driver and have the runner use it.</li>
+        </ul>
+        <p>Issues 101–110, all complete and moved to <code>issues/completed/</code>. Demo: <code>issues/completed/demos/phase-1/</code>.</p>
+
+        <h2 id="phase-2">Phase 2 — Editor &amp; graph model <span class="pill open">current</span></h2>
+        <p>Goal: an editor you can actually use to build maps, and the graph model the phase 3 runtime will consume.</p>
+        <p>This phase is editor-focused with some graph-model cleanup:</p>
+        <ul>
+          <li>Map picker, fit-to-view, interaction hints, entry-box marking</li>
+          <li>Source file browser with auto-populated input ports</li>
+          <li>File browser library directories</li>
+          <li>Single-output driver contract (issue 218)</li>
+          <li>Comparator-based branching replaces the old <code>branch</code> box kind with named ports (issue 210)</li>
+          <li>Comparator + iterator are the two routing primitives (issues 210, 221), being unified under issue 233</li>
+          <li>Variadic / queued inputs (issues 213, 217)</li>
+          <li>Compile button (issue 222) — placeholder until phase 3's build system (issue 309) ships the backing endpoint</li>
+          <li>Ollama / LLM library (issue 209)</li>
+        </ul>
+        <p>Phase 2 runs on the synchronous Lua interpreter (<code>src/007-runner-main.lua</code>). No threading. Drivers per phase 1.</p>
+        <p>See <code>issues/phase-2-progress.md</code> for the live status.</p>
+
+        <h2 id="phase-3">Phase 3 — Thread pool runtime <span class="pill planned">designed</span></h2>
+        <p>Goal: replace the Lua synchronous runner with a C thread pool runner that executes box graphs in parallel, with persistent per-worker language runtimes and proper inter-task value plumbing.</p>
+        <p>Designed across issues 301–313:</p>
+
+        <table>
+          <thead><tr><th>Issue</th><th>Title</th></tr></thead>
+          <tbody>
+            <tr><td><code>301</code></td><td>pool lifecycle and per-worker init</td></tr>
+            <tr><td><code>302</code></td><td>wire value slot store (ring buffers, refcount, large-value heap)</td></tr>
+            <tr><td><code>303</code></td><td>language runtime spec (<code>lang_spec_t</code> interface)</td></tr>
+            <tr><td><code>304</code></td><td>task dispatch layer</td></tr>
+            <tr><td><code>305</code></td><td>C graph loader (replaces <code>src/003-loader.lua</code>)</td></tr>
+            <tr><td><code>306</code></td><td>Lua language spec (in-process via <code>lua_State</code>)</td></tr>
+            <tr><td><code>307</code></td><td>C language spec (in-process via <code>dlopen</code>, with compile)</td></tr>
+            <tr><td><code>308</code></td><td>Bash language spec (out-of-process via Unix domain socket)</td></tr>
+            <tr><td><code>309</code></td><td>build system &amp; Makefile orchestration</td></tr>
+            <tr><td><code>310</code></td><td>priority queue (wired in, no-op behaviorally)</td></tr>
+            <tr><td><code>311</code></td><td>integration tests &amp; run output (<code>last-run.jsonl</code>)</td></tr>
+            <tr><td><code>312</code></td><td>same-language wire fast path</td></tr>
+            <tr><td><code>313</code></td><td>research — whole-program same-language merge</td></tr>
+          </tbody>
+        </table>
+
+        <p>When phase 3 lands, the synchronous Lua runner retires. The editor and the map directory format do not change — the runtime mechanism beneath the box is what changes. See <a href="004-ipc-and-threading.html">§ 04 · IPC &amp; Threading</a> for the design discussion.</p>
+
+        <h2 id="phase-4">Phase 4 — SoraMind integration <span class="pill planned">later</span></h2>
+        <p>Goal: turn the basic Ollama call box into a full inference surface against the Alpine cluster.</p>
+        <p>The basic LLM call already ships in Phase 2 (issue 209): a Lua library that takes a prompt string and returns a completion, usable directly as a call box by copying it into a map&rsquo;s <code>src/</code> directory. Phase 4 is the work on top of that:</p>
+        <ul>
+          <li>Streaming output from the inference endpoint back to the runner, surfacing tokens as they arrive instead of waiting for the full completion</li>
+          <li>Prompt assembly sugar — a dedicated box kind that pulls named sections from data files into a prompt template, rather than the user concatenating strings by hand</li>
+          <li>Multi-host routing — a single logical &ldquo;LLM call&rdquo; that picks among several backing endpoints (laptop Ollama, Alpine cluster, fallback hosts) based on availability or model</li>
+          <li>Comparator-routed classifiers as a worked pattern, not new machinery — comparators already exist in Phase 2; the work here is documenting the rogue / wizard / else style and shipping it as a reusable example</li>
+        </ul>
+        <p>Built on the phase 3 runtime — these LLM boxes are regular box functions, just ones whose backing service is a network endpoint.</p>
+
+        <h2 id="phase-5">Phase 5 — Map-to-map calls <span class="pill planned">later</span></h2>
+        <p>Goal: a box that invokes another map as a subroutine.</p>
+        <ul>
+          <li>Map call box type: specifies another map directory, passes inputs, receives outputs</li>
+          <li>Maps run concurrently with each other (sub-pool per map)</li>
+          <li>Entry/exit contracts defined in <code>meta.json</code></li>
+        </ul>
+
+        <h2 id="phase-6">Phase 6 — Remote runner <span class="pill planned">later</span></h2>
+        <p>Goal: run a map on the Alpine cluster, edit it from a laptop.</p>
+        <ul>
+          <li>Pool runner on a remote machine</li>
+          <li>File-CRUD server on the same machine exposes map files over HTTP</li>
+          <li>Browser editor on the laptop connects to the remote server</li>
+          <li>Results written to remote <code>last-run.jsonl</code>, accessible via server</li>
+        </ul>
+
+        <div class="callout">
+          Phases 4, 5, and 6 are scoped only briefly here — concrete planning happens once phase 3 is done.
+        </div>
+
+        <div class="page-nav">
+          <a href="001-architecture.html"><span class="dir">◂ back</span><span class="title">Architecture</span></a>
+          <a href="003-driver-system.html" class="next"><span class="dir">next ▸</span><span class="title">Driver System</span></a>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
