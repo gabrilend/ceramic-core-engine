@@ -18,6 +18,12 @@ local schema = require("001-schema")
 
 local M = {}
 
+-- Bundled script dirs come from config/editor-server.lua (issue 238).
+-- Set at serve() time; read by the file-browser handlers so every map
+-- sees the same default toolbox without per-map setup. Module-level
+-- state keeps the dispatch-handler signatures unchanged.
+local bundled_dirs = {}
+
 -- {{{ read_file
 local function read_file(path)
     local f, err = io.open(path, "r")
@@ -308,21 +314,64 @@ local function handle_list_src(client, req, maps_root)
 end
 -- }}}
 
+-- {{{ canonical_path
+-- Strips symlink redirection so two paths that point at the same
+-- directory compare equal even when written with different prefixes
+-- (e.g. /home/ritz/... via a symlink to /mnt/mtwo/...). Used to
+-- decide whether an entry in meta.src_dirs is the implicit map src/.
+-- One shell-out per call; called at most ~N times per listing where
+-- N is the number of dirs in the map's meta, which stays small.
+local function canonical_path(p)
+    if not p or p == "" then return p end
+    local h = io.popen("realpath -m '" .. p .. "' 2>/dev/null")
+    if not h then return p end
+    local r = h:read("*l")
+    h:close()
+    return r or p
+end
+-- }}}
+
 -- {{{ resolve_src_dirs
--- Returns the unified src_dirs list for a map.
--- Migration: if meta.json has no src_dirs, synthesizes from implicit src/ + extra_src_dirs.
--- All browseable directories go through this single function; no caller special-cases src/.
+-- Returns the unified browseable-dir list for a map. Every entry is
+-- {path, kind} with one of three kinds (issue 238):
+--   default — the map's own src/ directory, always present
+--   added   — a dir the user attached to this map via "+ library dir"
+--   bundled — an editor-wide default from config/editor-server.lua
+-- The split between default and added isn't about how they behave at
+-- runtime (both live in meta.src_dirs) — it's so the file browser
+-- can mark "ships with the map" entries differently from "user
+-- opted in" entries. The implicit src/ path is recognized by
+-- comparing canonical (realpath'd) forms so a symlinked map root
+-- matches a /mtwo/-rooted server config.
+-- Migration: if meta.json has no src_dirs, synthesizes from the
+-- implicit src/ + the older extra_src_dirs field.
 local function resolve_src_dirs(meta, maps_root, map_name)
+    local out = {}
+    local implicit_src      = maps_root .. "/" .. map_name .. "/src"
+    local implicit_src_real = canonical_path(implicit_src)
     if meta.src_dirs then
-        return meta.src_dirs
+        for _, d in ipairs(meta.src_dirs) do
+            local kind = (canonical_path(d) == implicit_src_real) and "default" or "added"
+            out[#out + 1] = { path = d, kind = kind }
+        end
+    else
+        out[#out + 1] = { path = implicit_src, kind = "default" }
+        for _, d in ipairs(meta.extra_src_dirs or {}) do
+            out[#out + 1] = { path = d, kind = "added" }
+        end
     end
-    -- migrate: implicit src/ dir is the first entry, followed by any previously stored extra dirs
-    local implicit_src = maps_root .. "/" .. map_name .. "/src"
-    local dirs = { implicit_src }
-    for _, d in ipairs(meta.extra_src_dirs or {}) do
-        dirs[#dirs + 1] = d
+    -- Per-map opt-out for bundled dirs: a map can list paths in
+    -- meta.hidden_bundled_dirs to skip them. Same hide gesture the
+    -- user does for map-owned dirs, surfaced through the editor's
+    -- right-click menu so the three kinds feel identical to use.
+    local hidden = {}
+    for _, p in ipairs(meta.hidden_bundled_dirs or {}) do hidden[p] = true end
+    for _, d in ipairs(bundled_dirs) do
+        if not hidden[d] then
+            out[#out + 1] = { path = d, kind = "bundled" }
+        end
     end
-    return dirs
+    return out
 end
 -- }}}
 
@@ -343,8 +392,8 @@ local function handle_list_extrasrc(client, req, maps_root)
 
     local src_dirs = resolve_src_dirs(meta, maps_root, map_name)
     local result = {}
-    for i, dir_path in ipairs(src_dirs) do
-        local handle = io.popen("ls " .. dir_path .. "/ 2>/dev/null")
+    for i, entry in ipairs(src_dirs) do
+        local handle = io.popen("ls " .. entry.path .. "/ 2>/dev/null")
         local files = {}
         if handle then
             local listing = handle:read("*a")
@@ -353,8 +402,11 @@ local function handle_list_extrasrc(client, req, maps_root)
                 if name ~= "" then files[#files + 1] = name end
             end
         end
-        local label = dir_path:match("([^/]+)$") or dir_path
-        result[#result + 1] = { index = i - 1, label = label, path = dir_path, files = files }
+        local label = entry.path:match("([^/]+)$") or entry.path
+        result[#result + 1] = {
+            index = i - 1, label = label,
+            path = entry.path, kind = entry.kind, files = files,
+        }
     end
     json_ok(client, result)
 end
@@ -382,10 +434,10 @@ local function handle_get_extrasrc(client, req, maps_root)
     if not meta then return json_err(client, "500 Internal Server Error", "bad meta.json") end
 
     local src_dirs = resolve_src_dirs(meta, maps_root, map_name)
-    local dir_path = src_dirs[dir_index + 1]  -- lua 1-indexed
-    if not dir_path then return json_err(client, "404 Not Found", "no src dir at index " .. dir_index) end
+    local entry = src_dirs[dir_index + 1]  -- lua 1-indexed
+    if not entry then return json_err(client, "404 Not Found", "no src dir at index " .. dir_index) end
 
-    local file_path = dir_path .. "/" .. file_name
+    local file_path = entry.path .. "/" .. file_name
     local content, ferr = read_file(file_path)
     if not content then return json_err(client, "404 Not Found", tostring(ferr)) end
     respond(client, "200 OK", content, "text/plain")
@@ -632,7 +684,15 @@ end
 -- }}}
 
 -- {{{ serve
-function M.serve(maps_root, port)
+-- opts: { maps_root = string, port = number, bundled_dirs = {string} }
+-- The bundled_dirs list (resolved absolute paths from issue 238's
+-- config file) is captured into module state so the dispatch handlers
+-- can read it without threading an extra arg through every signature.
+function M.serve(opts)
+    local maps_root = opts.maps_root
+    local port      = opts.port
+    bundled_dirs    = opts.bundled_dirs or {}
+
     local server, err = socket.bind("*", port)
     if not server then
         io.stderr:write("server: cannot bind to port " .. port .. ": " .. tostring(err) .. "\n")

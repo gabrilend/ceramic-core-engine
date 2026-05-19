@@ -1,7 +1,63 @@
 # 238 — Editor HTTP server config file (default bundled-script locations)
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+`config/editor-server.lua` is the user-facing knob — a single Lua
+table returning `port`, `map_root`, and `bundled_script_dirs`. The
+loader in `src/006-server-main.lua` does three things:
+
+- If the file is missing, **generates it** from a hard-wired
+  template (`DEFAULT_CONFIG_TEXT`, the literal text of the file) and
+  prints `generating config file at … …` so the user sees it
+  happen. The hard-wired defaults exist only as that template; the
+  on-disk file is the source of truth on every subsequent boot.
+- Field-by-field merge against the parsed template fills in any
+  fields the user trimmed out of their own config, so partial
+  configs still work.
+- Path resolution: absolute (`/x`) as-is, home-relative (`~/x`)
+  with `$HOME` expansion, project-relative (`x`) prefixed with
+  the project root.
+
+Boot log prints the resolved config so the user can confirm what's
+in effect before troubleshooting.
+
+`src/005-http-server.lua` captures the resolved `bundled_dirs`
+list into module-level state on `serve(opts)` and merges them into
+the file-browser dir listing alongside the map's own dirs.
+`resolve_src_dirs` now returns entries tagged with one of three
+kinds (instead of just a path):
+
+- `default` — the map's own `src/` directory, identified by
+  canonical-path comparison so a symlinked `/home/...` mount
+  matches a `/mnt/...` server config.
+- `added` — a directory the user attached to this map via the
+  file browser's `+ library dir` button. Stored in
+  `meta.src_dirs`.
+- `bundled` — an editor-wide default from the config file. Stored
+  in the config, not per-map.
+
+`meta.hidden_bundled_dirs` is a per-map opt-out list: paths listed
+there are filtered out of the bundled merge so a map can hide one
+of the editor-wide defaults without touching the config file.
+
+`assets/js/007-filebrowser.js` paints the `bundled` tag on
+`default` and `bundled` groups (the "ships with this map
+automatically" set) and leaves `added` groups untagged so the
+user can tell at a glance what they explicitly attached vs what
+is here by default. Right-click → `hide directory` works on every
+group — for `added` and `default` it strips from `meta.src_dirs`,
+for `bundled` it appends to `meta.hidden_bundled_dirs`. The user
+experiences a single uniform gesture; the storage split is
+invisible.
+
+Verified end-to-end via curl against the running server: missing
+config triggers generation, malformed config triggers a clear
+error, hidden_bundled_dirs filters the merge, and the three-way
+kind split surfaces correctly for both maps with and without
+`src_dirs` in their meta. User-verified visually in the editor.
 
 ## Current behavior
 

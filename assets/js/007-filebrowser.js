@@ -332,13 +332,18 @@ const FileBrowser = (() => {
       return;
     }
 
-    // build group list — every entry has a path; no exceptions
+    // build group list — every entry has a path; no exceptions.
+    // `kind` (issue 238): "default" = the map's own src/, "added" =
+    // user-opted-in via the + library dir button, "bundled" =
+    // editor-wide config default. Tag and hide-storage differ by
+    // kind below.
     const groups = [];
     (src_dirs || []).forEach(d => {
       if (d.files && d.files.length > 0) {
         groups.push({
           label:      d.label + '/',
           path:       d.path,
+          kind:       d.kind || 'added',
           files:      d.files,
           fetch_file: f => API.get_extra_src_file(d.index, f),
         });
@@ -360,10 +365,16 @@ const FileBrowser = (() => {
           async (path) => {
             try {
               const meta = await API.get_meta();
-              // derive current list from groups, not meta.src_dirs:
-              // groups already reflects the server-migrated state (extra_src_dirs + src/),
-              // whereas meta.src_dirs is absent on old maps and would discard prior entries
-              const current = groups.map(g => g.path);
+              // Derive current list from groups, not meta.src_dirs:
+              // groups already reflects the server-migrated state
+              // (extra_src_dirs + src/), whereas meta.src_dirs is
+              // absent on old maps and would discard prior entries.
+              // Strip bundled dirs (issue 238) — they live in the
+              // server config, not per-map meta.json, and we never
+              // want them to migrate into a map's own list.
+              const current = groups
+                .filter(g => g.kind !== 'bundled')
+                .map(g => g.path);
               if (!current.includes(path)) {
                 current.push(path);
                 await API.put_meta({ ...meta, src_dirs: current });
@@ -410,13 +421,31 @@ const FileBrowser = (() => {
         lbl.textContent = group.label;
         hdr.appendChild(lbl);
 
+        // The "bundled" tag marks dirs that ship with the map
+        // automatically — the map's own src/ and the editor-wide
+        // config defaults. User-added dirs (kind === 'added') stay
+        // untagged so the user can tell at a glance what they
+        // explicitly attached vs what is here by default.
+        if (group.kind === 'default' || group.kind === 'bundled') {
+          const tag = document.createElement('span');
+          tag.textContent = ' bundled';
+          tag.style.cssText = 'font-size:9px;color:#4caf7d;margin-left:6px;' +
+            'border:1px solid #4caf7d;padding:0 4px;border-radius:2px;';
+          hdr.appendChild(tag);
+        }
+
         hdr.onclick = () => {
           if (collapsed.has(collapse_key)) collapsed.delete(collapse_key);
           else collapsed.add(collapse_key);
           show_file_list();
         };
 
-        // right-click on any dir header: offer "hide directory"
+        // Right-click → "hide directory" works on every group. The
+        // storage differs by kind: map dirs come out of src_dirs;
+        // editor-wide bundled dirs are recorded in
+        // hidden_bundled_dirs (an opt-out list the server checks
+        // when merging in the config defaults). The user
+        // experiences both as the same action.
         hdr.addEventListener('contextmenu', e => {
           e.preventDefault();
           show_fb_ctx_menu(e.clientX, e.clientY, [{
@@ -425,9 +454,24 @@ const FileBrowser = (() => {
             action: async () => {
               try {
                 const meta = await API.get_meta();
-                // same migration rationale as add: use groups as source of truth
-                const dirs = groups.map(g => g.path).filter(p => p !== group.path);
-                await API.put_meta({ ...meta, src_dirs: dirs });
+                let patch;
+                if (group.kind === 'bundled') {
+                  // record the opt-out; the server filters this
+                  // path out of the bundled list on next load
+                  const hidden = Array.isArray(meta.hidden_bundled_dirs)
+                    ? meta.hidden_bundled_dirs.slice() : [];
+                  if (!hidden.includes(group.path)) hidden.push(group.path);
+                  patch = { ...meta, hidden_bundled_dirs: hidden };
+                } else {
+                  // drop from src_dirs; bundled paths never bleed
+                  // into the per-map list. Default and added live
+                  // in src_dirs together, so both go through here.
+                  const dirs = groups
+                    .filter(g => g.kind !== 'bundled' && g.path !== group.path)
+                    .map(g => g.path);
+                  patch = { ...meta, src_dirs: dirs };
+                }
+                await API.put_meta(patch);
                 render(container, on_select);
               } catch (err) {
                 show_file_list();
