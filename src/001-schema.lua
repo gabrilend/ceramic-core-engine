@@ -109,6 +109,18 @@ function M.validate_box(box)
         if box.has_output ~= nil and type(box.has_output) ~= "boolean" then
             err(errors, "'has_output' must be a boolean")
         end
+        -- Per-port `optional` flag (issue 230). Absent means false: the
+        -- port is required and must be either wired or carry a literal
+        -- value. The wire/literal/optional triple-check happens at the
+        -- graph level (validate-map.lua and the editor's compile path),
+        -- not here — this only validates per-port shape.
+        if box.inputs ~= nil and type(box.inputs) == "table" then
+            for i, p in ipairs(box.inputs) do
+                if type(p) == "table" and p.optional ~= nil and type(p.optional) ~= "boolean" then
+                    err(errors, "'inputs[" .. i .. "].optional' must be a boolean")
+                end
+            end
+        end
         if box.connections ~= nil then
             for i, c in ipairs(box.connections) do
                 validate_connection(c, i, errors)
@@ -121,6 +133,57 @@ function M.validate_box(box)
             err(errors, "'ui' must be a table")
         elseif box.ui.x == nil or box.ui.y == nil then
             err(errors, "'ui' must have 'x' and 'y' fields")
+        end
+    end
+
+    return errors
+end
+-- }}}
+
+-- {{{ check_input_bindings
+-- Graph-level check from issue 230: every input port on every box
+-- must be in one of three states by compile time —
+--   1. a wire is connected to it
+--   2. a literal `value` is set on it
+--   3. it carries `optional: true`
+-- Otherwise the box would silently receive a missing arg at runtime
+-- and the bug would only surface where the function happens to
+-- reference it. The check fails loud and points at the exact box +
+-- port instead.
+--
+-- `boxes` is a table mapping box-id → box record (the shape the
+-- editor cache and the phase 2 loader's graph use). Returns an
+-- array of error strings; empty array means OK.
+function M.check_input_bindings(boxes)
+    local errors = {}
+
+    -- precompute: for each (to_box, to_input) → true if a wire targets it.
+    -- Connections live on both endpoints (issue 228), so scanning every
+    -- box's connection list overcounts but doesn't miss anything.
+    local wired = {}
+    for _, box in pairs(boxes) do
+        for _, c in ipairs(box.connections or {}) do
+            if c.to_box and c.to_input then
+                wired[c.to_box .. "\0" .. c.to_input] = true
+            end
+        end
+    end
+
+    -- stable per-box iteration for predictable error ordering
+    local ids = {}
+    for id, _ in pairs(boxes) do ids[#ids + 1] = id end
+    table.sort(ids)
+
+    for _, id in ipairs(ids) do
+        local box = boxes[id]
+        for _, p in ipairs(box.inputs or {}) do
+            local has_wire    = wired[id .. "\0" .. p.name] == true
+            local has_literal = p.value ~= nil and p.value ~= ""
+            local is_optional = p.optional == true
+            if not (has_wire or has_literal or is_optional) then
+                err(errors, "box '" .. id .. "': input '" .. tostring(p.name) ..
+                    "' has no wire, no literal, and is not optional")
+            end
         end
     end
 

@@ -194,6 +194,14 @@ local function validate_map(map_dir)
                     meta.entry_box_id .. "' does not match any box file"
             end
         end
+
+        -- Issue 230: every input port must be wired, littered, or
+        -- flagged optional. Catches the silent-nil class at validation
+        -- time so a quiet-runtime-failure can't escape the editor.
+        local bind_errors = schema.check_input_bindings(boxes)
+        for _, e in ipairs(bind_errors) do
+            errors[#errors + 1] = e
+        end
     end
 
     return errors

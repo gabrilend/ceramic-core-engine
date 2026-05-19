@@ -794,19 +794,62 @@ const App = (() => {
   }
   // }}}
 
+  // {{{ check_input_bindings
+  // Issue 230: every input port must be wired, littered, or flagged
+  // optional. Mirrors src/001-schema.lua::check_input_bindings — the
+  // server-side validator runs the same logic when validate-map is
+  // invoked from the CLI. Returns [] on success, an array of
+  // human-readable error strings otherwise.
+  function check_input_bindings() {
+    // precompute: which (to_box, to_input) pairs have an incoming wire
+    const wired = new Set();
+    for (const id in Boxes.boxes) {
+      const conns = Boxes.boxes[id].connections || [];
+      for (const c of conns) {
+        if (c.to_box && c.to_input) {
+          wired.add(c.to_box + '\0' + c.to_input);
+        }
+      }
+    }
+
+    const errors = [];
+    const ids = Object.keys(Boxes.boxes).sort();
+    for (const id of ids) {
+      const box = Boxes.boxes[id];
+      for (const p of (box.inputs || [])) {
+        const has_wire    = wired.has(id + '\0' + p.name);
+        const has_literal = p.value !== undefined && p.value !== null && p.value !== '';
+        const is_optional = p.optional === true;
+        if (!(has_wire || has_literal || is_optional)) {
+          errors.push("box '" + id + "': input '" + p.name +
+            "' has no wire, no literal, and is not optional");
+        }
+      }
+    }
+    return errors;
+  }
+  // }}}
+
   // {{{ compile_map
-  // Placeholder for the phase 3 compile pipeline (issue 219). The button
-  // exists so the toolbar layout is settled before the backend is wired
-  // in. When implemented, this will POST to /maps/<name>/compile and
-  // produce a self-contained `compiled/` directory in the map:
-  //   compiled/pool-runner   — the C pool runner binary
-  //   compiled/src/          — copy of every source file the map uses
-  //   compiled/bin/          — per-box compiled .so files (C boxes)
-  //   compiled/langs/        — language spec .so files needed
-  //   compiled/manifest.json — every box, its language, its artifact path
+  // Pre-flight for the phase 3 compile pipeline (issue 219, folded
+  // into 309). The actual compile is the other dev's territory; here
+  // we run the issue-230 input-binding check so the user gets a hard
+  // stop on missing wires before whatever compile pipeline eventually
+  // lands. Errors print to the console (full list) and the first one
+  // surfaces in the status bar.
   function compile_map() {
-    console.log('compile clicked');
-    status_msg('compile is not wired up yet — see issue 219');
+    const errors = check_input_bindings();
+    if (errors.length > 0) {
+      console.warn('compile blocked — input-binding errors:');
+      errors.forEach(e => console.warn('  ' + e));
+      const summary = errors.length === 1
+        ? errors[0]
+        : errors.length + ' input-binding errors (see console for the full list); first: ' + errors[0];
+      status_msg(summary, 'error');
+      return;
+    }
+    console.log('compile clicked — input bindings OK');
+    status_msg('input bindings OK — compile pipeline not wired up yet (see issue 219)');
   }
   // }}}
 

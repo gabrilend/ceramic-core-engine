@@ -1,7 +1,73 @@
 # 230 — Required inputs, the optional flag, and no-null-from-missing
 
 ## Status
-open
+complete (compile-time check; runtime "shorter arg list" deferred)
+
+## Implementation notes
+
+The compile-time guarantee landed end-to-end this round. Runtime
+behavior for optional-and-absent ports (the "shorter arg list"
+section of this issue) is deliberately deferred until the C spec
+wrapper (issue 307) and the phase-3 dispatch layer (304) are
+ready to honor it — `n_inputs` reflecting actual presence vs JSON
+null padding is a contract on those layers, not this one.
+
+The shape that shipped:
+
+- **Schema** (`src/001-schema.lua`): `optional` accepted as a
+  per-port boolean. Per-port shape check rejects non-boolean
+  values; absence means false.
+- **Graph-level validator** in the same file:
+  `M.check_input_bindings(boxes)` walks every box's inputs and
+  every connection record in the cache, returning a list of
+  per-port errors for any port that has no wire, no literal,
+  and no `optional: true`. Pre-computes the wired-port set once
+  to avoid O(N²) over many boxes. Sorts results by box id for
+  predictable error ordering.
+- **CLI validator** (`src/002-validate-map.lua`): runs
+  `check_input_bindings` after the existing cross-box checks
+  (connections, branch-else, entry-box-exists). Same gating —
+  if any earlier check failed, this one is skipped to avoid
+  cascading noise.
+- **Editor mirror** (`assets/js/005-app.js`): a JS port of the
+  same algorithm, run inside `compile_map()`. The Compile button
+  blocks on input-binding errors before whatever compile
+  pipeline eventually lands (issue 309). Errors print to the
+  console with one line per violation; the status bar shows
+  either the single error (when there's one) or a "N errors,
+  see console" summary (when there are many).
+- **Inspector toggle** (`assets/js/004-inspector.js`): each port
+  block's top row now has an `opt` button alongside `var` / `×`.
+  Click flips `port.optional` between `true` and `undefined`.
+  Amber border when on, plain border when off — distinct
+  category from the blue variadic family.
+
+The check uses `\0` as the (to_box, to_input) join separator in
+the wired-set, matching the same trick on both sides.
+
+### What's *not* in this round
+
+- **Runtime arg-list shortening**: `src/004-executor.lua` still
+  emits a JSON null for any port without a value, optional or
+  not. For Lua and Bash this is invisible (null arrives as nil /
+  empty string, same as an omitted arg in practice); for C it
+  matters once the typed wrapper lands. The wrapper convention
+  is 307's territory and the dispatch layer for `n_inputs` is
+  304's. Following-on work for those issues should switch the
+  arg-assembly path to skip optional-and-absent ports when the
+  spec layer is ready.
+- **Explicit null literal** (the `null` typed into the value
+  field, distinct from absence): noted in the original spec.
+  Deferred — needs a small change to how the literal-value parser
+  interprets the string `null`, plus per-spec confirmation that
+  each language receives null natively. Pick up alongside the
+  arg-assembly change above.
+- **Live editor warnings** (red-outlined boxes as the user
+  edits): nice-to-have, not blocking. The Compile-button check
+  catches everything at the natural decision point.
+
+Tested via a six-case Lua unit script plus end-to-end against
+existing maps. User-verified visually in the editor.
 
 ## Current behavior
 

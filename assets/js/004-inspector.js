@@ -634,6 +634,25 @@ const Inspector = (() => {
           top_row.appendChild(x_btn);
         }
 
+        // `opt` toggle (issue 230). Flips port.optional between true
+        // and undefined (absent = false). An optional port doesn't
+        // require a wire or literal — the compile-time check from
+        // 230 allows it through. Amber styling so it reads as a
+        // different category from the blue `var` family.
+        const opt_btn = document.createElement('button');
+        const opt_on  = ports[i].optional === true;
+        opt_btn.style.cssText = btn_style + (opt_on
+          ? 'border-color:#d4762a;color:#d4762a;'
+          : '');
+        opt_btn.textContent = 'opt';
+        opt_btn.title       = 'mark this input as optional — the box runs even if unwired';
+        opt_btn.onclick     = () => {
+          ports[i].optional = opt_on ? undefined : true;
+          save();
+          show(current_box, on_change_cb, on_delete_cb);
+        };
+        top_row.appendChild(opt_btn);
+
         block.appendChild(top_row);
 
         // Value input — full-width row below the name. Empty means
