@@ -23,8 +23,8 @@ CFLAGS = -shared -fPIC -O2 -Wall -I$(DIR)/langs
 
 all: spec.so
 
-spec.so: spec.c
-	@$(CC) $(CFLAGS) -o $@ $<
+spec.so: spec.c $(DIR)/langs/lang-spec.h
+	@$(CC) $(CFLAGS) -o $@ $< -ldl
 
 clean:
 	@rm -f spec.so

@@ -297,3 +297,75 @@ No retry, no respawn. Per issue 303, errors crash the program.
 - `issues/307-c-language-spec.md` — sister spec, in-process C with
   compile step
 - `maps/driver-test` — multi-language test map including Bash boxes
+
+## Implementation log
+
+### fork+exec invoke — 2026-05-12
+
+First-pass implementation: every invoke forks bash with an inline
+`-c` script that sources the box file and calls the named
+function with the inputs as positional args. Child's stdout is
+read through a pipe — that becomes the output bytes. Slow (~1 ms
+per call), but it gets bash boxes running end-to-end. The
+persistent Unix-domain-socket model lands as a follow-on.
+
+### Persistent socketpair + line-protocol — 2026-05-12
+
+Replaced the fork+exec path with a persistent bash subprocess per
+worker thread. Each worker's `bash_init` does
+`socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC)`, forks bash,
+and execs `langs/bash/bash-server.sh` with the child-side socket
+fd dup'd to stdin and stdout. The `SOCK_CLOEXEC` flag is load-
+bearing: without it, concurrent worker forks would inherit each
+other's parent-side fds, the bash subprocesses would never see
+EOF, and orphan processes would pile up.
+
+The on-the-wire protocol is line-oriented:
+
+```
+Request:                          Response:
+  <n_args>\n        (or QUIT)       <exit_status>\n
+  <file_path>\n                     <output_length>\n
+  <fn_name>\n                       <output_bytes>
+  <arg1>\n
+  <arg2>\n
+  ...
+```
+
+`bash-server.sh` keeps an associative array of sourced files so a
+box source is sourced exactly once per worker — analogous to the
+Lua spec's per-worker module cache (issue 306).
+
+Per-worker teardown plumbed through the pool (issue 301's new
+`pool_set_worker_teardown` callback) sends `QUIT\n`, closes the
+parent fd, and `waitpid`s the subprocess with a 1-second
+short-poll fallback to `SIGTERM`. Verified: zero orphan bash
+processes after a `soramech-pool` run.
+
+Limitations of the current protocol:
+- Arguments containing literal newlines are not supported
+  (line-oriented framing). Box authors who need them base64-encode.
+- Single-request/single-response; long-running bash boxes
+  serialize behind themselves on the same worker. Multi-worker
+  pools dispatch in parallel, so this is rarely the bottleneck.
+
+`tests/maps/hello/src/echo.sh` ships three fixture functions.
+Five tests in `tests/308-bash-spec-test.c` cover happy paths
+plus the missing-function failure mode; all pass against the
+persistent-subprocess implementation.
+
+### Self-locating `bash-server.sh` — 2026-05-19
+
+Original implementation hard-coded the server path as
+cwd-relative (`langs/bash/bash-server.sh`), which defeated the
+compile-pipeline portability goal in issue 309. Replaced with a
+`dladdr()`-based lookup that takes the dirname of *this*
+`spec.so` and joins `bash-server.sh` to it. So when a compiled
+artifact ships `compiled/langs/bash/{spec.so,bash-server.sh}`
+side-by-side, the spec finds the script no matter what cwd the
+runner was invoked from.
+
+`SORAMECH_BASH_SERVER` still overrides the lookup, and there's
+still a cwd-relative fallback — but the fallback emits a stderr
+warning so it can't silently mask a packaging bug. `-ldl` added
+to `langs/bash/Makefile` for the new `dladdr` dependency.

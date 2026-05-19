@@ -128,6 +128,7 @@ $(BUILD_DIR)/tests/303-pool-spec-init-test: $(BUILD_DIR)/libs/task-pool/pool.o \
                                             $(BUILD_DIR)/src/011-spec-registry.o
 $(BUILD_DIR)/tests/306-lua-spec-test:     $(BUILD_DIR)/src/011-spec-registry.o
 $(BUILD_DIR)/tests/307-c-spec-test:       $(BUILD_DIR)/src/011-spec-registry.o
+$(BUILD_DIR)/tests/308-bash-spec-test:    $(BUILD_DIR)/src/011-spec-registry.o
 $(BUILD_DIR)/tests/314-json-test:         $(BUILD_DIR)/libs/json/json.o
 
 # Pattern: link a test binary. $^ collects the .o files declared
