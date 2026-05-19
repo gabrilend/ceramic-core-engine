@@ -336,6 +336,7 @@ static int parse_box_file(graph_t *g, box_t *box,
     box->spec_idx          = -1;   /* unresolved until graph_attach_runtime */
     box->counter_slot_id   = -1;   /* only iterator boxes allocate one      */
     box->multi_spawn       = 0;    /* set by graph_attach_runtime           */
+    box->use_native_invoke = 0;    /* set by graph_attach_runtime (312)     */
 
     /* id */
     json_node_t *id_n = json_object_get(n, "id");
@@ -662,6 +663,87 @@ graph_t *graph_load(const char *map_dir, char **err)
     if (load_boxes(g, map_dir, err)    != 0) { graph_destroy(g); return NULL; }
     if (resolve_topology(g, err)       != 0) { graph_destroy(g); return NULL; }
     if (detect_cycles(g, err)          != 0) { graph_destroy(g); return NULL; }
+
+    /* Compute the same-language fast path flag per call box (issue
+     * 312). A box is "native-eligible" iff every adjacent call box —
+     * any producer feeding its inputs AND any consumer reading its
+     * output — shares the box's language. Data boxes and
+     * file_write boxes don't constrain (they emit/consume raw
+     * bytes that any spec interprets uniformly).
+     *
+     * Computed in graph_load (not graph_attach_runtime) because
+     * it's purely topology-derived and doesn't need the slot
+     * store or registry. The dispatch action picks
+     * `spec->invoke_native` when this flag is set, falling back to
+     * `invoke_json` or `invoke`. Our current specs all leave
+     * invoke_native NULL so the fallback runs and behaviour is
+     * unchanged — but the infrastructure is in place. */
+    for (int i = 0; i < g->n_boxes; i++) {
+        box_t *b = &g->boxes[i];
+        b->input_edge_native  = NULL;
+        b->output_edge_native = NULL;
+        b->use_native_invoke  = 0;
+        if (b->kind != BOX_CALL || !b->lang) continue;
+
+        /* Allocate per-port input bits and per-connection output
+         * bits. malloc rather than calloc — we fill every entry
+         * explicitly below. */
+        if (b->n_inputs > 0) {
+            b->input_edge_native = malloc((size_t)b->n_inputs * sizeof(int));
+            if (!b->input_edge_native) { if (err) *err = err_fmt("oom"); return NULL; }
+            for (int j = 0; j < b->n_inputs; j++) b->input_edge_native[j] = 0;
+        }
+        if (b->n_connections > 0) {
+            b->output_edge_native = malloc((size_t)b->n_connections * sizeof(int));
+            if (!b->output_edge_native) { if (err) *err = err_fmt("oom"); return NULL; }
+            for (int j = 0; j < b->n_connections; j++) b->output_edge_native[j] = 0;
+        }
+
+        /* Outgoing edges: for each connection, the consumer's lang
+         * is native iff it's also a call box in this box's
+         * language. Data / file_write consumers are not native
+         * (they don't carry a language). */
+        int all_outs_native = 1;
+        for (int j = 0; j < b->n_connections; j++) {
+            int dst = b->connections[j].to_box_idx;
+            if (dst < 0) { all_outs_native = 0; continue; }
+            const box_t *c = &g->boxes[dst];
+            int native = (c->kind == BOX_CALL && c->lang
+                          && strcmp(c->lang, b->lang) == 0);
+            b->output_edge_native[j] = native;
+            if (!native) all_outs_native = 0;
+        }
+
+        /* Incoming edges: for each input port, scan every producer
+         * in the graph; the port is native iff at least one
+         * producer feeds it AND every feeding producer shares this
+         * box's language. (A mixed-language fan-in downgrades the
+         * port to JSON for the whole port — the slot can carry only
+         * one format, and JSON is the common denominator.) */
+        int all_ins_native = 1;
+        for (int port = 0; port < b->n_inputs; port++) {
+            int any_producer = 0;
+            int all_native   = 1;
+            for (int p = 0; p < g->n_boxes; p++) {
+                const box_t *prod = &g->boxes[p];
+                for (int k = 0; k < prod->n_connections; k++) {
+                    if (prod->connections[k].to_box_idx != i)        continue;
+                    if (prod->connections[k].to_input_idx != port)   continue;
+                    any_producer = 1;
+                    int native = (prod->kind == BOX_CALL && prod->lang
+                                  && strcmp(prod->lang, b->lang) == 0);
+                    if (!native) all_native = 0;
+                }
+            }
+            b->input_edge_native[port] = (any_producer && all_native) ? 1 : 0;
+            if (!b->input_edge_native[port]) all_ins_native = 0;
+        }
+
+        /* Retain the per-box bit for dispatch sites that haven't
+         * been migrated to per-edge consultation yet. Only true
+         * when EVERY edge in both directions is native. */
+        b->use_native_invoke = (all_ins_native && all_outs_native) ? 1 : 0;
+    }
     return g;
 }
 /* }}} */
@@ -676,6 +758,8 @@ void graph_destroy(graph_t *g)
             free(g->boxes[i].connections);
             free(g->boxes[i].input_slot_ids);
             free(g->boxes[i].input_slot_modes);
+            free(g->boxes[i].input_edge_native);
+            free(g->boxes[i].output_edge_native);
             free((double *)g->boxes[i].routing.weights);
         }
         free(g->boxes);

@@ -519,7 +519,20 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
         fprintf(stderr, "dispatch: '%s' spec not in registry\n", b->id);
         return -1;
     }
-    if (!spec->invoke) {
+    /* Pick the invoke path per issue 312's same-language fast-path
+     * rules:
+     *   - same-language chain ⇒ invoke_native (if the spec supplies one)
+     *   - cross-language wire ⇒ invoke_json   (if the spec supplies one)
+     *   - either way: fall back to the canonical `invoke` when the
+     *     spec hasn't specialised. Our current specs all use the
+     *     fallback, so behaviour is unchanged; the resolution is
+     *     here so future specs can opt in without touching the
+     *     dispatch layer. */
+    lang_invoke_fn fn;
+    if (b->use_native_invoke && spec->invoke_native) fn = spec->invoke_native;
+    else if (!b->use_native_invoke && spec->invoke_json) fn = spec->invoke_json;
+    else                                              fn = spec->invoke;
+    if (!fn) {
         fprintf(stderr, "dispatch: '%s' spec missing invoke\n", b->id);
         return -1;
     }

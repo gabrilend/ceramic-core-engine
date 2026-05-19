@@ -106,6 +106,88 @@ static int test_load_hello(void)
 }
 /* }}} */
 
+/* {{{ test_native_invoke_classification() */
+/* Verifies issue 312's per-edge fast-path classification:
+ *
+ *  - input_edge_native[port]  is 1 iff every producer feeding
+ *    that port is a call box in the consumer's language.
+ *    Literals and data-box producers count as NOT native — they
+ *    emit JSON text the consumer's spec must parse.
+ *  - output_edge_native[edge] is 1 iff the consumer at the other
+ *    end of that connection is a call box in this box's language.
+ *  - use_native_invoke remains as the per-box AND of every edge,
+ *    used by dispatch sites not yet migrated to per-edge. */
+static int test_native_invoke_classification(void)
+{
+    char *err = NULL;
+
+    /* hello: greet (lua) has a literal-fed input → input edge is
+     * JSON. greet has no outgoing connections in this fixture.
+     * Per-edge: input 0 not native; vacuous all-outs. Per-box AND
+     * = 0 because the input is a JSON edge. */
+    {
+        graph_t *g = graph_load("tests/maps/hello", &err);
+        ASSERT(g);
+        const box_t *greet = graph_box_by_id(g, "greet");
+        const box_t *who   = graph_box_by_id(g, "who");
+        ASSERT(greet->n_inputs == 2);
+        ASSERT(greet->input_edge_native != NULL);
+        ASSERT(greet->input_edge_native[0] == 0);  /* fed by data box `who` */
+        ASSERT(greet->input_edge_native[1] == 0);  /* literal */
+        ASSERT(greet->use_native_invoke == 0);
+        ASSERT(who->use_native_invoke   == 0);     /* who is BOX_DATA */
+        graph_destroy(g);
+    }
+
+    /* comparator: classify (lua) has a literal input but its
+     * three outgoing edges all feed lua call boxes → outputs are
+     * native, input is JSON. low/mid/high have no outgoing
+     * connections and their input comes from classify (a Lua call
+     * box) → input native, vacuous outs, all-native = use_native. */
+    {
+        graph_t *g = graph_load("tests/maps/comparator", &err);
+        ASSERT(g);
+        const box_t *classify = graph_box_by_id(g, "classify");
+        const box_t *low      = graph_box_by_id(g, "low");
+
+        ASSERT(classify->input_edge_native[0]  == 0);  /* literal */
+        ASSERT(classify->n_connections         == 3);
+        ASSERT(classify->output_edge_native[0] == 1);  /* lt → low (lua) */
+        ASSERT(classify->output_edge_native[1] == 1);  /* eq → mid (lua) */
+        ASSERT(classify->output_edge_native[2] == 1);  /* gt → high (lua) */
+        ASSERT(classify->use_native_invoke     == 0);  /* per-box AND fails on input */
+
+        /* low has two inputs: port 0 "tag" (literal) and port 1
+         * "v" (fed by classify, a Lua call box). */
+        ASSERT(low->n_inputs               == 2);
+        ASSERT(low->input_edge_native[0]   == 0);   /* literal "tag"      */
+        ASSERT(low->input_edge_native[1]   == 1);   /* lua classify → "v" */
+        /* use_native_invoke is the AND across all ports, so the
+         * literal port keeps it at 0 even though the lua input
+         * is native. */
+        ASSERT(low->use_native_invoke      == 0);
+        ASSERT(graph_box_by_id(g, "mid") ->use_native_invoke == 0);
+        ASSERT(graph_box_by_id(g, "high")->use_native_invoke == 0);
+        graph_destroy(g);
+    }
+
+    /* pipeline: lua → c → bash chain. Every adjacent edge crosses
+     * a language boundary; per-edge bits are 0 across the board. */
+    {
+        graph_t *g = graph_load("tests/maps/pipeline", &err);
+        ASSERT(g);
+        const box_t *dbl = graph_box_by_id(g, "double");  /* lua */
+        ASSERT(dbl->n_connections >= 1);
+        ASSERT(dbl->output_edge_native[0] == 0);          /* → addone (c) */
+        ASSERT(dbl->use_native_invoke == 0);
+        ASSERT(graph_box_by_id(g, "addone")->use_native_invoke == 0);
+        ASSERT(graph_box_by_id(g, "shout") ->use_native_invoke == 0);
+        graph_destroy(g);
+    }
+    return 1;
+}
+/* }}} */
+
 /* {{{ test_randomizer_weighted_parsing() */
 /* Verifies issue 304's randomizer and weighted routing schemas
  * load cleanly with the right per-kind fields. */
@@ -553,6 +635,7 @@ int main(void)
     RUN(non_iterator_cycle);
     RUN(iterator_cycle_allowed);
     RUN(duplicate_id);
+    RUN(native_invoke_classification);
     RUN(randomizer_weighted_parsing);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

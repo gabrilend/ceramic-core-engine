@@ -15,9 +15,12 @@
  * layer prints the error context and aborts. There is no recovery,
  * no retry, no per-task failed state. This is intentional.
  *
- * The fast-path callbacks (invoke_native, native_to_json,
- * json_to_native) from issue 312 are not in this initial header —
- * they land when 312 is implemented.
+ * Issue 312 extends this contract with optional fast-path
+ * callbacks: `invoke_native` and `invoke_json` are specialised
+ * variants the dispatch layer prefers when wire classification
+ * says they apply; `native_to_json` and `json_to_native` are
+ * bridges used at language boundaries. Specs that don't set them
+ * fall back to `invoke` for every call.
  */
 
 #ifndef SORAMECH_LANG_SPEC_H
@@ -28,6 +31,28 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* {{{ Shared signatures */
+/* Invoke signature — shared by `invoke`, `invoke_native`, and
+ * `invoke_json`. The dispatch layer picks which one to call based
+ * on the wire-format classification in issue 312. */
+typedef int (*lang_invoke_fn)(void *handle,
+                              const char *file_path,
+                              const char *fn_name,
+                              const void **input_data,
+                              const int   *input_sizes,
+                              int          n_inputs,
+                              void        *out_buf,
+                              int          out_buf_capacity,
+                              int         *out_size);
+
+/* Wire-format bridge: convert one direction of native ↔ JSON.
+ * Used when a value crosses a language boundary. Spec sets one
+ * or both; if NULL, the dispatch layer treats native and JSON as
+ * identical byte streams (the current uniform-byte default). */
+typedef int (*lang_bridge_fn)(const void *src, int src_size,
+                              void *dst, int dst_capacity, int *dst_size);
+/* }}} */
 
 /* {{{ lang_spec_t */
 typedef struct lang_spec {
@@ -54,16 +79,36 @@ typedef struct lang_spec {
     /* invoke: per box call. Inputs are arrays of (bytes, size) pairs,
      * already read from slots by the dispatch layer. Returns the
      * function's output by writing to out_buf and setting *out_size.
-     * Returns 0 on success, nonzero (fatal) on error. */
-    int   (*invoke)(void *handle,
-                    const char *file_path,
-                    const char *fn_name,
-                    const void **input_data,
-                    const int   *input_sizes,
-                    int          n_inputs,
-                    void        *out_buf,
-                    int          out_buf_capacity,
-                    int         *out_size);
+     * Returns 0 on success, nonzero (fatal) on error.
+     *
+     * This is the canonical entry point; every spec implements it.
+     * The dispatch layer falls back to it when the specialised
+     * paths below are not set. */
+    lang_invoke_fn invoke;
+
+    /* invoke_native — optional fast path used when every wire
+     * adjacent to this box (input and output) stays inside this
+     * spec's language. Bytes on the wire are this language's
+     * native serialisation (Lua tables via msgpack, C struct
+     * memcpy, etc.) and the encode/decode round trip is skipped.
+     * NULL means the spec hasn't specialised; dispatch falls
+     * back to `invoke`. Issue 312. */
+    lang_invoke_fn invoke_native;
+
+    /* invoke_json — optional universal-interop path. Bytes on the
+     * wire are JSON. NULL means the spec hasn't specialised;
+     * dispatch falls back to `invoke`. Issue 312. */
+    lang_invoke_fn invoke_json;
+
+    /* Bridges between native and JSON wire forms. Used when a
+     * value crosses a language boundary — the producer writes
+     * native, the dispatch layer converts via the producer's
+     * native_to_json, hands the JSON bytes to the consumer's
+     * json_to_native. NULL means the spec hasn't specialised;
+     * dispatch treats native and JSON as identical bytes. Issue
+     * 312. */
+    lang_bridge_fn native_to_json;
+    lang_bridge_fn json_to_native;
 } lang_spec_t;
 /* }}} */
 

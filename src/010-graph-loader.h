@@ -127,6 +127,29 @@ typedef struct {
     int           *input_slot_modes;/* 0 = PEEK (1-cell), 1 = POP (N-cell)         */
     int            counter_slot_id;/* atomic-counter slot for iterator routing; -1 */
     int            multi_spawn;    /* 1 if the box may fire many times in one run  */
+
+    /* 312 per-edge fast-path classification.
+     *
+     * One bit per input port: true iff the producer feeding that
+     * port shares this box's language. When set, the dispatch
+     * passes the slot's bytes to invoke_native as-is; when cleared
+     * the dispatch calls json_to_native first.
+     *
+     * One bit per outgoing connection (not per output port — a
+     * single output may fan to consumers of different languages):
+     * true iff the consumer on the other end of that connection
+     * shares this box's language. When set, push native bytes
+     * directly; when cleared, call native_to_json first and push
+     * JSON. */
+    int           *input_edge_native;   /* n_inputs entries, or NULL              */
+    int           *output_edge_native;  /* n_connections entries, or NULL         */
+
+    /* The earlier per-box approximation, retained until the
+     * dispatch fully switches to per-edge consultation. Computed as
+     * (all input_edge_native bits set) && (all output_edge_native
+     * bits set) — i.e. true only for boxes inside a same-language
+     * island with no cross-language neighbours. */
+    int            use_native_invoke;
 } box_t;
 
 /* Slot mode constants used by box_t.input_slot_modes[]. */
