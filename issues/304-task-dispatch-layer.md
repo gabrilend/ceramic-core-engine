@@ -317,3 +317,187 @@ and the per-kind UI.
 - `issues/221-iterator-box.md` — iterator routing and self-rescheduling
 - `issues/completed/108-branch-box-and-predicate-routing.md` — comparator routing
 - `issues/213-queued-inputs-and-task-model.md` — queued-input slot semantics
+
+## Implementation log
+
+### Skeleton — 2026-05-12
+
+`src/012-dispatch.{c,h,info.md}` ships the types and the action's
+signature with a stub body that increments a diagnostic counter
+on the context and frees the task. `dispatch_ctx_t` bundles the
+graph, slot store, spec registry, and pool — every task carries a
+pointer to the context so the action has everything it needs
+without globals. `dispatch_spawn(ctx, box_id, priority)`
+allocates a task and calls `pool_spawn`.
+
+Two skeleton tests in `tests/012-dispatch-test.c` build the full
+runtime (graph + slots + registry + pool) and submit either one
+task per box, or 200 tasks at varied priorities, and assert that
+the counter advances by the right amount.
+
+What's still ahead inside 304:
+- Reading inputs from per-port slots (peek vs pop based on
+  compile-time wire classification — that classification work
+  itself is the deferred size-class step in 305).
+- Invoking the per-worker spec handle. Needs 303's pool hook in
+  place so each worker has its handles populated; right now the
+  context's `specs` registry is reachable but worker handles
+  aren't routed through the worker context.
+- Picking the output branch per `routing.kind` and pushing to
+  consumer slots; this is the routing-table dispatch from the
+  unified schema in issue 233.
+- Spawn-on-input-ready chaining: each push to a consumer slot
+  triggers a check, which may spawn the consumer's next task.
+
+### Plain-call dispatch + spawn-on-ready — 2026-05-12
+
+`src/012-dispatch.c` now has a real action body. For each task:
+1. Look up the box from the graph.
+2. Read every input port via `slot_peek` into a heap buffer.
+3. Dispatch on `box->kind`:
+   - **BOX_CALL** — resolve the per-worker spec handle via
+     `pool_current_worker->handles[box->spec_idx]`, call
+     `spec->invoke(handle, ref_path, fn_name, inputs, sizes,
+     n_present, out_buf, out_cap, &out_size)`.
+   - **BOX_DATA** — open `map_dir/box->path`, read up to
+     `out_capacity` bytes into the output buffer.
+   - **BOX_FILE_WRITE** — read inputs "path" and "text",
+     `fwrite` text to the resolved path.
+4. Capture the output for inspection (optional), push to every
+   outgoing connection's input slot, and fire
+   `dispatch_spawn_if_ready` on each consumer.
+5. Emit `task_start` / `task_end` events through the optional
+   event queue (issue 311) with monotonic-clock durations.
+
+Three end-to-end fixture maps cover the major paths:
+
+- `tests/maps/calc/` — single Lua call box with two literal
+  inputs. `add(17, 25) = "42"`.
+- `tests/maps/hello/` — two-box data → Lua pipeline.
+  `who → "World"` → `greet → "Hello, World!"`.
+- `tests/maps/pipeline/` — five-box multilang chain.
+  `data "5" → Lua double "10" → C addone "11" →
+  Bash shout "11!" → file_write` writes `11!` to disk.
+
+Four dispatch tests in `tests/012-dispatch-test.c` exercise the
+calc fixture (with and without literals), a counter-burst
+verifying many concurrent tasks against the same box, and the
+skeleton dispatch path.
+
+Still ahead inside 304:
+- **Iterator multi-spawn.** Each iterator task should re-spawn
+  itself when its input queue still has values; that needs the
+  N-cell pop-mode slot shape from 302 and a different
+  `box_ever_spawned` rule.
+- **Routing kinds beyond plain.** Comparator routes by output
+  value; iterator/randomizer/weighted/distributor route by the
+  atomic counter or downstream fill. The hooks in `box->routing`
+  are populated by 305; only the dispatch branch picker is
+  missing.
+- **Variable-size payloads via the large-value heap** (issue 302).
+
+### Comparator + iterator routing — 2026-05-12
+
+`push_routed(ctx, b, bytes, size)` now branches on
+`b->routing.kind`:
+- **PLAIN** — fan to every outgoing connection (existing behavior).
+- **COMPARATOR** — parse the output as a double via `strtod`,
+  compare against `b->routing.comparand`, push to the
+  matching `lt` / `eq` / `gt` connection only.
+- **ITERATOR** — `slot_read_inc(ctx->slots, b->counter_slot_id,
+  n_outputs)` picks the branch index, then push to the
+  `out_<idx>` connection only.
+- **RANDOMIZER / WEIGHTED / DISTRIBUTOR** — fall back to plain
+  for now; deferred to follow-ons.
+
+A new `push_branch(ctx, b, branch, bytes, size)` helper filters
+connections by `from_branch` and pushes to each match (also
+firing the spawn-on-input-ready check on each consumer).
+
+The randomizer/weighted/distributor enum values stay reserved
+in the routing-kind table; the dispatch falls through to plain
+so nothing deadlocks.
+
+Two fixture maps cover the two routing kinds end-to-end:
+
+- `tests/maps/comparator/` — `classify` (lua, comparator,
+  `comparand=5`) feeds three sinks `low`/`mid`/`high` via
+  `from_branch="lt"/"eq"/"gt"`. With literal `v="8"`, only the
+  `high` sink runs and captures `"HIGH:8"`.
+- `tests/maps/iter-route/` — `iter` (lua, iterator,
+  `n_outputs=3`) feeds three sinks `a`/`b`/`c` via
+  `from_branch="out_0"/"out_1"/"out_2"`. First invocation
+  (counter=0) routes to `a`; manual `dispatch_spawn` calls then
+  walk through `b` and `c` as the counter advances.
+
+Three new tests in `tests/012-dispatch-test.c`: comparator
+routing, single-fire iterator routing, and a 3-call round-robin
+iterator covering all three branches.
+
+### Task-id correlation — 2026-05-12
+
+`dispatch_task_t` gained a `task_id` field assigned at
+`dispatch_spawn` time (atomic fetch-add on
+`ctx->next_task_id`). The same id correlates the
+`task_submit` / `task_start` / `task_end` events emitted
+through the event queue. `task_submit` lands on the spawning
+thread (worker_idx = -1 since the task hasn't been picked up
+yet); start/end land on the dispatching worker with its real
+`thread_idx`.
+
+### Iterator multi-spawn + N-cell pop reads — 2026-05-12
+
+Three pieces together unlock real iteration:
+
+1. **Per-input slot mode.** `box->input_slot_modes[i]` is set by
+   `graph_attach_runtime` to either `SLOT_MODE_PEEK` (single
+   cell, the legacy path) or `SLOT_MODE_POP` (multi-cell ring;
+   each read drains one cell). `read_inputs` picks `slot_pop`
+   or `slot_peek` based on the mode.
+2. **multi_spawn propagation.** Iterators are marked
+   `multi_spawn = 1`; a forward BFS propagates the flag through
+   the connection graph so every box reachable from an iterator
+   is also `multi_spawn`. Multi-spawn boxes get N-cell pop slots
+   (currently 16 cells); single-spawn boxes keep their 1-cell
+   peek slots.
+3. **Auto-re-spawn.** After a multi-spawn box's action completes
+   successfully, it calls `dispatch_spawn` on itself if any POP
+   input still has queued values. A single push wakes the entire
+   chain — an iterator with three queued inputs walks the counter
+   through all three branches without external intervention.
+
+The single-spawn guard now applies only to single-spawn boxes.
+Multi-spawn ones spawn on every push; the per-slot atomic-flag
+spinlock serializes pops so two concurrent tasks each get a
+distinct cell.
+
+`test_iterator_multi_fire` in `tests/012-dispatch-test.c` is the
+headline test: push three values to the iterator's input slot,
+spawn once, all three branches a/b/c fire with the right tagged
+output. The atomic counter walks 0 → 1 → 2 across the
+auto-re-spawned tasks.
+
+### Cell-tagged ordering across parallel iterator workers — 2026-05-19
+
+Earlier multi-spawn slot pushes carried `tag = 0`; pop order was
+fill order (which is FIFO under the per-slot spinlock but
+non-deterministic across producer interleaving).
+
+Tag propagation is now wired through:
+
+- `push_one_connection` / `push_branch` take an explicit `tag`
+  argument forwarded to `slot_push`.
+- Iterator routing passes the freshly-incremented counter as
+  the tag; randomizer and weighted routing pass their counter
+  snapshot so any downstream tagged slot still serves in stable
+  order; plain/comparator pushes pass `0`.
+- `graph_attach_runtime` sets `SLOT_FLAG_TAGGED` on every
+  multi-spawn box's input slots. The slot store's tagged-pop
+  rule (lowest tag first; FIFO among ties via filled-index
+  scan) means that even when two iterator tasks run on
+  different workers in opposite order, the downstream consumer
+  reads them in invocation order.
+
+Verified by re-running all 6 fixture maps and the dedicated
+`test_iterator_multi_fire` test (which now exercises tagged
+input slots).

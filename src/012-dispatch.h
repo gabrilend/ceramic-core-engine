@@ -1,0 +1,117 @@
+/* src/012-dispatch.h — task dispatch layer, public API.
+ *
+ * What it is, in a sentence: the C function the thread pool runs
+ * per task; reads inputs from the slot store, invokes the box's
+ * language spec, pushes outputs to downstream input slots, and
+ * spawns consumer tasks on input readiness.
+ *
+ * Designed in issue 304. As of this iteration: real input
+ * reading, real spec invocation via per-worker handles, real
+ * output pushing with FIFO + 1-cell peek slots, real
+ * spawn-on-input-ready chaining under a single-spawn-per-box
+ * rule. Iterator multi-spawn, the routing kinds beyond plain,
+ * and the large-value heap path are still ahead.
+ *
+ * The `dispatch_ctx_t` bundle is the durable runtime state for
+ * the whole run: graph, slot store, spec registry, pool, plus
+ * a per-box "ever spawned" flag array and (optionally) a
+ * per-box output-capture table for testing. Tasks carry a
+ * pointer to the context so the action has everything it needs
+ * without globals.
+ */
+
+#ifndef SORAMECH_DISPATCH_H
+#define SORAMECH_DISPATCH_H
+
+#include <stdatomic.h>
+
+#include "010-graph-loader.h"
+#include "011-spec-registry.h"
+#include "009-slot-store.h"
+#include "pool.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* {{{ Types */
+typedef struct dispatch_ctx {
+    const graph_t        *graph;
+    slot_store_t         *slots;
+    spec_registry_t      *specs;
+    pool_t               *pool;
+
+    /* Diagnostic: incremented each time dispatch_action runs. */
+    _Atomic int           tasks_dispatched;
+
+    /* Per-box spawn guard (n_boxes entries). The 1-cell peek model
+     * spawns each box at most once; this flag is the CAS target
+     * that enforces "only one push wins the spawn." */
+    int                   n_boxes;
+    _Atomic int          *box_ever_spawned;
+
+    /* Per-box output capture (opt-in, for tests). When non-NULL,
+     * dispatch_action copies the box's output bytes here on
+     * completion. n_boxes entries. */
+    char                **last_outputs;
+    int                  *last_output_sizes;
+    int                   capture_outputs;
+
+    /* Optional default output buffer size for invoke calls. If 0,
+     * defaults to 4096. */
+    int                   default_out_capacity;
+} dispatch_ctx_t;
+
+typedef struct dispatch_task {
+    int                   box_id;
+    const dispatch_ctx_t *ctx;
+} dispatch_task_t;
+/* }}} */
+
+/* {{{ Lifecycle */
+/* Initialize the per-box runtime state owned by the context. The
+ * graph + slots + specs + pool fields are caller-owned and just
+ * referenced. Call after `graph_attach_runtime` so the per-box
+ * runtime data is in place.
+ *
+ * `enable_output_capture` allocates `last_outputs` and
+ * `last_output_sizes` so tests can inspect what each box wrote
+ * after `pool_wait_quiescent`. */
+int  dispatch_ctx_init   (dispatch_ctx_t *ctx,
+                          const graph_t *g, slot_store_t *s,
+                          spec_registry_t *r, pool_t *p,
+                          int enable_output_capture, char **err);
+
+/* Free per-box runtime arrays; does not touch the externally-owned
+ * graph / slots / specs / pool fields. */
+void dispatch_ctx_destroy(dispatch_ctx_t *ctx);
+/* }}} */
+
+/* {{{ Startup helpers */
+/* Walk every box and push any input-port literal values into the
+ * corresponding input slot. After this call, boxes whose inputs
+ * are entirely literals are "ready" — spawn them with
+ * `dispatch_spawn_if_ready` to start the run. */
+int  dispatch_push_literals(dispatch_ctx_t *ctx, char **err);
+
+/* If `box_id` has all required inputs available and hasn't been
+ * spawned yet, allocate a task and submit it to the pool. */
+void dispatch_spawn_if_ready(dispatch_ctx_t *ctx, int box_id, int priority);
+/* }}} */
+
+/* {{{ Task submission / action */
+/* Submit a task explicitly, bypassing the spawn-if-ready check.
+ * The dispatch_action will still consume inputs from slots and
+ * push outputs to downstream slots. */
+void dispatch_spawn(const dispatch_ctx_t *ctx, int box_id, int priority);
+
+/* The pool action. Cast `arg` back to `dispatch_task_t *` inside.
+ * Frees the task at the end of the action. */
+void dispatch_action(void *arg);
+/* }}} */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* SORAMECH_DISPATCH_H */

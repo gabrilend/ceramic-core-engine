@@ -71,6 +71,9 @@ typedef struct {
     routing_kind_t kind;
     int            n_outputs;   /* iterator / randomizer / weighted / distributor */
     double         comparand;   /* comparator */
+    /* Weighted routing: arena-owned double array of n_outputs
+     * entries. Normalised at runtime. NULL for other kinds. */
+    const double  *weights;
 } routing_t;
 /* }}} */
 
@@ -122,6 +125,8 @@ typedef struct {
     int            spec_idx;       /* index into the spec registry; -1 if no spec  */
     int           *input_slot_ids; /* n_inputs entries; -1 if not allocated yet    */
     int           *input_slot_modes;/* 0 = PEEK (1-cell), 1 = POP (N-cell)         */
+    int            counter_slot_id;/* atomic-counter slot for iterator routing; -1 */
+    int            multi_spawn;    /* 1 if the box may fire many times in one run  */
 } box_t;
 
 /* Slot mode constants used by box_t.input_slot_modes[]. */

@@ -106,6 +106,63 @@ static int test_load_hello(void)
 }
 /* }}} */
 
+/* {{{ test_randomizer_weighted_parsing() */
+/* Verifies issue 304's randomizer and weighted routing schemas
+ * load cleanly with the right per-kind fields. */
+static int test_randomizer_weighted_parsing(void)
+{
+    char tmpl[] = "/tmp/soramech-routing-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char path[4096];
+    snprintf(path, sizeof path, "%s/meta.json", dir);
+    FILE *fp = fopen(path, "w");
+    fputs("{\"name\":\"r\",\"entry_box_id\":\"rnd\"}", fp);
+    fclose(fp);
+    snprintf(path, sizeof path, "%s/boxes", dir); mkdir(path, 0755);
+
+    snprintf(path, sizeof path, "%s/boxes/rnd.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"rnd\",\"kind\":\"call\",\"lang\":\"lua\","
+          "\"ref\":\"r.lua\",\"fn\":\"r\","
+          "\"routing\":{\"kind\":\"randomizer\",\"n_outputs\":4}}", fp);
+    fclose(fp);
+
+    snprintf(path, sizeof path, "%s/boxes/wtd.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"wtd\",\"kind\":\"call\",\"lang\":\"lua\","
+          "\"ref\":\"r.lua\",\"fn\":\"w\","
+          "\"routing\":{\"kind\":\"weighted\",\"weights\":[0.8,0.2]}}", fp);
+    fclose(fp);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    if (!g) {
+        fprintf(stderr, "      load failed: %s\n", err ? err : "(null)");
+        free(err);
+        return 0;
+    }
+    const box_t *rnd = graph_box_by_id(g, "rnd");
+    const box_t *wtd = graph_box_by_id(g, "wtd");
+    ASSERT(rnd->routing.kind      == ROUTING_RANDOMIZER);
+    ASSERT(rnd->routing.n_outputs == 4);
+    ASSERT(wtd->routing.kind      == ROUTING_WEIGHTED);
+    ASSERT(wtd->routing.n_outputs == 2);
+    ASSERT(wtd->routing.weights   != NULL);
+    ASSERT(wtd->routing.weights[0] == 0.8);
+    ASSERT(wtd->routing.weights[1] == 0.2);
+    graph_destroy(g);
+
+    /* Cleanup. */
+    snprintf(path, sizeof path, "%s/boxes/rnd.json", dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes/wtd.json", dir); unlink(path);
+    snprintf(path, sizeof path, "%s/meta.json",     dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes",         dir); rmdir(path);
+    rmdir(dir);
+    return 1;
+}
+/* }}} */
 
 /* {{{ test_load_branching() — comparator + iterator routing kinds */
 static int test_load_branching(void)
@@ -496,6 +553,7 @@ int main(void)
     RUN(non_iterator_cycle);
     RUN(iterator_cycle_allowed);
     RUN(duplicate_id);
+    RUN(randomizer_weighted_parsing);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

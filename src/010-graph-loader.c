@@ -137,8 +137,73 @@ static int parse_routing(const json_node_t *r, routing_t *out,
         }
         return 0;
     }
+    if (strcmp(kind, "randomizer") == 0) {
+        out->kind = ROUTING_RANDOMIZER;
+        json_node_t *n = json_object_get(r, "n_outputs");
+        if (!n || json_kind(n) != JSON_NUMBER) {
+            *err = err_fmt("box '%s': randomizer routing missing 'n_outputs'", box_id);
+            return -1;
+        }
+        out->n_outputs = (int)json_number_value(n);
+        if (out->n_outputs < 1) {
+            *err = err_fmt("box '%s': randomizer n_outputs must be >= 1", box_id);
+            return -1;
+        }
+        return 0;
+    }
+    if (strcmp(kind, "weighted") == 0) {
+        out->kind = ROUTING_WEIGHTED;
+        json_node_t *w = json_object_get(r, "weights");
+        if (!w || json_kind(w) != JSON_ARRAY) {
+            *err = err_fmt("box '%s': weighted routing missing 'weights' array", box_id);
+            return -1;
+        }
+        int n = json_array_size(w);
+        if (n < 1) {
+            *err = err_fmt("box '%s': weighted routing 'weights' must be non-empty", box_id);
+            return -1;
+        }
+        out->n_outputs = n;
+        /* The graph loader's arena is not exposed to this function;
+         * stash a heap-allocated copy and recover it in graph_destroy
+         * via a per-box free pass — wait, simpler: allocate via the
+         * arena. We'll use the JSON arena owned by the graph. The
+         * routing_t already holds a const pointer; cast away const
+         * at allocation time. */
+        /* Use plain malloc for simplicity; the per-box free in
+         * graph_destroy frees it via a new field below. To avoid
+         * widening box_t for one field, leak through the graph's
+         * arena would be neater — but the arena pointer isn't
+         * threaded through. Just malloc + free in graph_destroy.
+         *
+         * Actually the cleanest path: the JSON parse tree's array
+         * already lives in the arena. Walk it and read values
+         * directly at dispatch time. But routing_t wants double*
+         * for fast access. Compromise: copy into a malloc'd buffer
+         * here, free in graph_destroy. */
+        double *vals = malloc((size_t)n * sizeof(double));
+        if (!vals) { *err = err_fmt("out of memory"); return -1; }
+        for (int i = 0; i < n; i++) {
+            json_node_t *e = json_array_at(w, i);
+            if (!e || json_kind(e) != JSON_NUMBER) {
+                free(vals);
+                *err = err_fmt("box '%s': weights[%d] is not a number", box_id, i);
+                return -1;
+            }
+            vals[i] = json_number_value(e);
+            if (vals[i] < 0) {
+                free(vals);
+                *err = err_fmt("box '%s': weights[%d] is negative", box_id, i);
+                return -1;
+            }
+        }
+        out->weights = vals;
+        return 0;
+    }
+
     *err = err_fmt("box '%s': unknown routing.kind '%s' "
-                   "(supported: plain, comparator, iterator)",
+                   "(supported: plain, comparator, iterator, "
+                   "randomizer, weighted)",
                    box_id, kind);
     return -1;
 }
@@ -269,6 +334,8 @@ static int parse_box_file(graph_t *g, box_t *box,
 
     memset(box, 0, sizeof *box);
     box->spec_idx          = -1;   /* unresolved until graph_attach_runtime */
+    box->counter_slot_id   = -1;   /* only iterator boxes allocate one      */
+    box->multi_spawn       = 0;    /* set by graph_attach_runtime           */
 
     /* id */
     json_node_t *id_n = json_object_get(n, "id");
@@ -609,6 +676,7 @@ void graph_destroy(graph_t *g)
             free(g->boxes[i].connections);
             free(g->boxes[i].input_slot_ids);
             free(g->boxes[i].input_slot_modes);
+            free((double *)g->boxes[i].routing.weights);
         }
         free(g->boxes);
     }
@@ -686,6 +754,42 @@ static int resolve_spec_for_box(const box_t *box, spec_registry_t *r)
 }
 /* }}} */
 
+/* {{{ propagate_multi_spawn() — BFS forward from iterators */
+/* A box is "multi_spawn" if it's an iterator OR if any producer
+ * feeding one of its inputs is itself multi_spawn. The marker
+ * propagates forward through the connection graph. */
+#define MULTI_SPAWN_RING_CELLS 16
+
+static void propagate_multi_spawn(graph_t *g)
+{
+    /* Seed: every iterator-routing call box is multi_spawn. */
+    for (int i = 0; i < g->n_boxes; i++) {
+        box_t *b = &g->boxes[i];
+        b->multi_spawn = (b->kind == BOX_CALL &&
+                          b->routing.kind == ROUTING_ITERATOR) ? 1 : 0;
+    }
+    /* Fixed-point: as long as any new box gets marked, iterate. The
+     * graph is small (≤ a few hundred boxes in practice), so the
+     * O(n × edges) bound is fine. */
+    int changed = 1;
+    while (changed) {
+        changed = 0;
+        for (int i = 0; i < g->n_boxes; i++) {
+            const box_t *b = &g->boxes[i];
+            if (!b->multi_spawn) continue;
+            for (int j = 0; j < b->n_connections; j++) {
+                int dst = b->connections[j].to_box_idx;
+                if (dst < 0) continue;
+                if (!g->boxes[dst].multi_spawn) {
+                    g->boxes[dst].multi_spawn = 1;
+                    changed = 1;
+                }
+            }
+        }
+    }
+}
+/* }}} */
+
 /* {{{ graph_attach_runtime() — phase 5 + 7 */
 int graph_attach_runtime(graph_t *g,
                          struct slot_store *slots,
@@ -699,14 +803,17 @@ int graph_attach_runtime(graph_t *g,
     }
     if (default_cell_bytes <= 0) default_cell_bytes = 4096;
 
+    /* Mark multi-spawn boxes via forward BFS from iterators so we
+     * can pick the right slot mode for each input port below. */
+    propagate_multi_spawn(g);
+
     for (int i = 0; i < g->n_boxes; i++) {
         box_t *b = &g->boxes[i];
 
-        /* Allocate one 1-cell peek slot per input port. The slot
-         * stays filled after the producer writes it; consumers
-         * peek-without-draining each time they run. Issues 304 and
-         * 312 grow this into pop rings and tagged slots once the
-         * dispatch layer needs them. */
+        /* Allocate slots per input port. Multi-spawn boxes get
+         * N-cell pop rings so producers' multiple pushes accumulate
+         * and each task drains one cell. Single-spawn boxes get
+         * 1-cell peek slots (the legacy fast path). */
         if (b->n_inputs > 0) {
             b->input_slot_ids   = malloc((size_t)b->n_inputs * sizeof(int));
             b->input_slot_modes = malloc((size_t)b->n_inputs * sizeof(int));
@@ -714,9 +821,17 @@ int graph_attach_runtime(graph_t *g,
                 if (err) *err = err_fmt("out of memory allocating input slots");
                 return -1;
             }
+            int n_cells = b->multi_spawn ? MULTI_SPAWN_RING_CELLS : 1;
+            int mode    = b->multi_spawn ? SLOT_MODE_POP : SLOT_MODE_PEEK;
+            /* Multi-spawn rings tag each cell so pops serve in
+             * producer-supplied order (issue 304). Iterators pass
+             * their counter as the tag; non-iterator producers pass
+             * 0 and effectively get FIFO ordering. */
+            int slot_flags = b->multi_spawn ? SLOT_FLAG_TAGGED : 0;
             for (int j = 0; j < b->n_inputs; j++) {
                 slot_id_t id = slot_alloc((slot_store_t *)slots,
-                                          default_cell_bytes, 1, 0);
+                                          default_cell_bytes, n_cells,
+                                          slot_flags);
                 if (id == SLOT_INVALID) {
                     if (err) *err = err_fmt("box '%s': failed to allocate "
                                             "slot for input '%s'",
@@ -724,7 +839,7 @@ int graph_attach_runtime(graph_t *g,
                     return -1;
                 }
                 b->input_slot_ids[j]   = (int)id;
-                b->input_slot_modes[j] = SLOT_MODE_PEEK;
+                b->input_slot_modes[j] = mode;
             }
         }
 
@@ -740,6 +855,24 @@ int graph_attach_runtime(graph_t *g,
                                         b->ref ? b->ref : "(null)");
                 return -1;
             }
+        }
+
+        /* Iterator boxes need an atomic-counter slot so the dispatch
+         * layer can pick the output branch via slot_read_inc with
+         * concurrent-safe semantics. */
+        b->counter_slot_id = -1;
+        if (b->kind == BOX_CALL &&
+            (b->routing.kind == ROUTING_ITERATOR   ||
+             b->routing.kind == ROUTING_RANDOMIZER ||
+             b->routing.kind == ROUTING_WEIGHTED)) {
+            slot_id_t cid = slot_alloc((slot_store_t *)slots, 0, 0,
+                                       SLOT_FLAG_ATOMIC_COUNTER);
+            if (cid == SLOT_INVALID) {
+                if (err) *err = err_fmt("box '%s': could not allocate "
+                                        "atomic-counter slot", b->id);
+                return -1;
+            }
+            b->counter_slot_id = (int)cid;
         }
     }
 

@@ -126,6 +126,13 @@ $(BUILD_DIR)/tests/010-graph-loader-test: $(BUILD_DIR)/src/010-graph-loader.o \
                                           $(BUILD_DIR)/src/011-spec-registry.o \
                                           $(BUILD_DIR)/libs/json/json.o
 $(BUILD_DIR)/tests/011-spec-registry-test: $(BUILD_DIR)/src/011-spec-registry.o
+$(BUILD_DIR)/tests/012-dispatch-test:      $(BUILD_DIR)/src/012-dispatch.o \
+                                           $(BUILD_DIR)/src/010-graph-loader.o \
+                                           $(BUILD_DIR)/src/011-spec-registry.o \
+                                           $(BUILD_DIR)/src/009-slot-store.o \
+                                           $(BUILD_DIR)/src/015-large-value-heap.o \
+                                           $(BUILD_DIR)/libs/json/json.o \
+                                           $(BUILD_DIR)/libs/task-pool/pool.o
 $(BUILD_DIR)/tests/301-pool-test:         $(BUILD_DIR)/libs/task-pool/pool.o
 $(BUILD_DIR)/tests/303-pool-spec-init-test: $(BUILD_DIR)/libs/task-pool/pool.o \
                                             $(BUILD_DIR)/src/011-spec-registry.o
