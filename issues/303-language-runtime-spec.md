@@ -214,3 +214,59 @@ exists or how to extend it.
   runs spec `compile` for every box
 - `docs/004-ipc-and-threading.md` — Option 1 (FFI) and Option 3 (Unix
   socket) describe the two execution models specs implement
+
+## Implementation log
+
+### Registry — 2026-05-12
+
+`src/011-spec-registry.{c,h}` scans a `langs/` directory, dlopens
+every `<name>/spec.so` it finds with `RTLD_NOW | RTLD_LOCAL`, and
+exposes name + extension lookup plus enumeration. The three
+shipped stubs (lua/c/bash) load cleanly and round-trip through
+`spec_registry_get` and `spec_registry_for_ext`. Four unit tests
+in `tests/011-spec-registry-test.c` cover the load, missing dir,
+null inputs, and accessor safety.
+
+Deferred: hooking `spec->init(worker_idx)` into the pool's
+`worker_main` between TLS setup and the init barrier. That's the
+final piece that makes 303 fully wired; lands in a follow-on once
+a spec has a real `init` body to call (issue 306 onward).
+
+### Per-worker init / teardown helper — 2026-05-12
+
+`spec_registry_init_worker(r, worker_idx, handles, cap)` and the
+matching `_teardown_worker` walk the registry, call each spec's
+init/teardown, and stash handles in a caller-provided array.
+Index in the array matches index in the registry. Specs with NULL
+init contribute NULL handles; teardown skips NULL slots. A new
+unit test runs against the three shipped specs and now confirms
+that the Lua spec's init returns a non-NULL `lua_State` while the
+still-stub C and Bash specs leave their slots NULL.
+
+What's still ahead inside 303: actually calling the helper from
+the pool's `worker_main` so each worker thread populates its
+`worker_ctx_t.handles[]` before crossing the init barrier. Small
+change; lives in `libs/task-pool/pool.c` and needs the runner to
+pass a `spec_registry_t *` into `pool_create` (or to a new
+`pool_init_specs` API). Lands in the next pass.
+
+### Pool worker hook — 2026-05-12
+
+`libs/task-pool/pool.{c,h}` grew a per-worker init callback:
+`pool_set_worker_init(p, cb, user)` and `pool_init_barrier` now
+returns an int (0 ok, -1 if any worker's callback failed). The
+init barrier became a three-stage handshake so callbacks
+registered between `pool_create` and `pool_init_barrier` can't
+race the workers — stage 1 parks workers until the barrier
+authorises them, stage 2 runs each worker's callback, stage 3
+releases everyone into the task loop.
+
+`tests/303-pool-spec-init-test.c` wires `spec_registry_init_worker`
+into the pool callback (a two-line trampoline) and asserts that
+spawned tasks see a non-NULL `lua_State` in
+`pool_current_worker->handles[lua_idx]`, with each worker getting
+its own distinct state. The pool-internal callback test in
+`tests/301-pool-test.c` covers the success and failure paths
+without the registry. 303 is now functionally complete end to
+end — the registry loads specs, the helper inits them per
+worker, and the pool's worker_main calls them through the hook.
