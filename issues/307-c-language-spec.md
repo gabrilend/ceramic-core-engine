@@ -86,6 +86,19 @@ preserve the field; saves write it back. Nothing overwrites it.
 
 ## Box file convention: any C function, no boilerplate
 
+**The rule, stated as a rule:** a box author writes code as if
+SoraMech does not exist. The function they write must be a
+function their non-SoraMech compiler can compile, their
+non-SoraMech editor can lint, their non-SoraMech test harness
+can call. No SoraMech-prefixed macros. No SoraMech-shaped
+return types. No `#include "soramech.h"`. Nothing in the
+author's source betrays that the function will ever cross
+SoraMech's wire.
+
+SoraMech bends to the language. The language never bends to
+SoraMech. This is non-negotiable across every spec; it's the
+reason for the spec interface in the first place.
+
 Users do not write a SoraMech-specific C signature. They reference
 any C function — whether one they wrote themselves, or one from a
 library (zlib, OpenCV, libcurl, anything they have headers for) —
@@ -419,3 +432,24 @@ No retry, no fallback. Per issue 303.
 - `issues/306-lua-language-spec.md` — sister spec; same shape, no
   compile step
 - `maps/driver-test` — multi-language test map including C boxes
+
+## Implementation log
+
+### Compile + invoke — 2026-05-12
+
+`langs/c/spec.c`:
+- `compile(src, out)` forks gcc with `-shared -fPIC -O2 -Wall`.
+- `init` allocates a 32-entry dlopen cache; `teardown` walks it.
+- `invoke` looks up the .so in the cache or dlopens it, dlsyms
+  the named function, and calls it through a fixed signature:
+  `int fn(const void **inputs, const int *sizes, int n,
+  void *out_buf, int out_capacity, int *out_size)`.
+
+Convention: C box functions all match that signature. The
+optional typed-wrapper mode (per-box signature parsing +
+generated marshaller) is deferred until a box wants types that
+diverge from the byte-array shape.
+
+`tests/maps/hello/src/echo.c` ships two fixture functions; five
+tests in `tests/307-c-spec-test.c` compile and invoke them, plus
+the missing-symbol and bad-source failure modes.
