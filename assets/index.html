@@ -161,6 +161,29 @@ canvas {
 
 .branch-port-row { flex-wrap: wrap; }
 
+/* Canvas tooltip (issue 235): shows the full literal value of an
+   input port when the canvas label was truncated (long single line
+   or collapsed multi-line). Positioned in screen coords near the
+   cursor by 005-app.js. */
+#canvas-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: #1e2130ee;
+  color: #e8eaf6;
+  border: 1px solid #4a9eff;
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  max-width: 400px;
+  max-height: 200px;
+  overflow: hidden;
+  z-index: 50;
+  display: none;
+}
+#canvas-tooltip.visible { display: block; }
+
 /* Status bar */
 #status-bar {
   position: absolute;
@@ -583,6 +606,7 @@ canvas {
   <div id="status-bar">
     <span id="status" class="status">starting…</span>
   </div>
+  <div id="canvas-tooltip"></div>
 </div>
 
 <div id="sidebar">

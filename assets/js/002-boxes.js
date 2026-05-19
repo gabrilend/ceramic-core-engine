@@ -10,11 +10,56 @@ const Boxes = (() => {
 
   const KIND_COLOR = { call: '#4a9eff', data: '#4caf7d' };
 
+  // Issue 235: input ports with a literal value show the value on the
+  // canvas in place of the port name. ~24 chars fits comfortably in
+  // BOX_W=180 at 10px monospace; anything longer truncates with an
+  // ellipsis. Multi-line values collapse to their first line.
+  const MAX_LABEL_CHARS = 24;
+
   // Comparator branch colors: lt=orange, eq=blue, gt=green
   const BRANCH_COLOR = { lt: '#ff8c42', eq: '#4a9eff', gt: '#4caf7d' };
 
   // boxes: { [id]: box_data }
   let boxes = {};
+
+  // {{{ port_has_incoming_wire
+  // A wire on a port is the source of truth for that port's value at
+  // runtime; any literal value sitting on the same port is dormant.
+  // Issue 235 surfaces this by deciding the canvas label — port name
+  // when wired (so the reader doesn't mistake the dormant value for
+  // what's flowing through), value otherwise.
+  function port_has_incoming_wire(box, port_name) {
+    if (!box.connections) return false;
+    for (const c of box.connections) {
+      if (c.to_box === box.id && c.to_input === port_name) return true;
+    }
+    return false;
+  }
+  // }}}
+
+  // {{{ port_label_text
+  // Picks the string drawn next to an input port dot. Three cases:
+  //   - wire attached, or no value → port name (parameter identity)
+  //   - value set, no wire         → the value (what the box does)
+  //   - value too long / multiline → first line, truncated with …
+  // The two-branch decision is the visible heart of issue 235: a
+  // reader scanning the map should see the data the box operates on,
+  // not the parameter slot it sits in.
+  function port_label_text(box, i) {
+    const p = box.inputs[i];
+    const has_value = p.value !== undefined && p.value !== null && p.value !== '';
+    if (!has_value)                              return p.name;
+    if (port_has_incoming_wire(box, p.name))     return p.name;
+    const raw        = String(p.value);
+    const first_line = raw.split('\n')[0];
+    const multiline  = first_line.length < raw.length;
+    if (first_line.length > MAX_LABEL_CHARS) {
+      return first_line.slice(0, MAX_LABEL_CHARS - 1) + '…';
+    }
+    if (multiline) return first_line + '…';
+    return first_line;
+  }
+  // }}}
 
   // {{{ box_height
   function box_height(box) {
@@ -136,7 +181,7 @@ const Boxes = (() => {
     ctx.font      = '10px monospace';
     ctx.fillStyle = '#9ea3c0';
 
-    in_pts.forEach(p => {
+    in_pts.forEach((p, i) => {
       ctx.beginPath();
       ctx.arc(p.x, p.y, PORT_R, 0, Math.PI * 2);
       ctx.fillStyle   = '#2d3250';
@@ -145,15 +190,17 @@ const Boxes = (() => {
       ctx.fill();
       ctx.stroke();
 
-      // Port name label rendered into the canvas (issue 224 reverted
-      // the DOM-overlay experiment — a click-capturing <input> next to
-      // the dot was capturing drag attempts). Drawn in world space,
-      // so it scales with zoom. Editing happens in the inspector.
+      // Label rendered into the canvas (issue 224 reverted the DOM-
+      // overlay experiment — a click-capturing <input> next to the dot
+      // was capturing drag attempts). Drawn in world space, so it
+      // scales with zoom. Editing still happens in the inspector.
+      // What text we draw depends on whether a literal value is set
+      // and whether a wire occupies the port (issue 235).
       ctx.fillStyle  = '#9ea3c0';
       ctx.font       = '10px monospace';
       ctx.textAlign  = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(p.name, p.x + PORT_R + 4, p.y);
+      ctx.fillText(port_label_text(box, i), p.x + PORT_R + 4, p.y);
     });
 
     out_pts.forEach(p => {
@@ -227,9 +274,31 @@ const Boxes = (() => {
   }
   // }}}
 
+  // {{{ port_full_value_if_truncated
+  // For the canvas tooltip (issue 235): if a port is showing a
+  // shortened version of its literal value (multi-line collapse or
+  // ellipsis), return the raw value so the tooltip can present it
+  // in full. Returns null when the displayed label is already the
+  // whole value, or when the label is the port name (wired / no
+  // value). Looking up the index by name keeps callers honest —
+  // they can ask about a port without knowing its row.
+  function port_full_value_if_truncated(box, port_name) {
+    if (!box.inputs) return null;
+    const i = box.inputs.findIndex(p => p.name === port_name);
+    if (i < 0) return null;
+    const p = box.inputs[i];
+    const has_value = p.value !== undefined && p.value !== null && p.value !== '';
+    if (!has_value) return null;
+    if (port_has_incoming_wire(box, p.name)) return null;
+    const raw = String(p.value);
+    return raw === port_label_text(box, i) ? null : raw;
+  }
+  // }}}
+
   return {
     boxes, BOX_W, BOX_HEADER, PORT_R,
     box_height, port_positions,
     draw_all, draw_box, hit_test_port, hit_test_box, get_port_world_pos,
+    port_full_value_if_truncated,
   };
 })();

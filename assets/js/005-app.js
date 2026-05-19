@@ -13,6 +13,21 @@ const App = (() => {
   let erasing    = false;
   let erase_seen = new Set();  // wire signatures already queued for deletion this drag
 
+  // Canvas tooltip (issue 235): pulled when hovering an input port
+  // whose canvas label is a truncated literal value. Offset puts the
+  // tooltip below-right of the cursor so it doesn't occlude the dot
+  // the user is reading.
+  const tooltip_el     = document.getElementById('canvas-tooltip');
+  const TOOLTIP_OFFSET = 14;
+
+  function show_tooltip(screen_x, screen_y, text) {
+    tooltip_el.textContent = text;
+    tooltip_el.style.left  = (screen_x + TOOLTIP_OFFSET) + 'px';
+    tooltip_el.style.top   = (screen_y + TOOLTIP_OFFSET) + 'px';
+    tooltip_el.classList.add('visible');
+  }
+  function hide_tooltip() { tooltip_el.classList.remove('visible'); }
+
   // context menu
   const ctx_menu = document.createElement('div');
   ctx_menu.id = 'context-menu';
@@ -296,6 +311,13 @@ const App = (() => {
     const s = Canvas.mouse_pos(e);
     const w = Canvas.screen_to_world(s.x, s.y);
 
+    // Tooltip default: hide each tick. The hover-detection block at
+    // the bottom of this handler reinstates it when the cursor is
+    // over a truncated-value port. Any branch with an early `return`
+    // therefore leaves the tooltip hidden, which is what we want
+    // during drag / wire / erase interactions.
+    hide_tooltip();
+
     if (erasing && tool_mode === 'erase-wire') {
       // Sample several points along the line from the previous cursor
       // position to the current one; hit-test each against every wire.
@@ -355,8 +377,21 @@ const App = (() => {
         b.ui.y = Math.round(w.y - drag_offset.y);
         Canvas.mark_dirty();
       }
+      return;
+    }
+
+    // Idle hover — check for a truncated-value input port and show
+    // the full value as a tooltip if found. Reached only when no
+    // interaction is active (every busy branch above returns).
+    const hit = Boxes.hit_test_port(w.x, w.y);
+    if (hit && hit.side === 'input') {
+      const box  = Boxes.boxes[hit.box_id];
+      const full = Boxes.port_full_value_if_truncated(box, hit.port_name);
+      if (full) show_tooltip(s.x, s.y, full);
     }
   });
+
+  Canvas.el.addEventListener('mouseleave', hide_tooltip);
 
   Canvas.el.addEventListener('mouseup', async e => {
     if (e.button !== 0) return;

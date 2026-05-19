@@ -29,10 +29,15 @@ model the phase 3 runtime will consume.
 | 226  | hide output controls for no-return functions   | complete |
 | 227  | hide view button when box has no ref           | complete |
 | 228  | self-loop wires routed around the box body     | complete |
-| 229  | data box as language-agnostic file source / sink | open     |
+| 229  | `read` / `write` box kinds (language-agnostic IO) | open     |
 | 230  | required inputs and the optional flag           | open     |
 | 231  | move signature parsers into langs/              | open     |
 | 233  | unified routing schema (comparator+iterator)    | open     |
+| 234  | middle-click duplicates the selected box        | open     |
+| 235  | literal value replaces port name on the canvas  | complete |
+| 236  | box header = filename, output label = `fn()`    | open     |
+| 237  | string-manipulation library expansion           | open     |
+| 238  | editor HTTP server config file                  | open     |
 | 216  | read-file box                                  | complete |
 | 217  | concat box and dynamic inputs                  | complete |
 | 218  | enforce single-output driver contract          | complete |
