@@ -366,6 +366,147 @@ static int test_store_size_growth(void)
 }
 /* }}} */
 
+/* {{{ test_large_value_push_pop() */
+/* SLOT_FLAG_LARGE_VALUE accepts any size on push, regardless of
+ * cell_capacity (which is ignored). Bytes live in the slot store's
+ * lazy-created lvh heap; the cell holds a stable pointer. Peek
+ * and pop both copy from the heap back into the caller buffer. */
+static int test_large_value_push_pop(void)
+{
+    slot_store_t *s = slot_store_create();
+    slot_id_t id = slot_alloc(s, 0, 4, SLOT_FLAG_LARGE_VALUE);
+    ASSERT(id != SLOT_INVALID);
+
+    /* 100 KB push — well beyond any sane fixed cell size. */
+    int payload_size = 100 * 1024;
+    unsigned char *src = malloc((size_t)payload_size);
+    for (int i = 0; i < payload_size; i++) src[i] = (unsigned char)(i & 0xFF);
+    ASSERT(slot_push(s, id, src, payload_size, 0) == 0);
+
+    /* Peek twice — value stays in the cell. */
+    unsigned char *dst = malloc((size_t)payload_size);
+    int32_t got = slot_peek(s, id, dst, payload_size);
+    ASSERT(got == payload_size);
+    for (int i = 0; i < payload_size; i++) ASSERT(dst[i] == src[i]);
+
+    memset(dst, 0, (size_t)payload_size);
+    got = slot_peek(s, id, dst, payload_size);
+    ASSERT(got == payload_size);
+    ASSERT(dst[0] == 0 && dst[payload_size - 1] == (unsigned char)((payload_size - 1) & 0xFF));
+
+    /* Pop drains. */
+    memset(dst, 0, (size_t)payload_size);
+    got = slot_pop(s, id, dst, payload_size);
+    ASSERT(got == payload_size);
+    for (int i = 0; i < payload_size; i++) ASSERT(dst[i] == src[i]);
+
+    /* Empty now. */
+    ASSERT(slot_pop(s, id, dst, payload_size) == -1);
+
+    free(src); free(dst);
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_large_value_buf_too_small() */
+/* Pop / peek into an undersized buffer returns -1 and leaves the
+ * cell in place (same semantics as fixed-size slots). */
+static int test_large_value_buf_too_small(void)
+{
+    slot_store_t *s = slot_store_create();
+    slot_id_t id = slot_alloc(s, 0, 1, SLOT_FLAG_LARGE_VALUE);
+    ASSERT(id != SLOT_INVALID);
+
+    char src[200];
+    memset(src, 'A', sizeof src);
+    ASSERT(slot_push(s, id, src, sizeof src, 0) == 0);
+
+    char small_buf[50];
+    ASSERT(slot_peek(s, id, small_buf, sizeof small_buf) == -1);
+    /* Cell still present — full peek succeeds. */
+    char ok_buf[200];
+    ASSERT(slot_peek(s, id, ok_buf, sizeof ok_buf) == (int32_t)sizeof src);
+
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_large_value_multi_push_fifo() */
+/* N-cell pop semantics still work for LARGE_VALUE slots. Push
+ * three values of wildly different sizes; pop returns them in
+ * order with their original bytes. */
+static int test_large_value_multi_push_fifo(void)
+{
+    slot_store_t *s = slot_store_create();
+    slot_id_t id = slot_alloc(s, 0, 8, SLOT_FLAG_LARGE_VALUE);
+    ASSERT(id != SLOT_INVALID);
+
+    char a[]   = "alpha";
+    char b[]   = "bravo-bravo-bravo";
+    int big_sz = 70 * 1024;
+    char *big  = malloc((size_t)big_sz);
+    memset(big, 'X', (size_t)big_sz);
+
+    ASSERT(slot_push(s, id, a,   (int)strlen(a),   0) == 0);
+    ASSERT(slot_push(s, id, b,   (int)strlen(b),   0) == 0);
+    ASSERT(slot_push(s, id, big, big_sz,           0) == 0);
+    ASSERT(slot_fill_count(s, id) == 3);
+
+    char buf[100 * 1024];
+    int32_t got;
+
+    got = slot_pop(s, id, buf, sizeof buf);
+    ASSERT(got == (int32_t)strlen(a));
+    ASSERT(memcmp(buf, a, (size_t)got) == 0);
+
+    got = slot_pop(s, id, buf, sizeof buf);
+    ASSERT(got == (int32_t)strlen(b));
+    ASSERT(memcmp(buf, b, (size_t)got) == 0);
+
+    got = slot_pop(s, id, buf, sizeof buf);
+    ASSERT(got == big_sz);
+    for (int i = 0; i < big_sz; i++) ASSERT(buf[i] == 'X');
+
+    free(big);
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_large_value_tagged_ordering() */
+/* SLOT_FLAG_LARGE_VALUE combined with SLOT_FLAG_TAGGED: pops are
+ * served lowest-tag-first, with bytes intact from the heap. */
+static int test_large_value_tagged_ordering(void)
+{
+    slot_store_t *s = slot_store_create();
+    slot_id_t id = slot_alloc(s, 0, 4,
+                              SLOT_FLAG_LARGE_VALUE | SLOT_FLAG_TAGGED);
+    ASSERT(id != SLOT_INVALID);
+
+    /* Push in mixed-tag order. */
+    ASSERT(slot_push(s, id, "third",  5, 30) == 0);
+    ASSERT(slot_push(s, id, "first",  5, 10) == 0);
+    ASSERT(slot_push(s, id, "second", 6, 20) == 0);
+
+    char buf[64];
+    int32_t got;
+
+    got = slot_pop(s, id, buf, sizeof buf);
+    ASSERT(got == 5 && memcmp(buf, "first", 5) == 0);
+
+    got = slot_pop(s, id, buf, sizeof buf);
+    ASSERT(got == 6 && memcmp(buf, "second", 6) == 0);
+
+    got = slot_pop(s, id, buf, sizeof buf);
+    ASSERT(got == 5 && memcmp(buf, "third", 5) == 0);
+
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -382,6 +523,10 @@ int main(void)
     RUN(concurrent_counter);
     RUN(concurrent_push_pop);
     RUN(store_size_growth);
+    RUN(large_value_push_pop);
+    RUN(large_value_buf_too_small);
+    RUN(large_value_multi_push_fifo);
+    RUN(large_value_tagged_ordering);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

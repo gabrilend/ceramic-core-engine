@@ -28,6 +28,7 @@
  */
 
 #include "009-slot-store.h"
+#include "015-large-value-heap.h"
 
 #include <stdatomic.h>
 #include <stdint.h>
@@ -59,6 +60,11 @@ struct slot_store {
     slot_rec_t **slots;        /* dynamic array, indexed by slot_id_t */
     int32_t      count;
     int32_t      capacity;
+
+    /* Lazy-created on first SLOT_FLAG_LARGE_VALUE allocation. The
+     * heap owns payload bytes for every LARGE_VALUE slot in this
+     * store. Destroyed alongside the store. */
+    lvh_t       *heap;
 };
 /* }}} */
 
@@ -82,8 +88,13 @@ static inline void unlock_slot(slot_rec_t *r)
  * record layout for ring slots is:
  *
  *   bytes 0..3   : filled_size (uint32_t; 0 means empty)
- *   bytes 4..7   : tag         (uint32_t; only if SLOT_FLAG_TAGGED)
- *   bytes (4|8)..: payload     (cell_capacity bytes)
+ *   bytes 4..7   : tag         (uint32_t; SLOT_FLAG_TAGGED *or*
+ *                               SLOT_FLAG_LARGE_VALUE — the latter
+ *                               keeps the 8-byte payload offset
+ *                               consistent so the inline pointer is
+ *                               always aligned)
+ *   bytes (4|8)..: payload     (cell_capacity bytes; for LARGE_VALUE
+ *                               this is a stable lvh-heap pointer)
  */
 static inline uint8_t *cell_ptr(slot_rec_t *r, uint32_t i)
 {
@@ -104,9 +115,15 @@ static inline uint32_t cell_tag(slot_rec_t *r, uint32_t i)
     return v;
 }
 
+/* The payload offset within a cell is 8 if there's a tag header OR
+ * if the slot is LARGE_VALUE (we always reserve 4 bytes of pad for
+ * LARGE_VALUE so the inline pointer is 8-byte aligned). Otherwise
+ * it's 4. */
 static inline uint8_t *cell_data(slot_rec_t *r, uint32_t i)
 {
-    return cell_ptr(r, i) + ((r->flags & SLOT_FLAG_TAGGED) ? 8 : 4);
+    int has_8b_header = (r->flags & SLOT_FLAG_TAGGED)
+                     || (r->flags & SLOT_FLAG_LARGE_VALUE);
+    return cell_ptr(r, i) + (has_8b_header ? 8 : 4);
 }
 /* }}} */
 
@@ -130,6 +147,10 @@ void slot_store_destroy(slot_store_t *s)
         free(s->slots[i]);
     }
     free(s->slots);
+    /* The lvh heap owns every LARGE_VALUE payload across every slot
+     * in this store. Destroying it last is fine because slot
+     * records no longer reference any heap pointers. */
+    if (s->heap) lvh_destroy(s->heap);
     free(s);
 }
 /* }}} */
@@ -166,13 +187,39 @@ slot_id_t slot_alloc(slot_store_t *s,
 
     size_t bytes_cells = 0;
     uint32_t cell_record = 0;
+    uint32_t stored_capacity = 0;
 
     if (flags & SLOT_FLAG_ATOMIC_COUNTER) {
         /* Atomic-counter slot: no ring cells. cell_capacity and
          * n_cells are ignored. */
         bytes_cells = 0;
+    } else if (flags & SLOT_FLAG_LARGE_VALUE) {
+        /* Large-value slot: the cell holds a stable pointer into
+         * the lvh heap, not the bytes themselves. Caller-supplied
+         * cell_capacity is ignored (it has no meaning here — the
+         * actual payload bytes live in the heap and can be any
+         * size). n_cells controls ring depth as usual.
+         *
+         * Cell layout for LARGE_VALUE is 4 (filled_size) + 4
+         * (tag or pad) + 8 (pointer) = 16 bytes; cell_data() uses
+         * the 8-byte payload offset so the pointer is naturally
+         * aligned. */
+        if (n_cells <= 0) return SLOT_INVALID;
+        stored_capacity = (uint32_t)sizeof(void *);
+        cell_record     = 4u + 4u + (uint32_t)sizeof(void *);
+        bytes_cells     = (size_t)n_cells * cell_record;
+
+        /* Lazy-create the heap on first LARGE_VALUE slot. Default
+         * chunk size (64 KB) is fine for now — variable-size
+         * payloads bigger than that get their own chunks per
+         * lvh_alloc's oversized-allocation rule. */
+        if (!s->heap) {
+            s->heap = lvh_create(0);
+            if (!s->heap) return SLOT_INVALID;
+        }
     } else {
         if (cell_capacity <= 0 || n_cells <= 0) return SLOT_INVALID;
+        stored_capacity = (uint32_t)cell_capacity;
         cell_record = (uint32_t)(4
                                   + ((flags & SLOT_FLAG_TAGGED) ? 4 : 0)
                                   + cell_capacity);
@@ -182,7 +229,7 @@ slot_id_t slot_alloc(slot_store_t *s,
     slot_rec_t *r = calloc(1, sizeof(slot_rec_t) + bytes_cells);
     if (!r) return SLOT_INVALID;
 
-    r->cell_capacity = (flags & SLOT_FLAG_ATOMIC_COUNTER) ? 0 : (uint32_t)cell_capacity;
+    r->cell_capacity = (flags & SLOT_FLAG_ATOMIC_COUNTER) ? 0 : stored_capacity;
     r->n_cells       = (flags & SLOT_FLAG_ATOMIC_COUNTER) ? 0 : (uint32_t)n_cells;
     r->cell_record   = cell_record;
     r->flags         = (uint32_t)flags;
@@ -215,15 +262,35 @@ int slot_push(slot_store_t *s, slot_id_t id,
     slot_rec_t *r = get_slot(s, id);
     if (!r)                                      return -1;
     if (r->flags & SLOT_FLAG_ATOMIC_COUNTER)     return -1;
-    if (size < 0 || (uint32_t)size > r->cell_capacity) return -1;
+    if (size < 0)                                return -1;
     if (!data && size > 0)                       return -1;
+
+    int large = (r->flags & SLOT_FLAG_LARGE_VALUE) != 0;
+    /* For LARGE_VALUE slots size has no per-cell upper bound; the
+     * heap absorbs whatever the caller wants to store. For
+     * fixed-size slots, enforce the cell capacity as before. */
+    if (!large && (uint32_t)size > r->cell_capacity) return -1;
+
+    /* For LARGE_VALUE, allocate the heap region BEFORE taking the
+     * slot's spinlock. The heap has its own mutex; nesting the two
+     * is fine but reducing time-under-spinlock keeps the lock
+     * holder fast for everyone else. */
+    void *heap_ptr = NULL;
+    if (large && size > 0) {
+        heap_ptr = lvh_alloc(s->heap, (size_t)size);
+        if (!heap_ptr) return -1;
+        memcpy(heap_ptr, data, (size_t)size);
+    }
 
     lock_slot(r);
 
     uint32_t head = atomic_load_explicit(&r->head, memory_order_relaxed);
     uint32_t tail = atomic_load_explicit(&r->tail, memory_order_relaxed);
     if (tail - head >= r->n_cells) {
-        /* Ring full. */
+        /* Ring full. The heap allocation we just made stays alive
+         * — there's no per-allocation free — but it's bytes the
+         * caller will retry to use, so the cost is bounded by
+         * how often pushes actually fail. */
         unlock_slot(r);
         return -1;
     }
@@ -234,12 +301,17 @@ int slot_push(slot_store_t *s, slot_id_t id,
     /* filled_size */
     uint32_t fs = (uint32_t)size;
     memcpy(cp, &fs, sizeof fs);
-    /* tag (only if tagged) */
+    /* tag (only if tagged); LARGE_VALUE without TAGGED still has 4
+     * pad bytes in the same position so the payload pointer stays
+     * 8-byte aligned, but we leave them zero. */
     if (r->flags & SLOT_FLAG_TAGGED) {
         memcpy(cp + 4, &tag, sizeof tag);
     }
     /* payload */
-    if (size > 0) {
+    if (large) {
+        /* Store the heap pointer (may be NULL for zero-size). */
+        memcpy(cell_data(r, i), &heap_ptr, sizeof heap_ptr);
+    } else if (size > 0) {
         memcpy(cell_data(r, i), data, (size_t)size);
     }
 
@@ -257,6 +329,8 @@ int32_t slot_peek(slot_store_t *s, slot_id_t id,
     if (!r)                                  return -1;
     if (r->flags & SLOT_FLAG_ATOMIC_COUNTER) return -1;
     if (buf_size < 0 || (!buf && buf_size > 0)) return -1;
+
+    int large = (r->flags & SLOT_FLAG_LARGE_VALUE) != 0;
 
     lock_slot(r);
 
@@ -277,7 +351,15 @@ int32_t slot_peek(slot_store_t *s, slot_id_t id,
         unlock_slot(r);
         return -1;
     }
-    if (fs > 0) memcpy(buf, cell_data(r, i), fs);
+    if (fs > 0) {
+        if (large) {
+            void *p;
+            memcpy(&p, cell_data(r, i), sizeof p);
+            if (p) memcpy(buf, p, fs);
+        } else {
+            memcpy(buf, cell_data(r, i), fs);
+        }
+    }
     /* head not advanced — peek leaves the cell in place. */
     unlock_slot(r);
     return (int32_t)fs;
@@ -330,9 +412,19 @@ int32_t slot_pop(slot_store_t *s, slot_id_t id,
     if (fs == 0)                  { unlock_slot(r); return -1; }
     if ((uint32_t)buf_size < fs)  { unlock_slot(r); return -1; }
 
-    if (fs > 0) memcpy(buf, cell_data(r, pick), fs);
+    if (fs > 0) {
+        if (r->flags & SLOT_FLAG_LARGE_VALUE) {
+            void *p;
+            memcpy(&p, cell_data(r, pick), sizeof p);
+            if (p) memcpy(buf, p, fs);
+        } else {
+            memcpy(buf, cell_data(r, pick), fs);
+        }
+    }
 
-    /* Mark cell empty. */
+    /* Mark cell empty. The heap allocation (if any) stays alive in
+     * the lvh heap — there's no per-allocation free in the current
+     * design. */
     uint32_t zero = 0;
     memcpy(cell_ptr(r, pick), &zero, sizeof zero);
 

@@ -498,3 +498,60 @@ What's deferred to a follow-on within 302:
   in-flight phase 3 work until a graph wants variable-size outputs.
 
 Neither deferred item blocks 301 / 304 / 305 / 306 / 307 / 308.
+
+### Large-value heap milestone — 2026-05-19
+
+The variable-size payload follow-on landed in two layers:
+
+1. **`src/015-large-value-heap.{c,h}`** — chunked arena allocator.
+   Default 64 KB chunks; oversized allocations (larger than the
+   default chunk) get their own exact-fit chunk so one large value
+   doesn't bloat the regular bump chunks. Pointer stability is the
+   load-bearing property: chunks never move once allocated, so a
+   consumer's pointer survives any number of subsequent producer
+   allocations. Eight unit tests in
+   `tests/015-large-value-heap-test.c` cover the create/destroy
+   round-trip, single + multi alloc within a chunk, oversized
+   allocations getting their own chunks, pointer stability across
+   forced growth, zero-size allocations returning non-NULL, the
+   stats accessors, and an eight-thread / eight-thousand-alloc
+   concurrency stress test that asserts every returned pointer is
+   unique and writable.
+
+2. **Slot-store integration.** Added `SLOT_FLAG_LARGE_VALUE` to
+   `slot_alloc`. Cell layout for LARGE_VALUE slots is
+   `filled_size (4 bytes) + pad/tag (4 bytes) + stable pointer
+   (8 bytes)` — the 8-byte payload offset keeps the pointer
+   naturally aligned regardless of whether SLOT_FLAG_TAGGED is
+   also set. The slot store lazy-creates one shared lvh heap on
+   the first LARGE_VALUE allocation; the heap is destroyed
+   alongside the store. Push allocates from the heap *outside*
+   the slot spinlock (the heap has its own mutex; nesting is
+   fine, but reducing time-under-spinlock keeps the lock fast for
+   other producers). Peek and pop follow the cell's pointer and
+   memcpy the requested bytes back into the caller's buffer.
+
+Four new slot-store tests cover the new path:
+`large_value_push_pop` (100 KB payload, double-peek, then pop);
+`large_value_buf_too_small` (oversized payload + small dest →
+-1, cell preserved); `large_value_multi_push_fifo` (three
+different-size values pushed and popped in order); and
+`large_value_tagged_ordering` (LARGE_VALUE + TAGGED → pops
+return lowest-tag-first with bytes intact).
+
+What this unblocks: any box that wants to emit a variable-size
+output can now declare its downstream consumer slots with
+SLOT_FLAG_LARGE_VALUE and produce payloads whose size isn't
+known at graph-load time. The wiring from declared box output
+type to the LARGE_VALUE flag in `graph_attach_runtime` lands as
+a follow-on once a fixture or real graph requires it; the
+foundation is in place.
+
+What's still deferred within 302:
+- **Size-class free lists with coalescing.** Still no need.
+- **Per-allocation free in the large-value heap.** The heap
+  grows monotonically for the life of a run. Long-running
+  iterator loops that emit large values will pin memory until
+  run end. Acceptable for current fixtures; a size-class
+  allocator with eager-coalesce is the upgrade path if profiling
+  flags it.

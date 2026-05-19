@@ -36,6 +36,15 @@
  *       weighted-routing counters. Concurrent reads each get a
  *       distinct value mod the caller-supplied bound.
  *
+ *   large-value (SLOT_FLAG_LARGE_VALUE)
+ *     — for outputs whose size is not known at compile time
+ *       (multi-MB LLM responses, dynamically-sized arrays). The
+ *       cell holds only a pointer; the payload bytes live in a
+ *       large-value heap owned by the slot store. cell_capacity
+ *       is ignored — push/pop accept any size. May be combined
+ *       with SLOT_FLAG_TAGGED to get lowest-tag pop semantics
+ *       over variable-size values.
+ *
  * Synchronization is per-slot. There is no allocator-wide lock on
  * the hot read/write path. The atomic-counter slot uses
  * atomic_fetch_add; the ring-buffer slots use a per-slot spinlock
@@ -59,9 +68,12 @@
  *    is "allocate once at graph load, free at run end", so free-list
  *    optimization buys nothing for the current usage. Lands as a
  *    follow-on if profiling justifies it.
- *  - Large-value heap for variable-size payloads. Slots store
- *    fixed-size cells; very large outputs (LLM responses) will
- *    use a separate two-tier scheme. Follow-on within 302.
+ *
+ * Large-value heap support landed 2026-05-19: slots with
+ * SLOT_FLAG_LARGE_VALUE store payload bytes in an internal
+ * large-value heap (see src/015-large-value-heap.h) and the cell
+ * only holds a stable pointer. The store lazy-creates the heap on
+ * the first LARGE_VALUE slot_alloc and destroys it with the store.
  */
 
 #ifndef SORAMECH_SLOT_STORE_H
@@ -84,6 +96,7 @@ enum {
     SLOT_FLAG_NONE           = 0,
     SLOT_FLAG_TAGGED         = 1 << 0,
     SLOT_FLAG_ATOMIC_COUNTER = 1 << 1,
+    SLOT_FLAG_LARGE_VALUE    = 1 << 2,
 };
 /* }}} */
 
