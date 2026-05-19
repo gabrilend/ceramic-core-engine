@@ -1,7 +1,48 @@
 # 236 — Box header shows filename; output label shows `fn_name()` call form
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+Two new helpers in `assets/js/002-boxes.js`:
+
+- `default_header(box)` — the canvas header text when the user
+  has not set an explicit label. For `call` boxes it's the
+  basename of `ref`; for the other kinds it's a small lookup
+  table (`branch`, `data`, `comparator`, `iterator` — full kind
+  names, no abbreviations). Exported so the inspector can show
+  it as the label-input placeholder, keeping inspector and
+  canvas in sync about "what shows when this field is blank."
+- `output_label_text(box, p)` — the string to the LEFT of an
+  output port dot. Named ports (comparator branches, iterator
+  slots) keep their existing names; a `call` box's single
+  null-named output now renders as `fn_name()`. Anything else
+  renders nothing, same as before.
+
+`draw_box` routes its header through `box.label || default_header(box)`
+and its output-label loop through `output_label_text`. The
+single-output `fn()` label uses the kind color (the existing
+dot color), matching how comparator branches paint themselves.
+
+`assets/js/004-inspector.js` sets the title input's
+`placeholder` to `Boxes.default_header(box)`. The label-input
+write path is unchanged — typing into the field updates
+`current_box.label`, which on the next render-pass wins over
+the default.
+
+Two call sites where the file browser writes `ref`/`fn` onto
+the current box now also rewrite `box.label` to the new
+filename — but ONLY when the new file differs from the
+previous one. Picking a different function from the same file
+leaves the label alone, so user-customized labels survive
+function swaps within a module. Different file → label snaps
+to the new basename, matching the canvas-header convention.
+
+Tested with the 10-case node script (call w/ ref+fn, label
+override, every non-call kind, unknown kind, missing kind →
+id fallback, branch name preserved as output label). User
+verified visually.
 
 ## Current behavior
 

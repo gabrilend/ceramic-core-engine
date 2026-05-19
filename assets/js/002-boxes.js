@@ -16,11 +16,54 @@ const Boxes = (() => {
   // ellipsis. Multi-line values collapse to their first line.
   const MAX_LABEL_CHARS = 24;
 
+  // Issue 236: default header text per box kind, used when the user
+  // has not set an explicit label. `call` is the special case —
+  // basename of its `ref` is the answer, so we resolve it at draw
+  // time. Add a row when a new kind ships.
+  const KIND_HEADER = {
+    branch:     'branch',
+    data:       'data',
+    comparator: 'comparator',
+    iterator:   'iterator',
+  };
+
   // Comparator branch colors: lt=orange, eq=blue, gt=green
   const BRANCH_COLOR = { lt: '#ff8c42', eq: '#4a9eff', gt: '#4caf7d' };
 
   // boxes: { [id]: box_data }
   let boxes = {};
+
+  // {{{ default_header
+  // The box header text used when `box.label` is unset (issue 236).
+  // Three cases:
+  //   call    — basename of `ref`, the source file the box calls
+  //   other   — the kind name, plain
+  //   unknown — fall back to the box id so nothing renders blank
+  // Exported so the inspector can show it as the label-field
+  // placeholder, keeping the inspector and canvas in sync about
+  // "what would render if I left this empty".
+  function default_header(box) {
+    if (box.kind === 'call' && box.ref) {
+      const parts = String(box.ref).split('/');
+      return parts[parts.length - 1] || box.ref;
+    }
+    return KIND_HEADER[box.kind] || box.kind || box.id;
+  }
+  // }}}
+
+  // {{{ output_label_text
+  // Picks the string drawn to the LEFT of an output port dot
+  // (issue 236). Two paths:
+  //   p.name set → render it (comparator branches, iterator slots)
+  //   p.name null, box is a call → render `fn()` so the wire reads
+  //     as "the return value of calling fn"
+  //   otherwise → null, draw no label
+  function output_label_text(box, p) {
+    if (p.name) return p.name;
+    if (box.kind === 'call' && box.fn) return box.fn + '()';
+    return null;
+  }
+  // }}}
 
   // {{{ port_has_incoming_wire
   // A wire on a port is the source of truth for that port's value at
@@ -162,12 +205,14 @@ const Boxes = (() => {
     ctx.roundRect(x, y, w, BOX_HEADER, [6, 6, 0, 0]);
     ctx.fill();
 
-    // label
+    // label — user override wins; otherwise the kind-driven default
+    // (issue 236): basename of ref for call boxes, plain kind name
+    // for everything else.
     ctx.fillStyle  = '#e8eaf6';
     ctx.font       = 'bold 12px monospace';
     ctx.textAlign  = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(box.label || box.id, x + 10, y + BOX_HEADER / 2);
+    ctx.fillText(box.label || default_header(box), x + 10, y + BOX_HEADER / 2);
 
     // kind badge (top right)
     ctx.fillStyle  = color;
@@ -214,13 +259,18 @@ const Boxes = (() => {
       ctx.fill();
       ctx.stroke();
 
-      // label branch name ('lt'/'eq'/'gt') to the left of the dot; nothing for single wire
-      if (p.name) {
+      // Output label rendered to the LEFT of the dot. Branch names
+      // ('lt'/'eq'/'gt') and iterator slot names come straight from
+      // p.name; a call box's single output gets `fn()` synthesized
+      // (issue 236) so the wire reads as the return value of
+      // calling the function.
+      const out_label = output_label_text(box, p);
+      if (out_label) {
         ctx.fillStyle  = dot_color;
         ctx.font       = '9px monospace';
         ctx.textAlign  = 'right';
         ctx.textBaseline = 'middle';
-        ctx.fillText(p.name, p.x - PORT_R - 4, p.y);
+        ctx.fillText(out_label, p.x - PORT_R - 4, p.y);
       }
     });
   }
@@ -299,6 +349,6 @@ const Boxes = (() => {
     boxes, BOX_W, BOX_HEADER, PORT_R,
     box_height, port_positions,
     draw_all, draw_box, hit_test_port, hit_test_box, get_port_world_pos,
-    port_full_value_if_truncated,
+    port_full_value_if_truncated, default_header,
   };
 })();

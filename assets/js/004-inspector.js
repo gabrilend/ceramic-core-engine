@@ -707,6 +707,15 @@ const Inspector = (() => {
     title.textContent = 'browse src/';
     fields.innerHTML  = '';
     FileBrowser.render(fields, async (filename, fn) => {
+      // Issue 236: when the user picks from a DIFFERENT source file,
+      // snap the box label to that file's basename so the canvas
+      // header stays in sync. Same file (different function within
+      // it) is left alone — the user is just swapping which entry
+      // from this module they're calling, and any custom label they
+      // typed (e.g. "Join paragraphs") should survive that.
+      if (current_box.ref !== filename) {
+        current_box.label = Boxes.default_header({ kind: 'call', ref: filename });
+      }
       current_box.ref    = filename;
       current_box.fn     = fn.name;
       current_box.inputs = fn.inputs.map(n => ({ name: n, type: 'any' }));
@@ -749,12 +758,16 @@ const Inspector = (() => {
     on_delete_cb = on_delete || null;
     panel.classList.remove('hidden');
 
-    // title: editable label input + read-only id subtitle
+    // title: editable label input + read-only id subtitle. The
+    // placeholder shows the canvas-side default (issue 236) — basename
+    // of ref for a call box, the kind name otherwise — so the user
+    // can see what would render with the field left empty.
     title.innerHTML = '';
     const lbl_inp = document.createElement('input');
-    lbl_inp.type      = 'text';
-    lbl_inp.value     = box.label || '';
-    lbl_inp.className = 'inspector-title-inp';
+    lbl_inp.type        = 'text';
+    lbl_inp.value       = box.label || '';
+    lbl_inp.placeholder = Boxes.default_header(box);
+    lbl_inp.className   = 'inspector-title-inp';
     lbl_inp.addEventListener('input', () => { current_box.label = lbl_inp.value; save(); });
     title.appendChild(lbl_inp);
     const id_sub = document.createElement('div');
@@ -903,6 +916,12 @@ const Inspector = (() => {
       title.textContent = 'pick fn';
       fields.innerHTML  = '';
       FileBrowser.render_at_fn_list(fields, current_box.ref, async (filename, fn) => {
+        // Same label-swap rule as the full browse (issue 236) —
+        // changing the file overwrites the label, switching fn
+        // within the same file leaves it alone.
+        if (current_box.ref !== filename) {
+          current_box.label = Boxes.default_header({ kind: 'call', ref: filename });
+        }
         current_box.ref    = filename;
         current_box.fn     = fn.name;
         current_box.inputs = fn.inputs.map(n => ({ name: n, type: 'any' }));
