@@ -10,6 +10,15 @@ build/
 *.dylib
 soramech-pool
 
+# Per-map compile artifacts produced by scripts/soramech-compile.sh.
+# Derived from the source map and the language plugins; regenerated
+# with `scripts/soramech-compile.sh <map>`.
+tests/maps/*/compiled/
+
+# Linux coredumps — the kernel core_pattern drops these at the cwd
+# of the crashing process, which is usually the project root.
+core.*
+
 # Map directories at the project root — user content, not part of
 # project source. Editor / runner state lives here per design.
 # Includes compiled/ artifacts (issue 309) and run logs (issue 311).

@@ -345,3 +345,50 @@ What's still ahead inside 309:
 
 These follow-ons depend on their respective issues; this issue
 stays open until they're all wired in.
+
+### Compile / package pipeline — 2026-05-19
+
+`scripts/soramech-compile.sh <map>` now produces a portable
+`<map>/compiled/` directory laid out as:
+
+```
+compiled/
+  meta.json, boxes/, src/, data/, *.txt   # verbatim copies
+  langs/<lang>/spec.so                    # per-language plugin
+  langs/bash/bash-server.sh               # only if bash boxes exist
+  bin/<box>.so                            # pre-compiled C boxes
+  pool-runner                             # *real copy* of soramech-pool
+  manifest.json                           # n_boxes, languages, etc.
+```
+
+Two subtle correctness points landed alongside the script:
+
+1. **pool-runner must be a real copy, not a symlink.** The runner
+   discovers `langs/` via `readlink("/proc/self/exe")`. A symlink
+   resolves to its target, so a symlinked pool-runner would pick
+   up the project tree's `langs/` instead of the bundled one. A
+   real copy makes the artifact self-describing — `compiled/`
+   stands alone with no reference to the source map directory.
+
+2. **The bash spec self-locates `bash-server.sh`.** Previously
+   the bash spec used a cwd-relative path
+   (`langs/bash/bash-server.sh`), defeating portability. It now
+   uses `dladdr()` on its own symbol to find the loaded `.so`
+   path, takes `dirname()`, and looks for `bash-server.sh` next
+   to itself. SORAMECH_BASH_SERVER still overrides; the
+   cwd-relative path remains as a fallback (with a stderr
+   warning so the fallback isn't silent). This required adding
+   `-ldl` to `langs/bash/Makefile`.
+
+Verified end-to-end: `scripts/run-tests.sh` includes a new
+`compile pipeline (portable run)` integration check that runs
+soramech-compile on the pipeline fixture, invokes the compiled
+artifact from `/tmp` (so cwd cannot accidentally satisfy any
+relative path), and asserts both the captured stdout and the
+`file_write` destination match the expected values.
+
+Per-map `compiled/` directories under `tests/maps/*/` are
+gitignored.
+
+The follow-ons enumerated above are now all in place; the issue
+is effectively done.
