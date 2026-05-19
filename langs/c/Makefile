@@ -23,7 +23,7 @@ LDFLAGS = -ldl
 
 all: spec.so
 
-spec.so: spec.c
+spec.so: spec.c $(DIR)/langs/lang-spec.h
 	@$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
 clean:
