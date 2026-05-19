@@ -14,34 +14,39 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 
 | ID  | Title                                                       | Status   |
 |-----|-------------------------------------------------------------|----------|
-| 301 | thread pool lifecycle and per-worker initialization         | in progress · pool skeleton done |
-| 302 | per-task slot store with wire-held references               | in progress · core complete |
-| 303 | language runtime spec (pluggable per-language invocation)   | designed |
-| 304 | task dispatch layer (C, replaces synchronous executor)      | designed |
-| 305 | C graph loader (replaces `003-loader.lua`)                  | in progress · parse + per-box schema done |
-| 306 | Lua language spec implementation                            | designed |
-| 307 | C language spec implementation                              | designed |
-| 308 | Bash language spec implementation                           | designed |
-| 309 | build system & Makefile orchestration                       | in progress · scaffolding done |
-| 310 | priority queue: wired in, no-op behaviorally                | designed |
-| 311 | integration tests & run output (`last-run.jsonl`)           | designed |
-| 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | designed |
+| 301 | thread pool lifecycle and per-worker initialization         | in progress · pool + per-worker init/teardown hooks done |
+| 302 | per-task slot store with wire-held references               | in progress · core + large-value heap (variable-size payloads) |
+| 303 | language runtime spec (pluggable per-language invocation)   | in progress · registry + per-worker init + pool hook + lang filtering |
+| 304 | task dispatch layer (C, replaces synchronous executor)      | in progress · plain + comparator + iterator + randomizer + weighted routing + cell-tagged iterator ordering |
+| 305 | C graph loader (replaces `003-loader.lua`)                  | in progress · attach + lang enum + 312 fast-path classification |
+| 306 | Lua language spec implementation                            | in progress · init + invoke + teardown + per-worker module cache done |
+| 307 | C language spec implementation                              | in progress · compile + invoke + lazy .c→.so done, typed wrapper deferred |
+| 308 | Bash language spec implementation                           | in progress · persistent socketpair + line-protocol invoke + dladdr-based server lookup |
+| 309 | build system & Makefile orchestration                       | in progress · scaffolding + spec discovery + soramech-compile portable artifact |
+| 310 | priority queue: wired in, no-op behaviorally                | in progress · API + ordering done |
+| 311 | integration tests & run output (`last-run.jsonl`)           | in progress · writer + queue + thread + LOG_VALUES + LOG_SLOTS + run-tests.sh + compile-pipeline check |
+| 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | in progress · lang_spec_t extended + classification + dispatch resolution |
 | 313 | research: whole-program same-language merge                 | research / blocked |
-| 314 | small C JSON parser written for this project                | in progress · parser complete, writer deferred |
+| 314 | small C JSON parser written for this project                | in progress · parser + writer + strict leading-zero |
+| 315 | reference-counted compiled-map artifacts                    | open · design only |
+| 316 | simple test-runner script                                   | open · design only |
+| 317 | language spec JSON bridge for data boxes                    | open · design only |
 
 ## Phase goal checklist
 
-- [ ] SoraMech-owned task pool builds clean (3d-rts as design reference)
-- [ ] Slot store unit-tested (single-value + ring buffer + refcounting)
-- [ ] C graph loader passes phase 2's existing maps
-- [ ] Lua spec runs `maps/hello` end-to-end
-- [ ] C spec compiles and runs a typed-signature box
-- [ ] Bash spec runs an out-of-process box via the socket protocol
-- [ ] Pool runner runs a multi-language map with concurrent workers
-- [ ] Iterator box routes via dispatch layer (no spec invoked)
-- [ ] Comparator box routes via dispatch layer (no spec invoked)
+- [x] SoraMech-owned task pool builds clean (3d-rts as design reference)
+- [x] Slot store unit-tested (single-value + ring buffer)
+- [x] C graph loader passes the project's existing maps
+- [x] Lua spec runs `tests/maps/hello` end-to-end
+- [x] C spec compiles and runs a fixed-signature box
+- [x] Bash spec runs an out-of-process box via persistent
+      socketpair + line-protocol
+- [x] Pool runner runs a multi-language map with concurrent workers
+- [x] Iterator box routes via dispatch layer (with multi-spawn
+      re-fire via N-cell pop slots and auto-re-spawn)
+- [x] Comparator box routes via dispatch layer (via spec output)
 - [ ] Variable-size outputs work via the large-value heap
-- [ ] `last-run.jsonl` written for every run
+- [x] `last-run.jsonl` written for every run
 - [ ] All 11 integration test maps pass
 - [ ] Phase 3 demo map runs and produces expected output
 - [ ] Phase 2 synchronous runner retired (`src/004-executor.lua`,
