@@ -1,7 +1,41 @@
 # 237 — Expand the bundled string-manipulation library
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+Ten new functions appended to `libs/text.lua` after the existing
+`concat` and `split`: `upper`, `lower`, `trim`, `replace`,
+`replace_first`, `contains`, `starts_with`, `ends_with`,
+`length`, `substring`. The information file
+`libs/text.lua.info.md` carries one short entry per function in
+the same shape as the existing `concat` / `split` rows.
+
+Two design specifics worth keeping:
+
+- All matching is **plain string**, never Lua pattern. The
+  `find`/`prefix`/`suffix` arguments may carry any characters
+  without escaping. `replace` / `replace_first` use a private
+  `replace_n` helper that walks the input with
+  `string.find(..., plain=true)` and emits an interleaved slice +
+  replacement list, sidestepping the otherwise-needed
+  pattern-metacharacter escape pass for both the search needle
+  and the replacement.
+- Booleans cross the wire as real JSON booleans, not as the
+  strings `"true"` / `"false"`, because the Lua driver does
+  `json.encode(result)`. The info.md spells this out so a user
+  doesn't expect string-formatted booleans when wiring
+  `contains` / `starts_with` / `ends_with` into a downstream
+  consumer.
+
+Tested via a 28-case luajit script covering each function plus
+`nil` and edge inputs (empty string args, out-of-range
+substring, pattern-metacharacter haystacks for `replace`, etc).
+The file browser picks all twelve public functions up via the
+existing `function M.<name>` parser — no editor-side changes
+needed since the bundled-dirs work in issue 238 already makes
+`libs/` visible to every map.
 
 ## Current behavior
 

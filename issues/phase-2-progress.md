@@ -36,7 +36,7 @@ model the phase 3 runtime will consume.
 | 234  | middle-click duplicates the selected box        | open     |
 | 235  | literal value replaces port name on the canvas  | complete |
 | 236  | box header = filename, output label = `fn()`    | complete |
-| 237  | string-manipulation library expansion           | open     |
+| 237  | string-manipulation library expansion           | complete |
 | 238  | editor HTTP server config file                  | complete |
 | 216  | read-file box                                  | complete |
 | 217  | concat box and dynamic inputs                  | complete |
