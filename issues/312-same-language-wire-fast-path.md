@@ -80,48 +80,124 @@ for wire in graph.wires:
 The flag becomes part of the compiled manifest. Runtime never
 re-evaluates language pairing.
 
-## Producer-side decision
+## Per-edge format negotiation
 
-A producer's output goes into one slot, but multiple consumers may
-read from it. If they're all the same language, the producer can
-write native bytes. If any consumer is in a different language, the
-producer must write JSON (and same-language consumers convert via
-`json_to_native` to recover native form).
+Classification is **per edge**, not per box. A box always
+executes its user function in native form. The format on the
+wire is decided independently for each input edge and each
+output edge based on the language pair across that edge:
 
-Two ways to decide:
-1. **Per-output decision** — analyze all consumers of the output
-   slot at compile time. All same lang → native; mixed → JSON.
-2. **Always JSON producer / convert at consumer** — simpler, but
-   pays the encode cost even when no cross-language consumer is
-   present.
+```
+input edge native?   = (producer.lang == this_box.lang)
+output edge native?  = (this_box.lang == consumer.lang)
+```
 
-Option 1 is the right call. The compile step records the producer's
-output format on the box record (`output_format: "native" | "json"`),
-and same-language consumers know to read native bytes directly,
-cross-language consumers call `json_to_native` first.
+So a Lua box sitting in the middle of `[C → Lua → C]` works
+like this:
+
+- Input edge from the C producer: cross-lang, so the slot
+  carries JSON. On read, the Lua spec calls `json_to_native`
+  to lift it into a Lua value.
+- The box's user function runs natively in Lua. It returns a
+  Lua value.
+- Output edges to the two C consumers: cross-lang, so the spec
+  calls `native_to_json` once and pushes JSON bytes to each
+  consumer's slot.
+
+A Lua box in `[Lua → Lua → C]` works differently *along its
+own edges*:
+
+- Input edge from the Lua producer: same-lang, slot carries
+  native binary. No conversion on read.
+- User function runs.
+- Output edges: one is same-lang (push native), the other is
+  cross-lang (call `native_to_json`, push JSON). The producer
+  pushes once to each consumer's slot in the right format.
+
+This means **same-lang neighbors get the fast path even when
+some other neighbor is cross-lang**. The classification doesn't
+collapse on the first cross-language edge it finds; it stays
+per-edge.
+
+### Why per-edge, not per-box
+
+The earlier design considered an "all same-lang or fall back
+to JSON for all" rule (the simpler classification). It's
+strictly dominated by the per-edge rule:
+
+- The dominant case is "a Lua sub-graph occasionally talks to
+  C." Per-box would force the Lua-to-Lua interior to round-trip
+  through JSON for every box that has *any* C neighbor.
+- Per-edge keeps the cost local to the actual cross-lang
+  boundary. The interior of any same-lang island skips JSON;
+  only the boundary edges pay.
+- The implementation cost is identical: same number of bits per
+  box, just stored per-port/per-edge instead of per-box.
+
+### What each box records at graph load
+
+For each box:
+
+- `input_edge_native[i]` — one bit per input port. True iff the
+  producer feeding that port has the same language as this box.
+- `output_edge_native[j]` — one bit per outgoing connection
+  (not per output port — a single output port can fan to
+  multiple consumers, each of which is classified independently
+  because the language pair may differ across consumers).
+
+Both arrays are computed during `graph_attach_runtime` and live
+on the box record. No runtime re-evaluation.
 
 ## Runtime dispatch
 
-The dispatch action's input-read path branches on the wire flag:
+The dispatch action calls `invoke_native` always (when the spec
+provides one). The boundary work is per-edge in two places:
+input-read and output-push.
+
+### Input-read: per-input-port
 
 ```c
 for (int i = 0; i < n_inputs; i++) {
-    slot_peek(input_slots[i], buf, buf_capacity);
-    if (input_wires[i].fast_path && producer_format == NATIVE) {
-        // bytes are already this language's native form
-        ...
-    } else if (producer_format == JSON) {
-        // bytes are JSON, decode into native form
-        json_to_native(buf, buf_size, native_buf, native_capacity, &native_size);
-        ...
+    slot_pop(input_slots[i], wire_buf, wire_buf_cap);
+    if (b->input_edge_native[i]) {
+        // wire bytes are native form already; hand to invoke_native as-is
+        native_inputs[i] = wire_buf;
+    } else {
+        // wire bytes are JSON; lift into native form
+        spec->json_to_native(ctx, wire_buf, wire_size,
+                             native_buf, native_cap, &native_size);
+        native_inputs[i] = native_buf;
+    }
+}
+spec->invoke_native(ctx, fn, native_inputs, n_inputs,
+                    native_out, native_out_cap, &native_out_size);
+```
+
+### Output-push: per-outgoing-connection
+
+```c
+for (int j = 0; j < b->n_connections; j++) {
+    if (b->output_edge_native[j]) {
+        // consumer is same-lang; push native bytes directly
+        slot_push(consumer_slot, native_out, native_out_size, tag);
+    } else {
+        // consumer is cross-lang; serialize to JSON once per such edge
+        spec->native_to_json(ctx, native_out, native_out_size,
+                             json_buf, json_buf_cap, &json_size);
+        slot_push(consumer_slot, json_buf, json_size, tag);
     }
 }
 ```
 
-Then `invoke_native` is called with native-form bytes regardless of
-how they were obtained. Same on the output side: if the box's output
-format is `native`, write native bytes; if `json`, encode then
-write.
+If multiple cross-lang consumers share the producer's language,
+the dispatch can cache the JSON encoding from the first such
+edge and reuse it for the rest (optimization, not required for
+correctness).
+
+If the spec's `invoke_native` is NULL (e.g., bash), the dispatch
+falls back to the universal `invoke` (JSON-in, JSON-out) and
+treats every edge as JSON. This is the slow path; it's always
+correct.
 
 ## Edge cases
 
@@ -218,3 +294,38 @@ two designs aren't trivially interchangeable later.
   cross-language consumer, that consumer pays native_to_json then
   json_to_native_their_lang. Two conversions for one cross-language
   hop in this case. Probably fine; it's a corner case.
+
+## Implementation status
+
+What's in place (per the round summaries on 2026-05-12 to
+2026-05-19):
+
+- `lang_spec_t` extended with `invoke_native`, `invoke_json`,
+  `native_to_json`, `json_to_native` callback slots (issue 303
+  spec interface).
+- Each of the three specs declares all four callbacks. Today
+  they all alias to the single existing `invoke` implementation;
+  the actual specialization (real native_to_json / json_to_native
+  bodies, real per-language binary native form) is not yet
+  implemented.
+- `graph_attach_runtime` computes a per-box `use_native_invoke`
+  bit (true iff all input producers and all output consumers
+  share this box's language). The dispatch picks
+  `invoke_native > invoke_json > invoke` based on that single
+  bit.
+
+What's still ahead:
+
+- **Replace per-box `use_native_invoke` with per-edge
+  classification.** The current bit is the simpler approximation
+  of the per-edge design above. It needs to be split into
+  `b->input_edge_native[i]` and `b->output_edge_native[j]` arrays
+  computed at graph load, with the dispatch's input-read and
+  output-push paths each consulting the relevant array.
+- **Per-language native binary serializations.** Each spec
+  needs a real `native_to_json` and `json_to_native` (also
+  required by issue 317 for data boxes), plus a real
+  `invoke_native` that operates on whatever the spec considers
+  its native handoff format.
+- The type-annotated cross-language encoding decision flagged
+  above is still pending user direction.
