@@ -370,6 +370,172 @@ static int test_kind_safety(void)
 }
 /* }}} */
 
+/* {{{ Writer tests */
+
+/* {{{ test_writer_primitives() */
+static int test_writer_primitives(void)
+{
+    char buf[128];
+    json_writer_t w;
+
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_int(&w, 42);
+    int n = json_writer_finish(&w);
+    ASSERT(n == 2);
+    ASSERT(strcmp(buf, "42") == 0);
+
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_bool(&w, 1);
+    ASSERT(json_writer_finish(&w) == 4);
+    ASSERT(strcmp(buf, "true") == 0);
+
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_null(&w);
+    ASSERT(json_writer_finish(&w) == 4);
+    ASSERT(strcmp(buf, "null") == 0);
+
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_string(&w, "hi");
+    ASSERT(json_writer_finish(&w) == 4);
+    ASSERT(strcmp(buf, "\"hi\"") == 0);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_writer_string_escapes() */
+static int test_writer_string_escapes(void)
+{
+    char buf[128];
+    json_writer_t w;
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_string(&w, "a\nb\"c\\d\te");
+    ASSERT(json_writer_finish(&w) > 0);
+    ASSERT(strcmp(buf, "\"a\\nb\\\"c\\\\d\\te\"") == 0);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_writer_object() */
+static int test_writer_object(void)
+{
+    char buf[128];
+    json_writer_t w;
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_object(&w);
+    json_writer_key(&w, "k");
+    json_writer_int(&w, 7);
+    json_writer_key(&w, "n");
+    json_writer_string(&w, "hi");
+    json_writer_end(&w);
+    ASSERT(json_writer_finish(&w) > 0);
+    ASSERT(strcmp(buf, "{\"k\":7,\"n\":\"hi\"}") == 0);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_writer_array() */
+static int test_writer_array(void)
+{
+    char buf[128];
+    json_writer_t w;
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_array(&w);
+    json_writer_int(&w, 1);
+    json_writer_int(&w, 2);
+    json_writer_int(&w, 3);
+    json_writer_end(&w);
+    ASSERT(json_writer_finish(&w) > 0);
+    ASSERT(strcmp(buf, "[1,2,3]") == 0);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_writer_nested() */
+static int test_writer_nested(void)
+{
+    char buf[256];
+    json_writer_t w;
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_object(&w);
+    json_writer_key(&w, "event");
+    json_writer_string(&w, "task_end");
+    json_writer_key(&w, "task_id");
+    json_writer_int(&w, 42);
+    json_writer_key(&w, "tags");
+    json_writer_array(&w);
+    json_writer_string(&w, "a");
+    json_writer_string(&w, "b");
+    json_writer_end(&w);
+    json_writer_end(&w);
+    ASSERT(json_writer_finish(&w) > 0);
+    ASSERT(strcmp(buf, "{\"event\":\"task_end\",\"task_id\":42,\"tags\":[\"a\",\"b\"]}") == 0);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_writer_empty_containers() */
+static int test_writer_empty_containers(void)
+{
+    char buf[32];
+    json_writer_t w;
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_object(&w);
+    json_writer_end(&w);
+    ASSERT(json_writer_finish(&w) == 2);
+    ASSERT(strcmp(buf, "{}") == 0);
+
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_array(&w);
+    json_writer_end(&w);
+    ASSERT(json_writer_finish(&w) == 2);
+    ASSERT(strcmp(buf, "[]") == 0);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_writer_overflow() */
+static int test_writer_overflow(void)
+{
+    char buf[8];
+    json_writer_t w;
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_string(&w, "this string is too long to fit");
+    ASSERT(json_writer_finish(&w) == -1);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_writer_round_trip() */
+/* Write a small object with the writer, parse it back with the
+ * parser, verify the fields. */
+static int test_writer_round_trip(void)
+{
+    char buf[256];
+    json_writer_t w;
+    json_writer_init(&w, buf, sizeof buf);
+    json_writer_object(&w);
+    json_writer_key(&w, "id");
+    json_writer_string(&w, "greet");
+    json_writer_key(&w, "answer");
+    json_writer_int(&w, 42);
+    json_writer_key(&w, "flag");
+    json_writer_bool(&w, 1);
+    json_writer_end(&w);
+    ASSERT(json_writer_finish(&w) > 0);
+
+    ARENA();
+    json_node_t *n = json_parse(a, buf, NULL, NULL);
+    ASSERT(n);
+    ASSERT(strcmp(json_string_value(json_object_get(n, "id")), "greet") == 0);
+    ASSERT(json_number_value(json_object_get(n, "answer")) == 42.0);
+    ASSERT(json_bool_value(json_object_get(n, "flag")) == 1);
+    END_ARENA();
+    return 1;
+}
+/* }}} */
+
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -388,6 +554,14 @@ int main(void)
     RUN(parse_file_error_line);
     RUN(arena_grows);
     RUN(kind_safety);
+    RUN(writer_primitives);
+    RUN(writer_string_escapes);
+    RUN(writer_object);
+    RUN(writer_array);
+    RUN(writer_nested);
+    RUN(writer_empty_containers);
+    RUN(writer_overflow);
+    RUN(writer_round_trip);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

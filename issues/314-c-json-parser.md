@@ -239,13 +239,14 @@ Verified `make STRICT=1` (`-Werror -Wextra -Wpedantic`) builds
 cleanly; 14/14 parser tests and the 12 slot-store tests all pass.
 
 What's deferred:
-- **The writer half.** Declared in `json.h`; every entrypoint in
-  `json.c` currently sets `w->err`. Lands alongside the JSONL
-  run-log writer (issue 311) since that's the first real consumer
-  — no point implementing it before there's a struct shape to
-  serialize.
 - **Stricter leading-zero rule.** RFC 8259 disallows `0\d+`; we
   currently accept `01` as `1`. None of our inputs produce that
   shape, so it's a tightening that lands when something needs it.
 
-Neither blocks 305 — the graph loader uses the parser half only.
+### Writer half — 2026-05-12
+
+Filled in the writer bodies (object/array open+close+key+
+primitives) on top of the depth-stack design declared in the
+header. Eight new writer tests cover comma placement, escape
+emission, empty and non-empty containers, nesting, overflow
+detection, and a round-trip back through the parser. Done.

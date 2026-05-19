@@ -346,6 +346,12 @@ static json_node_t *parse_number(parser_t *p)
     if (!is_digit(peek(p))) { fail(p, "invalid number"); return NULL; }
     if (peek(p) == '0') {
         p->pos++;
+        /* RFC 8259: a leading zero must not be followed by another
+         * digit. "01" is a hard error, not silently truncated. */
+        if (is_digit(peek(p))) {
+            fail(p, "leading zero followed by digit");
+            return NULL;
+        }
     } else {
         while (is_digit(peek(p))) p->pos++;
     }
@@ -675,13 +681,80 @@ json_node_t *json_object_get(const json_node_t *n, const char *key)
 }
 /* }}} */
 
-/* {{{ Writer — declared, body deferred */
-/* The writer half is exercised once the JSONL run-log writer
- * (issue 311) lands. The signatures are declared in json.h so other
- * components can link against this object even before the writer
- * body is implemented. For now each entrypoint sets w->err and
- * returns; json_writer_finish returns -1 if the writer has been
- * touched, 0 if untouched. */
+/* {{{ Writer — bounded streaming emitter
+ *
+ * The writer fills the caller's buffer one token at a time. State is
+ * a small stack of depth markers: low bit is "next element will be
+ * the first," high bit is "this level is an object" (vs an array).
+ * That's enough to handle comma placement and choose the right
+ * close bracket. Depth is capped at 16 — plenty for the event
+ * records issue 311 will emit.
+ *
+ * Errors are sticky: once w->err is set, every subsequent op is a
+ * no-op until json_writer_finish reports the failure. Overruns of
+ * the bounded buffer flip w->err; the caller is expected to size
+ * the buffer for the worst case (or detect overflow and retry with
+ * a bigger one).
+ */
+
+#define WRITER_FLAG_FIRST    1u
+#define WRITER_FLAG_OBJECT   2u
+
+/* {{{ writer_emit() — append `n` bytes, or set err on overflow */
+static void writer_emit(json_writer_t *w, const char *s, int n)
+{
+    if (w->err) return;
+    if (w->used + n > w->cap) { w->err = 1; return; }
+    memcpy(w->buf + w->used, s, (size_t)n);
+    w->used += n;
+}
+/* }}} */
+
+/* {{{ writer_pre_value() — comma before next array element if needed */
+static void writer_pre_value(json_writer_t *w)
+{
+    if (w->depth == 0) return;
+    unsigned char st = w->first[w->depth - 1];
+    if (st & WRITER_FLAG_OBJECT) {
+        /* In an object: a value follows a key, which already wrote
+         * its colon. No comma here. */
+        return;
+    }
+    /* In an array. */
+    if (!(st & WRITER_FLAG_FIRST)) writer_emit(w, ",", 1);
+    w->first[w->depth - 1] = (unsigned char)(st & (unsigned char)~WRITER_FLAG_FIRST);
+}
+/* }}} */
+
+/* {{{ writer_emit_string_literal() — "..." with JSON escapes */
+static void writer_emit_string_literal(json_writer_t *w, const char *s)
+{
+    writer_emit(w, "\"", 1);
+    if (!s) { writer_emit(w, "\"", 1); return; }
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+        unsigned char c = *p;
+        switch (c) {
+            case '"':  writer_emit(w, "\\\"", 2); break;
+            case '\\': writer_emit(w, "\\\\", 2); break;
+            case '\n': writer_emit(w, "\\n",  2); break;
+            case '\r': writer_emit(w, "\\r",  2); break;
+            case '\t': writer_emit(w, "\\t",  2); break;
+            case '\b': writer_emit(w, "\\b",  2); break;
+            case '\f': writer_emit(w, "\\f",  2); break;
+            default:
+                if (c < 0x20) {
+                    char buf[8];
+                    int n = snprintf(buf, sizeof buf, "\\u%04x", c);
+                    if (n > 0) writer_emit(w, buf, n);
+                } else {
+                    char ch = (char)c;
+                    writer_emit(w, &ch, 1);
+                }
+        }
+    }
+    writer_emit(w, "\"", 1);
+}
+/* }}} */
 
 /* {{{ json_writer_init() */
 void json_writer_init(json_writer_t *w, char *buf, int cap)
@@ -697,37 +770,113 @@ void json_writer_init(json_writer_t *w, char *buf, int cap)
 /* }}} */
 
 /* {{{ json_writer_object() */
-void json_writer_object(json_writer_t *w) { (void)w; if (w) w->err = -1; }
+void json_writer_object(json_writer_t *w)
+{
+    if (!w || w->err) return;
+    if (w->depth >= 16) { w->err = 1; return; }
+    writer_pre_value(w);
+    writer_emit(w, "{", 1);
+    w->first[w->depth] = WRITER_FLAG_FIRST | WRITER_FLAG_OBJECT;
+    w->depth++;
+}
 /* }}} */
+
 /* {{{ json_writer_array() */
-void json_writer_array (json_writer_t *w) { (void)w; if (w) w->err = -1; }
+void json_writer_array(json_writer_t *w)
+{
+    if (!w || w->err) return;
+    if (w->depth >= 16) { w->err = 1; return; }
+    writer_pre_value(w);
+    writer_emit(w, "[", 1);
+    w->first[w->depth] = WRITER_FLAG_FIRST;     /* array, no OBJECT bit */
+    w->depth++;
+}
 /* }}} */
+
 /* {{{ json_writer_end() */
-void json_writer_end   (json_writer_t *w) { (void)w; if (w) w->err = -1; }
+void json_writer_end(json_writer_t *w)
+{
+    if (!w || w->err) return;
+    if (w->depth == 0) { w->err = 1; return; }
+    w->depth--;
+    writer_emit(w, (w->first[w->depth] & WRITER_FLAG_OBJECT) ? "}" : "]", 1);
+}
 /* }}} */
+
 /* {{{ json_writer_key() */
-void json_writer_key   (json_writer_t *w, const char *k) { (void)k; if (w) w->err = -1; }
+void json_writer_key(json_writer_t *w, const char *key)
+{
+    if (!w || w->err || !key) { if (w) w->err = 1; return; }
+    if (w->depth == 0) { w->err = 1; return; }
+    unsigned char st = w->first[w->depth - 1];
+    if (!(st & WRITER_FLAG_OBJECT)) { w->err = 1; return; }
+    if (!(st & WRITER_FLAG_FIRST)) writer_emit(w, ",", 1);
+    w->first[w->depth - 1] = (unsigned char)(st & (unsigned char)~WRITER_FLAG_FIRST);
+    writer_emit_string_literal(w, key);
+    writer_emit(w, ":", 1);
+}
 /* }}} */
+
 /* {{{ json_writer_string() */
-void json_writer_string(json_writer_t *w, const char *s) { (void)s; if (w) w->err = -1; }
+void json_writer_string(json_writer_t *w, const char *s)
+{
+    if (!w || w->err) return;
+    writer_pre_value(w);
+    writer_emit_string_literal(w, s);
+}
 /* }}} */
+
 /* {{{ json_writer_int() */
-void json_writer_int   (json_writer_t *w, long long v)   { (void)v; if (w) w->err = -1; }
+void json_writer_int(json_writer_t *w, long long v)
+{
+    if (!w || w->err) return;
+    writer_pre_value(w);
+    char buf[32];
+    int n = snprintf(buf, sizeof buf, "%lld", v);
+    if (n > 0) writer_emit(w, buf, n);
+}
 /* }}} */
+
 /* {{{ json_writer_number() */
-void json_writer_number(json_writer_t *w, double v)      { (void)v; if (w) w->err = -1; }
+void json_writer_number(json_writer_t *w, double v)
+{
+    if (!w || w->err) return;
+    writer_pre_value(w);
+    char buf[40];
+    /* %.17g preserves round-trip for IEEE-754 doubles. */
+    int n = snprintf(buf, sizeof buf, "%.17g", v);
+    if (n > 0) writer_emit(w, buf, n);
+}
 /* }}} */
+
 /* {{{ json_writer_bool() */
-void json_writer_bool  (json_writer_t *w, int v)         { (void)v; if (w) w->err = -1; }
+void json_writer_bool(json_writer_t *w, int v)
+{
+    if (!w || w->err) return;
+    writer_pre_value(w);
+    if (v) writer_emit(w, "true",  4);
+    else   writer_emit(w, "false", 5);
+}
 /* }}} */
+
 /* {{{ json_writer_null() */
-void json_writer_null  (json_writer_t *w)                { if (w) w->err = -1; }
+void json_writer_null(json_writer_t *w)
+{
+    if (!w || w->err) return;
+    writer_pre_value(w);
+    writer_emit(w, "null", 4);
+}
 /* }}} */
+
 /* {{{ json_writer_finish() */
 int json_writer_finish(json_writer_t *w)
 {
-    if (!w) return -1;
-    return w->err ? -1 : w->used;
+    if (!w)          return -1;
+    if (w->err)      return -1;
+    if (w->depth != 0) { w->err = 1; return -1; }
+    /* NUL-terminate in any spare byte (not counted in `used`). */
+    if (w->used < w->cap) w->buf[w->used] = '\0';
+    return w->used;
 }
 /* }}} */
 /* }}} */
