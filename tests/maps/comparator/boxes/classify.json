@@ -1,0 +1,21 @@
+{
+  "id": "classify",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/routing.lua",
+  "fn": "identity",
+  "inputs": [
+    { "name": "v", "type": "string", "value": "8" }
+  ],
+  "routing": { "kind": "comparator", "comparand": 5 },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "classify", "from_branch": "lt",
+      "to_box": "low",  "to_input": "v" },
+    { "from_box": "classify", "from_branch": "eq",
+      "to_box": "mid",  "to_input": "v" },
+    { "from_box": "classify", "from_branch": "gt",
+      "to_box": "high", "to_input": "v" }
+  ],
+  "ui": { "x": 200, "y": 100 }
+}

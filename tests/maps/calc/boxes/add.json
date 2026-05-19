@@ -1,0 +1,14 @@
+{
+  "id": "add",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/calc.lua",
+  "fn": "add",
+  "inputs": [
+    { "name": "a", "type": "string", "value": "17" },
+    { "name": "b", "type": "string", "value": "25" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "ui": { "x": 100, "y": 100 }
+}

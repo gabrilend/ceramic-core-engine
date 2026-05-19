@@ -1,0 +1,14 @@
+{
+  "id": "c",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/routing.lua",
+  "fn": "tag",
+  "inputs": [
+    { "name": "tag", "type": "string", "value": "C" },
+    { "name": "v",   "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "ui": { "x": 400, "y": 160 }
+}

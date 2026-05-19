@@ -1,0 +1,14 @@
+{
+  "id": "mid",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/routing.lua",
+  "fn": "tag",
+  "inputs": [
+    { "name": "tag", "type": "string", "value": "MID" },
+    { "name": "v",   "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "ui": { "x": 400, "y": 100 }
+}

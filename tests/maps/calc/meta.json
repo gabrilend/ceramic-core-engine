@@ -1,0 +1,5 @@
+{
+  "name": "calc",
+  "description": "Single-box fixture: one Lua call with two literal inputs.",
+  "entry_box_id": "add"
+}

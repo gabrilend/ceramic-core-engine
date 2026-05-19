@@ -1,0 +1,17 @@
+{
+  "id": "shout",
+  "kind": "call",
+  "lang": "bash",
+  "ref": "src/pipeline.sh",
+  "fn": "shout",
+  "inputs": [
+    { "name": "s", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "shout", "from_branch": null,
+      "to_box": "output", "to_input": "text" }
+  ],
+  "ui": { "x": 700, "y": 100 }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "comparator",
+  "description": "Comparator routing: pick one of low/mid/high based on output.",
+  "entry_box_id": "classify"
+}

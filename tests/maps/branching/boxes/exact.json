@@ -1,0 +1,12 @@
+{
+  "id": "exact",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/sink.lua",
+  "fn": "sink",
+  "routing": { "kind": "plain" },
+  "inputs": [
+    { "name": "v", "type": "string" }
+  ],
+  "ui": { "x": 500, "y": 100 }
+}

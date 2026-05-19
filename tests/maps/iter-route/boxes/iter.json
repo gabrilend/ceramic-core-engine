@@ -1,0 +1,21 @@
+{
+  "id": "iter",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/routing.lua",
+  "fn": "identity",
+  "inputs": [
+    { "name": "v", "type": "string", "value": "hi" }
+  ],
+  "routing": { "kind": "iterator", "n_outputs": 3 },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "iter", "from_branch": "out_0",
+      "to_box": "a", "to_input": "v" },
+    { "from_box": "iter", "from_branch": "out_1",
+      "to_box": "b", "to_input": "v" },
+    { "from_box": "iter", "from_branch": "out_2",
+      "to_box": "c", "to_input": "v" }
+  ],
+  "ui": { "x": 200, "y": 100 }
+}

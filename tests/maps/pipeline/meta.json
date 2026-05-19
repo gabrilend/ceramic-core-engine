@@ -1,0 +1,5 @@
+{
+  "name": "pipeline",
+  "description": "data → Lua → C → Bash → file_write — multilang showcase.",
+  "entry_box_id": "input"
+}

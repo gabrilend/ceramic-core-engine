@@ -1,0 +1,9 @@
+{
+  "id": "output",
+  "kind": "file_write",
+  "inputs": [
+    { "name": "path", "type": "string", "value": "/tmp/soramech-pipeline-out.txt" },
+    { "name": "text", "type": "string" }
+  ],
+  "ui": { "x": 900, "y": 100 }
+}

@@ -254,3 +254,101 @@ phase produces a runnable demo in `issues/completed/demos/`.
 - `issues/309-build-system.md` — `make test` invokes this
 - `docs/004-ipc-and-threading.md` — blocking semantics relevant to
   test design
+
+## Implementation log
+
+### JSON writer half — 2026-05-12
+
+`libs/json/json.c` had stub writer bodies left over from 314's
+parser milestone; this pass filled them in. The writer maintains
+a small depth stack (capped at 16) where each entry packs two
+booleans — "next element is first" and "this level is an
+object." That's enough to handle comma placement and pick the
+right close bracket. Overflow of the caller-supplied buffer is
+sticky on `w->err`; `json_writer_finish` reports it.
+
+Eight new writer tests in `tests/314-json-test.c` cover the
+primitives, escape encoding, empty and non-empty containers,
+nesting depth, overflow detection, and a round-trip where the
+writer emits an object that the parser then decodes and the test
+verifies via the accessor API.
+
+Still ahead for 311: the JSONL event writer (a thin wrapper that
+serializes `task_start` / `task_end` / `run_start` / `run_end`
+records using this writer), the MPSC ring buffer the worker
+threads push events into, and the dedicated writer thread that
+drains them.
+
+### Event emitters — 2026-05-12
+
+`src/013-jsonl-events.{c,h}` ships the per-event emit functions
+on top of issue 314's bounded writer:
+
+- `jsonl_emit_run_start(w, ts, map, n_workers)`
+- `jsonl_emit_task_submit(w, ts, task_id, box_id, worker_idx)`
+- `jsonl_emit_task_start(w, ts, task_id, worker_idx)`
+- `jsonl_emit_task_end(w, ts, task_id, worker_idx, duration_us, output_size)`
+- `jsonl_emit_run_end(w, ts, duration_us, n_tasks)`
+
+Each emit serializes into a fixed 512-byte buffer, appends a
+newline, and writes to a `FILE *` under a per-writer mutex. The
+MPSC ring + dedicated writer thread aren't there yet — the mutex
+is a placeholder until dispatch is producing events fast enough
+to justify the contention.
+
+`tests/013-jsonl-events-test.c` writes a full sequence, slurps
+the file back, and parses each line through 314's JSON parser to
+verify the event shape. A concurrent-emit test runs 8 producer
+threads each emitting 200 events into the same writer and
+verifies every line round-trips.
+
+Still ahead inside 311: slot-event opt-in
+(`SORAMECH_LOG_SLOTS=1`), inputs/outputs opt-in
+(`SORAMECH_LOG_VALUES=1`), the MPSC ring + writer thread, and
+the integration-test harness map fixtures.
+
+### Multi-producer event queue + writer thread — 2026-05-12
+
+`src/014-event-queue.{c,h}` ships the producer-side queue and the
+dedicated writer thread. Producers (worker threads + the main
+thread) call `event_queue_run_start` / `task_submit` / `task_start`
+/ `task_end` / `run_end`; each emit appends a small fixed-size
+event record under a brief mutex and signals a CV. The writer
+thread sleeps on the CV, snapshots the queue head into a local
+batch under the lock, then drains the batch outside the lock —
+JSON encoding + fwrite happen with zero producer contention.
+
+Four unit tests in `tests/014-event-queue-test.c` cover single
+producer / multi-thread burst (8 producers × 250 events each =
+2000 lines, all round-trip through the JSON parser) / shutdown-
+drain / pending-count.
+
+The dispatch action (issue 304) opt-in emits task_start and
+task_end events with monotonic-clock durations via the queue;
+the pool runner emits run_start and run_end. `soramech-pool`
+writes to `map_dir/tmp/last-run.jsonl` when that directory
+exists, falling back to `/tmp/soramech-last-run.jsonl`.
+
+What's still ahead inside 311:
+- Lock-free Vyukov MPSC ring with sequence numbers — the
+  architecture doc's preferred design. The mutex queue is a
+  placeholder; upgrade once contention shows up.
+- Opt-in slot events and per-task input/output dumps.
+
+### Integration test runner — 2026-05-12
+
+`scripts/run-tests.sh` runs every fixture map under `tests/maps/`
+through `soramech-pool` and asserts the expected box-output
+substrings show up in stderr. `make test` invokes the script
+after the unit tests so a full `make test` covers everything
+from slot operations all the way through end-to-end Lua / C /
+Bash dispatch via JSONL logging.
+
+Six fixture checks at the moment:
+- `calc`            — single Lua `add → 42`
+- `hello`           — data → Lua, `greet → "Hello, World!"`
+- `comparator`      — `high` fires, `low` / `mid` don't
+- `iter-route`      — single-fire iterator picks `out_0` → `a`
+- `pipeline`        — five-box multilang chain
+- `pipeline file`   — verifies the file_write sink wrote
+  `"11!"` to `/tmp/soramech-pipeline-out.txt`

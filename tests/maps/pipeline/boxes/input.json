@@ -1,0 +1,10 @@
+{
+  "id": "input",
+  "kind": "data",
+  "path": "input.txt",
+  "ui": { "x": 100, "y": 100 },
+  "connections": [
+    { "from_box": "input", "from_branch": null,
+      "to_box": "double", "to_input": "s" }
+  ]
+}

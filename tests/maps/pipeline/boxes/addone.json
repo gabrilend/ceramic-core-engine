@@ -1,0 +1,17 @@
+{
+  "id": "addone",
+  "kind": "call",
+  "lang": "c",
+  "ref": "src/pipeline.c",
+  "fn": "addone",
+  "inputs": [
+    { "name": "s", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "addone", "from_branch": null,
+      "to_box": "shout", "to_input": "s" }
+  ],
+  "ui": { "x": 500, "y": 100 }
+}

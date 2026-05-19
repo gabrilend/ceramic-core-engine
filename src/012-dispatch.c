@@ -34,6 +34,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
+
+/* {{{ now_secs() / mono_us() — timestamps */
+static double now_secs(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+
+static long mono_us(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long)ts.tv_sec * 1000000L + ts.tv_nsec / 1000;
+}
+/* }}} */
 
 /* {{{ err_fmt() — malloc'd diagnostic string */
 __attribute__((format(printf, 1, 2)))
@@ -70,8 +87,11 @@ int dispatch_ctx_init(dispatch_ctx_t *ctx,
     ctx->specs = r;
     ctx->pool  = p;
     atomic_init(&ctx->tasks_dispatched, 0);
+    atomic_init(&ctx->next_task_id,     0);
     ctx->n_boxes              = graph_n_boxes(g);
     ctx->default_out_capacity = 4096;
+    ctx->events               = NULL;     /* opt-in via caller assignment */
+    ctx->log_values           = 0;        /* opt-in via SORAMECH_LOG_VALUES=1 */
 
     if (ctx->n_boxes > 0) {
         ctx->box_ever_spawned = calloc((size_t)ctx->n_boxes, sizeof(_Atomic int));
@@ -152,9 +172,20 @@ void dispatch_spawn(const dispatch_ctx_t *ctx, int box_id, int priority)
     dispatch_task_t *t = malloc(sizeof *t);
     if (!t) return;
 
-    t->box_id = box_id;
-    t->ctx    = ctx;
+    /* Assign task_id at submission so the same id correlates the
+     * task_submit / task_start / task_end events. The next_task_id
+     * counter is atomic so concurrent spawners don't collide. */
+    dispatch_ctx_t *mctx = (dispatch_ctx_t *)ctx;
+    t->task_id = atomic_fetch_add_explicit(&mctx->next_task_id, 1,
+                                           memory_order_relaxed);
+    t->box_id  = box_id;
+    t->ctx     = ctx;
 
+    if (ctx->events) {
+        const box_t *b = graph_box(ctx->graph, box_id);
+        event_queue_task_submit(ctx->events, now_secs(),
+            t->task_id, b ? b->id : "(unknown)", -1);
+    }
     pool_spawn(ctx->pool, dispatch_action, t, priority);
 }
 /* }}} */
@@ -233,6 +264,20 @@ static char *resolve_path(const dispatch_ctx_t *ctx, const char *p)
     memcpy(out + blen + 1, p, plen);
     out[blen + 1 + plen] = '\0';
     return out;
+}
+/* }}} */
+
+/* {{{ emit_input_events() — log every input port under LOG_VALUES */
+static void emit_input_events(dispatch_ctx_t *ctx, int task_id,
+                              char **bufs, const int *sizes, int n_inputs)
+{
+    if (!ctx->log_values || !ctx->events) return;
+    double ts = now_secs();
+    for (int i = 0; i < n_inputs; i++) {
+        if (!bufs[i]) continue;
+        event_queue_task_input(ctx->events, ts, task_id, i,
+                               bufs[i], sizes[i]);
+    }
 }
 /* }}} */
 
@@ -462,7 +507,7 @@ static void capture(dispatch_ctx_t *ctx, int box_id,
 /* }}} */
 
 /* {{{ do_call_box() — invoke a call box's language spec */
-static int do_call_box(dispatch_ctx_t *ctx, const box_t *b,
+static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
                        char *out_buf, int out_capacity, int *out_size)
 {
     if (b->spec_idx < 0) {
@@ -505,12 +550,15 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b,
         return -1;
     }
 
+    /* Verbose: emit the input payloads now, before the spec runs. */
+    emit_input_events(ctx, task_id, bufs, sizes, n_present);
+
     /* Resolve the box's source file relative to map_dir. */
     char *ref_path = b->ref ? resolve_path(ctx, b->ref) : NULL;
 
-    int rc = spec->invoke(handle, ref_path ? ref_path : b->ref, b->fn,
-                          datas, sizes, n_present,
-                          out_buf, out_capacity, out_size);
+    int rc = fn(handle, ref_path ? ref_path : b->ref, b->fn,
+                datas, sizes, n_present,
+                out_buf, out_capacity, out_size);
     free(ref_path);
     for (int i = 0; i < n; i++) free(bufs[i]);
     return rc;
@@ -552,7 +600,7 @@ static int do_data_box(dispatch_ctx_t *ctx, const box_t *b,
 /* Convention: inputs[0] = "path" (string), inputs[1] = "text"
  * (bytes). If the box also has a literal path, we already pushed
  * it to inputs[0] via dispatch_push_literals. */
-static int do_file_write_box(dispatch_ctx_t *ctx, const box_t *b,
+static int do_file_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
                              int *out_size)
 {
     char       *bufs[16]  = {0};
@@ -561,6 +609,7 @@ static int do_file_write_box(dispatch_ctx_t *ctx, const box_t *b,
     int failed = 0;
     int n_present = read_inputs(ctx, b, bufs, datas, sizes,
                                 ctx->default_out_capacity, &failed);
+    emit_input_events(ctx, task_id, bufs, sizes, n_present);
     int path_idx = -1, text_idx = -1;
     for (int i = 0; i < b->n_inputs; i++) {
         if (strcmp(b->inputs[i].name, "path") == 0) path_idx = i;
@@ -605,6 +654,13 @@ void dispatch_action(void *arg)
 
     atomic_fetch_add_explicit(&ctx->tasks_dispatched, 1, memory_order_relaxed);
 
+    int task_id    = t->task_id;
+    int worker_idx = pool_current_worker ? pool_current_worker->thread_idx : -1;
+
+    long start_us = mono_us();
+    if (ctx->events)
+        event_queue_task_start(ctx->events, now_secs(), task_id, worker_idx);
+
     int out_size = 0;
     int out_capacity = ctx->default_out_capacity > 0
                         ? ctx->default_out_capacity : 4096;
@@ -613,19 +669,25 @@ void dispatch_action(void *arg)
     if (out_buf && b) {
         switch (b->kind) {
             case BOX_CALL:
-                rc = do_call_box(ctx, b, out_buf, out_capacity, &out_size);
+                rc = do_call_box(ctx, b, task_id, out_buf, out_capacity, &out_size);
                 break;
             case BOX_DATA:
                 rc = do_data_box(ctx, b, out_buf, out_capacity, &out_size);
                 break;
             case BOX_FILE_WRITE:
-                rc = do_file_write_box(ctx, b, &out_size);
+                rc = do_file_write_box(ctx, b, task_id, &out_size);
                 break;
         }
     }
 
     if (rc == 0 && b) {
         capture(ctx, t->box_id, out_buf, out_size);
+        /* Verbose: emit the task's output payload before push (so
+         * the log entries land in computation order). */
+        if (ctx->log_values && ctx->events) {
+            event_queue_task_output(ctx->events, now_secs(),
+                                    task_id, out_buf, out_size);
+        }
         /* file_write boxes don't push (they're sinks). */
         if (b->kind != BOX_FILE_WRITE) {
             push_routed(ctx, b, out_buf, out_size);
@@ -640,6 +702,12 @@ void dispatch_action(void *arg)
         }
     } else if (b) {
         fprintf(stderr, "dispatch: box '%s' failed (rc=%d)\n", b->id, rc);
+    }
+
+    long end_us = mono_us();
+    if (ctx->events) {
+        event_queue_task_end(ctx->events, now_secs(), task_id, worker_idx,
+                             end_us - start_us, out_size);
     }
 
     free(out_buf);

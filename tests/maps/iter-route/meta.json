@@ -1,0 +1,5 @@
+{
+  "name": "iter-route",
+  "description": "Iterator routing: pick one of a/b/c based on the box's counter.",
+  "entry_box_id": "iter"
+}

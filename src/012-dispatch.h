@@ -28,6 +28,7 @@
 #include "010-graph-loader.h"
 #include "011-spec-registry.h"
 #include "009-slot-store.h"
+#include "014-event-queue.h"
 #include "pool.h"
 
 #ifdef __cplusplus
@@ -60,10 +61,26 @@ typedef struct dispatch_ctx {
     /* Optional default output buffer size for invoke calls. If 0,
      * defaults to 4096. */
     int                   default_out_capacity;
+
+    /* Optional run-log event queue (issue 311). When non-NULL, the
+     * dispatch action emits task_start + task_end events through
+     * it. NULL turns the per-task logging off; the runner emits
+     * run_start / run_end on its own. */
+    event_queue_t        *events;
+
+    /* Verbose-event gate (issue 311 SORAMECH_LOG_VALUES=1). When
+     * 1 and `events` is non-NULL, dispatch_action also emits
+     * task_input / task_output events with the byte payloads
+     * (truncated to 4 KB per the architecture doc). */
+    int                   log_values;
+
+    /* Monotonic task id counter for run-log correlation. */
+    _Atomic int           next_task_id;
 } dispatch_ctx_t;
 
 typedef struct dispatch_task {
     int                   box_id;
+    int                   task_id;   /* assigned at dispatch_spawn time */
     const dispatch_ctx_t *ctx;
 } dispatch_task_t;
 /* }}} */

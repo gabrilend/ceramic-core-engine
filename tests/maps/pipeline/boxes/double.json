@@ -1,0 +1,17 @@
+{
+  "id": "double",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/pipeline.lua",
+  "fn": "double",
+  "inputs": [
+    { "name": "s", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "double", "from_branch": null,
+      "to_box": "addone", "to_input": "s" }
+  ],
+  "ui": { "x": 300, "y": 100 }
+}
