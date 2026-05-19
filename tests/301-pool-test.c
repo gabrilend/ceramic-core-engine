@@ -196,6 +196,52 @@ static int test_concurrent_producers(void)
 }
 /* }}} */
 
+/* {{{ test_worker_init_callback() */
+static atomic_int g_init_count;
+static int worker_init_fn(int worker_idx, worker_ctx_t *ctx, void *user)
+{
+    (void)user;
+    /* Verify the worker's ctx is consistent: thread_idx matches the
+     * argument; back-pointer to the pool isn't NULL. */
+    if (ctx->thread_idx != worker_idx) return -1;
+    if (ctx->pool == NULL) return -1;
+    atomic_fetch_add(&g_init_count, 1);
+    return 0;
+}
+
+static int test_worker_init_callback(void)
+{
+    atomic_store(&g_init_count, 0);
+    pool_t *p = pool_create(4);
+    ASSERT(p);
+    pool_set_worker_init(p, worker_init_fn, NULL);
+    ASSERT(pool_init_barrier(p) == 0);
+    /* Every worker's init ran exactly once. */
+    ASSERT(atomic_load(&g_init_count) == 4);
+    pool_destroy(p);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_worker_init_failure() */
+static int worker_init_failing(int worker_idx, worker_ctx_t *ctx, void *user)
+{
+    (void)ctx; (void)user;
+    /* Fail on worker 2 to test the failure path. */
+    return (worker_idx == 2) ? -1 : 0;
+}
+
+static int test_worker_init_failure(void)
+{
+    pool_t *p = pool_create(4);
+    ASSERT(p);
+    pool_set_worker_init(p, worker_init_failing, NULL);
+    ASSERT(pool_init_barrier(p) == -1);
+    pool_destroy(p);
+    return 1;
+}
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -208,6 +254,8 @@ int main(void)
     RUN(current_worker_tls);
     RUN(recursive_spawn);
     RUN(concurrent_producers);
+    RUN(worker_init_callback);
+    RUN(worker_init_failure);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

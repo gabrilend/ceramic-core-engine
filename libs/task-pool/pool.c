@@ -35,6 +35,12 @@ struct pool {
     pthread_t     *threads;
     worker_ctx_t  *contexts;
 
+    /* Per-worker init / teardown callbacks (issue 303 plumbing). */
+    pool_init_cb_t      init_cb;
+    void               *init_user;
+    pool_teardown_cb_t  teardown_cb;
+    void               *teardown_user;
+
     /* Task queue. */
     pthread_mutex_t  q_mtx;
     pthread_cond_t   q_cv;
@@ -49,12 +55,24 @@ struct pool {
     /* Shutdown flag. Set by pool_destroy; checked by workers. */
     _Atomic int      shutdown;
 
-    /* Init barrier. workers_ready is incremented by each worker
-     * after its (currently empty) per-thread setup; main thread
-     * waits for workers_ready == n_workers, then flips init_released
-     * and broadcasts. */
+    /* Init barrier. Three phases, all protected by init_mtx and
+     * woken via init_cv:
+     *
+     *   init_starting=0  workers are spawned but parked on the cv,
+     *                    waiting for pool_init_barrier to authorise
+     *                    them to run their init callbacks. The
+     *                    callback can't be safely registered after
+     *                    pool_create otherwise — workers would
+     *                    race past the (then-NULL) callback before
+     *                    pool_set_worker_init is called.
+     *   init_starting=1  workers run their init callbacks, update
+     *                    workers_ready / init_fail, and park on
+     *                    init_released.
+     *   init_released=1  workers proceed to the task loop. */
+    int              init_starting;
     int              workers_ready;
     int              init_released;
+    int              init_fail;
     pthread_mutex_t  init_mtx;
     pthread_cond_t   init_cv;
 };
@@ -82,18 +100,45 @@ static void *worker_main(void *arg)
     pool_t       *p   = ctx->pool;
     pool_current_worker = ctx;
 
-    /* Per-worker init point — issue 303 plugs spec->init calls here
-     * for every language the map uses. Empty for now. */
-
-    /* Increment workers_ready, notify the main thread, then park at
-     * the barrier until init_released flips. */
+    /* Stage 1: wait for pool_init_barrier to authorise init.
+     * Without this, a callback registered between pool_create and
+     * pool_init_barrier would race the workers running init with
+     * a still-NULL p->init_cb. */
     pthread_mutex_lock(&p->init_mtx);
+    while (!p->init_starting && !atomic_load(&p->shutdown)) {
+        pthread_cond_wait(&p->init_cv, &p->init_mtx);
+    }
+    int shutting_down = atomic_load(&p->shutdown);
+    pthread_mutex_unlock(&p->init_mtx);
+    if (shutting_down) return NULL;
+
+    /* Stage 2: per-worker init point. Issue 303's spec_registry
+     * helper registers itself via pool_set_worker_init; this is
+     * where it runs, populating ctx->handles[] before the worker
+     * is allowed to pull tasks. */
+    int cb_rc = 0;
+    if (p->init_cb) cb_rc = p->init_cb(ctx->thread_idx, ctx, p->init_user);
+
+    /* Stage 3: report ready (or failure) and park on init_released. */
+    pthread_mutex_lock(&p->init_mtx);
+    if (cb_rc != 0) p->init_fail = 1;
     p->workers_ready++;
     pthread_cond_broadcast(&p->init_cv);
     while (!p->init_released) {
         pthread_cond_wait(&p->init_cv, &p->init_mtx);
     }
+    int fail = p->init_fail;
     pthread_mutex_unlock(&p->init_mtx);
+
+    /* If anyone's init failed, every worker bails before touching
+     * the task queue; the pool is unusable until destroyed. Run
+     * the teardown so partially-initialised handles get cleaned
+     * up symmetrically with init. */
+    if (fail) {
+        if (p->teardown_cb)
+            p->teardown_cb(ctx->thread_idx, ctx, p->teardown_user);
+        return NULL;
+    }
 
     /* Task loop. */
     while (1) {
@@ -126,6 +171,13 @@ static void *worker_main(void *arg)
             pthread_cond_broadcast(&p->quiet_cv);
             pthread_mutex_unlock(&p->quiet_mtx);
         }
+    }
+
+    /* Worker is exiting. Run the per-worker teardown so language
+     * specs (issue 303) can release their handles symmetrically
+     * with init. */
+    if (p->teardown_cb) {
+        p->teardown_cb(ctx->thread_idx, ctx, p->teardown_user);
     }
     return NULL;
 }
@@ -185,17 +237,42 @@ fail:
 }
 /* }}} */
 
-/* {{{ pool_init_barrier() */
-void pool_init_barrier(pool_t *p)
+/* {{{ pool_set_worker_init() */
+void pool_set_worker_init(pool_t *p, pool_init_cb_t cb, void *user)
 {
     if (!p) return;
+    p->init_cb   = cb;
+    p->init_user = user;
+}
+/* }}} */
+
+/* {{{ pool_set_worker_teardown() */
+void pool_set_worker_teardown(pool_t *p, pool_teardown_cb_t cb, void *user)
+{
+    if (!p) return;
+    p->teardown_cb   = cb;
+    p->teardown_user = user;
+}
+/* }}} */
+
+/* {{{ pool_init_barrier() */
+int pool_init_barrier(pool_t *p)
+{
+    if (!p) return -1;
     pthread_mutex_lock(&p->init_mtx);
+    /* Stage 1: authorise workers to run their init callbacks. */
+    p->init_starting = 1;
+    pthread_cond_broadcast(&p->init_cv);
+    /* Stage 2: wait for all workers to report ready. */
     while (p->workers_ready < p->n_workers) {
         pthread_cond_wait(&p->init_cv, &p->init_mtx);
     }
+    int fail = p->init_fail;
+    /* Stage 3: release everyone into the task loop. */
     p->init_released = 1;
     pthread_cond_broadcast(&p->init_cv);
     pthread_mutex_unlock(&p->init_mtx);
+    return fail ? -1 : 0;
 }
 /* }}} */
 
@@ -247,16 +324,20 @@ void pool_destroy(pool_t *p)
 {
     if (!p) return;
 
-    /* If pool_init_barrier was never called (e.g. error before
-     * use), release workers from the barrier so they can exit. */
+    /* Release every stage of the init barrier in case
+     * pool_init_barrier was never called (e.g. caller hit an error
+     * between pool_create and pool_init_barrier). Setting shutdown
+     * first means workers parked on stage 1 will see it and exit
+     * cleanly without running their init callback. */
+    atomic_store_explicit(&p->shutdown, 1, memory_order_release);
+
     pthread_mutex_lock(&p->init_mtx);
     if (!p->init_released) {
+        p->init_starting = 1;
         p->init_released = 1;
         pthread_cond_broadcast(&p->init_cv);
     }
     pthread_mutex_unlock(&p->init_mtx);
-
-    atomic_store_explicit(&p->shutdown, 1, memory_order_release);
 
     pthread_mutex_lock(&p->q_mtx);
     pthread_cond_broadcast(&p->q_cv);

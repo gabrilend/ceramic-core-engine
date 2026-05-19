@@ -71,11 +71,34 @@ extern __thread worker_ctx_t *pool_current_worker;
  * the default. Returns NULL on allocation or pthread_create failure. */
 pool_t *pool_create(int n_workers);
 
-/* Block until every worker has finished its (currently empty) init
- * sequence and is parked at the barrier; then release them all. The
- * 303 spec-registry plug-in point lives between pool_create and
- * pool_init_barrier. One-shot. */
-void    pool_init_barrier(pool_t *p);
+/* Per-worker init callback (optional). Runs on every worker thread
+ * after TLS is set up and before the worker parks at the init
+ * barrier. Returns 0 on success; nonzero is reported by
+ * pool_init_barrier as a fatal error. The callback is the canonical
+ * place to populate ctx->handles[] with per-language spec state
+ * (issue 303 plumbs spec_registry_init_worker into here). */
+typedef int (*pool_init_cb_t)(int worker_idx, worker_ctx_t *ctx, void *user);
+
+/* Register the per-worker init callback. Must be called before
+ * pool_init_barrier. Calling it after pool_init_barrier or more
+ * than once is a programming error. */
+void    pool_set_worker_init(pool_t *p, pool_init_cb_t cb, void *user);
+
+/* Optional per-worker teardown callback. Runs on each worker
+ * thread inside `pool_destroy`, after the worker exits the task
+ * loop and before it returns. The canonical use is the spec
+ * registry's `spec_registry_teardown_worker` so each language's
+ * per-worker handle (e.g. a Lua state, a bash subprocess) can
+ * shut down cleanly instead of leaking through process exit. */
+typedef void (*pool_teardown_cb_t)(int worker_idx, worker_ctx_t *ctx, void *user);
+void    pool_set_worker_teardown(pool_t *p, pool_teardown_cb_t cb, void *user);
+
+/* Block until every worker has finished its init sequence and is
+ * parked at the barrier; then release them all. Returns 0 on
+ * success; -1 if any worker's init callback returned nonzero (in
+ * which case the barrier never released the workers and the pool
+ * should be torn down). */
+int     pool_init_barrier(pool_t *p);
 
 /* Stop accepting tasks, drain whatever's queued, join every worker,
  * free the pool. Safe on NULL. */

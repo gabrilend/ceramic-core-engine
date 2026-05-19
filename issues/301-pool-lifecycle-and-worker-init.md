@@ -240,3 +240,14 @@ What's deferred to follow-ons within 301:
   behaviorally" upgrade. Current queue is plain FIFO.
 
 Neither blocks 304 (dispatch) from starting.
+
+### Per-worker teardown hook — 2026-05-12
+
+Symmetric counterpart to `pool_set_worker_init`. Registered via
+`pool_set_worker_teardown(p, cb, user)`; the worker thread runs
+the callback right before exiting, after the task loop drains.
+The runner uses it to call `spec_registry_teardown_worker`,
+which sends bash subprocesses `QUIT`, closes their socket fds,
+and waitpids them. Without this, soramech-pool was leaking
+orphan bash processes (16 per run) that piled up across runs
+and slowed startup. Verified: zero orphans after a fresh run.
