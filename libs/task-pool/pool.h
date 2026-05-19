@@ -110,8 +110,15 @@ int     pool_n_workers(const pool_t *p);
 /* {{{ Submission and wait */
 /* Submit a task. Safe from any thread (including from inside another
  * action). Increments the active-task counter; the worker that runs
- * the task decrements it on return. */
-void    pool_spawn(pool_t *p, pool_action_t fn, void *arg);
+ * the task decrements it on return.
+ *
+ * `priority` is a signed-int weight; higher priorities are dequeued
+ * before lower ones. Ties between equal-priority tasks resolve to
+ * FIFO. The current usage is "all priorities zero," which makes the
+ * queue behaviorally a plain FIFO — the priority machinery is here
+ * so callers (issue 304's dispatch action) can grow into it later
+ * without a signature change. Issue 310. */
+void    pool_spawn(pool_t *p, pool_action_t fn, void *arg, int priority);
 
 /* Block until the active-task counter reaches zero. Calling this
  * before pool_init_barrier with pending tasks is a programming

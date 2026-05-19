@@ -83,7 +83,7 @@ static int test_spawn_one(void)
     atomic_store(&g_count, 0);
     pool_t *p = pool_create(2);
     pool_init_barrier(p);
-    pool_spawn(p, inc_action, NULL);
+    pool_spawn(p, inc_action, NULL, 0);
     pool_wait_quiescent(p);
     ASSERT(atomic_load(&g_count) == 1);
     pool_destroy(p);
@@ -98,7 +98,7 @@ static int test_spawn_many(void)
     atomic_store(&g_count, 0);
     pool_t *p = pool_create(4);
     pool_init_barrier(p);
-    for (int i = 0; i < N; i++) pool_spawn(p, inc_action, NULL);
+    for (int i = 0; i < N; i++) pool_spawn(p, inc_action, NULL, 0);
     pool_wait_quiescent(p);
     ASSERT(atomic_load(&g_count) == N);
     pool_destroy(p);
@@ -126,7 +126,7 @@ static int test_current_worker_tls(void)
     pool_t *p = pool_create(4);
     pool_init_barrier(p);
     /* Spawn enough tasks that every worker likely picks one up. */
-    for (int i = 0; i < 256; i++) pool_spawn(p, check_worker_action, NULL);
+    for (int i = 0; i < 256; i++) pool_spawn(p, check_worker_action, NULL, 0);
     pool_wait_quiescent(p);
     /* At least one worker observed a non-negative thread_idx. With
      * 256 tasks across 4 workers we should see most/all of them. */
@@ -147,7 +147,7 @@ static void recursive_action(void *arg)
     if (depth > 0) {
         /* Spawn a child from inside the worker. */
         pool_spawn(pool_current_worker->pool, recursive_action,
-                   (void *)(intptr_t)(depth - 1));
+                   (void *)(intptr_t)(depth - 1), 0);
     }
 }
 
@@ -157,7 +157,7 @@ static int test_recursive_spawn(void)
     pool_t *p = pool_create(4);
     pool_init_barrier(p);
     /* depth 10 → 11 invocations (10..0). */
-    pool_spawn(p, recursive_action, (void *)(intptr_t)10);
+    pool_spawn(p, recursive_action, (void *)(intptr_t)10, 0);
     pool_wait_quiescent(p);
     ASSERT(atomic_load(&g_recursive) == 11);
     pool_destroy(p);
@@ -171,7 +171,7 @@ struct producer_args { pool_t *p; int n; };
 static void *producer_thread(void *arg)
 {
     struct producer_args *a = arg;
-    for (int i = 0; i < a->n; i++) pool_spawn(a->p, inc_action, NULL);
+    for (int i = 0; i < a->n; i++) pool_spawn(a->p, inc_action, NULL, 0);
     return NULL;
 }
 
@@ -242,6 +242,56 @@ static int test_worker_init_failure(void)
 }
 /* }}} */
 
+/* {{{ test_priority_order() */
+/* Spawn several tasks before the init barrier releases the worker,
+ * then verify the dequeue order respects priority (higher first)
+ * with FIFO tiebreaking at equal priority. Single-worker pool is
+ * used so dequeue order maps directly to execution order. */
+static pthread_mutex_t g_seq_mtx = PTHREAD_MUTEX_INITIALIZER;
+static int g_seq[16];
+static int g_seq_len;
+
+static void seq_action(void *arg)
+{
+    int id = (int)(intptr_t)arg;
+    pthread_mutex_lock(&g_seq_mtx);
+    g_seq[g_seq_len++] = id;
+    pthread_mutex_unlock(&g_seq_mtx);
+}
+
+static int test_priority_order(void)
+{
+    g_seq_len = 0;
+    pool_t *p = pool_create(1);
+    ASSERT(p);
+
+    /* Queue 6 tasks BEFORE the worker is released. ids encode order
+     * of spawn; the test asserts on order of execution. */
+    pool_spawn(p, seq_action, (void *)(intptr_t)1, 0);
+    pool_spawn(p, seq_action, (void *)(intptr_t)2, 5);
+    pool_spawn(p, seq_action, (void *)(intptr_t)3, 0);
+    pool_spawn(p, seq_action, (void *)(intptr_t)4, 9);
+    pool_spawn(p, seq_action, (void *)(intptr_t)5, 5);
+    pool_spawn(p, seq_action, (void *)(intptr_t)6, -1);
+
+    pool_init_barrier(p);
+    pool_wait_quiescent(p);
+
+    /* Expected order:
+     *   4 (prio 9)
+     *   2, 5 (prio 5, FIFO)
+     *   1, 3 (prio 0, FIFO)
+     *   6 (prio -1)
+     */
+    static const int expected[] = { 4, 2, 5, 1, 3, 6 };
+    ASSERT(g_seq_len == 6);
+    for (int i = 0; i < 6; i++) ASSERT(g_seq[i] == expected[i]);
+
+    pool_destroy(p);
+    return 1;
+}
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -256,6 +306,7 @@ int main(void)
     RUN(concurrent_producers);
     RUN(worker_init_callback);
     RUN(worker_init_failure);
+    RUN(priority_order);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

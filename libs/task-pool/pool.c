@@ -21,10 +21,11 @@
 
 __thread worker_ctx_t *pool_current_worker = NULL;
 
-/* {{{ Internal task node — singly-linked FIFO */
+/* {{{ Internal task node — singly-linked, priority-ordered */
 typedef struct task_node {
     pool_action_t      fn;
     void              *arg;
+    int                priority;     /* higher = earlier; FIFO on ties */
     struct task_node  *next;
 } task_node_t;
 /* }}} */
@@ -277,14 +278,15 @@ int pool_init_barrier(pool_t *p)
 /* }}} */
 
 /* {{{ pool_spawn() */
-void pool_spawn(pool_t *p, pool_action_t fn, void *arg)
+void pool_spawn(pool_t *p, pool_action_t fn, void *arg, int priority)
 {
     if (!p || !fn) return;
     task_node_t *t = malloc(sizeof *t);
     if (!t) return;        /* OOM: silently drop; revisit error path */
-    t->fn   = fn;
-    t->arg  = arg;
-    t->next = NULL;
+    t->fn       = fn;
+    t->arg      = arg;
+    t->priority = priority;
+    t->next     = NULL;
 
     /* Increment active BEFORE enqueueing so the pop+decrement on the
      * worker side never sees active drop below the pending-work
@@ -292,9 +294,18 @@ void pool_spawn(pool_t *p, pool_action_t fn, void *arg)
     atomic_fetch_add_explicit(&p->active, 1, memory_order_acq_rel);
 
     pthread_mutex_lock(&p->q_mtx);
-    if (p->q_tail) p->q_tail->next = t;
-    else           p->q_head       = t;
-    p->q_tail = t;
+    /* Priority-ordered insertion. Walk from head until finding the
+     * first node with strictly-lower priority; insert before it.
+     * Strict less-than gives FIFO tiebreaking on equal priority.
+     * The queue is small in practice (bounded by ready tasks), so
+     * linear scan is fine. */
+    task_node_t **link = &p->q_head;
+    while (*link && (*link)->priority >= priority) {
+        link = &(*link)->next;
+    }
+    t->next = *link;
+    *link = t;
+    if (t->next == NULL) p->q_tail = t;
     pthread_cond_signal(&p->q_cv);
     pthread_mutex_unlock(&p->q_mtx);
 }

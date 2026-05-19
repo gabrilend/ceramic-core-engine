@@ -113,3 +113,20 @@ deferred until concrete need.)
 - `issues/301-pool-lifecycle-and-worker-init.md` — pool lifecycle
 - `issues/304-task-dispatch-layer.md` — dispatch task submission
 - `issues/302-wire-value-slot-store.md` — deferred cleanup tasks
+
+## Implementation log
+
+### API + ordering — 2026-05-12
+
+`pool_spawn` gained a fourth argument: `int priority`. Higher
+priorities dequeue first; ties between equal priorities resolve
+to FIFO. Linear-scan insertion (strict less-than at the
+comparison) on the singly-linked queue — small queue, O(n) walk
+is fine. A unit test in `tests/301-pool-test.c` queues six tasks
+of varied priority before the init barrier releases the
+single-worker pool, and verifies the execution order matches the
+priority/FIFO rule.
+
+Existing call sites all pass priority 0; behaviorally the queue
+is still a plain FIFO. 304's dispatch action can grow into
+priority-aware scheduling without another signature change.
