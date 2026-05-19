@@ -33,7 +33,7 @@ model the phase 3 runtime will consume.
 | 230  | required inputs and the optional flag           | open     |
 | 231  | move signature parsers into langs/              | open     |
 | 233  | unified routing schema (comparator+iterator)    | open     |
-| 234  | middle-click duplicates the selected box        | open     |
+| 234  | middle-click duplicates the selected box        | complete |
 | 235  | literal value replaces port name on the canvas  | complete |
 | 236  | box header = filename, output label = `fn()`    | complete |
 | 237  | string-manipulation library expansion           | complete |

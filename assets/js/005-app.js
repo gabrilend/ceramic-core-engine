@@ -186,6 +186,116 @@ const App = (() => {
   }
   // }}}
 
+  // {{{ next_copy_label
+  // Produces the label for a duplicated box (issue 234). If the source
+  // already ends with "(copy)" or "(copy N)", increment N; otherwise
+  // append "(copy)". A user duplicating "Stamp Time" gets a series:
+  // "Stamp Time (copy)" → "Stamp Time (copy 2)" → "(copy 3)" etc.
+  function next_copy_label(base) {
+    const m = String(base || '').match(/^(.*?)\s*\(copy(?:\s+(\d+))?\)\s*$/);
+    if (m) {
+      const root = m[1];
+      const n    = m[2] ? parseInt(m[2]) + 1 : 2;
+      return root + ' (copy ' + n + ')';
+    }
+    return (base || '') + ' (copy)';
+  }
+  // }}}
+
+  // {{{ duplicate_box
+  // Issue 234: clone the box's data, drop it at (wx, wy), and replay
+  // every wire whose destination was the original. Outgoing wires are
+  // skipped — the natural use is "I want another node fed by the
+  // same data," not another sink for everything downstream. Self-
+  // loops are skipped too: they're both incoming and outgoing,
+  // which contradicts the two rules at once.
+  async function duplicate_box(src_id, wx, wy) {
+    const src = Boxes.boxes[src_id];
+    if (!src) return;
+
+    const dup = JSON.parse(JSON.stringify(src));
+    dup.id = 'box-' + Date.now().toString(36);
+    dup.ui = dup.ui || {};
+    dup.ui.x = Math.round(wx);
+    dup.ui.y = Math.round(wy);
+    dup.label = next_copy_label(src.label || src.id);
+
+    // Rewrite the clone's connection list to keep only incoming wires
+    // from OTHER boxes, with to_box pointed at the new id. The source
+    // box's side of each wire is patched below as a separate PUT.
+    const incoming = [];
+    for (const c of (dup.connections || [])) {
+      if (c.to_box === src_id && c.from_box !== src_id) {
+        incoming.push({ ...c, to_box: dup.id });
+      }
+    }
+    dup.connections = incoming;
+
+    try {
+      await API.put_box(dup.id, dup);
+    } catch (e) {
+      status_msg('duplicate error: ' + e.message, 'error');
+      return;
+    }
+    Boxes.boxes[dup.id] = dup;
+
+    // For each duplicated wire, append a matching record onto the
+    // source box's connections array and persist it. Without this the
+    // wire would be invisible to the source-side scan in
+    // hit_test_wire / draw_all (each wire is recorded on both
+    // endpoints — see issue 228 in wires.js).
+    for (const c of incoming) {
+      const src_box = Boxes.boxes[c.from_box];
+      if (!src_box) continue;
+      src_box.connections = src_box.connections || [];
+      src_box.connections.push({ ...c });
+      try {
+        await API.put_box(c.from_box, src_box);
+      } catch (e) {
+        // roll back this one wire and keep going — partial state is
+        // better than blocking the whole duplicate on one bad source
+        src_box.connections.pop();
+        status_msg('wire copy error on ' + c.from_box + ': ' + e.message, 'error');
+      }
+    }
+
+    selected_id = dup.id;
+    Inspector.show(dup, () => Canvas.mark_dirty(), () => delete_box(dup.id));
+    Canvas.mark_dirty();
+    status_msg('duplicated ' + src_id + ' → ' + dup.id);
+  }
+  // }}}
+
+  // Middle-click duplicate (issue 234). Middle-mouse-down records the
+  // cursor position; if the matching middle-up lands within
+  // MIDDLE_CLICK_THRESHOLD screen pixels of the down position AND a
+  // box is selected, that's a "click" — duplicate the selection at
+  // the cursor. Larger movement falls through to the existing
+  // middle-drag pan handler in 001-canvas.js so panning still works.
+  const MIDDLE_CLICK_THRESHOLD = 4;
+  let middle_down_pos = null;
+
+  Canvas.el.addEventListener('mousedown', e => {
+    if (e.button !== 1) return;
+    middle_down_pos = Canvas.mouse_pos(e);
+  });
+
+  Canvas.el.addEventListener('mouseup', async e => {
+    if (e.button !== 1) return;
+    const start = middle_down_pos;
+    middle_down_pos = null;
+    if (!start) return;
+    const cur = Canvas.mouse_pos(e);
+    const dx  = cur.x - start.x, dy = cur.y - start.y;
+    if (dx*dx + dy*dy > MIDDLE_CLICK_THRESHOLD * MIDDLE_CLICK_THRESHOLD) return;
+    if (!selected_id) {
+      status_msg('middle-click duplicates the selected box — none selected');
+      return;
+    }
+    const w = Canvas.screen_to_world(cur.x, cur.y);
+    await duplicate_box(selected_id, w.x, w.y);
+  });
+
   // {{{ render
   function render() {
     if (Canvas.start_frame()) {

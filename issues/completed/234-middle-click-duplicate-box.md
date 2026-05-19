@@ -1,7 +1,50 @@
 # 234 — Middle-click duplicates the selected box (with wires)
 
 ## Status
-open
+complete
+
+## Implementation notes
+
+The whole feature lives in `assets/js/005-app.js`:
+
+- `next_copy_label(base)` — picks the duplicate's label.
+  Detects an existing `(copy)` / `(copy N)` suffix and
+  increments; otherwise appends `(copy)`. Series goes
+  `(copy)` → `(copy 2)` → `(copy 3)` …
+- `duplicate_box(src_id, wx, wy)` — deep-clones the source box's
+  JSON, assigns a fresh id of the same `'box-' + Date.now().toString(36)`
+  shape `new_box_at` uses, drops it at the world-space cursor
+  position, rewrites the clone's `connections` array to keep
+  only incoming wires from OTHER boxes (outgoing wires and
+  self-loops are skipped), and PUTs the clone plus a patched
+  source box per duplicated wire so each wire is recorded on
+  both endpoints (issue 228's two-sided storage convention).
+- Middle-mouse handlers: mousedown records the cursor screen
+  position, mouseup compares the release position to it; if the
+  squared distance is within `MIDDLE_CLICK_THRESHOLD = 4` screen
+  pixels it's a click — duplicate the selection at the cursor.
+  Anything larger falls through to the existing middle-drag pan
+  in `001-canvas.js` so panning still works.
+
+A click with no box selected prints a status hint instead of
+silently doing nothing — easier to debug for a user who is
+expecting something to happen.
+
+Tested:
+- Visual round-trip in the editor (user verified).
+- `next_copy_label` against seven cases covering bare label,
+  `(copy)` suffix, `(copy N)` increment up to two digits,
+  empty input, and pre-existing extra whitespace before the
+  suffix. All pass.
+
+## Deliberate omissions
+
+- **Shift / modifier variants** (e.g. shift+middle for
+  "duplicate without wires") — punted. The right-click "add box
+  here" menu already covers the wireless case.
+- **Outgoing wires** — explicitly not duplicated. The intended
+  use is "I want another node fed by the same upstream," and
+  forking everything downstream rarely matches that intent.
 
 ## Current behavior
 
