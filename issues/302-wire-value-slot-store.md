@@ -547,6 +547,36 @@ type to the LARGE_VALUE flag in `graph_attach_runtime` lands as
 a follow-on once a fixture or real graph requires it; the
 foundation is in place.
 
+### Producer-driven LARGE_VALUE wiring — 2026-05-19
+
+The "wiring from declared box output type" deferred above is
+now in place. During `graph_attach_runtime`, each consumer
+input slot's flags get OR'd with `SLOT_FLAG_LARGE_VALUE` if any
+producer feeding that port declares `output_capacity == 0`. The
+rule covers both data boxes (which default to 0 because the
+field isn't in their JSON schema) and call boxes that opt into
+variable-size output by setting `"output_capacity": 0`. A
+mixed-language fan-in where any producer is variable-size
+upgrades the whole slot to LARGE_VALUE — the conservative call,
+since the slot can only carry one format and the LVH path
+handles small payloads correctly too.
+
+A new test in `tests/010-graph-loader-test.c`
+(`variable_size_producer_lvh_wiring`) attaches the hello fixture
+with a deliberately tight default_cell_bytes of 512, then
+asserts a 2 KB push succeeds on greet's `name` port (fed by
+data box `who`) and fails on greet's `salutation` port (literal
+only, no producer). The discriminator is the slot's capacity:
+without LARGE_VALUE the 2 KB push exceeds 512 and is rejected;
+with it the heap absorbs the bytes and the push lands.
+
+The remaining phase-3 checklist item "Variable-size outputs
+work via the large-value heap" is now satisfied end-to-end at
+the slot-store boundary. A graph fixture that exercises the
+path on the dispatch side — a Lua box returning a multi-KB
+string and a downstream box reading it — is a one-line fixture
+addition and lands with the 6-more-integration-fixtures task.
+
 What's still deferred within 302:
 - **Size-class free lists with coalescing.** Still no need.
 - **Per-allocation free in the large-value heap.** The heap

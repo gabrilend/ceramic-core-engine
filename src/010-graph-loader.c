@@ -911,8 +911,29 @@ int graph_attach_runtime(graph_t *g,
              * producer-supplied order (issue 304). Iterators pass
              * their counter as the tag; non-iterator producers pass
              * 0 and effectively get FIFO ordering. */
-            int slot_flags = b->multi_spawn ? SLOT_FLAG_TAGGED : 0;
+            int base_flags = b->multi_spawn ? SLOT_FLAG_TAGGED : 0;
             for (int j = 0; j < b->n_inputs; j++) {
+                /* If any producer feeding this input port declares
+                 * variable-size output (output_capacity == 0), the
+                 * slot needs the large-value heap path so pushes
+                 * larger than default_cell_bytes succeed. Data boxes
+                 * default to output_capacity 0 since they emit
+                 * arbitrary file contents; a call box opts in by
+                 * setting output_capacity to 0 in its JSON. Issue
+                 * 302 follow-on. */
+                int slot_flags = base_flags;
+                for (int p = 0; p < g->n_boxes && !(slot_flags & SLOT_FLAG_LARGE_VALUE); p++) {
+                    const box_t *prod = &g->boxes[p];
+                    for (int k = 0; k < prod->n_connections; k++) {
+                        if (prod->connections[k].to_box_idx == i &&
+                            prod->connections[k].to_input_idx == j &&
+                            prod->output_capacity == 0) {
+                            slot_flags |= SLOT_FLAG_LARGE_VALUE;
+                            break;
+                        }
+                    }
+                }
+
                 slot_id_t id = slot_alloc((slot_store_t *)slots,
                                           default_cell_bytes, n_cells,
                                           slot_flags);

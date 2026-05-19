@@ -10,6 +10,8 @@
  */
 
 #include "010-graph-loader.h"
+#include "009-slot-store.h"
+#include "011-spec-registry.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -614,6 +616,50 @@ static int test_duplicate_id(void)
 }
 /* }}} */
 
+/* {{{ test_variable_size_producer_lvh_wiring() */
+/* 302 follow-on: graph_attach_runtime sets SLOT_FLAG_LARGE_VALUE on
+ * any input slot whose producer declares variable-size output
+ * (output_capacity == 0). The hello fixture pairs greet (call,
+ * output_capacity=256) with who (data box, output_capacity defaults
+ * to 0). After attach, greet's input port 0 (`name`, fed by who)
+ * should accept a push that exceeds the slot's normal cell
+ * capacity, while port 1 (`salutation`, literal-only) should not. */
+static int test_variable_size_producer_lvh_wiring(void)
+{
+    char *err = NULL;
+    graph_t *g = graph_load("tests/maps/hello", &err);
+    ASSERT(g);
+
+    spec_registry_t *r = spec_registry_load("langs", &err);
+    ASSERT(r);
+
+    slot_store_t *s = slot_store_create();
+    ASSERT(s);
+    /* Tight default cell so the discriminator (push 2 KB) is well
+     * outside it — without LARGE_VALUE the push would fail. */
+    ASSERT(graph_attach_runtime(g, s, r, 512, &err) == 0);
+
+    const box_t *greet = graph_box_by_id(g, "greet");
+    ASSERT(greet && greet->n_inputs == 2);
+
+    char big[2048];
+    memset(big, 'A', sizeof big);
+
+    /* Port 0 (`name`) is fed by data box `who` → LARGE_VALUE. */
+    ASSERT(slot_push(s, greet->input_slot_ids[0], big, sizeof big, 0) == 0);
+
+    /* Port 1 (`salutation`) has only a literal — no variable-size
+     * producer → fixed-size slot → 2 KB push exceeds cell capacity
+     * and fails. */
+    ASSERT(slot_push(s, greet->input_slot_ids[1], big, sizeof big, 0) == -1);
+
+    slot_store_destroy(s);
+    spec_registry_destroy(r);
+    graph_destroy(g);
+    return 1;
+}
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -637,6 +683,7 @@ int main(void)
     RUN(duplicate_id);
     RUN(native_invoke_classification);
     RUN(randomizer_weighted_parsing);
+    RUN(variable_size_producer_lvh_wiring);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

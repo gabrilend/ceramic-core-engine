@@ -45,7 +45,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 - [x] Iterator box routes via dispatch layer (with multi-spawn
       re-fire via N-cell pop slots and auto-re-spawn)
 - [x] Comparator box routes via dispatch layer (via spec output)
-- [ ] Variable-size outputs work via the large-value heap
+- [x] Variable-size outputs work via the large-value heap
 - [x] `last-run.jsonl` written for every run
 - [ ] All 11 integration test maps pass
 - [ ] Phase 3 demo map runs and produces expected output
