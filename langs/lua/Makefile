@@ -27,7 +27,7 @@ LDFLAGS = -L$(LUA_LIB) -lluajit-5.1
 
 all: spec.so
 
-spec.so: spec.c
+spec.so: spec.c $(DIR)/langs/lang-spec.h
 	@$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
 clean:

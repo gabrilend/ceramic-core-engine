@@ -259,3 +259,60 @@ links against the system LuaJIT shared library.
   variable-size returns
 - `libs/dkjson` (vendored) — table-to-JSON serialization
 - `maps/hello`, `maps/classify-demo` — Lua-only smoke test maps
+
+## Implementation log
+
+### Init + invoke + teardown — 2026-05-12
+
+`langs/lua/spec.c` now exports a real `lang_spec_t`:
+
+- `init(worker_idx)` creates a `lua_State` and opens the standard
+  libraries via `luaL_openlibs`. Returns the state as the per-
+  worker handle.
+- `teardown(handle)` calls `lua_close`.
+- `invoke(handle, file_path, fn_name, inputs, sizes, n, out_buf,
+  out_cap, out_size)` loads the file with `luaL_loadfile`,
+  executes the chunk (which is expected to return a module
+  table), pulls the named function out of that table, pushes each
+  input as a Lua string, calls via `lua_pcall`, and copies the
+  return as a string into the caller's buffer. The state's stack
+  is rewound to its baseline depth at every entry/exit so
+  cross-call leaks don't accumulate. Errors at every step
+  surface as nonzero return and a stderr message.
+
+Five end-to-end tests in `tests/306-lua-spec-test.c` exercise the
+init/teardown round-trip, a `greet(name, salutation)` call with
+both args, the same call with one arg (the Lua side defaults
+salutation to "Hello"), and the two failure modes (missing
+function, missing file). The test loads the spec through the
+real spec registry via dlopen, so this is the actual artifact
+the pool runner will consume.
+
+Deferred:
+- **Rich return types.** The current invoke serializes the return
+  with `lua_tolstring`, which handles strings/numbers/booleans/
+  nil via tostring semantics. Tables, closures, and other
+  structured values land with the fast-path work in issue 312.
+
+### Per-worker module cache — 2026-05-12
+
+`lua_init` now seeds an empty Lua table at
+`LUA_REGISTRYINDEX[LUA_CACHE_KEY]`. `lua_invoke` looks up the
+box's `file_path` in that table; on a hit it skips the
+`luaL_loadfile + lua_pcall` round-trip and uses the cached
+module table directly; on a miss it loads, runs the chunk,
+verifies the module table shape, and stashes the result in the
+cache before proceeding.
+
+The cache is per-worker (each worker has its own `lua_State`),
+which means no locking. It's also per-file-path string, so two
+boxes that share a source file share a module table on each
+worker — calling `M.greet` from one box doesn't reload the
+chunk when another box later calls `M.farewell` on the same
+file.
+
+Cache invalidation is intentionally absent for now: once a file
+is loaded, its module table sticks for the run. If the box
+source changes mid-run, the worker won't notice. Fine for the
+read-once-then-execute usage; revisit when there's a use case
+for hot-reload.
