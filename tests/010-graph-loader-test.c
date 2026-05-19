@@ -91,10 +91,21 @@ static int test_load_hello(void)
     ASSERT(strcmp(who->connections[0].to_input, "name")  == 0);
     ASSERT(who->connections[0].from_branch == NULL);
 
+    /* Topology resolution: who's connection resolves to greet's
+     * `name` input. greet is index 0 or 1; name is greet.inputs[0]. */
+    int greet_idx = -1;
+    for (int i = 0; i < graph_n_boxes(g); i++) {
+        if (strcmp(graph_box(g, i)->id, "greet") == 0) { greet_idx = i; break; }
+    }
+    ASSERT(greet_idx >= 0);
+    ASSERT(who->connections[0].to_box_idx == greet_idx);
+    ASSERT(who->connections[0].to_input_idx == 0);
+
     graph_destroy(g);
     return 1;
 }
 /* }}} */
+
 
 /* {{{ test_load_branching() — comparator + iterator routing kinds */
 static int test_load_branching(void)
@@ -106,7 +117,7 @@ static int test_load_branching(void)
         free(err);
         return 0;
     }
-    ASSERT(graph_n_boxes(g) == 2);
+    ASSERT(graph_n_boxes(g) == 5);
 
     const box_t *src = graph_box_by_id(g, "source");
     ASSERT(src != NULL);
@@ -244,6 +255,180 @@ static int test_missing_routing(void)
 }
 /* }}} */
 
+/* {{{ test_connection_to_nonexistent_box() */
+static int test_connection_to_nonexistent_box(void)
+{
+    char *dir = NULL;
+    ASSERT(make_temp_map(
+        "{\"name\":\"t\",\"entry_box_id\":\"a\"}",
+        "a",
+        "{\"id\":\"a\",\"kind\":\"call\",\"ref\":\"f.lua\",\"fn\":\"f\","
+        "\"routing\":{\"kind\":\"plain\"},"
+        "\"connections\":[{\"to_box\":\"ghost\",\"to_input\":\"x\"}]}",
+        &dir) == 0);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g == NULL);
+    ASSERT(err && strstr(err, "ghost") != NULL);
+    free(err);
+    cleanup_temp_map(dir, "a");
+    free(dir);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_connection_to_nonexistent_input() */
+static int test_connection_to_nonexistent_input(void)
+{
+    /* Two boxes; box 'a' connects to box 'b' on input 'bogus' that
+     * doesn't exist. */
+    char tmpl[] = "/tmp/soramech-noinput-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char path[4096];
+    snprintf(path, sizeof path, "%s/meta.json", dir);
+    FILE *fp = fopen(path, "w");
+    fputs("{\"name\":\"t\",\"entry_box_id\":\"a\"}", fp);
+    fclose(fp);
+
+    snprintf(path, sizeof path, "%s/boxes", dir);
+    mkdir(path, 0755);
+
+    snprintf(path, sizeof path, "%s/boxes/a.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"a\",\"kind\":\"call\",\"ref\":\"f.lua\",\"fn\":\"f\","
+          "\"routing\":{\"kind\":\"plain\"},"
+          "\"connections\":[{\"to_box\":\"b\",\"to_input\":\"bogus\"}]}", fp);
+    fclose(fp);
+
+    snprintf(path, sizeof path, "%s/boxes/b.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"b\",\"kind\":\"call\",\"ref\":\"g.lua\",\"fn\":\"g\","
+          "\"routing\":{\"kind\":\"plain\"},"
+          "\"inputs\":[{\"name\":\"correct\",\"type\":\"string\"}]}", fp);
+    fclose(fp);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g == NULL);
+    ASSERT(err && strstr(err, "bogus") != NULL);
+    free(err);
+
+    snprintf(path, sizeof path, "%s/boxes/a.json", dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes/b.json", dir); unlink(path);
+    snprintf(path, sizeof path, "%s/meta.json",   dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes",       dir); rmdir(path);
+    rmdir(dir);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_non_iterator_cycle() */
+static int test_non_iterator_cycle(void)
+{
+    /* Two boxes pointing at each other; no iterator → reject. */
+    char tmpl[] = "/tmp/soramech-cycle-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char path[4096];
+    snprintf(path, sizeof path, "%s/meta.json", dir);
+    FILE *fp = fopen(path, "w");
+    fputs("{\"name\":\"t\",\"entry_box_id\":\"a\"}", fp);
+    fclose(fp);
+    snprintf(path, sizeof path, "%s/boxes", dir); mkdir(path, 0755);
+
+    snprintf(path, sizeof path, "%s/boxes/a.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"a\",\"kind\":\"call\",\"ref\":\"f.lua\",\"fn\":\"f\","
+          "\"routing\":{\"kind\":\"plain\"},"
+          "\"inputs\":[{\"name\":\"v\",\"type\":\"string\"}],"
+          "\"connections\":[{\"to_box\":\"b\",\"to_input\":\"v\"}]}", fp);
+    fclose(fp);
+
+    snprintf(path, sizeof path, "%s/boxes/b.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"b\",\"kind\":\"call\",\"ref\":\"g.lua\",\"fn\":\"g\","
+          "\"routing\":{\"kind\":\"plain\"},"
+          "\"inputs\":[{\"name\":\"v\",\"type\":\"string\"}],"
+          "\"connections\":[{\"to_box\":\"a\",\"to_input\":\"v\"}]}", fp);
+    fclose(fp);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g == NULL);
+    ASSERT(err && strstr(err, "cycle") != NULL);
+    free(err);
+
+    snprintf(path, sizeof path, "%s/boxes/a.json", dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes/b.json", dir); unlink(path);
+    snprintf(path, sizeof path, "%s/meta.json",   dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes",       dir); rmdir(path);
+    rmdir(dir);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_iterator_cycle_allowed() */
+static int test_iterator_cycle_allowed(void)
+{
+    /* Three-box cycle a → iter → b → a. The iterator cuts the
+     * cycle; load must succeed. */
+    char tmpl[] = "/tmp/soramech-itercycle-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char path[4096];
+    snprintf(path, sizeof path, "%s/meta.json", dir);
+    FILE *fp = fopen(path, "w");
+    fputs("{\"name\":\"t\",\"entry_box_id\":\"a\"}", fp);
+    fclose(fp);
+    snprintf(path, sizeof path, "%s/boxes", dir); mkdir(path, 0755);
+
+    snprintf(path, sizeof path, "%s/boxes/a.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"a\",\"kind\":\"call\",\"ref\":\"f.lua\",\"fn\":\"f\","
+          "\"routing\":{\"kind\":\"plain\"},"
+          "\"inputs\":[{\"name\":\"feedback\",\"type\":\"string\"}],"
+          "\"connections\":[{\"to_box\":\"iter\",\"to_input\":\"in\"}]}", fp);
+    fclose(fp);
+
+    snprintf(path, sizeof path, "%s/boxes/iter.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"iter\",\"kind\":\"call\",\"ref\":\"i.lua\",\"fn\":\"i\","
+          "\"routing\":{\"kind\":\"iterator\",\"n_outputs\":1},"
+          "\"inputs\":[{\"name\":\"in\",\"type\":\"string\"}],"
+          "\"connections\":[{\"from_branch\":\"out_0\","
+                            "\"to_box\":\"b\",\"to_input\":\"v\"}]}", fp);
+    fclose(fp);
+
+    snprintf(path, sizeof path, "%s/boxes/b.json", dir);
+    fp = fopen(path, "w");
+    fputs("{\"id\":\"b\",\"kind\":\"call\",\"ref\":\"g.lua\",\"fn\":\"g\","
+          "\"routing\":{\"kind\":\"plain\"},"
+          "\"inputs\":[{\"name\":\"v\",\"type\":\"string\"}],"
+          "\"connections\":[{\"to_box\":\"a\",\"to_input\":\"feedback\"}]}", fp);
+    fclose(fp);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    if (!g) fprintf(stderr, "      load failed: %s\n", err ? err : "(null)");
+    ASSERT(g != NULL);
+    ASSERT(err == NULL);
+    graph_destroy(g);
+
+    snprintf(path, sizeof path, "%s/boxes/a.json",    dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes/iter.json", dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes/b.json",    dir); unlink(path);
+    snprintf(path, sizeof path, "%s/meta.json",       dir); unlink(path);
+    snprintf(path, sizeof path, "%s/boxes",           dir); rmdir(path);
+    rmdir(dir);
+    return 1;
+}
+/* }}} */
+
 /* {{{ test_duplicate_id() */
 static int test_duplicate_id(void)
 {
@@ -306,6 +491,10 @@ int main(void)
     RUN(null_argument);
     RUN(unknown_kind);
     RUN(missing_routing);
+    RUN(connection_to_nonexistent_box);
+    RUN(connection_to_nonexistent_input);
+    RUN(non_iterator_cycle);
+    RUN(iterator_cycle_allowed);
     RUN(duplicate_id);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

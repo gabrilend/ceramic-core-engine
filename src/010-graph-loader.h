@@ -71,9 +71,6 @@ typedef struct {
     routing_kind_t kind;
     int            n_outputs;   /* iterator / randomizer / weighted / distributor */
     double         comparand;   /* comparator */
-    /* For routing kinds that need them later — weights, thresholds —
-     * the parser leaves their fields zero in this iteration and adds
-     * them when those kinds are implemented. */
 } routing_t;
 /* }}} */
 
@@ -86,11 +83,16 @@ typedef struct {
 } input_decl_t;
 /* }}} */
 
-/* {{{ Outgoing connection (string refs; resolved in phase 4) */
+/* {{{ Outgoing connection */
+/* String refs are preserved for diagnostics; resolved integer
+ * indices are filled in by the topology pass and let the dispatch
+ * layer (issue 304) avoid string lookups at runtime. */
 typedef struct {
     const char *to_box;       /* destination box id (arena-owned)        */
     const char *to_input;     /* destination port name                   */
     const char *from_branch;  /* NULL for plain output; else branch name */
+    int         to_box_idx;   /* resolved index into graph->boxes        */
+    int         to_input_idx; /* resolved index into target's inputs[]   */
 } connection_t;
 /* }}} */
 
@@ -114,7 +116,17 @@ typedef struct {
     input_decl_t  *inputs;
     int            n_connections;
     connection_t  *connections;
+
+    /* Runtime state — populated by graph_attach_runtime, left at
+     * defaults (-1 / NULL / 0) by graph_load alone. */
+    int            spec_idx;       /* index into the spec registry; -1 if no spec  */
+    int           *input_slot_ids; /* n_inputs entries; -1 if not allocated yet    */
+    int           *input_slot_modes;/* 0 = PEEK (1-cell), 1 = POP (N-cell)         */
 } box_t;
+
+/* Slot mode constants used by box_t.input_slot_modes[]. */
+#define SLOT_MODE_PEEK 0
+#define SLOT_MODE_POP  1
 /* }}} */
 
 /* {{{ Graph */
@@ -132,9 +144,44 @@ void     graph_destroy(graph_t *g);
 const char  *graph_name        (const graph_t *g);
 const char  *graph_description (const graph_t *g);
 const char  *graph_entry_box_id(const graph_t *g);
+const char  *graph_map_dir     (const graph_t *g);
 int          graph_n_boxes     (const graph_t *g);
 const box_t *graph_box         (const graph_t *g, int i);
 const box_t *graph_box_by_id   (const graph_t *g, const char *id);
+
+/* Find a box's index by id; -1 if missing. */
+int          graph_box_index   (const graph_t *g, const char *id);
+
+/* Distinct language names used by call boxes in the map (filled
+ * in by graph_attach_runtime). The pool's spec init can use this
+ * to skip workers for specs the map doesn't actually use. */
+int          graph_n_languages (const graph_t *g);
+const char  *graph_language    (const graph_t *g, int i);
+/* }}} */
+
+/* {{{ Runtime attach (phase 5 + 7)
+ *
+ * Allocates one slot per input port for every box and resolves each
+ * call box's language spec from the registry. After this call, the
+ * dispatch layer can read inputs via `box->input_slot_ids[i]` and
+ * invoke the spec via `spec_registry_at(r, box->spec_idx)`.
+ *
+ * Slot defaults for this iteration:
+ *   - cell_capacity = `default_cell_bytes` (or 4096 if 0)
+ *   - n_cells = 1 (peek mode)
+ *   - flags = 0
+ *
+ * Iterator-fed wires and the multi-cell pop mode land in a follow-on
+ * — they need compile-time wire classification (issue 305 phase 5
+ * proper) that this iteration ducks. Returns 0 on success, -1 with
+ * *err set on the first resolution or allocation failure. */
+struct slot_store;        /* opaque forward decl */
+struct spec_registry;     /* opaque forward decl */
+int graph_attach_runtime(graph_t *g,
+                         struct slot_store    *slots,
+                         struct spec_registry *specs,
+                         int                   default_cell_bytes,
+                         char                **err);
 /* }}} */
 
 #ifdef __cplusplus

@@ -337,3 +337,69 @@ What's deferred to follow-on iterations within 305:
 None of those block 301 / 303 / 306. Topology and language
 enumeration land before 304 (the dispatch layer) since the
 dispatch action needs both.
+
+### Topology endpoint resolution — 2026-05-12
+
+After `load_boxes` succeeds, a `resolve_topology` pass walks every
+outgoing connection on every box and resolves the `to_box` string
+to its index in `graph->boxes`, and `to_input` to its index in
+the target box's `inputs[]`. Both string refs are preserved on
+`connection_t` for diagnostics. Misses surface as
+`box 'X' has a connection to nonexistent box 'Y'` or
+`... nonexistent input 'Z'`. Two new fixture-based failure tests
+plus an assertion on the resolved indices in the happy-path
+`load_hello` test. The `branching` fixture grew three more box
+files (`small`, `exact`, `big`) so its three comparator branches
+have real targets now.
+
+Still deferred within 305: slot size class enumeration, entry-box
+detection, language enumeration.
+
+### Non-iterator cycle detection — 2026-05-12
+
+Standard DFS with white/gray/black coloring; the only twist is
+that we skip outgoing edges from iterator-routing boxes, since
+cycles passing through an iterator are legitimate (the iterator's
+input queue eventually empties and the loop terminates). Two new
+fixture-based tests cover the reject case (`a → b → a`, no
+iterator) and the allowed case (`a → iter → b → a`).
+
+### Runtime attach (slot allocation + spec resolution) — 2026-05-12
+
+`graph_attach_runtime(g, slots, specs, default_cell_bytes, err)`
+walks every box and:
+- allocates one 1-cell peek slot per declared input port via
+  `slot_alloc`, storing the slot id in `box->input_slot_ids[i]`;
+- resolves the spec for each call box by looking up `box->lang`
+  in the registry (or, as a fallback, by matching the file
+  extension of `box->ref`), storing the result on
+  `box->spec_idx`.
+
+The graph also remembers its `map_dir` so the dispatch layer can
+resolve relative paths for data boxes and file_write boxes.
+
+What's still deferred:
+- **Language enumeration on the graph.** We resolve per-box but
+  don't expose the distinct set of languages a map uses, so
+  workers init every spec rather than only the ones in use.
+
+### Per-input slot modes + multi-spawn propagation — 2026-05-12
+
+`graph_attach_runtime` now picks the slot mode per input port:
+- A new BFS pass (`propagate_multi_spawn`) seeds every iterator-
+  routing call box as `multi_spawn = 1` and propagates the flag
+  forward through the connection graph. Every box reachable from
+  an iterator is now flagged.
+- For multi-spawn boxes, each input slot is allocated as a
+  16-cell pop ring. For single-spawn boxes, the legacy 1-cell
+  peek slot is used.
+- `box->input_slot_modes[]` carries the per-port mode
+  (`SLOT_MODE_PEEK` / `SLOT_MODE_POP`) so the dispatch action
+  picks the right read op.
+
+This is the compile-time wire classification the architecture
+doc described, with a single-step forward propagation rule. A
+proper per-wire classification (an iterator-rooted wire is
+multi-push regardless of the immediate consumer's status) would
+allow finer-grained mode picks; the current rule is conservative
+in the right direction (slots that *could* be POP are POP).

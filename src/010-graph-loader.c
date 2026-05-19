@@ -15,6 +15,8 @@
  */
 
 #include "010-graph-loader.h"
+#include "009-slot-store.h"
+#include "011-spec-registry.h"
 #include "json.h"
 
 #include <dirent.h>
@@ -30,9 +32,14 @@ struct graph {
     const char   *name;
     const char   *description;
     const char   *entry_box_id;
+    char         *map_dir;     /* malloc'd; remembered for dispatch (data boxes,
+                                 * source-file resolution). */
 
     int           n_boxes;
     box_t        *boxes;
+
+    int           n_languages;
+    const char  **languages;   /* arena-owned strings */
 };
 /* }}} */
 
@@ -130,9 +137,8 @@ static int parse_routing(const json_node_t *r, routing_t *out,
         }
         return 0;
     }
-
     *err = err_fmt("box '%s': unknown routing.kind '%s' "
-                   "(this iteration supports plain, comparator, iterator)",
+                   "(supported: plain, comparator, iterator)",
                    box_id, kind);
     return -1;
 }
@@ -262,6 +268,7 @@ static int parse_box_file(graph_t *g, box_t *box,
     }
 
     memset(box, 0, sizeof *box);
+    box->spec_idx          = -1;   /* unresolved until graph_attach_runtime */
 
     /* id */
     json_node_t *id_n = json_object_get(n, "id");
@@ -449,6 +456,115 @@ static int load_boxes(graph_t *g, const char *map_dir, char **err)
 }
 /* }}} */
 
+/* {{{ box_is_iterator() — true iff this is a call box whose routing
+ * kind cuts cycles. Cycles passing through an iterator are
+ * legitimate (the iterator's input queue eventually empties and
+ * the cycle terminates); cycles that don't are deadlocks at
+ * load time and must be rejected. */
+static int box_is_iterator(const box_t *b)
+{
+    return b->kind == BOX_CALL && b->routing.kind == ROUTING_ITERATOR;
+}
+/* }}} */
+
+/* {{{ dfs_cycle() — recursive DFS for non-iterator cycle detection */
+/* colors: 0 = white (not seen), 1 = gray (on current stack),
+ * 2 = black (finished). Returns 0 on success, -1 if a cycle was
+ * found; *culprit_box is the box where the back-edge was detected. */
+static int dfs_cycle(const graph_t *g, int box_id, char *color,
+                     int *culprit_box)
+{
+    color[box_id] = 1;
+    const box_t *src = &g->boxes[box_id];
+
+    /* Skip outgoing edges from iterator boxes. The iterator naturally
+     * terminates on input-queue empty, so cycles that loop through
+     * one are legal. Skipping is the cleanest way to express
+     * "this edge doesn't propagate cycle reachability." */
+    if (!box_is_iterator(src)) {
+        for (int i = 0; i < src->n_connections; i++) {
+            int dst = src->connections[i].to_box_idx;
+            if (color[dst] == 1) { *culprit_box = box_id; return -1; }
+            if (color[dst] == 0) {
+                if (dfs_cycle(g, dst, color, culprit_box) != 0) return -1;
+            }
+        }
+    }
+    color[box_id] = 2;
+    return 0;
+}
+/* }}} */
+
+/* {{{ detect_cycles() — phase 4 part 2 */
+static int detect_cycles(const graph_t *g, char **err)
+{
+    if (g->n_boxes <= 0) return 0;
+    char *color = calloc((size_t)g->n_boxes, 1);
+    if (!color) { *err = err_fmt("out of memory"); return -1; }
+
+    for (int i = 0; i < g->n_boxes; i++) {
+        if (color[i] != 0) continue;
+        int culprit = -1;
+        if (dfs_cycle(g, i, color, &culprit) != 0) {
+            *err = err_fmt("non-iterator cycle detected (back-edge from "
+                           "box '%s'); cycles must pass through an "
+                           "iterator-routing box",
+                           g->boxes[culprit].id);
+            free(color);
+            return -1;
+        }
+    }
+    free(color);
+    return 0;
+}
+/* }}} */
+
+/* {{{ resolve_topology() — phase 4 (partial: endpoints only) */
+/* Walks every outgoing connection on every box. Looks up `to_box`
+ * as a box id and `to_input` as one of that box's declared input
+ * port names; fills in the integer indices. Errors out with a
+ * precise message on either miss. Cycle detection lands in a
+ * later iteration. */
+static int resolve_topology(graph_t *g, char **err)
+{
+    for (int i = 0; i < g->n_boxes; i++) {
+        box_t *src = &g->boxes[i];
+        for (int j = 0; j < src->n_connections; j++) {
+            connection_t *c = &src->connections[j];
+            c->to_box_idx   = -1;
+            c->to_input_idx = -1;
+
+            int found_box = -1;
+            for (int k = 0; k < g->n_boxes; k++) {
+                if (strcmp(g->boxes[k].id, c->to_box) == 0) { found_box = k; break; }
+            }
+            if (found_box < 0) {
+                *err = err_fmt("box '%s' has a connection to nonexistent box '%s'",
+                               src->id, c->to_box);
+                return -1;
+            }
+            c->to_box_idx = found_box;
+
+            const box_t *dst = &g->boxes[found_box];
+            int found_in = -1;
+            for (int k = 0; k < dst->n_inputs; k++) {
+                if (strcmp(dst->inputs[k].name, c->to_input) == 0) {
+                    found_in = k; break;
+                }
+            }
+            if (found_in < 0) {
+                *err = err_fmt("box '%s' has a connection to box '%s' on "
+                               "nonexistent input '%s'",
+                               src->id, dst->id, c->to_input);
+                return -1;
+            }
+            c->to_input_idx = found_in;
+        }
+    }
+    return 0;
+}
+/* }}} */
+
 /* {{{ graph_load() */
 graph_t *graph_load(const char *map_dir, char **err)
 {
@@ -468,8 +584,17 @@ graph_t *graph_load(const char *map_dir, char **err)
         return NULL;
     }
 
-    if (load_meta(g, map_dir, err) != 0)  { graph_destroy(g); return NULL; }
-    if (load_boxes(g, map_dir, err) != 0) { graph_destroy(g); return NULL; }
+    g->map_dir = strdup(map_dir);
+    if (!g->map_dir) {
+        if (err) *err = err_fmt("out of memory");
+        graph_destroy(g);
+        return NULL;
+    }
+
+    if (load_meta(g, map_dir, err)     != 0) { graph_destroy(g); return NULL; }
+    if (load_boxes(g, map_dir, err)    != 0) { graph_destroy(g); return NULL; }
+    if (resolve_topology(g, err)       != 0) { graph_destroy(g); return NULL; }
+    if (detect_cycles(g, err)          != 0) { graph_destroy(g); return NULL; }
     return g;
 }
 /* }}} */
@@ -482,9 +607,13 @@ void graph_destroy(graph_t *g)
         for (int i = 0; i < g->n_boxes; i++) {
             free(g->boxes[i].inputs);
             free(g->boxes[i].connections);
+            free(g->boxes[i].input_slot_ids);
+            free(g->boxes[i].input_slot_modes);
         }
         free(g->boxes);
     }
+    free(g->languages);    /* element strings live in the arena */
+    free(g->map_dir);
     json_arena_destroy(g->arena);
     free(g);
 }
@@ -494,6 +623,7 @@ void graph_destroy(graph_t *g)
 const char *graph_name(const graph_t *g)         { return g ? g->name : NULL; }
 const char *graph_description(const graph_t *g)  { return g ? g->description : NULL; }
 const char *graph_entry_box_id(const graph_t *g) { return g ? g->entry_box_id : NULL; }
+const char *graph_map_dir(const graph_t *g)      { return g ? g->map_dir : NULL; }
 int         graph_n_boxes(const graph_t *g)      { return g ? g->n_boxes : 0; }
 
 const box_t *graph_box(const graph_t *g, int i)
@@ -509,5 +639,132 @@ const box_t *graph_box_by_id(const graph_t *g, const char *id)
         if (strcmp(g->boxes[i].id, id) == 0) return &g->boxes[i];
     }
     return NULL;
+}
+
+int graph_box_index(const graph_t *g, const char *id)
+{
+    if (!g || !id) return -1;
+    for (int i = 0; i < g->n_boxes; i++) {
+        if (strcmp(g->boxes[i].id, id) == 0) return i;
+    }
+    return -1;
+}
+
+int graph_n_languages(const graph_t *g) { return g ? g->n_languages : 0; }
+
+const char *graph_language(const graph_t *g, int i)
+{
+    if (!g || i < 0 || i >= g->n_languages) return NULL;
+    return g->languages[i];
+}
+/* }}} */
+
+/* {{{ resolve_spec_for_box() — find the spec index by box->lang */
+/* Returns the spec's index in the registry, or -1 if not found. */
+static int resolve_spec_for_box(const box_t *box, spec_registry_t *r)
+{
+    if (!box || !r) return -1;
+    if (box->kind != BOX_CALL) return -1;
+    if (box->lang) {
+        for (int i = 0; i < spec_registry_size(r); i++) {
+            const lang_spec_t *s = spec_registry_at(r, i);
+            if (strcmp(s->name, box->lang) == 0) return i;
+        }
+    }
+    /* Fallback: derive from ref extension if lang isn't explicit.
+     * Simple search for the last '.' and match against file_ext. */
+    if (box->ref) {
+        const char *dot = strrchr(box->ref, '.');
+        if (dot) {
+            for (int i = 0; i < spec_registry_size(r); i++) {
+                const lang_spec_t *s = spec_registry_at(r, i);
+                if (s->file_ext && strcmp(s->file_ext, dot) == 0) return i;
+            }
+        }
+    }
+    return -1;
+}
+/* }}} */
+
+/* {{{ graph_attach_runtime() — phase 5 + 7 */
+int graph_attach_runtime(graph_t *g,
+                         struct slot_store *slots,
+                         struct spec_registry *specs,
+                         int default_cell_bytes,
+                         char **err)
+{
+    if (!g || !slots) {
+        if (err) *err = err_fmt("graph_attach_runtime: NULL graph or slots");
+        return -1;
+    }
+    if (default_cell_bytes <= 0) default_cell_bytes = 4096;
+
+    for (int i = 0; i < g->n_boxes; i++) {
+        box_t *b = &g->boxes[i];
+
+        /* Allocate one 1-cell peek slot per input port. The slot
+         * stays filled after the producer writes it; consumers
+         * peek-without-draining each time they run. Issues 304 and
+         * 312 grow this into pop rings and tagged slots once the
+         * dispatch layer needs them. */
+        if (b->n_inputs > 0) {
+            b->input_slot_ids   = malloc((size_t)b->n_inputs * sizeof(int));
+            b->input_slot_modes = malloc((size_t)b->n_inputs * sizeof(int));
+            if (!b->input_slot_ids || !b->input_slot_modes) {
+                if (err) *err = err_fmt("out of memory allocating input slots");
+                return -1;
+            }
+            for (int j = 0; j < b->n_inputs; j++) {
+                slot_id_t id = slot_alloc((slot_store_t *)slots,
+                                          default_cell_bytes, 1, 0);
+                if (id == SLOT_INVALID) {
+                    if (err) *err = err_fmt("box '%s': failed to allocate "
+                                            "slot for input '%s'",
+                                            b->id, b->inputs[j].name);
+                    return -1;
+                }
+                b->input_slot_ids[j]   = (int)id;
+                b->input_slot_modes[j] = SLOT_MODE_PEEK;
+            }
+        }
+
+        /* Resolve the spec index for call boxes. Non-call boxes
+         * stay at -1; the dispatch layer handles them directly. */
+        b->spec_idx = -1;
+        if (b->kind == BOX_CALL && specs) {
+            b->spec_idx = resolve_spec_for_box(b, (spec_registry_t *)specs);
+            if (b->spec_idx < 0) {
+                if (err) *err = err_fmt("box '%s': no spec found for "
+                                        "lang='%s' / ref='%s'",
+                                        b->id, b->lang ? b->lang : "(null)",
+                                        b->ref ? b->ref : "(null)");
+                return -1;
+            }
+        }
+    }
+
+    /* Enumerate distinct languages used by call boxes. Stored as
+     * a small array of arena-owned string pointers; the pool init
+     * can use it to skip specs no box in this map uses. */
+    free(g->languages);
+    g->languages   = NULL;
+    g->n_languages = 0;
+    if (g->n_boxes > 0) {
+        g->languages = calloc((size_t)g->n_boxes, sizeof(const char *));
+        if (!g->languages) {
+            if (err) *err = err_fmt("out of memory");
+            return -1;
+        }
+        for (int i = 0; i < g->n_boxes; i++) {
+            const box_t *b = &g->boxes[i];
+            if (b->kind != BOX_CALL || !b->lang) continue;
+            int seen = 0;
+            for (int k = 0; k < g->n_languages; k++) {
+                if (strcmp(g->languages[k], b->lang) == 0) { seen = 1; break; }
+            }
+            if (!seen) g->languages[g->n_languages++] = b->lang;
+        }
+    }
+    return 0;
 }
 /* }}} */
