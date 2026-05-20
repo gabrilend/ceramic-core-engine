@@ -1,7 +1,12 @@
 # 310 — Priority queue: wired in, no-op behaviorally
 
 ## Status
-open
+complete (2026-05-20) — `pool_spawn` carries a priority argument,
+the pool's singly-linked queue orders by descending priority with
+FIFO tiebreak, and existing call sites all submit at priority 0.
+Behaviorally a single-priority FIFO until a real use case raises
+`SM_MAX_PRIORITY`; the mechanism is in place so future hooks land
+as a constant change, not a signature change.
 
 ## Current behavior
 The SoraMech thread pool's `pool_spawn` (modeled on 3d-rts's API)

@@ -23,7 +23,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 307 | C language spec implementation                              | in progress · compile + invoke + lazy .c→.so done, typed wrapper deferred |
 | 308 | Bash language spec implementation                           | complete · persistent socketpair + line-protocol invoke + dladdr-based server lookup |
 | 309 | build system & Makefile orchestration                       | complete · scaffolding + spec discovery + soramech-compile portable artifact |
-| 310 | priority queue: wired in, no-op behaviorally                | in progress · API + ordering done |
+| 310 | priority queue: wired in, no-op behaviorally                | complete · API + ordering done |
 | 311 | integration tests & run output (`last-run.jsonl`)           | in progress · writer + queue + thread + LOG_VALUES + LOG_SLOTS + run-tests.sh + compile-pipeline check |
 | 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | in progress · lang_spec_t extended + classification + dispatch resolution |
 | 313 | research: whole-program same-language merge                 | research / blocked |
