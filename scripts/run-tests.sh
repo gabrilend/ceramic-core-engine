@@ -158,6 +158,39 @@ pipeline_output_check
 compile_pipeline_check
 # }}}
 
+# {{{ parser_tests() — issue 232: unit tests for langs/<lang>/parser.js
+# Run Node's built-in test runner over each per-language parser test
+# file and fold the result into the surrounding pass/fail counters.
+# Each .mjs file is one logical "test" from this script's perspective;
+# Node prints its own subtest breakdown on failure for the diagnostic.
+parser_tests() {
+    if ! command -v node >/dev/null 2>&1; then
+        printf "  %-44s SKIP — node not installed\n" "parser tests (lua, bash)"
+        return
+    fi
+    for tf in "$DIR/tests/232-lua-parser-test.mjs" \
+              "$DIR/tests/233-bash-parser-test.mjs" \
+              "$DIR/tests/234-language-spec-js-test.mjs"; do
+        local label
+        label=$(basename "$tf")
+        printf "  %-44s " "$label"
+        local out
+        out=$(SORAMECH_DIR="$DIR" node --test "$tf" 2>&1)
+        local rc=$?
+        if [[ $rc -eq 0 ]]; then
+            printf "ok\n"
+            pass=$((pass + 1))
+        else
+            printf "FAIL\n"
+            echo "$out" | sed 's/^/      /'
+            fail=$((fail + 1))
+            failures+=("$label: node --test exit=$rc")
+        fi
+    done
+}
+parser_tests
+# }}}
+
 echo
 echo "  $pass passed, $fail failed"
 
