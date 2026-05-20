@@ -1,8 +1,14 @@
 # 217 — Variadic ports and the language-spec variadic shape
 
 ## Status
-open — Part A and Part B mechanics are in the codebase; Part C is
-the active design question
+complete (2026-05-20) — all three parts in the codebase. Part A's
+text library shipped under issue 237's expansion; Part B's
+inspector variadic mechanics shipped earlier; Part C's
+language-spec gate is now wired into the inspector and reads
+`langs/<name>/spec.js::LANGUAGE_SPEC.variadic_shape` on demand.
+The "language spec for the editor" docs section is deferred — the
+language-spec contract is still being designed and a stable doc
+will land alongside that work, not here.
 
 ## What this issue is now
 
@@ -134,6 +140,8 @@ in this issue's pass.
 
 ### Implementation status
 
+All three parts of the design are in the codebase.
+
 - `langs/lua/spec.js`, `langs/bash/spec.js`, `langs/c/spec.js` —
   shipped. Each exports `LANGUAGE_SPEC` with `variadic_shape:
   'positional'`.
@@ -143,28 +151,18 @@ in this issue's pass.
 - `tests/234-language-spec-js-test.mjs` — shipped. Asserts every
   spec.js exports a valid `LANGUAGE_SPEC` with a known
   `variadic_shape`.
-- Inspector consumption of `LANGUAGE_SPEC.variadic_shape` —
-  **not yet wired**. Today the `var` toggle is offered
-  unconditionally; the gate-by-language step is the remaining
-  work.
-
-### Remaining work
-
-1. `assets/js/004-inspector.js::mk_port_display` — load the active
-   box's language spec (the same dynamic-import pattern used for
-   lexers), and hide the `var` button when
-   `variadic_shape !== 'positional'`. Today every shipped language
-   is positional, so this is a future-proofing step rather than a
-   visible change.
-2. Inspector renders the parsed signature near the box header so
-   the user always sees the function's declared arity. This is the
-   documentation half of the design — replaces the rejected "gate
-   the toggle per function" approach with "show the arity, let the
-   user judge."
-3. Update `docs/005-language-specs.md` with a "language spec for
-   the editor" section pointing at `spec.js` as the canonical
-   home for editor-facing language facts (variadic shape, future
-   additions).
+- `assets/js/004-inspector.js` — language-spec registry section
+  added (mirrors the lexer / parser registries). The `var` toggle
+  in `mk_port_display` consults the cached spec and suppresses
+  itself when `variadic_shape !== 'positional'`. Already-variadic
+  groups keep their collapse + remove buttons regardless, so a
+  future language flip can't trap an existing group. Today every
+  shipped language is positional — the gate is future-proofing
+  with no visible change to the current UI.
+- The "show the parsed signature near the header" design intent
+  is already served by issue 236 (box header = filename, output
+  port labeled with the function name). No additional rendering
+  needed here.
 
 ## Future development ideas
 

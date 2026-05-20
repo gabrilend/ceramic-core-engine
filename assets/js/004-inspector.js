@@ -11,6 +11,53 @@ const Inspector = (() => {
   let on_change_cb = null;
   let on_delete_cb = null;
 
+  // {{{ Language-spec registry (issue 217 part C)
+  // Loads `langs/<name>/spec.js` on demand so the variadic UI can ask
+  // the language — not the per-function source — whether a `var`
+  // toggle is meaningful. Today every shipped language declares
+  // `variadic_shape: 'positional'`, so the toggle shows; a future
+  // language declaring `'none'` (or anything else we don't know how
+  // to render) would suppress it for its boxes. Cached per session
+  // to mirror the lexer / parser registries elsewhere.
+  const SPEC_EXT_TO_LANG = { lua: 'lua', sh: 'bash', bash: 'bash', c: 'c', h: 'c' };
+  const spec_cache = {};   // lang_name → LANGUAGE_SPEC | null
+
+  // {{{ function lang_for_ref()
+  function lang_for_ref(ref) {
+    if (!ref) return null;
+    const m = /\.([^./]+)$/.exec(ref);
+    if (!m) return null;
+    return SPEC_EXT_TO_LANG[m[1].toLowerCase()] || null;
+  }
+  // }}}
+
+  // {{{ async function load_spec()
+  async function load_spec(lang) {
+    if (!lang) return null;
+    if (lang in spec_cache) return spec_cache[lang];
+    try {
+      const mod = await import('/langs/' + lang + '/spec.js');
+      spec_cache[lang] = mod.LANGUAGE_SPEC || null;
+      return spec_cache[lang];
+    } catch (e) {
+      console.warn('no spec.js for ' + lang + ':', e.message);
+      spec_cache[lang] = null;
+      return null;
+    }
+  }
+  // }}}
+
+  // {{{ function spec_for_box()
+  // Sync read of an already-loaded spec. Returns null when the spec
+  // hasn't loaded yet — callers default to "no gate" so the first
+  // render of a box doesn't blink the var button off and on.
+  function spec_for_box(box) {
+    const lang = lang_for_ref(box && box.ref);
+    return (lang && lang in spec_cache) ? spec_cache[lang] : null;
+  }
+  // }}}
+  // }}}
+
   // {{{ Variadic helpers (issue 217 part B)
   // Variadic input naming convention:
   //   - non-variadic input is just `text`
@@ -612,12 +659,23 @@ const Inspector = (() => {
           'padding:1px 5px;line-height:1.4;';
 
         if (!in_var_group) {
-          const var_btn = document.createElement('button');
-          var_btn.style.cssText = btn_style;
-          var_btn.textContent   = 'var';
-          var_btn.title         = 'mark this input as variadic (grows to N slots)';
-          var_btn.onclick       = () => make_variadic(p.name);
-          top_row.appendChild(var_btn);
+          // Issue 217 part C: the var toggle is offered when the box's
+          // language declares `variadic_shape: 'positional'`. Until
+          // the spec is loaded we default to "offered" (every shipped
+          // language is positional) so the first render of a box
+          // doesn't lose the button. Already-variadic groups keep
+          // their collapse + remove controls regardless, so flipping
+          // a language to 'none' later can't trap an existing group.
+          const spec          = spec_for_box(current_box);
+          const var_supported = !spec || spec.variadic_shape === 'positional';
+          if (var_supported) {
+            const var_btn = document.createElement('button');
+            var_btn.style.cssText = btn_style;
+            var_btn.textContent   = 'var';
+            var_btn.title         = 'mark this input as variadic (grows to N slots)';
+            var_btn.onclick       = () => make_variadic(p.name);
+            top_row.appendChild(var_btn);
+          }
         } else if (pv.index === 0) {
           const var_btn = document.createElement('button');
           var_btn.style.cssText = btn_style + 'border-color:#4a9eff;color:#4a9eff;';
@@ -806,6 +864,19 @@ const Inspector = (() => {
     on_change_cb = on_changed;
     on_delete_cb = on_delete || null;
     panel.classList.remove('hidden');
+
+    // Pre-warm the spec cache for this box's language so subsequent
+    // renders of the same box read a known `variadic_shape`. First
+    // render of a never-seen language paints with the default (var
+    // toggle visible); the re-render kicked off here applies the
+    // real gate once spec.js has resolved. No-op if the spec is
+    // already cached or if box has no ref (no language to look up).
+    const lang = lang_for_ref(box && box.ref);
+    if (lang && !(lang in spec_cache)) {
+      load_spec(lang).then(() => {
+        if (current_box === box) show(box, on_changed, on_delete);
+      });
+    }
 
     // title: editable label input + read-only id subtitle. The
     // placeholder shows the canvas-side default (issue 236) — basename
