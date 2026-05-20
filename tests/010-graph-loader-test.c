@@ -86,7 +86,7 @@ static int test_load_hello(void)
     /* who box */
     const box_t *who = graph_box_by_id(g, "who");
     ASSERT(who != NULL);
-    ASSERT(who->kind == BOX_DATA);
+    ASSERT(who->kind == BOX_READ);
     ASSERT(strcmp(who->path, "names.txt") == 0);
     ASSERT(who->n_connections == 1);
     ASSERT(strcmp(who->connections[0].to_box,   "greet") == 0);
@@ -134,10 +134,10 @@ static int test_native_invoke_classification(void)
         const box_t *who   = graph_box_by_id(g, "who");
         ASSERT(greet->n_inputs == 2);
         ASSERT(greet->input_edge_native != NULL);
-        ASSERT(greet->input_edge_native[0] == 0);  /* fed by data box `who` */
+        ASSERT(greet->input_edge_native[0] == 0);  /* fed by read box `who` */
         ASSERT(greet->input_edge_native[1] == 0);  /* literal */
         ASSERT(greet->use_native_invoke == 0);
-        ASSERT(who->use_native_invoke   == 0);     /* who is BOX_DATA */
+        ASSERT(who->use_native_invoke   == 0);     /* who is BOX_READ */
         graph_destroy(g);
     }
 

@@ -11,7 +11,7 @@
   "output_capacity": 64,
   "connections": [
     { "from_box": "shout", "from_branch": null,
-      "to_box": "output", "to_input": "text" }
+      "to_box": "output", "to_input": "value" }
   ],
   "ui": { "x": 700, "y": 100 }
 }

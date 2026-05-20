@@ -1180,11 +1180,11 @@ lang_spec_t soramech_lang_spec = {
     const root = svg("svg", { viewBox: `0 0 ${W} ${H}` });
 
     const boxes = [
-      { x: 30,  y: 80,  label: "input",      sub: "data" },
+      { x: 30,  y: 80,  label: "input",      sub: "read" },
       { x: 200, y: 30,  label: "tokenize",   sub: "lua / call" },
       { x: 200, y: 130, label: "fetch",      sub: "bash / call" },
       { x: 380, y: 80,  label: "rank",       sub: "c / call" },
-      { x: 550, y: 30,  label: "log",        sub: "file_write" },
+      { x: 550, y: 30,  label: "log",        sub: "write" },
       { x: 550, y: 130, label: "respond",    sub: "lua / call" },
     ];
     const wires = [[0,1], [0,2], [1,3], [2,3], [3,4], [3,5]];

@@ -1,0 +1,10 @@
+{
+  "id": "src",
+  "kind": "read",
+  "value": "hello, world!",
+  "ui": { "x": 100, "y": 100 },
+  "connections": [
+    { "from_box": "src", "from_branch": null,
+      "to_box": "echo", "to_input": "x" }
+  ]
+}

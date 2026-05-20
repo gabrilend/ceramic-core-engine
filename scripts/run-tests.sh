@@ -62,7 +62,7 @@ pipeline_output_check() {
     local file="/tmp/soramech-pipeline-out.txt"
     rm -f "$file"
     "$DIR/soramech-pool" "$DIR/tests/maps/pipeline" > /dev/null 2>&1
-    printf "  %-44s " "pipeline file_write output"
+    printf "  %-44s " "pipeline write output"
     if [[ -f "$file" ]]; then
         local content
         content=$(cat "$file")
@@ -153,6 +153,10 @@ check_map "pipeline" \
     "double → 10" \
     "addone → 11" \
     "shout → 11!"
+
+check_map "read-literal" \
+    "src → hello, world!" \
+    "echo → hello, world!"
 
 pipeline_output_check
 compile_pipeline_check

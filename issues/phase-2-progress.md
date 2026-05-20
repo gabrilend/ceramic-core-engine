@@ -29,7 +29,7 @@ model the phase 3 runtime will consume.
 | 226  | hide output controls for no-return functions   | complete |
 | 227  | hide view button when box has no ref           | complete |
 | 228  | self-loop wires routed around the box body     | complete |
-| 229  | `read` / `write` box kinds (language-agnostic IO) | open     |
+| 229  | `read` / `write` box kinds (language-agnostic IO) | complete (phase 3 + editor; phase 2 mirror skipped per teardown) |
 | 230  | required inputs and the optional flag           | complete (compile-time; runtime arg-list shortening deferred) |
 | 231  | move signature parsers into langs/              | complete |
 | 232  | test coverage map (parser tests landed; tracks gaps) | ongoing |

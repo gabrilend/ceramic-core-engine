@@ -32,7 +32,7 @@ struct graph {
     const char   *name;
     const char   *description;
     const char   *entry_box_id;
-    char         *map_dir;     /* malloc'd; remembered for dispatch (data boxes,
+    char         *map_dir;     /* malloc'd; remembered for dispatch (read boxes,
                                  * source-file resolution). */
 
     int           n_boxes;
@@ -353,9 +353,9 @@ static int parse_box_file(graph_t *g, box_t *box,
         return -1;
     }
     const char *kind_str = json_string_value(kind_n);
-    if      (strcmp(kind_str, "call")       == 0) box->kind = BOX_CALL;
-    else if (strcmp(kind_str, "data")       == 0) box->kind = BOX_DATA;
-    else if (strcmp(kind_str, "file_write") == 0) box->kind = BOX_FILE_WRITE;
+    if      (strcmp(kind_str, "call")  == 0) box->kind = BOX_CALL;
+    else if (strcmp(kind_str, "read")  == 0) box->kind = BOX_READ;
+    else if (strcmp(kind_str, "write") == 0) box->kind = BOX_WRITE;
     else {
         *err = err_fmt("%s: box '%s': unknown kind '%s'", path, box->id, kind_str);
         return -1;
@@ -387,15 +387,23 @@ static int parse_box_file(graph_t *g, box_t *box,
         if (oc_n && json_kind(oc_n) == JSON_NUMBER) {
             box->output_capacity = (int)json_number_value(oc_n);
         }
-    } else if (box->kind == BOX_DATA) {
+    } else if (box->kind == BOX_READ) {
+        /* read accepts EITHER an inline `value` literal OR a `path`
+         * field. value takes precedence at run time (the canvas
+         * hides the path input port when value is set, per issue
+         * 229). When neither is set, the box may still be valid if
+         * its `path` arrives at runtime via the input wire — that's
+         * checked in dispatch, not here. */
+        json_node_t *val_n  = json_object_get(n, "value");
         json_node_t *path_n = json_object_get(n, "path");
-        if (!path_n || json_kind(path_n) != JSON_STRING) {
-            *err = err_fmt("%s: data box '%s' missing 'path'", path, box->id);
-            return -1;
+        if (val_n && json_kind(val_n) == JSON_STRING) {
+            box->value = json_string_value(val_n);
         }
-        box->path = json_string_value(path_n);
+        if (path_n && json_kind(path_n) == JSON_STRING) {
+            box->path = json_string_value(path_n);
+        }
     }
-    /* file_write boxes: nothing additional beyond inputs. */
+    /* write boxes: nothing additional beyond inputs. */
 
     if (parse_inputs(json_object_get(n, "inputs"),
                      box, box->id, err) != 0) return -1;
@@ -667,9 +675,9 @@ graph_t *graph_load(const char *map_dir, char **err)
     /* Compute the same-language fast path flag per call box (issue
      * 312). A box is "native-eligible" iff every adjacent call box —
      * any producer feeding its inputs AND any consumer reading its
-     * output — shares the box's language. Data boxes and
-     * file_write boxes don't constrain (they emit/consume raw
-     * bytes that any spec interprets uniformly).
+     * output — shares the box's language. Read boxes and
+     * write boxes don't constrain (they emit/consume JSON-shaped
+     * bytes that any spec interprets through its bridges).
      *
      * Computed in graph_load (not graph_attach_runtime) because
      * it's purely topology-derived and doesn't need the slot
@@ -701,7 +709,7 @@ graph_t *graph_load(const char *map_dir, char **err)
 
         /* Outgoing edges: for each connection, the consumer's lang
          * is native iff it's also a call box in this box's
-         * language. Data / file_write consumers are not native
+         * language. Read / write consumers are not native
          * (they don't carry a language). */
         int all_outs_native = 1;
         for (int j = 0; j < b->n_connections; j++) {
@@ -916,7 +924,7 @@ int graph_attach_runtime(graph_t *g,
                 /* If any producer feeding this input port declares
                  * variable-size output (output_capacity == 0), the
                  * slot needs the large-value heap path so pushes
-                 * larger than default_cell_bytes succeed. Data boxes
+                 * larger than default_cell_bytes succeed. Read boxes
                  * default to output_capacity 0 since they emit
                  * arbitrary file contents; a call box opts in by
                  * setting output_capacity to 0 in its JSON. Issue

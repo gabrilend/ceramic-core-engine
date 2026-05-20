@@ -139,28 +139,41 @@ system" below) and decoded downstream.
 
 ### Box kinds
 
-| `kind`       | Runs a function? | Notes                                                          |
-|--------------|------------------|----------------------------------------------------------------|
-| `call`       | yes              | Plain call, comparator, iterator, etc. — see `routing` below.  |
-| `data`       | no               | Language-agnostic **file source**. Reads `path` at dispatch.   |
-| `file_write` | no               | Language-agnostic **file sink**. Writes inputs to disk.        |
+| `kind`  | Runs a function? | Notes                                                                |
+|---------|------------------|----------------------------------------------------------------------|
+| `call`  | yes              | Plain call, comparator, iterator, etc. — see `routing` below.        |
+| `read`  | no               | Value source. Inline literal `value` OR file at `path`.              |
+| `write` | no               | File sink. Writes the `value` input; emits boolean `"true"` downstream. |
 
-`data` and `file_write` are dispatch-layer primitives — the runtime
-reads/writes the file directly, no language spec is invoked. Both
-follow atomic-write semantics where it matters (write to `path.tmp`,
-fsync, rename).
+`read` and `write` are dispatch-layer primitives — the runtime
+reads/writes the file directly, no language spec is invoked. A
+`read` box with an inline `value` literal skips file IO entirely
+and emits the literal bytes. A `write` box atomically commits
+its `value` input to disk and pushes `"true"` to any downstream
+wires; if no wire reads its output, the boolean is discarded per
+the unwired-output rule.
 
 ```json
-{ "id": "config", "kind": "data", "path": "config.json",
+{ "id": "from_file", "kind": "read", "path": "config.json",
   "ui": { "x": 100, "y": 100 } }
 
-{ "id": "save",   "kind": "file_write",
+{ "id": "from_literal", "kind": "read",
+  "value": "hello, world!",
+  "ui": { "x": 100, "y": 200 } }
+
+{ "id": "save", "kind": "write",
   "inputs": [
-    { "name": "path", "type": "string" },
-    { "name": "text", "type": "string" }
+    { "name": "path",  "type": "string" },
+    { "name": "value", "type": "string" }
   ],
   "ui": { "x": 400, "y": 100 } }
 ```
+
+**Unwired-output discard rule.** If an output value is produced
+but no wire carries it downstream, the value is discarded. A
+`write` box with no wire on its done-boolean output still
+commits the file — the boolean just goes nowhere. The rule
+applies to every kind; `write` is the most visible case.
 
 `data` has `path` (not `ref`), no `fn`, no inputs; emits the file's
 bytes-as-UTF-8 string on its one output wire. `file_write` takes

@@ -51,9 +51,9 @@ extern "C" {
 
 /* {{{ Box kinds */
 typedef enum {
-    BOX_CALL,         /* runs a function via a language spec        */
-    BOX_DATA,         /* file source — dispatch reads `path` at run */
-    BOX_FILE_WRITE,   /* file sink  — dispatch writes inputs at run */
+    BOX_CALL,    /* runs a function via a language spec                */
+    BOX_READ,    /* value source — inline literal or file at `path`    */
+    BOX_WRITE,   /* file sink — writes one input, emits "true" downstream */
 } box_kind_t;
 /* }}} */
 
@@ -111,8 +111,9 @@ typedef struct {
     routing_t      routing;       /* call only                      */
     int            output_capacity; /* 0 means variable-size        */
 
-    /* Data boxes */
-    const char    *path;          /* file path (data only)          */
+    /* Read boxes */
+    const char    *path;          /* file path (read only; ignored if value set) */
+    const char    *value;         /* inline literal; if set, read emits this directly */
 
     /* Common */
     int            n_inputs;

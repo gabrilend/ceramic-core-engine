@@ -8,7 +8,11 @@ local DIR = "/mnt/mtwo/programs/sora/soramech"
 local M = {}
 
 -- {{{ valid_kinds
-local valid_kinds = { call = true, data = true }
+-- `call` runs a language function. `read` and `write` are dispatch-
+-- layer IO primitives (issue 229) — `read` emits an inline literal
+-- or file contents, `write` commits a `value` to disk and emits a
+-- boolean done signal.
+local valid_kinds = { call = true, read = true, write = true }
 -- }}}
 
 -- {{{ valid_branches
@@ -54,10 +58,10 @@ function M.validate_box(box)
         err(errors, "missing or non-string 'label'")
     end
     if box.kind == nil or not valid_kinds[box.kind] then
-        err(errors, "missing or invalid 'kind' (must be 'call' or 'data')")
+        err(errors, "missing or invalid 'kind' (must be 'call', 'read', or 'write')")
     end
 
-    if box.kind == "call" or box.kind == "data" then
+    if box.kind == "call" then
         -- iterator boxes (issue 221) are a pure routing primitive: input
         -- copies straight to a chosen output, no language function is
         -- invoked. Such a box has no ref/fn — only `iterator_outputs`,
@@ -120,6 +124,26 @@ function M.validate_box(box)
                     err(errors, "'inputs[" .. i .. "].optional' must be a boolean")
                 end
             end
+        end
+        if box.connections ~= nil then
+            for i, c in ipairs(box.connections) do
+                validate_connection(c, i, errors)
+            end
+        end
+    end
+
+    -- read / write: dispatch-layer IO primitives (issue 229). Shape
+    -- check is intentionally permissive — the graph loader does the
+    -- "has a value or a path" semantic check.
+    if box.kind == "read" or box.kind == "write" then
+        if box.value ~= nil and type(box.value) ~= "string" then
+            err(errors, "'value' must be a string")
+        end
+        if box.path ~= nil and type(box.path) ~= "string" then
+            err(errors, "'path' must be a string")
+        end
+        if box.inputs ~= nil and type(box.inputs) ~= "table" then
+            err(errors, "'inputs' must be an array")
         end
         if box.connections ~= nil then
             for i, c in ipairs(box.connections) do

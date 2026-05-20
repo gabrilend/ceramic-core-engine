@@ -25,7 +25,7 @@ and pool runner consume. Replaces `src/003-loader.lua`.
 
 ## Public types
 
-- `box_kind_t` — `BOX_CALL` / `BOX_DATA` / `BOX_FILE_WRITE`.
+- `box_kind_t` — `BOX_CALL` / `BOX_READ` / `BOX_WRITE`.
 - `routing_kind_t` — `ROUTING_PLAIN` / `ROUTING_COMPARATOR` /
   `ROUTING_ITERATOR`; randomizer / weighted / distributor enum
   values exist but the parser doesn't accept them yet.
@@ -41,14 +41,17 @@ and pool runner consume. Replaces `src/003-loader.lua`.
 
 - `meta.json` must be a JSON object containing at least `name`.
 - Every file under `boxes/` ending in `.json` is a box file with a
-  top-level object, `id` (string), `kind` ∈ `{call, data, file_write}`.
+  top-level object, `id` (string), `kind` ∈ `{call, read, write}`.
 - `call` boxes: require `ref` and `routing`. `fn` is optional (a
   language without function-name dispatch is fine). `lang` is
   optional too — falls back to inference from `ref` extension once
   the spec registry lands.
-- `data` boxes: require `path`; no `ref` / `fn` / `routing`.
-- `file_write` boxes: no kind-specific required fields beyond
-  inputs.
+- `read` boxes (issue 229): an inline `value` literal OR a `path`
+  field; no `ref` / `fn` / `routing`. With `value` set, the box
+  emits the literal directly and the `path` port hides on the canvas.
+- `write` boxes (issue 229): no kind-specific required fields beyond
+  inputs `path` and `value`. Pushes the boolean string `"true"`
+  downstream after a successful write.
 - `routing.kind` ∈ `{plain, comparator, iterator}` (issue 233's
   shipped surface). `comparator` requires `comparand` (number or
   string-form number per the issue's example shape).

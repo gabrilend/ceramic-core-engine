@@ -1,0 +1,6 @@
+{
+  "name": "read-literal",
+  "description": "229 fixture: read box with an inline literal value (no file IO), feeds a lua echo.",
+  "entry_box_id": "src",
+  "src_dirs": ["tests/maps/read-literal/src"]
+}

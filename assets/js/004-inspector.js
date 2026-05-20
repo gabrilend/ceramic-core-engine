@@ -770,6 +770,36 @@ const Inspector = (() => {
   }
   // }}}
 
+  // {{{ render_io_box
+  // Issue 229: `read` boxes carry an optional inline `value` literal
+  // that, when set, hides the `path` input port on the canvas and
+  // overrides the file-read path entirely. `write` boxes have no
+  // inline value — they receive what they write through the `value`
+  // input port. Both kinds skip the call-box machinery (ref/fn/
+  // routing don't apply).
+  //
+  // The textarea below feeds box.value. Setting it non-empty puts
+  // the box in literal-source mode; clearing it returns to file-
+  // source mode where box.path (or the wired `path` input) is used.
+  function render_io_box(fields, box) {
+    if (box.kind !== 'read') return;
+
+    const ta = document.createElement('textarea');
+    ta.className   = 'inspector-value';
+    ta.value       = box.value || '';
+    ta.rows        = 3;
+    ta.placeholder = '(empty — read from path instead)';
+    ta.addEventListener('input', () => {
+      current_box.value = ta.value;
+      // Force a re-render so the path input port hides / un-hides on
+      // the canvas immediately.
+      show(current_box, on_change_cb, on_delete_cb);
+      save();
+    });
+    fields.appendChild(mk_row('value', ta));
+  }
+  // }}}
+
   // {{{ show
   function show(box, on_changed, on_delete) {
     current_box  = box;
@@ -809,7 +839,7 @@ const Inspector = (() => {
 
     fields.appendChild(mk_row('kind', (() => {
       const sel = document.createElement('select');
-      ['call', 'data'].forEach(k => {
+      ['call', 'read', 'write'].forEach(k => {
         const opt = document.createElement('option');
         opt.value = k; opt.textContent = k;
         if (k === box.kind) opt.selected = true;
@@ -822,6 +852,22 @@ const Inspector = (() => {
       });
       return sel;
     })()));
+
+    // Issue 229: read and write boxes have a different inspector shape
+    // than call boxes — `ref`/`fn`/routing don't apply, and `read` has
+    // an inline `value` field that swaps out the path port. Render the
+    // IO-primitive form and stop here so the call-box machinery below
+    // doesn't try to attach.
+    if (box.kind === 'read' || box.kind === 'write') {
+      render_io_box(fields, box);
+      // Inputs section — same port table as call boxes.
+      const in_sec = document.createElement('div');
+      in_sec.className   = 'section-label';
+      in_sec.textContent = 'inputs';
+      fields.appendChild(in_sec);
+      fields.appendChild(mk_port_display(box.inputs));
+      return;
+    }
 
     // iterator toggle (issue 221) — flips between function-backed and
     // routing-primitive shapes; mutually exclusive with ref/fn/comparator

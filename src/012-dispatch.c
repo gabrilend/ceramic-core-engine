@@ -8,11 +8,14 @@
  *   3. Do the box's work:
  *        - BOX_CALL — invoke the resolved language spec via the
  *          worker's per-language handle.
- *        - BOX_DATA — read the file at `box->path` (resolved
- *          relative to `graph_map_dir` if non-absolute) and use
- *          its contents as the output.
- *        - BOX_FILE_WRITE — write the second input ("text") to the
- *          path given by the first input or by box->path.
+ *        - BOX_READ — emit a value. If the box has an inline literal
+ *          `value`, emit it as-is; otherwise read the file at
+ *          `box->path` (resolved relative to map_dir) and use its
+ *          contents.
+ *        - BOX_WRITE — write the `value` input to the path from the
+ *          `path` input (or `box->path` if a static literal). After
+ *          a successful write, emit the boolean `"true"` downstream
+ *          for chain-after-write graphs; unwired output discards.
  *   4. Push the resulting bytes to every outgoing connection's
  *      consumer input slot.
  *   5. For each consumer, fire the spawn-on-input-ready check,
@@ -397,7 +400,7 @@ static double parse_double(const void *bytes, int size)
 static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
                        const void *out_bytes, int out_size)
 {
-    /* Data and file_write boxes don't carry a routing kind; their
+    /* Read and write boxes don't carry a routing kind; their
      * output fans plain. Same for call boxes with no routing set
      * (treated as plain). */
     if (b->kind != BOX_CALL) return push_to_downstream(ctx, b, out_bytes, out_size);
@@ -578,19 +581,45 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
 }
 /* }}} */
 
-/* {{{ do_data_box() — read file from box->path */
-static int do_data_box(dispatch_ctx_t *ctx, const box_t *b,
+/* {{{ do_read_box() — emit the box's value */
+/* Precedence (issue 229):
+ *   1. Inline `value` literal — copied verbatim, no file IO.
+ *   2. Static `path` field — read that file from disk.
+ *   3. `path` input wire — would arrive in the box's input slot;
+ *      not exercised by current fixtures but supported by reading
+ *      slot[port="path"] when no static path is set.
+ *   4. Otherwise, error — the box has nothing to emit. */
+static int do_read_box(dispatch_ctx_t *ctx, const box_t *b,
                        char *out_buf, int out_capacity, int *out_size)
 {
-    if (!b->path) {
-        fprintf(stderr, "dispatch: data box '%s' missing path\n", b->id);
+    /* (1) inline literal */
+    if (b->value) {
+        int n = (int)strlen(b->value);
+        if (n > out_capacity) {
+            fprintf(stderr, "dispatch: read box '%s' literal (%d bytes) "
+                            "exceeds output capacity %d\n",
+                    b->id, n, out_capacity);
+            return -1;
+        }
+        memcpy(out_buf, b->value, (size_t)n);
+        *out_size = n;
+        return 0;
+    }
+
+    /* (2) static path. The (3) "path-from-input" form is left as a
+     * future slice — the inputs[] slot needs to be peeked first.
+     * Today's fixtures all use the static path. */
+    const char *path_str = b->path;
+    if (!path_str) {
+        fprintf(stderr, "dispatch: read box '%s' has neither value "
+                        "nor path\n", b->id);
         return -1;
     }
-    char *full = resolve_path(ctx, b->path);
+    char *full = resolve_path(ctx, path_str);
     if (!full) return -1;
     FILE *fp = fopen(full, "rb");
     if (!fp) {
-        fprintf(stderr, "dispatch: data box '%s': cannot open '%s'\n",
+        fprintf(stderr, "dispatch: read box '%s': cannot open '%s'\n",
                 b->id, full);
         free(full);
         return -1;
@@ -609,12 +638,17 @@ static int do_data_box(dispatch_ctx_t *ctx, const box_t *b,
 }
 /* }}} */
 
-/* {{{ do_file_write_box() */
-/* Convention: inputs[0] = "path" (string), inputs[1] = "text"
- * (bytes). If the box also has a literal path, we already pushed
- * it to inputs[0] via dispatch_push_literals. */
-static int do_file_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
-                             int *out_size)
+/* {{{ do_write_box() — write `value` input to `path`, emit "true" */
+/* Convention (issue 229): inputs are named "path" (string) and
+ * "value" (bytes). Either may carry a static literal supplied
+ * via dispatch_push_literals.
+ *
+ * On success, the box pushes the boolean string `"true"` to its
+ * outgoing connections. A `write` box with no downstream wire
+ * still produces the boolean; the dispatch fans to zero consumers
+ * and the value is discarded (unwired-output rule). */
+static int do_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
+                        char *out_buf, int out_capacity, int *out_size)
 {
     char       *bufs[16]  = {0};
     const void *datas[16] = {0};
@@ -623,12 +657,13 @@ static int do_file_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     int n_present = read_inputs(ctx, b, bufs, datas, sizes,
                                 ctx->default_out_capacity, &failed);
     emit_input_events(ctx, task_id, bufs, sizes, n_present);
-    int path_idx = -1, text_idx = -1;
+    int path_idx = -1, value_idx = -1;
     for (int i = 0; i < b->n_inputs; i++) {
-        if (strcmp(b->inputs[i].name, "path") == 0) path_idx = i;
-        if (strcmp(b->inputs[i].name, "text") == 0) text_idx = i;
+        if (strcmp(b->inputs[i].name, "path")  == 0) path_idx  = i;
+        if (strcmp(b->inputs[i].name, "value") == 0) value_idx = i;
     }
-    if (failed || path_idx < 0 || text_idx < 0 || path_idx >= n_present || text_idx >= n_present) {
+    if (failed || path_idx < 0 || value_idx < 0
+            || path_idx >= n_present || value_idx >= n_present) {
         for (int i = 0; i < b->n_inputs; i++) free(bufs[i]);
         return -1;
     }
@@ -647,12 +682,18 @@ static int do_file_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     int rc = 0;
     if (!fp) rc = -1;
     else {
-        size_t want = (size_t)sizes[text_idx];
-        if (fwrite(datas[text_idx], 1, want, fp) != want) rc = -1;
+        size_t want = (size_t)sizes[value_idx];
+        if (fwrite(datas[value_idx], 1, want, fp) != want) rc = -1;
         fclose(fp);
     }
     for (int i = 0; i < b->n_inputs; i++) free(bufs[i]);
-    *out_size = 0;
+
+    if (rc == 0 && out_buf && out_capacity >= 4) {
+        memcpy(out_buf, "true", 4);
+        *out_size = 4;
+    } else {
+        *out_size = 0;
+    }
     return rc;
 }
 /* }}} */
@@ -684,11 +725,12 @@ void dispatch_action(void *arg)
             case BOX_CALL:
                 rc = do_call_box(ctx, b, task_id, out_buf, out_capacity, &out_size);
                 break;
-            case BOX_DATA:
-                rc = do_data_box(ctx, b, out_buf, out_capacity, &out_size);
+            case BOX_READ:
+                rc = do_read_box(ctx, b, out_buf, out_capacity, &out_size);
                 break;
-            case BOX_FILE_WRITE:
-                rc = do_file_write_box(ctx, b, task_id, &out_size);
+            case BOX_WRITE:
+                rc = do_write_box(ctx, b, task_id,
+                                  out_buf, out_capacity, &out_size);
                 break;
         }
     }
@@ -701,10 +743,10 @@ void dispatch_action(void *arg)
             event_queue_task_output(ctx->events, now_secs(),
                                     task_id, out_buf, out_size);
         }
-        /* file_write boxes don't push (they're sinks). */
-        if (b->kind != BOX_FILE_WRITE) {
-            push_routed(ctx, b, out_buf, out_size);
-        }
+        /* Every kind pushes — even write, which emits its "true"
+         * boolean for any downstream wires (unwired output is just
+         * discarded, per the 229 unwired-output rule). */
+        push_routed(ctx, b, out_buf, out_size);
         /* Iterator-style re-spawn: if this is a multi-spawn box and
          * any POP input still has queued values, schedule another
          * task on the same box. This is how an iterator "loops"

@@ -1,0 +1,13 @@
+{
+  "id": "echo",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/echo.lua",
+  "fn": "echo",
+  "inputs": [
+    { "name": "x", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "ui": { "x": 300, "y": 100 }
+}

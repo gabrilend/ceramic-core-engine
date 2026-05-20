@@ -8,7 +8,15 @@ const Boxes = (() => {
   const PORT_R        = 6;   // port dot radius in world units
   const MIN_BOX_H     = 80;
 
-  const KIND_COLOR = { call: '#4a9eff', data: '#4caf7d' };
+  // KIND_COLOR drives the box header colour on the canvas. `read`
+  // keeps the green that data boxes used to wear; `write` takes a
+  // warm cheddar so source-of-value and sink-to-disk read as
+  // clearly different at a glance (issue 229).
+  const KIND_COLOR = {
+    call:  '#4a9eff',
+    read:  '#4caf7d',
+    write: '#d4762a',
+  };
 
   // Issue 235: input ports with a literal value show the value on the
   // canvas in place of the port name. ~24 chars fits comfortably in
@@ -22,7 +30,8 @@ const Boxes = (() => {
   // time. Add a row when a new kind ships.
   const KIND_HEADER = {
     branch:     'branch',
-    data:       'data',
+    read:       'read',
+    write:      'write',
     comparator: 'comparator',
     iterator:   'iterator',
   };
@@ -88,8 +97,7 @@ const Boxes = (() => {
   // The two-branch decision is the visible heart of issue 235: a
   // reader scanning the map should see the data the box operates on,
   // not the parameter slot it sits in.
-  function port_label_text(box, i) {
-    const p = box.inputs[i];
+  function port_label_text(box, p) {
     const has_value = p.value !== undefined && p.value !== null && p.value !== '';
     if (!has_value)                              return p.name;
     if (port_has_incoming_wire(box, p.name))     return p.name;
@@ -104,9 +112,27 @@ const Boxes = (() => {
   }
   // }}}
 
+  // {{{ visible_inputs
+  // Issue 229: a `read` box with an inline literal `value` set has no
+  // file to read, so its `path` input port doesn't belong on the
+  // canvas — showing one would imply "wire me to a path" and confuse
+  // the reader. Inspector still owns the path field; the canvas just
+  // hides the port. Every other layout path (height, port positions,
+  // hit testing) goes through this helper so the box reads
+  // consistently.
+  function visible_inputs(box) {
+    const all = box.inputs || [];
+    if (box.kind === 'read' && box.value !== undefined
+        && box.value !== null && box.value !== '') {
+      return all.filter(p => p.name !== 'path');
+    }
+    return all;
+  }
+  // }}}
+
   // {{{ box_height
   function box_height(box) {
-    const n_in  = (box.inputs || []).length;
+    const n_in  = visible_inputs(box).length;
     // Output rows: iterator boxes have N named slots (issue 221);
     // comparator active: 3 dots (lt/eq/gt); sink: 0; otherwise 1.
     let n_out;
@@ -130,7 +156,7 @@ const Boxes = (() => {
     const bx = box.ui?.x ?? 0;
     const by = box.ui?.y ?? 0;
     const h  = box_height(box);
-    const inputs = box.inputs || [];
+    const inputs = visible_inputs(box);
 
     const in_pts = inputs.map((p, i) => ({
       name: p.name, side: 'input',
@@ -245,7 +271,8 @@ const Boxes = (() => {
       ctx.font       = '10px monospace';
       ctx.textAlign  = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(port_label_text(box, i), p.x + PORT_R + 4, p.y);
+      ctx.fillText(port_label_text(box, box.inputs.find(q => q.name === p.name)),
+                   p.x + PORT_R + 4, p.y);
     });
 
     out_pts.forEach(p => {
@@ -341,7 +368,7 @@ const Boxes = (() => {
     if (!has_value) return null;
     if (port_has_incoming_wire(box, p.name)) return null;
     const raw = String(p.value);
-    return raw === port_label_text(box, i) ? null : raw;
+    return raw === port_label_text(box, p) ? null : raw;
   }
   // }}}
 

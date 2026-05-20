@@ -1,6 +1,6 @@
 {
   "id": "input",
-  "kind": "data",
+  "kind": "read",
   "path": "input.txt",
   "ui": { "x": 100, "y": 100 },
   "connections": [

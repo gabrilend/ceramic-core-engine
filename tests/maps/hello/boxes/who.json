@@ -1,6 +1,6 @@
 {
   "id": "who",
-  "kind": "data",
+  "kind": "read",
   "path": "names.txt",
   "ui": { "x": 100, "y": 100 },
   "connections": [
