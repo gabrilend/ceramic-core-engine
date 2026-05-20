@@ -1,7 +1,8 @@
 # 317 — Language spec JSON bridge for data boxes
 
 ## Status
-in progress — Lua bridges landed 2026-05-19; C and Bash still stubs
+in progress — Lua bridges fidelity-preserving (stage 2 landed
+2026-05-19); C and Bash still stubs
 
 ## Current behavior
 
@@ -299,16 +300,42 @@ implementers of the C / Bash bridges):**
 
 **Tests:** 5/5 in `317-lua-bridge-test`; full suite green.
 
-**Known impedance-mismatch case (documented in the test):** `null`
-inside a JSON array becomes Lua `nil`, and `lua_objlen` truncates
-the sequence at the first hole. The bridge round-trips
-`[true,false,null]` as `[true,false]`. This is fundamental Lua
-semantics and is asserted explicitly rather than glossed over.
+### 2026-05-19 — stage 2: Lua array fidelity
 
-This stage-1 lossiness is **not the final design.** See the
-fidelity directive below — stage 2 must preserve the JSON shape
-through Lua via an explicit length field, accepting that this
-intrudes on idiomatic Lua.
+Stage 1 lost `null` inside arrays — `[true,false,null]` round-tripped
+as `[true,false]`. Stage 2 fixes it by applying the n-field
+convention from the fidelity directive below.
+
+What changed in the code:
+
+- `decode_node` (JSON → Lua): the JSON_ARRAY case now creates a Lua
+  table with a string key `n` set to the array's length, then
+  fills integer keys 1..n. JSON `null` elements use `lua_rawseti`
+  with nil — which deletes the key, leaving an absent slot. The
+  table now carries enough information to reconstruct the array
+  losslessly.
+
+- `encode_value` (Lua → JSON): table emission reads `n` first. If
+  the field is a non-negative integer, the table is treated as a
+  declared-length array — the encoder walks 1..n and emits null
+  for any missing slot via the existing nil → null path. Tables
+  without `n` fall through to the existing array-vs-object
+  heuristic for idiomatic Lua values.
+
+What the tests prove now:
+
+- `[]`, `[null]`, `[null,null]`, `[null,1,2]`, `[1,null,3]`,
+  `[1,2,null]`, `[true,false,null]` all round-trip exactly.
+
+What this costs:
+
+- Lua tables that have crossed the bridge carry a `n` field
+  visible to `pairs()`. The fidelity directive accepts this:
+  "We can intrude on idiomatic Lua because we're fundamentally
+  translating from Lua to JSON." Box authors who write Lua
+  tables by hand and want them treated as JSON arrays can also
+  set `n` themselves; otherwise the existing heuristic still
+  catches `{1, 2, 3}`-shaped tables.
 
 ## Fidelity directive (added 2026-05-19, supersedes earlier "lossy is OK" thinking)
 
@@ -383,14 +410,10 @@ bends to the wire.
 
 **Next implementation slices:**
 
-1. **Lua bridges, stage 2 — fidelity preservation.** Apply the
-   `n`-field convention from the fidelity directive above. The
-   decoder pushes arrays as `{n = N, ...}` so trailing/embedded
-   nulls survive the round-trip. The encoder reads `n` when
-   present. Update `tests/317-lua-bridge-test.c` to assert the
-   round-trip preserves `[true,false,null]` etc. The stage-1
-   "truncation is documented" assertions become real
-   "round-trips faithfully" assertions.
+1. ~~**Lua bridges, stage 2 — fidelity preservation.**~~ Done
+   2026-05-19. The n-field convention is implemented; every JSON
+   array shape round-trips faithfully. See the stage-2 entry in
+   the implementation log above.
 2. Bash bridges — near-identity (scripts are already producing
    text). `native_to_json` validates the text is well-formed JSON;
    `json_to_native` is identity. No `lua_State`-style scratch

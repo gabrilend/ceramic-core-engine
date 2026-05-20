@@ -209,14 +209,55 @@ static int encode_value(lua_State *L, int abs_idx, json_writer_t *w)
         json_writer_string(w, lua_tostring(L, abs_idx));
         return 0;
     case LUA_TTABLE: {
-        /* Array vs object: we treat a table as an array when its
-         * # length is positive AND a full key walk turns up exactly
-         * that many entries (no holes, no extra string keys). Empty
-         * tables encode as {} — a deliberate choice; JSON's [] vs {}
-         * distinction has no Lua equivalent and the object form
-         * keeps round-trips honest when downstream code expects a
-         * map. Future: an explicit array marker (issue 317 follow-up)
-         * if this becomes a footgun. */
+        /* n-field convention (issue 317, fidelity directive):
+         *
+         * If the table carries `n` as a non-negative integer, that
+         * field declares "this is a JSON array of length n; every
+         * missing integer key in 1..n is an explicit null on the
+         * wire." That's how the decoder records arrays it pushed
+         * onto the stack — a full round-trip of [true,false,null]
+         * leaves `{n=3, [1]=true, [2]=false}` here, and we have to
+         * emit `[true,false,null]` from it. Idiomatic Lua tables
+         * (no n field) still take the existing heuristic path.
+         *
+         * The intrusion of an explicit `n` field on values pushed
+         * by the decoder is the price of preserving JSON fidelity
+         * through Lua's nil-as-absence storage model. Documented
+         * in issue 317. */
+        lua_getfield(L, abs_idx, "n");
+        int  has_declared_len = 0;
+        long declared_len     = 0;
+        if (lua_type(L, -1) == LUA_TNUMBER) {
+            lua_Number nn = lua_tonumber(L, -1);
+            long       ni = (long)nn;
+            if ((lua_Number)ni == nn && ni >= 0) {
+                has_declared_len = 1;
+                declared_len     = ni;
+            }
+        }
+        lua_pop(L, 1);
+
+        if (has_declared_len) {
+            json_writer_array(w);
+            for (long i = 1; i <= declared_len; i++) {
+                lua_rawgeti(L, abs_idx, (int)i);
+                int top = lua_gettop(L);
+                /* Missing keys land here as nil and encode_value
+                 * emits json null for them — exactly the round-trip
+                 * behavior the n-field convention promises. */
+                int r = encode_value(L, top, w);
+                lua_pop(L, 1);
+                if (r != 0) return -1;
+            }
+            json_writer_end(w);
+            return 0;
+        }
+
+        /* No n field — fall back to the existing heuristic: every
+         * key in 1..N and no others → array; anything else → object.
+         * Empty tables go through the object path because JSON `[]`
+         * vs `{}` is a distinction Lua can't natively express, and
+         * the n-field convention is the way to ask for `[]`. */
         int n = (int)lua_objlen(L, abs_idx);
         int total = 0;
         lua_pushnil(L);
@@ -343,8 +384,17 @@ static int decode_node(lua_State *L, const json_node_t *node)
         lua_pushstring(L, json_string_value(node));
         return 0;
     case JSON_ARRAY: {
+        /* Push as `{n = N, [1] = ..., [2] = ..., ...}` so the
+         * encoder's n-field path can reconstruct the array
+         * faithfully on the way out, including any embedded or
+         * trailing nulls. `lua_rawseti` on a JSON `null` (which
+         * decode_node pushed as Lua nil) is effectively a key
+         * deletion — which is precisely the right representation
+         * for "missing slot, fill with null at encode time." */
         int n = json_array_size(node);
-        lua_createtable(L, n, 0);
+        lua_createtable(L, n, 1);
+        lua_pushinteger(L, n);
+        lua_setfield(L, -2, "n");
         for (int i = 0; i < n; i++) {
             if (decode_node(L, json_array_at(node, i)) != 0) {
                 lua_settop(L, baseline);

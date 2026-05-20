@@ -130,26 +130,26 @@ static int test_arrays(void)
     ASSERT(lua);
     void *h = lua->init(0);
 
-    /* Empty array is the one shape we *can't* round-trip as []
-     * because an empty Lua table can't be told apart from {} on the
-     * way out (see encode_value's array-vs-object heuristic). The
-     * round-trip canonicalises [] to {} — a deliberate, documented
-     * choice. Every non-empty sequence works as expected. */
-    ASSERT(roundtrip(lua, h, "[]",                "{}"));
+    /* The n-field convention (issue 317, stage 2) preserves every
+     * array shape JSON can express — including the empty array,
+     * trailing nulls, embedded nulls, and leading nulls. The
+     * decoder records the intended length via a `n` field on the
+     * Lua table; the encoder reads it back and walks 1..n,
+     * emitting null for any missing slot. */
+    ASSERT(roundtrip(lua, h, "[]",                NULL));
     ASSERT(roundtrip(lua, h, "[1]",               NULL));
     ASSERT(roundtrip(lua, h, "[1,2,3]",           NULL));
     ASSERT(roundtrip(lua, h, "[\"a\",\"b\"]",     NULL));
     ASSERT(roundtrip(lua, h, "[[1,2],[3,4]]",     NULL));
 
-    /* Lua impedance: `null` inside an array becomes `nil`, which
-     * truncates the table's # length at the first hole. JSON's
-     * "trailing nulls are still slots" semantics has no native Lua
-     * shape. We document this by asserting the truncation rather
-     * than pretending it round-trips. A future $lang_opaque or
-     * an explicit n-field convention is the way out, but not
-     * today. */
-    ASSERT(roundtrip(lua, h, "[true,false,null]", "[true,false]"));
-    ASSERT(roundtrip(lua, h, "[1,2,null]",        "[1,2]"));
+    /* Embedded / trailing / leading nulls — the cases stage-1 lost
+     * and stage-2 must preserve. */
+    ASSERT(roundtrip(lua, h, "[true,false,null]", NULL));
+    ASSERT(roundtrip(lua, h, "[1,2,null]",        NULL));
+    ASSERT(roundtrip(lua, h, "[null,1,2]",        NULL));
+    ASSERT(roundtrip(lua, h, "[1,null,3]",        NULL));
+    ASSERT(roundtrip(lua, h, "[null,null]",       NULL));
+    ASSERT(roundtrip(lua, h, "[null]",            NULL));
 
     lua->teardown(h);
     spec_registry_destroy(r);
