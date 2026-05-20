@@ -27,7 +27,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 311 | integration tests & run output (`last-run.jsonl`)           | in progress · writer + queue + thread + LOG_VALUES + LOG_SLOTS + run-tests.sh + compile-pipeline check |
 | 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | in progress · lang_spec_t extended + classification + dispatch resolution |
 | 313 | research: whole-program same-language merge                 | research / blocked |
-| 314 | small C JSON parser written for this project                | in progress · parser + writer + strict leading-zero |
+| 314 | small C JSON parser written for this project                | complete · parser + writer + strict leading-zero |
 | 315 | reference-counted compiled-map artifacts                    | open · design only |
 | 316 | simple test-runner script                                   | folded into 232 |
 | 317 | language spec JSON bridge for data boxes                    | open · design only |

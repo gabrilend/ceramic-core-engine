@@ -1,7 +1,12 @@
 # 314 — A small C JSON parser, written for SoraMech
 
 ## Status
-open
+complete (2026-05-20) — arena-allocated recursive-descent parser
+and bounded-buffer writer both shipped under `libs/json/`, with
+22 unit tests covering primitives, escapes, surrogate pairs,
+error-position reporting, writer comma/bracket placement, writer
+overflow detection, arena chunk growth, and a parser→writer
+round-trip.
 
 ## Current behavior
 
