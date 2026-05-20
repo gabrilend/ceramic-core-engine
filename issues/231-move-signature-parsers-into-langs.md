@@ -1,7 +1,10 @@
 # 231 — Move per-language signature parsers out of the file browser into `langs/<name>/parser.js`
 
 ## Status
-open
+complete (2026-05-19) — lua + bash parsers and their editor-facing
+language specs moved into `langs/<lang>/`, file browser is now
+language-agnostic. C parser explicitly deferred per the original
+step 3. Test coverage lands under issue 232.
 
 ## Current behavior
 

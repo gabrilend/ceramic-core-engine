@@ -31,7 +31,7 @@ model the phase 3 runtime will consume.
 | 228  | self-loop wires routed around the box body     | complete |
 | 229  | `read` / `write` box kinds (language-agnostic IO) | open     |
 | 230  | required inputs and the optional flag           | complete (compile-time; runtime arg-list shortening deferred) |
-| 231  | move signature parsers into langs/              | open     |
+| 231  | move signature parsers into langs/              | complete |
 | 233  | unified routing schema (comparator+iterator)    | open     |
 | 234  | middle-click duplicates the selected box        | complete |
 | 235  | literal value replaces port name on the canvas  | complete |

@@ -3,130 +3,46 @@
 
 const FileBrowser = (() => {
 
-  // {{{ lua_fn_end
-  // Returns the index of the closing 'end'/'until' that matches the function body
-  // starting at body_start. Tracks nesting depth by counting block openers and closers.
-  // Does not attempt to skip string literals — good enough for well-formatted source.
-  function lua_fn_end(content, body_start) {
-    const tok = /\b(function|if|while|for|repeat|do|end|until)\b/g;
-    tok.lastIndex = body_start;
-    let depth = 1;
-    let m;
-    while ((m = tok.exec(content)) !== null) {
-      const kw = m[1];
-      if (kw === 'end' || kw === 'until') {
-        depth--;
-        if (depth === 0) return m.index;
-      } else {
-        depth++;
-      }
-    }
-    return content.length;
-  }
-  // }}}
+  // {{{ Parser registry (issue 231)
+  // Lazy-loads a per-language signature parser the first time a file
+  // of that language is opened. Cached afterwards. Files with an
+  // unknown extension or a missing parser fall back to "no parser
+  // available" — the file is listed but offers no function picker.
+  // Same lazy-import shape as the lexer registry in 008-source-view.js.
+  const EXT_TO_LANG = { lua: 'lua', sh: 'bash', bash: 'bash' };
+  const parser_cache = {};   // lang_name → { parse_functions } | null
 
-  // {{{ parse_lua_returns
-  // Scans a function body for return statements; returns an array of output names.
-  function parse_lua_returns(body) {
-    const re    = /\breturn\b\s*([^\n]+)/g;
-    const names = new Set();
-    let m;
-    while ((m = re.exec(body)) !== null) {
-      const expr = m[1].replace(/--.*$/, '').trim();
-      if (!expr) continue;
-      // string literals or concat operator mean the whole expression is complex
-      if (/["']|\.\./.test(expr)) { names.add('result'); continue; }
-      const parts = expr.split(',');
-      parts.forEach(part => {
-        part = part.trim();
-        // bare identifier → use as port name
-        if (/^[a-zA-Z_]\w*$/.test(part) &&
-            !['nil','true','false','not','and','or','end'].includes(part)) {
-          names.add(part);
-        } else if (parts.length === 1 && part) {
-          // single complex expression → call it "result"
-          names.add('result');
-        }
-        // multi-value complex expression with no bare names: skip
-      });
+  async function load_parser(lang) {
+    if (lang in parser_cache) return parser_cache[lang];
+    try {
+      const mod = await import('/langs/' + lang + '/parser.js');
+      parser_cache[lang] = mod;
+      return mod;
+    } catch (e) {
+      console.warn('no parser for ' + lang + ':', e.message);
+      parser_cache[lang] = null;
+      return null;
     }
-    return [...names];
-  }
-  // }}}
-
-  // {{{ parse_lua
-  function parse_lua(content) {
-    const fns    = [];
-    const fn_re  = /^function\s+M\.(\w+)\s*\(([^)]*)\)/mg;
-    let m;
-    while ((m = fn_re.exec(content)) !== null) {
-      const body_start = m.index + m[0].length;
-      const body_end   = lua_fn_end(content, body_start);
-      const body       = content.slice(body_start, body_end);
-      const inputs     = m[2].trim()
-        ? m[2].split(',').map(s => s.trim()).filter(Boolean)
-        : [];
-      const outputs    = parse_lua_returns(body);
-      fns.push({ name: m[1], inputs, outputs });
-    }
-    return fns;
-  }
-  // }}}
-
-  // {{{ parse_bash_inputs
-  function parse_bash_inputs(body) {
-    const params = {};
-    // local var="${N}" or local var="$N"
-    const local_re = /local\s+(\w+)\s*=\s*["']?\$\{?(\d+)\}?["']?/g;
-    let m;
-    while ((m = local_re.exec(body)) !== null) {
-      params[parseInt(m[2])] = m[1];
-    }
-    if (Object.keys(params).length > 0) {
-      const max = Math.max(...Object.keys(params).map(Number));
-      return Array.from({ length: max }, (_, i) => params[i + 1] || `arg${i + 1}`);
-    }
-    // fall back: scan for raw $N references
-    const seen = new Set();
-    const pos_re = /\$\{?(\d+)\}?/g;
-    while ((m = pos_re.exec(body)) !== null) {
-      const n = parseInt(m[1]);
-      if (n > 0) seen.add(n);
-    }
-    if (seen.size > 0) {
-      const max = Math.max(...seen);
-      return Array.from({ length: max }, (_, i) => `arg${i + 1}`);
-    }
-    return [];
-  }
-  // }}}
-
-  // {{{ parse_bash
-  function parse_bash(content) {
-    const fns   = [];
-    const re    = /^(\w+)\s*\(\s*\)\s*\{/mg;
-    const skip  = new Set(['if','while','for','case','do','done','fi','then','else']);
-    let m;
-    while ((m = re.exec(content)) !== null) {
-      const name = m[1];
-      if (skip.has(name)) continue;
-      const body_start = m.index + m[0].length;
-      const close      = content.indexOf('\n}', body_start);
-      const body       = content.slice(body_start, close > -1 ? close : body_start + 800);
-      const inputs     = parse_bash_inputs(body);
-      fns.push({ name, inputs, outputs: ['output'] });
-    }
-    return fns;
   }
   // }}}
 
   // {{{ parse_functions
-  // Returns [{name, inputs:[string], outputs:[string]}] for a given file.
-  function parse_functions(content, filename) {
-    const ext = filename.split('.').pop();
-    if (ext === 'lua') return parse_lua(content);
-    if (ext === 'sh')  return parse_bash(content);
-    return null;  // null = no parser for this extension
+  // Returns [{name, inputs, outputs, variadic_tail}] for the file's
+  // public functions, or null when no parser is available for the
+  // extension. Per-language detail lives in langs/<name>/parser.js;
+  // this function just dispatches.
+  async function parse_functions(content, filename) {
+    const ext  = (filename || '').split('.').pop();
+    const lang = EXT_TO_LANG[ext];
+    if (!lang) return null;
+    const mod = await load_parser(lang);
+    if (!mod || typeof mod.parse_functions !== 'function') return null;
+    try {
+      return mod.parse_functions(content);
+    } catch (e) {
+      console.warn('parser error for ' + filename + ':', e.message);
+      return null;
+    }
   }
   // }}}
 
@@ -504,7 +420,7 @@ const FileBrowser = (() => {
               show_file_list();
               return;
             }
-            const fns = parse_functions(content, filename);
+            const fns = await parse_functions(content, filename);
             render_fn_list(container, group.label + filename, fns,
               (f, fn) => on_select(f, fn),
               show_file_list
@@ -566,7 +482,7 @@ const FileBrowser = (() => {
       return;
     }
 
-    const fns = parse_functions(content, stripped);
+    const fns = await parse_functions(content, stripped);
     render_fn_list(container, stripped, fns,
       (f, fn) => on_select(f, fn),
       () => render(container, on_select));
