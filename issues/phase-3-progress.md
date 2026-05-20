@@ -21,7 +21,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 305 | C graph loader (replaces `003-loader.lua`)                  | in progress · attach + lang enum + 312 fast-path classification |
 | 306 | Lua language spec implementation                            | in progress · init + invoke + teardown + per-worker module cache done |
 | 307 | C language spec implementation                              | in progress · compile + invoke + lazy .c→.so done, typed wrapper deferred |
-| 308 | Bash language spec implementation                           | in progress · persistent socketpair + line-protocol invoke + dladdr-based server lookup |
+| 308 | Bash language spec implementation                           | complete · persistent socketpair + line-protocol invoke + dladdr-based server lookup |
 | 309 | build system & Makefile orchestration                       | in progress · scaffolding + spec discovery + soramech-compile portable artifact |
 | 310 | priority queue: wired in, no-op behaviorally                | in progress · API + ordering done |
 | 311 | integration tests & run output (`last-run.jsonl`)           | in progress · writer + queue + thread + LOG_VALUES + LOG_SLOTS + run-tests.sh + compile-pipeline check |

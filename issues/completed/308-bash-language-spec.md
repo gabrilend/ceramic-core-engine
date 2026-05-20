@@ -1,7 +1,11 @@
 # 308 — Bash language spec implementation
 
 ## Status
-open
+complete (2026-05-20) — persistent socketpair + line-protocol
+invoke shipped, per-worker teardown plumbed through the pool's
+teardown callback (no orphan bash processes), and the bash spec
+self-locates `bash-server.sh` via `dladdr` so portable artifacts
+work from any cwd.
 
 ## Current behavior
 Bash boxes today run via `drivers/bash.sh`, which `source`s the box
