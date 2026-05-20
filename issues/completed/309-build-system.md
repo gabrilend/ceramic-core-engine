@@ -1,7 +1,12 @@
 # 309 — Build system & Makefile orchestration
 
 ## Status
-open
+complete (2026-05-20) — top-level Makefile, per-language spec
+Makefiles, vendored sources under `libs/task-pool/` and
+`libs/json/`, spec discovery via `/proc/self/exe`, and
+`scripts/soramech-compile.sh` producing a portable `compiled/`
+directory all in place. Verified end-to-end via the
+"compile pipeline (portable run)" integration check.
 
 ## Current behavior
 Phase 2 has no compiled binary. The runner is a Lua script
