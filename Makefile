@@ -120,6 +120,7 @@ $(BUILD_DIR)/%.o: $(DIR)/%.c
 $(BUILD_DIR)/tests/009-slot-store-test:    $(BUILD_DIR)/src/009-slot-store.o \
                                            $(BUILD_DIR)/src/015-large-value-heap.o
 $(BUILD_DIR)/tests/015-large-value-heap-test: $(BUILD_DIR)/src/015-large-value-heap.o
+$(BUILD_DIR)/tests/016-unified-allocator-test: $(BUILD_DIR)/src/016-unified-allocator.o
 $(BUILD_DIR)/tests/010-graph-loader-test: $(BUILD_DIR)/src/010-graph-loader.o \
                                           $(BUILD_DIR)/src/009-slot-store.o \
                                           $(BUILD_DIR)/src/015-large-value-heap.o \
