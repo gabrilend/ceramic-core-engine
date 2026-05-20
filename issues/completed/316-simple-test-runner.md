@@ -1,7 +1,23 @@
 # 316 — Simple test runner script
 
 ## Status
-open
+folded into issue 232 (test coverage map)
+
+## Resolution
+
+The scope of this issue — a build-free unit-test runner script at
+`scripts/run-unit-tests.sh` — was folded into issue 232's
+"Test runners → Planned" section. 232 is the standing
+test-infrastructure issue for the project (coverage map + runner
+inventory); keeping the runner design alongside the coverage view
+means the next person who picks this up sees both halves at once.
+
+The original design notes (goals, output shape, filtering, stale-
+binary check) are preserved verbatim under 232's "Test runners →
+Planned — `scripts/run-unit-tests.sh`" subsection.
+
+The script itself has not yet been written. Tracking continues
+under 232.
 
 ## Current behavior
 

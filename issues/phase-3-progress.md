@@ -29,7 +29,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 313 | research: whole-program same-language merge                 | research / blocked |
 | 314 | small C JSON parser written for this project                | in progress · parser + writer + strict leading-zero |
 | 315 | reference-counted compiled-map artifacts                    | open · design only |
-| 316 | simple test-runner script                                   | open · design only |
+| 316 | simple test-runner script                                   | folded into 232 |
 | 317 | language spec JSON bridge for data boxes                    | open · design only |
 
 ## Phase goal checklist
