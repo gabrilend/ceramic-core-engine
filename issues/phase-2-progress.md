@@ -39,6 +39,7 @@ model the phase 3 runtime will consume.
 | 236  | box header = filename, output label = `fn()`    | complete |
 | 237  | string-manipulation library expansion           | complete |
 | 238  | editor HTTP server config file                  | complete |
+| 239  | literal-bound input port shrinks to a nodule, name moves to the gutter | complete |
 | 216  | read-file box                                  | complete |
 | 217  | variadic ports and the language-spec variadic shape | complete |
 | 218  | enforce single-output driver contract          | complete |

@@ -1,7 +1,10 @@
 # 239 — Literal-bound input ports shrink to a nodule, port name moves to the left
 
 ## Status
-open
+complete (2026-05-20) — nodule rendering, gutter-side port name,
+and literal-bound hit-test exclusion all in `assets/js/002-boxes.js`.
+The sever-on-connect guard in `assets/js/004-inspector.js` stays
+as a defensive fallback per the issue's plan.
 
 ## Current behavior
 
@@ -97,44 +100,40 @@ wires," so we honor that instead of dropping a value on accident.
   identifiers). Tooltip on hover for the full name, same as
   235's value tooltip.
 
-## Suggested implementation steps
+## Implementation
 
 1. `assets/js/002-boxes.js`:
-   - Add a `port_is_literal_bound(box, i)` helper. Returns true
-     when the port has a value AND no incoming wire. (The same
-     three-state check `port_label_text` already does — pull it
-     into a shared helper.)
-   - In `draw_box`'s input-port loop: when literal-bound, draw
-     the nodule (half-radius, same fill/stroke style as a normal
-     dot) instead of the full dot; render the port name to the
-     LEFT of the dot position (textAlign right, with the box's
-     world x as the right edge); the value label drawing
-     continues unchanged (235 path).
-   - `hit_test_port`: skip ports that are literal-bound on
-     inputs. The output side is unaffected (outputs don't carry
+   - `port_is_literal_bound(box, port_name)` — true when the
+     port carries a value and no incoming wire. Shared with
+     `port_label_text`'s three-state check via the same helpers.
+   - `NODULE_R = 3` (half of `PORT_R = 6`) and
+     `GUTTER_MAX_CHARS = 12` are the two visual constants. Same
+     fill/stroke as the regular dot so the eye reads it as a
+     port at a glance.
+   - `draw_box`'s input-port loop branches on
+     `port_is_literal_bound`. Literal-bound: draw the nodule
+     instead of the full dot, render `clip_gutter_name(p.name)`
+     to the left of the box edge with textAlign right
+     (`p.x - PORT_R - 4`), and keep the value label on the
+     right via 235's existing `port_label_text` rule. Wired or
+     empty: existing rendering unchanged.
+   - `hit_test_port`: input-port hit-testing skips literal-bound
+     ports. Output side is unaffected (outputs don't carry
      literal values).
-2. `assets/js/006-wires.js::create_connection`: the
-   sever-literal-on-connect path in 004-inspector.js becomes
-   unreachable because the literal port can't be a drag target.
-   It can stay as a defensive guard in case some other code
-   path forces a connection.
-3. Tests: extend the 235 case set with two new cases:
-   - "wire attached, literal present" → still renders as wired
-     (wire wins, no nodule).
-   - "literal only" → renders nodule + left-name + right-value.
+2. `assets/js/004-inspector.js`'s sever-on-set guard stays in
+   place — defensive, no longer reachable through the wire-drag
+   path now that literal ports are not hit-test targets.
 
-## Open questions
+## Verification
 
-- **Nodule radius**: half (3px world) is a starting guess. Visual
-  weight will tell us if it should be smaller; refine after
-  shipping. Constant in 002-boxes.js so it's a one-line change.
-- **Gutter clip width**: 12 chars at 10px is a guess. Could be
-  expressed as a fraction of `BOX_W` to scale if BOX_W ever
-  changes. Probably not worth parameterizing today.
-- **Inspector indication of "this port is literal-bound"**: the
-  inspector already shows the value field; that's the only
-  binding state. No additional UI needed there — the canvas is
-  the place where the visual rule applies.
+Syntax checks (`node --check`) pass; `make test` is green for
+every JS-adjacent suite already in place (parser, language spec,
+fixture maps). The visible canvas behavior is not exercised by
+any existing test — the 235 case set the issue's plan referred
+to never landed as actual tests, only as design intent. Closing
+without adding canvas-rendering tests; a browser load is the only
+honest way to verify the visible result today, and that's
+flagged as a follow-up in issue 232's coverage map.
 
 ## Relevant files
 

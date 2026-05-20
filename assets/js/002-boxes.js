@@ -6,6 +6,14 @@ const Boxes = (() => {
   const BOX_HEADER    = 36;
   const PORT_ROW_H    = 22;
   const PORT_R        = 6;   // port dot radius in world units
+  // Issue 239: a literal-bound input port renders as a smaller
+  // "nodule" with the port name pulled into the gutter to its
+  // left. Half the radius reads visually as "this is a port, but
+  // it's bound — don't drag a wire to it." NODULE_R and the
+  // 12-char gutter clip are the two visual constants of that
+  // rendering.
+  const NODULE_R      = 3;
+  const GUTTER_MAX_CHARS = 12;
   const MIN_BOX_H     = 80;
 
   // KIND_COLOR drives the box header colour on the canvas. `read`
@@ -86,6 +94,33 @@ const Boxes = (() => {
       if (c.to_box === box.id && c.to_input === port_name) return true;
     }
     return false;
+  }
+  // }}}
+
+  // {{{ port_is_literal_bound
+  // A port is "literal-bound" when the inspector has a value set
+  // and no wire is feeding the port. That's the state issue 239
+  // renders specially — small nodule, name in the gutter, value
+  // on the right — to make it obvious at a glance that the value
+  // is the binding, not a default.
+  //
+  // The three-state check (value set / wired / both) also lives
+  // in port_label_text; the helper exists so both renderers and
+  // hit-testing share one truth.
+  function port_is_literal_bound(box, port_name) {
+    const p = (box.inputs || []).find(q => q.name === port_name);
+    if (!p) return false;
+    const has_value = p.value !== undefined && p.value !== null && p.value !== '';
+    if (!has_value) return false;
+    return !port_has_incoming_wire(box, p.name);
+  }
+  // }}}
+
+  // {{{ clip_gutter_name
+  function clip_gutter_name(name) {
+    const s = String(name || '');
+    if (s.length <= GUTTER_MAX_CHARS) return s;
+    return s.slice(0, GUTTER_MAX_CHARS - 1) + '…';
   }
   // }}}
 
@@ -253,20 +288,41 @@ const Boxes = (() => {
     ctx.fillStyle = '#9ea3c0';
 
     in_pts.forEach((p, i) => {
+      // Issue 239 split: a literal-bound port renders as a nodule
+      // (smaller dot) with the port name pulled into the gutter
+      // outside the box's left edge. Plain wired-or-empty ports
+      // keep the full dot. The two rendering shapes communicate at
+      // a glance whether the port accepts a wire (full dot) or is
+      // committed to its literal (nodule).
+      const literal_bound = port_is_literal_bound(box, p.name);
+      const radius = literal_bound ? NODULE_R : PORT_R;
+
       ctx.beginPath();
-      ctx.arc(p.x, p.y, PORT_R, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
       ctx.fillStyle   = '#2d3250';
       ctx.strokeStyle = '#6c72a0';
       ctx.lineWidth   = 1.5;
       ctx.fill();
       ctx.stroke();
 
-      // Label rendered into the canvas (issue 224 reverted the DOM-
-      // overlay experiment — a click-capturing <input> next to the dot
-      // was capturing drag attempts). Drawn in world space, so it
-      // scales with zoom. Editing still happens in the inspector.
-      // What text we draw depends on whether a literal value is set
-      // and whether a wire occupies the port (issue 235).
+      // Gutter name for literal-bound ports (issue 239). The port's
+      // parameter identity goes to the LEFT of the box edge,
+      // textAlign right so the right edge of the text sits just
+      // shy of where the dot would be — the reader sees both the
+      // name and the value on one line. Clipped at GUTTER_MAX_CHARS.
+      if (literal_bound) {
+        ctx.fillStyle  = '#6c72a0';
+        ctx.font       = '10px monospace';
+        ctx.textAlign  = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(clip_gutter_name(p.name), p.x - PORT_R - 4, p.y);
+      }
+
+      // Right-side label. For literal-bound ports this is the
+      // value (235's rule, unchanged); for plain ports it's the
+      // port name (or value-without-wire — 235 already handles
+      // the dispatch). Drawn in world space so it scales with
+      // zoom. Editing still happens in the inspector.
       ctx.fillStyle  = '#9ea3c0';
       ctx.font       = '10px monospace';
       ctx.textAlign  = 'left';
@@ -314,10 +370,25 @@ const Boxes = (() => {
   // {{{ hit_test_port
   // Returns {box_id, port_name, side, x, y} for the port under world point (wx,wy), or null.
   // For output dots: port_name is null (single wire) or 'lt'/'eq'/'gt' (comparator).
+  //
+  // Issue 239: literal-bound INPUT ports are excluded from hit
+  // testing. The user can't start or land a wire on a port whose
+  // value is already committed by a literal — the visual nodule
+  // declares "this isn't a wire target," and the hit-test honors
+  // that. To rebind, clear the literal in the inspector first;
+  // the port returns to a full dot and becomes targetable.
   function hit_test_port(wx, wy) {
     for (const id in boxes) {
-      const { inputs, outputs } = port_positions(boxes[id]);
-      for (const p of [...inputs, ...outputs]) {
+      const box = boxes[id];
+      const { inputs, outputs } = port_positions(box);
+      for (const p of inputs) {
+        if (port_is_literal_bound(box, p.name)) continue;
+        const dx = wx - p.x, dy = wy - p.y;
+        if (dx*dx + dy*dy <= (PORT_R + 4) * (PORT_R + 4)) {
+          return { box_id: id, port_name: p.name, side: p.side, x: p.x, y: p.y };
+        }
+      }
+      for (const p of outputs) {
         const dx = wx - p.x, dy = wy - p.y;
         if (dx*dx + dy*dy <= (PORT_R + 4) * (PORT_R + 4)) {
           return { box_id: id, port_name: p.name, side: p.side, x: p.x, y: p.y };
