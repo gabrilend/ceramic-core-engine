@@ -177,15 +177,35 @@ see the complete value at the head cell.
 
 ## Lifetime
 
-Slots are owned by the box that holds the input port. They live
-from graph load until run end. There is no per-slot reference
-counting and no end-of-stream propagation — the slot is freed
-when the run ends, alongside its owning box.
+A slot — the named input port on a box — is owned by its box and
+lives from graph load until run end. That hasn't changed. What
+has changed is the values that pass through slots: they are
+reference-counted memory chunks served by a single unified
+allocator (see "Allocation strategy" below), not malloc'd memory
+that lives the whole run.
 
-Run termination is governed entirely by the pool's active-task
-counter (issue 301): when no task is running and no further spawns
-are pending, the run is over. There's nothing the slot store needs
-to track to make this work.
+Every value handed to a consumer carries a reference. When a
+consumer is done with a value, it drops its reference. When the
+last reference drops, the chunk holding the value goes back to
+the allocator's free-lists, available for the next request. Two
+neighbor-merge steps and an on-demand sweep keep fragmentation
+under control (described in the allocator section).
+
+The earlier note in this document — "no per-slot reference
+counting" — referred to the box's own slot record, not to the
+values flowing through it. The slot record itself is still
+allocated once at graph load and not freed until run end. The
+values inside the slot are the things that get refcounted, freed,
+and recycled. The distinction matters: there's one slot per
+input port, and many values flow through that slot over the life
+of a run.
+
+Run termination is still governed by the pool's active-task
+counter (issue 301): when no task is running and no further
+spawns are pending, the run is over. The allocator and refcount
+machinery don't influence termination — they just ensure memory
+gets returned to the free-lists as values become unreferenced
+during the run.
 
 ### No wait lists
 
@@ -305,128 +325,157 @@ synchronization primitive.
 The pool's queue is the only queue. There is no separate "blocked
 tasks" structure.
 
-## Allocation strategy: size-class free lists with coalescing fallback
+## Allocation strategy: one unified allocator for every value
 
-The slot store uses a segregated free-list allocator. The map is
-analyzed at compile time to enumerate every distinct slot size the
-graph will need (each call box declares its output slot size; each
-queued-input ring declares its total size from cell capacity × queue
-depth). The allocator builds one free list per distinct size class.
+There is one allocator. It serves both values whose size is known
+from the graph at compile time and values whose size only becomes
+known when they're produced (LLM responses, dynamic arrays, anything
+where the upper bound isn't a useful number). The earlier draft of
+this document split these into two stores — a size-class slot
+allocator for the known case, a separate "large-value heap" for the
+unknown case. That split was a mistake. They are the same problem
+and they reuse the same machinery; treating them as two stores led
+to the unknown-size path being a monotonically-growing pool that
+never reclaims, which is a memory leak by design.
 
-Variable-size and unknown-size payloads (a long LLM response, an
-array whose length is not known until runtime) are handled by a
-separate **large-value heap** described below — not by allocating
-huge slots up front.
+### How the allocator learns sizes ahead of time
 
-### The lists
-Each size class is an array (or linked list) of free slots of exactly
-that size. At startup, each list is pre-populated with enough slots
-to cover the static box count for that size. Lists grow during the
-run if demand exceeds the pre-allocation.
+Before the run starts, the loader walks every box in the graph and
+reads the size that box declares for its output. A box that always
+produces a 32-byte number declares 32. A box that always produces a
+4-megabyte image declares 4 megabytes. The loader collects every
+distinct declared size, deduplicates them, and creates one free-list
+per distinct size. Each list is pre-populated with enough chunks to
+cover the static demand for that size.
 
-Each list has its own mutex — allocation and deallocation in different
-size classes never contend with each other.
+Boxes whose output size depends on runtime — the LLM case — declare
+"size unknown." The loader doesn't create a pre-warmed list for those
+boxes; it knows their values will be allocated on demand.
 
-### Allocation
-Given a request for size N bytes:
-1. Find the smallest size class with `class_size ≥ N`.
-2. If that class has a free slot, pop it. Done.
-3. Otherwise, try the next larger size class. Repeat.
-4. If a larger class hits, the slot is oversized for the request.
-   Try to slice the unused tail into a residual slot. If the residual
-   is at least as large as the smallest size class, push it onto that
-   class's list. Otherwise skip the slice — oversize the allocation
-   and live with the waste until the slot is freed.
-5. If no size class has a free slot, attempt to coalesce: walk the
-   address-ordered chunk list looking for adjacent free chunks that
-   together meet the requested size. If found, merge them and return
-   the combined chunk.
-6. If coalescing fails, grow the region (see "Growth" below) and
-   append the new slots to the appropriate lists. Then try again.
-7. After steps 5 or 6 complete, queue a deferred cleanup task on the
-   pool. Cleanup runs on a worker thread later and walks the
-   chunk list to opportunistically coalesce contiguous free chunks
-   into the largest possible chunks. Cleanup is best-effort — it
-   does not block any other thread. If memory fragments faster than
-   cleanup can keep up, the next allocation grows the heap; that's
-   fine.
+Both kinds share the same underlying memory region. The difference is
+only whether the loader had a list pre-warmed for the value's size.
 
-### Deallocation
-When refcount drops to zero, the slot is pushed onto its size class's
-free list. The deallocator also performs a cheap eager-coalesce step:
-check the slot's two physical neighbors; if either is free, merge
-them and push the combined chunk onto the appropriate size class.
-This is O(1) given the doubly-linked chunk list (see below) and keeps
-small-scale fragmentation in check without needing the deferred
-cleanup task to run.
+### Two doors, one allocator
 
-### Physical-order chunk list (for coalescing)
-Coalescing needs to know which chunks are physically adjacent in
-memory. The size-class free lists don't carry that information.
+**Door 1 — declared-size allocation.** Given a request for size N,
+where N matches a declared size class: pop the head of that class's
+free-list. One step. This is the common path for the vast majority
+of values; nearly every box in a typical graph has a declared output
+size.
 
-Two viable representations:
+**Door 2 — runtime-size allocation.** Given a request for an unknown
+size at runtime: find the smallest size class whose chunks are large
+enough. If that class is exhausted, try the next-larger. If the
+chunk handed out is oversized for the request, slice the unused tail
+into a residual chunk and push that residual onto the appropriate
+smaller free-list. The residual is only kept if it's at least as large
+as the smallest declared size class — anything smaller is left as
+internal waste rather than fragmenting the lists with stubs.
 
-- **Doubly-linked list** of all chunks (free and allocated) in
-  address order. Splits and merges are O(1) given the chunk pointer.
-  Neighbor lookup is O(1). Pointer chasing is the cost.
-- **Two parallel arrays** (`start[i]`, `end[i]`) sorted by start
-  address. Lookup by binary search is O(log N), but inserts and
-  deletes are O(N) without an additional index. Cache-friendly to
-  scan.
+Both doors fall through to the same fragmentation-recovery and growth
+machinery below when their free-lists can't satisfy a request.
 
-The linked list is simpler and has the right asymptotic behavior for
-splits/merges, which dominate. Start there. If profiling later shows
-list traversal is hot, switch to the array form with an auxiliary
-index — the API doesn't change.
+### Reference counting drives deallocation
 
-### Large-value heap (variable-size payloads)
+Every value the allocator hands out is reference-counted. The dispatch
+layer increments the count when handing a value to a consumer and
+decrements it when the consumer is done. When the count reaches zero,
+the chunk is returned to the allocator.
 
-For values whose size is not known at compile time — long LLM
-responses, dynamically-sized arrays, anything where the upper bound
-is not a useful number to allocate — the slot does not hold the value
-directly. Instead, the slot holds a small fixed-size handle:
+The return-to-allocator step does two things atomically: pushes the
+chunk onto the appropriate free-list AND checks the chunk's two
+physical neighbors. If either neighbor is also free, the deallocator
+merges them into a larger chunk and pushes the merged chunk onto the
+free-list for the merged size. This eager neighbor-merge is O(1) and
+keeps small-scale fragmentation from accumulating on the hot path.
 
-```
-{ uint32_t size; uint32_t lvh_offset; }
-```
+Reference counting requires touching every place that hands out a
+pointer to an allocator-managed value. That cost is paid once. After
+the wiring exists, both doors above benefit from the same recycling.
 
-`lvh_offset` points into a separate **large-value heap**, a
-plain `malloc`-backed region used only for variable-size payloads.
-When a box produces a 4 MB LLM response, the dispatch layer:
-1. Allocates 4 MB in the large-value heap.
-2. Writes the bytes there.
-3. Stores the handle (size = 4 MB, offset = …) in the slot.
+### When does the bigger sweep run
 
-The consumer reads the handle from the slot, follows the offset,
-copies the bytes (or works with them in place). When the slot's
-refcount hits zero, the slot's deallocator also frees the
-large-value-heap region.
+The eager neighbor-merge above catches the common case. It misses
+patterns where free chunks are scattered with allocated chunks between
+them — the cheap merge can't see past its immediate neighbors.
 
-The slot allocator is unchanged — it always sees fixed-size slots.
-The two-tier approach keeps the hot path simple while still
-supporting unbounded outputs.
+A deeper sweep that walks the whole address-ordered chunk list
+looking for runs of contiguous free chunks runs on two deterministic
+triggers, both decoupled from wall-clock time:
 
-A box opts into large-value output by declaring its output as
-"variable-size" in the graph. Compile-time-known outputs use the
-fixed-size path with no indirection.
+1. **At the moment an allocation would otherwise fail.** When a
+   request can't be satisfied from any free-list — including after
+   trying larger classes and slicing — the system runs the deep sweep
+   before falling back to asking the operating system for more memory.
+   If the sweep produces a chunk large enough to satisfy the request,
+   the allocation succeeds and no growth happens. This is the
+   mandatory trigger: the sweep is the immediate alternative to
+   monotonic growth, and it fires exactly when its work has value.
 
-### Growth
-When all size-class lists are exhausted and coalescing cannot satisfy
-a request, the allocator grows by calling `malloc` for a new region,
-dividing it into slots, and appending them to the relevant size-class
-lists. Plain heap memory is fine — no spec needs cross-process access
-to slot memory.
+2. **At quiescence — moments when no task is running.** The dispatch
+   layer already recognizes these moments because it uses them to
+   decide a run is complete. Between batches is a natural opportunity
+   because no tasks are reading or writing chunks at that instant.
+   This is the opportunistic trigger.
 
-### Why this design
-- Compile-time enumeration makes every common allocation a single
-  pop from a list. No size-comparison loops, no walks of free space.
-- Slicing residuals cannot fragment beyond the granularity of the
-  smallest declared size class, since smaller residuals are simply
-  not split.
-- Coalescing is the safety valve for unusual allocation patterns,
-  and it costs nothing on the common path.
-- Growth is rare — if pre-allocation matches static demand, it never
-  fires.
+The mandatory trigger is enough on its own. The opportunistic trigger
+is a tunable knob that can be enabled later if profiling shows
+fragmentation surviving the cheap merge faster than the mandatory
+trigger catches up.
+
+A third option was considered — trigger when the count of small free
+fragments crosses a threshold — but rejected for now. It works, but
+it needs the threshold tuned, and the two triggers above cover the
+same ground without that tuning step.
+
+### Physical-order chunk list (for the merge steps)
+
+Both the eager neighbor-merge and the deeper sweep need to know
+which chunks are physically adjacent in memory. The size-class
+free-lists don't carry that information — they're indexed by size,
+not address.
+
+The supporting structure is a doubly-linked list of all chunks (free
+and allocated) in address order. Splits and merges are O(1) given a
+chunk pointer. Neighbor lookup is O(1). The cost is pointer-chasing
+during the deeper sweep, but the sweep only runs at the two triggers
+above, not on the hot path.
+
+If profiling later shows traversal cost hurting at sweep time, the
+list can be swapped for a sorted-by-address array of `(start, end)`
+pairs with an auxiliary index — the allocator's external API doesn't
+change.
+
+### Why one allocator instead of two
+
+The split design existed because the original two-tier scheme had a
+"large-value heap" carved out for variable-size payloads, on the
+theory that mixing variable and fixed sizes in the same pool would
+complicate the fixed-size path. That reasoning doesn't survive
+contact with reference counting and free-list recycling: with
+refcount-driven free, the fixed-size path stays fast because most
+requests match a declared class and pop in one step regardless of
+what else is in the region.
+
+Splitting them also meant the variable-size pool had to grow
+forever, because writing the same allocator twice — once with
+reclamation, once without — was more work than was budgeted in early
+phase 3. That's the position the current code is in. Unified gets us
+the reclamation everywhere, with no extra design work.
+
+### Growth (last resort)
+
+When both doors fail and the deep sweep can't produce a fitting
+chunk, the allocator grows by asking the operating system for a new
+region, dividing it into chunks per the declared size classes (or
+into a single large chunk if the request was for an unknown size
+beyond all declared classes), and threading the new chunks into the
+free-lists and the address-ordered list.
+
+Growth is the rare case. With pre-warmed free-lists sized to static
+demand and refcount-driven recycling, a well-behaved graph never
+reaches growth — every allocation either pops a pre-warmed chunk or
+recycles one whose last reference just dropped.
 
 ## No type tags
 
@@ -585,3 +634,51 @@ What's still deferred within 302:
   run end. Acceptable for current fixtures; a size-class
   allocator with eager-coalesce is the upgrade path if profiling
   flags it.
+
+### Retraction of the monotonic-growth deferral — 2026-05-19
+
+The two deferrals listed immediately above this entry no longer
+reflect the design. Monotonic growth was being described as
+"acceptable for current fixtures." It isn't acceptable — it's a
+memory leak by design, and any long-running workload (multi-day
+runs, anything driven by an LLM in a loop, anything that
+accumulates) will reproduce it as a real problem. Calling it
+deferred made it easier to skip; calling it a leak makes it clear
+why the skip isn't safe.
+
+The design above this implementation log has been rewritten
+accordingly. There are no longer two stores. There is one
+allocator that serves both compile-time-known sizes and
+runtime-only-known sizes from a shared pool, with reference
+counting driving deallocation, an O(1) eager neighbor-merge on
+return, and a deeper sweep on the two triggers described in the
+allocator section ("at the moment an allocation would otherwise
+fail" and "at quiescence between task batches"). Both triggers
+are deterministic — they react to the program's own behavior
+rather than to wall-clock time.
+
+What this means in terms of work remaining:
+
+- The chained-block region currently serving variable-size values
+  gets replaced by the unified allocator above. The slot-store
+  cells that hold large-value pointers stay; what they point into
+  changes from the bump-allocated chain to the size-class
+  allocator's chunks.
+- The slot store's small-fixed-size path adopts the same
+  allocator. Today that path malloc's each slot's cell-array
+  separately; under the new design every cell-array is a chunk
+  from the unified allocator.
+- The dispatch layer learns to increment and decrement reference
+  counts when it hands values from producer to consumer. This is
+  the widest change in scope — many places — but each individual
+  change is one line. The new allocator depends on these calls
+  being correct: a missed decrement leaks; a missed increment
+  frees a value that's still in use.
+- The address-ordered chunk list (described in the allocator
+  section) is added alongside the size-class lists.
+- The deeper sweep is implemented and wired into the two trigger
+  points.
+
+The implementation has not been started; this entry is the
+design commitment, not a completion notice. The earlier
+"acceptable for current fixtures" framing is withdrawn.
