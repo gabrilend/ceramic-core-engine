@@ -1,7 +1,10 @@
 # 301 — Thread pool lifecycle and per-worker initialization
 
 ## Status
-open
+complete (2026-05-20) — pool + per-worker init/teardown hooks +
+priority queue all shipped; the two deferred follow-ons noted in
+the implementation log (per-worker spec init, priority queue)
+landed via 303 and 310 respectively
 
 ## Current behavior
 The executor (`src/004-executor.lua`) runs boxes synchronously in a

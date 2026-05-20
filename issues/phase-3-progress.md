@@ -14,7 +14,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 
 | ID  | Title                                                       | Status   |
 |-----|-------------------------------------------------------------|----------|
-| 301 | thread pool lifecycle and per-worker initialization         | in progress · pool + per-worker init/teardown hooks done |
+| 301 | thread pool lifecycle and per-worker initialization         | complete · pool + per-worker init/teardown hooks + priority queue |
 | 302 | per-task slot store with wire-held references               | in progress · core + large-value heap (variable-size payloads) |
 | 303 | language runtime spec (pluggable per-language invocation)   | in progress · registry + per-worker init + pool hook + lang filtering |
 | 304 | task dispatch layer (C, replaces synchronous executor)      | in progress · plain + comparator + iterator + randomizer + weighted routing + cell-tagged iterator ordering |
