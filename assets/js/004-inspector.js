@@ -322,187 +322,108 @@ const Inspector = (() => {
     show(current_box, on_change_cb, on_delete_cb);
   }
 
-  // {{{ Iterator helpers (issue 221)
-  // Iterator boxes are pure routing primitives: input copies straight
-  // to one output, the dispatch layer (phase 3, issue 304) advances a
-  // counter mod #iterator_outputs each call. No ref/fn — the box body
-  // is just the counter + slot list. Each slot has a user-renamable
-  // name; the slot name lands in a connection's `from_branch` field
-  // exactly like a comparator branch name.
+  // {{{ Routing helpers (issue 233)
+  // Every call box carries a `routing` field declaring how its
+  // single output reaches downstream wires. Three kinds ship
+  // today (plain / comparator / iterator); randomizer / weighted
+  // / distributor / multi-band-comparator have their own follow-on
+  // issues (240–243).
   //
-  // The inspector edits the slot list; the dispatch layer is what
-  // actually rotates between them at runtime.
+  // Plain is the default for a newly-created box. Switching kinds
+  // severs every outgoing wire because the output port shape
+  // changes — same shape-change-clears-wires rule the variadic
+  // input toggle uses.
+  //
+  // Iterator routing is a pure routing primitive: no language
+  // function is invoked, ref/fn are not set. Iterator port names
+  // are fixed as `out_0`, `out_1`, ... `out_<n-1>` (not user-
+  // renameable — the read-only-port-name rule from issue 224
+  // applies on the output side too).
 
-  function is_iterator(box) {
-    return Array.isArray(box && box.iterator_outputs);
+  // {{{ function routing_kind()
+  function routing_kind(box) {
+    return (box && box.routing && box.routing.kind) || 'plain';
   }
+  // }}}
 
-  // Toggle the box ON as an iterator. Ref/fn/comparand are mutually
-  // exclusive with iterator routing (a routing primitive has no
-  // function to invoke), so they are stripped. All outgoing wires are
-  // dropped because the output shape changes from a single dot (or
-  // lt/eq/gt) to N named slots — same shape-change-clears-wires rule
-  // as the variadic input toggle.
-  async function make_iterator() {
+  // {{{ function default_routing_for()
+  function default_routing_for(kind) {
+    if (kind === 'comparator') return { kind: 'comparator', comparand: 0 };
+    if (kind === 'iterator')   return { kind: 'iterator',   n_outputs: 2 };
+    return { kind: 'plain' };
+  }
+  // }}}
+
+  // {{{ async function set_routing_kind()
+  async function set_routing_kind(kind) {
     if (!current_box) return;
-
+    if (routing_kind(current_box) === kind) return;
     await sever_output_wires();
-
-    delete current_box.ref;
-    delete current_box.fn;
-    delete current_box.comparand;
-    delete current_box.has_output;
-    current_box.iterator_outputs = ['output_0'];
-
+    current_box.routing = default_routing_for(kind);
+    if (kind === 'iterator') {
+      // Iterator boxes are routing primitives — no function.
+      delete current_box.ref;
+      delete current_box.fn;
+      delete current_box.has_output;
+    } else {
+      // Plain/comparator need a function. Restore empty ref/fn
+      // so the schema (which requires ref on non-iterator call
+      // boxes) accepts the save; the user picks via the browse
+      // button to populate them.
+      if (current_box.ref === undefined) current_box.ref = '';
+      if (current_box.fn  === undefined) current_box.fn  = '';
+    }
     await save();
     Canvas.mark_dirty();
     show(current_box, on_change_cb, on_delete_cb);
   }
+  // }}}
 
-  // Toggle iterator OFF. Drop the iterator_outputs field; sever
-  // outgoing wires (their from_branch values referenced slot names
-  // that no longer exist). The user re-picks a function via the
-  // browse button to restore ref/fn.
-  async function unmake_iterator() {
-    if (!current_box) return;
-
-    await sever_output_wires();
-    delete current_box.iterator_outputs;
-    // Restore an empty ref/fn so the schema (which requires ref on
-    // non-iterator call boxes) accepts the save. The user picks a
-    // function via the browse button to populate them.
-    if (current_box.ref === undefined) current_box.ref = '';
-    if (current_box.fn  === undefined) current_box.fn  = '';
-
+  // {{{ async function set_comparand()
+  async function set_comparand(n) {
+    if (!current_box || routing_kind(current_box) !== 'comparator') return;
+    current_box.routing.comparand = n;
     await save();
-    Canvas.mark_dirty();
-    show(current_box, on_change_cb, on_delete_cb);
   }
+  // }}}
 
-  // Append a new slot with a placeholder name (`output_N`). The user
-  // can rename it after — placeholder is just to avoid prompting on
-  // every grow. Mirrors the variadic auto-grow pattern.
-  async function add_iterator_slot() {
-    if (!current_box || !is_iterator(current_box)) return;
-    const slots = current_box.iterator_outputs;
-    let n = slots.length;
-    // pick the lowest free `output_N` so renaming + adding doesn't
-    // collide with an existing user-named slot
-    while (slots.includes('output_' + n)) n++;
-    slots.push('output_' + n);
-    await save();
-    Canvas.mark_dirty();
-    show(current_box, on_change_cb, on_delete_cb);
-  }
-
-  // Remove the slot at index `idx`. Outgoing wires whose from_branch
-  // matched the removed slot get severed; remaining slots keep their
-  // names (no rename — slot names are user-defined and free-form, no
-  // need to compact like the variadic numeric indexes).
-  async function remove_iterator_slot(idx) {
-    if (!current_box || !is_iterator(current_box)) return;
-    const slots = current_box.iterator_outputs;
-    if (idx < 0 || idx >= slots.length) return;
-    // Removing the last remaining slot collapses the iterator entirely
-    // — the user shouldn't have to know there's a separate "toggle off"
-    // button when the visual outcome of "× the last slot" is the same.
-    if (slots.length <= 1) {
-      return unmake_iterator();
-    }
-    const removed = slots[idx];
-
-    // Sever every outgoing wire on this branch.
-    const my_id = current_box.id;
-    const dst_ids = new Set();
-    (current_box.connections || []).forEach(c => {
-      if (c.from_box === my_id && c.from_branch === removed) dst_ids.add(c.to_box);
-    });
-    current_box.connections = (current_box.connections || [])
-      .filter(c => !(c.from_box === my_id && c.from_branch === removed));
-    for (const dst_id of dst_ids) {
-      const dst = Boxes.boxes[dst_id];
-      if (!dst) continue;
-      dst.connections = (dst.connections || [])
-        .filter(c => !(c.from_box === my_id && c.from_branch === removed));
-      try { await API.put_box(dst_id, dst); }
-      catch (e) { console.error('failed to clean wires to ' + dst_id + ': ' + e.message); }
-    }
-
-    slots.splice(idx, 1);
-    await save();
-    Canvas.mark_dirty();
-    show(current_box, on_change_cb, on_delete_cb);
-  }
-
-  // Rename slot at index `idx` to `new_name`. Renames the slot itself
-  // and rewrites `from_branch` on every outgoing wire that used the
-  // old name (both the source-box record and the destination-box
-  // copy). No-op if the name is unchanged or already taken.
-  async function rename_iterator_slot(idx, new_name) {
-    if (!current_box || !is_iterator(current_box)) return;
-    const slots = current_box.iterator_outputs;
-    if (idx < 0 || idx >= slots.length) return;
-    const old_name = slots[idx];
-    if (old_name === new_name) return;
-    if (!new_name) {
-      status_msg('slot name cannot be empty', 'error');
-      return;
-    }
-    if (slots.includes(new_name)) {
-      status_msg('slot name already in use', 'error');
-      return;
-    }
-
-    slots[idx] = new_name;
-
-    const my_id = current_box.id;
-    const dst_ids = new Set();
-    (current_box.connections || []).forEach(c => {
-      if (c.from_box === my_id && c.from_branch === old_name) {
-        c.from_branch = new_name;
-        dst_ids.add(c.to_box);
-      }
-    });
-    for (const dst_id of dst_ids) {
-      const dst = Boxes.boxes[dst_id];
-      if (!dst) continue;
-      (dst.connections || []).forEach(c => {
-        if (c.from_box === my_id && c.from_branch === old_name) {
-          c.from_branch = new_name;
+  // {{{ async function set_n_outputs()
+  // Iterator routing's port count. Shrinking the count means
+  // wires whose from_branch is `out_<i>` with i >= new_n no longer
+  // have a port to attach to — sever them on the source side and
+  // on each destination box's copy, same pattern as the iterator
+  // slot removal used under the legacy schema.
+  async function set_n_outputs(n) {
+    if (!current_box || routing_kind(current_box) !== 'iterator') return;
+    if (typeof n !== 'number' || n < 1 || n !== Math.floor(n)) return;
+    const old_n = current_box.routing.n_outputs || 1;
+    current_box.routing.n_outputs = n;
+    if (n < old_n) {
+      const my_id = current_box.id;
+      const orphans = new Set();
+      for (let i = n; i < old_n; i++) orphans.add('out_' + i);
+      const dst_ids = new Set();
+      (current_box.connections || []).forEach(c => {
+        if (c.from_box === my_id && orphans.has(c.from_branch)) {
+          dst_ids.add(c.to_box);
         }
       });
-      try { await API.put_box(dst_id, dst); }
-      catch (e) { console.error('failed to rename wires on ' + dst_id + ': ' + e.message); }
+      current_box.connections = (current_box.connections || [])
+        .filter(c => !(c.from_box === my_id && orphans.has(c.from_branch)));
+      for (const dst_id of dst_ids) {
+        const dst = Boxes.boxes[dst_id];
+        if (!dst) continue;
+        dst.connections = (dst.connections || [])
+          .filter(c => !(c.from_box === my_id && orphans.has(c.from_branch)));
+        try { await API.put_box(dst_id, dst); }
+        catch (e) { console.error('failed to clean wires to ' + dst_id + ': ' + e.message); }
+      }
     }
-
     await save();
     Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
   }
-
-  // Auto-grow check used by the wire-connect path. If `from_branch` is
-  // the LAST slot of an iterator box, append a new placeholder slot
-  // and persist. Idempotent — calling again on the same slot is a
-  // no-op once a newer slot exists below it. Mirrors the variadic
-  // input auto-grow.
-  async function auto_grow_iterator_after_connect(box, from_branch) {
-    if (!is_iterator(box)) return;
-    const slots = box.iterator_outputs;
-    if (slots[slots.length - 1] !== from_branch) return;
-
-    let n = slots.length;
-    while (slots.includes('output_' + n)) n++;
-    slots.push('output_' + n);
-    try {
-      await API.put_box(box.id, box);
-      Canvas.mark_dirty();
-      if (current_box && current_box.id === box.id) {
-        show(current_box, on_change_cb, on_delete_cb);
-      }
-    } catch (e) {
-      slots.pop();
-      status_msg('iterator auto-grow failed: ' + e.message, 'error');
-    }
-  }
+  // }}}
   // }}}
 
   // Sever every outgoing wire from this box. Used when toggling the
@@ -940,68 +861,57 @@ const Inspector = (() => {
       return;
     }
 
-    // iterator toggle (issue 221) — flips between function-backed and
-    // routing-primitive shapes; mutually exclusive with ref/fn/comparator
-    const iter_btn = document.createElement('button');
-    iter_btn.className   = 'toolbar-btn';
-    iter_btn.textContent = is_iterator(box) ? 'iterator ×' : 'iterator';
-    iter_btn.onclick = () => {
-      if (is_iterator(current_box)) unmake_iterator();
-      else make_iterator();
-    };
-    fields.appendChild(mk_row('mode', iter_btn));
+    // Routing-kind dropdown (issue 233). The mode picks which
+    // dispatch-layer rule decides where this box's output goes:
+    //   plain      → fan to every wire on the single output
+    //   comparator → lt/eq/gt branches by numeric comparison
+    //   iterator   → N round-robin output ports (out_0..out_<n-1>)
+    // Switching kinds changes the output-port shape on the
+    // canvas; set_routing_kind severs every outgoing wire on the
+    // transition for the same reason the variadic input toggle
+    // clears its inputs.
+    const mode_sel = document.createElement('select');
+    ['plain', 'comparator', 'iterator'].forEach(k => {
+      const opt = document.createElement('option');
+      opt.value = k; opt.textContent = k;
+      if (k === routing_kind(box)) opt.selected = true;
+      mode_sel.appendChild(opt);
+    });
+    mode_sel.addEventListener('change', () => set_routing_kind(mode_sel.value));
+    fields.appendChild(mk_row('routing', mode_sel));
 
-    // For iterator boxes, ref/fn/output are all replaced by the slot
-    // list. Inputs still render below (one input wire feeds the
-    // routing primitive). The render flow forks here.
-    if (is_iterator(box)) {
-      // inputs section (same as below; one input is typical but we
-      // accept whatever the user has set)
+    // Iterator boxes are pure routing primitives — no ref/fn, no
+    // language function invoked. The inspector shows inputs (a
+    // single input wire feeds the routing) plus an n_outputs
+    // number control; the output ports themselves are fixed as
+    // out_0..out_<n-1>, not user-renameable (issue 224 rule
+    // extended to the output side).
+    if (routing_kind(box) === 'iterator') {
       const in_sec = document.createElement('div');
       in_sec.className   = 'section-label';
       in_sec.textContent = 'inputs';
       fields.appendChild(in_sec);
       fields.appendChild(mk_port_display(box.inputs));
 
-      // outputs: editable list of slot names with × per slot, + at end
       const out_sec = document.createElement('div');
       out_sec.className   = 'section-label';
       out_sec.textContent = 'outputs (round-robin)';
       fields.appendChild(out_sec);
 
-      const slot_wrap = document.createElement('div');
-      slot_wrap.className = 'port-display';
-      box.iterator_outputs.forEach((slot, i) => {
-        const row = document.createElement('div');
-        row.className = 'port-display-row';
-
-        const inp = document.createElement('input');
-        inp.type      = 'text';
-        inp.value     = slot;
-        inp.className = 'port-name-inp';
-        inp.style.flex = '1';
-        inp.addEventListener('change', () => {
-          rename_iterator_slot(i, inp.value.trim());
-        });
-        row.appendChild(inp);
-
-        const rm = document.createElement('button');
-        rm.className   = 'toolbar-btn';
-        rm.textContent = '×';
-        rm.title       = 'remove slot';
-        rm.onclick     = () => remove_iterator_slot(i);
-        row.appendChild(rm);
-
-        slot_wrap.appendChild(row);
+      const n_inp = document.createElement('input');
+      n_inp.type        = 'number';
+      n_inp.min         = '1';
+      n_inp.value       = String((box.routing && box.routing.n_outputs) || 2);
+      n_inp.style.cssText = 'width:80px;background:#0f1117;border:1px solid #2a2f45;' +
+        'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      n_inp.addEventListener('change', () => {
+        const v = parseInt(n_inp.value, 10);
+        if (!isNaN(v) && v >= 1) set_n_outputs(v);
       });
-      const add_btn = document.createElement('button');
-      add_btn.className   = 'toolbar-btn';
-      add_btn.textContent = '+ slot';
-      add_btn.onclick     = () => add_iterator_slot();
-      slot_wrap.appendChild(add_btn);
-      fields.appendChild(slot_wrap);
+      fields.appendChild(mk_row('n_outputs', n_inp));
       return;
     }
+
 
     // ref: read-only display showing just the basename (no path, no
     // extension), plus browse / view buttons. Full path stored on the
@@ -1081,9 +991,9 @@ const Inspector = (() => {
     fields.appendChild(in_sec);
     fields.appendChild(mk_port_display(box.inputs));
 
-    // output: single wire; optional comparator splits into lt/eq/gt.
-    // Skipped entirely for sink boxes (functions with no return values,
-    // issue 226) — no output dot, no comparator toggle, nothing to wire.
+    // output section (issue 233). Per-kind controls live below
+    // the mode dropdown above. Sink boxes (has_output false)
+    // skip the section entirely — no output dot, no controls.
     if (box.has_output === false) {
       return;
     }
@@ -1093,46 +1003,25 @@ const Inspector = (() => {
     out_sec.textContent = 'output';
     fields.appendChild(out_sec);
 
-    const cmp_row = document.createElement('div');
-    cmp_row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px;';
-
-    const has_cmp = box.comparand !== undefined && box.comparand !== '';
-    const cmp_btn = document.createElement('button');
-    cmp_btn.className   = 'toolbar-btn';
-    cmp_btn.textContent = has_cmp ? 'comparing ×' : 'compare';
-    cmp_btn.onclick = async () => {
-      // Toggling the comparator changes the set of valid output ports
-      // (single null wire ↔ three lt/eq/gt wires). Wires from the old
-      // configuration would re-appear if we left them in the
-      // connections array, so clear all outgoing wires on either
-      // toggle direction.
-      await sever_output_wires();
-      if (current_box.comparand !== undefined && current_box.comparand !== '') {
-        delete current_box.comparand;
-      } else {
-        current_box.comparand = '0';
-      }
-      await save();
-      show(current_box, on_change_cb, on_delete_cb);
-      Canvas.mark_dirty();
-    };
-    cmp_row.appendChild(cmp_btn);
-
-    if (has_cmp) {
+    // Comparator routing exposes one number knob — the value the
+    // output is compared against. The mode dropdown already
+    // declared the kind; the inspector just needs the value here.
+    // Plain routing has no per-kind control.
+    if (routing_kind(box) === 'comparator') {
       const cmp_inp = document.createElement('input');
-      cmp_inp.type        = 'text';
-      cmp_inp.value       = box.comparand || '';
+      cmp_inp.type        = 'number';
+      cmp_inp.value       = String((box.routing && box.routing.comparand) ?? 0);
       cmp_inp.placeholder = 'number';
-      cmp_inp.style.cssText = 'flex:1;background:#0f1117;border:1px solid #2a2f45;' +
+      cmp_inp.style.cssText = 'width:100%;background:#0f1117;border:1px solid #2a2f45;' +
         'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
-      cmp_inp.addEventListener('input', () => { current_box.comparand = cmp_inp.value; save(); });
-      cmp_row.appendChild(cmp_inp);
+      cmp_inp.addEventListener('input', () => {
+        const v = parseFloat(cmp_inp.value);
+        if (!isNaN(v)) set_comparand(v);
+      });
+      fields.appendChild(mk_row('comparand', cmp_inp));
     }
-
-    fields.appendChild(cmp_row);
   }
   // }}}
 
-  return { show, hide, show_content, auto_grow_after_set,
-           auto_grow_iterator_after_connect };
+  return { show, hide, show_content, auto_grow_after_set };
 })();

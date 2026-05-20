@@ -240,13 +240,11 @@ const Wires = (() => {
     if (Inspector.auto_grow_after_set) {
       await Inspector.auto_grow_after_set(dst_box, to_input);
     }
-    // Same idea on the source side: an iterator box (issue 221) auto-
-    // appends a new placeholder slot when the user wires from its last
-    // slot. The helper is a no-op if from_branch isn't the last slot
-    // (or the box isn't an iterator).
-    if (Inspector.auto_grow_iterator_after_connect && from_branch) {
-      await Inspector.auto_grow_iterator_after_connect(src_box, from_branch);
-    }
+    // Iterator-side auto-grow removed under the unified routing
+    // schema (issue 233): iterator boxes carry a fixed
+    // routing.n_outputs and rename their output ports out_0
+    // through out_<n-1>. Growing the port count is now an
+    // explicit inspector action, not a side-effect of wiring.
   }
   // }}}
 

@@ -1,7 +1,15 @@
 # 233 — Unified `routing` schema for branching boxes
 
 ## Status
-open
+complete (2026-05-20) — `routing` field shipped through the
+schema, the phase-2 executor, the editor inspector (mode
+dropdown replacing the two separate toggles), the canvas
+output rendering, the wire `from_branch` matching, and the
+phase-3 dispatch table (which had already landed under issue
+304). Legacy `comparand` / `iterator_outputs` fields are
+rejected outright. Follow-on issues 240–243 carry the
+randomizer / weighted / distributor / multi-band-comparator
+designs forward as separate units of work.
 
 ## Concept
 

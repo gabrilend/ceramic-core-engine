@@ -33,7 +33,7 @@ model the phase 3 runtime will consume.
 | 230  | required inputs and the optional flag           | complete (compile-time; runtime arg-list shortening deferred) |
 | 231  | move signature parsers into langs/              | complete |
 | 232  | test coverage map (parser tests landed; tracks gaps) | ongoing |
-| 233  | unified routing schema (comparator+iterator)    | open     |
+| 233  | unified routing schema (comparator+iterator)    | complete |
 | 234  | middle-click duplicates the selected box        | complete |
 | 235  | literal value replaces port name on the canvas  | complete |
 | 236  | box header = filename, output label = `fn()`    | complete |

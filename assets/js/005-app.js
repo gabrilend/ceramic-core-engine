@@ -169,9 +169,13 @@ const App = (() => {
   // {{{ new_box_at
   async function new_box_at(wx, wy) {
     const id = 'box-' + Date.now().toString(36);
+    // Routing defaults to plain (issue 233): one output port that
+    // fans to every wire attached. The user can switch to
+    // comparator or iterator via the inspector's mode dropdown.
     const box = {
       id, label: 'New Box', kind: 'call',
       ref: '', fn: '', inputs: [], connections: [],
+      routing: { kind: 'plain' },
       ui: { x: Math.round(wx), y: Math.round(wy) },
     };
     try {

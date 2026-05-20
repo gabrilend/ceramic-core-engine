@@ -125,17 +125,27 @@ end
 -- }}}
 
 -- {{{ fire_connections
--- Routes the single output value through wired connections.
--- If box.comparand is set: compare output against it (must be a number or error).
--- Otherwise: fire all connections whose from_branch is nil.
--- Returns nil on success, or an error string.
+-- Routes the single output value through wired connections,
+-- branching on `box.routing.kind` (issue 233):
+--   plain      → fan to every connection (from_branch == nil)
+--   comparator → compare output against routing.comparand,
+--                fire only the matching lt/eq/gt branch
+--   iterator   → not exercised in the phase 2 executor; the
+--                runtime semantics live in phase 3's dispatch
+--                layer (issue 304). Iterator-routed boxes are
+--                visible in the editor so users can author them
+--                today; the phase 2 executor refuses to run them
+--                rather than guess at counter semantics.
 local function fire_connections(box, output_val, store, queue, boxes)
-    if box.comparand and box.comparand ~= "" then
-        -- comparator mode: output must be a number
-        local comparand = tonumber(box.comparand)
-        if not comparand then
-            return "box '" .. box.id .. "': comparand '" ..
-                tostring(box.comparand) .. "' is not a valid number"
+    local r = box.routing
+    if r == nil then
+        return "box '" .. box.id .. "': missing 'routing' field (issue 233)"
+    end
+
+    if r.kind == "comparator" then
+        local comparand = r.comparand
+        if type(comparand) ~= "number" then
+            return "box '" .. box.id .. "': routing.comparand must be a number"
         end
         local num_val = tonumber(output_val)
         if not num_val then
@@ -143,7 +153,6 @@ local function fire_connections(box, output_val, store, queue, boxes)
                 tostring(output_val) .. "' is not a number, but comparator is configured"
         end
 
-        -- determine which branch to fire
         local branch
         if num_val < comparand then
             branch = "lt"
@@ -164,8 +173,12 @@ local function fire_connections(box, output_val, store, queue, boxes)
             end
             ::next_cmp_conn::
         end
+    elseif r.kind == "iterator" then
+        return "box '" .. box.id .. "': iterator routing is a phase 3 " ..
+            "feature; the phase 2 executor cannot run it (issue 304)"
     else
-        -- single-wire mode: fire connections where from_branch is nil
+        -- plain (or any future kind that falls through here): fan
+        -- to every connection where from_branch is nil
         for _, c in ipairs(box.connections or {}) do
             if c.from_box ~= box.id then goto next_conn end
             if c.from_branch == nil then

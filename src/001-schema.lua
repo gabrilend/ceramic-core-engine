@@ -16,8 +16,32 @@ local valid_kinds = { call = true, read = true, write = true }
 -- }}}
 
 -- {{{ valid_branches
--- null/nil means no comparator (single wire); the three strings are comparator outputs.
+-- A connection's `from_branch` field identifies which output of
+-- the producer box this wire leaves from. The accepted values
+-- depend on the producer's `routing.kind` (issue 233):
+--   plain      → nil
+--   comparator → 'lt' / 'eq' / 'gt'
+--   iterator   → 'out_0', 'out_1', ... 'out_<n-1>'
+-- The schema here only enforces the lexical shape — that a
+-- branch string is either nil, one of the three comparator
+-- branches, or `out_<digits>`. Cross-referencing the producer's
+-- routing kind happens at the graph level in
+-- `check_input_bindings` / `validate-map.lua`.
 local valid_branches = { lt = true, eq = true, gt = true }
+local function is_iterator_branch_name(name)
+    return type(name) == "string" and name:match("^out_%d+$") ~= nil
+end
+-- }}}
+
+-- {{{ valid_routing_kinds
+-- Issue 233's unified `routing` field. Plain is the default
+-- shape for a call box that wants its single output fanned to
+-- all wires. Comparator and iterator are the two routing kinds
+-- shipped under 233. Randomizer / weighted / distributor /
+-- multi-band-comparator have their own follow-on issues
+-- (240–243); until those ship, the schema rejects their kind
+-- values so we don't accumulate dead state.
+local valid_routing_kinds = { plain = true, comparator = true, iterator = true }
 -- }}}
 
 -- {{{ err
@@ -32,8 +56,11 @@ local function validate_connection(c, i, errors)
     if c.from_box == nil then
         err(errors, "connection[" .. i .. "] missing 'from_box'")
     end
-    if c.from_branch ~= nil and not valid_branches[c.from_branch] then
-        err(errors, "connection[" .. i .. "] 'from_branch' must be nil, 'lt', 'eq', or 'gt'")
+    if c.from_branch ~= nil
+       and not valid_branches[c.from_branch]
+       and not is_iterator_branch_name(c.from_branch) then
+        err(errors, "connection[" .. i .. "] 'from_branch' must be nil, " ..
+            "'lt'/'eq'/'gt' (comparator), or 'out_<n>' (iterator)")
     end
     if c.to_box == nil then
         err(errors, "connection[" .. i .. "] missing 'to_box'")
@@ -62,25 +89,55 @@ function M.validate_box(box)
     end
 
     if box.kind == "call" then
-        -- iterator boxes (issue 221) are a pure routing primitive: input
-        -- copies straight to a chosen output, no language function is
-        -- invoked. Such a box has no ref/fn — only `iterator_outputs`,
-        -- an ordered list of output slot names. Otherwise ref is required.
-        local is_iterator = box.iterator_outputs ~= nil
-        if not is_iterator then
-            if box.ref == nil or type(box.ref) ~= "string" then
-                err(errors, "box missing 'ref'")
+        -- Unified routing (issue 233). Every call box carries a
+        -- `routing` field declaring how its single output reaches
+        -- downstream wires. Routing kind also gates whether
+        -- ref/fn are required: iterator is a pure routing
+        -- primitive with no language function attached; plain
+        -- and comparator boxes need a function to invoke.
+        local r = box.routing
+        local is_routing_primitive = false
+        if r == nil then
+            err(errors, "call box missing 'routing' field (issue 233)")
+        elseif type(r) ~= "table" then
+            err(errors, "'routing' must be a table")
+        elseif type(r.kind) ~= "string" then
+            err(errors, "'routing.kind' must be a string")
+        elseif not valid_routing_kinds[r.kind] then
+            err(errors, "'routing.kind' = '" .. r.kind ..
+                "' is not one of 'plain'/'comparator'/'iterator' " ..
+                "(other kinds belong to follow-on issues 240–243)")
+        else
+            if r.kind == "comparator" then
+                if type(r.comparand) ~= "number" then
+                    err(errors, "comparator routing requires numeric 'routing.comparand'")
+                end
+            elseif r.kind == "iterator" then
+                is_routing_primitive = true
+                if type(r.n_outputs) ~= "number"
+                   or r.n_outputs < 1
+                   or r.n_outputs ~= math.floor(r.n_outputs) then
+                    err(errors, "iterator routing requires 'routing.n_outputs' to be a positive integer")
+                end
             end
         end
+
+        -- Legacy fields are explicitly rejected (issue 233 ships
+        -- no in-loader migration). The editor or a one-off script
+        -- rewrites old maps to the new shape; reading the old
+        -- shape with this schema is meant to fail loudly.
+        if box.comparand ~= nil then
+            err(errors, "'comparand' is a legacy field — use routing = " ..
+                "{ kind = 'comparator', comparand = <number> } instead (issue 233)")
+        end
         if box.iterator_outputs ~= nil then
-            if type(box.iterator_outputs) ~= "table" then
-                err(errors, "'iterator_outputs' must be an array")
-            else
-                for i, name in ipairs(box.iterator_outputs) do
-                    if type(name) ~= "string" then
-                        err(errors, "'iterator_outputs[" .. i .. "]' must be a string")
-                    end
-                end
+            err(errors, "'iterator_outputs' is a legacy field — use routing = " ..
+                "{ kind = 'iterator', n_outputs = <integer> } instead (issue 233)")
+        end
+
+        if not is_routing_primitive then
+            if box.ref == nil or type(box.ref) ~= "string" then
+                err(errors, "box missing 'ref'")
             end
         end
         -- fn is optional for binary callers (shell scripts, binaries)
@@ -101,10 +158,6 @@ function M.validate_box(box)
                     end
                 end
             end
-        end
-        -- comparand: optional; if present it must be a string parseable as number at runtime
-        if box.comparand ~= nil and type(box.comparand) ~= "string" then
-            err(errors, "'comparand' must be a string")
         end
         -- has_output: optional; absence means "true" (default behavior).
         -- false marks a sink box whose function has no return values

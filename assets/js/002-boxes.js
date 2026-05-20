@@ -168,14 +168,17 @@ const Boxes = (() => {
   // {{{ box_height
   function box_height(box) {
     const n_in  = visible_inputs(box).length;
-    // Output rows: iterator boxes have N named slots (issue 221);
-    // comparator active: 3 dots (lt/eq/gt); sink: 0; otherwise 1.
+    // Output rows are decided by the unified routing kind (issue
+    // 233). Sink boxes (has_output === false) override every kind
+    // with zero outputs. Otherwise: plain = 1 dot, comparator = 3
+    // (lt/eq/gt), iterator = routing.n_outputs.
+    const rk = box.routing && box.routing.kind;
     let n_out;
-    if (box.iterator_outputs) {
-      n_out = box.iterator_outputs.length;
-    } else if (box.has_output === false) {
+    if (box.has_output === false) {
       n_out = 0;
-    } else if (box.comparand && box.comparand !== '') {
+    } else if (rk === 'iterator') {
+      n_out = (box.routing && box.routing.n_outputs) || 1;
+    } else if (rk === 'comparator') {
       n_out = 3;
     } else {
       n_out = 1;
@@ -185,8 +188,10 @@ const Boxes = (() => {
   // }}}
 
   // {{{ port_positions
-  // Returns world-space {x,y} for each port dot on a box.
-  // Output side: null-named single dot when no comparand; 'lt'/'eq'/'gt' dots when comparand set.
+  // Returns world-space {x,y} for each port dot on a box. Output
+  // shape mirrors box_height's routing-kind dispatch (issue 233):
+  // plain = single null-named dot, comparator = three lt/eq/gt
+  // dots, iterator = N `out_<i>` dots.
   function port_positions(box) {
     const bx = box.ui?.x ?? 0;
     const by = box.ui?.y ?? 0;
@@ -199,23 +204,27 @@ const Boxes = (() => {
       y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
     }));
 
+    const rk = box.routing && box.routing.kind;
     let out_pts;
     if (box.has_output === false) {
       // sink box — function has no return values (issue 226). No output
       // port, no wire-grab target, nothing for the inspector to render.
       out_pts = [];
-    } else if (box.iterator_outputs) {
-      // iterator box (issue 221) — N named output dots stacked down
-      // the right edge, one per declared slot. Slot names land in the
-      // `name` field, so the wire's `from_branch` will pick them up
-      // exactly like a comparator branch name.
-      out_pts = box.iterator_outputs.map((slot, i) => ({
-        name: slot, side: 'output',
-        x: bx + BOX_W,
-        y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
-      }));
-    } else if (box.comparand && box.comparand !== '') {
-      // three comparator dots
+    } else if (rk === 'iterator') {
+      // iterator routing (issue 233): n_outputs ports named
+      // `out_0` through `out_<n-1>`. The naming is fixed by the
+      // schema; from_branch on wires matches these names exactly.
+      const n = (box.routing && box.routing.n_outputs) || 1;
+      out_pts = [];
+      for (let i = 0; i < n; i++) {
+        out_pts.push({
+          name: 'out_' + i, side: 'output',
+          x: bx + BOX_W,
+          y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
+        });
+      }
+    } else if (rk === 'comparator') {
+      // three comparator dots — lt/eq/gt
       out_pts = ['lt', 'eq', 'gt'].map((branch, i) => ({
         name: branch, side: 'output',
         x: bx + BOX_W,
