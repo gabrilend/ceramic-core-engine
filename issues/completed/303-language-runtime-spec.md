@@ -1,7 +1,10 @@
 # 303 — Language runtime spec: pluggable per-language invocation
 
 ## Status
-open
+complete (2026-05-20) — registry, per-worker init/teardown helper,
+and the pool's worker_main hook all wired through. Lua, C, and
+Bash specs load via dlopen and populate per-worker handles before
+the init barrier releases.
 
 ## Current behavior
 Each language has an ad-hoc driver script (`drivers/lua.sh`, `drivers/bash.sh`,
