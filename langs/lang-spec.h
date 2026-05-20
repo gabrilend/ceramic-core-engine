@@ -49,8 +49,21 @@ typedef int (*lang_invoke_fn)(void *handle,
 /* Wire-format bridge: convert one direction of native ↔ JSON.
  * Used when a value crosses a language boundary. Spec sets one
  * or both; if NULL, the dispatch layer treats native and JSON as
- * identical byte streams (the current uniform-byte default). */
-typedef int (*lang_bridge_fn)(const void *src, int src_size,
+ * identical byte streams (the current uniform-byte default).
+ *
+ * `handle` is the worker's per-language handle (the same one
+ * `invoke` receives) — bridges may need it to reach a runtime-side
+ * scratch area: Lua reads/writes via the lua_State stack, C may
+ * keep a typed-pointer table, Bash may need its sub-process. Specs
+ * that don't need it ignore the argument.
+ *
+ * Stack-protocol convention for `native_to_json`: the producer
+ * leaves its native value on top of its runtime's working store
+ * (Lua: top of stack); the bridge consumes it. For `json_to_native`:
+ * the bridge pushes the reconstructed value onto the same store.
+ * `src` / `dst` carry only the JSON side. */
+typedef int (*lang_bridge_fn)(void *handle,
+                              const void *src, int src_size,
                               void *dst, int dst_capacity, int *dst_size);
 /* }}} */
 

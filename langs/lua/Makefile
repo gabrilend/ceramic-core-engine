@@ -18,17 +18,21 @@ CC          ?= gcc
 LUA_INCLUDE ?= /usr/include/luajit-2.1
 LUA_LIB     ?= /usr/lib
 
-CFLAGS  = -shared -fPIC -O2 -Wall -I$(LUA_INCLUDE) -I$(DIR)/langs
+CFLAGS  = -shared -fPIC -O2 -Wall -I$(LUA_INCLUDE) -I$(DIR)/langs -I$(DIR)/libs/json
 LDFLAGS = -L$(LUA_LIB) -lluajit-5.1
 # }}}
 
 # {{{ Build rules
+# spec.c needs the JSON writer + DOM parser for the native↔JSON
+# bridges (issue 317). The library is small and header-pair compatible,
+# so we fold libs/json/json.c straight into spec.so rather than
+# linking against a separate .so — keeps the spec self-contained.
 .PHONY: all clean
 
 all: spec.so
 
-spec.so: spec.c $(DIR)/langs/lang-spec.h
-	@$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+spec.so: spec.c $(DIR)/langs/lang-spec.h $(DIR)/libs/json/json.c $(DIR)/libs/json/json.h
+	@$(CC) $(CFLAGS) -o $@ spec.c $(DIR)/libs/json/json.c $(LDFLAGS)
 
 clean:
 	@rm -f spec.so

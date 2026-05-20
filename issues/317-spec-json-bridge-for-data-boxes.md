@@ -1,7 +1,7 @@
 # 317 — Language spec JSON bridge for data boxes
 
 ## Status
-open
+in progress — Lua bridges landed 2026-05-19; C and Bash still stubs
 
 ## Current behavior
 
@@ -234,3 +234,176 @@ loud rather than producing wrong output.
   rabbit hole. Tie scope to 307 — the same type declarations
   drive both the wrapper and the JSON walk. Until 307 lands,
   only scalar types are supported for C data boxes.
+
+## Implementation log
+
+### 2026-05-19 — Lua bridges landed
+
+Implemented the first concrete pair of bridges. Scope: only the
+Lua spec; C and Bash still NULL their bridge slots and fall back
+to the uniform-byte default.
+
+**Design decisions made during this round (kept for later
+implementers of the C / Bash bridges):**
+
+- **Bridge signature has the worker handle as the first arg.**
+  The previous declaration in `lang-spec.h` was missing it; without
+  it Lua can't reach its `lua_State`. C and Bash will need it for
+  the same reason once they grow real bridges.
+
+- **Stack-protocol convention for the native side.** The bridge
+  reads / writes the producer's working store directly, not the
+  `src` / `dst` buffers. For Lua: `native_to_json` consumes the
+  value at the top of the `lua_State` (pops on success); `json_to_native`
+  pushes the reconstructed value to the top. The `src` / `dst`
+  buffers carry only the JSON side of the conversion. This keeps
+  the wire format opaque to specs and avoids inventing a "native
+  byte" serialization just so it can fit through a buffer.
+
+- **Wire primitive vocabulary.** Three JSON-with-extensions
+  primitives are reserved for the harder types; this round did not
+  emit any of them, but every future bridge must agree on the
+  names: `$ref` (shared-memory pointer + length), `$function_pointer`
+  (decomposed callable: address + signature), `$lang_opaque`
+  (last-resort sealed envelope routed only between same-language
+  endpoints — escape hatch, not a default).
+
+- **No handles, no back-routing.** The wire must carry data the
+  destination spec can reconstruct on its own — never a token that
+  says "operations on this value cross back to the source spec."
+  See `memory/feedback_cross_language_pitfalls.md` for the longer
+  argument; the principle constrains every bridge implementation.
+
+- **Type ambiguities are resolved by wiring, not by annotation.**
+  When a function signature has hidden pairings (a `char *` with a
+  separate length argument, a `union` with a discriminator, a
+  callback with a context pointer), the destination spec exposes
+  *each* parameter as its own input slot on the box. The user wires
+  them according to the function's English docs. The system never
+  prompts the user with vocabulary words it has no general way to
+  ask about.
+
+**Files touched:**
+
+- `langs/lang-spec.h` — `lang_bridge_fn` now takes `void *handle`
+  as its first parameter; the doc comment documents the stack
+  protocol.
+- `langs/lua/spec.c` — added `encode_value`, `decode_node`,
+  `lua_native_to_json`, `lua_json_to_native`. Wired the last two
+  into `soramech_lang_spec`.
+- `langs/lua/Makefile` — folds `libs/json/json.c` straight into
+  `spec.so` so the spec stays self-contained.
+- `tests/317-lua-bridge-test.c` — new round-trip test (JSON →
+  lua_State → JSON, compare).
+- `Makefile` — added the test's dependency line.
+
+**Tests:** 5/5 in `317-lua-bridge-test`; full suite green.
+
+**Known impedance-mismatch case (documented in the test):** `null`
+inside a JSON array becomes Lua `nil`, and `lua_objlen` truncates
+the sequence at the first hole. The bridge round-trips
+`[true,false,null]` as `[true,false]`. This is fundamental Lua
+semantics and is asserted explicitly rather than glossed over.
+
+This stage-1 lossiness is **not the final design.** See the
+fidelity directive below — stage 2 must preserve the JSON shape
+through Lua via an explicit length field, accepting that this
+intrudes on idiomatic Lua.
+
+## Fidelity directive (added 2026-05-19, supersedes earlier "lossy is OK" thinking)
+
+The wire format (JSON) is canonical. **A value leaving a box's
+output slot and entering the wire must not lose fidelity.** The
+bridge intrudes on the language as needed to achieve that. The
+language's idioms are upheld on the in-language side (inside the
+box's source file); on the wire side the bridge is allowed —
+required — to use whatever encoding preserves the shape.
+
+This reverses the earlier instinct that lossy round-trips were
+"the box author's problem." They're the bridge's problem. The
+box author writes idiomatic Lua / C / bash; the bridge converts
+without dropping anything.
+
+### Concrete rules per language
+
+- **Lua → JSON** (and JSON → Lua → JSON round-trip): preserve
+  array shape including embedded nulls. The decoder pushes
+  arrays as `{n = N, [1] = ..., [2] = ..., ...}` where `n` is the
+  intended length and missing integer keys are real nil slots.
+  The encoder reads `n` if present and emits a full-length JSON
+  array with `null` at every missing slot. Idiomatic Lua tables
+  without `n` continue to encode via the existing
+  array-vs-object heuristic — `n` is only required when the
+  caller cares about distinguishing "trailing nil" from "shorter
+  array." Same scheme handles intermixed nil-in-middle too.
+
+- **Lua → JSON** (type annotations): the bridge may emit a
+  type-tagged JSON shape when the destination language needs
+  more than JSON's native types convey (e.g. int vs float when
+  the Lua value is whole-numbered but the destination expects a
+  float, or vice versa). The tag lives in the JSON itself, not
+  in a sidecar protocol. Suggested shape: a `$type` key inside a
+  small wrapper object, only emitted when the encoder can tell
+  the unwrapped value would be ambiguous downstream.
+
+- **C → JSON**: C functions have declared types — emit those
+  types as part of the JSON, so any downstream language can
+  honour them without guessing. Lua receivers may use the type
+  to coerce (e.g. force `2` instead of `2.0`); receivers that
+  don't care can ignore the type tag.
+
+- **JSON → C**: when the wire value doesn't fit the destination
+  C type (a float arriving at an int slot, a string at a number
+  slot), the C bridge **truncates / coerces and records a
+  warning** at map-compile time. The warning surfaces in the
+  compile output, not at run time. Silent dropping is forbidden;
+  hard-failing the compile is too aggressive — the user may
+  know the truncation is fine.
+
+- **JSON → Lua / JSON → bash**: same coercion rule, with
+  language-appropriate fallbacks. The receiver records the
+  warning.
+
+### Why this lives in the bridge, not the box author
+
+A box author writes a function in their language. They don't
+write a SoraMech-aware serializer. The bridge — which is the
+spec author's responsibility, not the box author's — owns every
+detail of how their language's values reach JSON and how JSON
+reaches their language's values. The box author writes
+idiomatic code; the bridge does whatever is necessary on the
+JSON side, including unwrapping `n`-fielded tables back into
+idiomatic Lua at decode time so subsequent in-language calls
+see clean tables.
+
+This is the same principle the rest of 317 already states: the
+spec bends to the language at the box surface, and bends the
+wire shape to the language at the bridge. The language never
+bends to the wire.
+
+**Next implementation slices:**
+
+1. **Lua bridges, stage 2 — fidelity preservation.** Apply the
+   `n`-field convention from the fidelity directive above. The
+   decoder pushes arrays as `{n = N, ...}` so trailing/embedded
+   nulls survive the round-trip. The encoder reads `n` when
+   present. Update `tests/317-lua-bridge-test.c` to assert the
+   round-trip preserves `[true,false,null]` etc. The stage-1
+   "truncation is documented" assertions become real
+   "round-trips faithfully" assertions.
+2. Bash bridges — near-identity (scripts are already producing
+   text). `native_to_json` validates the text is well-formed JSON;
+   `json_to_native` is identity. No `lua_State`-style scratch
+   needed, so the bridge can ignore `handle`. Type fidelity is
+   trivial because bash already deals only in text.
+3. C bridges — depends on 307's typed wrapper work. Until 307
+   lands, scalar types (int / double / string) is enough to
+   unblock data-box semantics. The coerce-and-warn rule from
+   the fidelity directive governs how mismatched types behave.
+4. Wire the bridges into the dispatch layer (issue 312's
+   wire-classification path) so cross-language edges actually
+   round-trip through them.
+5. Add a map-compile warning channel that the C / Lua / bash
+   bridges feed into when they truncate or coerce. Surface
+   the warnings in the compile output — silent loss is
+   forbidden by the fidelity directive.
