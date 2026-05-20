@@ -40,7 +40,7 @@ model the phase 3 runtime will consume.
 | 237  | string-manipulation library expansion           | complete |
 | 238  | editor HTTP server config file                  | complete |
 | 216  | read-file box                                  | complete |
-| 217  | concat box and dynamic inputs                  | complete |
+| 217  | variadic ports and the language-spec variadic shape | A+B mechanics in; C model rewritten — spec.js drives the gate |
 | 218  | enforce single-output driver contract          | complete |
 | 220  | root run script and entry point cleanup        | complete |
 | 221  | iterator box (editor surface only)             | complete |
