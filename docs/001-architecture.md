@@ -1,5 +1,71 @@
 # SoraMech — Architecture
 
+## The structural shell
+
+SoraMech is a structural shell. The thread pool, the slot store, the
+dispatch layer, the allocator — these are the steel and concrete of
+an apartment building. They hold the roof up. They do not decorate
+the rooms.
+
+Box authors design the rooms. Library authors furnish them. The
+shell provides the framing, the load-bearing walls, the structural
+guarantees of what can hang where. The shell does not know what
+colour the curtains are.
+
+> "We are creating a structural shell, like an apartment building
+> that is just steel and concrete at first, and the user can build
+> the walls and windows and design the doors and movement paths as
+> they please. The library authors are doing the actual decorating,
+> with tables and chairs and pictures of the beach. We are
+> structural, we keep the roof from caving in. To that end, we must
+> be rigid. We must be firm. We must be flexible." — 2026-05-20
+
+Two consequences shape every design decision below.
+
+### One allocator function per kind of operation
+
+For each distinct kind of allocation the runtime needs, exactly one
+function performs it. The same function is called from every box's
+hot path; only its parameters vary. The user's code, the spec's
+code, the dispatch layer's code — all reach the same entry point.
+
+This is the rigidity. The shell does not present "convenient
+shortcuts" for special cases. Every value lifecycle goes through
+the same allocator. Every task struct comes from the same slab.
+Every wire push goes through the same `slot_push`. No alternatives,
+no escape hatches.
+
+The exceptions are setup and teardown: the graph loader allocates
+every box's slot table once at startup before the pool launches;
+`pool_destroy` releases everything in one shot at the end. Outside
+those two moments, the shell is uniform.
+
+### No single-threaded process outside the pool
+
+Every piece of runtime work — every allocation, every reference
+count update, every dispatch action, every cleanup — happens
+inside a pool task. There is no background garbage collector, no
+maintenance daemon, no separate scheduler. The pool is the
+universal scheduler; the pool task is the universal unit of work.
+
+Consequences:
+
+- The allocator's deep sweep, when it runs, runs inside the
+  failing-to-allocate task. There is no "sweep thread" polling for
+  free memory. There is no quiescence-triggered sweep either — we
+  cannot assume there will ever be a quiescent moment in a graph
+  with self-feeding iterators.
+- Reference count decrements happen at the end of the task that
+  was holding the reference. Cleanup is the task's last act, not
+  a separate worker's job.
+- Box-level retirement (when all of a box's possible inputs are
+  exhausted) is checked inside the task whose completion may have
+  triggered the retirement condition.
+
+The pool's parallelism is the only parallelism the runtime
+provides. A side thread would be a different shape — a violation
+of the uniform "one allocator, one scheduler" rule.
+
 ## Three programs, one data format
 
 SoraMech is three independent programs that share a common on-disk
@@ -466,35 +532,83 @@ When a consumer has two tagged inputs from two iterators, each port
 pops in tag order independently — pairing falls out as `(A_K, B_K)`
 for every K.
 
-### The dispatch action
+### The dispatch action — the attempt loop
 
-One C function, one phase per worker per task:
+Every task in the pool is an **attempt task**. The pool's queue
+holds attempt tasks; workers pick them up; each attempt either
+advances the graph by one box invocation or returns without doing
+anything. There is no separate "readiness check" task kind. An
+attempt that finds its inputs ready *is* the work invocation; an
+attempt that doesn't, returns and disappears.
 
-1. **Read inputs.** For each input port: `slot_peek` (peek mode) or
-   `slot_pop` (pop mode) into a heap buffer. Tasks are spawned only
-   when every input slot has a value (spawn-on-input-ready rule), so
-   no waiting is needed.
-2. **Invoke spec.** Look up the box's `lang`, find the worker's
-   handle for it, call `invoke_native` or `invoke_json` (per the
-   wire's fast-path classification). Output lands in a heap buffer
-   sized to the box's declared output size, or into the large-value
-   heap if the box's output is variable-size.
-3. **Pick the branch.** Dispatch on `routing.kind`:
-   - `plain`: every outgoing wire fires.
-   - `comparator`: compare to `comparand`, fire only `lt`/`eq`/`gt`.
-   - `iterator`: `idx = slot_read_inc(counter_slot, n_outputs)`,
-     fire `out_idx` only.
-   - `randomizer` / `weighted` / `distributor`: kind-specific rule
-     (computes an `idx` from the counter slot or from downstream
-     fill, fires that branch).
-4. **Push.** For each firing wire, `slot_push` into the consumer's
-   input slot. The push carries the appropriate ordering tag
-   (iterator counter snapshot for iterator-rooted wires; 0 for
-   plain). Each push triggers a spawn-on-input-ready check on the
-   consumer; if the check passes, the dispatch layer spawns a new
-   `dispatch_task_t` and the pool picks it up.
-5. **Done.** The action returns; the pool decrements the active-task
-   counter. The action does not block, does not wait, does not park.
+```
+producer task:
+   compute output
+   for each downstream consumer box C this producer just touched:
+      write all values to C's input slots
+         (snapshotted into the attempt's cell at the END)
+   for each distinct C:
+      slab_alloc() → attempt_task for C
+      pool_spawn(attempt_task)
+   slab_free(this cell)
+
+attempt task:
+   if every required input on C is satisfiable
+      (slot value or data-box pull):
+      snapshot values into local vars
+      invoke spec, get output
+      push output to downstream consumer slots
+      submit one attempt per distinct downstream consumer
+      decrement input $ref counts
+      decrement upstream boxes' live_predecessor_count if applicable
+   slab_free(this cell)
+```
+
+The producer task and the attempt task are the same shape of
+allocation, same call site, same return path. One cell per
+invocation in the steady-state hot path; no double-allocation
+between "check that I'm ready" and "do my work."
+
+Three properties fall out:
+
+- **Targeted attempts.** A producer knows which consumer boxes it
+  just pushed to; the attempts it submits are for those specific
+  consumers, not a generic re-evaluation of every consumer in the
+  graph.
+- **One readiness check per producer task.** Even if a producer
+  writes to multiple slots on the same consumer, only one attempt
+  is submitted for that consumer. The submission happens at the
+  END of the producer, after every output value has been placed —
+  the attempt is guaranteed to find a coherent input set, not a
+  half-written one.
+- **No parking.** An attempt that finds its inputs unsatisfied
+  returns. The shell does not hold tasks in waiting states. The
+  next producer push to any of the consumer's input slots triggers
+  another attempt with the same shape. Eventually one of those
+  attempts finds the input set complete and runs the work.
+
+> "the most recent change that would enable the box to run —
+> essentially, our logic is such that the fewest amount of steps
+> between each function call must be made, while enabling the
+> long-tail async threads to do non-blocking tasks on their own
+> time. As soon as they can, they knit themselves with their
+> fellow threads, co-creating a weaving texture of computer
+> programming. proving without a doubt that intelligence can have
+> a dynamical host." — 2026-05-20
+
+Routing kinds (per 233) dispatch the output-side push: `plain` fans
+to every wire, `comparator` picks one of `lt`/`eq`/`gt` by numeric
+comparison, `iterator` reads-and-increments a per-box atomic
+counter slot mod `n_outputs` and fires only the picked branch. The
+follow-on kinds (randomizer / weighted / distributor) live in
+issues 240–242.
+
+Cross-language pushes carry a `$ref` handle when the output value
+is variable-size (per 312/317): the producer writes the bytes to
+the large-value heap once, refcount = number of consuming slots,
+and writes the `(ptr, length)` handle into each consumer slot. The
+bytes themselves are never copied; the consumer's spec follows the
+pointer to read.
 
 ### Startup, quiescence, and termination
 

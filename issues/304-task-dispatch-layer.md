@@ -1,7 +1,11 @@
 # 304 — Task dispatch layer (C, replaces synchronous executor)
 
 ## Status
-open
+open · design rewritten 2026-05-20 to the attempt-task model.
+Current code is the older two-phase model (inline
+spawn-on-input-ready check inside producer's dispatch action).
+The refactor lands with issue 302's slab-allocator + refcount
+work, since the two are intertwined.
 
 ## Current behavior
 The synchronous executor at `src/004-executor.lua` walks the graph in
@@ -11,185 +15,131 @@ blocking, runs in Lua coroutines.
 
 ## Concept
 
-The task dispatch layer is the C component that runs inside each pool
-worker. The pool calls a single C action — `dispatch_action` — per
-task. That action is the one place in the runtime that:
+The task dispatch layer is the C component every pool worker runs.
+Every task in the pool is an **attempt task** — same shape, same
+allocation, same call site. An attempt task either advances the
+graph by one box invocation (when its consumer's inputs are
+ready) or returns without doing anything (when they aren't).
 
-- Reads from and writes to slots
-- Calls `lang_spec->invoke`
-- Picks the output branch per `routing.kind` (issue 233)
-- Pushes the function's output to the picked branch's downstream
-  input slots, triggering downstream task spawns
+There is no separate "readiness check" task kind. There is no
+"work task" kind distinct from a check. There is one kind, the
+attempt; the work it performs is conditional on what it finds.
 
-There is no Lua-level executor in the phase 3 path. `004-executor.lua`
-is replaced wholesale.
+The architecture doc's "structural shell" section frames this:
+one allocator per kind of operation, one scheduler (the pool),
+one task shape. The dispatch action is the one place the runtime:
 
-## Task struct
+- Reads from input ring buffers (or pulls from read-box predecessors)
+- Calls the language spec's `invoke`
+- Picks the output branch per `routing.kind`
+- Pushes the output value into every downstream consumer slot
+- Submits attempt tasks for the consumers whose input sets may
+  have just become satisfiable
 
-A task is one ephemeral invocation of a box. Its struct carries
-just the box ID:
+`004-executor.lua` is replaced wholesale. There is no Lua-level
+executor in phase 3.
+
+## Task struct (cell layout)
+
+A task struct is a 64-byte slab cell. The layout reserves space
+for every field every attempt may need; the fields' meaning is
+the same for "this attempt found ready inputs and ran" and "this
+attempt didn't find ready inputs and returned." One shape, two
+outcomes.
 
 ```c
 typedef struct {
-    int  box_id;          // index into the graph's box array
-} dispatch_task_t;
+    void   *next_free;          /* 8B — free-list link, overwritten on alloc */
+    box_t  *box;                /* 8B — the box this attempt is for */
+    uint32_t task_id;           /* 4B — event-log correlation (311) */
+    uint32_t flags;             /* 4B — work / attempt / priority hint */
+    void   *output_destinations;/* 8B — per-wire consumer slot pointers */
+    void   *input_snapshot;     /* 8B — values OR pointer to values-array */
+    uint32_t live_wire_count;   /* 4B — box-refcount slot (244 / retirement) */
+    uint32_t _pad;              /* 4B — alignment */
+    /* remaining 16B available for inline input snapshot or extensions */
+} attempt_task_t;
 ```
 
-There is no per-task counter. Iterator counter state lives in a
-`SLOT_ATOMIC_COUNTER` slot owned by the box (see issue 302); the
-action reads and atomically increments it via `slot_read_inc`
-when it needs the routing index.
+The `live_wire_count` slot is the documented placeholder for the
+box-level retirement system. The dispatch action populates it at
+creation; the box-retirement consumer that DOES something with
+the count is the stretch goal in 302. Until that ships, the slot
+is honest but unread — its presence is documentation that the
+field belongs in the design.
 
-There is no `input_slots` or `output_slot` array on the task —
-the box's input slots are durable per-box state (see issue 302).
-The action looks them up through `box_runtime_state[box_id]`.
+The `input_snapshot` is the FIFO-popped values from each input
+slot's ring buffer (or the pointer to a read-box's value when
+pulled per 244). Once the attempt has snapshotted, the slot
+state is independent of the task's execution.
 
-Output is a routing event, not a stored value. When the action
-finishes, it pushes copies of the return value into the input
-slots of every downstream box wired to this output (or only the
-matching branch for comparators and iterators).
+The `output_destinations` is the array of consumer slot pointers
+the attempt will write to — one per outgoing wire (or one per
+firing branch, for routed boxes). Pre-computed at graph load and
+referenced through the box pointer.
 
-Tasks are spawned by the dispatch layer's "spawn on input ready"
-rule (issue 302). Each spawn allocates a fresh `dispatch_task_t`
-on the pool's task allocator, pre-populated with the box ID. The
-action's first read of the input slots is what drains them — pop
-or peek one cell per input port, per the port's mode.
+## The dispatch action — the attempt loop
 
-## The dispatch action
+```
+producer task (a completing attempt that ran):
+   compute output via spec invoke
+   for each downstream consumer box C this producer just touched:
+      write all values to C's input slots
+         (snapshotted into the attempt's cell at the END)
+   for each distinct C:
+      slab_alloc() → attempt_task for C
+      pool_spawn(attempt_task)
+   decrement input $ref counts
+   decrement upstream boxes' live_predecessor_count if applicable
+   slab_free(this cell)
 
-```c
-action_result_t dispatch_action(task_ctx_t *ctx, void *arg);
+attempt task (newly picked up by a worker):
+   if every required input on C is satisfiable
+      (slot value or data-box pull per 244):
+      snapshot values into local vars
+      invoke spec, get output
+      [continue as producer task above]
+   slab_free(this cell)
 ```
 
-Phases, in order:
+Three properties of this loop:
 
-### 1. Read inputs into byte buffers
+- **Targeted attempts.** A producer knows which consumer boxes it
+  just pushed to; it submits attempts for *those specific
+  consumers*, not a generic re-evaluation.
+- **One attempt per (producer, consumer-box) pair.** Even if a
+  producer writes to multiple slots on the same consumer, only
+  one attempt is submitted for that consumer. Dedup happens at
+  the end of the producer's run, after every output value has
+  been placed. The attempt is guaranteed to find a coherent
+  input set, not a half-written one.
+- **No parking.** An attempt that finds its inputs unsatisfied
+  returns. The shell does not hold tasks in waiting states. The
+  next producer push to any of the consumer's input slots
+  triggers another attempt with the same shape. Eventually one
+  of those attempts finds the input set complete and runs the
+  work.
 
-Tasks are spawned only when every input port has a value
-available (issue 302's spawn-on-input-ready rule), so the action
-does not need to check or block — input availability is the spawn
-precondition.
-
-For each input port:
-- **Peek-mode (1-cell) port**: `slot_peek` into a heap buffer.
-  The cell is not drained; subsequent tasks on this box read the
-  same value.
-- **Pop-mode (N-cell) port**: `slot_pop` into a heap buffer. One
-  cell drains; values queued behind it remain. For tagged slots,
-  pop returns the lowest-tag cell; for untagged, FIFO.
-
-Variable-size payloads work via the large-value heap (issue 302):
-the cell holds a `{size, offset}` handle that points into the
-heap; the spec follows the handle if it needs the bytes.
-
-Buffers are freed when the action ends.
-
-### 3. Dispatch is uniform across routing kinds
-
-Every call box runs its function (phase 4) and pushes the
-function's output (phase 5). The only thing that varies is which
-downstream branch receives the push (phase 5b — the branch-pick).
-
-Boxes carry an optional `routing` field (issue 233):
-- No `routing`: plain call. Function runs; output fans to all
-  outgoing wires unconditionally.
-- `routing.kind: "comparator"`: function runs; output is
-  compared to `comparand`; only the matching `lt` / `eq` / `gt`
-  branch fires.
-- `routing.kind: "iterator"`: function runs; output is routed to
-  `outputs[slot_read_inc(counter_slot, n_outputs)]`.
-- `routing.kind: "randomizer" / "weighted" / "distributor"`:
-  function runs; output is routed by the kind-specific rule.
-
-The function always runs. There is no "iterator skips invoke"
-case — the iterator differs from a plain call only in how the
-function's output is routed, not in whether the function runs.
-Iterators that want passthrough behavior use an identity function
-(or the editor defaults to one when no `ref`/`fn` is set).
-
-### 4. Invoke (every call box)
-Look up the box's language spec by its `lang` field. Find the
-worker's language handle in `current_worker->handles[lang_idx]`.
-Call `lang->invoke` with:
-- `handle` — the per-worker language runtime state
-- `file_path`, `fn_name` — the box's function source
-- `input_data[]`, `input_sizes[]` — pointers and sizes for each
-  input buffer
-- `out_buf`, `out_buf_capacity`, `*out_size` — the output buffer the
-  spec writes into
-
-The spec is the bridge between the language's native call convention
-and bytes. Inside `invoke` it:
-1. Loads the function (cached: e.g. `luaL_loadfile` once per file,
-   `dlsym` once per function).
-2. Pushes the input bytes into the language's native types (Lua
-   strings on the Lua stack, C pointers in registers, etc.).
-3. Calls the function and receives the return value in the language's
-   native form.
-4. Serializes the return value back into bytes in `out_buf` and
-   sets `*out_size`.
-5. Returns 0 for success, nonzero for any failure.
-
-Nonzero return aborts the program (issue 303).
-
-The output buffer for `invoke` is heap-allocated to the box's
-declared maximum output size. If the box's output is variable-size
-(uses the large-value heap, issue 302), the spec writes into that
-heap and stores the handle in `out_buf`.
-
-### 5. Write output (push to downstream input slots)
-
-The action picks the branch (or branches) and pushes the
-function's output. Branch picking dispatches on `routing.kind`:
-
-- **No routing field** (plain call): push to every outgoing
-  connection.
-- **comparator**: compare output to `comparand`, push to the
-  matching `lt` / `eq` / `gt` connection only.
-- **iterator**: `idx = slot_read_inc(box->counter_slot,
-  n_outputs)`; push to the connection at branch `out_idx`.
-- **randomizer / weighted / distributor**: kind-specific rule,
-  same shape (compute `idx`, push to that one connection). See
-  issue 233 for the rules.
-
-For routing kinds that derive an order tag (iterator,
-randomizer, weighted), the push carries `tag = idx` so consumers
-downstream of parallel iterators preserve order.
-
-After each push, the spawn-on-input-ready check (issue 302) fires
-on the receiving box. If that push completes its input set, a
-fresh task spawns for the consumer.
-
-### 6. (No phase 6)
-
-Slots are durable for the run; tasks don't unref. Run termination
-is governed by the pool's active-task counter (issue 301). The
-dispatch action goes from phase 5 directly to phase 7.
-
-### 7. Post-action: nothing for the action itself
-
-Routing already happened in phase 5. Counter advancement, where
-applicable, happened inside `slot_read_inc` during phase 5 (the
-read-and-increment is the same op). No box-level mutable state
-needs touching here.
-
-### 8. Return ACT_DONE
-The action completes. The pool decrements the active-task counter
-(issue 301). If the counter reaches zero and the runner is waiting,
-the run ends.
+The attempt task's "if inputs ready, run" branch IS the
+inline-fast-path for same-language chains. There is no separate
+spawn step between the readiness decision and the work; the work
+just happens, in the same allocation, on the same worker. A
+producer pushing into a fast same-language consumer fires an
+attempt that runs immediately on whichever worker picks it up —
+one allocation, one queue round-trip per box invocation.
 
 ## Initial submission
 
-At startup, the pool runner walks the graph and pushes the
-literal-input values (from `value` fields on input ports) directly
-into the corresponding input slots. Boxes whose input set becomes
-fully populated by literals — entry-point boxes — immediately
-satisfy the spawn-on-input-ready condition, and their first task
-gets queued. From there, every subsequent task spawn follows from
-the regular phase-5 push → spawn-check chain.
+At startup the pool runner walks the graph and submits an attempt
+task for each **entry box** (a box whose required inputs are all
+satisfiable from literal values or read-box predecessors, i.e.
+whose attempt would succeed on first try). Read boxes do NOT
+push at startup under 244 — they're pulled on demand from inside
+attempts that find their slots empty and their port has a
+read-box predecessor.
 
-Iterator counter state starts at 0; literal-only entry iterators
-spawn their first task at startup and increment from there.
+Iterator counter slots start at 0. Literal-only entry boxes
+submit their first attempt at startup and increment from there.
 
 ## Iterator counter and parallel iteration
 
@@ -501,3 +451,50 @@ Tag propagation is now wired through:
 Verified by re-running all 6 fixture maps and the dedicated
 `test_iterator_multi_fire` test (which now exercises tagged
 input slots).
+
+### Design rewrite to the attempt-task model — 2026-05-20
+
+What changed in the design (not yet in the code):
+
+- The two-phase model (producer's dispatch action calls
+  `dispatch_spawn_if_ready` inline on each consumer; if ready,
+  spawns a fresh `dispatch_task_t` for the consumer) is replaced
+  by the **attempt-task model**. Every task in the pool is an
+  attempt; the work happens conditionally when the attempt finds
+  inputs ready. One allocation per invocation, not two.
+- The task struct grows from `{ box_id }` to the 64-byte cell
+  layout above (free-list link, box pointer, task_id, flags,
+  input snapshot, output destinations, live_wire_count
+  placeholder).
+- Read-box producers stop pushing at startup; they become
+  pull-on-demand sources per issue 244.
+- The "no parking" rule from the structural-shell doc holds: an
+  attempt that finds its inputs unsatisfied returns and is
+  collected; the next push to the consumer triggers a fresh
+  attempt.
+
+What's still in the code from the older model:
+
+- The `dispatch_action` body in `src/012-dispatch.c` is the
+  two-phase shape: read inputs → invoke → push → inline
+  `dispatch_spawn_if_ready` per consumer. Plain, comparator, and
+  iterator routing all work under this shape.
+- `dispatch_task_t` is still `{ box_id, task_id }` plus a
+  context pointer.
+- Read boxes still push at startup.
+
+The refactor lands with issue 302's slab-allocator + LVH
+refcount work, since the task-cell layout and the refcount
+plumbing share the same allocator changes. After 302 ships:
+
+1. `src/012-dispatch.c::dispatch_action` becomes the single
+   attempt-loop body.
+2. Task allocation moves from per-spawn malloc to slab pop.
+3. Spawn logic moves from "producer inlines check" to "producer
+   submits attempts" — one submission per distinct downstream
+   consumer box, at the END of the producer.
+4. Read-box predecessors are recognized at attempt time and
+   pulled round-robin per 244.
+5. The `live_wire_count` field on the cell is populated by
+   graph load; the box-retirement consumer is the stretch
+   piece that may or may not ship with 302.
