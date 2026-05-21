@@ -507,6 +507,57 @@ static int test_large_value_tagged_ordering(void)
 }
 /* }}} */
 
+/* {{{ test_large_value_reclamation() */
+/* The reclamation regression test for issue 302. Before the
+ * unified-allocator integration, every push into a LARGE_VALUE slot
+ * carved fresh bytes off a monotonically-growing arena that nothing
+ * ever returned to. A long-running graph that pushed and popped
+ * through the same slot would watch the arena climb forever.
+ *
+ * Now, pop drops the chunk's last reference and the chunk rejoins
+ * the allocator's free-lists. This test confirms that by running
+ * many push-pop iterations on a depth-1 ring and asserting the
+ * allocator's "bytes in use" stays bounded — specifically, that it
+ * doesn't grow with the iteration count.
+ *
+ * The bound used here is "no more than three chunks worth of bytes
+ * at any moment" — generous enough that the eager neighbor-merge's
+ * intermediate states are tolerated, tight enough to catch the
+ * monotonic-growth bug it's named after. */
+static int test_large_value_reclamation(void)
+{
+    slot_store_t *s = slot_store_create();
+    ASSERT(s);
+    slot_id_t id = slot_alloc(s, 0, 1, SLOT_FLAG_LARGE_VALUE);
+    ASSERT(id != SLOT_INVALID);
+
+    const int payload_size = 8 * 1024;  /* 8 KB */
+    char *src = malloc((size_t)payload_size);
+    char *dst = malloc((size_t)payload_size);
+    memset(src, 'Z', (size_t)payload_size);
+
+    const int iterations = 500;
+    uint64_t bound = 0;  /* set after the first push so the bound
+                          * tracks the actual chunk size (which the
+                          * allocator may round up). */
+
+    for (int i = 0; i < iterations; i++) {
+        ASSERT(slot_push(s, id, src, payload_size, 0) == 0);
+        int32_t got = slot_pop(s, id, dst, payload_size);
+        ASSERT(got == payload_size);
+        ASSERT(dst[0] == 'Z' && dst[payload_size - 1] == 'Z');
+
+        uint64_t in_use = slot_store_large_value_bytes_in_use(s);
+        if (i == 0) bound = in_use * 4 + 64;  /* slack for header */
+        ASSERT(in_use <= bound);
+    }
+
+    free(src); free(dst);
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -527,6 +578,7 @@ int main(void)
     RUN(large_value_buf_too_small);
     RUN(large_value_multi_push_fifo);
     RUN(large_value_tagged_ordering);
+    RUN(large_value_reclamation);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

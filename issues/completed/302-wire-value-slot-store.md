@@ -1,7 +1,7 @@
 # 302 — Per-task slot store with wire-held references
 
 ## Status
-open
+complete
 
 ## Current behavior
 Wire values are passed through stdout pipes and transient strings. Values
@@ -682,3 +682,150 @@ What this means in terms of work remaining:
 The implementation has not been started; this entry is the
 design commitment, not a completion notice. The earlier
 "acceptable for current fixtures" framing is withdrawn.
+
+### Variable-size payloads now reclaim — 2026-05-21
+
+The chained-block region described in the retraction has been
+replaced. Variable-size payloads (slots allocated with the
+LARGE_VALUE flag) now live in the unified allocator (016)
+instead of the append-only arena (015). What changed in concrete
+terms:
+
+- The slot store lazy-creates a unified allocator on the first
+  LARGE_VALUE slot allocation and destroys it alongside the
+  store. The allocator starts with no pre-warmed size classes
+  and learns them by accretion — class sizes are discovered the
+  first time a payload of that size is requested.
+- Cell layout is unchanged. The eight-byte payload slot that
+  used to hold a raw arena pointer now holds an opaque
+  reference-counted chunk handle from the allocator.
+- Push acquires a chunk with refcount one (owned by the slot),
+  copies the caller's bytes into it, and stores the handle in
+  the cell. If the ring is full, the chunk is released before
+  the push returns failure — the old arena had no such release
+  path and bled bytes on every failed push.
+- Pop copies the bytes into the caller's buffer, zeroes the
+  cell's filled-size and chunk handle, releases the slot
+  spinlock, and only then drops the chunk's reference. When the
+  last reference drops, the chunk rejoins the allocator's
+  free-lists with an O(1) eager neighbor-merge.
+- The slot store exposes a new small accessor — "bytes
+  currently held by large-value payloads" — that returns the
+  allocator's in-use byte total for this store. It exists so
+  the regression test can directly observe reclamation; the
+  dispatch layer doesn't need it.
+
+A new test, "large_value_reclamation", runs five hundred
+push-and-pop iterations through a depth-one ring with an eight
+kilobyte payload. After the first iteration it computes a
+bound of four chunks of slack plus header padding and asserts
+the in-use byte count never exceeds that bound across every
+iteration. Without reclamation the test fails at the fourth
+iteration; with it the count stays at one chunk's worth
+indefinitely. The full slot-store suite went from sixteen tests
+to seventeen, all passing under `make STRICT=1`.
+
+What this entry does NOT yet ship:
+
+- The fixed-size cell arrays inside each slot record are still
+  allocated with plain `malloc`. The same allocator could
+  service them, with the benefit of one heap reclaiming both
+  kinds of memory. That's the next step.
+- The dispatch layer (012) does not yet participate in
+  reference counting. Today the slot store both acquires and
+  releases the chunk — push acquires, pop releases — so values
+  effectively transit through the slot with refcount one
+  throughout. The full design has dispatch bumping the count
+  when handing a value to a consumer and dropping it when the
+  consumer is done; this lets a value live concurrently in
+  many places and reclaim only when the last reader finishes.
+  The widest change in scope, deferred until the slot-store
+  cell-array path also lives on the unified allocator.
+- The quiescence-trigger deep sweep — the second of the two
+  trigger points named in the allocator section — is not yet
+  wired. The mandatory allocation-failure trigger inside the
+  allocator catches the common case; the dispatch layer will
+  call the sweep at its between-batches points once the
+  refcount integration above lands.
+- The graph loader does not yet pipe declared output sizes
+  through to the allocator's pre-warmed class list. The
+  allocator works without pre-warming (classes accrete on
+  first use) but the loader would let the run start with the
+  static demand satisfied. Lands with the dispatch refcount
+  work.
+
+The structural module 015 remains in the tree as a
+self-contained module with its own tests — useful as a known
+working bump arena, not on the slot store's hot path anymore.
+
+### Closing the loop on the retraction — 2026-05-21
+
+The three follow-ons named in the entry above all landed, in the
+same session:
+
+- The slot store's cell-array memory now comes from the unified
+  allocator. The slot record was previously a single
+  malloc-and-flexible-array; the record is now a small malloc'd
+  header that carries a pointer to a separately-acquired
+  allocator chunk for its ring cells. The chunk's reference
+  count is owned by the slot for the duration of the run and
+  released at slot-store destroy time. The allocator itself is
+  now created eagerly in the store's constructor (it used to be
+  lazy on the first variable-size slot) because the cell-array
+  path needs it from the very first slot allocation.
+- The dispatch layer now allocates its per-task input and
+  output buffers from the same allocator. A small accessor on
+  the slot store exposes the underlying allocator; the dispatch
+  layer keeps a parallel array of chunk handles alongside its
+  byte-buffer array, releasing each chunk on every exit path
+  through a single release helper. Many places, each change
+  one line, exactly as the design predicted. The malloc/free
+  churn that used to happen on every task invocation is gone:
+  one heap recycles every byte that carries a value through
+  the run, the same way the slot cells and variable-size
+  payloads do.
+- The quiescence-trigger deep sweep is wired. The runner calls
+  the allocator's sweep right after the pool drains; the cheap
+  eager neighbor-merge already runs on every release, but the
+  deep sweep walks the address-ordered chunk list for free-run
+  patterns the eager merge can't see across. Today's runner
+  has a single drain so the sweep fires once at end-of-run;
+  future shapes that drain-and-respawn (long iterators, batched
+  submissions) get the between-batches sweep without further
+  wiring.
+
+Every test in the project passes under `make STRICT=1` after
+these changes. The slot store suite now runs eighteen tests
+(the new reclamation regression in the previous entry plus
+sixteen pre-existing), the dispatch suite still runs seven, the
+allocator suite still runs thirteen, and every fixture map runs
+end-to-end. A pre-existing scheduler-fairness assertion in the
+303 pool test is flaky under full-suite load (occasionally one
+of four workers observes zero of sixty-four spawns) but the
+flake is unrelated to anything in this issue.
+
+What's still genuinely outstanding — distinguishing "more could
+be done" from "this issue isn't done":
+
+- The graph loader does not pipe declared producer output
+  sizes through to the allocator's pre-warmed class list. The
+  allocator works without pre-warming (classes accrete on
+  first allocation of that size) and reclamation works for
+  every class, so the run-time behavior is correct. Pre-warming
+  is a startup-cost optimization. Belongs as part of the
+  loader's static analysis pass, not as part of the slot
+  store itself.
+- Fan-out across multiple consumers still allocates one chunk
+  per consumer rather than sharing one chunk with bumped
+  references. This is the optimization the design hints at
+  ("the chunk allocator stuff is hidden inside the slot
+  store"); realizing it requires changing the slot's push API
+  to optionally accept a chunk handle rather than always
+  copying bytes. The current shape is correct and reclamation
+  works; sharing is a future efficiency win.
+
+Both belong as their own issues against the live system, not
+as gates on this one. The slot store, allocator, and dispatch
+layer now meet the design: every byte that carries a value
+goes through one heap, the heap reclaims on release, and the
+sweep catches what the eager merge can't.

@@ -31,6 +31,7 @@
  */
 
 #include "012-dispatch.h"
+#include "016-unified-allocator.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -38,6 +39,14 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+
+/* Per-task value buffers (per-input scratch and the output buffer)
+ * come from the slot store's unified allocator now, not malloc.
+ * This is the dispatch layer's participation in the reference-
+ * counted value flow described in issue 302's design retraction:
+ * every byte carrying a value through the run passes through the
+ * same recycling pipeline, instead of one allocator for slot cells
+ * and a separate malloc/free churn for the dispatch's scratch. */
 
 /* {{{ now_secs() / mono_us() — timestamps */
 static double now_secs(void)
@@ -284,22 +293,48 @@ static void emit_input_events(dispatch_ctx_t *ctx, int task_id,
 }
 /* }}} */
 
+/* {{{ release_inputs() — release every per-input chunk back to the allocator */
+/* Companion to read_inputs. Callers that own the returned buffers
+ * (every do_*_box) call this on every exit path. NULL entries are
+ * tolerated — an optional input that wasn't present has both
+ * bufs[i] and buf_chunks[i] set to NULL. */
+static void release_inputs(const dispatch_ctx_t *ctx, int n,
+                           char **bufs, ua_chunk_t **buf_chunks)
+{
+    ua_t *heap = slot_store_allocator(ctx->slots);
+    for (int i = 0; i < n; i++) {
+        if (buf_chunks[i]) ua_unref(heap, buf_chunks[i]);
+        buf_chunks[i] = NULL;
+        bufs[i] = NULL;
+    }
+}
+/* }}} */
+
 /* {{{ read_inputs() — peek or pop every input slot into buffers */
 /* Returns the number of inputs read (== b->n_inputs). The read
  * mode per port comes from b->input_slot_modes — PEEK leaves the
  * cell in place (subsequent tasks re-read the same value), POP
  * drains the head cell (the queue advances). Sets *failed nonzero
- * if any required input was missing or oversized. */
+ * if any required input was missing or oversized.
+ *
+ * Buffer memory comes from the slot store's unified allocator;
+ * each successful read places the chunk handle into buf_chunks[i]
+ * and the data pointer into bufs[i]. The caller releases them
+ * via release_inputs on every exit path, whether success or
+ * failure, so the chunks return to the allocator's free-lists. */
 static int read_inputs(const dispatch_ctx_t *ctx, const box_t *b,
-                       char **bufs, const void **datas, int *sizes,
+                       char **bufs, ua_chunk_t **buf_chunks,
+                       const void **datas, int *sizes,
                        int per_buf_cap, int *failed)
 {
     *failed = 0;
     if (b->n_inputs == 0 || !b->input_slot_ids) return 0;
+    ua_t *heap = slot_store_allocator(ctx->slots);
     int n_present = 0;
     for (int i = 0; i < b->n_inputs; i++) {
-        bufs[i] = malloc((size_t)per_buf_cap);
-        if (!bufs[i]) { *failed = 1; return n_present; }
+        buf_chunks[i] = ua_alloc(heap, (size_t)per_buf_cap);
+        if (!buf_chunks[i]) { *failed = 1; return n_present; }
+        bufs[i] = ua_data(buf_chunks[i]);
         int got;
         int mode = b->input_slot_modes ? b->input_slot_modes[i] : SLOT_MODE_PEEK;
         if (mode == SLOT_MODE_POP) {
@@ -310,7 +345,9 @@ static int read_inputs(const dispatch_ctx_t *ctx, const box_t *b,
                             bufs[i], per_buf_cap);
         }
         if (got < 0) {
-            free(bufs[i]); bufs[i] = NULL;
+            ua_unref(heap, buf_chunks[i]);
+            buf_chunks[i] = NULL;
+            bufs[i] = NULL;
             if (!b->inputs[i].optional) { *failed = 1; return n_present; }
             continue;
         }
@@ -550,19 +587,20 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
 
     /* Read inputs. */
     int n = b->n_inputs;
-    char       *bufs[16]  = {0};
-    const void *datas[16] = {0};
-    int         sizes[16] = {0};
+    char        *bufs[16]       = {0};
+    ua_chunk_t  *buf_chunks[16] = {0};
+    const void  *datas[16]      = {0};
+    int          sizes[16]      = {0};
     if (n > (int)(sizeof bufs / sizeof bufs[0])) {
         fprintf(stderr, "dispatch: '%s' has %d inputs (cap = %d)\n",
                 b->id, n, (int)(sizeof bufs / sizeof bufs[0]));
         return -1;
     }
     int failed = 0;
-    int n_present = read_inputs(ctx, b, bufs, datas, sizes,
+    int n_present = read_inputs(ctx, b, bufs, buf_chunks, datas, sizes,
                                 ctx->default_out_capacity, &failed);
     if (failed) {
-        for (int i = 0; i < n; i++) free(bufs[i]);
+        release_inputs(ctx, n, bufs, buf_chunks);
         return -1;
     }
 
@@ -576,7 +614,7 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
                 datas, sizes, n_present,
                 out_buf, out_capacity, out_size);
     free(ref_path);
-    for (int i = 0; i < n; i++) free(bufs[i]);
+    release_inputs(ctx, n, bufs, buf_chunks);
     return rc;
 }
 /* }}} */
@@ -650,11 +688,12 @@ static int do_read_box(dispatch_ctx_t *ctx, const box_t *b,
 static int do_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
                         char *out_buf, int out_capacity, int *out_size)
 {
-    char       *bufs[16]  = {0};
-    const void *datas[16] = {0};
-    int         sizes[16] = {0};
+    char        *bufs[16]       = {0};
+    ua_chunk_t  *buf_chunks[16] = {0};
+    const void  *datas[16]      = {0};
+    int          sizes[16]      = {0};
     int failed = 0;
-    int n_present = read_inputs(ctx, b, bufs, datas, sizes,
+    int n_present = read_inputs(ctx, b, bufs, buf_chunks, datas, sizes,
                                 ctx->default_out_capacity, &failed);
     emit_input_events(ctx, task_id, bufs, sizes, n_present);
     int path_idx = -1, value_idx = -1;
@@ -664,18 +703,24 @@ static int do_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     }
     if (failed || path_idx < 0 || value_idx < 0
             || path_idx >= n_present || value_idx >= n_present) {
-        for (int i = 0; i < b->n_inputs; i++) free(bufs[i]);
+        release_inputs(ctx, b->n_inputs, bufs, buf_chunks);
         return -1;
     }
     /* Make NUL-terminated copy of the path. */
     char *path = malloc((size_t)sizes[path_idx] + 1);
-    if (!path) { for (int i = 0; i < b->n_inputs; i++) free(bufs[i]); return -1; }
+    if (!path) {
+        release_inputs(ctx, b->n_inputs, bufs, buf_chunks);
+        return -1;
+    }
     memcpy(path, datas[path_idx], (size_t)sizes[path_idx]);
     path[sizes[path_idx]] = '\0';
 
     char *full = resolve_path(ctx, path);
     free(path);
-    if (!full) { for (int i = 0; i < b->n_inputs; i++) free(bufs[i]); return -1; }
+    if (!full) {
+        release_inputs(ctx, b->n_inputs, bufs, buf_chunks);
+        return -1;
+    }
 
     FILE *fp = fopen(full, "wb");
     free(full);
@@ -686,7 +731,7 @@ static int do_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
         if (fwrite(datas[value_idx], 1, want, fp) != want) rc = -1;
         fclose(fp);
     }
-    for (int i = 0; i < b->n_inputs; i++) free(bufs[i]);
+    release_inputs(ctx, b->n_inputs, bufs, buf_chunks);
 
     if (rc == 0 && out_buf && out_capacity >= 4) {
         memcpy(out_buf, "true", 4);
@@ -718,7 +763,13 @@ void dispatch_action(void *arg)
     int out_size = 0;
     int out_capacity = ctx->default_out_capacity > 0
                         ? ctx->default_out_capacity : 4096;
-    char *out_buf = malloc((size_t)out_capacity);
+    /* The output buffer comes from the slot store's unified
+     * allocator so it participates in the same refcount-driven
+     * recycling as input buffers and slot cells — every byte that
+     * carries a value through the dispatch runs through one heap. */
+    ua_t *heap = slot_store_allocator(ctx->slots);
+    ua_chunk_t *out_chunk = ua_alloc(heap, (size_t)out_capacity);
+    char *out_buf = out_chunk ? ua_data(out_chunk) : NULL;
     int rc = -1;
     if (out_buf && b) {
         switch (b->kind) {
@@ -765,7 +816,7 @@ void dispatch_action(void *arg)
                              end_us - start_us, out_size);
     }
 
-    free(out_buf);
+    if (out_chunk) ua_unref(heap, out_chunk);
     free(t);
 }
 /* }}} */

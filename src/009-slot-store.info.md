@@ -44,13 +44,29 @@ slot IDs (issue 303 keeps that boundary clean).
   phase); after that, the slot array is read-only and per-slot
   operations run concurrently.
 
+## Variable-size payloads
+
+Slots allocated with `SLOT_FLAG_LARGE_VALUE` store payload bytes in
+the unified allocator (016) and keep only an opaque chunk handle in
+the cell. Push acquires a chunk (refcount 1, owned by the slot);
+pop copies the bytes into the caller's buffer and drops the
+reference, returning the chunk to the allocator's free-lists with
+an eager neighbor-merge. The reclamation test
+(`tests/009-slot-store-test.c::large_value_reclamation`) is the
+regression guard for the previous monotonic-growth path.
+
+`slot_store_large_value_bytes_in_use` exposes the allocator's
+"in use" total for the regression test and for future telemetry.
+
 ## What's NOT here (deferred)
 
-- Size-class free lists / coalescing — plain `malloc` per slot for
-  now. The current usage pattern doesn't reuse slot memory, so
-  optimization buys nothing yet.
-- Large-value heap for variable-size payloads. Follow-on within
-  issue 302.
+- Size-class free lists for the fixed-size cell arrays themselves —
+  plain `malloc` per slot for now. Allocator-driven cell allocation
+  is the next step in issue 302.
+- Producer-declared output sizes are not yet piped through to
+  `ua_create`, so the allocator starts with no pre-warmed classes
+  and learns them by accretion. The graph loader integration is
+  the follow-on.
 
 ## Related
 

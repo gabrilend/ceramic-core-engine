@@ -69,11 +69,17 @@
  *    optimization buys nothing for the current usage. Lands as a
  *    follow-on if profiling justifies it.
  *
- * Large-value heap support landed 2026-05-19: slots with
- * SLOT_FLAG_LARGE_VALUE store payload bytes in an internal
- * large-value heap (see src/015-large-value-heap.h) and the cell
- * only holds a stable pointer. The store lazy-creates the heap on
- * the first LARGE_VALUE slot_alloc and destroys it with the store.
+ * Variable-size payload support: slots with SLOT_FLAG_LARGE_VALUE
+ * store payload bytes in the unified allocator (src/016-…) and the
+ * cell only holds an opaque chunk handle. Push allocates a chunk;
+ * pop copies the bytes out and drops the chunk's last reference so
+ * the bytes return to the allocator's free-lists. The store
+ * lazy-creates its allocator on the first LARGE_VALUE slot_alloc
+ * and destroys it with the store.
+ *
+ * (Issue 302's earlier shape used an append-only arena for this
+ * path; that arena leaked by design and was retracted on
+ * 2026-05-19 in favor of the reclamation-capable allocator above.)
  */
 
 #ifndef SORAMECH_SLOT_STORE_H
@@ -88,6 +94,13 @@ extern "C" {
 /* {{{ Types & flags */
 typedef struct slot_store slot_store_t;
 typedef int32_t           slot_id_t;
+
+/* Forward declaration of the unified allocator handle. Callers that
+ * want to use it (dispatch, for example, allocating its own value
+ * buffers) include the allocator header directly; callers that
+ * only push/pop bytes through the slot API don't need to know it
+ * exists. */
+struct ua;
 
 #define SLOT_INVALID  ((slot_id_t)-1)
 
@@ -188,6 +201,24 @@ int32_t       slot_fill_count(slot_store_t *s, slot_id_t id);
 
 /* Slot count in the store. */
 int32_t       slot_store_size(slot_store_t *s);
+
+/* Bytes currently held by SLOT_FLAG_LARGE_VALUE payloads — i.e.
+ * the unified allocator's "in use" total for this store. Returns 0
+ * if the store has no allocator (impossible after the cell-array
+ * path moved onto the allocator, but kept defensive).
+ *
+ * Used by the reclamation regression test (issue 302): a slot that
+ * pushes-then-pops many times should observe this number stay
+ * bounded, proving the variable-size path no longer leaks. */
+uint64_t      slot_store_large_value_bytes_in_use(slot_store_t *s);
+
+/* The unified allocator that owns this store's slot memory. The
+ * dispatch layer uses it for the per-task input and output buffers
+ * so those allocations participate in the same refcount-driven
+ * recycling as the slot cells and the large-value payloads — one
+ * heap for every byte that carries a value through the run. May
+ * return NULL only if the store itself is NULL. */
+struct ua    *slot_store_allocator(slot_store_t *s);
 /* }}} */
 
 #ifdef __cplusplus

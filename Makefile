@@ -118,12 +118,12 @@ $(BUILD_DIR)/%.o: $(DIR)/%.c
 # add one line here naming the dependencies (no globbing — explicit
 # is clearer than clever for tests).
 $(BUILD_DIR)/tests/009-slot-store-test:    $(BUILD_DIR)/src/009-slot-store.o \
-                                           $(BUILD_DIR)/src/015-large-value-heap.o
+                                           $(BUILD_DIR)/src/016-unified-allocator.o
 $(BUILD_DIR)/tests/015-large-value-heap-test: $(BUILD_DIR)/src/015-large-value-heap.o
 $(BUILD_DIR)/tests/016-unified-allocator-test: $(BUILD_DIR)/src/016-unified-allocator.o
 $(BUILD_DIR)/tests/010-graph-loader-test: $(BUILD_DIR)/src/010-graph-loader.o \
                                           $(BUILD_DIR)/src/009-slot-store.o \
-                                          $(BUILD_DIR)/src/015-large-value-heap.o \
+                                          $(BUILD_DIR)/src/016-unified-allocator.o \
                                           $(BUILD_DIR)/src/011-spec-registry.o \
                                           $(BUILD_DIR)/libs/json/json.o
 $(BUILD_DIR)/tests/011-spec-registry-test: $(BUILD_DIR)/src/011-spec-registry.o
@@ -131,7 +131,7 @@ $(BUILD_DIR)/tests/012-dispatch-test:      $(BUILD_DIR)/src/012-dispatch.o \
                                            $(BUILD_DIR)/src/010-graph-loader.o \
                                            $(BUILD_DIR)/src/011-spec-registry.o \
                                            $(BUILD_DIR)/src/009-slot-store.o \
-                                           $(BUILD_DIR)/src/015-large-value-heap.o \
+                                           $(BUILD_DIR)/src/016-unified-allocator.o \
                                            $(BUILD_DIR)/src/013-jsonl-events.o \
                                            $(BUILD_DIR)/src/014-event-queue.o \
                                            $(BUILD_DIR)/libs/json/json.o \

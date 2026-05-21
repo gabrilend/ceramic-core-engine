@@ -22,13 +22,24 @@
  * slot_id_t. The array grows on demand. Ids are never reused — there
  * is no slot_free; slots live for the run.
  *
+ * Variable-size payloads (SLOT_FLAG_LARGE_VALUE) used to point into a
+ * monotonically-growing arena. That arena was a memory leak by design
+ * — every push consumed bytes that were never reclaimed until run end.
+ * The 2026-05-19 retraction in issue 302 commits to the unified
+ * allocator (016) instead: every variable-size payload is a
+ * reference-counted chunk, popped values release their reference, and
+ * freed chunks rejoin the allocator's free-lists with eager
+ * neighbor-merge. The cell layout is unchanged — the 8-byte payload
+ * slot that used to hold a raw arena pointer now holds an opaque
+ * chunk handle.
+ *
  * Designed in issue 302. This file implements the API declared in
- * 009-slot-store.h. Free-list optimization and the large-value heap
- * are deferred per the header's "what's not in this version" note.
+ * 009-slot-store.h. Free-list optimization for the fixed-size cell
+ * arrays themselves is still deferred.
  */
 
 #include "009-slot-store.h"
-#include "015-large-value-heap.h"
+#include "016-unified-allocator.h"
 
 #include <stdatomic.h>
 #include <stdint.h>
@@ -50,8 +61,15 @@ typedef struct slot_rec {
      * shapes don't share storage interpretation. */
     _Atomic uint32_t counter;
 
-    /* For ring slots: n_cells * cell_record bytes. Flexible array. */
-    uint8_t     cells[];
+    /* The cell array. Memory is owned by `cells_chunk` (a chunk
+     * from the store's unified allocator). For atomic-counter
+     * slots both fields are NULL. The split between header and
+     * cell-array storage lets the cell-array memory go through
+     * the same recycling pipeline as the large-value payloads —
+     * one heap for both kinds of slot memory, as the design
+     * retraction requires. */
+    uint8_t     *cells;
+    ua_chunk_t  *cells_chunk;
 } slot_rec_t;
 /* }}} */
 
@@ -61,10 +79,13 @@ struct slot_store {
     int32_t      count;
     int32_t      capacity;
 
-    /* Lazy-created on first SLOT_FLAG_LARGE_VALUE allocation. The
-     * heap owns payload bytes for every LARGE_VALUE slot in this
-     * store. Destroyed alongside the store. */
-    lvh_t       *heap;
+    /* The unified allocator. Owns the cell-array memory for every
+     * ring slot in this store, plus the payload bytes for every
+     * LARGE_VALUE cell. Created in slot_store_create; destroyed
+     * alongside the store. Any chunks still parked in cells at
+     * destroy time are reclaimed in bulk when the allocator's
+     * regions are freed. */
+    ua_t        *heap;
 };
 /* }}} */
 
@@ -98,6 +119,9 @@ static inline void unlock_slot(slot_rec_t *r)
  */
 static inline uint8_t *cell_ptr(slot_rec_t *r, uint32_t i)
 {
+    /* r->cells is now a pointer into an allocator chunk, not a
+     * flexible array on the slot record itself — same indexing
+     * arithmetic. */
     return r->cells + (size_t)i * r->cell_record;
 }
 
@@ -135,6 +159,17 @@ slot_store_t *slot_store_create(void)
     s->capacity = 16;
     s->slots    = calloc((size_t)s->capacity, sizeof(slot_rec_t *));
     if (!s->slots) { free(s); return NULL; }
+
+    /* Eagerly create the unified allocator. Earlier in this issue
+     * the allocator was lazy-created on the first LARGE_VALUE slot;
+     * since the cell arrays of ordinary ring slots also live in the
+     * allocator now, every slot allocation needs the allocator
+     * present from the start. No pre-warmed classes — they accrete
+     * on first use until the graph loader is wired to declare
+     * sizes up front. */
+    s->heap = ua_create(NULL, 0);
+    if (!s->heap) { free(s->slots); free(s); return NULL; }
+
     return s;
 }
 /* }}} */
@@ -143,14 +178,26 @@ slot_store_t *slot_store_create(void)
 void slot_store_destroy(slot_store_t *s)
 {
     if (!s) return;
+    /* Release each slot's cell-array chunk before tearing down the
+     * allocator. We don't strictly need to (ua_destroy frees all
+     * regions in bulk) but the unref'ed-then-destroyed path leaves
+     * the allocator's stats coherent if anything inspects them on
+     * the way out. The slot record itself was allocated via plain
+     * malloc and is freed here. */
     for (int32_t i = 0; i < s->count; i++) {
-        free(s->slots[i]);
+        slot_rec_t *r = s->slots[i];
+        if (!r) continue;
+        if (r->cells_chunk) ua_unref(s->heap, r->cells_chunk);
+        free(r);
     }
     free(s->slots);
-    /* The lvh heap owns every LARGE_VALUE payload across every slot
-     * in this store. Destroying it last is fine because slot
-     * records no longer reference any heap pointers. */
-    if (s->heap) lvh_destroy(s->heap);
+    /* The unified allocator owns the cell arrays for every ring
+     * slot in this store and the payload bytes for every
+     * LARGE_VALUE cell. ua_destroy releases all regions in one
+     * sweep. Any LARGE_VALUE chunks still parked in cells at this
+     * point become harmless garbage at the same moment the
+     * regions are freed. */
+    if (s->heap) ua_destroy(s->heap);
     free(s);
 }
 /* }}} */
@@ -194,29 +241,27 @@ slot_id_t slot_alloc(slot_store_t *s,
          * n_cells are ignored. */
         bytes_cells = 0;
     } else if (flags & SLOT_FLAG_LARGE_VALUE) {
-        /* Large-value slot: the cell holds a stable pointer into
-         * the lvh heap, not the bytes themselves. Caller-supplied
-         * cell_capacity is ignored (it has no meaning here — the
-         * actual payload bytes live in the heap and can be any
+        /* Large-value slot: the cell holds an opaque chunk handle
+         * from the unified allocator, not the bytes themselves.
+         * Caller-supplied cell_capacity is ignored (the actual
+         * payload bytes live in the allocator and can be any
          * size). n_cells controls ring depth as usual.
          *
          * Cell layout for LARGE_VALUE is 4 (filled_size) + 4
-         * (tag or pad) + 8 (pointer) = 16 bytes; cell_data() uses
-         * the 8-byte payload offset so the pointer is naturally
-         * aligned. */
+         * (tag or pad) + 8 (chunk handle) = 16 bytes; cell_data()
+         * uses the 8-byte payload offset so the handle is
+         * naturally aligned. */
         if (n_cells <= 0) return SLOT_INVALID;
+        /* The cell payload is one machine pointer; sizeof(void *)
+         * sidesteps a clang-tidy warning about "sizeof of a pointer
+         * to an aggregate" while still being the right number — all
+         * data pointers have the same size on the platforms we
+         * target. */
         stored_capacity = (uint32_t)sizeof(void *);
         cell_record     = 4u + 4u + (uint32_t)sizeof(void *);
         bytes_cells     = (size_t)n_cells * cell_record;
 
-        /* Lazy-create the heap on first LARGE_VALUE slot. Default
-         * chunk size (64 KB) is fine for now — variable-size
-         * payloads bigger than that get their own chunks per
-         * lvh_alloc's oversized-allocation rule. */
-        if (!s->heap) {
-            s->heap = lvh_create(0);
-            if (!s->heap) return SLOT_INVALID;
-        }
+        /* Allocator is created up front in slot_store_create. */
     } else {
         if (cell_capacity <= 0 || n_cells <= 0) return SLOT_INVALID;
         stored_capacity = (uint32_t)cell_capacity;
@@ -226,7 +271,7 @@ slot_id_t slot_alloc(slot_store_t *s,
         bytes_cells = (size_t)n_cells * cell_record;
     }
 
-    slot_rec_t *r = calloc(1, sizeof(slot_rec_t) + bytes_cells);
+    slot_rec_t *r = calloc(1, sizeof(slot_rec_t));
     if (!r) return SLOT_INVALID;
 
     r->cell_capacity = (flags & SLOT_FLAG_ATOMIC_COUNTER) ? 0 : stored_capacity;
@@ -240,7 +285,26 @@ slot_id_t slot_alloc(slot_store_t *s,
      * for initializers. Clearing it leaves it in the "not set" state. */
     atomic_flag_clear(&r->lock);
 
-    if (grow_store_if_needed(s) != 0) { free(r); return SLOT_INVALID; }
+    /* Acquire the cell-array memory from the unified allocator. Ring
+     * slots take one chunk sized to n_cells * cell_record; atomic
+     * counter slots have no cells and skip this step. The chunk's
+     * refcount starts at 1 — the slot itself owns that reference for
+     * the duration of the run. */
+    if (bytes_cells > 0) {
+        r->cells_chunk = ua_alloc(s->heap, bytes_cells);
+        if (!r->cells_chunk) { free(r); return SLOT_INVALID; }
+        r->cells = ua_data(r->cells_chunk);
+        /* The allocator hands back uninitialized bytes. The cell
+         * header's filled_size must start at zero so empty cells
+         * look empty to peek and pop. */
+        memset(r->cells, 0, bytes_cells);
+    }
+
+    if (grow_store_if_needed(s) != 0) {
+        if (r->cells_chunk) ua_unref(s->heap, r->cells_chunk);
+        free(r);
+        return SLOT_INVALID;
+    }
     slot_id_t id = s->count++;
     s->slots[id] = r;
     return id;
@@ -271,15 +335,15 @@ int slot_push(slot_store_t *s, slot_id_t id,
      * fixed-size slots, enforce the cell capacity as before. */
     if (!large && (uint32_t)size > r->cell_capacity) return -1;
 
-    /* For LARGE_VALUE, allocate the heap region BEFORE taking the
-     * slot's spinlock. The heap has its own mutex; nesting the two
-     * is fine but reducing time-under-spinlock keeps the lock
+    /* For LARGE_VALUE, allocate the chunk BEFORE taking the slot's
+     * spinlock. The unified allocator has its own mutex; nesting the
+     * two is fine but reducing time-under-spinlock keeps the lock
      * holder fast for everyone else. */
-    void *heap_ptr = NULL;
+    ua_chunk_t *chunk = NULL;
     if (large && size > 0) {
-        heap_ptr = lvh_alloc(s->heap, (size_t)size);
-        if (!heap_ptr) return -1;
-        memcpy(heap_ptr, data, (size_t)size);
+        chunk = ua_alloc(s->heap, (size_t)size);
+        if (!chunk) return -1;
+        memcpy(ua_data(chunk), data, (size_t)size);
     }
 
     lock_slot(r);
@@ -287,11 +351,11 @@ int slot_push(slot_store_t *s, slot_id_t id,
     uint32_t head = atomic_load_explicit(&r->head, memory_order_relaxed);
     uint32_t tail = atomic_load_explicit(&r->tail, memory_order_relaxed);
     if (tail - head >= r->n_cells) {
-        /* Ring full. The heap allocation we just made stays alive
-         * — there's no per-allocation free — but it's bytes the
-         * caller will retry to use, so the cost is bounded by
-         * how often pushes actually fail. */
+        /* Ring full. Release the chunk we just took so it goes back
+         * to the allocator's free-lists — the old arena had no such
+         * release path and accumulated bytes on every failed push. */
         unlock_slot(r);
+        if (chunk) ua_unref(s->heap, chunk);
         return -1;
     }
 
@@ -302,15 +366,16 @@ int slot_push(slot_store_t *s, slot_id_t id,
     uint32_t fs = (uint32_t)size;
     memcpy(cp, &fs, sizeof fs);
     /* tag (only if tagged); LARGE_VALUE without TAGGED still has 4
-     * pad bytes in the same position so the payload pointer stays
+     * pad bytes in the same position so the chunk handle stays
      * 8-byte aligned, but we leave them zero. */
     if (r->flags & SLOT_FLAG_TAGGED) {
         memcpy(cp + 4, &tag, sizeof tag);
     }
     /* payload */
     if (large) {
-        /* Store the heap pointer (may be NULL for zero-size). */
-        memcpy(cell_data(r, i), &heap_ptr, sizeof heap_ptr);
+        /* Store the chunk handle (may be NULL for zero-size — peek
+         * and pop both treat NULL as "no bytes to copy"). */
+        memcpy(cell_data(r, i), &chunk, sizeof(void *));
     } else if (size > 0) {
         memcpy(cell_data(r, i), data, (size_t)size);
     }
@@ -353,14 +418,15 @@ int32_t slot_peek(slot_store_t *s, slot_id_t id,
     }
     if (fs > 0) {
         if (large) {
-            void *p;
-            memcpy(&p, cell_data(r, i), sizeof p);
-            if (p) memcpy(buf, p, fs);
+            ua_chunk_t *chunk = NULL;
+            memcpy(&chunk, cell_data(r, i), sizeof(void *));
+            if (chunk) memcpy(buf, ua_data(chunk), fs);
         } else {
             memcpy(buf, cell_data(r, i), fs);
         }
     }
-    /* head not advanced — peek leaves the cell in place. */
+    /* head not advanced — peek leaves the cell in place and the
+     * chunk's reference count untouched. */
     unlock_slot(r);
     return (int32_t)fs;
 }
@@ -412,21 +478,30 @@ int32_t slot_pop(slot_store_t *s, slot_id_t id,
     if (fs == 0)                  { unlock_slot(r); return -1; }
     if ((uint32_t)buf_size < fs)  { unlock_slot(r); return -1; }
 
+    /* For LARGE_VALUE we capture the chunk handle here so we can
+     * release it AFTER the slot lock is dropped — the allocator
+     * takes its own mutex during ua_unref, and nesting the two is
+     * fine but unnecessary if we can release the cheap lock first. */
+    ua_chunk_t *released_chunk = NULL;
+
     if (fs > 0) {
         if (r->flags & SLOT_FLAG_LARGE_VALUE) {
-            void *p;
-            memcpy(&p, cell_data(r, pick), sizeof p);
-            if (p) memcpy(buf, p, fs);
+            memcpy(&released_chunk, cell_data(r, pick), sizeof(void *));
+            if (released_chunk) memcpy(buf, ua_data(released_chunk), fs);
         } else {
             memcpy(buf, cell_data(r, pick), fs);
         }
     }
 
-    /* Mark cell empty. The heap allocation (if any) stays alive in
-     * the lvh heap — there's no per-allocation free in the current
-     * design. */
+    /* Mark cell empty. For LARGE_VALUE cells, also zero the handle
+     * so a stale chunk pointer can't be misread by a later inspector
+     * — the actual release happens after we drop the slot lock. */
     uint32_t zero = 0;
     memcpy(cell_ptr(r, pick), &zero, sizeof zero);
+    if (r->flags & SLOT_FLAG_LARGE_VALUE) {
+        ua_chunk_t *null_chunk = NULL;
+        memcpy(cell_data(r, pick), &null_chunk, sizeof(void *));
+    }
 
     /* For untagged: advance head by one. For tagged: walk head
      * forward over any contiguous empty cells (the head/tail
@@ -446,6 +521,15 @@ int32_t slot_pop(slot_store_t *s, slot_id_t id,
     }
 
     unlock_slot(r);
+
+    /* Drop the consumer's reference to the chunk now that the slot
+     * lock is gone. The bytes have already been copied into the
+     * caller's buffer, so reclamation is safe. If the refcount goes
+     * to zero, the chunk rejoins the allocator's free-lists with an
+     * eager neighbor-merge — the line that turns the old leak into
+     * proper reclamation. */
+    if (released_chunk) ua_unref(s->heap, released_chunk);
+
     return (int32_t)fs;
 }
 /* }}} */
@@ -486,6 +570,24 @@ int slot_has_value(slot_store_t *s, slot_id_t id)
     uint32_t head = atomic_load_explicit(&r->head, memory_order_acquire);
     uint32_t tail = atomic_load_explicit(&r->tail, memory_order_acquire);
     return head != tail;
+}
+/* }}} */
+
+/* {{{ slot_store_allocator() */
+struct ua *slot_store_allocator(slot_store_t *s)
+{
+    return s ? s->heap : NULL;
+}
+/* }}} */
+
+/* {{{ slot_store_large_value_bytes_in_use() */
+/* A small accessor for the reclamation regression test in issue
+ * 302. Exposes the unified allocator's in-use byte total without
+ * leaking the allocator type into the slot store's public API. */
+uint64_t slot_store_large_value_bytes_in_use(slot_store_t *s)
+{
+    if (!s || !s->heap) return 0;
+    return ua_bytes_in_use(s->heap);
 }
 /* }}} */
 

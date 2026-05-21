@@ -33,6 +33,7 @@
 #include "011-spec-registry.h"
 #include "012-dispatch.h"
 #include "014-event-queue.h"
+#include "016-unified-allocator.h"
 #include "pool.h"
 
 #include <stdio.h>
@@ -305,6 +306,16 @@ int main(int argc, char **argv)
 
     /* 8. Quiesce. */
     pool_wait_quiescent(pool);
+
+    /* Quiescence-trigger sweep (issue 302). The pool has no tasks
+     * in flight at this point, so it's the natural moment for the
+     * allocator's deep sweep to fuse free-chunk runs the cheap
+     * eager-merge couldn't catch — there's no producer or consumer
+     * mid-read to invalidate. Today the runner has a single drain
+     * so the only effect is on shutdown statistics; future shapes
+     * that drain and respawn (long iterators, batched submissions)
+     * benefit between batches without further wiring. */
+    ua_sweep(slot_store_allocator(slots));
 
     struct timespec ts_end;
     clock_gettime(CLOCK_MONOTONIC, &ts_end);
