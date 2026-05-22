@@ -25,7 +25,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 309 | build system & Makefile orchestration                       | complete · scaffolding + spec discovery + soramech-compile portable artifact |
 | 310 | priority queue: wired in, no-op behaviorally                | complete · API + ordering done |
 | 311 | integration tests & run output (`last-run.jsonl`)           | in progress · writer + queue + thread + LOG_VALUES + LOG_SLOTS + run-tests.sh + compile-pipeline check |
-| 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | in progress · lang_spec_t extended + classification + dispatch resolution |
+| 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | complete · dual-ring slots + per-edge classification + per-cell ordering; spec contract has single invoke + two bridges; Lua native-bytes optimisation tracked as a future slice |
 | 313 | research: whole-program same-language merge                 | research / blocked |
 | 314 | small C JSON parser written for this project                | complete · parser + writer + strict leading-zero |
 | 315 | reference-counted compiled-map artifacts                    | open · design only |

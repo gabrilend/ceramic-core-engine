@@ -408,6 +408,115 @@ static int test_read_predecessor_rotation(void)
 }
 /* }}} */
 
+/* {{{ test_dual_ring_per_cell_format() — issue 312
+ *
+ * The dual-ring slot's per-cell ring tag (NATIVE vs JSON) is set
+ * by the producer at push time and consulted by the dispatch's
+ * read_inputs at pop time to seed the consumer spec's
+ * input_native[i] flag. This test exercises the flow with a
+ * Lua consumer whose function visibly distinguishes the two
+ * cases: M.describe returns "table:..." on a parsed-JSON table
+ * input and "string:..." on a raw-bytes string input. Pushing
+ * the same bytes (`{"a":42}`) once through slot_push_native and
+ * once through slot_push_json verifies the per-cell tag
+ * propagates correctly.
+ *
+ * Each half uses a fresh fixture: dual-ring slots are single-cell
+ * (slice 1 deferred DUAL_RING + multi-cell combining), so we
+ * can't push two cells to the same slot in one run.  */
+static int build_describe_fixture(char *dir, size_t cap)
+{
+    char tmpl[] = "/tmp/soramech-dualring-XXXXXX";
+    char *got = mkdtemp(tmpl);
+    if (!got) return -1;
+    snprintf(dir, cap, "%s", got);
+
+    char abs[4096];
+    if (!realpath("tests/maps/calc/src/calc.lua", abs)) return -1;
+
+    char p[4096];
+    snprintf(p, sizeof p, "%s/meta.json", dir);
+    FILE *fp = fopen(p, "w");
+    fputs("{\"name\":\"dr\",\"entry_box_id\":\"sink\"}", fp); fclose(fp);
+    snprintf(p, sizeof p, "%s/boxes", dir); mkdir(p, 0755);
+
+    snprintf(p, sizeof p, "%s/boxes/sink.json", dir);
+    fp = fopen(p, "w");
+    fprintf(fp,
+        "{\"id\":\"sink\",\"kind\":\"call\",\"lang\":\"lua\","
+        "\"ref\":\"%s\",\"fn\":\"describe\","
+        "\"inputs\":[{\"name\":\"x\",\"type\":\"string\"}],"
+        "\"routing\":{\"kind\":\"plain\"}}",
+        abs);
+    fclose(fp);
+    return 0;
+}
+
+static void cleanup_describe_fixture(const char *dir)
+{
+    char p[4096];
+    snprintf(p, sizeof p, "%s/boxes/sink.json", dir); unlink(p);
+    snprintf(p, sizeof p, "%s/meta.json",       dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes",           dir); rmdir(p);
+    rmdir(dir);
+}
+
+static int test_dual_ring_per_cell_format(void)
+{
+    const char *bytes  = "{\"a\":42}";
+    int         n      = (int)strlen(bytes);
+    int ok = 1;
+
+    /* Half 1: native push → Lua sees raw string → "string:..." */
+    {
+        char dir[1024];
+        ASSERT(build_describe_fixture(dir, sizeof dir) == 0);
+        runtime_t rt;
+        ASSERT(runtime_setup(&rt, dir, 2, 1) == 0);
+        int sink = graph_box_index(rt.graph, "sink");
+        ASSERT(sink >= 0);
+        const box_t *sb = graph_box(rt.graph, sink);
+        ASSERT(slot_push_native(rt.slots, sb->input_slot_ids[0],
+                                bytes, n, 0) == 0);
+        dispatch_spawn_if_ready(&rt.ctx, sink, 0);
+        pool_wait_quiescent(rt.pool);
+        ASSERT(rt.ctx.last_outputs[sink] != NULL);
+        if (strncmp(rt.ctx.last_outputs[sink], "string:", 7) != 0) {
+            fprintf(stderr, "      native half got: %s\n",
+                    rt.ctx.last_outputs[sink]);
+            ok = 0;
+        }
+        runtime_teardown(&rt);
+        cleanup_describe_fixture(dir);
+    }
+
+    /* Half 2: JSON push → Lua parses → "table:42" */
+    {
+        char dir[1024];
+        ASSERT(build_describe_fixture(dir, sizeof dir) == 0);
+        runtime_t rt;
+        ASSERT(runtime_setup(&rt, dir, 2, 1) == 0);
+        int sink = graph_box_index(rt.graph, "sink");
+        ASSERT(sink >= 0);
+        const box_t *sb = graph_box(rt.graph, sink);
+        ASSERT(slot_push_json(rt.slots, sb->input_slot_ids[0],
+                              bytes, n, 0) == 0);
+        dispatch_spawn_if_ready(&rt.ctx, sink, 0);
+        pool_wait_quiescent(rt.pool);
+        ASSERT(rt.ctx.last_outputs[sink] != NULL);
+        if (strcmp(rt.ctx.last_outputs[sink], "table:42") != 0) {
+            fprintf(stderr, "      json half got: %s\n",
+                    rt.ctx.last_outputs[sink]);
+            ok = 0;
+        }
+        runtime_teardown(&rt);
+        cleanup_describe_fixture(dir);
+    }
+
+    return ok;
+}
+/* }}} */
+
 /* {{{ test_distributor_picks_least_full() — issue 304 */
 /* Build a temp map: one distributor `dist` (n_outputs=2) wired to
  * two echo sinks `s0` / `s1`. Pre-fill `s1`'s input slot so its
@@ -555,6 +664,7 @@ int main(void)
     RUN(iterator_routing_single_fire);
     RUN(iterator_multi_fire);
     RUN(read_predecessor_rotation);
+    RUN(dual_ring_per_cell_format);
     RUN(distributor_picks_least_full);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

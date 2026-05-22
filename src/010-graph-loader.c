@@ -1009,11 +1009,9 @@ graph_t *graph_load(const char *map_dir, char **err)
      *
      * Computed in graph_load (not graph_attach_runtime) because
      * it's purely topology-derived and doesn't need the slot
-     * store or registry. The dispatch action picks
-     * `spec->invoke_native` when this flag is set, falling back to
-     * `invoke_json` or `invoke`. Our current specs all leave
-     * invoke_native NULL so the fallback runs and behaviour is
-     * unchanged — but the infrastructure is in place. */
+     * store or registry. The dispatch reads these per-cell to
+     * pick the producer's push ring (native vs JSON) and to set
+     * the consumer's `input_native[i]` flag at read time. */
     for (int i = 0; i < g->n_boxes; i++) {
         box_t *b = &g->boxes[i];
         b->input_edge_native  = NULL;

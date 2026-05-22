@@ -152,16 +152,17 @@ typedef struct box {
     /* 312 per-edge fast-path classification.
      *
      * One bit per input port: true iff the producer feeding that
-     * port shares this box's language. When set, the dispatch
-     * passes the slot's bytes to invoke_native as-is; when cleared
-     * the dispatch calls json_to_native first.
+     * port shares this box's language. Drives the consumer's
+     * decoder choice on single-ring slots and seeds the
+     * `input_native[i]` flag that the spec's invoke consults.
      *
      * One bit per outgoing connection (not per output port — a
      * single output may fan to consumers of different languages):
      * true iff the consumer on the other end of that connection
-     * shares this box's language. When set, push native bytes
-     * directly; when cleared, call native_to_json first and push
-     * JSON. */
+     * shares this box's language. When set, the producer pushes
+     * native bytes to the consumer slot's `ring_native`; when
+     * cleared, the producer calls `native_to_json` first and
+     * pushes JSON to `ring_json`. */
     int           *input_edge_native;   /* n_inputs entries, or NULL              */
     int           *output_edge_native;  /* n_connections entries, or NULL         */
 

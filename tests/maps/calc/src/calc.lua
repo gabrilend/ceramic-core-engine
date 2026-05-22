@@ -24,4 +24,18 @@ function M.identity(x)
 end
 -- }}}
 
+-- {{{ M.describe
+-- Used by the dual-ring dispatch test (issue 312) to distinguish
+-- native-tagged from JSON-tagged input cells. The Lua spec turns
+-- native bytes into a Lua string and JSON bytes into the parsed
+-- value (a table for an object). This function reports which it
+-- got, so the dispatch test can assert the per-cell ring tag flowed
+-- through read_inputs to the spec's input_native[i] flag correctly.
+function M.describe(x)
+    if type(x) == "table" then return "table:" .. tostring(x.a)
+    else                       return "string:" .. tostring(x)
+    end
+end
+-- }}}
+
 return M
