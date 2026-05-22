@@ -671,11 +671,70 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
             return push_branch(ctx, b, branch, out_bytes, out_size, i) < 0 ? -1 : 0;
         }
 
-        case ROUTING_DISTRIBUTOR:
+        case ROUTING_DISTRIBUTOR: {
+            /* Argmin over downstream slot fill levels: pick the
+             * output branch whose busiest consumer slot is least
+             * loaded, so load spreads across the downstream stages.
+             * For multi-consumer branches the branch's "load" is
+             * the max fill across its consumers — the branch is
+             * only as fast as its slowest stage. Ties resolve via
+             * the counter slot so a steady stream still rotates
+             * across equally-empty branches instead of always
+             * picking the same low-index one. */
+            if (b->counter_slot_id < 0 || b->routing.n_outputs < 1) {
+                return push_to_downstream(ctx, b, out_bytes, out_size);
+            }
+            /* Read the counter once. Use it both as the rotation
+             * offset (so ties between equally-loaded branches break
+             * in round-robin order, not always toward index 0) AND
+             * as the tag carried on the push (so downstream tagged
+             * slots still serve in invocation order). */
+            uint32_t tag = slot_read_inc(ctx->slots, b->counter_slot_id,
+                                         UINT32_MAX);
+            int best_branch  = -1;
+            int32_t best_max = INT32_MAX;
+            for (int step = 0; step < b->routing.n_outputs; step++) {
+                int k = (int)(((uint32_t)step + tag) %
+                              (uint32_t)b->routing.n_outputs);
+                char want[24];
+                snprintf(want, sizeof want, "out_%d", k);
+                int32_t this_max = 0;
+                int found_any = 0;
+                for (int j = 0; j < b->n_connections; j++) {
+                    const connection_t *c = &b->connections[j];
+                    if (!c->from_branch ||
+                        strcmp(c->from_branch, want) != 0) continue;
+                    int dst = c->to_box_idx;
+                    if (dst < 0) continue;
+                    const box_t *db = graph_box(ctx->graph, dst);
+                    int port = c->to_input_idx;
+                    if (!db || port < 0 || port >= db->n_inputs ||
+                        !db->input_slot_ids) continue;
+                    int32_t fill = slot_fill_count(ctx->slots,
+                                                   db->input_slot_ids[port]);
+                    if (fill > this_max) this_max = fill;
+                    found_any = 1;
+                }
+                if (!found_any) continue;
+                if (this_max < best_max) {
+                    best_max    = this_max;
+                    best_branch = k;
+                }
+            }
+            if (best_branch < 0) {
+                /* No outgoing connection on any branch — falling
+                 * back to plain still pushes nothing useful, but
+                 * keeps the action's contract (return 0 means OK). */
+                return push_to_downstream(ctx, b, out_bytes, out_size);
+            }
+            char branch[24];
+            snprintf(branch, sizeof branch, "out_%d", best_branch);
+            return push_branch(ctx, b, branch, out_bytes, out_size, tag) < 0
+                       ? -1 : 0;
+        }
+
         default:
-            /* Distributor inspects downstream slot fill levels; not
-             * yet implemented. Fall back to plain so the runtime
-             * doesn't deadlock. */
+            /* Unknown routing kind — push plain as the safe default. */
             return push_to_downstream(ctx, b, out_bytes, out_size);
     }
 }

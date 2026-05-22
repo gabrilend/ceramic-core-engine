@@ -15,4 +15,13 @@ function M.mul(a, b)
 end
 -- }}}
 
+-- {{{ M.identity
+-- Used by the distributor dispatch test as a passthrough sink: the
+-- distributor's argmin picker is the unit under test, the sink just
+-- needs to capture whatever it received.
+function M.identity(x)
+    return tostring(x)
+end
+-- }}}
+
 return M

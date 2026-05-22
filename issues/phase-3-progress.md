@@ -17,7 +17,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 301 | thread pool lifecycle and per-worker initialization         | complete · pool + per-worker init/teardown hooks + priority queue |
 | 302 | per-task slot store with wire-held references               | complete · unified allocator + refcounted recycling on every byte path (slot cells, variable-size payloads, dispatch input/output buffers) + eager neighbor-merge + quiescence-trigger deep sweep |
 | 303 | language runtime spec (pluggable per-language invocation)   | complete · registry + per-worker init + pool hook + lang filtering |
-| 304 | task dispatch layer (C, replaces synchronous executor)      | in progress · plain + comparator + iterator + randomizer + weighted routing + cell-tagged iterator ordering |
+| 304 | task dispatch layer (C, replaces synchronous executor)      | in progress · every routing kind ships (plain / comparator / iterator / randomizer / weighted / distributor); attempt-task model rewrite is a structural follow-on |
 | 305 | C graph loader (replaces `003-loader.lua`)                  | complete · all seven phases + entry-box set + size classes + all six routing kinds |
 | 306 | Lua language spec implementation                            | complete · init + invoke + teardown + per-worker module cache + per-edge native/JSON in & out |
 | 307 | C language spec implementation                              | complete · compile + lazy .c→.so + invoke + per-worker dlopen cache + JSON in/out (string-wrap + primitive-passthrough); typed-wrapper generator deferred to future enhancement |

@@ -1,17 +1,40 @@
 # 304 — Task dispatch layer (C, replaces synchronous executor)
 
 ## Status
-open · design rewritten 2026-05-20 to the attempt-task model.
-Current code is the older two-phase model (inline
-spawn-on-input-ready check inside producer's dispatch action).
-The refactor lands with issue 302's slab-allocator + refcount
-work, since the two are intertwined.
+in progress — every routing kind ships and every fixture passes
+end-to-end. The remaining piece, the attempt-task model rewrite
+(documented below), is a structural refactor with no observable
+behavior change; it has its own scope and lands separately when
+prioritised. See "Attempt-task refactor (future)" near the end.
 
 ## Current behavior
-The synchronous executor at `src/004-executor.lua` walks the graph in
-dependency order, calling each box's driver, capturing stdout, decoding
-JSON, and propagating values to downstream boxes. Single-threaded,
-blocking, runs in Lua coroutines.
+`src/012-dispatch.c` ships the C dispatch layer. The action body
+reads each input port (peek for single-spawn boxes, pop for
+multi-spawn ones; dual-ring for cross-language wires), invokes the
+resolved spec's `invoke` callback, picks the output branch per
+`routing.kind`, and pushes the output bytes to every outgoing
+connection's consumer slot. Each push fires `dispatch_spawn_if_ready`
+on the destination; consumers with all required inputs ready spawn
+as fresh tasks. Read boxes are pulled on demand by consumers, not
+spawned (issue 244).
+
+Routing kinds, all implemented:
+
+- `plain` — fan to every outgoing connection.
+- `comparator` — compare output to `comparand`, pick `lt`/`eq`/`gt`.
+- `iterator` — `slot_read_inc(counter, n_outputs)` picks the
+  branch; counter doubles as the per-cell tag so parallel iterator
+  tasks land in invocation order downstream.
+- `randomizer` — xorshift-mix the counter, modulo n_outputs.
+- `weighted` — cumulative-band lookup against counter scaled to a
+  fixed precision; ties absorbed by the last band.
+- `distributor` — argmin over downstream slot fill levels. Ties
+  resolve via counter-rotated iteration so a steady stream
+  spreads across equally-empty branches instead of always biasing
+  toward index 0.
+
+The synchronous executor at `src/004-executor.lua` is wholly
+replaced.
 
 ## Concept
 
@@ -451,6 +474,21 @@ Tag propagation is now wired through:
 Verified by re-running all 6 fixture maps and the dedicated
 `test_iterator_multi_fire` test (which now exercises tagged
 input slots).
+
+## Attempt-task refactor (future)
+
+The design rewrite below replaces the current two-phase
+("producer inlines spawn-if-ready check per consumer") shape with
+a single attempt-task shape — one allocation per invocation, one
+loop body. It is a structural refactor; observable behavior
+across every fixture stays the same.
+
+It does not block any phase-3 feature: every routing kind ships,
+read boxes pull on demand, multi-spawn iteration works, cross-
+language wires work. The refactor's value is in code clarity and
+allocation count, not user-visible features. Tracked here so the
+shape doesn't get lost; will move to its own issue when picked
+up.
 
 ### Design rewrite to the attempt-task model — 2026-05-20
 

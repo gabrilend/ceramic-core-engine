@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 /* {{{ Test harness */
 static int g_pass = 0;
@@ -324,6 +325,134 @@ static int test_iterator_multi_fire(void)
 }
 /* }}} */
 
+/* {{{ test_distributor_picks_least_full() — issue 304 */
+/* Build a temp map: one distributor `dist` (n_outputs=2) wired to
+ * two echo sinks `s0` / `s1`. Pre-fill `s1`'s input slot so its
+ * fill count is 1; leave `s0` empty. Push the distributor's input
+ * and spawn it. The distributor's argmin-over-fill picker should
+ * route to `s0` (less loaded). Only `s0` captures an output —
+ * `s1` was never spawn-triggered.
+ *
+ * Counter-rotated tie-breaking is also exercised here implicitly:
+ * if the picker had a bias toward branch 0 the test would pass
+ * spuriously, so the inverse case (s0 pre-filled, expect s1) is
+ * the actual proof. We run both. */
+static int build_distributor_fixture(char *dir, size_t cap)
+{
+    char tmpl[] = "/tmp/soramech-distributor-XXXXXX";
+    char *got = mkdtemp(tmpl);
+    if (!got) return -1;
+    snprintf(dir, cap, "%s", got);
+
+    /* Reach back at the project root's calc.lua via an absolute
+     * path. Keeps the temp fixture self-sufficient without copying
+     * a Lua file. resolve_path leaves absolute paths untouched. */
+    char abs[4096];
+    if (!realpath("tests/maps/calc/src/calc.lua", abs)) return -1;
+
+    char p[4096];
+    snprintf(p, sizeof p, "%s/meta.json", dir);
+    FILE *fp = fopen(p, "w");
+    if (!fp) return -1;
+    fputs("{\"name\":\"dist\",\"entry_box_id\":\"dist\"}", fp);
+    fclose(fp);
+
+    snprintf(p, sizeof p, "%s/boxes", dir);
+    mkdir(p, 0755);
+
+    snprintf(p, sizeof p, "%s/boxes/dist.json", dir);
+    fp = fopen(p, "w");
+    fprintf(fp,
+        "{\"id\":\"dist\",\"kind\":\"call\",\"lang\":\"lua\","
+        "\"ref\":\"%s\",\"fn\":\"add\","
+        "\"inputs\":["
+            "{\"name\":\"a\",\"type\":\"string\",\"value\":\"1\"},"
+            "{\"name\":\"b\",\"type\":\"string\",\"value\":\"0\"}"
+        "],"
+        "\"routing\":{\"kind\":\"distributor\",\"n_outputs\":2},"
+        "\"connections\":["
+            "{\"from_box\":\"dist\",\"from_branch\":\"out_0\","
+              "\"to_box\":\"s0\",\"to_input\":\"x\"},"
+            "{\"from_box\":\"dist\",\"from_branch\":\"out_1\","
+              "\"to_box\":\"s1\",\"to_input\":\"x\"}"
+        "]}", abs);
+    fclose(fp);
+
+    for (int i = 0; i < 2; i++) {
+        snprintf(p, sizeof p, "%s/boxes/s%d.json", dir, i);
+        fp = fopen(p, "w");
+        fprintf(fp,
+            "{\"id\":\"s%d\",\"kind\":\"call\",\"lang\":\"lua\","
+            "\"ref\":\"%s\",\"fn\":\"identity\","
+            "\"inputs\":[{\"name\":\"x\",\"type\":\"string\"}],"
+            "\"routing\":{\"kind\":\"plain\"}}",
+            i, abs);
+        fclose(fp);
+    }
+    return 0;
+}
+
+static void cleanup_distributor_fixture(const char *dir)
+{
+    char p[4096];
+    snprintf(p, sizeof p, "%s/boxes/dist.json", dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes/s0.json",   dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes/s1.json",   dir); unlink(p);
+    snprintf(p, sizeof p, "%s/meta.json",       dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes",           dir); rmdir(p);
+    rmdir(dir);
+}
+
+static int distributor_case(const char *dir, int pre_fill_branch,
+                            int expect_picked)
+{
+    runtime_t rt;
+    if (runtime_setup(&rt, dir, 2, 1) != 0) {
+        runtime_teardown(&rt); return 0;
+    }
+    char *err = NULL;
+    ASSERT(dispatch_push_literals(&rt.ctx, &err) == 0);
+
+    int dist = graph_box_index(rt.graph, "dist");
+    int s0   = graph_box_index(rt.graph, "s0");
+    int s1   = graph_box_index(rt.graph, "s1");
+    int targets[2] = { s0, s1 };
+    ASSERT(dist >= 0 && s0 >= 0 && s1 >= 0);
+
+    const box_t *busy = graph_box(rt.graph, targets[pre_fill_branch]);
+    ASSERT(busy && busy->input_slot_ids);
+    /* Inflate the chosen sink's slot fill so the distributor sees
+     * it as "loaded" without ever spawn-triggering it. */
+    ASSERT(slot_push(rt.slots, busy->input_slot_ids[0], "x", 1, 0) == 0);
+
+    dispatch_spawn_if_ready(&rt.ctx, dist, 0);
+    pool_wait_quiescent(rt.pool);
+
+    int picked    = targets[expect_picked];
+    int rejected  = targets[1 - expect_picked];
+    ASSERT(rt.ctx.last_outputs[picked]   != NULL);
+    ASSERT(rt.ctx.last_outputs[rejected] == NULL);
+
+    runtime_teardown(&rt);
+    return 1;
+}
+
+static int test_distributor_picks_least_full(void)
+{
+    char dir[1024];
+    ASSERT(build_distributor_fixture(dir, sizeof dir) == 0);
+
+    /* s1 pre-filled → s0 is less loaded → distributor picks s0. */
+    int ok_a = distributor_case(dir, /*pre_fill=*/1, /*expect=*/0);
+    /* s0 pre-filled → distributor picks s1. */
+    int ok_b = distributor_case(dir, /*pre_fill=*/0, /*expect=*/1);
+
+    cleanup_distributor_fixture(dir);
+    ASSERT(ok_a && ok_b);
+    return 1;
+}
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -342,6 +471,7 @@ int main(void)
     RUN(comparator_routing);
     RUN(iterator_routing_single_fire);
     RUN(iterator_multi_fire);
+    RUN(distributor_picks_least_full);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }
