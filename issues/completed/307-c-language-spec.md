@@ -1,14 +1,41 @@
 # 307 — C language spec implementation
 
 ## Status
-open
+complete
 
 ## Current behavior
-C boxes today run via `drivers/c.sh`, which compiles the source on
-demand (mtime-based recompile to a binary), then spawns the binary as
-a subprocess and reads stdout. Process spawn cost dominates; each call
-is its own freshly-launched executable. The phase 2 driver compiles
-to a standalone binary, not a `.so`.
+`langs/c/spec.{c,Makefile}` builds `langs/c/spec.so`, dlopened by the
+pool runner via the spec registry. C boxes compile lazily on first
+reference to a `.so` next to the user's source (mtime-checked), then
+invoke through a fixed function signature looked up via dlsym, with
+no subprocess and no IPC. Per-worker dlopen handle and function-
+pointer caches keep repeated calls to the same box at single-pointer
+overhead. Per-box `cflags`, `link_libs`, and `headers` fields on the
+box JSON (parsed by the loader, issue 305) feed into the compile
+command line.
+
+Cross-language JSON adaptation is symmetric on both sides:
+
+- **Input**: when the dispatch passes `input_native[i] == 0`,
+  `try_strip_json_primitive` parses the bytes as JSON. A JSON string
+  is unquoted into a per-invoke scratch buffer; JSON numbers, bools,
+  null, and parse failures pass through (their textual form is
+  already what `atol`/`strtod`/`strcmp` expect). JSON arrays /
+  objects passthrough too (the typed-wrapper generator that would
+  project them into typed values is an enhancement, not in scope
+  here).
+- **Output**: when the dispatch asks for `output_native == 0`,
+  `apply_typed_json_output` rewraps the user function's raw bytes
+  according to the box's declared `returns` type — strings are
+  JSON-quoted with proper escaping, primitives (`int`, `double`,
+  `bool`) pass through unchanged (already valid JSON spellings),
+  `void` writes zero bytes, `json` returns passthrough (the user
+  function chose the encoding). `bytes` returns currently
+  passthrough; base64 wrapping for non-printable payloads is a
+  known limitation flagged inline.
+
+Errors at any step (compile failure, missing symbol, oversized
+output) abort the dispatch with a stderr line identifying the box.
 
 ## Concept
 The C language spec implements `lang_spec_t` (issue 303) for C. It is
@@ -453,3 +480,117 @@ diverge from the byte-array shape.
 `tests/maps/hello/src/echo.c` ships two fixture functions; five
 tests in `tests/307-c-spec-test.c` compile and invoke them, plus
 the missing-symbol and bad-source failure modes.
+
+## Remaining work (history)
+
+1. ~~**JSON-input parsing (primitive level).** Done 2026-05-21.~~
+2. ~~**JSON-output writing.** Done — `apply_typed_json_output`
+   ships, covering string-wrap + primitive-passthrough + void.
+   The typed-wrapper generator the original design proposed
+   turned out unnecessary for the JSON-output goal: looking at
+   `box->returns` directly in `invoke` and rewrapping the user
+   function's raw bytes is enough.~~
+3. ~~**`compile` callback signature extension.** Done 2026-05-21.~~
+4. ~~**Per-box cflags / link_libs.** Done 2026-05-21.~~ The
+   `headers` field is still parsed-but-unused; it lights up
+   only with the typed-wrapper generator, which is now a
+   separate future enhancement (see below).
+
+## Future enhancements (not blocking, not in scope of 307)
+
+- **Typed-wrapper generator.** The "Box file convention: any C
+  function, no boilerplate" section above sketches a code
+  generator that emits a per-box `_wrap.c` translating SoraMech's
+  bytes-in / bytes-out ABI to a naturally typed C signature. The
+  fixed-signature convention covers every current use case, so
+  this is an ergonomics improvement, not a correctness gap.
+  Should land in its own issue if/when a real box wants it.
+- **Base64 for `bytes` returns.** Currently raw passthrough,
+  which produces invalid JSON for non-printable payloads. A
+  small `apply_typed_json_output` extension; no exercise today.
+
+## Implementation log (continued)
+
+### JSON-input acceptance (primitive level) — 2026-05-21
+
+`langs/c/spec.c` gains `try_strip_json_primitive`, called per
+input port when `input_native[i] == 0`. Behavior:
+
+- JSON string `"hello"` → user function receives the unquoted
+  bytes `hello` (5 bytes, no quotes).
+- JSON number / bool / null → passthrough; the JSON
+  representation is already the form the C function's
+  `atol` / `strncmp` / etc. expect.
+- JSON arrays / objects → passthrough (raw bytes); proper
+  projection needs the typed-wrapper generation that's still
+  ahead in items 2-4 above.
+- Parse failure → passthrough. Matches Lua's input-side
+  parse-with-fallback so producers that don't yet emit real
+  JSON keep working.
+
+The C spec's `invoke` reuses a stack-allocated scratch matrix
+(`scratch[C_MAX_INPUTS][4096]`) — the substituted bytes live
+inside the invoke's frame so the lifetime question is trivial,
+and no heap allocation happens on the call path. The C box
+function still uses the same fixed signature
+(`int fn(const void **, const int *, int, void *, int, int *)`);
+the JSON unwrap is transparent to it.
+
+This slice unblocks issue 312's slice 4.5 — Lua now writes JSON
+for cross-language outputs, and a Lua → C wire with a primitive
+payload (string or number) flows correctly end-to-end. The
+pipeline integration test (`tests/maps/pipeline`) exercises this
+path: Lua doubles a number, C adds one, Bash exclaims, end-to-end.
+
+`tests/307-c-spec-test.c` gains three tests:
+`invoke_json_string_input` (quotes stripped),
+`invoke_json_number_input` (raw passthrough on JSON number),
+`invoke_json_falls_back_on_non_json` (raw passthrough on parse
+failure). `langs/c/Makefile` now folds in `libs/json/json.c`
+the same way the Lua spec does.
+
+### compile callback signature + per-box build hints — 2026-05-21
+
+The spec interface's `compile` callback grew a third parameter,
+`const box_t *box`. Calls with a real box record (compile-button
+pipeline, future typed-wrapper generation) get access to the
+box's identity and compile hints; the internal lazy-compile path
+in `maybe_lazy_compile` passes `NULL` because it operates on a
+raw `.c` ref with no box context. `langs/lang-spec.h` carries a
+forward `typedef struct box box_t;` so specs that don't read the
+fields don't need the loader header pulled in.
+
+`box_t` (in `src/010-graph-loader.h`) grew four optional fields,
+all parsed from the box JSON when present:
+
+- `cflags` — a single string of additional flags appended to gcc.
+  Whitespace-split into argv tokens at compile time.
+- `link_libs[]` — array of library names. Each becomes a
+  `-l<name>` argv entry. The pointer array is malloc'd and freed
+  by `graph_destroy`; the strings inside live in the JSON arena.
+- `headers[]` — array of header names. Parsed and stored; not yet
+  consumed by the spec. Lights up with wrapper generation.
+- `n_link_libs` / `n_headers` — counts.
+
+`langs/c/spec.c`'s `c_compile` walks the box's `cflags` and
+`link_libs` into a bounded argv (96 slots), forks gcc, and waits.
+The previous fixed-flags-only execlp call is replaced by execvp
+so the variable arg list can flow through. Failure modes (cflags
+too long, too many tokens, argv overflow, oom) all return -1
+with a stderr line naming the box id.
+
+Two new end-to-end tests in `tests/307-c-spec-test.c`:
+
+- `compile_with_cflags` — a probe source whose return depends on
+  `#ifdef SORAMECH_FLAG_ON`. Builds twice: once with no hints
+  (returns "off"), once with `cflags="-DSORAMECH_FLAG_ON"`
+  (returns "on"). Proves the cflags string reaches gcc.
+- `compile_with_link_libs` — a source that calls `sqrt(16.0)`
+  from `<math.h>`. Builds with `link_libs=["m"]`, invokes,
+  receives "4". Proves the `-l<name>` translation works.
+
+The compile pipeline (`scripts/soramech-compile.sh`) currently
+ignores the box's cflags / link_libs when its informational
+pre-compile of C boxes runs — the runtime lazy-compile is the
+authoritative path. Cleaning that up so the pre-compile uses the
+same flags is a small follow-on; out of scope for this slice.

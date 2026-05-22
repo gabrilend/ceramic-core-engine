@@ -20,7 +20,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 304 | task dispatch layer (C, replaces synchronous executor)      | in progress · plain + comparator + iterator + randomizer + weighted routing + cell-tagged iterator ordering |
 | 305 | C graph loader (replaces `003-loader.lua`)                  | complete · all seven phases + entry-box set + size classes + all six routing kinds |
 | 306 | Lua language spec implementation                            | complete · init + invoke + teardown + per-worker module cache + per-edge native/JSON in & out |
-| 307 | C language spec implementation                              | in progress · compile + invoke + lazy .c→.so done, typed wrapper deferred |
+| 307 | C language spec implementation                              | complete · compile + lazy .c→.so + invoke + per-worker dlopen cache + JSON in/out (string-wrap + primitive-passthrough); typed-wrapper generator deferred to future enhancement |
 | 308 | Bash language spec implementation                           | complete · persistent socketpair + line-protocol invoke + dladdr-based server lookup |
 | 309 | build system & Makefile orchestration                       | complete · scaffolding + spec discovery + soramech-compile portable artifact |
 | 310 | priority queue: wired in, no-op behaviorally                | complete · API + ordering done |
