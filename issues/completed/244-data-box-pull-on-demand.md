@@ -1,10 +1,13 @@
 # 244 — Data boxes as round-robin default providers, pulled on demand
 
 ## Status
-in progress — pull-on-demand model in place end-to-end for the
-common case (single read predecessor); round-robin code path
-written and unit-tested at the loader, but no integration fixture
-exercises it yet (see "Remaining" below)
+complete — pull-on-demand model ships end-to-end for both the
+single-predecessor case (covered by the read-literal and hello
+fixtures) and the round-robin case (covered by
+`test_read_predecessor_rotation` in `tests/012-dispatch-test.c`,
+which builds a three-read-box fixture, serial-spawns the
+consumer three times, and verifies each spawn picks the next
+predecessor in the loader's list order).
 
 ## Current behavior
 
@@ -177,27 +180,16 @@ pulls fresh from the read box (or its rotation).
 - `docs/001-architecture.md` — the attempt loop (described in the
   "structural shell" section) is the place where the pull happens.
 
-## Remaining
+## Out of scope for this issue
 
-- **End-to-end round-robin fixture.** The counter-slot rotation
-  path is wired (atomic increment via the existing slot-store
-  counter primitive, mod n_predecessors) and the loader allocates
-  one only when a port has more than one read predecessor. It is
-  unit-tested at the loader level (`read_predecessor_list` in
-  `tests/010-graph-loader-test.c` confirms the three predecessors
-  land in the consumer's port list). It has not yet been exercised
-  by an integration fixture — that needs a multi-spawn consumer
-  (e.g. iterator-fed) wired to multiple read predecessors, and the
-  fixture's value-rotation needs to be observable in the pool
-  runner's output. A small follow-on; the code path will light up
-  with the first map that actually wants the rotation.
 - **Schema validation in `src/001-schema.lua`.** The phase 2 Lua
-  schema is still the canonical author-side check; the C loader
-  in phase 3 enforces topology but defers the "every required
-  input has a feeder, a literal, or is optional" rule to graph
-  validation in the editor. Adding the "read-box predecessor
-  satisfies the requirement" condition there is a follow-on
-  inside phase 2's schema work.
+  schema is the canonical author-side check that runs in the
+  editor. Adding the "read-box predecessor satisfies a required
+  port" condition there belongs to phase-2 schema work, not to
+  this issue's phase-3 dispatch redesign. The C loader's topology
+  validation already accepts read-box-fed ports as satisfied
+  (otherwise nothing here would work); the editor's static check
+  is the part that's still on the old "wire or literal" rule.
 
 ## Open questions
 

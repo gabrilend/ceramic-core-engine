@@ -325,6 +325,89 @@ static int test_iterator_multi_fire(void)
 }
 /* }}} */
 
+/* {{{ test_read_predecessor_rotation() — issue 244 */
+/* Three read boxes feed the same consumer input port. Spawning the
+ * consumer three times in a row should rotate through the three
+ * cached values via the per-port atomic counter the loader
+ * allocated. Serial spawns make the order deterministic — counter
+ * 0 → r0, counter 1 → r1, counter 2 → r2.
+ *
+ * This is the end-to-end test 244 owed for the multi-predecessor
+ * rotation path. The single-predecessor pull is already exercised
+ * by the read-literal and hello fixtures. */
+static int test_read_predecessor_rotation(void)
+{
+    char tmpl[] = "/tmp/soramech-rotation-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char abs[4096];
+    ASSERT(realpath("tests/maps/calc/src/calc.lua", abs));
+
+    char p[4096];
+    snprintf(p, sizeof p, "%s/meta.json", dir);
+    FILE *fp = fopen(p, "w");
+    fputs("{\"name\":\"rot\",\"entry_box_id\":\"sink\"}", fp); fclose(fp);
+    snprintf(p, sizeof p, "%s/boxes", dir); mkdir(p, 0755);
+
+    for (int i = 0; i < 3; i++) {
+        snprintf(p, sizeof p, "%s/boxes/r%d.json", dir, i);
+        fp = fopen(p, "w");
+        fprintf(fp,
+            "{\"id\":\"r%d\",\"kind\":\"read\",\"value\":\"v%d\","
+            "\"connections\":[{\"to_box\":\"sink\",\"to_input\":\"x\"}]}",
+            i, i);
+        fclose(fp);
+    }
+    snprintf(p, sizeof p, "%s/boxes/sink.json", dir);
+    fp = fopen(p, "w");
+    fprintf(fp,
+        "{\"id\":\"sink\",\"kind\":\"call\",\"lang\":\"lua\","
+        "\"ref\":\"%s\",\"fn\":\"identity\","
+        "\"inputs\":[{\"name\":\"x\",\"type\":\"string\"}],"
+        "\"routing\":{\"kind\":\"plain\"}}",
+        abs);
+    fclose(fp);
+
+    runtime_t rt;
+    int ok = (runtime_setup(&rt, dir, 1, 1) == 0);
+    if (ok) {
+        int sink = graph_box_index(rt.graph, "sink");
+        ASSERT(sink >= 0);
+        const box_t *sb = graph_box(rt.graph, sink);
+        ASSERT(sb && sb->n_read_predecessors &&
+               sb->n_read_predecessors[0] == 3 &&
+               sb->read_pred_counter_slot[0] >= 0);
+
+        /* Each k-th spawn should pull from the predecessor at
+         * counter index k. Read directly from the loader's list so
+         * the test is agnostic to whatever filesystem order
+         * surfaced r0 / r1 / r2 in. */
+        for (int k = 0; k < 3; k++) {
+            int pred_idx = sb->read_predecessor_ids[0][k];
+            const box_t *pred = graph_box(rt.graph, pred_idx);
+            ASSERT(pred && pred->cached_value);
+
+            dispatch_spawn(&rt.ctx, sink, 0);
+            pool_wait_quiescent(rt.pool);
+            ASSERT(rt.ctx.last_outputs[sink]);
+            ASSERT(strcmp(rt.ctx.last_outputs[sink],
+                          pred->cached_value) == 0);
+        }
+    }
+    runtime_teardown(&rt);
+
+    for (int i = 0; i < 3; i++) {
+        snprintf(p, sizeof p, "%s/boxes/r%d.json", dir, i); unlink(p);
+    }
+    snprintf(p, sizeof p, "%s/boxes/sink.json", dir); unlink(p);
+    snprintf(p, sizeof p, "%s/meta.json",       dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes",           dir); rmdir(p);
+    rmdir(dir);
+    return ok;
+}
+/* }}} */
+
 /* {{{ test_distributor_picks_least_full() — issue 304 */
 /* Build a temp map: one distributor `dist` (n_outputs=2) wired to
  * two echo sinks `s0` / `s1`. Pre-fill `s1`'s input slot so its
@@ -471,6 +554,7 @@ int main(void)
     RUN(comparator_routing);
     RUN(iterator_routing_single_fire);
     RUN(iterator_multi_fire);
+    RUN(read_predecessor_rotation);
     RUN(distributor_picks_least_full);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
