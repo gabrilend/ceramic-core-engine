@@ -23,21 +23,16 @@
  * (issue 303) applies upstream — graph_load's caller decides
  * whether to abort or surface the error.
  *
- * What's implemented now: phases 1 (directory walk), 2 (JSON
- * parse), and the first part of 3 (per-box schema validation —
- * kind valid, id unique, kind-specific required fields present,
- * routing schema validated).
+ * Pipeline: directory walk, JSON parse, per-box schema validation,
+ * topology resolution (string refs → integer indices), non-iterator
+ * cycle rejection, per-edge same-language classification (issue 312),
+ * entry-box detection. graph_attach_runtime then allocates input
+ * slots sized per the feeders' declared output_capacity, resolves
+ * each call box's language spec, and enumerates the distinct
+ * languages and slot size classes the map uses.
  *
- * What's deferred to follow-ons within 305:
- *  - Phase 4: topology validation. Connections currently store
- *    string refs (to_box / to_input); resolving those to integer
- *    indices, verifying both endpoints exist, and detecting
- *    non-iterator cycles all land in the next iteration.
- *  - Phase 5: slot size class enumeration.
- *  - Phase 6: entry-box detection.
- *  - Phase 7: language enumeration.
- *
- * None of those block 301 / 303 / 306 from starting.
+ * Errors out of any phase abort the load and return NULL with a
+ * diagnostic via *err.
  */
 
 #ifndef SORAMECH_GRAPH_LOADER_H
@@ -62,9 +57,9 @@ typedef enum {
     ROUTING_PLAIN,
     ROUTING_COMPARATOR,
     ROUTING_ITERATOR,
-    ROUTING_RANDOMIZER,    /* not yet parsed; reserved */
-    ROUTING_WEIGHTED,      /* not yet parsed; reserved */
-    ROUTING_DISTRIBUTOR,   /* not yet parsed; reserved */
+    ROUTING_RANDOMIZER,
+    ROUTING_WEIGHTED,
+    ROUTING_DISTRIBUTOR,
 } routing_kind_t;
 
 typedef struct {
@@ -100,7 +95,10 @@ typedef struct {
 /* }}} */
 
 /* {{{ Box */
-typedef struct {
+/* Tagged so the forward declaration `typedef struct box box_t;` in
+ * langs/lang-spec.h matches and the compile callback can accept a
+ * `const box_t *` parameter. */
+typedef struct box {
     const char    *id;
     box_kind_t     kind;
 
@@ -108,8 +106,22 @@ typedef struct {
     const char    *lang;          /* "lua" / "c" / "bash" / NULL    */
     const char    *ref;           /* source file (call only)        */
     const char    *fn;            /* function name (call only)      */
+    const char    *returns;       /* declared output type: "string"/"int"/
+                                   * "double"/"bool"/"bytes"/"json"/"void"
+                                   * or NULL when the user hasn't said.
+                                   * Read by specs on the JSON-output
+                                   * path (issue 307 item 2). */
     routing_t      routing;       /* call only                      */
     int            output_capacity; /* 0 means variable-size        */
+
+    /* Per-box compile hints, optional, currently used by the C spec
+     * (issue 307). Lua / Bash boxes leave these at NULL / 0. All
+     * point into the graph's arena; no separate ownership. */
+    const char    *cflags;        /* extra flags appended to `cc`   */
+    int            n_link_libs;
+    const char   **link_libs;     /* each becomes `-l<name>`        */
+    int            n_headers;
+    const char   **headers;       /* `#include`d by generated wrappers */
 
     /* Read boxes */
     const char    *path;          /* file path (read only; ignored if value set) */
@@ -144,13 +156,6 @@ typedef struct {
      * JSON. */
     int           *input_edge_native;   /* n_inputs entries, or NULL              */
     int           *output_edge_native;  /* n_connections entries, or NULL         */
-
-    /* The earlier per-box approximation, retained until the
-     * dispatch fully switches to per-edge consultation. Computed as
-     * (all input_edge_native bits set) && (all output_edge_native
-     * bits set) — i.e. true only for boxes inside a same-language
-     * island with no cross-language neighbours. */
-    int            use_native_invoke;
 } box_t;
 
 /* Slot mode constants used by box_t.input_slot_modes[]. */
@@ -186,24 +191,36 @@ int          graph_box_index   (const graph_t *g, const char *id);
  * to skip workers for specs the map doesn't actually use. */
 int          graph_n_languages (const graph_t *g);
 const char  *graph_language    (const graph_t *g, int i);
+
+/* Entry-box set: indices into graph->boxes of boxes the pool runner
+ * submits as initial tasks. A box qualifies when it is BOX_CALL or
+ * BOX_WRITE AND every non-optional input is fed only by BOX_READ
+ * value sources (or has zero inputs). Filled in by graph_load. */
+int          graph_n_entry_boxes(const graph_t *g);
+int          graph_entry_box    (const graph_t *g, int i);
+
+/* Distinct input-slot cell sizes the graph uses. Filled in by
+ * graph_attach_runtime after the per-port slot widths are picked.
+ * The slot store can use this to pre-populate free lists. */
+int          graph_n_size_classes(const graph_t *g);
+int          graph_size_class    (const graph_t *g, int i);
 /* }}} */
 
-/* {{{ Runtime attach (phase 5 + 7)
+/* {{{ Runtime attach
  *
- * Allocates one slot per input port for every box and resolves each
- * call box's language spec from the registry. After this call, the
- * dispatch layer can read inputs via `box->input_slot_ids[i]` and
+ * Allocates one input slot per input port for every box and resolves
+ * each call box's language spec from the registry. After this call,
+ * the dispatch layer can read inputs via `box->input_slot_ids[i]` and
  * invoke the spec via `spec_registry_at(r, box->spec_idx)`.
  *
- * Slot defaults for this iteration:
- *   - cell_capacity = `default_cell_bytes` (or 4096 if 0)
- *   - n_cells = 1 (peek mode)
- *   - flags = 0
+ * Per-port slot sizing: cell_capacity = max(declared output_capacity
+ * across feeders, default_cell_bytes). The LARGE_VALUE flag is set if
+ * any feeder has output_capacity == 0 (variable-size). Multi-spawn
+ * boxes (any box reachable from an iterator-routing call box) get an
+ * N-cell pop ring; single-spawn boxes get a 1-cell peek slot.
  *
- * Iterator-fed wires and the multi-cell pop mode land in a follow-on
- * — they need compile-time wire classification (issue 305 phase 5
- * proper) that this iteration ducks. Returns 0 on success, -1 with
- * *err set on the first resolution or allocation failure. */
+ * Returns 0 on success, -1 with *err set on the first resolution or
+ * allocation failure. */
 struct slot_store;        /* opaque forward decl */
 struct spec_registry;     /* opaque forward decl */
 int graph_attach_runtime(graph_t *g,

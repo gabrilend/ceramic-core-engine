@@ -18,7 +18,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 302 | per-task slot store with wire-held references               | complete · unified allocator + refcounted recycling on every byte path (slot cells, variable-size payloads, dispatch input/output buffers) + eager neighbor-merge + quiescence-trigger deep sweep |
 | 303 | language runtime spec (pluggable per-language invocation)   | complete · registry + per-worker init + pool hook + lang filtering |
 | 304 | task dispatch layer (C, replaces synchronous executor)      | in progress · plain + comparator + iterator + randomizer + weighted routing + cell-tagged iterator ordering |
-| 305 | C graph loader (replaces `003-loader.lua`)                  | in progress · attach + lang enum + 312 fast-path classification |
+| 305 | C graph loader (replaces `003-loader.lua`)                  | complete · all seven phases + entry-box set + size classes + all six routing kinds |
 | 306 | Lua language spec implementation                            | in progress · init + invoke + teardown + per-worker module cache done |
 | 307 | C language spec implementation                              | in progress · compile + invoke + lazy .c→.so done, typed wrapper deferred |
 | 308 | Bash language spec implementation                           | complete · persistent socketpair + line-protocol invoke + dladdr-based server lookup |

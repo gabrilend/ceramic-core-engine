@@ -10,8 +10,13 @@
  * map. Box / connection / input arrays are plain malloc — fixed
  * size after the load completes. graph_destroy frees both.
  *
- * Designed in issue 305. Phases 4–7 (topology, size classes, entry
- * boxes, language enumeration) ship in follow-on iterations.
+ * Designed in issue 305. All seven phases now ship here: directory
+ * walk, parse, schema, topology resolution + cycle rejection, slot
+ * size-class enumeration, entry-box detection, language
+ * enumeration. The reverse-scan over producers feeding a given
+ * (box, port) is factored into scan_input_feeders so the
+ * native-edge, large-value, slot-sizing, size-class, and entry-box
+ * passes share one definition of "feeder".
  */
 
 #include "010-graph-loader.h"
@@ -40,6 +45,12 @@ struct graph {
 
     int           n_languages;
     const char  **languages;   /* arena-owned strings */
+
+    int           n_entry_boxes;
+    int          *entry_box_ids;   /* indices into boxes[] */
+
+    int           n_size_classes;
+    int          *size_classes;    /* distinct input-slot cell widths */
 };
 /* }}} */
 
@@ -68,6 +79,48 @@ static int ends_with(const char *s, const char *suffix)
     size_t ls = strlen(s), lf = strlen(suffix);
     if (ls < lf) return 0;
     return memcmp(s + ls - lf, suffix, lf) == 0;
+}
+/* }}} */
+
+/* {{{ input_feeders_t / scan_input_feeders() — one reverse-scan, four facts
+ *
+ * Three earlier loops in this file walked all boxes looking for
+ * connections ending at a given (dst_box, port) — the same scan,
+ * collecting different facts. They are now one helper. dst_lang may
+ * be NULL when the caller doesn't care about the native count. */
+typedef struct {
+    int n_feeders;     /* total connections ending at (dst_box, port)        */
+    int n_native;      /* feeders that are call boxes sharing dst_lang       */
+    int n_non_read;    /* feeders that aren't BOX_READ value sources         */
+    int has_variable;  /* any feeder declares output_capacity == 0           */
+    int max_capacity;  /* max declared output_capacity across feeders (>= 0) */
+} input_feeders_t;
+
+static input_feeders_t scan_input_feeders(const struct graph *g,
+                                          int dst_box, int port_idx,
+                                          const char *dst_lang)
+{
+    input_feeders_t f = {0};
+    for (int p = 0; p < g->n_boxes; p++) {
+        const box_t *prod = &g->boxes[p];
+        for (int k = 0; k < prod->n_connections; k++) {
+            const connection_t *c = &prod->connections[k];
+            if (c->to_box_idx   != dst_box)  continue;
+            if (c->to_input_idx != port_idx) continue;
+            f.n_feeders++;
+            if (prod->kind != BOX_READ) f.n_non_read++;
+            if (dst_lang && prod->kind == BOX_CALL && prod->lang &&
+                strcmp(prod->lang, dst_lang) == 0) {
+                f.n_native++;
+            }
+            if (prod->output_capacity == 0) {
+                f.has_variable = 1;
+            } else if (prod->output_capacity > f.max_capacity) {
+                f.max_capacity = prod->output_capacity;
+            }
+        }
+    }
+    return f;
 }
 /* }}} */
 
@@ -201,9 +254,27 @@ static int parse_routing(const json_node_t *r, routing_t *out,
         return 0;
     }
 
+    if (strcmp(kind, "distributor") == 0) {
+        /* Round-robin fan-out: each firing routes to the next branch
+         * index (mod n_outputs). The dispatch layer uses an atomic
+         * counter slot the same way it does for iterator routing. */
+        out->kind = ROUTING_DISTRIBUTOR;
+        json_node_t *n = json_object_get(r, "n_outputs");
+        if (!n || json_kind(n) != JSON_NUMBER) {
+            *err = err_fmt("box '%s': distributor routing missing 'n_outputs'", box_id);
+            return -1;
+        }
+        out->n_outputs = (int)json_number_value(n);
+        if (out->n_outputs < 1) {
+            *err = err_fmt("box '%s': distributor n_outputs must be >= 1", box_id);
+            return -1;
+        }
+        return 0;
+    }
+
     *err = err_fmt("box '%s': unknown routing.kind '%s' "
                    "(supported: plain, comparator, iterator, "
-                   "randomizer, weighted)",
+                   "randomizer, weighted, distributor)",
                    box_id, kind);
     return -1;
 }
@@ -336,7 +407,6 @@ static int parse_box_file(graph_t *g, box_t *box,
     box->spec_idx          = -1;   /* unresolved until graph_attach_runtime */
     box->counter_slot_id   = -1;   /* only iterator boxes allocate one      */
     box->multi_spawn       = 0;    /* set by graph_attach_runtime           */
-    box->use_native_invoke = 0;    /* set by graph_attach_runtime (312)     */
 
     /* id */
     json_node_t *id_n = json_object_get(n, "id");
@@ -386,6 +456,74 @@ static int parse_box_file(graph_t *g, box_t *box,
         json_node_t *oc_n = json_object_get(n, "output_capacity");
         if (oc_n && json_kind(oc_n) == JSON_NUMBER) {
             box->output_capacity = (int)json_number_value(oc_n);
+        }
+
+        /* Declared return type. Optional; absence means "raw bytes,
+         * format up to the spec." Specs that care (the C spec's
+         * JSON-output branch, for example) read this on the
+         * output_native=0 path. */
+        json_node_t *ret_n = json_object_get(n, "returns");
+        if (ret_n && json_kind(ret_n) == JSON_STRING) {
+            box->returns = json_string_value(ret_n);
+        }
+
+        /* Per-box compile hints (issue 307 items 3+4). All optional;
+         * any spec that ignores them gets the default behaviour. The
+         * arena owns the strings and arrays — graph_destroy doesn't
+         * free them. */
+        json_node_t *cf_n = json_object_get(n, "cflags");
+        if (cf_n && json_kind(cf_n) == JSON_STRING) {
+            box->cflags = json_string_value(cf_n);
+        }
+        /* The pointer array is malloc'd (and freed in graph_destroy);
+         * the string contents are owned by the JSON arena and stay
+         * alive for the run. Same pattern as the routing weights
+         * array elsewhere in this file. */
+        json_node_t *ll_n = json_object_get(n, "link_libs");
+        if (ll_n && json_kind(ll_n) == JSON_ARRAY) {
+            int sz = json_array_size(ll_n);
+            if (sz > 0) {
+                const char **arr = malloc((size_t)sz * sizeof(*arr));
+                if (!arr) {
+                    *err = err_fmt("%s: oom for link_libs", box->id);
+                    return -1;
+                }
+                for (int i = 0; i < sz; i++) {
+                    json_node_t *e = json_array_at(ll_n, i);
+                    if (!e || json_kind(e) != JSON_STRING) {
+                        free(arr);
+                        *err = err_fmt("%s: link_libs[%d] is not a string",
+                                       box->id, i);
+                        return -1;
+                    }
+                    arr[i] = json_string_value(e);
+                }
+                box->link_libs   = arr;
+                box->n_link_libs = sz;
+            }
+        }
+        json_node_t *hd_n = json_object_get(n, "headers");
+        if (hd_n && json_kind(hd_n) == JSON_ARRAY) {
+            int sz = json_array_size(hd_n);
+            if (sz > 0) {
+                const char **arr = malloc((size_t)sz * sizeof(*arr));
+                if (!arr) {
+                    *err = err_fmt("%s: oom for headers", box->id);
+                    return -1;
+                }
+                for (int i = 0; i < sz; i++) {
+                    json_node_t *e = json_array_at(hd_n, i);
+                    if (!e || json_kind(e) != JSON_STRING) {
+                        free(arr);
+                        *err = err_fmt("%s: headers[%d] is not a string",
+                                       box->id, i);
+                        return -1;
+                    }
+                    arr[i] = json_string_value(e);
+                }
+                box->headers   = arr;
+                box->n_headers = sz;
+            }
         }
     } else if (box->kind == BOX_READ) {
         /* read accepts EITHER an inline `value` literal OR a `path`
@@ -595,6 +733,51 @@ static int detect_cycles(const graph_t *g, char **err)
 }
 /* }}} */
 
+/* {{{ detect_entry_boxes() — phase 6
+ *
+ * Fills g->entry_box_ids with the indices of boxes the pool runner
+ * should submit as initial tasks. A box qualifies when:
+ *   - it is BOX_CALL or BOX_WRITE (the kinds that run as tasks —
+ *     BOX_READ is a value source, never a task), AND
+ *   - every non-optional input port has zero non-read feeders.
+ *     Read boxes (literal-or-file value sources) don't count as
+ *     upstream computation; a box fed only by reads can fire
+ *     immediately on startup. Optional ports are ignored.
+ *
+ * A zero-input call box passes the loop vacuously and qualifies.
+ *
+ * The scan reuses scan_input_feeders so its definition of "feeder"
+ * matches the native-edge and large-value passes — single source of
+ * truth for "what feeds (box, port)". */
+static int detect_entry_boxes(graph_t *g, char **err)
+{
+    if (g->n_boxes <= 0) {
+        g->n_entry_boxes = 0;
+        g->entry_box_ids = NULL;
+        return 0;
+    }
+    int *ids = malloc((size_t)g->n_boxes * sizeof(int));
+    if (!ids) { *err = err_fmt("out of memory"); return -1; }
+
+    int count = 0;
+    for (int i = 0; i < g->n_boxes; i++) {
+        const box_t *b = &g->boxes[i];
+        if (b->kind != BOX_CALL && b->kind != BOX_WRITE) continue;
+
+        int qualifies = 1;
+        for (int port = 0; port < b->n_inputs; port++) {
+            if (b->inputs[port].optional) continue;
+            input_feeders_t f = scan_input_feeders(g, i, port, NULL);
+            if (f.n_non_read > 0) { qualifies = 0; break; }
+        }
+        if (qualifies) ids[count++] = i;
+    }
+    g->n_entry_boxes = count;
+    g->entry_box_ids = (count > 0) ? ids : (free(ids), NULL);
+    return 0;
+}
+/* }}} */
+
 /* {{{ resolve_topology() — phase 4 (partial: endpoints only) */
 /* Walks every outgoing connection on every box. Looks up `to_box`
  * as a box id and `to_input` as one of that box's declared input
@@ -671,6 +854,7 @@ graph_t *graph_load(const char *map_dir, char **err)
     if (load_boxes(g, map_dir, err)    != 0) { graph_destroy(g); return NULL; }
     if (resolve_topology(g, err)       != 0) { graph_destroy(g); return NULL; }
     if (detect_cycles(g, err)          != 0) { graph_destroy(g); return NULL; }
+    if (detect_entry_boxes(g, err)     != 0) { graph_destroy(g); return NULL; }
 
     /* Compute the same-language fast path flag per call box (issue
      * 312). A box is "native-eligible" iff every adjacent call box —
@@ -690,7 +874,6 @@ graph_t *graph_load(const char *map_dir, char **err)
         box_t *b = &g->boxes[i];
         b->input_edge_native  = NULL;
         b->output_edge_native = NULL;
-        b->use_native_invoke  = 0;
         if (b->kind != BOX_CALL || !b->lang) continue;
 
         /* Allocate per-port input bits and per-connection output
@@ -722,35 +905,18 @@ graph_t *graph_load(const char *map_dir, char **err)
             if (!native) all_outs_native = 0;
         }
 
-        /* Incoming edges: for each input port, scan every producer
-         * in the graph; the port is native iff at least one
-         * producer feeds it AND every feeding producer shares this
-         * box's language. (A mixed-language fan-in downgrades the
-         * port to JSON for the whole port — the slot can carry only
-         * one format, and JSON is the common denominator.) */
-        int all_ins_native = 1;
-        for (int port = 0; port < b->n_inputs; port++) {
-            int any_producer = 0;
-            int all_native   = 1;
-            for (int p = 0; p < g->n_boxes; p++) {
-                const box_t *prod = &g->boxes[p];
-                for (int k = 0; k < prod->n_connections; k++) {
-                    if (prod->connections[k].to_box_idx != i)        continue;
-                    if (prod->connections[k].to_input_idx != port)   continue;
-                    any_producer = 1;
-                    int native = (prod->kind == BOX_CALL && prod->lang
-                                  && strcmp(prod->lang, b->lang) == 0);
-                    if (!native) all_native = 0;
-                }
-            }
-            b->input_edge_native[port] = (any_producer && all_native) ? 1 : 0;
-            if (!b->input_edge_native[port]) all_ins_native = 0;
-        }
+        (void)all_outs_native;   /* slice 5 of 312 removed the per-box bit */
 
-        /* Retain the per-box bit for dispatch sites that haven't
-         * been migrated to per-edge consultation yet. Only true
-         * when EVERY edge in both directions is native. */
-        b->use_native_invoke = (all_ins_native && all_outs_native) ? 1 : 0;
+        /* Incoming edges: for each input port the port is native iff
+         * it has at least one feeder AND every feeder is a call box
+         * sharing this box's language. A mixed-language fan-in
+         * downgrades the port to JSON — the slot can carry only one
+         * format and JSON is the common denominator. */
+        for (int port = 0; port < b->n_inputs; port++) {
+            input_feeders_t f = scan_input_feeders(g, i, port, b->lang);
+            b->input_edge_native[port] = (f.n_feeders > 0 &&
+                                          f.n_native == f.n_feeders) ? 1 : 0;
+        }
     }
     return g;
 }
@@ -769,10 +935,16 @@ void graph_destroy(graph_t *g)
             free(g->boxes[i].input_edge_native);
             free(g->boxes[i].output_edge_native);
             free((double *)g->boxes[i].routing.weights);
+            /* per-box compile hint pointer arrays (strings inside
+             * are arena-owned; only the array itself is heap) */
+            free((void *)g->boxes[i].link_libs);
+            free((void *)g->boxes[i].headers);
         }
         free(g->boxes);
     }
     free(g->languages);    /* element strings live in the arena */
+    free(g->entry_box_ids);
+    free(g->size_classes);
     free(g->map_dir);
     json_arena_destroy(g->arena);
     free(g);
@@ -816,6 +988,22 @@ const char *graph_language(const graph_t *g, int i)
 {
     if (!g || i < 0 || i >= g->n_languages) return NULL;
     return g->languages[i];
+}
+
+int graph_n_entry_boxes(const graph_t *g) { return g ? g->n_entry_boxes : 0; }
+
+int graph_entry_box(const graph_t *g, int i)
+{
+    if (!g || i < 0 || i >= g->n_entry_boxes) return -1;
+    return g->entry_box_ids[i];
+}
+
+int graph_n_size_classes(const graph_t *g) { return g ? g->n_size_classes : 0; }
+
+int graph_size_class(const graph_t *g, int i)
+{
+    if (!g || i < 0 || i >= g->n_size_classes) return -1;
+    return g->size_classes[i];
 }
 /* }}} */
 
@@ -921,29 +1109,31 @@ int graph_attach_runtime(graph_t *g,
              * 0 and effectively get FIFO ordering. */
             int base_flags = b->multi_spawn ? SLOT_FLAG_TAGGED : 0;
             for (int j = 0; j < b->n_inputs; j++) {
-                /* If any producer feeding this input port declares
-                 * variable-size output (output_capacity == 0), the
-                 * slot needs the large-value heap path so pushes
-                 * larger than default_cell_bytes succeed. Read boxes
-                 * default to output_capacity 0 since they emit
-                 * arbitrary file contents; a call box opts in by
-                 * setting output_capacity to 0 in its JSON. Issue
-                 * 302 follow-on. */
+                /* One reverse-scan, four facts: variable-size
+                 * detection (LARGE_VALUE flag) and max declared
+                 * capacity (cell width) both come from the same
+                 * walk. Read boxes default to output_capacity 0
+                 * since they emit arbitrary file contents; a call
+                 * box opts in by setting output_capacity to 0. */
+                input_feeders_t fdr = scan_input_feeders(g, i, j, NULL);
                 int slot_flags = base_flags;
-                for (int p = 0; p < g->n_boxes && !(slot_flags & SLOT_FLAG_LARGE_VALUE); p++) {
-                    const box_t *prod = &g->boxes[p];
-                    for (int k = 0; k < prod->n_connections; k++) {
-                        if (prod->connections[k].to_box_idx == i &&
-                            prod->connections[k].to_input_idx == j &&
-                            prod->output_capacity == 0) {
-                            slot_flags |= SLOT_FLAG_LARGE_VALUE;
-                            break;
-                        }
-                    }
+                if (fdr.has_variable) slot_flags |= SLOT_FLAG_LARGE_VALUE;
+
+                int cell_bytes = (fdr.max_capacity > default_cell_bytes)
+                                    ? fdr.max_capacity : default_cell_bytes;
+
+                /* Slice 3 of issue 312: call-box input ports become
+                 * dual-ring slots so producers can write native or
+                 * JSON per per-edge classification. DUAL_RING doesn't
+                 * combine with LARGE_VALUE / TAGGED yet, so ports
+                 * requiring those fall back to single-ring. */
+                if (b->kind == BOX_CALL && b->lang &&
+                    !(slot_flags & (SLOT_FLAG_LARGE_VALUE | SLOT_FLAG_TAGGED))) {
+                    slot_flags |= SLOT_FLAG_DUAL_RING;
                 }
 
                 slot_id_t id = slot_alloc((slot_store_t *)slots,
-                                          default_cell_bytes, n_cells,
+                                          cell_bytes, n_cells,
                                           slot_flags);
                 if (id == SLOT_INVALID) {
                     if (err) *err = err_fmt("box '%s': failed to allocate "
@@ -975,9 +1165,10 @@ int graph_attach_runtime(graph_t *g,
          * concurrent-safe semantics. */
         b->counter_slot_id = -1;
         if (b->kind == BOX_CALL &&
-            (b->routing.kind == ROUTING_ITERATOR   ||
-             b->routing.kind == ROUTING_RANDOMIZER ||
-             b->routing.kind == ROUTING_WEIGHTED)) {
+            (b->routing.kind == ROUTING_ITERATOR    ||
+             b->routing.kind == ROUTING_RANDOMIZER  ||
+             b->routing.kind == ROUTING_WEIGHTED    ||
+             b->routing.kind == ROUTING_DISTRIBUTOR)) {
             slot_id_t cid = slot_alloc((slot_store_t *)slots, 0, 0,
                                        SLOT_FLAG_ATOMIC_COUNTER);
             if (cid == SLOT_INVALID) {
@@ -1009,6 +1200,38 @@ int graph_attach_runtime(graph_t *g,
                 if (strcmp(g->languages[k], b->lang) == 0) { seen = 1; break; }
             }
             if (!seen) g->languages[g->n_languages++] = b->lang;
+        }
+    }
+
+    /* Distinct slot cell widths used across input ports. Each port's
+     * cell width was picked from max(feeder output_capacity,
+     * default_cell_bytes), so the same reverse-scan helper drives
+     * both the slot allocation above and this enumeration. The
+     * slot store's free-list pre-population (issue 302) can use
+     * this set to amortise allocations per class. */
+    free(g->size_classes);
+    g->size_classes   = NULL;
+    g->n_size_classes = 0;
+    int total_ports = 0;
+    for (int i = 0; i < g->n_boxes; i++) total_ports += g->boxes[i].n_inputs;
+    if (total_ports > 0) {
+        g->size_classes = calloc((size_t)total_ports, sizeof(int));
+        if (!g->size_classes) {
+            if (err) *err = err_fmt("out of memory");
+            return -1;
+        }
+        for (int i = 0; i < g->n_boxes; i++) {
+            const box_t *b = &g->boxes[i];
+            for (int j = 0; j < b->n_inputs; j++) {
+                input_feeders_t fdr = scan_input_feeders(g, i, j, NULL);
+                int width = (fdr.max_capacity > default_cell_bytes)
+                                ? fdr.max_capacity : default_cell_bytes;
+                int seen = 0;
+                for (int k = 0; k < g->n_size_classes; k++) {
+                    if (g->size_classes[k] == width) { seen = 1; break; }
+                }
+                if (!seen) g->size_classes[g->n_size_classes++] = width;
+            }
         }
     }
     return 0;

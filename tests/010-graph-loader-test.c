@@ -132,12 +132,14 @@ static int test_native_invoke_classification(void)
         ASSERT(g);
         const box_t *greet = graph_box_by_id(g, "greet");
         const box_t *who   = graph_box_by_id(g, "who");
+        (void)who;
         ASSERT(greet->n_inputs == 2);
         ASSERT(greet->input_edge_native != NULL);
         ASSERT(greet->input_edge_native[0] == 0);  /* fed by read box `who` */
         ASSERT(greet->input_edge_native[1] == 0);  /* literal */
-        ASSERT(greet->use_native_invoke == 0);
-        ASSERT(who->use_native_invoke   == 0);     /* who is BOX_READ */
+        /* Slice 5 of issue 312 removed the per-box use_native_invoke
+         * field. Per-edge bits above carry the same information with
+         * better resolution. */
         graph_destroy(g);
     }
 
@@ -157,19 +159,12 @@ static int test_native_invoke_classification(void)
         ASSERT(classify->output_edge_native[0] == 1);  /* lt → low (lua) */
         ASSERT(classify->output_edge_native[1] == 1);  /* eq → mid (lua) */
         ASSERT(classify->output_edge_native[2] == 1);  /* gt → high (lua) */
-        ASSERT(classify->use_native_invoke     == 0);  /* per-box AND fails on input */
 
         /* low has two inputs: port 0 "tag" (literal) and port 1
          * "v" (fed by classify, a Lua call box). */
         ASSERT(low->n_inputs               == 2);
         ASSERT(low->input_edge_native[0]   == 0);   /* literal "tag"      */
         ASSERT(low->input_edge_native[1]   == 1);   /* lua classify → "v" */
-        /* use_native_invoke is the AND across all ports, so the
-         * literal port keeps it at 0 even though the lua input
-         * is native. */
-        ASSERT(low->use_native_invoke      == 0);
-        ASSERT(graph_box_by_id(g, "mid") ->use_native_invoke == 0);
-        ASSERT(graph_box_by_id(g, "high")->use_native_invoke == 0);
         graph_destroy(g);
     }
 
@@ -181,9 +176,6 @@ static int test_native_invoke_classification(void)
         const box_t *dbl = graph_box_by_id(g, "double");  /* lua */
         ASSERT(dbl->n_connections >= 1);
         ASSERT(dbl->output_edge_native[0] == 0);          /* → addone (c) */
-        ASSERT(dbl->use_native_invoke == 0);
-        ASSERT(graph_box_by_id(g, "addone")->use_native_invoke == 0);
-        ASSERT(graph_box_by_id(g, "shout") ->use_native_invoke == 0);
         graph_destroy(g);
     }
     return 1;
@@ -660,6 +652,197 @@ static int test_variable_size_producer_lvh_wiring(void)
 }
 /* }}} */
 
+/* {{{ test_entry_box_detection() */
+/* Phase 6: graph_load fills entry_box_ids with the indices of boxes
+ * the pool runner submits first. A call box whose only input is fed
+ * by a read box (a literal value source) qualifies; a call box fed
+ * by another call box does not. The hello fixture has exactly one
+ * call box, `greet`, whose computed input is wired from a read box,
+ * so it must be the sole entry. */
+static int test_entry_box_detection(void)
+{
+    char *err = NULL;
+    graph_t *g = graph_load("tests/maps/hello", &err);
+    ASSERT(g);
+
+    ASSERT(graph_n_entry_boxes(g) == 1);
+    int idx = graph_entry_box(g, 0);
+    ASSERT(idx >= 0);
+    const box_t *eb = graph_box(g, idx);
+    ASSERT(eb && strcmp(eb->id, "greet") == 0);
+
+    graph_destroy(g);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_entry_box_excludes_downstream() */
+/* When a call box's input is fed by another call box, that box must
+ * NOT be in the entry set — it has to wait for upstream computation.
+ * Build a temp map: read -> A (entry), A -> B (not entry). */
+static int test_entry_box_excludes_downstream(void)
+{
+    char tmpl[] = "/tmp/soramech-entry-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char p[4096];
+    snprintf(p, sizeof p, "%s/meta.json", dir);
+    FILE *fp = fopen(p, "w");
+    fputs("{\"name\":\"e\",\"entry_box_id\":\"a\"}", fp); fclose(fp);
+    snprintf(p, sizeof p, "%s/boxes", dir); mkdir(p, 0755);
+
+    snprintf(p, sizeof p, "%s/boxes/lit.json", dir);
+    fp = fopen(p, "w");
+    fputs("{\"id\":\"lit\",\"kind\":\"read\",\"value\":\"x\","
+          "\"connections\":[{\"to_box\":\"a\",\"to_input\":\"in\"}]}", fp);
+    fclose(fp);
+
+    snprintf(p, sizeof p, "%s/boxes/a.json", dir);
+    fp = fopen(p, "w");
+    fputs("{\"id\":\"a\",\"kind\":\"call\",\"lang\":\"lua\",\"ref\":\"a.lua\","
+          "\"fn\":\"a\",\"routing\":{\"kind\":\"plain\"},"
+          "\"inputs\":[{\"name\":\"in\",\"type\":\"string\"}],"
+          "\"connections\":[{\"to_box\":\"b\",\"to_input\":\"in\"}]}", fp);
+    fclose(fp);
+
+    snprintf(p, sizeof p, "%s/boxes/b.json", dir);
+    fp = fopen(p, "w");
+    fputs("{\"id\":\"b\",\"kind\":\"call\",\"lang\":\"lua\",\"ref\":\"a.lua\","
+          "\"fn\":\"b\",\"routing\":{\"kind\":\"plain\"},"
+          "\"inputs\":[{\"name\":\"in\",\"type\":\"string\"}]}", fp);
+    fclose(fp);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g);
+
+    ASSERT(graph_n_entry_boxes(g) == 1);
+    const box_t *eb = graph_box(g, graph_entry_box(g, 0));
+    ASSERT(eb && strcmp(eb->id, "a") == 0);
+
+    graph_destroy(g);
+    snprintf(p, sizeof p, "%s/boxes/lit.json", dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes/a.json",   dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes/b.json",   dir); unlink(p);
+    snprintf(p, sizeof p, "%s/meta.json",      dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes",          dir); rmdir(p);
+    rmdir(dir);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_size_class_enumeration() */
+/* graph_attach_runtime collects the distinct cell widths it picked
+ * across every input port. Build a map whose two call producers
+ * declare different output_capacity values; attach with a small
+ * default so the producer caps actually dominate. */
+static int test_size_class_enumeration(void)
+{
+    char tmpl[] = "/tmp/soramech-size-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char p[4096];
+    snprintf(p, sizeof p, "%s/meta.json", dir);
+    FILE *fp = fopen(p, "w");
+    fputs("{\"name\":\"s\",\"entry_box_id\":\"p256\"}", fp); fclose(fp);
+    snprintf(p, sizeof p, "%s/boxes", dir); mkdir(p, 0755);
+
+    snprintf(p, sizeof p, "%s/boxes/p256.json", dir);
+    fp = fopen(p, "w");
+    fputs("{\"id\":\"p256\",\"kind\":\"call\",\"lang\":\"lua\",\"ref\":\"x.lua\","
+          "\"fn\":\"x\",\"routing\":{\"kind\":\"plain\"},"
+          "\"output_capacity\":256,"
+          "\"connections\":[{\"to_box\":\"sink\",\"to_input\":\"a\"}]}", fp);
+    fclose(fp);
+
+    snprintf(p, sizeof p, "%s/boxes/p1024.json", dir);
+    fp = fopen(p, "w");
+    fputs("{\"id\":\"p1024\",\"kind\":\"call\",\"lang\":\"lua\",\"ref\":\"x.lua\","
+          "\"fn\":\"y\",\"routing\":{\"kind\":\"plain\"},"
+          "\"output_capacity\":1024,"
+          "\"connections\":[{\"to_box\":\"sink\",\"to_input\":\"b\"}]}", fp);
+    fclose(fp);
+
+    snprintf(p, sizeof p, "%s/boxes/sink.json", dir);
+    fp = fopen(p, "w");
+    fputs("{\"id\":\"sink\",\"kind\":\"call\",\"lang\":\"lua\",\"ref\":\"x.lua\","
+          "\"fn\":\"s\",\"routing\":{\"kind\":\"plain\"},"
+          "\"inputs\":[{\"name\":\"a\",\"type\":\"string\"},"
+                      "{\"name\":\"b\",\"type\":\"string\"}]}", fp);
+    fclose(fp);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g);
+
+    spec_registry_t *r = spec_registry_load("langs", &err);
+    ASSERT(r);
+    slot_store_t *s = slot_store_create();
+    ASSERT(s);
+    ASSERT(graph_attach_runtime(g, s, r, 64, &err) == 0);
+
+    /* Two distinct widths: 256 (for sink.a) and 1024 (for sink.b).
+     * The producer boxes themselves have no input ports, so they
+     * contribute nothing. */
+    ASSERT(graph_n_size_classes(g) == 2);
+    int saw_256 = 0, saw_1024 = 0;
+    for (int i = 0; i < graph_n_size_classes(g); i++) {
+        int w = graph_size_class(g, i);
+        if (w == 256)  saw_256  = 1;
+        if (w == 1024) saw_1024 = 1;
+    }
+    ASSERT(saw_256 && saw_1024);
+
+    slot_store_destroy(s);
+    spec_registry_destroy(r);
+    graph_destroy(g);
+    snprintf(p, sizeof p, "%s/boxes/p256.json",  dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes/p1024.json", dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes/sink.json",  dir); unlink(p);
+    snprintf(p, sizeof p, "%s/meta.json",        dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes",            dir); rmdir(p);
+    rmdir(dir);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_distributor_parsing() */
+static int test_distributor_parsing(void)
+{
+    char tmpl[] = "/tmp/soramech-dist-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char p[4096];
+    snprintf(p, sizeof p, "%s/meta.json", dir);
+    FILE *fp = fopen(p, "w");
+    fputs("{\"name\":\"d\",\"entry_box_id\":\"dst\"}", fp); fclose(fp);
+    snprintf(p, sizeof p, "%s/boxes", dir); mkdir(p, 0755);
+
+    snprintf(p, sizeof p, "%s/boxes/dst.json", dir);
+    fp = fopen(p, "w");
+    fputs("{\"id\":\"dst\",\"kind\":\"call\",\"lang\":\"lua\",\"ref\":\"d.lua\","
+          "\"fn\":\"d\",\"routing\":{\"kind\":\"distributor\",\"n_outputs\":3}}", fp);
+    fclose(fp);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g);
+    const box_t *dst = graph_box_by_id(g, "dst");
+    ASSERT(dst && dst->routing.kind == ROUTING_DISTRIBUTOR);
+    ASSERT(dst->routing.n_outputs == 3);
+
+    graph_destroy(g);
+    snprintf(p, sizeof p, "%s/boxes/dst.json", dir); unlink(p);
+    snprintf(p, sizeof p, "%s/meta.json",      dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes",          dir); rmdir(p);
+    rmdir(dir);
+    return 1;
+}
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -684,6 +867,10 @@ int main(void)
     RUN(native_invoke_classification);
     RUN(randomizer_weighted_parsing);
     RUN(variable_size_producer_lvh_wiring);
+    RUN(entry_box_detection);
+    RUN(entry_box_excludes_downstream);
+    RUN(size_class_enumeration);
+    RUN(distributor_parsing);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

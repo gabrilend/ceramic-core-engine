@@ -1,18 +1,46 @@
 # 305 — C graph loader (replaces 003-loader.lua)
 
 ## Status
-open
+complete
 
 ## Current behavior
-The phase 2 loader at `src/003-loader.lua` reads a map directory's
-`boxes/*.json`, `data/*.json`, and metadata, decodes JSON via dkjson,
-runs schema validation, builds the in-memory graph table, and detects
-entry boxes. It is Lua. The synchronous executor consumes its output.
+The C loader lives at `src/010-graph-loader.{c,h}` and replaces the
+phase 2 Lua loader. It opens a map directory, parses every JSON file
+under it through the project's JSON parser, validates per-box schema,
+resolves connection endpoints to integer indices, rejects non-iterator
+cycles, derives the entry-box set, and (via `graph_attach_runtime`)
+allocates per-port input slots sized to fit declared producer output
+capacities, resolves each call box's language spec, and enumerates
+the distinct languages and slot size classes a map uses. Per-edge
+same-language classification (issue 312) also runs at load time.
 
-The phase 3 pool runner (issue 301) cannot embed a Lua state for
-loading — Lua appears in the runner only as a per-box language runtime,
-never as the runner's own scripting layer. The loader is therefore
-ported to C and lives inside (or alongside) `src/008-pool-runner.c`.
+Three small refactors landed in this iteration:
+- A single `scan_input_feeders` helper replaces three duplicated
+  reverse-scan loops that walked all producers feeding a given
+  `(box, port)`. Native-edge classification, large-value detection,
+  per-port slot sizing, size-class enumeration, and entry-box
+  detection all collect their facts from the same walk so any
+  future change to "what counts as a feeder" has one place to land.
+- All six routing kinds now parse uniformly (plain, comparator,
+  iterator, randomizer, weighted, distributor).
+- The `_routing_needs_counter_slot` set in `graph_attach_runtime`
+  now lists all four counter-using kinds (iterator, randomizer,
+  weighted, distributor) instead of three.
+
+Future refactoring opportunities noted but not taken in this
+iteration (each would route currently-duplicated logic through a
+single pathway, no behavior change):
+- The four `n_outputs`-from-JSON blocks in `parse_routing` are
+  near-identical and could share a tiny `parse_n_outputs` helper.
+- The two string-array parse blocks (`link_libs`, `headers`) are
+  near-identical and could share a `parse_string_array` helper.
+- `count_json_files_in_dir` + `load_boxes` both open the same dir;
+  a single-pass loader that grows the boxes array would remove the
+  double-walk.
+- `graph_box_index`, `graph_box_by_id`, and the inner lookup in
+  `resolve_topology` all do linear scans by id; a small hashmap or
+  sorted id list would collapse the O(n²) topology pass to O(n log
+  n) without changing observable behaviour.
 
 ## Concept
 
@@ -43,48 +71,32 @@ The loader is given the map directory path as a C string.
 
 ## Output: `graph_t`
 
-```c
-typedef struct {
-    int           n_boxes;
-    box_t        *boxes;            // array of box descriptors
-    int           n_connections;
-    connection_t *connections;
-    int           n_size_classes;
-    int          *size_classes;     // distinct slot sizes the graph uses
-    int           n_entry_boxes;
-    int          *entry_box_ids;    // indices into boxes[]
-    int           n_languages;
-    const char  **languages;        // distinct language names used
-} graph_t;
+`graph_t` is opaque; the structs it holds (`box_t`, `connection_t`,
+`input_decl_t`, `routing_t`) are public so the dispatch layer can walk
+them without going through accessors. Box kinds are an enum:
+`BOX_CALL` (verb — runs a function), `BOX_READ` (value source — either
+an inline `value` literal or a file at `path`), `BOX_WRITE` (file sink
+— consumes one input). Routing is a tagged union on `routing_kind_t`
+(plain / comparator / iterator / randomizer / weighted / distributor)
+carrying the per-kind parameters in the same struct.
 
-typedef struct {
-    char         *id;               // user-defined box id ("classifier", "stamp", …)
-    char         *kind;             // "call" | "data"
-    char         *lang;             // "lua" | "c" | "bash" | ...; NULL for data and iterator/comparator
-    char         *ref;               // file path; NULL for data/iterator/comparator
-    char         *fn;                // function name; NULL for data/iterator/comparator
-    int           n_inputs;
-    input_decl_t *inputs;
-    int           output_capacity;  // bytes; 0 if variable-size (uses large-value heap)
-    int           is_comparator;
-    int           is_iterator;
-    int           n_iter_outputs;
-    char        **iter_output_names;
-    // …
-} box_t;
+Each connection holds both its original string endpoint refs (for
+diagnostics) and the resolved integer indices (`to_box_idx`,
+`to_input_idx`). The topology pass fills the indices in; the dispatch
+layer uses only the indices.
 
-typedef struct {
-    int   from_box_id;
-    char *from_branch;              // NULL for plain call; "lt"/"eq"/"gt" for comparator;
-                                    // iterator output name otherwise
-    int   to_box_id;
-    char *to_input_name;
-    int   to_input_index;
-} connection_t;
-```
+The graph also exposes:
+- `n_languages` / `languages[]` — distinct language names across call
+  boxes, filled in by `graph_attach_runtime`.
+- `entry_box_id` — single name from `meta.json` (the multi-entry set
+  described below is the work this iteration adds).
+- `map_dir` — the directory the graph was loaded from, kept so the
+  dispatch layer can resolve relative paths inside read / write boxes.
 
-Strings are owned by the graph (allocated from a single arena attached
-to the graph; freed when the graph is destroyed at the end of the run).
+Strings are owned by the graph (allocated from a single JSON arena
+attached to the graph; freed when the graph is destroyed at the end
+of the run). The box / connection / input arrays are plain malloc and
+freed in `graph_destroy`.
 
 ## Loading phases
 
@@ -100,30 +112,36 @@ fatal — print the file path and the parser's error message, abort.
 ### 3. Schema validation
 Box kinds and what they mean at runtime:
 
-- **`call`** is a verb — a box that runs a function (or, for iterator
-  and comparator variants, a dispatch-layer routing primitive). Each
-  call box becomes a `dispatch_task_t` in the pool when its inputs
-  are ready.
-- **`data`** is a noun — a literal value embedded in the map. It has
-  no function and produces no task in the pool. Its output slot is
-  allocated and filled at startup by the loader and remains filled
-  for the duration of the run; downstream consumers read it like any
-  other slot.
+- **`call`** is a verb — a box that runs a function. Each call box
+  becomes a dispatch task in the pool when its inputs are ready. The
+  branching primitives that used to be separate box kinds
+  (comparator / iterator) are now expressed as a `routing` field on a
+  call box; the dispatch layer reads `routing.kind` to pick the
+  outgoing branch.
+- **`read`** is a value source. It can carry an inline `value`
+  literal or a `path` that the dispatch layer reads at run time.
+  When `value` is set the canvas hides the `path` input port. A
+  read box has no function to invoke — it just produces a value
+  downstream consumers can read like any other slot.
+- **`write`** is a file sink. It consumes one input and emits the
+  string `"true"` downstream after a successful write so it can be
+  chained.
 
 Required fields per kind:
 - `id`, `kind` always required.
-- For `kind == "call"`: either (a) `lang`, `ref`, `fn` (plain call
-  box), or (b) `iterator_outputs` (iterator box, no `ref`/`fn`), or
-  (c) `comparator` field set (comparator box, no `ref`/`fn`).
-- For `kind == "data"`: a `value` field; no `inputs` or `connections`
-  (other than outgoing wires from this box's output slot).
+- For `kind == "call"`: `ref` (source file) plus a `routing` object
+  (`{ "kind": "plain" | "comparator" | "iterator" | ... }` with the
+  per-kind parameters). `lang` and `fn` are optional — `lang` falls
+  back to the file-extension lookup in the spec registry, `fn`
+  defaults to the box id at dispatch time.
+- For `kind == "read"`: at least one of `value` (inline literal) or
+  `path` (file). Either can also arrive at run time on the implicit
+  `path` input port — the run-time check lives in dispatch.
+- For `kind == "write"`: no extra fields beyond `inputs` (the input
+  carries the bytes to write and the path).
 
 Box ids must be unique across the map. Connection endpoints must
-reference valid box ids and valid input names.
-
-Schema rules mirror `src/001-schema.lua`. The C validator is a port of
-that file's logic, simplified by the absence of port-named branching
-(removed in issue 108 cleanup).
+reference valid box ids and valid input port names.
 
 ### 4. Topology validation
 - Every connection's `from_box` and `to_box` exist.
@@ -132,7 +150,7 @@ that file's logic, simplified by the absence of port-named branching
 - No non-iterator cycles. The validator runs DFS; any cycle that does
   not pass through an iterator box is rejected.
 - Every required input has at least one connection feeding it (or is
-  fed by a `data` box).
+  fed by a `read` box, the value-source kind).
 
 Validation failure aborts the program with a precise error message —
 which box, which connection, what was wrong.
@@ -156,18 +174,25 @@ the static count, while leaving headroom for iterators that allocate
 per-invocation slots.
 
 ### 6. Entry-box detection
-A box is an entry box if either:
-- It has zero inputs, or
-- All of its inputs are connected only to `data` boxes (literal values
-  with no upstream computation).
+An "entry box" is one the pool runner submits as an initial task. A
+box qualifies when it is a `call` or `write` box (the kinds that
+actually run as tasks) AND either:
+- it has zero inputs, or
+- every one of its non-optional inputs is fed only by `read` boxes
+  — literal-or-file value sources with no upstream computation.
+  Inputs flagged `optional` in the schema are ignored when checking
+  this condition, so a box that has all its computed inputs satisfied
+  by literals still qualifies even if an optional port is wired to
+  another call box (it just won't fire until the optional value
+  arrives).
 
-Entry boxes are submitted to the pool first; everything else fires from
-post-action routing in the dispatch layer.
+Read boxes never qualify — they aren't tasks; their value is staged
+into their downstream consumers' input slots at dispatch time.
 
-A map can have any number of entry boxes. The user lays out the
-initial program state via `data` boxes and entry-point call boxes; the
-runner submits all entries at once, and the graph propagates from
-there. There is no singular `main`.
+A map can have any number of entry boxes. The runner submits all of
+them at once and the graph propagates from there; there is no
+singular `main`. The single `entry_box_id` field on `meta.json`
+remains supported as a hint but is not the canonical answer.
 
 ### 7. Language enumeration
 Collect the distinct `lang` values across all plain call boxes. The
@@ -214,12 +239,6 @@ Any failure in any phase aborts the program. The loader prints:
 
 Then `exit(1)`. There is no partial-load mode.
 
-## Open questions
-
-- JSON library choice: cJSON (heaviest, easiest, well-maintained),
-  jsmn (tiny, no allocations, manual tree walking), or hand-rolled
-  (smallest dependency footprint, more code). Decision deferred to
-  implementation time.
 ### String storage
 
 A "string arena" is a single `malloc`-backed buffer the graph loader
