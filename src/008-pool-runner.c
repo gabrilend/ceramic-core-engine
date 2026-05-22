@@ -144,22 +144,19 @@ static event_queue_t *open_event_queue(const char *map_dir,
 /* }}} */
 
 /* {{{ print_outputs() */
+/* Reports each task-producing box's captured output. Read boxes are
+ * not tasks under 244 — they have no output to capture and are
+ * skipped from this report entirely; their cached values reach the
+ * graph via consumer pulls, observed in the consumers' outputs. */
 static void print_outputs(const dispatch_ctx_t *ctx)
 {
     if (!ctx->last_outputs) return;
     for (int i = 0; i < ctx->n_boxes; i++) {
         const box_t *b = graph_box(ctx->graph, i);
+        if (b && b->kind == BOX_READ) continue;
         const char *out = ctx->last_outputs[i];
         if (out) {
             fprintf(stderr, "  %s → %s\n", b->id, out);
-        } else if (b && b->kind == BOX_READ && b->cached_value) {
-            /* 244: read boxes don't run as tasks, so they have no
-             * captured output. Their cached value is still their
-             * declared "output" conceptually — surface it here so
-             * the outputs report reflects every value source the
-             * graph carries. */
-            fprintf(stderr, "  %s → %.*s\n",
-                    b->id, b->cached_size, b->cached_value);
         } else {
             fprintf(stderr, "  %s → (no output)\n", b->id);
         }

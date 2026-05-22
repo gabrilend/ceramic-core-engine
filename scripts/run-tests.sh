@@ -133,7 +133,6 @@ check_map "calc" \
     "add → 42"
 
 check_map "hello" \
-    "who → World" \
     "greet → Hello, World!"
 
 check_map "comparator" \
@@ -149,13 +148,11 @@ check_map "iter-route" \
     "c → (no output)"
 
 check_map "pipeline" \
-    "input → 5" \
     "double → 10" \
     "addone → 11" \
     "shout → 11!"
 
 check_map "read-literal" \
-    "src → hello, world!" \
     "echo → hello, world!"
 
 pipeline_output_check
