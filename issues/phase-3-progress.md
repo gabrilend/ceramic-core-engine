@@ -30,7 +30,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 314 | small C JSON parser written for this project                | complete · parser + writer + strict leading-zero |
 | 315 | reference-counted compiled-map artifacts                    | open · design only |
 | 316 | simple test-runner script                                   | folded into 232 |
-| 317 | language spec JSON bridge for data boxes                    | open · design only |
+| 317 | language spec JSON bridge for data boxes                    | complete · Lua fidelity-preserving, C+Bash pass-through-or-string-wrap, shared test harness |
 
 ## Phase goal checklist
 

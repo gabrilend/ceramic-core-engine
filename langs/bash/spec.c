@@ -26,6 +26,7 @@
 
 #define _GNU_SOURCE
 #include "lang-spec.h"
+#include "json.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -275,15 +276,24 @@ static int send_request(int fd, const char *file_path, const char *fn_name,
 
 /* {{{ bash_invoke() */
 static int bash_invoke(void *handle,
+                       const box_t *box,
                        const char  *file_path,
                        const char  *fn_name,
                        const void **input_data,
                        const int   *input_sizes,
+                       const int   *input_native,
                        int          n_inputs,
+                       int          output_native,
                        void        *out_buf,
                        int          out_capacity,
                        int         *out_size)
 {
+    /* `box` accepted for signature uniformity; the bash spec's
+     * per-input / per-output JSON branches land in this slice
+     * alongside C's typed JSON output. */
+    (void)box;
+    (void)input_native;
+    (void)output_native;
     if (!handle || !file_path || !fn_name) return -1;
     bash_handle_t *h = (bash_handle_t *)handle;
 
@@ -327,13 +337,127 @@ static int bash_invoke(void *handle,
 }
 /* }}} */
 
+/* {{{ bash_native_to_json() — issue 317 bridge
+ *
+ * Bash scripts produce raw text. The bridge's job at the wire edge
+ * is to shape that text into JSON the consumer's spec can parse.
+ * If the bytes already parse as JSON (a script that printed `42`,
+ * `true`, `{"a":1}`, or even a fully-quoted `"hello"`), pass them
+ * through — the script chose its encoding. If they don't parse,
+ * wrap them as a JSON string with proper escaping so a script that
+ * printed `Hello World` becomes `"Hello World"` on the wire.
+ *
+ * The worker handle is unused — there's no per-worker bash state
+ * to read here; the value already lives in the `src` buffer the
+ * dispatch layer hands us. */
+static int bash_native_to_json(void *handle,
+                               const void *src, int src_size,
+                               void *dst, int dst_capacity, int *dst_size)
+{
+    (void)handle;
+    if (!src || src_size < 0 || !dst || dst_capacity <= 0) return -1;
+
+    char *scratch = malloc((size_t)src_size + 1);
+    if (!scratch) return -1;
+    memcpy(scratch, src, (size_t)src_size);
+    scratch[src_size] = '\0';
+
+    json_arena_t *arena = json_arena_create();
+    if (!arena) { free(scratch); return -1; }
+    json_node_t *n = json_parse(arena, scratch, NULL, NULL);
+    int valid = (n != NULL);
+    json_arena_destroy(arena);
+
+    if (valid) {
+        if (src_size > dst_capacity) {
+            free(scratch);
+            fprintf(stderr, "bash spec: native_to_json: src %d > dst %d\n",
+                    src_size, dst_capacity);
+            return -1;
+        }
+        memcpy(dst, src, (size_t)src_size);
+        if (dst_size) *dst_size = src_size;
+        free(scratch);
+        return 0;
+    }
+
+    json_writer_t w;
+    json_writer_init(&w, (char *)dst, dst_capacity);
+    json_writer_string(&w, scratch);
+    int written = json_writer_finish(&w);
+    free(scratch);
+    if (written < 0) {
+        fprintf(stderr, "bash spec: native_to_json: output buffer too small\n");
+        return -1;
+    }
+    if (dst_size) *dst_size = written;
+    return 0;
+}
+/* }}} */
+
+/* {{{ bash_json_to_native() — issue 317 bridge
+ *
+ * The bash side wants text — what a `$1` argument in a script looks
+ * like. The bridge mirrors the C spec: if `src` is a JSON string,
+ * unwrap the quotes and escapes into `dst`; otherwise pass through
+ * unchanged. A bash script reading `42` or `true` sees the natural
+ * textual form; a script reading `{"a":1}` sees the literal JSON
+ * (and may pipe it to `jq` if it cares). */
+static int bash_json_to_native(void *handle,
+                               const void *src, int src_size,
+                               void *dst, int dst_capacity, int *dst_size)
+{
+    (void)handle;
+    if (!src || src_size < 0 || !dst || dst_capacity <= 0) return -1;
+
+    char *scratch = malloc((size_t)src_size + 1);
+    if (!scratch) return -1;
+    memcpy(scratch, src, (size_t)src_size);
+    scratch[src_size] = '\0';
+
+    json_arena_t *arena = json_arena_create();
+    if (!arena) { free(scratch); return -1; }
+    json_node_t *n = json_parse(arena, scratch, NULL, NULL);
+
+    if (n && json_kind(n) == JSON_STRING) {
+        const char *s = json_string_value(n);
+        int len = (int)strlen(s);
+        if (len > dst_capacity) {
+            json_arena_destroy(arena);
+            free(scratch);
+            fprintf(stderr, "bash spec: json_to_native: unquoted %d > dst %d\n",
+                    len, dst_capacity);
+            return -1;
+        }
+        memcpy(dst, s, (size_t)len);
+        if (dst_size) *dst_size = len;
+        json_arena_destroy(arena);
+        free(scratch);
+        return 0;
+    }
+    json_arena_destroy(arena);
+    free(scratch);
+
+    if (src_size > dst_capacity) {
+        fprintf(stderr, "bash spec: json_to_native: src %d > dst %d\n",
+                src_size, dst_capacity);
+        return -1;
+    }
+    memcpy(dst, src, (size_t)src_size);
+    if (dst_size) *dst_size = src_size;
+    return 0;
+}
+/* }}} */
+
 /* {{{ soramech_lang_spec */
 lang_spec_t soramech_lang_spec = {
-    .name     = "bash",
-    .file_ext = ".sh",
-    .init     = bash_init,
-    .teardown = bash_teardown,
-    .compile  = 0,
-    .invoke   = bash_invoke,
+    .name           = "bash",
+    .file_ext       = ".sh",
+    .init           = bash_init,
+    .teardown       = bash_teardown,
+    .compile        = 0,
+    .invoke         = bash_invoke,
+    .native_to_json = bash_native_to_json,
+    .json_to_native = bash_json_to_native,
 };
 /* }}} */

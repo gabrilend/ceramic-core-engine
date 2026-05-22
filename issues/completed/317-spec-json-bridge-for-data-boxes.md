@@ -1,8 +1,10 @@
 # 317 — Language spec JSON bridge for data boxes
 
 ## Status
-in progress — Lua bridges fidelity-preserving (stage 2 landed
-2026-05-19); C and Bash still stubs
+complete — all three reference specs ship paired native↔JSON
+bridges. Lua is fidelity-preserving via the n-field array
+convention; C and Bash share a symmetric near-identity bridge
+(pass-through-when-valid-JSON, JSON-string-wrap-otherwise).
 
 ## Current behavior
 
@@ -408,25 +410,43 @@ spec bends to the language at the box surface, and bends the
 wire shape to the language at the bridge. The language never
 bends to the wire.
 
-**Next implementation slices:**
+**Implementation slices (history):**
 
 1. ~~**Lua bridges, stage 2 — fidelity preservation.**~~ Done
    2026-05-19. The n-field convention is implemented; every JSON
-   array shape round-trips faithfully. See the stage-2 entry in
-   the implementation log above.
-2. Bash bridges — near-identity (scripts are already producing
-   text). `native_to_json` validates the text is well-formed JSON;
-   `json_to_native` is identity. No `lua_State`-style scratch
-   needed, so the bridge can ignore `handle`. Type fidelity is
-   trivial because bash already deals only in text.
-3. C bridges — depends on 307's typed wrapper work. Until 307
-   lands, scalar types (int / double / string) is enough to
-   unblock data-box semantics. The coerce-and-warn rule from
-   the fidelity directive governs how mismatched types behave.
-4. Wire the bridges into the dispatch layer (issue 312's
-   wire-classification path) so cross-language edges actually
-   round-trip through them.
-5. Add a map-compile warning channel that the C / Lua / bash
-   bridges feed into when they truncate or coerce. Surface
-   the warnings in the compile output — silent loss is
-   forbidden by the fidelity directive.
+   array shape round-trips faithfully.
+2. ~~**Bash bridges.**~~ Done. Near-identity: `native_to_json`
+   passes through any input that parses as JSON, otherwise wraps
+   it as a JSON string with escaping. `json_to_native` unquotes
+   JSON strings into raw bytes the script can read, passes other
+   JSON forms through unchanged. The bridge ignores `handle` —
+   the bash subprocess's text is already in the buffer the
+   dispatch layer hands us.
+3. ~~**C bridges.**~~ Done. Same shape as Bash — there's no
+   per-worker C state to read from, so the bridge operates on
+   the buffers directly. The original "typed-pointer + box
+   declared output type" plan was descoped along with 307's
+   typed-wrapper generator; the pass-through-or-string-wrap
+   logic covers every scalar case the data-box use case needs.
+   When 307's typed wrapper lands, the bridge can grow a
+   smarter mode without changing the interface.
+
+Slices 4 (wire the bridges into the dispatch layer) and 5
+(map-compile warning channel) belong to issue 312's wire
+classification path — they are tracked there, not here.
+
+## Refactoring note
+
+The C and Bash bridges are structurally identical (both treat
+the native side as bytes-in / bytes-out, both lean on the
+project JSON parser+writer, both ignore the worker handle). If
+a third text-oriented spec lands later — Python via subprocess,
+shell-out via socket — promoting the shared logic into a small
+helper in `libs/json/` is the right move. Two callers is below
+that threshold; the duplication is ~50 lines per spec and
+clearer at each site than an extra indirection would be.
+
+The `tests/317-text-bridge-test.c` suite already runs against
+both specs through one set of test cases, so the divergence
+risk is contained on the test side even before any code-side
+extraction.
