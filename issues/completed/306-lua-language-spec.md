@@ -1,13 +1,21 @@
 # 306 — Lua language spec implementation (reference spec)
 
 ## Status
-open
+complete
 
 ## Current behavior
-Lua boxes today run via `drivers/lua.sh`, which spawns a fresh `luajit`
-process per box invocation, feeds it stdin, and reads stdout. Process
-spawn cost dominates; each call is its own fresh interpreter. There is
-no persistent Lua state between calls.
+`langs/lua/spec.{c,Makefile}` builds `langs/lua/spec.so`, dlopened by
+the pool runner via the spec registry (issue 303). Each worker thread
+gets its own `lua_State`; states are not shared and need no locking.
+Per-worker module cache keyed by file path lets the same source be
+reused across calls without reloading. Input bytes are pushed as
+either native Lua strings or parsed JSON values per the per-edge
+classification the loader hands the dispatch layer (issue 312); return
+values are written back as either raw strings (single-string path) or
+JSON (everything else) via the project's JSON encoder. Errors at any
+step (file load, chunk run, function lookup, pcall) surface as
+nonzero return with a stderr line and crash the dispatch layer per
+issue 303.
 
 ## Concept
 The Lua language spec implements `lang_spec_t` (issue 303) for Lua. It
@@ -30,7 +38,7 @@ Init creates a fresh `lua_State` and configures it:
 void *lua_init(int worker_idx) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
-    set_package_path(L);   // libs/, map src/, meta.json src_dirs
+    // Seed an empty per-worker module cache in LUA_REGISTRYINDEX
     return L;
 }
 
@@ -39,17 +47,12 @@ void lua_teardown(void *handle) {
 }
 ```
 
-`set_package_path` writes `package.path` and `package.cpath` to
-include exactly one directory: the map's own `src/`. Everything the
-map needs — vendored libs, helper modules, anything — is copied into
-`src/` by the compile step (issue 222). The compiled map is then a
-self-contained directory: ship the directory to someone else and it
-runs without further setup.
-
-This is a tightening of the phase 2 path, which also included
-SoraMech's central `libs/` and any `meta.json src_dirs`. The new rule
-is: one place to look for functions, the map's own `src/`, full stop.
-Compile is the step that resolves dependencies into that location.
+Box source file paths arrive at `invoke` already resolved against the
+map directory by the dispatch layer (issue 304) — the spec does not
+manipulate `package.path`. Maps are expected to be self-contained:
+everything the map's Lua needs lives under the map's own `src/`, and
+the compile step (issue 222) is what resolves dependencies into that
+location.
 
 ## File-and-function caching
 
@@ -100,82 +103,63 @@ This is the existing phase 2 convention — kept as-is.
 
 ## Input marshalling
 
-Inputs arrive at `invoke` as `(void *bytes, int size)` pairs. The
-spec is responsible for converting each input's bytes into the Lua
-value type the user's function expects. The user's function sees
-arguments as native Lua values — never a raw byte buffer that the
-function has to parse itself.
+Inputs arrive at `invoke` as `(bytes, size, is_native)` triples. The
+`is_native` bit per input is set by the graph loader's per-edge
+classification (issue 312) — true when the producer feeding this port
+is a call box in the same language (Lua → Lua), false when bytes are
+JSON-encoded by an upstream of a different language (or by anyone
+deliberately writing JSON).
 
-Each input has a declared type in the box JSON
-(`{"name": "count", "type": "number"}`). The graph loader (issue 305)
-records this type on the `input_decl_t` and passes the type alongside
-the bytes when calling `invoke`. The Lua spec dispatches on type:
+- `is_native == 1` → `lua_pushlstring(L, bytes, size)`. The user's
+  function sees the bytes as a Lua string and is free to call
+  `tonumber`, `tostring`, etc. on them — same convention as the
+  phase 2 driver.
+- `is_native == 0` → parse the bytes as JSON via the project parser
+  and push the resulting Lua value (table for arrays/objects,
+  number/string/boolean/nil for primitives). On parse failure the
+  bytes are pushed as a raw string so that producers still emitting
+  non-JSON keep working (transitional fallback inherited from
+  issue 312's slice 4).
 
-| Declared type | Lua spec action                                             |
-|---------------|-------------------------------------------------------------|
-| `string`      | `lua_pushlstring(L, bytes, size)`                           |
-| `number`      | parse with `strtod`, `lua_pushnumber`                       |
-| `integer`     | parse with `strtoll`, `lua_pushinteger`                     |
-| `boolean`     | strcmp against `"true"` / `"false"`, `lua_pushboolean`      |
-| `json`        | call `dkjson.decode` on the bytes, push the resulting table |
-| `bytes`       | `lua_pushlstring` (raw, may contain nulls)                  |
-| `any`         | treat as `string` for now                                   |
-
-The Lua function then takes typed arguments:
-
-```lua
-function M.add(a, b)            -- both already numbers
-    return a + b
-end
-
-function M.classify(payload)    -- payload is already a table
-    return payload.kind
-end
-```
-
-The user does not write `tonumber` or `dkjson.decode` calls inside
-their box function. The spec did that work before the function was
-called.
-
-If a parse fails (`json` input that isn't valid JSON, `number` input
-that isn't a number), the spec returns nonzero and the dispatch layer
-aborts (per issue 303).
+The original "declared input type" idea — a per-port type tag that
+the spec would honor — never shipped. Per-edge classification proved
+sufficient: the producer's language and the consumer's language are
+known at load time, which is enough to decide native-or-JSON per
+edge. Adding a per-port type tag would have duplicated that decision
+in two places.
 
 ## Return marshalling
 
 The Lua function returns one or more values. The spec converts the
-return into bytes for the output slot:
+return into bytes for the output slot, with the format chosen by an
+`output_native` flag passed in from the dispatch layer (set by the
+loader's per-connection classification):
 
-| Return shape           | Spec action                                                   |
-|------------------------|---------------------------------------------------------------|
-| Single string          | `lua_tolstring` → copy into `out_buf`                         |
-| Single number          | `snprintf("%.17g", ...)` into `out_buf`                       |
-| Single boolean         | write `"true"` or `"false"`                                   |
-| Single table           | `dkjson.encode` into `out_buf`                                |
-| Single nil             | `*out_size = 0` (zero-byte output)                            |
-| Multiple values        | wrap into a table `{v1, v2, ...}` and `dkjson.encode`         |
+- `output_native == 1` and a single string return → `lua_tolstring`,
+  raw bytes into `out_buf`.
+- Anything else (multi-return, non-string, or `output_native == 0`)
+  → JSON-encode via the project's `json_writer_t`. Lua tables become
+  JSON arrays or objects depending on shape; primitives become
+  their JSON spellings; `nil` becomes a zero-byte output.
 
-`nil` is a valid return. The spec writes zero bytes and sets
-`*out_size = 0`. Downstream consumers receive a zero-byte slot value;
-how they interpret it depends on their declared input type (typed
-`number` consumer fails to parse; typed `string` consumer gets an
-empty string; typed `json` consumer parses zero bytes as `null` via
-dkjson). We cannot demand that user functions never return nil, so we
-handle it.
+`nil` is a valid return — zero bytes, downstream consumers
+interpret per their wire's classification (a native-input port sees
+an empty string; a JSON-input port parses zero bytes as `null`).
 
-Multiple return values are wrapped into a table and JSON-encoded.
-Phase 2 silently dropped extra returns; phase 3 keeps them — the
-serialized form is `[v1, v2, ...]`.
+Multiple return values are wrapped into a table `{v1, v2, ...}` and
+JSON-encoded. Phase 2 silently dropped extras; phase 3 keeps them.
 
-Output buffer is sized to the box's declared `output_capacity`
-(issue 305's `box_t`). If the serialized value exceeds that, abort
-(per the hard-crash policy in issue 303). For variable-size outputs
-the box declares `output_capacity = 0` and uses the large-value heap
-(issue 302); the spec writes into that heap and stores the handle in
-`out_buf`.
+Output buffer is sized from the producer's declared
+`output_capacity` (issue 305). If the serialized value exceeds that,
+abort per the hard-crash policy in issue 303. Variable-size outputs
+declare `output_capacity = 0` and use the large-value heap (issue
+302); the spec writes through the same `out_buf` pointer and the
+slot store handles the heap path transparently.
 
-dkjson is the table serializer in both directions (input parsing
-above and output serialization here). It is already vendored.
+The JSON encoder is the project's own (`libs/json/json.c`, designed
+in issue 314) — dkjson was the original plan but the project parser
+shipped first and avoided a vendored Lua dependency on the encode
+path.
 
 ## Error handling
 
@@ -288,11 +272,9 @@ function, missing file). The test loads the spec through the
 real spec registry via dlopen, so this is the actual artifact
 the pool runner will consume.
 
-Deferred:
-- **Rich return types.** The current invoke serializes the return
-  with `lua_tolstring`, which handles strings/numbers/booleans/
-  nil via tostring semantics. Tables, closures, and other
-  structured values land with the fast-path work in issue 312.
+(The rich-return-types follow-on noted here originally — tables /
+closures — landed under issue 312's slice 4.5: tables and primitives
+both serialize via the project JSON encoder.)
 
 ### Per-worker module cache — 2026-05-12
 
