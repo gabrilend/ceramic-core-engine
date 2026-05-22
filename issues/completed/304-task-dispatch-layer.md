@@ -1,11 +1,17 @@
 # 304 — Task dispatch layer (C, replaces synchronous executor)
 
 ## Status
-in progress — every routing kind ships and every fixture passes
-end-to-end. The remaining piece, the attempt-task model rewrite
-(documented below), is a structural refactor with no observable
-behavior change; it has its own scope and lands separately when
-prioritised. See "Attempt-task refactor (future)" near the end.
+complete — every routing kind ships, every fixture passes
+end-to-end, task structs are slab-allocated from the unified
+allocator (no per-spawn malloc bookkeeping), and the
+`live_wire_count` placeholder is in the struct layout for the
+future box-retirement slice.
+
+The structural "attempt-task model rewrite" that was tracked
+here was reconsidered (see "Attempt-task rewrite — reconsidered"
+below) and walked back. The two perf / scaffolding tweaks that
+turned out to be the actually-useful pieces of it landed
+without restructuring the dispatch action.
 
 ## Current behavior
 `src/012-dispatch.c` ships the C dispatch layer. The action body
@@ -475,20 +481,56 @@ Verified by re-running all 6 fixture maps and the dedicated
 `test_iterator_multi_fire` test (which now exercises tagged
 input slots).
 
-## Attempt-task refactor (future)
+## Attempt-task rewrite — reconsidered
 
-The design rewrite below replaces the current two-phase
-("producer inlines spawn-if-ready check per consumer") shape with
-a single attempt-task shape — one allocation per invocation, one
-loop body. It is a structural refactor; observable behavior
-across every fixture stays the same.
+The "attempt-task model" rewrite (originally drafted 2026-05-20,
+preserved in the historical log below) framed itself as
+"replacing the two-phase dispatch with a unified attempt-task
+shape — one allocation per invocation, one loop body, no
+separate readiness check." On inspection the current code
+already has one task shape (`dispatch_task_t`), one allocation
+path, and the readiness check is just a few lines of C in the
+producer's epilogue — not a separate task kind. The rewrite
+was framing a few lines of inline logic as a structural unit
+and proposing to "move" them; the "from A to B" wasn't real.
 
-It does not block any phase-3 feature: every routing kind ships,
-read boxes pull on demand, multi-spawn iteration works, cross-
-language wires work. The refactor's value is in code clarity and
-allocation count, not user-visible features. Tracked here so the
-shape doesn't get lost; will move to its own issue when picked
-up.
+The two pieces of the rewrite that *were* useful, restated and
+shipped:
+
+1. **Slab allocation of task structs.** `dispatch_spawn` now
+   pulls task cells from the unified allocator (`ua_alloc`)
+   instead of `malloc`-ing per spawn. `dispatch_action` releases
+   via `ua_unref` paired with a `chunk` back-reference on the
+   task itself. Hot graphs no longer pay per-call malloc
+   bookkeeping; the free-list amortises spawn/free pairs across
+   the run. ~10 lines of code; no semantic change.
+
+2. **`live_wire_count` field placeholder** on `dispatch_task_t`,
+   initialised to 0 by `dispatch_spawn` and otherwise unread for
+   now. The box-retirement consumer that *does* something with
+   the count is the lifetime-tracking slice — it lands when a
+   future feature needs it (run statistics, GC of unused
+   producer outputs, etc.). The field is in the layout so a
+   future slice can wire up the read without changing the
+   struct shape callers depend on.
+
+What was *not* shipped — and would be a mistake to ship without
+a concrete trigger:
+
+- Moving the readiness check from the producer's epilogue to a
+  consumer-side attempt prologue. The epilogue check is the
+  honest signal mechanism: producer writes inputs, checks
+  "consumer ready?", submits iff yes. The attempt-side check
+  would submit attempts that find inputs not ready and return —
+  strictly more work for the same outcome.
+- Restructuring `dispatch_action` into a single attempt-loop
+  body. The action already has one loop body; the "two-phase"
+  framing was paper.
+
+If the same architectural pressure surfaces again — usually
+phrased as "tasks have two meanings" or "we should unify the
+shape" — the answer is to trace the runtime, not the issue
+body. Two meanings on paper, one shape in code, is fine.
 
 ### Design rewrite to the attempt-task model — 2026-05-20
 

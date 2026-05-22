@@ -191,8 +191,17 @@ static int box_pop_ready(const dispatch_ctx_t *ctx, int box_id)
 void dispatch_spawn(const dispatch_ctx_t *ctx, int box_id, int priority)
 {
     if (!ctx || !ctx->pool) return;
-    dispatch_task_t *t = malloc(sizeof *t);
-    if (!t) return;
+
+    /* Task structs come from the unified allocator's free-list so
+     * hot graphs don't pay per-spawn malloc bookkeeping. The chunk
+     * is stashed on the task itself so dispatch_action can release
+     * it via ua_unref without a lookup. */
+    ua_t *heap = slot_store_allocator(ctx->slots);
+    ua_chunk_t *chunk = ua_alloc(heap, sizeof(dispatch_task_t));
+    if (!chunk) return;
+    dispatch_task_t *t = (dispatch_task_t *)ua_data(chunk);
+    t->chunk = chunk;
+    t->live_wire_count = 0;
 
     /* Assign task_id at submission so the same id correlates the
      * task_submit / task_start / task_end events. The next_task_id
@@ -990,6 +999,8 @@ void dispatch_action(void *arg)
     }
 
     if (out_chunk) ua_unref(heap, out_chunk);
-    free(t);
+    /* Release the task cell back to the slab. The chunk pointer
+     * was stashed on the task by dispatch_spawn. */
+    if (t->chunk) ua_unref(heap, t->chunk);
 }
 /* }}} */

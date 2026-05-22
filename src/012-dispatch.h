@@ -24,6 +24,7 @@
 #define SORAMECH_DISPATCH_H
 
 #include <stdatomic.h>
+#include <stdint.h>
 
 #include "010-graph-loader.h"
 #include "011-spec-registry.h"
@@ -78,10 +79,29 @@ typedef struct dispatch_ctx {
     _Atomic int           next_task_id;
 } dispatch_ctx_t;
 
+/* Task structs are allocated from the unified allocator's slab
+ * pool so spawn/free pairs amortise across the run instead of
+ * paying per-call malloc bookkeeping. The chunk back-reference
+ * lets dispatch_action release the cell via ua_unref without
+ * having to look it up by data pointer. */
+struct ua_chunk;
+
 typedef struct dispatch_task {
     int                   box_id;
     int                   task_id;   /* assigned at dispatch_spawn time */
     const dispatch_ctx_t *ctx;
+
+    /* 304 placeholder — live count of outgoing wires that still
+     * carry an unconsumed value pushed by this task. The box-
+     * retirement consumer that reads this lands with the
+     * lifetime-tracking slice; for now the field is set to 0 on
+     * spawn and otherwise unread. Keeping it in the layout
+     * documents the intent and lets a future slice flip the
+     * read-it-and-act-on-it switch without changing the struct
+     * shape callers depend on. */
+    uint32_t              live_wire_count;
+
+    struct ua_chunk      *chunk;     /* set by dispatch_spawn; freed by dispatch_action */
 } dispatch_task_t;
 /* }}} */
 
