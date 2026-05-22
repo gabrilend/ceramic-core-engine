@@ -1,16 +1,29 @@
 # 244 — Data boxes as round-robin default providers, pulled on demand
 
 ## Status
-open · design
+in progress — pull-on-demand model in place end-to-end for the
+common case (single read predecessor); round-robin code path
+written and unit-tested at the loader, but no integration fixture
+exercises it yet (see "Remaining" below)
 
 ## Current behavior
 
-Issue 229 renamed `kind: data` to `kind: read` and reshaped the box
-so its value can come from either a file path or an inline literal.
-The current dispatch model (304) treats a read box as a producer:
-at pool startup the runner pushes the read box's value into every
-consumer slot wired from it. After that single push, the read box
-is "done" — it never pushes again.
+Read boxes are pull-on-demand value sources. They never enter the
+pool's task queue. At graph load every read box's bytes are read
+once and cached on its box record (inline `value` is strdup'd;
+`path` is fopen+fread). Every call/write box gets a per-input-port
+list of its read-box predecessors. When a consumer attempts to
+fire and finds its slot empty, the dispatch's `read_inputs` copies
+the next predecessor's cached bytes into the consumer's input
+buffer — single predecessor: always index 0; multiple predecessors:
+the port's atomic-counter slot rotates the choice across parallel
+attempts. A port satisfied by a read predecessor counts as ready
+in `box_is_ready`, so consumers wired only to read boxes fire
+immediately at startup without their predecessors having to push.
+
+`do_read_box` is gone; the BOX_READ case in dispatch_action is now
+a BUG path that fires only if a read box accidentally reaches the
+pool.
 
 This breaks down in two cases:
 
@@ -163,6 +176,28 @@ pulls fresh from the read box (or its rotation).
 - `src/012-dispatch.c` — attempt-task input pull.
 - `docs/001-architecture.md` — the attempt loop (described in the
   "structural shell" section) is the place where the pull happens.
+
+## Remaining
+
+- **End-to-end round-robin fixture.** The counter-slot rotation
+  path is wired (atomic increment via the existing slot-store
+  counter primitive, mod n_predecessors) and the loader allocates
+  one only when a port has more than one read predecessor. It is
+  unit-tested at the loader level (`read_predecessor_list` in
+  `tests/010-graph-loader-test.c` confirms the three predecessors
+  land in the consumer's port list). It has not yet been exercised
+  by an integration fixture — that needs a multi-spawn consumer
+  (e.g. iterator-fed) wired to multiple read predecessors, and the
+  fixture's value-rotation needs to be observable in the pool
+  runner's output. A small follow-on; the code path will light up
+  with the first map that actually wants the rotation.
+- **Schema validation in `src/001-schema.lua`.** The phase 2 Lua
+  schema is still the canonical author-side check; the C loader
+  in phase 3 enforces topology but defers the "every required
+  input has a feeder, a literal, or is optional" rule to graph
+  validation in the editor. Adding the "read-box predecessor
+  satisfies the requirement" condition there is a follow-on
+  inside phase 2's schema work.
 
 ## Open questions
 

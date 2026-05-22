@@ -152,6 +152,14 @@ static void print_outputs(const dispatch_ctx_t *ctx)
         const char *out = ctx->last_outputs[i];
         if (out) {
             fprintf(stderr, "  %s → %s\n", b->id, out);
+        } else if (b && b->kind == BOX_READ && b->cached_value) {
+            /* 244: read boxes don't run as tasks, so they have no
+             * captured output. Their cached value is still their
+             * declared "output" conceptually — surface it here so
+             * the outputs report reflects every value source the
+             * graph carries. */
+            fprintf(stderr, "  %s → %.*s\n",
+                    b->id, b->cached_size, b->cached_value);
         } else {
             fprintf(stderr, "  %s → (no output)\n", b->id);
         }

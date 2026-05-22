@@ -733,6 +733,148 @@ static int detect_cycles(const graph_t *g, char **err)
 }
 /* }}} */
 
+/* {{{ cache_read_box_values() — issue 244
+ *
+ * Every BOX_READ's downstream value lives on its box record from
+ * graph_load onward. Inline `value` literals are strdup'd; `path`
+ * fields trigger a one-time file read whose bytes become the cache.
+ * Once cached the read box never re-reads — its value is the run's
+ * source of truth. */
+static int cache_read_box_values(graph_t *g, char **err)
+{
+    for (int i = 0; i < g->n_boxes; i++) {
+        box_t *b = &g->boxes[i];
+        if (b->kind != BOX_READ) continue;
+
+        if (b->value) {
+            int n = (int)strlen(b->value);
+            b->cached_value = malloc((size_t)n + 1);
+            if (!b->cached_value) { *err = err_fmt("oom"); return -1; }
+            memcpy(b->cached_value, b->value, (size_t)n);
+            b->cached_value[n] = '\0';
+            b->cached_size = n;
+            continue;
+        }
+        if (!b->path) {
+            /* No value, no path — error surfaces only if a consumer
+             * actually tries to pull from this box, but flagging at
+             * load is louder. Future iterations may allow `path`
+             * inputs that arrive at run time; for now an unconfigured
+             * read box is a load failure. */
+            *err = err_fmt("read box '%s' has neither 'value' nor 'path'", b->id);
+            return -1;
+        }
+
+        /* Resolve `path` relative to the map directory and slurp the
+         * file. The graph holds onto these bytes for the life of
+         * the run. */
+        const char *base = g->map_dir;
+        size_t blen = base ? strlen(base) : 0;
+        size_t plen = strlen(b->path);
+        char *full = malloc(blen + 1 + plen + 1);
+        if (!full) { *err = err_fmt("oom"); return -1; }
+        if (b->path[0] == '/') {
+            memcpy(full, b->path, plen + 1);
+        } else if (blen > 0) {
+            memcpy(full, base, blen);
+            full[blen] = '/';
+            memcpy(full + blen + 1, b->path, plen + 1);
+        } else {
+            memcpy(full, b->path, plen + 1);
+        }
+
+        FILE *fp = fopen(full, "rb");
+        if (!fp) {
+            *err = err_fmt("read box '%s': cannot open '%s'", b->id, full);
+            free(full);
+            return -1;
+        }
+        free(full);
+        fseek(fp, 0, SEEK_END);
+        long len = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        if (len < 0) {
+            *err = err_fmt("read box '%s': ftell failed", b->id);
+            fclose(fp);
+            return -1;
+        }
+        b->cached_value = malloc((size_t)len + 1);
+        if (!b->cached_value) {
+            *err = err_fmt("oom");
+            fclose(fp);
+            return -1;
+        }
+        size_t got = fread(b->cached_value, 1, (size_t)len, fp);
+        fclose(fp);
+        b->cached_value[got] = '\0';
+        b->cached_size = (int)got;
+    }
+    return 0;
+}
+/* }}} */
+
+/* {{{ build_read_predecessor_lists() — issue 244
+ *
+ * For every call / write box, walk each input port and collect the
+ * indices of any BOX_READ producers feeding it. The list lives on
+ * the consumer's box record so dispatch can pull on demand without
+ * a full graph scan. Reuses scan_input_feeders only indirectly —
+ * we need the producer indices, not just counts, and the existing
+ * helper doesn't expose them. The walk is small enough that an
+ * inline loop is clearer than threading a callback through. */
+static int build_read_predecessor_lists(graph_t *g, char **err)
+{
+    for (int i = 0; i < g->n_boxes; i++) {
+        box_t *b = &g->boxes[i];
+        if (b->kind != BOX_CALL && b->kind != BOX_WRITE) continue;
+        if (b->n_inputs <= 0) continue;
+
+        b->n_read_predecessors    = calloc((size_t)b->n_inputs, sizeof(int));
+        b->read_predecessor_ids   = calloc((size_t)b->n_inputs, sizeof(int *));
+        b->read_pred_counter_slot = malloc((size_t)b->n_inputs * sizeof(int));
+        if (!b->n_read_predecessors || !b->read_predecessor_ids ||
+            !b->read_pred_counter_slot) {
+            *err = err_fmt("oom");
+            return -1;
+        }
+        for (int p = 0; p < b->n_inputs; p++) b->read_pred_counter_slot[p] = -1;
+
+        for (int port = 0; port < b->n_inputs; port++) {
+            /* First pass: count. */
+            int n = 0;
+            for (int p = 0; p < g->n_boxes; p++) {
+                const box_t *prod = &g->boxes[p];
+                if (prod->kind != BOX_READ) continue;
+                for (int k = 0; k < prod->n_connections; k++) {
+                    const connection_t *c = &prod->connections[k];
+                    if (c->to_box_idx == i && c->to_input_idx == port) n++;
+                }
+            }
+            if (n == 0) continue;
+
+            int *ids = malloc((size_t)n * sizeof(int));
+            if (!ids) { *err = err_fmt("oom"); return -1; }
+
+            /* Second pass: fill. */
+            int idx = 0;
+            for (int p = 0; p < g->n_boxes; p++) {
+                const box_t *prod = &g->boxes[p];
+                if (prod->kind != BOX_READ) continue;
+                for (int k = 0; k < prod->n_connections; k++) {
+                    const connection_t *c = &prod->connections[k];
+                    if (c->to_box_idx == i && c->to_input_idx == port) {
+                        ids[idx++] = p;
+                    }
+                }
+            }
+            b->n_read_predecessors[port]  = n;
+            b->read_predecessor_ids[port] = ids;
+        }
+    }
+    return 0;
+}
+/* }}} */
+
 /* {{{ detect_entry_boxes() — phase 6
  *
  * Fills g->entry_box_ids with the indices of boxes the pool runner
@@ -850,11 +992,13 @@ graph_t *graph_load(const char *map_dir, char **err)
         return NULL;
     }
 
-    if (load_meta(g, map_dir, err)     != 0) { graph_destroy(g); return NULL; }
-    if (load_boxes(g, map_dir, err)    != 0) { graph_destroy(g); return NULL; }
-    if (resolve_topology(g, err)       != 0) { graph_destroy(g); return NULL; }
-    if (detect_cycles(g, err)          != 0) { graph_destroy(g); return NULL; }
-    if (detect_entry_boxes(g, err)     != 0) { graph_destroy(g); return NULL; }
+    if (load_meta(g, map_dir, err)            != 0) { graph_destroy(g); return NULL; }
+    if (load_boxes(g, map_dir, err)           != 0) { graph_destroy(g); return NULL; }
+    if (resolve_topology(g, err)              != 0) { graph_destroy(g); return NULL; }
+    if (detect_cycles(g, err)                 != 0) { graph_destroy(g); return NULL; }
+    if (cache_read_box_values(g, err)         != 0) { graph_destroy(g); return NULL; }
+    if (build_read_predecessor_lists(g, err)  != 0) { graph_destroy(g); return NULL; }
+    if (detect_entry_boxes(g, err)            != 0) { graph_destroy(g); return NULL; }
 
     /* Compute the same-language fast path flag per call box (issue
      * 312). A box is "native-eligible" iff every adjacent call box —
@@ -928,17 +1072,28 @@ void graph_destroy(graph_t *g)
     if (!g) return;
     if (g->boxes) {
         for (int i = 0; i < g->n_boxes; i++) {
-            free(g->boxes[i].inputs);
-            free(g->boxes[i].connections);
-            free(g->boxes[i].input_slot_ids);
-            free(g->boxes[i].input_slot_modes);
-            free(g->boxes[i].input_edge_native);
-            free(g->boxes[i].output_edge_native);
-            free((double *)g->boxes[i].routing.weights);
+            box_t *b = &g->boxes[i];
+            free(b->inputs);
+            free(b->connections);
+            free(b->input_slot_ids);
+            free(b->input_slot_modes);
+            free(b->input_edge_native);
+            free(b->output_edge_native);
+            free((double *)b->routing.weights);
             /* per-box compile hint pointer arrays (strings inside
              * are arena-owned; only the array itself is heap) */
-            free((void *)g->boxes[i].link_libs);
-            free((void *)g->boxes[i].headers);
+            free((void *)b->link_libs);
+            free((void *)b->headers);
+            /* 244 read-box cache + predecessor lists */
+            free(b->cached_value);
+            if (b->read_predecessor_ids) {
+                for (int j = 0; j < b->n_inputs; j++) {
+                    free(b->read_predecessor_ids[j]);
+                }
+                free(b->read_predecessor_ids);
+            }
+            free(b->n_read_predecessors);
+            free(b->read_pred_counter_slot);
         }
         free(g->boxes);
     }
@@ -1177,6 +1332,27 @@ int graph_attach_runtime(graph_t *g,
                 return -1;
             }
             b->counter_slot_id = (int)cid;
+        }
+
+        /* 244 round-robin counter slots. A consumer port with more
+         * than one read-box predecessor rotates among them; the
+         * atomic counter lets parallel attempt-tasks each grab a
+         * distinct index. Ports with zero or one read predecessor
+         * don't need a counter (no predecessor → no pull; one
+         * predecessor → always index 0). */
+        if (b->n_read_predecessors) {
+            for (int j = 0; j < b->n_inputs; j++) {
+                if (b->n_read_predecessors[j] <= 1) continue;
+                slot_id_t cid = slot_alloc((slot_store_t *)slots, 0, 0,
+                                           SLOT_FLAG_ATOMIC_COUNTER);
+                if (cid == SLOT_INVALID) {
+                    if (err) *err = err_fmt("box '%s': could not allocate "
+                                            "read-rotation counter for input '%s'",
+                                            b->id, b->inputs[j].name);
+                    return -1;
+                }
+                b->read_pred_counter_slot[j] = (int)cid;
+            }
         }
     }
 

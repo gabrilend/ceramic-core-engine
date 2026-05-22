@@ -8,14 +8,15 @@
  *   3. Do the box's work:
  *        - BOX_CALL — invoke the resolved language spec via the
  *          worker's per-language handle.
- *        - BOX_READ — emit a value. If the box has an inline literal
- *          `value`, emit it as-is; otherwise read the file at
- *          `box->path` (resolved relative to map_dir) and use its
- *          contents.
  *        - BOX_WRITE — write the `value` input to the path from the
  *          `path` input (or `box->path` if a static literal). After
  *          a successful write, emit the boolean `"true"` downstream
  *          for chain-after-write graphs; unwired output discards.
+ *        - BOX_READ — never reaches dispatch. Read boxes are
+ *          pull-on-demand value sources (issue 244); their cached
+ *          bytes are copied directly into a consumer's input buffer
+ *          by `read_inputs` when the consumer fires and finds the
+ *          slot empty. They are not tasks and never enter the pool.
  *   4. Push the resulting bytes to every outgoing connection's
  *      consumer input slot.
  *   5. For each consumer, fire the spawn-on-input-ready check,
@@ -143,7 +144,14 @@ void dispatch_ctx_destroy(dispatch_ctx_t *ctx)
 }
 /* }}} */
 
-/* {{{ box_is_ready() — every required input has a value */
+/* {{{ box_is_ready() — every required input has a value or fallback
+ *
+ * A port is satisfied when:
+ *   - it is optional, OR
+ *   - its slot currently holds a value, OR
+ *   - it has at least one read-box predecessor (issue 244 — the
+ *     consumer can pull the cached value at attempt time even
+ *     though the slot is empty). */
 static int box_is_ready(const dispatch_ctx_t *ctx, int box_id)
 {
     const box_t *b = graph_box(ctx->graph, box_id);
@@ -152,7 +160,9 @@ static int box_is_ready(const dispatch_ctx_t *ctx, int box_id)
     if (!b->input_slot_ids) return 0;        /* runtime not attached */
     for (int i = 0; i < b->n_inputs; i++) {
         if (b->inputs[i].optional) continue;
-        if (!slot_has_value(ctx->slots, b->input_slot_ids[i])) return 0;
+        if (slot_has_value(ctx->slots, b->input_slot_ids[i])) continue;
+        if (b->n_read_predecessors && b->n_read_predecessors[i] > 0) continue;
+        return 0;
     }
     return 1;
 }
@@ -210,6 +220,10 @@ void dispatch_spawn_if_ready(dispatch_ctx_t *ctx, int box_id, int priority)
     if (!box_is_ready(ctx, box_id)) return;
 
     const box_t *b = graph_box(ctx->graph, box_id);
+    /* 244: read boxes are pull-on-demand value sources, not tasks.
+     * They never enter the pool — their consumers read the cached
+     * value directly when they fire. */
+    if (b && b->kind == BOX_READ) return;
     if (b && b->multi_spawn) {
         /* Multi-spawn box (iterator or anything downstream of one).
          * The single-spawn guard doesn't apply: every push that
@@ -246,8 +260,15 @@ int dispatch_push_literals(dispatch_ctx_t *ctx, char **err)
             const input_decl_t *p = &b->inputs[j];
             if (!p->literal) continue;
             int sz = (int)strlen(p->literal);
-            if (slot_push(ctx->slots, b->input_slot_ids[j],
-                          p->literal, sz, 0) != 0) {
+            /* slot_push_native aliases to slot_push for single-ring
+             * slots; for dual-ring slots (issue 312 slice 3), it
+             * writes to the native ring + ordering ring atomically.
+             * Literals are treated as native — they're configured
+             * inline in the consumer's own box JSON, so semantically
+             * they belong to the consumer's language and the spec's
+             * native decoder reads them directly. */
+            if (slot_push_native(ctx->slots, b->input_slot_ids[j],
+                                 p->literal, sz, 0) != 0) {
                 if (err) *err = err_fmt("box '%s' input '%s': "
                                         "literal push failed",
                                         b->id, p->name);
@@ -325,6 +346,7 @@ static void release_inputs(const dispatch_ctx_t *ctx, int n,
 static int read_inputs(const dispatch_ctx_t *ctx, const box_t *b,
                        char **bufs, ua_chunk_t **buf_chunks,
                        const void **datas, int *sizes,
+                       int *input_native,
                        int per_buf_cap, int *failed)
 {
     *failed = 0;
@@ -337,13 +359,76 @@ static int read_inputs(const dispatch_ctx_t *ctx, const box_t *b,
         bufs[i] = ua_data(buf_chunks[i]);
         int got;
         int mode = b->input_slot_modes ? b->input_slot_modes[i] : SLOT_MODE_PEEK;
-        if (mode == SLOT_MODE_POP) {
-            got = slot_pop(ctx->slots, b->input_slot_ids[i],
-                           bufs[i], per_buf_cap);
+        /* Slice 3 of issue 312: dual-ring slots are read via
+         * slot_pop_ordered so the ordering ring drives the read
+         * order across the native and JSON sub-rings. The returned
+         * which_ring tag becomes the per-input native flag the spec
+         * sees. Single-ring slots fall back to the existing
+         * peek / pop and take their format from the box's per-port
+         * input_edge_native[] classification (uniform across the
+         * port — every cell in a single-ring slot is the same
+         * format because the producers were all classified the
+         * same way at graph load). */
+        int32_t flags  = slot_flags(ctx->slots, b->input_slot_ids[i]);
+        int     native = 1;
+        if (flags >= 0 && (flags & SLOT_FLAG_DUAL_RING)) {
+            int32_t which = SLOT_RING_NATIVE;
+            got = slot_pop_ordered(ctx->slots, b->input_slot_ids[i],
+                                   bufs[i], per_buf_cap, &which);
+            native = (which == SLOT_RING_NATIVE) ? 1 : 0;
         } else {
-            got = slot_peek(ctx->slots, b->input_slot_ids[i],
-                            bufs[i], per_buf_cap);
+            if (mode == SLOT_MODE_POP) {
+                got = slot_pop(ctx->slots, b->input_slot_ids[i],
+                               bufs[i], per_buf_cap);
+            } else {
+                got = slot_peek(ctx->slots, b->input_slot_ids[i],
+                                bufs[i], per_buf_cap);
+            }
+            native = (b->input_edge_native && b->input_edge_native[i]) ? 1 : 0;
         }
+        /* 244 pull-on-demand: if the slot was empty and the port
+         * has read-box predecessors, copy the next read box's
+         * cached bytes into the buffer. With multiple predecessors
+         * the per-port atomic counter rotates the choice across
+         * concurrent attempt-tasks. The native flag stays the
+         * port's existing input_edge_native value — same wire
+         * classification the loader assigned for any feeder. */
+        if (got < 0 && b->n_read_predecessors &&
+            b->n_read_predecessors[i] > 0) {
+            int n_preds = b->n_read_predecessors[i];
+            int pick = 0;
+            if (n_preds > 1 && b->read_pred_counter_slot &&
+                b->read_pred_counter_slot[i] >= 0) {
+                uint32_t v = slot_read_inc(ctx->slots,
+                                           b->read_pred_counter_slot[i],
+                                           (uint32_t)n_preds);
+                pick = (int)v;
+            }
+            int src_idx = b->read_predecessor_ids[i][pick];
+            const box_t *src = graph_box(ctx->graph, src_idx);
+            if (!src || !src->cached_value) {
+                ua_unref(heap, buf_chunks[i]);
+                buf_chunks[i] = NULL;
+                bufs[i] = NULL;
+                if (!b->inputs[i].optional) { *failed = 1; return n_present; }
+                continue;
+            }
+            if (src->cached_size > per_buf_cap) {
+                fprintf(stderr, "dispatch: read box '%s' (%d bytes) exceeds "
+                                "consumer '%s' input '%s' capacity %d\n",
+                        src->id, src->cached_size, b->id,
+                        b->inputs[i].name, per_buf_cap);
+                ua_unref(heap, buf_chunks[i]);
+                buf_chunks[i] = NULL;
+                bufs[i] = NULL;
+                *failed = 1;
+                return n_present;
+            }
+            memcpy(bufs[i], src->cached_value, (size_t)src->cached_size);
+            got    = src->cached_size;
+            native = (b->input_edge_native && b->input_edge_native[i]) ? 1 : 0;
+        }
+
         if (got < 0) {
             ua_unref(heap, buf_chunks[i]);
             buf_chunks[i] = NULL;
@@ -351,11 +436,46 @@ static int read_inputs(const dispatch_ctx_t *ctx, const box_t *b,
             if (!b->inputs[i].optional) { *failed = 1; return n_present; }
             continue;
         }
-        datas[n_present] = bufs[i];
-        sizes[n_present] = got;
+        datas[n_present]        = bufs[i];
+        sizes[n_present]        = got;
+        if (input_native) input_native[n_present] = native;
         n_present++;
     }
     return n_present;
+}
+/* }}} */
+
+/* {{{ wire_is_native() — does this specific wire stay within one language?
+ *
+ * Returns 1 iff the given outgoing connection terminates at a
+ * consumer in the producer's own language. Used by push_one_connection
+ * to pick the dual-ring slot's native or JSON ring per wire — each
+ * wire's writing style is its own. */
+static int wire_is_native(const box_t *producer, const connection_t *c)
+{
+    if (!producer->output_edge_native || !producer->connections) return 0;
+    int idx = (int)(c - producer->connections);
+    if (idx < 0 || idx >= producer->n_connections) return 0;
+    return producer->output_edge_native[idx];
+}
+/* }}} */
+
+/* {{{ all_wires_native() — does every outgoing wire stay in this language?
+ *
+ * Used to pass `output_native` to the spec as a hint about whether
+ * any cross-language consumer exists. Specs that can produce
+ * different formats may use this to pre-emptively pick the cheaper
+ * one when all consumers are same-lang. Slice 4 of issue 312
+ * threads this through; per-wire conversion (the symmetric
+ * per-edge picture, where each wire gets its own format) is the
+ * dispatch's job, not the spec's. */
+static int all_wires_native(const box_t *b)
+{
+    if (!b->output_edge_native || b->n_connections <= 0) return 1;
+    for (int j = 0; j < b->n_connections; j++) {
+        if (!b->output_edge_native[j]) return 0;
+    }
+    return 1;
 }
 /* }}} */
 
@@ -364,7 +484,15 @@ static int read_inputs(const dispatch_ctx_t *ctx, const box_t *b,
  * (issue 304's iterator-ordering rule). For pushes from
  * non-iterator producers it's 0; for iterator pushes the routing
  * code passes the counter value so parallel iterator tasks
- * preserve invocation order at the consumer. */
+ * preserve invocation order at the consumer.
+ *
+ * `conn_idx` is the producer-side connection index (which entry in
+ * `b->connections` this is) — used to look up
+ * `b->output_edge_native[conn_idx]` when the consumer's slot is
+ * dual-ring (issue 312 slice 3). For producers that don't carry
+ * per-edge classification (read / write / data boxes — no
+ * `output_edge_native` array), the bit defaults to 0 (treated as
+ * cross-language; the JSON ring receives the push). */
 static int push_one_connection(dispatch_ctx_t *ctx, const box_t *b,
                                const connection_t *c,
                                const void *out_bytes, int out_size,
@@ -374,8 +502,31 @@ static int push_one_connection(dispatch_ctx_t *ctx, const box_t *b,
     const box_t *dst = graph_box(ctx->graph, c->to_box_idx);
     if (!dst || !dst->input_slot_ids) return 0;
     if (c->to_input_idx < 0 || c->to_input_idx >= dst->n_inputs) return 0;
-    if (slot_push(ctx->slots, dst->input_slot_ids[c->to_input_idx],
-                  out_bytes, out_size, tag) != 0) {
+
+    int     dst_slot = dst->input_slot_ids[c->to_input_idx];
+    int32_t dst_flags = slot_flags(ctx->slots, dst_slot);
+    int     rc;
+
+    /* Each wire carries its own writing style — same-language wires
+     * push native, cross-language wires push JSON. The format is
+     * decided per outgoing connection (per-edge bit), not per call.
+     * A box with mixed fan-out (some same-lang, some cross-lang)
+     * lets each consumer get the right format for its own wire,
+     * which is what the dual-ring slot's per-cell tag preserves. */
+    if (dst_flags >= 0 && (dst_flags & SLOT_FLAG_DUAL_RING)) {
+        int native_edge = wire_is_native(b, c);
+        if (native_edge) {
+            rc = slot_push_native(ctx->slots, dst_slot,
+                                  out_bytes, out_size, tag);
+        } else {
+            rc = slot_push_json(ctx->slots, dst_slot,
+                                out_bytes, out_size, tag);
+        }
+    } else {
+        rc = slot_push(ctx->slots, dst_slot, out_bytes, out_size, tag);
+    }
+
+    if (rc != 0) {
         fprintf(stderr, "dispatch: '%s' → '%s'.%s: push failed\n",
                 b->id, dst->id, c->to_input);
         return -1;
@@ -559,19 +710,14 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
         fprintf(stderr, "dispatch: '%s' spec not in registry\n", b->id);
         return -1;
     }
-    /* Pick the invoke path per issue 312's same-language fast-path
-     * rules:
-     *   - same-language chain ⇒ invoke_native (if the spec supplies one)
-     *   - cross-language wire ⇒ invoke_json   (if the spec supplies one)
-     *   - either way: fall back to the canonical `invoke` when the
-     *     spec hasn't specialised. Our current specs all use the
-     *     fallback, so behaviour is unchanged; the resolution is
-     *     here so future specs can opt in without touching the
-     *     dispatch layer. */
-    lang_invoke_fn fn;
-    if (b->use_native_invoke && spec->invoke_native) fn = spec->invoke_native;
-    else if (!b->use_native_invoke && spec->invoke_json) fn = spec->invoke_json;
-    else                                              fn = spec->invoke;
+    /* Slice 5 of issue 312: there's now a single invoke entry point.
+     * The per-input `input_native[]` array and the per-call
+     * `output_native` flag carry the same-language-vs-cross-language
+     * information the old `invoke_native` / `invoke_json` callback
+     * split was meant to encode. The bridges (`native_to_json`,
+     * `json_to_native`) stay on the spec interface for the few
+     * places that consume them directly. */
+    lang_invoke_fn fn = spec->invoke;
     if (!fn) {
         fprintf(stderr, "dispatch: '%s' spec missing invoke\n", b->id);
         return -1;
@@ -591,6 +737,7 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     ua_chunk_t  *buf_chunks[16] = {0};
     const void  *datas[16]      = {0};
     int          sizes[16]      = {0};
+    int          input_native[16] = {0};
     if (n > (int)(sizeof bufs / sizeof bufs[0])) {
         fprintf(stderr, "dispatch: '%s' has %d inputs (cap = %d)\n",
                 b->id, n, (int)(sizeof bufs / sizeof bufs[0]));
@@ -598,6 +745,7 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     }
     int failed = 0;
     int n_present = read_inputs(ctx, b, bufs, buf_chunks, datas, sizes,
+                                input_native,
                                 ctx->default_out_capacity, &failed);
     if (failed) {
         release_inputs(ctx, n, bufs, buf_chunks);
@@ -610,69 +758,25 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     /* Resolve the box's source file relative to map_dir. */
     char *ref_path = b->ref ? resolve_path(ctx, b->ref) : NULL;
 
-    int rc = fn(handle, ref_path ? ref_path : b->ref, b->fn,
-                datas, sizes, n_present,
+    /* Slice 4.5 of issue 312: pick the box's output format once, at
+     * call time. If every outgoing wire goes to a consumer in this
+     * box's own language, the spec writes its fast native form;
+     * otherwise it writes JSON so the cross-language consumers can
+     * parse it. The decision is per-call, not per-edge — the spec
+     * writes once, the push then routes that one format to every
+     * consumer uniformly. Same-language consumers in a
+     * mixed-fan-out box eat the JSON cost as the price of having a
+     * cross-language sibling; the precision tradeoff is captured in
+     * issue 312's "Resolved design choice" section. */
+    int output_native = all_wires_native(b);
+
+    int rc = fn(handle, b, ref_path ? ref_path : b->ref, b->fn,
+                datas, sizes, input_native, n_present,
+                output_native,
                 out_buf, out_capacity, out_size);
     free(ref_path);
     release_inputs(ctx, n, bufs, buf_chunks);
     return rc;
-}
-/* }}} */
-
-/* {{{ do_read_box() — emit the box's value */
-/* Precedence (issue 229):
- *   1. Inline `value` literal — copied verbatim, no file IO.
- *   2. Static `path` field — read that file from disk.
- *   3. `path` input wire — would arrive in the box's input slot;
- *      not exercised by current fixtures but supported by reading
- *      slot[port="path"] when no static path is set.
- *   4. Otherwise, error — the box has nothing to emit. */
-static int do_read_box(dispatch_ctx_t *ctx, const box_t *b,
-                       char *out_buf, int out_capacity, int *out_size)
-{
-    /* (1) inline literal */
-    if (b->value) {
-        int n = (int)strlen(b->value);
-        if (n > out_capacity) {
-            fprintf(stderr, "dispatch: read box '%s' literal (%d bytes) "
-                            "exceeds output capacity %d\n",
-                    b->id, n, out_capacity);
-            return -1;
-        }
-        memcpy(out_buf, b->value, (size_t)n);
-        *out_size = n;
-        return 0;
-    }
-
-    /* (2) static path. The (3) "path-from-input" form is left as a
-     * future slice — the inputs[] slot needs to be peeked first.
-     * Today's fixtures all use the static path. */
-    const char *path_str = b->path;
-    if (!path_str) {
-        fprintf(stderr, "dispatch: read box '%s' has neither value "
-                        "nor path\n", b->id);
-        return -1;
-    }
-    char *full = resolve_path(ctx, path_str);
-    if (!full) return -1;
-    FILE *fp = fopen(full, "rb");
-    if (!fp) {
-        fprintf(stderr, "dispatch: read box '%s': cannot open '%s'\n",
-                b->id, full);
-        free(full);
-        return -1;
-    }
-    int total = 0;
-    while (total < out_capacity) {
-        size_t r = fread(out_buf + total, 1,
-                         (size_t)(out_capacity - total), fp);
-        if (r == 0) break;
-        total += (int)r;
-    }
-    fclose(fp);
-    free(full);
-    *out_size = total;
-    return 0;
 }
 /* }}} */
 
@@ -693,7 +797,11 @@ static int do_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     const void  *datas[16]      = {0};
     int          sizes[16]      = {0};
     int failed = 0;
+    /* do_write_box doesn't invoke a language spec — it's a dispatch
+     * primitive that writes a file. The per-input native flag isn't
+     * meaningful here, so pass NULL. */
     int n_present = read_inputs(ctx, b, bufs, buf_chunks, datas, sizes,
+                                /*input_native=*/NULL,
                                 ctx->default_out_capacity, &failed);
     emit_input_events(ctx, task_id, bufs, sizes, n_present);
     int path_idx = -1, value_idx = -1;
@@ -776,12 +884,18 @@ void dispatch_action(void *arg)
             case BOX_CALL:
                 rc = do_call_box(ctx, b, task_id, out_buf, out_capacity, &out_size);
                 break;
-            case BOX_READ:
-                rc = do_read_box(ctx, b, out_buf, out_capacity, &out_size);
-                break;
             case BOX_WRITE:
                 rc = do_write_box(ctx, b, task_id,
                                   out_buf, out_capacity, &out_size);
+                break;
+            case BOX_READ:
+                /* 244: read boxes are pull-on-demand value sources;
+                 * dispatch_spawn_if_ready filters them out before
+                 * they ever reach this point. Reaching here is a
+                 * bug — log loudly. */
+                fprintf(stderr, "dispatch: BUG — read box '%s' "
+                                "reached dispatch_action\n", b->id);
+                rc = -1;
                 break;
         }
     }

@@ -93,27 +93,21 @@ static void runtime_teardown(runtime_t *rt)
 /* }}} */
 
 /* {{{ test_dispatch_skeleton_run() */
-/* The original skeleton test: a dispatch run that's only checking
- * the action plumbing. Now uses the proper setup so the dispatch
- * action's real logic is exercised (even though the hello fixture
- * needs file IO for the data box, which we don't push literals
- * for — the data box just reads names.txt). We expect at least
- * the data box dispatch to run. */
+/* Smoke-test the spawn → action → return loop end-to-end. The hello
+ * fixture's `greet` call box is fed by the `who` read box; under
+ * 244 the read box never dispatches but the consumer pulls its
+ * cached `names.txt` bytes at attempt time. We spawn the consumer
+ * directly and confirm the pool serviced it. */
 static int test_dispatch_skeleton_run(void)
 {
     runtime_t rt;
-    /* hello has a data box that reads names.txt. We don't ship
-     * that file in the fixture, so the data box will fail to
-     * read it. That's expected — we only want to verify the
-     * dispatch ran (counter incremented). */
     if (runtime_setup(&rt, "tests/maps/hello", 2, 0) != 0) {
         runtime_teardown(&rt); return 0;
     }
 
-    /* Spawn the data box manually (no inputs, would be entry). */
-    int who = graph_box_index(rt.graph, "who");
-    ASSERT(who >= 0);
-    dispatch_spawn(&rt.ctx, who, 0);
+    int greet = graph_box_index(rt.graph, "greet");
+    ASSERT(greet >= 0);
+    dispatch_spawn_if_ready(&rt.ctx, greet, 0);
     pool_wait_quiescent(rt.pool);
     ASSERT(atomic_load(&rt.ctx.tasks_dispatched) >= 1);
 
@@ -173,8 +167,13 @@ static int test_calc_mul(void)
     ASSERT(b->n_inputs == 2);
 
     const char *six = "6", *seven = "7";
-    ASSERT(slot_push(rt.slots, b->input_slot_ids[0], six,   1, 0) == 0);
-    ASSERT(slot_push(rt.slots, b->input_slot_ids[1], seven, 1, 0) == 0);
+    /* slot_push_native aliases to slot_push for single-ring slots
+     * and handles the ordering-ring write for dual-ring slots (issue
+     * 312 slice 3). Calc's input ports are dual-ring (call box,
+     * non-LARGE_VALUE, non-TAGGED) so we go through the dual-aware
+     * variant. */
+    ASSERT(slot_push_native(rt.slots, b->input_slot_ids[0], six,   1, 0) == 0);
+    ASSERT(slot_push_native(rt.slots, b->input_slot_ids[1], seven, 1, 0) == 0);
 
     /* The function name is fixed in the box JSON ("add"); we just
      * verify add(6, 7) = "13". */

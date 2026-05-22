@@ -127,6 +127,14 @@ typedef struct box {
     const char    *path;          /* file path (read only; ignored if value set) */
     const char    *value;         /* inline literal; if set, read emits this directly */
 
+    /* Read-box value cache (issue 244): the bytes a downstream consumer
+     * pulls when it needs this read box's value. Populated at graph
+     * load — inline `value` is strdup'd; file `path` is read and the
+     * file's bytes are owned here. Always present on BOX_READ; NULL on
+     * call / write boxes. Freed by graph_destroy. */
+    char          *cached_value;
+    int            cached_size;
+
     /* Common */
     int            n_inputs;
     input_decl_t  *inputs;
@@ -156,6 +164,23 @@ typedef struct box {
      * JSON. */
     int           *input_edge_native;   /* n_inputs entries, or NULL              */
     int           *output_edge_native;  /* n_connections entries, or NULL         */
+
+    /* 244 per-port read-box predecessor lists.
+     *
+     * A consumer's input port may be fed by one or more BOX_READ
+     * value sources. Under the pull-on-demand model these don't push
+     * at startup; instead, when the consumer fires and finds the
+     * slot empty, the dispatch layer pulls the next read box's
+     * cached value into the input buffer directly. With more than
+     * one predecessor on the same port the dispatch rotates via the
+     * counter slot (atomic increment, mod count).
+     *
+     * Allocated by graph_load: n_inputs entries each; entries with
+     * zero read predecessors hold NULL / 0 / -1. Freed by
+     * graph_destroy. */
+    int           *n_read_predecessors;    /* n_inputs entries     */
+    int          **read_predecessor_ids;   /* per-port box-index lists */
+    int           *read_pred_counter_slot; /* per-port; -1 unless >1 preds */
 } box_t;
 
 /* Slot mode constants used by box_t.input_slot_modes[]. */

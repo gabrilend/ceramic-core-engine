@@ -843,6 +843,78 @@ static int test_distributor_parsing(void)
 }
 /* }}} */
 
+/* {{{ test_read_predecessor_list() — issue 244
+ *
+ * Build a temp map where three read boxes feed the same input
+ * port on one call box. Verify the loader cached every read box's
+ * value AND populated the consumer's per-port predecessor list. */
+static int test_read_predecessor_list(void)
+{
+    char tmpl[] = "/tmp/soramech-readlist-XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    ASSERT(dir);
+
+    char p[4096];
+    snprintf(p, sizeof p, "%s/meta.json", dir);
+    FILE *fp = fopen(p, "w");
+    fputs("{\"name\":\"r\",\"entry_box_id\":\"sink\"}", fp); fclose(fp);
+    snprintf(p, sizeof p, "%s/boxes", dir); mkdir(p, 0755);
+
+    for (int i = 0; i < 3; i++) {
+        snprintf(p, sizeof p, "%s/boxes/src%d.json", dir, i);
+        fp = fopen(p, "w");
+        fprintf(fp,
+            "{\"id\":\"src%d\",\"kind\":\"read\",\"value\":\"v%d\","
+            "\"connections\":[{\"to_box\":\"sink\",\"to_input\":\"in\"}]}",
+            i, i);
+        fclose(fp);
+    }
+    snprintf(p, sizeof p, "%s/boxes/sink.json", dir);
+    fp = fopen(p, "w");
+    fputs("{\"id\":\"sink\",\"kind\":\"call\",\"lang\":\"lua\",\"ref\":\"s.lua\","
+          "\"fn\":\"s\",\"routing\":{\"kind\":\"plain\"},"
+          "\"inputs\":[{\"name\":\"in\",\"type\":\"string\"}]}", fp);
+    fclose(fp);
+
+    char *err = NULL;
+    graph_t *g = graph_load(dir, &err);
+    ASSERT(g);
+
+    const box_t *sink = graph_box_by_id(g, "sink");
+    ASSERT(sink);
+    ASSERT(sink->n_inputs == 1);
+    ASSERT(sink->n_read_predecessors);
+    ASSERT(sink->n_read_predecessors[0] == 3);
+    ASSERT(sink->read_predecessor_ids);
+    ASSERT(sink->read_predecessor_ids[0]);
+
+    /* Each predecessor's cached_value matches the JSON we wrote. */
+    int saw[3] = {0, 0, 0};
+    for (int k = 0; k < 3; k++) {
+        int idx = sink->read_predecessor_ids[0][k];
+        const box_t *src = graph_box(g, idx);
+        ASSERT(src && src->kind == BOX_READ);
+        ASSERT(src->cached_value);
+        ASSERT(src->cached_size == 2);
+        ASSERT(src->cached_value[0] == 'v');
+        int which = src->cached_value[1] - '0';
+        ASSERT(which >= 0 && which <= 2);
+        saw[which] = 1;
+    }
+    ASSERT(saw[0] && saw[1] && saw[2]);
+
+    graph_destroy(g);
+    for (int i = 0; i < 3; i++) {
+        snprintf(p, sizeof p, "%s/boxes/src%d.json", dir, i); unlink(p);
+    }
+    snprintf(p, sizeof p, "%s/boxes/sink.json", dir); unlink(p);
+    snprintf(p, sizeof p, "%s/meta.json",       dir); unlink(p);
+    snprintf(p, sizeof p, "%s/boxes",           dir); rmdir(p);
+    rmdir(dir);
+    return 1;
+}
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -871,6 +943,7 @@ int main(void)
     RUN(entry_box_excludes_downstream);
     RUN(size_class_enumeration);
     RUN(distributor_parsing);
+    RUN(read_predecessor_list);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }
