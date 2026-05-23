@@ -11,4 +11,15 @@ function M.greet(name, salutation)
 end
 -- }}}
 
+-- {{{ M.sum_pair
+-- Used by the slice-4 (issue 312) JSON-input test. Receives a
+-- table parsed from JSON bytes and returns the sum of its two
+-- fields. If invoke had instead handed us the raw bytes string,
+-- the table indexing would error — that's the failure mode the
+-- test verifies against.
+function M.sum_pair(t)
+    return tostring(t.a + t.b)
+end
+-- }}}
+
 return M

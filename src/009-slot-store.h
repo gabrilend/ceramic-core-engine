@@ -110,6 +110,24 @@ enum {
     SLOT_FLAG_TAGGED         = 1 << 0,
     SLOT_FLAG_ATOMIC_COUNTER = 1 << 1,
     SLOT_FLAG_LARGE_VALUE    = 1 << 2,
+    /* Dual-ring slot (issue 312). The slot internally carries three
+     * rings — a native-bytes ring, a JSON-bytes ring, and an ordering
+     * ring whose cells are (which_ring, idx) tuples in arrival order.
+     * Producers push to native or JSON depending on whether the wire
+     * is same-language or crosses a language boundary; consumers pop
+     * via the ordering ring to preserve arrival order across the two
+     * data rings. Use slot_push_native / slot_push_json / slot_pop_ordered
+     * instead of slot_push / slot_pop. All three rings share one
+     * per-slot lock so a push's data write and ordering write are
+     * atomic together. */
+    SLOT_FLAG_DUAL_RING      = 1 << 3,
+};
+
+/* which_ring values returned by slot_pop_ordered and accepted by the
+ * dual-ring push variants. */
+enum {
+    SLOT_RING_NATIVE = 0,
+    SLOT_RING_JSON   = 1,
 };
 /* }}} */
 
@@ -175,6 +193,44 @@ int32_t       slot_peek(slot_store_t *s, slot_id_t id,
 int32_t       slot_pop(slot_store_t *s, slot_id_t id,
                        void *buf, int32_t buf_size);
 
+/* Dual-ring push: write `data` into the slot's native ring (issue 312)
+ * and append the (NATIVE, idx) tuple to the ordering ring. The data
+ * write and ordering write are atomic together — pops see them as a
+ * pair or not at all.
+ *
+ * Only valid on SLOT_FLAG_DUAL_RING slots. On non-dual slots, aliases
+ * to slot_push (the ordering ring isn't consulted; back-compat for
+ * callers that want one entry point regardless of slot shape).
+ *
+ * Returns 0 on success, -1 if the slot is full, arguments are
+ * invalid, or the slot is the wrong type (e.g. ATOMIC_COUNTER). */
+int           slot_push_native(slot_store_t *s, slot_id_t id,
+                               const void *data, int32_t size, uint32_t tag);
+
+/* Dual-ring push: write `data` into the slot's JSON ring and append
+ * the (JSON, idx) tuple to the ordering ring. Atomicity is the same
+ * as slot_push_native.
+ *
+ * Only valid on SLOT_FLAG_DUAL_RING slots. On non-dual slots returns
+ * -1 — the caller has to use slot_push for the single-ring case.
+ *
+ * Returns 0 on success, -1 on full / invalid / wrong type. */
+int           slot_push_json  (slot_store_t *s, slot_id_t id,
+                               const void *data, int32_t size, uint32_t tag);
+
+/* Dual-ring pop: read the next entry from the ordering ring,
+ * then drain the indicated cell from the matching data ring.
+ * `*out_which_ring` receives SLOT_RING_NATIVE or SLOT_RING_JSON.
+ *
+ * On non-dual slots, behaves like slot_pop and sets
+ * `*out_which_ring = SLOT_RING_NATIVE`.
+ *
+ * Returns the cell's filled_size on success, -1 on empty / wrong
+ * type / buffer too small. */
+int32_t       slot_pop_ordered(slot_store_t *s, slot_id_t id,
+                               void *buf, int32_t buf_size,
+                               int32_t *out_which_ring);
+
 /* Atomic read-and-increment on SLOT_FLAG_ATOMIC_COUNTER slots.
  *
  *   mod — modulus for the returned value. Pass UINT32_MAX for "no
@@ -201,6 +257,12 @@ int32_t       slot_fill_count(slot_store_t *s, slot_id_t id);
 
 /* Slot count in the store. */
 int32_t       slot_store_size(slot_store_t *s);
+
+/* Read the flag bits a slot was allocated with. Used by dispatch
+ * to branch on `SLOT_FLAG_DUAL_RING` and pick the right push / pop
+ * variant per slot. Returns the flag mask on success, -1 on invalid
+ * slot id. */
+int32_t       slot_flags(slot_store_t *s, slot_id_t id);
 
 /* Bytes currently held by SLOT_FLAG_LARGE_VALUE payloads — i.e.
  * the unified allocator's "in use" total for this store. Returns 0

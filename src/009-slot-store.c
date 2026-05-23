@@ -67,10 +67,45 @@ typedef struct slot_rec {
      * cell-array storage lets the cell-array memory go through
      * the same recycling pipeline as the large-value payloads —
      * one heap for both kinds of slot memory, as the design
-     * retraction requires. */
+     * retraction requires.
+     *
+     * For SLOT_FLAG_DUAL_RING slots, this is the native ring (the
+     * one that holds same-language native bytes). The json ring
+     * and ordering ring live in the dual-ring fields below. */
     uint8_t     *cells;
     ua_chunk_t  *cells_chunk;
+
+    /* Dual-ring extension (issue 312). All four pointer fields are
+     * NULL on non-dual slots; they're populated by slot_alloc when
+     * SLOT_FLAG_DUAL_RING is set. The single per-slot lock above
+     * covers all three rings — push_native writes (data + ordering)
+     * atomically, push_json mirrors, and pop_ordered consumes both
+     * the ordering tuple and the indicated data ring atomically.
+     *
+     * The json ring uses the same cell_capacity / cell_record / n_cells
+     * as the native ring (one slot, one cell size). The ordering ring
+     * has its own per-cell layout — see ORDER_CELL_RECORD below. */
+    _Atomic uint32_t json_head;
+    _Atomic uint32_t json_tail;
+    uint8_t         *json_cells;
+    ua_chunk_t      *json_cells_chunk;
+
+    _Atomic uint32_t order_head;
+    _Atomic uint32_t order_tail;
+    uint8_t         *order_cells;
+    ua_chunk_t      *order_cells_chunk;
 } slot_rec_t;
+
+/* Ordering-ring cell layout for SLOT_FLAG_DUAL_RING slots.
+ *
+ *   bytes 0..3 : which_ring (uint32; SLOT_RING_NATIVE or SLOT_RING_JSON)
+ *   bytes 4..7 : idx        (uint32; cell index within the indicated ring)
+ *
+ * Total 8 bytes per cell. Head/tail track FIFO position; head == tail
+ * means the ring is empty. No filled_size field — the order ring is
+ * plain FIFO (no lowest-tag pop semantics), so head/tail are
+ * sufficient to detect emptiness. */
+#define ORDER_CELL_RECORD ((uint32_t)8)
 /* }}} */
 
 /* {{{ Internal store */
@@ -187,7 +222,9 @@ void slot_store_destroy(slot_store_t *s)
     for (int32_t i = 0; i < s->count; i++) {
         slot_rec_t *r = s->slots[i];
         if (!r) continue;
-        if (r->cells_chunk) ua_unref(s->heap, r->cells_chunk);
+        if (r->cells_chunk)       ua_unref(s->heap, r->cells_chunk);
+        if (r->json_cells_chunk)  ua_unref(s->heap, r->json_cells_chunk);
+        if (r->order_cells_chunk) ua_unref(s->heap, r->order_cells_chunk);
         free(r);
     }
     free(s->slots);
@@ -208,6 +245,9 @@ int32_t slot_store_size(slot_store_t *s)
     return s ? s->count : 0;
 }
 /* }}} */
+
+/* slot_flags() lives further down — it needs the get_slot() helper
+ * that's defined after slot_alloc(). */
 
 /* {{{ Local helper — grow_store_if_needed() */
 static int grow_store_if_needed(slot_store_t *s)
@@ -231,6 +271,17 @@ slot_id_t slot_alloc(slot_store_t *s,
                      int32_t flags)
 {
     if (!s) return SLOT_INVALID;
+
+    /* DUAL_RING constraints (slice 1 of issue 312):
+     * - Doesn't combine with ATOMIC_COUNTER (no rings on counter slots).
+     * - Doesn't combine with LARGE_VALUE or TAGGED yet — both could
+     *   land here later, but slice 1 keeps the dual-ring path
+     *   narrow to inline-byte cells. */
+    if ((flags & SLOT_FLAG_DUAL_RING) &&
+        (flags & (SLOT_FLAG_ATOMIC_COUNTER | SLOT_FLAG_LARGE_VALUE
+                                           | SLOT_FLAG_TAGGED))) {
+        return SLOT_INVALID;
+    }
 
     size_t bytes_cells = 0;
     uint32_t cell_record = 0;
@@ -278,9 +329,13 @@ slot_id_t slot_alloc(slot_store_t *s,
     r->n_cells       = (flags & SLOT_FLAG_ATOMIC_COUNTER) ? 0 : (uint32_t)n_cells;
     r->cell_record   = cell_record;
     r->flags         = (uint32_t)flags;
-    atomic_init(&r->head,    0u);
-    atomic_init(&r->tail,    0u);
-    atomic_init(&r->counter, 0u);
+    atomic_init(&r->head,       0u);
+    atomic_init(&r->tail,       0u);
+    atomic_init(&r->counter,    0u);
+    atomic_init(&r->json_head,  0u);
+    atomic_init(&r->json_tail,  0u);
+    atomic_init(&r->order_head, 0u);
+    atomic_init(&r->order_tail, 0u);
     /* atomic_flag has no atomic_flag_init in C11; ATOMIC_FLAG_INIT is
      * for initializers. Clearing it leaves it in the "not set" state. */
     atomic_flag_clear(&r->lock);
@@ -300,8 +355,37 @@ slot_id_t slot_alloc(slot_store_t *s,
         memset(r->cells, 0, bytes_cells);
     }
 
+    /* Dual-ring slots: allocate the JSON-ring cell array (same shape
+     * as the native cell array) and the ordering ring (8 bytes per
+     * cell). All three rings live in the same unified allocator so
+     * they recycle on slot destroy like every other slot byte. */
+    if (flags & SLOT_FLAG_DUAL_RING) {
+        size_t json_bytes  = (size_t)n_cells * cell_record;
+        size_t order_bytes = (size_t)n_cells * ORDER_CELL_RECORD;
+        r->json_cells_chunk  = ua_alloc(s->heap, json_bytes);
+        if (!r->json_cells_chunk) {
+            if (r->cells_chunk) ua_unref(s->heap, r->cells_chunk);
+            free(r);
+            return SLOT_INVALID;
+        }
+        r->json_cells = ua_data(r->json_cells_chunk);
+        memset(r->json_cells, 0, json_bytes);
+
+        r->order_cells_chunk = ua_alloc(s->heap, order_bytes);
+        if (!r->order_cells_chunk) {
+            ua_unref(s->heap, r->json_cells_chunk);
+            if (r->cells_chunk) ua_unref(s->heap, r->cells_chunk);
+            free(r);
+            return SLOT_INVALID;
+        }
+        r->order_cells = ua_data(r->order_cells_chunk);
+        memset(r->order_cells, 0, order_bytes);
+    }
+
     if (grow_store_if_needed(s) != 0) {
-        if (r->cells_chunk) ua_unref(s->heap, r->cells_chunk);
+        if (r->cells_chunk)       ua_unref(s->heap, r->cells_chunk);
+        if (r->json_cells_chunk)  ua_unref(s->heap, r->json_cells_chunk);
+        if (r->order_cells_chunk) ua_unref(s->heap, r->order_cells_chunk);
         free(r);
         return SLOT_INVALID;
     }
@@ -326,6 +410,10 @@ int slot_push(slot_store_t *s, slot_id_t id,
     slot_rec_t *r = get_slot(s, id);
     if (!r)                                      return -1;
     if (r->flags & SLOT_FLAG_ATOMIC_COUNTER)     return -1;
+    /* Dual-ring slots require the caller to pick a ring via
+     * slot_push_native or slot_push_json — using the plain push
+     * would skip the ordering ring and break read order. */
+    if (r->flags & SLOT_FLAG_DUAL_RING)          return -1;
     if (size < 0)                                return -1;
     if (!data && size > 0)                       return -1;
 
@@ -393,6 +481,10 @@ int32_t slot_peek(slot_store_t *s, slot_id_t id,
     slot_rec_t *r = get_slot(s, id);
     if (!r)                                  return -1;
     if (r->flags & SLOT_FLAG_ATOMIC_COUNTER) return -1;
+    /* Peek on dual-ring would have to choose a ring to peek, and
+     * "the next" isn't meaningful without consulting the ordering
+     * ring. Dual-ring slots are pop-only via slot_pop_ordered. */
+    if (r->flags & SLOT_FLAG_DUAL_RING)      return -1;
     if (buf_size < 0 || (!buf && buf_size > 0)) return -1;
 
     int large = (r->flags & SLOT_FLAG_LARGE_VALUE) != 0;
@@ -459,6 +551,10 @@ int32_t slot_pop(slot_store_t *s, slot_id_t id,
     slot_rec_t *r = get_slot(s, id);
     if (!r)                                  return -1;
     if (r->flags & SLOT_FLAG_ATOMIC_COUNTER) return -1;
+    /* Dual-ring slots require slot_pop_ordered — popping the native
+     * ring directly would let the consumer skip cells whose ordering
+     * entry says to pop from the JSON ring next. */
+    if (r->flags & SLOT_FLAG_DUAL_RING)      return -1;
     if (buf_size < 0 || (!buf && buf_size > 0)) return -1;
 
     lock_slot(r);
@@ -534,6 +630,181 @@ int32_t slot_pop(slot_store_t *s, slot_id_t id,
 }
 /* }}} */
 
+/* {{{ Dual-ring helpers (issue 312)
+ *
+ * The three rings (native data, JSON data, ordering) all live on the
+ * same slot_rec and share one lock. A push writes (data cell +
+ * ordering entry) under the lock — readers either see both writes or
+ * neither.
+ *
+ * Data-ring cell layout for dual-ring slots is the standard layout
+ * minus the tag field (DUAL_RING doesn't combine with TAGGED in
+ * slice 1): bytes 0..3 are filled_size, bytes 4.. are payload. The
+ * ordering ring uses ORDER_CELL_RECORD (8 bytes — 4 for which_ring,
+ * 4 for idx); empty-cell detection is via head/tail, not filled_size.
+ *
+ * Sizing: all three rings have n_cells cells. The order ring is the
+ * binding constraint on total in-flight pushes (n_cells across both
+ * data rings combined). Callers that need more pending pushes pass
+ * a larger n_cells. */
+
+/* dual_push_locked() — write `data` into the indicated data ring at
+ * its tail, write the (which_ring, idx) tuple into the ordering ring
+ * at its tail, advance both tails. Caller holds the slot lock.
+ * Returns 0 on success, -1 if either ring is full. */
+static int dual_push_locked(slot_rec_t *r, int32_t which_ring,
+                            const void *data, int32_t size)
+{
+    _Atomic uint32_t *data_head, *data_tail;
+    uint8_t          *data_cells;
+    if (which_ring == SLOT_RING_NATIVE) {
+        data_head  = &r->head;
+        data_tail  = &r->tail;
+        data_cells = r->cells;
+    } else {
+        data_head  = &r->json_head;
+        data_tail  = &r->json_tail;
+        data_cells = r->json_cells;
+    }
+
+    uint32_t dh = atomic_load_explicit(data_head,     memory_order_relaxed);
+    uint32_t dt = atomic_load_explicit(data_tail,     memory_order_relaxed);
+    uint32_t oh = atomic_load_explicit(&r->order_head, memory_order_relaxed);
+    uint32_t ot = atomic_load_explicit(&r->order_tail, memory_order_relaxed);
+    if (dt - dh >= r->n_cells) return -1;
+    if (ot - oh >= r->n_cells) return -1;
+
+    uint32_t di = dt % r->n_cells;
+    uint8_t *dp = data_cells + (size_t)di * r->cell_record;
+    uint32_t fs = (uint32_t)size;
+    memcpy(dp, &fs, sizeof fs);
+    if (size > 0) memcpy(dp + 4, data, (size_t)size);
+
+    uint32_t oi = ot % r->n_cells;
+    uint8_t *op = r->order_cells + (size_t)oi * ORDER_CELL_RECORD;
+    uint32_t which_u32 = (uint32_t)which_ring;
+    memcpy(op,     &which_u32, sizeof which_u32);
+    memcpy(op + 4, &di,        sizeof di);
+
+    atomic_store_explicit(data_tail,      dt + 1u, memory_order_release);
+    atomic_store_explicit(&r->order_tail, ot + 1u, memory_order_release);
+    return 0;
+}
+/* }}} */
+
+/* {{{ slot_push_native() */
+int slot_push_native(slot_store_t *s, slot_id_t id,
+                     const void *data, int32_t size, uint32_t tag)
+{
+    slot_rec_t *r = get_slot(s, id);
+    if (!r) return -1;
+
+    /* Non-dual: alias to slot_push. Callers can use slot_push_native
+     * uniformly across both shapes; only the dual-ring path consults
+     * the ordering ring. */
+    if (!(r->flags & SLOT_FLAG_DUAL_RING))
+        return slot_push(s, id, data, size, tag);
+
+    if (r->flags & SLOT_FLAG_ATOMIC_COUNTER)         return -1;
+    if (size < 0)                                    return -1;
+    if (!data && size > 0)                           return -1;
+    if ((uint32_t)size > r->cell_capacity)           return -1;
+
+    lock_slot(r);
+    int rc = dual_push_locked(r, SLOT_RING_NATIVE, data, size);
+    unlock_slot(r);
+    return rc;
+}
+/* }}} */
+
+/* {{{ slot_push_json() */
+int slot_push_json(slot_store_t *s, slot_id_t id,
+                   const void *data, int32_t size, uint32_t tag)
+{
+    (void)tag;  /* dual-ring slice 1 doesn't combine with TAGGED */
+    slot_rec_t *r = get_slot(s, id);
+    if (!r)                                          return -1;
+    /* JSON ring only exists on dual-ring slots. */
+    if (!(r->flags & SLOT_FLAG_DUAL_RING))           return -1;
+    if (size < 0)                                    return -1;
+    if (!data && size > 0)                           return -1;
+    if ((uint32_t)size > r->cell_capacity)           return -1;
+
+    lock_slot(r);
+    int rc = dual_push_locked(r, SLOT_RING_JSON, data, size);
+    unlock_slot(r);
+    return rc;
+}
+/* }}} */
+
+/* {{{ slot_pop_ordered() */
+int32_t slot_pop_ordered(slot_store_t *s, slot_id_t id,
+                         void *buf, int32_t buf_size,
+                         int32_t *out_which_ring)
+{
+    slot_rec_t *r = get_slot(s, id);
+    if (!r) return -1;
+
+    /* Non-dual: alias to slot_pop; report NATIVE. */
+    if (!(r->flags & SLOT_FLAG_DUAL_RING)) {
+        if (out_which_ring) *out_which_ring = SLOT_RING_NATIVE;
+        return slot_pop(s, id, buf, buf_size);
+    }
+
+    if (r->flags & SLOT_FLAG_ATOMIC_COUNTER)         return -1;
+    if (buf_size < 0 || (!buf && buf_size > 0))      return -1;
+
+    lock_slot(r);
+
+    /* Read the next ordering entry. Empty ring → nothing to pop. */
+    uint32_t oh = atomic_load_explicit(&r->order_head, memory_order_acquire);
+    uint32_t ot = atomic_load_explicit(&r->order_tail, memory_order_acquire);
+    if (oh == ot) { unlock_slot(r); return -1; }
+
+    uint32_t oi = oh % r->n_cells;
+    uint8_t *op = r->order_cells + (size_t)oi * ORDER_CELL_RECORD;
+    uint32_t which_ring, idx;
+    memcpy(&which_ring, op,     sizeof which_ring);
+    memcpy(&idx,        op + 4, sizeof idx);
+
+    /* Pick the indicated data ring's head pointer and cell array. */
+    _Atomic uint32_t *data_head;
+    uint8_t          *data_cells;
+    if (which_ring == (uint32_t)SLOT_RING_NATIVE) {
+        data_head  = &r->head;
+        data_cells = r->cells;
+    } else {
+        data_head  = &r->json_head;
+        data_cells = r->json_cells;
+    }
+
+    uint8_t *dp = data_cells + (size_t)idx * r->cell_record;
+    uint32_t fs;
+    memcpy(&fs, dp, sizeof fs);
+    if (fs == 0)                  { unlock_slot(r); return -1; }
+    if ((uint32_t)buf_size < fs)  { unlock_slot(r); return -1; }
+
+    if (fs > 0) memcpy(buf, dp + 4, fs);
+
+    /* Mark the data cell empty. */
+    uint32_t zero = 0;
+    memcpy(dp, &zero, sizeof zero);
+
+    /* Advance both heads. The data ring's head matches the ordering
+     * entry's idx at this point (entries are popped strictly in push
+     * order, and each data ring fills sequentially), so head + 1 is
+     * always the next-to-pop cell on that ring. */
+    uint32_t dh = atomic_load_explicit(data_head, memory_order_relaxed);
+    atomic_store_explicit(data_head,      dh + 1u, memory_order_release);
+    atomic_store_explicit(&r->order_head, oh + 1u, memory_order_release);
+
+    unlock_slot(r);
+
+    if (out_which_ring) *out_which_ring = (int32_t)which_ring;
+    return (int32_t)fs;
+}
+/* }}} */
+
 /* {{{ slot_read_inc() */
 uint32_t slot_read_inc(slot_store_t *s, slot_id_t id, uint32_t mod)
 {
@@ -554,6 +825,17 @@ int slot_has_value(slot_store_t *s, slot_id_t id)
     slot_rec_t *r = get_slot(s, id);
     if (!r) return 0;
     if (r->flags & SLOT_FLAG_ATOMIC_COUNTER) return 1;
+
+    if (r->flags & SLOT_FLAG_DUAL_RING) {
+        /* Dual-ring: presence is dictated by the ordering ring, since
+         * pop is order-driven. The two data rings may have unconsumed
+         * cells beyond the order ring's tail (impossible in practice
+         * because every push writes both atomically) but the order
+         * ring is the authority. */
+        uint32_t oh = atomic_load_explicit(&r->order_head, memory_order_acquire);
+        uint32_t ot = atomic_load_explicit(&r->order_tail, memory_order_acquire);
+        return oh != ot;
+    }
 
     if (r->flags & SLOT_FLAG_TAGGED) {
         /* Tagged: any filled cell counts. Cheap scan; tagged slots
@@ -580,6 +862,15 @@ struct ua *slot_store_allocator(slot_store_t *s)
 }
 /* }}} */
 
+/* {{{ slot_flags() */
+int32_t slot_flags(slot_store_t *s, slot_id_t id)
+{
+    slot_rec_t *r = get_slot(s, id);
+    if (!r) return -1;
+    return (int32_t)r->flags;
+}
+/* }}} */
+
 /* {{{ slot_store_large_value_bytes_in_use() */
 /* A small accessor for the reclamation regression test in issue
  * 302. Exposes the unified allocator's in-use byte total without
@@ -597,6 +888,14 @@ int32_t slot_fill_count(slot_store_t *s, slot_id_t id)
     slot_rec_t *r = get_slot(s, id);
     if (!r)                                  return 0;
     if (r->flags & SLOT_FLAG_ATOMIC_COUNTER) return 0;
+
+    if (r->flags & SLOT_FLAG_DUAL_RING) {
+        /* Dual-ring fill = order ring length. That's the count of
+         * cells the consumer will see across N pops. */
+        uint32_t oh = atomic_load_explicit(&r->order_head, memory_order_acquire);
+        uint32_t ot = atomic_load_explicit(&r->order_tail, memory_order_acquire);
+        return (int32_t)(ot - oh);
+    }
 
     if (r->flags & SLOT_FLAG_TAGGED) {
         lock_slot(r);

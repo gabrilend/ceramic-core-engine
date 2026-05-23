@@ -76,8 +76,8 @@ static int test_invoke_echo(void)
     char buf[64];
     int  n = 0;
 
-    int rc = b->invoke(h, "tests/maps/hello/src/echo.sh", "echo_arg",
-                       args, sizes, 1, buf, sizeof buf, &n);
+    int rc = b->invoke(h, NULL, "tests/maps/hello/src/echo.sh", "echo_arg",
+                       args, sizes, NULL, 1, 0, buf, sizeof buf, &n);
     ASSERT(rc == 0);
     ASSERT(n == (int)strlen(msg));
     buf[n] = '\0';
@@ -101,8 +101,8 @@ static int test_invoke_concat(void)
     int         sizes[2] = { (int)strlen(a), (int)strlen(c) };
     char buf[64];
     int  n = 0;
-    int rc = b->invoke(h, "tests/maps/hello/src/echo.sh", "concat",
-                       args, sizes, 2, buf, sizeof buf, &n);
+    int rc = b->invoke(h, NULL, "tests/maps/hello/src/echo.sh", "concat",
+                       args, sizes, NULL, 2, 0, buf, sizeof buf, &n);
     ASSERT(rc == 0);
     buf[n] = '\0';
     ASSERT(strcmp(buf, "left-right") == 0);
@@ -125,8 +125,8 @@ static int test_invoke_shout(void)
     int         sizes[1] = { 3 };
     char buf[16];
     int  n = 0;
-    int rc = b->invoke(h, "tests/maps/hello/src/echo.sh", "shout",
-                       args, sizes, 1, buf, sizeof buf, &n);
+    int rc = b->invoke(h, NULL, "tests/maps/hello/src/echo.sh", "shout",
+                       args, sizes, NULL, 1, 0, buf, sizeof buf, &n);
     ASSERT(rc == 0);
     buf[n] = '\0';
     ASSERT(strcmp(buf, "hey!") == 0);
@@ -146,8 +146,8 @@ static int test_invoke_missing_function(void)
 
     char buf[16];
     int  n = 0;
-    int rc = b->invoke(h, "tests/maps/hello/src/echo.sh", "no_such_fn",
-                       NULL, NULL, 0, buf, sizeof buf, &n);
+    int rc = b->invoke(h, NULL, "tests/maps/hello/src/echo.sh", "no_such_fn",
+                       NULL, NULL, NULL, 0, 0, buf, sizeof buf, &n);
     ASSERT(rc != 0);
 
     b->teardown(h);

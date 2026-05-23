@@ -417,35 +417,63 @@ on a condition variable. The main thread waits for
 `workers_ready == n_workers`, then broadcasts — all workers release
 together and begin pulling tasks. One-shot; doesn't re-engage.
 
-### Same-language wire fast path
+### Same-language wire fast path — dual-ring slot
 
-Wire format defaults to JSON. At compile time, every wire is
-classified `fast_path: true` (same language at both ends) or `false`
-(crosses a language boundary). The compile step also records the
-producer's `output_format` per box — `native` if **all** consumers
-of its output share its language, `json` if any consumer is
-different.
+Each input slot is a **dual-ring buffer plus an ordering ring**. One
+ring holds bytes in the consumer's native language form; one ring
+holds JSON bytes from cross-language producers; the ordering ring
+records `(which_ring, idx)` tuples so consumers pop in arrival order.
+
+At graph load (the single-threaded phase), per-edge classification
+fills two arrays on each box:
+
+- `input_edge_native[i]` — one bit per input port. True iff every
+  producer feeding that port shares the consumer's language.
+- `output_edge_native[j]` — one bit per outgoing connection. True
+  iff the consumer on the other end shares this box's language.
 
 At runtime:
 
-- `fast_path && output_format=native`: producer writes native bytes;
-  same-language consumers read native bytes directly.
-- `output_format=json`: producer writes JSON bytes; cross-language
-  consumers read directly; same-language consumers call
-  `json_to_native` on the way in.
+- **Push (per outgoing connection)**: the producer's spec writes
+  native bytes to the consumer slot's native ring if
+  `output_edge_native[j]` is true; otherwise calls `native_to_json`
+  and writes to the JSON ring. Pushes `(which_ring, idx)` to the
+  ordering ring either way.
+- **Pop (per input port)**: dispatch reads `(which_ring, idx)` from
+  the ordering ring, then reads the indicated cell. Passes the
+  bytes and a per-input `native | json` flag to the spec's invoke.
+- **Invoke**: the spec dispatches per input — decode native or
+  decode JSON — and writes its output in whichever form the
+  dispatch tells it (`output_native` per box).
 
-Per-language native forms:
-- **Lua** — `lua_dump` for closures, `cjson` or msgpack for tables,
-  raw bytes for strings/numbers.
+The dual-ring shape is precise per cell. A port fed by one Lua
+producer and one C producer keeps the Lua values native and
+JSON-encodes only the C-sourced values. The pessimistic per-port
+alternative (slot is all-JSON if any fan-in is cross-lang) is
+strictly correct but forces same-language producers to translate
+on mixed-fan-in ports; dual-ring keeps each cell at the right cost.
+
+Per-language native forms (each spec's private choice; only the
+spec's own write/read need to be symmetric):
+- **Lua** — candidates include `cjson.encode`, msgpack, `lua_dump`
+  for closures, raw bytes for primitives.
 - **C** — `memcpy` of the typed struct (the C spec's `compile`
-  callback knows the types).
-- **Bash** — strings only; the fast path is an alias of the JSON
-  path.
+  callback knows the layout).
+- **Bash** — strings; native ring stores string bytes directly.
 
-A spec that only ever talks to itself can stub out `invoke_json`
-(compile error if a cross-language wire ever points at it). A spec
-that participates in cross-language wires must implement all four
-callbacks.
+JSON's role: the universal cross-language ring format. Self-describing
+(six kinds), so a new language K only adds K's own `native_to_json` /
+`json_to_native` pair — no per-language-pair code paths. Closures,
+opaque values, and function pointers travel as JSON sentinel
+primitives (`$ref`, `$function_pointer`, `$lang_opaque`); cross-language
+consumers that can't reconstruct fail at wire compile.
+
+This per-edge wire fast path is the foundation; issue 313 (research,
+blocked) describes a follow-on that merges same-language source into
+one translation unit per language so the spec invocation itself
+thins down for boxes in the merged region. The dual-ring slot
+machinery remains — boxes still run as separate thread-pool tasks
+needing slots to wait for sibling inputs.
 
 ### Shipped specs
 

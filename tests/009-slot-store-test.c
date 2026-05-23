@@ -559,6 +559,184 @@ static int test_large_value_reclamation(void)
 /* }}} */
 
 /* {{{ main() */
+/* {{{ test_dual_native_only() — dual-ring slot with only native pushes */
+static int test_dual_native_only(void)
+{
+    slot_store_t *s = slot_store_create();
+    slot_id_t id = slot_alloc(s, 16, 4, SLOT_FLAG_DUAL_RING);
+    ASSERT(id != SLOT_INVALID);
+    ASSERT(slot_has_value(s, id) == 0);
+
+    const char *vals[] = {"alpha", "beta", "gamma"};
+    for (int i = 0; i < 3; i++) {
+        ASSERT(slot_push_native(s, id, vals[i],
+                                (int)strlen(vals[i]), 0) == 0);
+    }
+    ASSERT(slot_fill_count(s, id) == 3);
+    ASSERT(slot_has_value(s, id) == 1);
+
+    char buf[32];
+    for (int i = 0; i < 3; i++) {
+        memset(buf, 0, sizeof buf);
+        int32_t which = -1;
+        int32_t got = slot_pop_ordered(s, id, buf, sizeof buf, &which);
+        ASSERT(got == (int32_t)strlen(vals[i]));
+        ASSERT(memcmp(buf, vals[i], (size_t)got) == 0);
+        ASSERT(which == SLOT_RING_NATIVE);
+    }
+    ASSERT(slot_pop_ordered(s, id, buf, sizeof buf, NULL) == -1);
+
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_dual_mixed_arrival_order() — interleaved native + JSON pushes
+ * preserve arrival order on pop. */
+static int test_dual_mixed_arrival_order(void)
+{
+    slot_store_t *s = slot_store_create();
+    slot_id_t id = slot_alloc(s, 16, 8, SLOT_FLAG_DUAL_RING);
+    ASSERT(id != SLOT_INVALID);
+
+    /* Push sequence: N(a) J(b) N(c) J(d) N(e). */
+    ASSERT(slot_push_native(s, id, "a",  1, 0) == 0);
+    ASSERT(slot_push_json  (s, id, "b",  1, 0) == 0);
+    ASSERT(slot_push_native(s, id, "c",  1, 0) == 0);
+    ASSERT(slot_push_json  (s, id, "d",  1, 0) == 0);
+    ASSERT(slot_push_native(s, id, "e",  1, 0) == 0);
+    ASSERT(slot_fill_count(s, id) == 5);
+
+    struct { const char *v; int32_t which; } expect[] = {
+        {"a", SLOT_RING_NATIVE},
+        {"b", SLOT_RING_JSON},
+        {"c", SLOT_RING_NATIVE},
+        {"d", SLOT_RING_JSON},
+        {"e", SLOT_RING_NATIVE},
+    };
+
+    char buf[8];
+    for (int i = 0; i < 5; i++) {
+        memset(buf, 0, sizeof buf);
+        int32_t which = -1;
+        int32_t got = slot_pop_ordered(s, id, buf, sizeof buf, &which);
+        ASSERT(got == 1);
+        ASSERT(buf[0] == expect[i].v[0]);
+        ASSERT(which == expect[i].which);
+    }
+    ASSERT(slot_pop_ordered(s, id, buf, sizeof buf, NULL) == -1);
+
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_dual_capacity_bounded_by_order_ring() — total in-flight
+ * (native + JSON) is capped by n_cells (the order ring's size). */
+static int test_dual_capacity_bounded_by_order_ring(void)
+{
+    slot_store_t *s = slot_store_create();
+    slot_id_t id = slot_alloc(s, 8, 3, SLOT_FLAG_DUAL_RING);
+    ASSERT(id != SLOT_INVALID);
+
+    ASSERT(slot_push_native(s, id, "1", 1, 0) == 0);
+    ASSERT(slot_push_json  (s, id, "2", 1, 0) == 0);
+    ASSERT(slot_push_native(s, id, "3", 1, 0) == 0);
+    /* Order ring full — next push fails even though each data ring
+     * still has spare cells. */
+    ASSERT(slot_push_json  (s, id, "4", 1, 0) == -1);
+    ASSERT(slot_push_native(s, id, "4", 1, 0) == -1);
+
+    /* Drain one — capacity opens for a new push. */
+    char buf[8]; int32_t which = -1;
+    ASSERT(slot_pop_ordered(s, id, buf, sizeof buf, &which) == 1);
+    ASSERT(which == SLOT_RING_NATIVE);
+    ASSERT(slot_push_json(s, id, "4", 1, 0) == 0);
+
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_dual_back_compat() — non-dual aliases and dual refusals */
+static int test_dual_back_compat(void)
+{
+    slot_store_t *s = slot_store_create();
+
+    /* Single-ring slot: slot_push_native aliases to slot_push;
+     * slot_push_json refuses; slot_pop_ordered reports NATIVE. */
+    slot_id_t single = slot_alloc(s, 8, 2, SLOT_FLAG_NONE);
+    ASSERT(single != SLOT_INVALID);
+    ASSERT(slot_push_native(s, single, "x", 1, 0) == 0);
+    ASSERT(slot_push_json  (s, single, "y", 1, 0) == -1);
+
+    char buf[8]; int32_t which = 99;
+    int32_t got = slot_pop_ordered(s, single, buf, sizeof buf, &which);
+    ASSERT(got == 1);
+    ASSERT(buf[0] == 'x');
+    ASSERT(which == SLOT_RING_NATIVE);
+
+    /* Dual-ring slot: slot_push refuses (caller must pick a ring);
+     * slot_pop refuses (caller must use slot_pop_ordered);
+     * slot_peek refuses. */
+    slot_id_t dual = slot_alloc(s, 8, 2, SLOT_FLAG_DUAL_RING);
+    ASSERT(dual != SLOT_INVALID);
+    ASSERT(slot_push(s, dual, "z", 1, 0) == -1);
+
+    ASSERT(slot_push_native(s, dual, "z", 1, 0) == 0);
+    ASSERT(slot_pop  (s, dual, buf, sizeof buf) == -1);
+    ASSERT(slot_peek (s, dual, buf, sizeof buf) == -1);
+
+    /* Dual-ring with incompatible flag combinations is refused at
+     * alloc time. */
+    ASSERT(slot_alloc(s, 8, 2,
+                      SLOT_FLAG_DUAL_RING | SLOT_FLAG_TAGGED) == SLOT_INVALID);
+    ASSERT(slot_alloc(s, 8, 2,
+                      SLOT_FLAG_DUAL_RING | SLOT_FLAG_LARGE_VALUE) == SLOT_INVALID);
+
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_dual_wrap_around() — pushes and pops cycle through cells
+ * past n_cells boundary; ordering preserved across the wrap. */
+static int test_dual_wrap_around(void)
+{
+    slot_store_t *s = slot_store_create();
+    slot_id_t id = slot_alloc(s, 4, 2, SLOT_FLAG_DUAL_RING);
+    ASSERT(id != SLOT_INVALID);
+
+    /* Cycle 1: push N(a) J(b), pop both. */
+    ASSERT(slot_push_native(s, id, "a", 1, 0) == 0);
+    ASSERT(slot_push_json  (s, id, "b", 1, 0) == 0);
+    char buf[4]; int32_t which = -1;
+    ASSERT(slot_pop_ordered(s, id, buf, sizeof buf, &which) == 1);
+    ASSERT(buf[0] == 'a' && which == SLOT_RING_NATIVE);
+    ASSERT(slot_pop_ordered(s, id, buf, sizeof buf, &which) == 1);
+    ASSERT(buf[0] == 'b' && which == SLOT_RING_JSON);
+
+    /* Cycle 2: same pattern, cells re-used after wrap. */
+    ASSERT(slot_push_json  (s, id, "c", 1, 0) == 0);
+    ASSERT(slot_push_native(s, id, "d", 1, 0) == 0);
+    ASSERT(slot_pop_ordered(s, id, buf, sizeof buf, &which) == 1);
+    ASSERT(buf[0] == 'c' && which == SLOT_RING_JSON);
+    ASSERT(slot_pop_ordered(s, id, buf, sizeof buf, &which) == 1);
+    ASSERT(buf[0] == 'd' && which == SLOT_RING_NATIVE);
+
+    /* Cycle 3: native-only burst then drain. */
+    ASSERT(slot_push_native(s, id, "e", 1, 0) == 0);
+    ASSERT(slot_push_native(s, id, "f", 1, 0) == 0);
+    ASSERT(slot_pop_ordered(s, id, buf, sizeof buf, &which) == 1);
+    ASSERT(buf[0] == 'e' && which == SLOT_RING_NATIVE);
+    ASSERT(slot_pop_ordered(s, id, buf, sizeof buf, &which) == 1);
+    ASSERT(buf[0] == 'f' && which == SLOT_RING_NATIVE);
+
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
 int main(void)
 {
     printf("009-slot-store-test:\n");
@@ -579,6 +757,11 @@ int main(void)
     RUN(large_value_multi_push_fifo);
     RUN(large_value_tagged_ordering);
     RUN(large_value_reclamation);
+    RUN(dual_native_only);
+    RUN(dual_mixed_arrival_order);
+    RUN(dual_capacity_bounded_by_order_ring);
+    RUN(dual_back_compat);
+    RUN(dual_wrap_around);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

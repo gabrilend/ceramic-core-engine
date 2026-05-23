@@ -44,6 +44,17 @@
  * touches the cache. */
 #define LUA_CACHE_KEY "soramech.module_cache"
 
+/* Forward declarations — these live further down, but lua_invoke
+ * needs them. parse_json_to_stack and encode_value: slices 4 and
+ * 4.5 of issue 312 (per-input native/JSON branch, per-call output
+ * format). load_via_merged: issue 313 (look up the per-file
+ * module inside the compile-time merged module if present). */
+static int parse_json_to_stack(lua_State *L,
+                               const void *src, int src_size,
+                               int verbose);
+static int encode_value(lua_State *L, int abs_idx, json_writer_t *w);
+static int load_via_merged(lua_State *L, const char *file_path);
+
 /* {{{ lua_init() — create a state, open standard libs, seed cache */
 static void *lua_init(int worker_idx)
 {
@@ -67,15 +78,39 @@ static void lua_teardown(void *handle)
 
 /* {{{ lua_invoke() */
 static int lua_invoke(void *handle,
+                      const box_t *box,
                       const char  *file_path,
                       const char  *fn_name,
                       const void **input_data,
                       const int   *input_sizes,
+                      const int   *input_native,
                       int          n_inputs,
+                      int          output_native,
                       void        *out_buf,
                       int          out_buf_capacity,
                       int         *out_size)
 {
+    /* The Lua spec doesn't yet read box-level fields — its encoder
+     * is type-agnostic. Accepted for signature uniformity. */
+    (void)box;
+    /* Slice 4 of issue 312: per-input format dispatch. NATIVE inputs
+     * become Lua strings (raw bytes the function reads directly);
+     * JSON inputs are parsed and pushed as the resulting Lua value,
+     * with a silent fallback to raw bytes when the bytes don't
+     * actually parse (some cross-language producers don't yet emit
+     * real JSON; the fallback keeps them working until they do).
+     *
+     * Slice 4.5: per-call output format dispatch. When `output_native`
+     * is non-zero the spec writes the return value via the existing
+     * lua_tolstring coercion (raw bytes for strings / numbers /
+     * booleans / nil; reads as a Lua string at a same-language
+     * consumer). When `output_native` is zero the spec serializes
+     * the return via the same encoder that powers native_to_json,
+     * so cross-language consumers receive a parseable JSON value
+     * (tables become JSON objects / arrays; non-JSON-encodable
+     * values surface a clear error). The dispatch decided which
+     * mode to ask for based on whether every downstream consumer
+     * shares this box's language. */
     lua_State *L = (lua_State *)handle;
     if (!L || !file_path || !fn_name) return -1;
 
@@ -91,22 +126,35 @@ static int lua_invoke(void *handle,
         lua_pop(L, 1);   /* discard nil */
         /* Stack: ..., cache */
 
-        if (luaL_loadfile(L, file_path) != 0) {
-            fprintf(stderr, "lua spec: loadfile('%s'): %s\n",
-                    file_path, lua_tostring(L, -1));
-            lua_settop(L, baseline);
-            return -1;
-        }
-        if (lua_pcall(L, 0, 1, 0) != 0) {
-            fprintf(stderr, "lua spec: chunk exec '%s': %s\n",
-                    file_path, lua_tostring(L, -1));
-            lua_settop(L, baseline);
-            return -1;
-        }
-        if (!lua_istable(L, -1)) {
-            fprintf(stderr, "lua spec: '%s' did not return a table\n", file_path);
-            lua_settop(L, baseline);
-            return -1;
+        /* Issue 313 — whole-program same-language merge. If the
+         * compile pipeline produced a merged module
+         * (`<dir>/__merged__.lua`) alongside this file, route
+         * through it: load the merged module once per worker,
+         * look up the per-file sub-module by basename, cache that
+         * under file_path. Subsequent invokes for the same box
+         * hit the cache and skip both the merged-load and the
+         * per-file resolution. */
+        if (load_via_merged(L, file_path) != 0) {
+            /* No merged file present (or it failed to load). Fall
+             * back to the per-file lazy load — same code path the
+             * spec has always used. */
+            if (luaL_loadfile(L, file_path) != 0) {
+                fprintf(stderr, "lua spec: loadfile('%s'): %s\n",
+                        file_path, lua_tostring(L, -1));
+                lua_settop(L, baseline);
+                return -1;
+            }
+            if (lua_pcall(L, 0, 1, 0) != 0) {
+                fprintf(stderr, "lua spec: chunk exec '%s': %s\n",
+                        file_path, lua_tostring(L, -1));
+                lua_settop(L, baseline);
+                return -1;
+            }
+            if (!lua_istable(L, -1)) {
+                fprintf(stderr, "lua spec: '%s' did not return a table\n", file_path);
+                lua_settop(L, baseline);
+                return -1;
+            }
         }
         /* Stack: ..., cache, module. Cache the module under
          * file_path. */
@@ -127,7 +175,16 @@ static int lua_invoke(void *handle,
     lua_remove(L, -2);   /* drop module */
     lua_remove(L, -2);   /* drop cache  */
 
-    /* Push each input as a Lua string. */
+    /* Push each input. Per-input format flag picks the decoder:
+     * native bytes go as Lua strings (the function reads them
+     * directly); JSON bytes are parsed into Lua values. On JSON
+     * parse failure we silently fall back to the raw-string path —
+     * this keeps backward compatibility with cross-language
+     * producers that still emit non-JSON bytes (the C and Bash
+     * specs' output-side JSON encoding lands later in issues 307 /
+     * 308). When `input_native` is NULL (slice 2 behaviour, kept
+     * for callers that don't supply it) every input is treated as
+     * native. */
     for (int i = 0; i < n_inputs; i++) {
         if (input_data[i] == NULL && input_sizes[i] > 0) {
             fprintf(stderr, "lua spec: input %d is NULL with size %d\n",
@@ -135,7 +192,21 @@ static int lua_invoke(void *handle,
             lua_settop(L, baseline);
             return -1;
         }
-        lua_pushlstring(L, (const char *)input_data[i], (size_t)input_sizes[i]);
+        int is_native = (input_native == NULL) || (input_native[i] != 0);
+        if (is_native) {
+            lua_pushlstring(L, (const char *)input_data[i],
+                            (size_t)input_sizes[i]);
+        } else {
+            /* Cross-language input: try JSON. On parse failure,
+             * push the raw bytes as a string so existing
+             * non-JSON-emitting producers keep working. */
+            if (input_sizes[i] <= 0 ||
+                parse_json_to_stack(L, input_data[i],
+                                    input_sizes[i], /*verbose=*/0) != 0) {
+                lua_pushlstring(L, (const char *)input_data[i],
+                                (size_t)input_sizes[i]);
+            }
+        }
     }
 
     /* Call. One return value expected. */
@@ -146,15 +217,52 @@ static int lua_invoke(void *handle,
         return -1;
     }
 
-    /* Convert the return to a string. tostring handles numbers /
-     * booleans / nil; if the spec needs richer marshaling later
-     * (tables, structs), that's an issue-312-shaped change. */
+    /* Slice 4.5 of issue 312 (now coordinated with 307): when the
+     * dispatch tells us at least one downstream consumer is in a
+     * different language (`output_native == 0`), serialize via the
+     * same JSON encoder that powers the native_to_json bridge.
+     * Cross-language consumers now know how to unwrap JSON
+     * primitives on their input side (Lua's parse-with-fallback,
+     * C's try_strip_json_primitive); tables / arrays become real
+     * JSON in the wire and consumer-side typed wrappers (the
+     * deferred half of 307) project them into typed values. When
+     * `output_native == 1` (every consumer same-language), the
+     * fast tostring coercion still runs. */
+    if (!output_native) {
+        json_writer_t w;
+        json_writer_init(&w, (char *)out_buf, out_buf_capacity);
+        int top = lua_gettop(L);
+        if (encode_value(L, top, &w) != 0) {
+            fprintf(stderr, "lua spec: %s.%s: JSON-encoding return failed\n",
+                    file_path, fn_name);
+            lua_settop(L, baseline);
+            return -1;
+        }
+        int n = json_writer_finish(&w);
+        if (n < 0) {
+            fprintf(stderr, "lua spec: %s.%s: JSON output (%d bytes) "
+                            "exceeds buffer\n",
+                    file_path, fn_name, out_buf_capacity);
+            lua_settop(L, baseline);
+            return -1;
+        }
+        if (out_size) *out_size = n;
+        lua_settop(L, baseline);
+        return 0;
+    }
+
+    /* Fast same-language path: tostring coercion. Handles strings /
+     * numbers / booleans / nil; tables come back as "table: 0x..."
+     * which is useless to consumers — only invoked when every
+     * downstream consumer is itself Lua, and even then a Lua
+     * function expecting a table from another Lua box should
+     * receive the actual table (a slice-on-top of issue 313's
+     * whole-program merge would let the runtime pass the value
+     * by reference). For now: documented limitation, primitive-
+     * only on the fast path. */
     size_t len = 0;
     const char *result = lua_tolstring(L, -1, &len);
     if (!result) {
-        /* Non-coercible value. For now, surface as zero-length
-         * output rather than an error — the box returned something
-         * we can't serialize, but the call itself succeeded. */
         if (out_size) *out_size = 0;
         lua_settop(L, baseline);
         return 0;
@@ -170,6 +278,111 @@ static int lua_invoke(void *handle,
     if (out_size) *out_size = (int)len;
 
     lua_settop(L, baseline);
+    return 0;
+}
+/* }}} */
+
+/* {{{ load_via_merged() — issue 313 whole-program same-language merge
+ *
+ * If a `__merged__.lua` exists next to `file_path`, treat it as the
+ * compile-time merged module produced by soramech-compile.sh. The
+ * merged module's top-level returns a table keyed by each
+ * source-file basename, with each value being that file's module
+ * table. We load the merged module once per worker (cached under
+ * a registry key), then index it by the box's source-file basename
+ * to recover the per-file module. Leaves exactly one value (the
+ * per-file module) on the Lua stack on success.
+ *
+ * Returns 0 on success (per-file module pushed), -1 if the merged
+ * file isn't present or doesn't yield a per-file module for this
+ * basename — the caller falls back to per-file lazy loading. The
+ * stack is unchanged on -1. */
+#define LUA_MERGED_CACHE_KEY "soramech.merged_module"
+
+static int load_via_merged(lua_State *L, const char *file_path)
+{
+    if (!file_path) return -1;
+    /* Find the last '/' to split directory from basename. */
+    const char *slash = strrchr(file_path, '/');
+    if (!slash) return -1;          /* bare basename, no dir to look in */
+    size_t dirlen = (size_t)(slash - file_path);
+
+    /* Build the candidate merged path. Bounded by PATH-ish 4 KB. */
+    char merged_path[4096];
+    if (dirlen + sizeof("/__merged__.lua") + 1 > sizeof merged_path) return -1;
+    memcpy(merged_path, file_path, dirlen);
+    memcpy(merged_path + dirlen, "/__merged__.lua",
+           sizeof("/__merged__.lua"));   /* includes trailing NUL */
+
+    /* Cheap existence check before paying load cost. fopen rather
+     * than stat keeps the dependency surface small. */
+    FILE *probe = fopen(merged_path, "r");
+    if (!probe) return -1;
+    fclose(probe);
+
+    /* Derive the basename (filename without `.lua`) the merged
+     * module's table is keyed by. */
+    const char *base_start = slash + 1;
+    const char *dot = strrchr(base_start, '.');
+    size_t baselen = dot ? (size_t)(dot - base_start) : strlen(base_start);
+    if (baselen == 0 || baselen >= 256) return -1;
+    char basename[256];
+    memcpy(basename, base_start, baselen);
+    basename[baselen] = '\0';
+
+    int baseline = lua_gettop(L);
+
+    /* Cache the merged module under a registry key keyed by the
+     * merged path. Subsequent same-merge lookups skip the load. */
+    lua_getfield(L, LUA_REGISTRYINDEX, LUA_MERGED_CACHE_KEY);
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, LUA_REGISTRYINDEX, LUA_MERGED_CACHE_KEY);
+    }
+    /* Stack: ..., merged_cache */
+
+    lua_getfield(L, -1, merged_path);
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        if (luaL_loadfile(L, merged_path) != 0) {
+            fprintf(stderr, "lua spec: load_via_merged: loadfile('%s'): %s\n",
+                    merged_path, lua_tostring(L, -1));
+            lua_settop(L, baseline);
+            return -1;
+        }
+        if (lua_pcall(L, 0, 1, 0) != 0) {
+            fprintf(stderr, "lua spec: load_via_merged: exec '%s': %s\n",
+                    merged_path, lua_tostring(L, -1));
+            lua_settop(L, baseline);
+            return -1;
+        }
+        if (!lua_istable(L, -1)) {
+            fprintf(stderr, "lua spec: load_via_merged: '%s' did not return a table\n",
+                    merged_path);
+            lua_settop(L, baseline);
+            return -1;
+        }
+        /* Stack: ..., merged_cache, merged_module. Cache it. */
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, merged_path);
+    }
+    /* Stack: ..., merged_cache, merged_module */
+
+    /* Look up the per-file sub-module by basename. */
+    lua_getfield(L, -1, basename);
+    if (!lua_istable(L, -1)) {
+        /* The merged file exists but doesn't carry this basename —
+         * unusual, but caller falls back to per-file load. */
+        lua_settop(L, baseline);
+        return -1;
+    }
+    /* Stack: ..., merged_cache, merged_module, per_file_module.
+     * Drop the merged_cache and merged_module — leave only the
+     * per-file module above the original baseline. */
+    lua_remove(L, -2);   /* drop merged_module */
+    lua_remove(L, -2);   /* drop merged_cache */
     return 0;
 }
 /* }}} */
@@ -423,6 +636,59 @@ static int decode_node(lua_State *L, const json_node_t *node)
 }
 /* }}} */
 
+/* {{{ parse_json_to_stack() — shared JSON→Lua-stack helper */
+/* Parses `src` (length `src_size`, not necessarily NUL-terminated)
+ * as JSON and pushes the resulting value onto L. Returns 0 on
+ * success, -1 on parse failure. When `verbose`, parse errors emit a
+ * stderr message — used by the bridge (where a parse failure is a
+ * cross-language wire error worth surfacing). When `verbose` is 0,
+ * parse failures are silent — used by lua_invoke's per-input branch
+ * where the caller falls back to raw-bytes-as-string if JSON parsing
+ * fails (some cross-language producers don't emit real JSON yet —
+ * keeps backward compatibility while the input-format contract
+ * tightens).
+ *
+ * On failure the Lua stack is unchanged. On success exactly one
+ * value is added. The transient JSON arena is created and freed
+ * inside this call. */
+static int parse_json_to_stack(lua_State *L,
+                               const void *src, int src_size,
+                               int verbose)
+{
+    if (!L || !src || src_size <= 0) return -1;
+
+    char *scratch = (char *)malloc((size_t)src_size + 1);
+    if (!scratch) {
+        if (verbose) fprintf(stderr, "lua spec: parse_json_to_stack: out of memory\n");
+        return -1;
+    }
+    memcpy(scratch, src, (size_t)src_size);
+    scratch[src_size] = '\0';
+
+    json_arena_t *arena = json_arena_create();
+    if (!arena) {
+        free(scratch);
+        if (verbose) fprintf(stderr, "lua spec: parse_json_to_stack: arena allocation failed\n");
+        return -1;
+    }
+
+    int err_offset = 0;
+    const char *err_msg = NULL;
+    json_node_t *node = json_parse(arena, scratch, &err_offset, &err_msg);
+    free(scratch);
+    if (!node) {
+        if (verbose) fprintf(stderr, "lua spec: parse_json_to_stack: parse error at byte %d: %s\n",
+                             err_offset, err_msg ? err_msg : "(no message)");
+        json_arena_destroy(arena);
+        return -1;
+    }
+
+    int r = decode_node(L, node);
+    json_arena_destroy(arena);
+    return r;
+}
+/* }}} */
+
 /* {{{ lua_json_to_native() — JSON bytes → push value onto Lua stack */
 /* The bridge parses `src` into a transient arena, walks the DOM
  * onto the lua_State stack, then frees the arena. The arena is
@@ -443,36 +709,10 @@ static int lua_json_to_native(void *handle,
     (void)dst_size;
     lua_State *L = (lua_State *)handle;
     if (!L || !src || src_size <= 0) return -1;
-
-    char *scratch = (char *)malloc((size_t)src_size + 1);
-    if (!scratch) {
-        fprintf(stderr, "lua spec: json_to_native: out of memory\n");
-        return -1;
-    }
-    memcpy(scratch, src, (size_t)src_size);
-    scratch[src_size] = '\0';
-
-    json_arena_t *arena = json_arena_create();
-    if (!arena) {
-        free(scratch);
-        fprintf(stderr, "lua spec: json_to_native: arena allocation failed\n");
-        return -1;
-    }
-
-    int err_offset = 0;
-    const char *err_msg = NULL;
-    json_node_t *node = json_parse(arena, scratch, &err_offset, &err_msg);
-    free(scratch);
-    if (!node) {
-        fprintf(stderr, "lua spec: json_to_native: parse error at byte %d: %s\n",
-                err_offset, err_msg ? err_msg : "(no message)");
-        json_arena_destroy(arena);
-        return -1;
-    }
-
-    int r = decode_node(L, node);
-    json_arena_destroy(arena);
-    return r;
+    /* The bridge version is loud on parse failure (this is the
+     * cross-language path; if the bytes don't parse, the wire is
+     * wrong and the user should see why). */
+    return parse_json_to_stack(L, src, src_size, /*verbose=*/1);
 }
 /* }}} */
 
