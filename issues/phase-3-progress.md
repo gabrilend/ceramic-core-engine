@@ -34,6 +34,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 319 | built-in library for map self-construction (`create_box`, `connect`) | open · design complete; sub-issues 319a–e |
 | 319a | dispatch input cap removal (VLA + named constant)           | complete · 20-input fixture passes end-to-end |
 | 319b | slot store growth (two-level chunked-append index)          | complete · 5000-slot growth test preserves all early pointers |
+| 319c | box id generator (compile-cache concept folded into spec.so loaders) | complete · 8-thread concurrent uniqueness test passes |
 
 ## Phase goal checklist
 

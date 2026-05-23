@@ -150,6 +150,7 @@ $(BUILD_DIR)/tests/317-text-bridge-test:  $(BUILD_DIR)/src/011-spec-registry.o
 $(BUILD_DIR)/tests/307-c-spec-test:       $(BUILD_DIR)/src/011-spec-registry.o
 $(BUILD_DIR)/tests/308-bash-spec-test:    $(BUILD_DIR)/src/011-spec-registry.o
 $(BUILD_DIR)/tests/314-json-test:         $(BUILD_DIR)/libs/json/json.o
+$(BUILD_DIR)/tests/017-box-id-test:       $(BUILD_DIR)/src/017-box-id.o
 
 # Pattern: link a test binary. $^ collects the .o files declared
 # above plus the test's own .o file.
