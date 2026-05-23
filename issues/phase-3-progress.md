@@ -33,6 +33,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 317 | language spec JSON bridge for data boxes                    | complete · Lua fidelity-preserving, C+Bash pass-through-or-string-wrap, shared test harness |
 | 319 | built-in library for map self-construction (`create_box`, `connect`) | open · design complete; sub-issues 319a–e |
 | 319a | dispatch input cap removal (VLA + named constant)           | complete · 20-input fixture passes end-to-end |
+| 319b | slot store growth (two-level chunked-append index)          | complete · 5000-slot growth test preserves all early pointers |
 
 ## Phase goal checklist
 

@@ -366,6 +366,54 @@ static int test_store_size_growth(void)
 }
 /* }}} */
 
+/* {{{ test_chunked_index_growth_preserves_early_slots() — issue 319b
+ *
+ * Forces multiple top-level chunk-pointer-table growth events and
+ * verifies that slots allocated BEFORE growth remain reachable AND
+ * functional afterward. This is the load-bearing invariant of the
+ * 319b two-level chunked-append index: slots and chunks never move,
+ * so handles cached early in the run keep working forever.
+ *
+ * Initial top capacity is 16 * SLOT_CHUNK_SIZE (= 1024) slots. We
+ * allocate 5000 slots, which forces at least two top-level growth
+ * events (1024 → 2048 → 4096 → 8192). We push a sentinel into each
+ * slot AT ALLOC TIME and read it back AFTER all allocations finish —
+ * any growth-related corruption would scramble the sentinel. */
+static int test_chunked_index_growth_preserves_early_slots(void)
+{
+    enum { N = 5000 };
+    slot_store_t *s = slot_store_create();
+
+    /* Each slot is a 1-cell ring of 4 bytes; we push the slot's id
+     * as its sentinel value. */
+    for (int i = 0; i < N; i++) {
+        slot_id_t id = slot_alloc(s, 4, 1, SLOT_FLAG_NONE);
+        ASSERT(id == i);
+        uint32_t v = (uint32_t)i;
+        ASSERT(slot_push(s, id, &v, sizeof v, 0) == 0);
+    }
+    ASSERT(slot_store_size(s) == N);
+
+    /* Read each slot's sentinel back. Slot 0 was allocated before
+     * any growth; if growth invalidated its pointer or moved its
+     * chunk, this peek would return garbage. */
+    for (int i = 0; i < N; i++) {
+        uint32_t got = 0xDEADBEEF;
+        int32_t  rc  = slot_peek(s, (slot_id_t)i, &got, sizeof got);
+        ASSERT(rc == (int32_t)sizeof got);
+        ASSERT(got == (uint32_t)i);
+    }
+
+    /* Out-of-range ids still rejected cleanly. */
+    uint32_t scratch = 0;
+    ASSERT(slot_peek(s, (slot_id_t)N,     &scratch, sizeof scratch) < 0);
+    ASSERT(slot_peek(s, (slot_id_t)(N+1), &scratch, sizeof scratch) < 0);
+
+    slot_store_destroy(s);
+    return 1;
+}
+/* }}} */
+
 /* {{{ test_large_value_push_pop() */
 /* SLOT_FLAG_LARGE_VALUE accepts any size on push, regardless of
  * cell_capacity (which is ignored). Bytes live in the slot store's
@@ -752,6 +800,7 @@ int main(void)
     RUN(concurrent_counter);
     RUN(concurrent_push_pop);
     RUN(store_size_growth);
+    RUN(chunked_index_growth_preserves_early_slots);
     RUN(large_value_push_pop);
     RUN(large_value_buf_too_small);
     RUN(large_value_multi_push_fifo);

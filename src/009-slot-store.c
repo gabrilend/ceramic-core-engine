@@ -45,6 +45,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>   /* alloc_lock — issue 319b */
 
 /* {{{ Internal slot record */
 typedef struct slot_rec {
@@ -108,11 +109,70 @@ typedef struct slot_rec {
 #define ORDER_CELL_RECORD ((uint32_t)8)
 /* }}} */
 
-/* {{{ Internal store */
+/* {{{ Internal store — two-level chunked-append index (issue 319b)
+ *
+ * Slot pointers are looked up via top-level chunk pointer table:
+ *
+ *     slot N lives at chunks[N / SLOT_CHUNK_SIZE][N % SLOT_CHUNK_SIZE]
+ *
+ * Why two levels: a flat realloc'd array (the original design) moves
+ * its base address on growth, invalidating any slot pointer a worker
+ * has cached. The two-level shape lets the slot RECORDS themselves
+ * stay at their original heap addresses forever (they always were —
+ * each is a separate malloc) AND lets the index that maps id → record
+ * grow without invalidating cached records.
+ *
+ * Growth happens in three layers, each rarer than the last:
+ *   Layer 1 — append a slot pointer inside an existing chunk
+ *             (every slot_alloc — the common case)
+ *   Layer 2 — allocate a new chunk when crossing a chunk boundary
+ *             (every SLOT_CHUNK_SIZE alloc — uncommon)
+ *   Layer 3 — grow the top-level chunk-pointer array when it fills
+ *             (logarithmic in total slot count — rare)
+ *
+ * Concurrency: slot_alloc is serialized by alloc_lock. The hot
+ * read/write path (slot_push, slot_pop, slot_peek, slot_flags) takes
+ * no allocator-wide lock — only the per-slot atomic_flag spinlock on
+ * the slot itself. Readers acquire-load `count` to know how many
+ * slots exist; the matching release-store at the end of slot_alloc
+ * pairs with this so a reader seeing count = N also sees the slot N-1
+ * record published.
+ *
+ * Layer 3 (top-level growth) uses copy-on-grow with defer-free: the
+ * new top-level array is malloc'd at 2x size, the old chunk pointers
+ * are memcpy'd in, the new top is atomically published, and the OLD
+ * top is parked on the stale_tops list to be freed at destroy time.
+ * A worker that loaded the old top pointer right before the swap can
+ * finish its lookup against it — every chunk the old top points to
+ * is still alive. */
+#define SLOT_CHUNK_SIZE      64u
+#define INITIAL_TOP_CAPACITY 16u
+
+struct stale_top {
+    slot_rec_t      ***ptr;
+    struct stale_top  *next;
+};
+
 struct slot_store {
-    slot_rec_t **slots;        /* dynamic array, indexed by slot_id_t */
-    int32_t      count;
-    int32_t      capacity;
+    /* Top-level chunk-pointer table. Atomic because layer-3 growth
+     * publishes a new table while readers are still walking the old
+     * one. */
+    _Atomic(slot_rec_t ***) chunks;
+    _Atomic uint32_t        top_capacity;   /* in chunk-pointer slots */
+
+    /* Total slots ever allocated. Atomic; readers see released
+     * slot publications via the release-store at the end of
+     * slot_alloc. */
+    _Atomic uint32_t        count;
+
+    /* Serializes layer-2 chunk creation and layer-3 top growth.
+     * Readers don't take this — they walk the atomic structure. */
+    pthread_mutex_t         alloc_lock;
+
+    /* Defer-free list for stale top-level arrays. At most
+     * log2(final_top_capacity) entries — typically 0–3 over an
+     * entire run. Walked once at destroy. */
+    struct stale_top       *stale_tops;
 
     /* The unified allocator. Owns the cell-array memory for every
      * ring slot in this store, plus the payload bytes for every
@@ -120,7 +180,7 @@ struct slot_store {
      * alongside the store. Any chunks still parked in cells at
      * destroy time are reclaimed in bulk when the allocator's
      * regions are freed. */
-    ua_t        *heap;
+    ua_t                   *heap;
 };
 /* }}} */
 
@@ -191,9 +251,21 @@ slot_store_t *slot_store_create(void)
 {
     slot_store_t *s = calloc(1, sizeof *s);
     if (!s) return NULL;
-    s->capacity = 16;
-    s->slots    = calloc((size_t)s->capacity, sizeof(slot_rec_t *));
-    if (!s->slots) { free(s); return NULL; }
+
+    /* Initial top-level chunk-pointer table. 16 entries means we
+     * can hold 16 * SLOT_CHUNK_SIZE = 1024 slots before any
+     * top-level growth fires; growth doubles thereafter and there
+     * is no upper ceiling (issue 319b). Chunks themselves are
+     * allocated lazily on first crossing of each chunk boundary. */
+    slot_rec_t ***top = calloc((size_t)INITIAL_TOP_CAPACITY,
+                               sizeof(slot_rec_t **));
+    if (!top) { free(s); return NULL; }
+
+    atomic_init(&s->chunks,       top);
+    atomic_init(&s->top_capacity, INITIAL_TOP_CAPACITY);
+    atomic_init(&s->count,        0u);
+    pthread_mutex_init(&s->alloc_lock, NULL);
+    s->stale_tops = NULL;
 
     /* Eagerly create the unified allocator. Earlier in this issue
      * the allocator was lazy-created on the first LARGE_VALUE slot;
@@ -203,7 +275,12 @@ slot_store_t *slot_store_create(void)
      * on first use until the graph loader is wired to declare
      * sizes up front. */
     s->heap = ua_create(NULL, 0);
-    if (!s->heap) { free(s->slots); free(s); return NULL; }
+    if (!s->heap) {
+        free(top);
+        pthread_mutex_destroy(&s->alloc_lock);
+        free(s);
+        return NULL;
+    }
 
     return s;
 }
@@ -219,15 +296,42 @@ void slot_store_destroy(slot_store_t *s)
      * the allocator's stats coherent if anything inspects them on
      * the way out. The slot record itself was allocated via plain
      * malloc and is freed here. */
-    for (int32_t i = 0; i < s->count; i++) {
-        slot_rec_t *r = s->slots[i];
+    uint32_t count   = atomic_load_explicit(&s->count,        memory_order_relaxed);
+    uint32_t top_cap = atomic_load_explicit(&s->top_capacity, memory_order_relaxed);
+    slot_rec_t ***top = atomic_load_explicit(&s->chunks,      memory_order_relaxed);
+
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t ci = i / SLOT_CHUNK_SIZE;
+        uint32_t si = i % SLOT_CHUNK_SIZE;
+        if (ci >= top_cap || !top[ci]) continue;
+        slot_rec_t *r = top[ci][si];
         if (!r) continue;
         if (r->cells_chunk)       ua_unref(s->heap, r->cells_chunk);
         if (r->json_cells_chunk)  ua_unref(s->heap, r->json_cells_chunk);
         if (r->order_cells_chunk) ua_unref(s->heap, r->order_cells_chunk);
         free(r);
     }
-    free(s->slots);
+
+    /* Free each chunk (those that were ever allocated). */
+    for (uint32_t ci = 0; ci < top_cap; ci++) {
+        if (top[ci]) free(top[ci]);
+    }
+    free(top);
+
+    /* Free any stale top-level arrays that growth left behind.
+     * Their chunks were the same chunks the current top points to
+     * (we only copied the pointers in, didn't deep-copy), so
+     * they've already been freed above. Just drop the array
+     * memory. */
+    struct stale_top *st = s->stale_tops;
+    while (st) {
+        struct stale_top *next = st->next;
+        free(st->ptr);
+        free(st);
+        st = next;
+    }
+
+    pthread_mutex_destroy(&s->alloc_lock);
     /* The unified allocator owns the cell arrays for every ring
      * slot in this store and the payload bytes for every
      * LARGE_VALUE cell. ua_destroy releases all regions in one
@@ -242,24 +346,75 @@ void slot_store_destroy(slot_store_t *s)
 /* {{{ slot_store_size() */
 int32_t slot_store_size(slot_store_t *s)
 {
-    return s ? s->count : 0;
+    /* Acquire-load pairs with the release-store in slot_alloc; a
+     * reader that sees count = N also sees the slot N-1 record
+     * fully published into its chunk. */
+    return s ? (int32_t)atomic_load_explicit(&s->count, memory_order_acquire)
+             : 0;
 }
 /* }}} */
 
 /* slot_flags() lives further down — it needs the get_slot() helper
  * that's defined after slot_alloc(). */
 
-/* {{{ Local helper — grow_store_if_needed() */
-static int grow_store_if_needed(slot_store_t *s)
+/* {{{ Local helper — grow_top_level() (issue 319b layer 3)
+ *
+ * Called with alloc_lock held. Allocates a new top-level chunk-
+ * pointer table of at least 2x the current size, copies the
+ * current chunk pointers into it, atomically publishes the new
+ * table, and parks the old one on the stale_tops free-list for
+ * destroy-time reclamation. */
+static int grow_top_level(slot_store_t *s, uint32_t needed_idx)
 {
-    if (s->count < s->capacity) return 0;
-    int32_t new_cap = s->capacity * 2;
-    slot_rec_t **grown = realloc(s->slots, (size_t)new_cap * sizeof(slot_rec_t *));
-    if (!grown) return -1;
-    memset(grown + s->capacity, 0,
-           (size_t)(new_cap - s->capacity) * sizeof(slot_rec_t *));
-    s->slots    = grown;
-    s->capacity = new_cap;
+    uint32_t old_cap = atomic_load_explicit(&s->top_capacity,
+                                            memory_order_relaxed);
+    uint32_t new_cap = old_cap * 2u;
+    while (new_cap <= needed_idx) new_cap *= 2u;
+
+    slot_rec_t ***new_top = calloc((size_t)new_cap, sizeof(slot_rec_t **));
+    if (!new_top) return -1;
+
+    slot_rec_t ***old_top = atomic_load_explicit(&s->chunks,
+                                                 memory_order_relaxed);
+    memcpy(new_top, old_top, (size_t)old_cap * sizeof(slot_rec_t **));
+
+    /* Park the old top-level pointer so any in-flight reader that
+     * loaded it before the swap finishes safely. The chunks it
+     * points to are the same chunks the new top points to (we only
+     * copied the pointer values), so reads from either top resolve
+     * to the same live chunks. */
+    struct stale_top *st = malloc(sizeof *st);
+    if (!st) { free(new_top); return -1; }
+    st->ptr  = old_top;
+    st->next = s->stale_tops;
+    s->stale_tops = st;
+
+    /* Publish the new top-level first, then the new capacity.
+     * Readers that race-load the new chunks pointer and the old
+     * capacity will compute id/SLOT_CHUNK_SIZE within the original
+     * range, which is still valid. The reverse — old chunks, new
+     * capacity — would let a reader index past the old top's
+     * allocation, which would be UB. So: chunks first. */
+    atomic_store_explicit(&s->chunks,       new_top, memory_order_release);
+    atomic_store_explicit(&s->top_capacity, new_cap, memory_order_release);
+    return 0;
+}
+/* }}} */
+
+/* {{{ Local helper — ensure_chunk() (issue 319b layer 2)
+ *
+ * Called with alloc_lock held. Allocates the chunk at index `ci`
+ * if it's not already populated, and publishes the chunk pointer
+ * into the top-level table. */
+static int ensure_chunk(slot_store_t *s, uint32_t ci)
+{
+    slot_rec_t ***top = atomic_load_explicit(&s->chunks,
+                                             memory_order_relaxed);
+    if (top[ci]) return 0;
+    slot_rec_t **chunk = calloc((size_t)SLOT_CHUNK_SIZE,
+                                sizeof(slot_rec_t *));
+    if (!chunk) return -1;
+    top[ci] = chunk;
     return 0;
 }
 /* }}} */
@@ -382,24 +537,76 @@ slot_id_t slot_alloc(slot_store_t *s,
         memset(r->order_cells, 0, order_bytes);
     }
 
-    if (grow_store_if_needed(s) != 0) {
+    /* Publish into the two-level chunked index. The hot read path
+     * is lock-free; only this rare allocation path takes the lock,
+     * and only to serialize structural changes to the index
+     * (layer-2 chunk creation, layer-3 top growth, count bump).
+     * Workers' get_slot calls walk the atomic structure without
+     * contending here. */
+    pthread_mutex_lock(&s->alloc_lock);
+
+    uint32_t id = atomic_load_explicit(&s->count, memory_order_relaxed);
+    uint32_t ci = id / SLOT_CHUNK_SIZE;
+    uint32_t si = id % SLOT_CHUNK_SIZE;
+
+    /* Layer 3: top-level grows if the chunk index is past current
+     * capacity. */
+    if (ci >= atomic_load_explicit(&s->top_capacity, memory_order_relaxed)) {
+        if (grow_top_level(s, ci) != 0) {
+            pthread_mutex_unlock(&s->alloc_lock);
+            if (r->cells_chunk)       ua_unref(s->heap, r->cells_chunk);
+            if (r->json_cells_chunk)  ua_unref(s->heap, r->json_cells_chunk);
+            if (r->order_cells_chunk) ua_unref(s->heap, r->order_cells_chunk);
+            free(r);
+            return SLOT_INVALID;
+        }
+    }
+
+    /* Layer 2: allocate the chunk if it's the first slot inside it. */
+    if (ensure_chunk(s, ci) != 0) {
+        pthread_mutex_unlock(&s->alloc_lock);
         if (r->cells_chunk)       ua_unref(s->heap, r->cells_chunk);
         if (r->json_cells_chunk)  ua_unref(s->heap, r->json_cells_chunk);
         if (r->order_cells_chunk) ua_unref(s->heap, r->order_cells_chunk);
         free(r);
         return SLOT_INVALID;
     }
-    slot_id_t id = s->count++;
-    s->slots[id] = r;
-    return id;
+
+    /* Layer 1: publish the slot pointer into the chunk. The count
+     * bump that follows is the release-store readers acquire-load
+     * to know the slot exists. */
+    slot_rec_t ***top = atomic_load_explicit(&s->chunks,
+                                             memory_order_relaxed);
+    top[ci][si] = r;
+
+    atomic_store_explicit(&s->count, id + 1u, memory_order_release);
+
+    pthread_mutex_unlock(&s->alloc_lock);
+    return (slot_id_t)id;
 }
 /* }}} */
 
 /* {{{ Local helper — get_slot() */
 static slot_rec_t *get_slot(slot_store_t *s, slot_id_t id)
 {
-    if (!s || id < 0 || id >= s->count) return NULL;
-    return s->slots[id];
+    if (!s || id < 0) return NULL;
+    uint32_t uid = (uint32_t)id;
+    /* Acquire-load count pairs with the release-store in slot_alloc.
+     * If we see count = N then the slot at id = N-1 (and all earlier)
+     * is fully published — the chunk pointer and the slot pointer
+     * inside it. */
+    if (uid >= atomic_load_explicit(&s->count, memory_order_acquire)) {
+        return NULL;
+    }
+    uint32_t ci = uid / SLOT_CHUNK_SIZE;
+    uint32_t si = uid % SLOT_CHUNK_SIZE;
+    /* Acquire-load the top so we see the chunk publishes that the
+     * release-store in grow_top_level orders before its top swap.
+     * After top growth, both the old and new top arrays point to
+     * the same chunks — either is safe to read from. */
+    slot_rec_t ***top = atomic_load_explicit(&s->chunks,
+                                             memory_order_acquire);
+    return top[ci][si];
 }
 /* }}} */
 
