@@ -1,7 +1,9 @@
 # 313 — Research: whole-program same-language compilation
 
 ## Status
-research / low priority / blocked until rest of phase 3 is complete
+in progress — Lua slice landed 2026-05-21 (compile-time
+concatenation in `soramech-compile.sh`, runtime detection in the
+Lua spec, end-to-end test). C and Bash merges are follow-ons.
 
 ## Concept
 
@@ -25,6 +27,40 @@ encode/decode, no slot push/pop, no spec re-entry per call.
 
 For Bash: probably no benefit — Bash is already process-per-call;
 fusing scripts doesn't help much. Skip.
+
+## Relationship to 312 — what stays, what thins
+
+312 defines the **wire format**: dual-ring slots (native ring,
+JSON ring, ordering ring) per input port, per-edge classification
+at graph load, JSON-only-at-borders, native-otherwise. Every
+value movement between boxes goes through this machinery.
+
+This issue's merge thins the **spec invocation overhead** — the
+dlsym + bridge + lua_pcall (or equivalent) that happens once
+per box invocation. For boxes in the merged region, the dispatch
+holds a direct pointer to the function inside the merged module
+and calls it without going through the spec interface.
+
+The slot machinery stays alive in the merged region. Why:
+**boxes still run as separate thread-pool tasks**. A producer
+on worker 0 and a consumer on worker 1 still need slots to hand
+off the value across threads. The thread pool's parallelism
+depends on tasks being scheduled independently; collapsing
+same-language hops to synchronous function calls would defeat
+the pool entirely. The merge wins on the per-call indirection
+cost, not on the wire format.
+
+So a box invocation inside the merged region looks like:
+
+1. Worker picks up the task.
+2. Dispatch reads inputs from the box's slots (same as 312 —
+   dual-ring native side).
+3. Dispatch jumps to the merged function directly (this is
+   what 313 wins).
+4. Function runs, returns a value.
+5. Dispatch writes output to consumer slots (same as 312).
+
+Steps 2 and 5 are unchanged from 312. Step 3 is the savings.
 
 ## Why this is research, not a feature
 
@@ -86,6 +122,62 @@ opens (or doesn't, depending on the recommendation).
 - `issues/306-lua-language-spec.md` — Lua-side bytecode pre-compile
 - `issues/309-build-system.md` — how the merge integrates with the
   compile/package step
+
+## Implementation log
+
+### Lua slice — 2026-05-21
+
+`scripts/soramech-compile.sh` grows a `merge_lua_sources` step
+between source-copy and per-spec packaging. For every `.lua` file
+in the map's `src/`, the merger wraps the file's body in a closure
+and binds the closure's return value to `merged[basename]` of a
+single output table. The result lands at `compiled/src/__merged__.lua`
+alongside the original files (which stay untouched, so any caller
+that hasn't been told about the merge still works).
+
+`langs/lua/spec.c` grows `load_via_merged()`, called on the
+cache-miss path of `lua_invoke`. The helper derives a candidate
+`__merged__.lua` path next to the requested source file; if the
+file exists, it loads the merged module once per worker (cached
+under `LUA_MERGED_CACHE_KEY` in the Lua registry), then indexes
+the returned table by the source file's basename to recover the
+per-file module. Lookup misses (no merged file, or no matching
+basename inside it) fall back to per-file lazy load — the
+existing path stays as the safety net. The dispatch never knows
+about the merge; the spec redirects transparently.
+
+A unit test in `tests/306-lua-spec-test.c` exercises the merged
+path on a synthetic temp directory: it writes a `__merged__.lua`
+that exports a sub-module under basename `calc` and invokes a
+phantom `calc.lua` file (no such file on disk). The invoke
+succeeds, proving the merged path is reached. The existing
+"compile pipeline (portable run)" integration test verifies the
+end-to-end flow: `soramech-compile.sh` produces the merged file
+when packaging the `pipeline` fixture, the compiled artifact
+runs from `/tmp`, and the output matches what the source-tree
+runner produces — the merge is transparent.
+
+Deferred to follow-on slices:
+
+- **C merge.** Concatenating C source needs care with static
+  vs. non-static functions, file-scoped declarations, and header
+  inclusion. Plausible approach: wrap each box's source in an
+  anonymous namespace-equivalent (C doesn't have namespaces, but
+  static-by-default at file scope + unique mangled exposure of
+  the box's entry function would do it). Real work; not done.
+- **Bash merge.** Bash already runs one persistent subprocess
+  per worker (issue 308's UDS-server model); the "merge" would
+  source every box's `.sh` file into the same subprocess
+  environment at server startup. Smaller surface than C; sized
+  somewhere in between.
+- **Inline-into-dispatch optimization.** This slice loads the
+  merged module per worker but still goes through the spec's
+  `lua_pcall` for every box invocation. The big optimization the
+  issue body talks about — turning box-to-box transitions into
+  direct function calls inside the merged module — needs
+  dispatch-layer work that hasn't started. The current slice is
+  the foundation: load-once-per-worker. The direct-call
+  optimization rides on top.
 
 ## Open questions (for the research, not for now)
 
