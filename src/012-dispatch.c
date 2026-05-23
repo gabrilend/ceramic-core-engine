@@ -41,6 +41,24 @@
 #include <sys/stat.h>
 #include <time.h>
 
+/* Sanity ceiling on per-box input count. The per-call input
+ * arrays are VLAs sized to the box's actual input count; this
+ * cap exists to keep a runaway graph loader from blowing the
+ * stack frame. Higher than any reasonable hand-authored graph;
+ * lower than what would matter for stack pressure. If a real
+ * workload ever needs more, raise it — the cap is dispatch-
+ * internal, not a wire-format limit. (Issue 319a — removed the
+ * earlier hardcoded cap of 16.) */
+#define DISPATCH_MAX_INPUTS_PER_BOX 4096
+
+/* Max formatted length for branch names like "out_<index>".
+ * Worst case for the current format is "out_-2147483648\0" =
+ * 16 bytes; 32 leaves headroom for any future format change.
+ * Used by every routing kind that emits a branch label via
+ * snprintf — comparator, iterator, randomizer, weighted,
+ * distributor. (Issue 319a — single source of truth.) */
+#define MAX_BRANCH_NAME 32
+
 /* Per-task value buffers (per-input scratch and the output buffer)
  * come from the slot store's unified allocator now, not malloc.
  * This is the dispatch layer's participation in the reference-
@@ -626,7 +644,7 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
              * order regardless of which worker finishes first. */
             uint32_t idx = slot_read_inc(ctx->slots, b->counter_slot_id,
                                          (uint32_t)b->routing.n_outputs);
-            char branch[24];
+            char branch[MAX_BRANCH_NAME];
             snprintf(branch, sizeof branch, "out_%u", idx);
             return push_branch(ctx, b, branch, out_bytes, out_size, idx) < 0 ? -1 : 0;
         }
@@ -644,7 +662,7 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
             h ^= h >> 13; h *= 0xc2b2ae35u;
             h ^= h >> 16;
             uint32_t branch_idx = h % (uint32_t)b->routing.n_outputs;
-            char branch[24];
+            char branch[MAX_BRANCH_NAME];
             snprintf(branch, sizeof branch, "out_%u", branch_idx);
             /* Randomizer is also multi-spawn-aware; pass i as tag so
              * any downstream tagged slot still serves in order. */
@@ -675,7 +693,7 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
                 acc += (b->routing.weights[k] / total) * WEIGHTED_PRECISION;
                 if ((double)i < acc) { branch_idx = k; break; }
             }
-            char branch[24];
+            char branch[MAX_BRANCH_NAME];
             snprintf(branch, sizeof branch, "out_%d", branch_idx);
             return push_branch(ctx, b, branch, out_bytes, out_size, i) < 0 ? -1 : 0;
         }
@@ -705,7 +723,7 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
             for (int step = 0; step < b->routing.n_outputs; step++) {
                 int k = (int)(((uint32_t)step + tag) %
                               (uint32_t)b->routing.n_outputs);
-                char want[24];
+                char want[MAX_BRANCH_NAME];
                 snprintf(want, sizeof want, "out_%d", k);
                 int32_t this_max = 0;
                 int found_any = 0;
@@ -736,7 +754,7 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
                  * keeps the action's contract (return 0 means OK). */
                 return push_to_downstream(ctx, b, out_bytes, out_size);
             }
-            char branch[24];
+            char branch[MAX_BRANCH_NAME];
             snprintf(branch, sizeof branch, "out_%d", best_branch);
             return push_branch(ctx, b, branch, out_bytes, out_size, tag) < 0
                        ? -1 : 0;
@@ -799,18 +817,26 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
         return -1;
     }
 
-    /* Read inputs. */
+    /* Read inputs. The five parallel arrays are VLAs sized to
+     * the box's actual input count, capped at
+     * DISPATCH_MAX_INPUTS_PER_BOX as a stack-frame sanity guard.
+     * VLAs can't be zero-sized, so when n is 0 the arrays
+     * collapse to size 1 (the extra slot is never touched
+     * because the read loop runs n times). Issue 319a removed
+     * the earlier hardcoded [16] cap that limited boxes to 16
+     * inputs at dispatch time. */
     int n = b->n_inputs;
-    char        *bufs[16]       = {0};
-    ua_chunk_t  *buf_chunks[16] = {0};
-    const void  *datas[16]      = {0};
-    int          sizes[16]      = {0};
-    int          input_native[16] = {0};
-    if (n > (int)(sizeof bufs / sizeof bufs[0])) {
-        fprintf(stderr, "dispatch: '%s' has %d inputs (cap = %d)\n",
-                b->id, n, (int)(sizeof bufs / sizeof bufs[0]));
+    if (n < 0 || n > DISPATCH_MAX_INPUTS_PER_BOX) {
+        fprintf(stderr, "dispatch: '%s' has %d inputs (sanity cap = %d)\n",
+                b->id, n, DISPATCH_MAX_INPUTS_PER_BOX);
         return -1;
     }
+    size_t n_arr = (n > 0) ? (size_t)n : 1;
+    char        *bufs[n_arr];          memset(bufs,         0, sizeof bufs);
+    ua_chunk_t  *buf_chunks[n_arr];    memset(buf_chunks,   0, sizeof buf_chunks);
+    const void  *datas[n_arr];         memset(datas,        0, sizeof datas);
+    int          sizes[n_arr];         memset(sizes,        0, sizeof sizes);
+    int          input_native[n_arr];  memset(input_native, 0, sizeof input_native);
     int failed = 0;
     int n_present = read_inputs(ctx, b, bufs, buf_chunks, datas, sizes,
                                 input_native,
@@ -860,10 +886,23 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
 static int do_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
                         char *out_buf, int out_capacity, int *out_size)
 {
-    char        *bufs[16]       = {0};
-    ua_chunk_t  *buf_chunks[16] = {0};
-    const void  *datas[16]      = {0};
-    int          sizes[16]      = {0};
+    /* Same VLA pattern as invoke_box_impl — sized to the box's
+     * actual input count, capped at DISPATCH_MAX_INPUTS_PER_BOX
+     * for stack-frame sanity. Write boxes only ever need two
+     * inputs (path, value) under issue 229's convention, so n
+     * is typically 1 or 2, but no reason to special-case the
+     * sizing here when the same machinery applies. */
+    int n = b->n_inputs;
+    if (n < 0 || n > DISPATCH_MAX_INPUTS_PER_BOX) {
+        fprintf(stderr, "dispatch: write box '%s' has %d inputs (sanity cap = %d)\n",
+                b->id, n, DISPATCH_MAX_INPUTS_PER_BOX);
+        return -1;
+    }
+    size_t n_arr = (n > 0) ? (size_t)n : 1;
+    char        *bufs[n_arr];        memset(bufs,       0, sizeof bufs);
+    ua_chunk_t  *buf_chunks[n_arr];  memset(buf_chunks, 0, sizeof buf_chunks);
+    const void  *datas[n_arr];       memset(datas,      0, sizeof datas);
+    int          sizes[n_arr];       memset(sizes,      0, sizeof sizes);
     int failed = 0;
     /* do_write_box doesn't invoke a language spec — it's a dispatch
      * primitive that writes a file. The per-input native flag isn't

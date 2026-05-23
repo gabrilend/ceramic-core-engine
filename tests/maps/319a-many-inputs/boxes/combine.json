@@ -1,0 +1,97 @@
+{
+  "id": "combine",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/many.lua",
+  "fn": "combine_twenty",
+  "inputs": [
+    {
+      "name": "in_01",
+      "type": "string"
+    },
+    {
+      "name": "in_02",
+      "type": "string"
+    },
+    {
+      "name": "in_03",
+      "type": "string"
+    },
+    {
+      "name": "in_04",
+      "type": "string"
+    },
+    {
+      "name": "in_05",
+      "type": "string"
+    },
+    {
+      "name": "in_06",
+      "type": "string"
+    },
+    {
+      "name": "in_07",
+      "type": "string"
+    },
+    {
+      "name": "in_08",
+      "type": "string"
+    },
+    {
+      "name": "in_09",
+      "type": "string"
+    },
+    {
+      "name": "in_10",
+      "type": "string"
+    },
+    {
+      "name": "in_11",
+      "type": "string"
+    },
+    {
+      "name": "in_12",
+      "type": "string"
+    },
+    {
+      "name": "in_13",
+      "type": "string"
+    },
+    {
+      "name": "in_14",
+      "type": "string"
+    },
+    {
+      "name": "in_15",
+      "type": "string"
+    },
+    {
+      "name": "in_16",
+      "type": "string"
+    },
+    {
+      "name": "in_17",
+      "type": "string"
+    },
+    {
+      "name": "in_18",
+      "type": "string"
+    },
+    {
+      "name": "in_19",
+      "type": "string"
+    },
+    {
+      "name": "in_20",
+      "type": "string"
+    }
+  ],
+  "routing": {
+    "kind": "plain"
+  },
+  "output_capacity": 64,
+  "ui": {
+    "x": 600,
+    "y": 250
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "319a-many-inputs",
+  "description": "Issue 319a fixture: a call box with 20 inputs proves the dispatch input cap (formerly hardcoded at 16) has been removed.",
+  "entry_box_id": "combine",
+  "src_dirs": ["tests/maps/319a-many-inputs/src"]
+}

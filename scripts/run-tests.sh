@@ -155,6 +155,9 @@ check_map "pipeline" \
 check_map "read-literal" \
     "echo → hello, world!"
 
+check_map "319a-many-inputs" \
+    "combine → count=20 sum=210"
+
 pipeline_output_check
 compile_pipeline_check
 # }}}

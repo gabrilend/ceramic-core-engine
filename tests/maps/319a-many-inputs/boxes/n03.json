@@ -1,0 +1,17 @@
+{
+  "id": "n03",
+  "kind": "read",
+  "value": "3",
+  "ui": {
+    "x": 260,
+    "y": 100
+  },
+  "connections": [
+    {
+      "from_box": "n03",
+      "from_branch": null,
+      "to_box": "combine",
+      "to_input": "in_03"
+    }
+  ]
+}

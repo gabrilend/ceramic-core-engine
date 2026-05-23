@@ -1,0 +1,17 @@
+{
+  "id": "n12",
+  "kind": "read",
+  "value": "12",
+  "ui": {
+    "x": 180,
+    "y": 260
+  },
+  "connections": [
+    {
+      "from_box": "n12",
+      "from_branch": null,
+      "to_box": "combine",
+      "to_input": "in_12"
+    }
+  ]
+}
