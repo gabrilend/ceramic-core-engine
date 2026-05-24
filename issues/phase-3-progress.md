@@ -28,7 +28,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | complete · dual-ring slots + per-edge classification + per-cell ordering; spec contract has single invoke + two bridges; Lua native-bytes optimisation tracked as a future slice |
 | 313 | research: whole-program same-language merge                 | complete · Lua merged module + C precompile preference + bash pre-source; inline-into-dispatch stays open research |
 | 314 | small C JSON parser written for this project                | complete · parser + writer + strict leading-zero |
-| 315 | reference-counted compiled-map artifacts                    | open · design only |
+| 315 | reference-counted compiled-map artifacts                    | complete · acquire/release/list/count/reap helper + fork-on-live-refs compile + PID + start-ticks back pointer + optional marker file as second liveness signal; 12 unit scenarios + end-to-end pinned-generation integration check |
 | 316 | simple test-runner script                                   | folded into 232 |
 | 317 | language spec JSON bridge for data boxes                    | complete · Lua fidelity-preserving, C+Bash pass-through-or-string-wrap, shared test harness |
 | 319 | built-in library for map self-construction (`create_box`, `connect`) | open · design complete; sub-issues 319a–e |
