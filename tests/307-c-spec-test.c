@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 /* {{{ Test harness */
@@ -311,11 +312,20 @@ static int test_compile_with_cflags(void)
     const lang_spec_t *c = load_c_spec(&r);
     ASSERT(c);
 
-    char src_path[256], so_path[256];
+    char src_path[256], so_off[256], so_on[256];
+    /* Each path is distinct from any path the rest of the suite or
+     * a prior run could have left in glibc's per-process dlopen
+     * cache: per-pid base + per-build suffix. Production code uses
+     * box-id-derived paths which are also distinct per box, so the
+     * cache hazard doesn't bite at runtime — this naming just
+     * mirrors the production discipline inside a single test. */
+    long ts = (long)time(NULL);
     snprintf(src_path, sizeof src_path,
-             "/tmp/soramech-cflags-%d.c", (int)getpid());
-    snprintf(so_path,  sizeof so_path,
-             "/tmp/soramech-cflags-%d.so", (int)getpid());
+             "/tmp/soramech-cflag-probe-%d-%ld.c",   (int)getpid(), ts);
+    snprintf(so_off, sizeof so_off,
+             "/tmp/soramech-cflag-probe-%d-%ld-default.so", (int)getpid(), ts);
+    snprintf(so_on,  sizeof so_on,
+             "/tmp/soramech-cflag-probe-%d-%ld-flagged.so", (int)getpid(), ts);
 
     FILE *fp = fopen(src_path, "w");
     ASSERT(fp);
@@ -337,17 +347,17 @@ static int test_compile_with_cflags(void)
     fclose(fp);
 
     /* Default build (no cflags): probe returns "off". */
-    ASSERT(c->compile(src_path, so_path, NULL) == 0);
+    ASSERT(c->compile(src_path, so_off, NULL) == 0);
     void *h = c->init(0);
     ASSERT(h);
     char buf[8]; int n = 0;
-    int rc = c->invoke(h, NULL, so_path, "probe", NULL, NULL, NULL, 0, 0,
+    int rc = c->invoke(h, NULL, so_off, "probe", NULL, NULL, NULL, 0, 0,
                        buf, sizeof buf, &n);
     ASSERT(rc == 0);
     buf[n] = '\0';
     ASSERT(strcmp(buf, "off") == 0);
     c->teardown(h);
-    unlink(so_path);
+    unlink(so_off);
 
     /* Build with cflags="-DSORAMECH_FLAG_ON": probe returns "on". */
     box_t hint;
@@ -355,18 +365,18 @@ static int test_compile_with_cflags(void)
     hint.id     = "probe";
     hint.cflags = "-DSORAMECH_FLAG_ON";
 
-    ASSERT(c->compile(src_path, so_path, &hint) == 0);
+    ASSERT(c->compile(src_path, so_on, &hint) == 0);
     h = c->init(0);
     ASSERT(h);
     n = 0;
-    rc = c->invoke(h, NULL, so_path, "probe", NULL, NULL, NULL, 0, 0,
+    rc = c->invoke(h, NULL, so_on, "probe", NULL, NULL, NULL, 0, 0,
                    buf, sizeof buf, &n);
     ASSERT(rc == 0);
     buf[n] = '\0';
     ASSERT(strcmp(buf, "on") == 0);
     c->teardown(h);
 
-    unlink(so_path);
+    unlink(so_on);
     unlink(src_path);
     spec_registry_destroy(r);
     return 1;
