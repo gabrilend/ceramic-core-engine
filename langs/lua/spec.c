@@ -26,6 +26,7 @@
 #include "json.h"
 #include "018-runtime-builtins.h"   /* runtime_create_box / runtime_connect — 319d */
 #include "017-box-id.h"             /* BOX_ID_GEN_BUF_SIZE — 319d */
+#include "020-sentinels.h"          /* sentinel emit / detect — 318 */
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -614,14 +615,29 @@ static int encode_value(lua_State *L, int abs_idx, json_writer_t *w)
         }
         return 0;
     }
-    default:
-        /* Function / userdata / thread / lightuserdata. The richer
-         * wire primitives ($function_pointer, $lang_opaque) decompose
-         * these into data the destination can rebuild, but that
-         * decomposition lands as a follow-on. Today: hard error. */
-        fprintf(stderr, "lua spec: cannot JSON-encode value of type %s\n",
-                lua_typename(L, t));
-        return -1;
+    default: {
+        /* Function / userdata / thread / lightuserdata land here.
+         * Issue 318: instead of hard-erroring, register the value in
+         * this Lua state's registry and emit a $lang_opaque sentinel
+         * the same-language consumer can resolve back. Cross-language
+         * consumers see a sentinel they can't reconstruct and fail
+         * cleanly at decode time. */
+        const char *shape = lua_typename(L, t);
+        /* luaL_ref pops the top of stack and stores it under a fresh
+         * integer key in the registry. We need to push a copy first
+         * since encode_value must NOT modify the source stack
+         * position. */
+        lua_pushvalue(L, abs_idx);
+        int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+        if (ref == LUA_REFNIL) {
+            fprintf(stderr,
+                "lua spec: failed to register opaque value of type %s\n",
+                shape);
+            return -1;
+        }
+        sentinel_write_lang_opaque(w, "lua", (uint64_t)ref, shape);
+        return 0;
+    }
     }
 }
 /* }}} */
@@ -705,6 +721,68 @@ static int decode_node(lua_State *L, const json_node_t *node)
         return 0;
     }
     case JSON_OBJECT: {
+        /* Issue 318: sentinel detection. A single-key object matching
+         * one of the reserved sentinel keys gets routed through the
+         * reconstruct path for that kind instead of materialising as
+         * a plain Lua table with `$ref` / `$lang_opaque` /
+         * `$function_pointer` as a literal key. */
+        sentinel_kind_t skind = sentinel_detect(node);
+        if (skind == SENTINEL_LANG_OPAQUE) {
+            const json_node_t *inner = json_object_value(node, 0);
+            const json_node_t *lang_n = inner ? json_object_get(inner, "lang") : NULL;
+            const json_node_t *tag_n  = inner ? json_object_get(inner, "tag")  : NULL;
+            if (!lang_n || json_kind((json_node_t *)lang_n) != JSON_STRING ||
+                !tag_n  || json_kind((json_node_t *)tag_n)  != JSON_NUMBER) {
+                fprintf(stderr, "lua spec: malformed $lang_opaque\n");
+                lua_settop(L, baseline);
+                return -1;
+            }
+            const char *lang = json_string_value(lang_n);
+            if (strcmp(lang, "lua") != 0) {
+                fprintf(stderr,
+                    "lua spec: $lang_opaque lang='%s' is not reconstructable "
+                    "by the Lua spec (cross-language opaque values require "
+                    "matching producer/consumer language)\n", lang);
+                lua_settop(L, baseline);
+                return -1;
+            }
+            int ref = (int)json_number_value(tag_n);
+            lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+            if (lua_isnil(L, -1)) {
+                fprintf(stderr, "lua spec: $lang_opaque tag %d not in registry\n", ref);
+                lua_settop(L, baseline);
+                return -1;
+            }
+            return 0;
+        }
+        if (skind == SENTINEL_REF) {
+            const json_node_t *inner = json_object_value(node, 0);
+            const json_node_t *ptr_n = inner ? json_object_get(inner, "chunk_ptr") : NULL;
+            if (!ptr_n || json_kind((json_node_t *)ptr_n) != JSON_STRING) {
+                fprintf(stderr, "lua spec: malformed $ref\n");
+                lua_settop(L, baseline);
+                return -1;
+            }
+            uintptr_t ptr = (uintptr_t)strtoull(json_string_value(ptr_n), NULL, 0);
+            int len = 0;
+            const void *bytes = sentinel_ref_lookup(ptr, &len);
+            if (!bytes) {
+                fprintf(stderr, "lua spec: $ref chunk_ptr=0x%lx not in store\n",
+                        (unsigned long)ptr);
+                lua_settop(L, baseline);
+                return -1;
+            }
+            lua_pushlstring(L, (const char *)bytes, (size_t)len);
+            return 0;
+        }
+        if (skind == SENTINEL_FUNCTION_POINTER) {
+            fprintf(stderr, "lua spec: $function_pointer reconstruction needs "
+                            "the wrapper-binary subsystem (issue 318 amendment), "
+                            "not yet implemented\n");
+            lua_settop(L, baseline);
+            return -1;
+        }
+        /* Plain object — fall through to the existing table path. */
         int n = json_object_size(node);
         lua_createtable(L, 0, n);
         for (int i = 0; i < n; i++) {
@@ -911,5 +989,10 @@ lang_spec_t soramech_lang_spec = {
     .native_to_json = lua_native_to_json,
     .json_to_native = lua_json_to_native,
     .translate      = lua_translate,
+    /* Issue 318: Lua spec emits and reconstructs $ref and
+     * $lang_opaque. $function_pointer is parsed but rejected
+     * pending the amendment's wrapper-binary subsystem. */
+    .sentinel_emit_mask        = SENTINEL_MASK_REF | SENTINEL_MASK_LANG_OPAQUE,
+    .sentinel_reconstruct_mask = SENTINEL_MASK_REF | SENTINEL_MASK_LANG_OPAQUE,
 };
 /* }}} */

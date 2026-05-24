@@ -193,6 +193,21 @@ typedef struct lang_spec {
                      const char *shim_path,
                      const void *raw, int raw_size, int raw_native,
                      void *out_buf, int out_capacity, int *out_size);
+
+    /* Sentinel capability declarations (issue 318). Each mask is a
+     * bitwise-OR of SENTINEL_MASK_REF / SENTINEL_MASK_LANG_OPAQUE /
+     * SENTINEL_MASK_FN_POINTER. The producer's emit_mask names the
+     * sentinel kinds its native_to_json may write; the consumer's
+     * reconstruct_mask names the kinds its json_to_native can
+     * rebuild. The compile-time wire walker validates that every
+     * cross-language edge has producer.emit ⊆ consumer.reconstruct
+     * and surfaces a warning when not.
+     *
+     * Specs that don't know about sentinels (the slice-1 default)
+     * leave both at 0; the wire walker treats that as "no
+     * capability, default decode only" and emits no warning. */
+    unsigned int sentinel_emit_mask;
+    unsigned int sentinel_reconstruct_mask;
 } lang_spec_t;
 /* }}} */
 

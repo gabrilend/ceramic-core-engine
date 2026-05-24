@@ -33,7 +33,20 @@ check_map() {
     printf "  %-44s " "$map"
 
     local output
-    output=$("$DIR/soramech-pool" "$DIR/tests/maps/$map" 2>&1)
+    # Per-map env opt-in: a map may set SORAMECH_TEST_WORKERS to
+    # pin worker count for tests that depend on per-worker state
+    # (e.g. issue 318's $lang_opaque, which lives in the producer's
+    # Lua registry and can only be reconstructed by a consumer on
+    # the same worker).
+    local workers_env=""
+    if [[ -f "$DIR/tests/maps/$map/.test_workers" ]]; then
+        workers_env=$(cat "$DIR/tests/maps/$map/.test_workers")
+    fi
+    if [[ -n "$workers_env" ]]; then
+        output=$(SORAMECH_WORKERS="$workers_env" "$DIR/soramech-pool" "$DIR/tests/maps/$map" 2>&1)
+    else
+        output=$("$DIR/soramech-pool" "$DIR/tests/maps/$map" 2>&1)
+    fi
     local rc=$?
 
     local missing=""
@@ -172,6 +185,17 @@ check_map "246-c-shim" \
 
 check_map "246-lua-shim" \
     "echo → seen:REV-fedcba"
+
+# Issue 318 — the producer's output proves the emit side works
+# end-to-end (Lua function → $lang_opaque sentinel in JSON). The
+# consumer's reconstruction needs the dual-ring slot to surface
+# "I was written as JSON" to the same-language consumer, which is
+# a deeper per-edge classification issue documented in 318's
+# closeout; the emit fixture stands today.
+check_map "318-lang-opaque" \
+    '"$lang_opaque"' \
+    '"lang":"lua"' \
+    '"shape":"function"'
 
 pipeline_output_check
 compile_pipeline_check

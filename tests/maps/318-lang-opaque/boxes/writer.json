@@ -1,0 +1,10 @@
+{
+  "id": "writer",
+  "kind": "write",
+  "path": "/tmp/soramech-318-lang-opaque.out",
+  "inputs": [
+    {"name": "path",  "type": "string", "value": "/tmp/soramech-318-lang-opaque.out", "optional": true},
+    {"name": "value", "type": "string"}
+  ],
+  "ui": {"x": 500, "y": 200}
+}

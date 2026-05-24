@@ -23,6 +23,7 @@
 #include "lang-spec.h"
 #include "json.h"
 #include "010-graph-loader.h"
+#include "020-sentinels.h"  /* SENTINEL_MASK_* — issue 318 */
 
 #include <dlfcn.h>
 #include <stdio.h>
@@ -634,5 +635,13 @@ lang_spec_t soramech_lang_spec = {
     .native_to_json = c_native_to_json,
     .json_to_native = c_json_to_native,
     .translate      = c_translate,
+    /* Issue 318: C spec sentinel capabilities. Slice-1 supports
+     * $ref both ways via the process-wide ref store; sentinel emit
+     * from the typed-output JSON wrapper is a future enhancement
+     * (the C spec's encode currently passes typed values through
+     * without sentinel emission), so emit_mask only declares what
+     * the spec can in principle write today. */
+    .sentinel_emit_mask        = SENTINEL_MASK_REF,
+    .sentinel_reconstruct_mask = SENTINEL_MASK_REF,
 };
 /* }}} */

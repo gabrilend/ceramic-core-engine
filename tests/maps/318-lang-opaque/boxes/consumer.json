@@ -1,0 +1,13 @@
+{
+  "id": "consumer",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/consumer.lua",
+  "fn": "consumer",
+  "inputs": [
+    {"name": "bundle", "type": "string"}
+  ],
+  "routing": {"kind": "plain"},
+  "output_capacity": 256,
+  "ui": {"x": 500, "y": 100}
+}

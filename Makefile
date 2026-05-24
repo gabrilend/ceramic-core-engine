@@ -130,8 +130,25 @@ $(BUILD_DIR)/tests/010-graph-loader-test: $(BUILD_DIR)/src/010-graph-loader.o \
                                           $(BUILD_DIR)/src/009-slot-store.o \
                                           $(BUILD_DIR)/src/016-unified-allocator.o \
                                           $(BUILD_DIR)/src/011-spec-registry.o \
+                                          $(BUILD_DIR)/src/017-box-id.o \
+                                          $(BUILD_DIR)/src/018-runtime-builtins.o \
+                                          $(BUILD_DIR)/src/020-sentinels.o \
                                           $(BUILD_DIR)/libs/json/json.o
-$(BUILD_DIR)/tests/011-spec-registry-test: $(BUILD_DIR)/src/011-spec-registry.o
+# Every test binary that loads a language spec via dlopen needs the
+# runner-side symbols the specs call back into (issue 318's
+# sentinel_*, issue 319d's runtime_set_active_context, etc.). The
+# pool runner pulls them in through POOL_SOURCES' wildcard; tests
+# name them explicitly.
+SPEC_LOADER_DEPS = $(BUILD_DIR)/src/020-sentinels.o \
+                   $(BUILD_DIR)/src/018-runtime-builtins.o \
+                   $(BUILD_DIR)/src/017-box-id.o \
+                   $(BUILD_DIR)/src/010-graph-loader.o \
+                   $(BUILD_DIR)/src/009-slot-store.o \
+                   $(BUILD_DIR)/src/016-unified-allocator.o \
+                   $(BUILD_DIR)/libs/json/json.o
+
+$(BUILD_DIR)/tests/011-spec-registry-test: $(BUILD_DIR)/src/011-spec-registry.o \
+                                           $(SPEC_LOADER_DEPS)
 $(BUILD_DIR)/tests/012-dispatch-test:      $(BUILD_DIR)/src/012-dispatch.o \
                                            $(BUILD_DIR)/src/010-graph-loader.o \
                                            $(BUILD_DIR)/src/011-spec-registry.o \
@@ -139,6 +156,9 @@ $(BUILD_DIR)/tests/012-dispatch-test:      $(BUILD_DIR)/src/012-dispatch.o \
                                            $(BUILD_DIR)/src/016-unified-allocator.o \
                                            $(BUILD_DIR)/src/013-jsonl-events.o \
                                            $(BUILD_DIR)/src/014-event-queue.o \
+                                           $(BUILD_DIR)/src/017-box-id.o \
+                                           $(BUILD_DIR)/src/018-runtime-builtins.o \
+                                           $(BUILD_DIR)/src/020-sentinels.o \
                                            $(BUILD_DIR)/libs/json/json.o \
                                            $(BUILD_DIR)/libs/task-pool/pool.o
 $(BUILD_DIR)/tests/013-jsonl-events-test:  $(BUILD_DIR)/src/013-jsonl-events.o \
@@ -148,14 +168,22 @@ $(BUILD_DIR)/tests/014-event-queue-test:   $(BUILD_DIR)/src/014-event-queue.o \
                                            $(BUILD_DIR)/libs/json/json.o
 $(BUILD_DIR)/tests/301-pool-test:         $(BUILD_DIR)/libs/task-pool/pool.o
 $(BUILD_DIR)/tests/303-pool-spec-init-test: $(BUILD_DIR)/libs/task-pool/pool.o \
-                                            $(BUILD_DIR)/src/011-spec-registry.o
-$(BUILD_DIR)/tests/306-lua-spec-test:     $(BUILD_DIR)/src/011-spec-registry.o
-$(BUILD_DIR)/tests/317-lua-bridge-test:   $(BUILD_DIR)/src/011-spec-registry.o
-$(BUILD_DIR)/tests/317-text-bridge-test:  $(BUILD_DIR)/src/011-spec-registry.o
-$(BUILD_DIR)/tests/307-c-spec-test:       $(BUILD_DIR)/src/011-spec-registry.o
-$(BUILD_DIR)/tests/308-bash-spec-test:    $(BUILD_DIR)/src/011-spec-registry.o
+                                            $(BUILD_DIR)/src/011-spec-registry.o \
+                                            $(SPEC_LOADER_DEPS)
+$(BUILD_DIR)/tests/306-lua-spec-test:     $(BUILD_DIR)/src/011-spec-registry.o \
+                                          $(SPEC_LOADER_DEPS)
+$(BUILD_DIR)/tests/317-lua-bridge-test:   $(BUILD_DIR)/src/011-spec-registry.o \
+                                          $(SPEC_LOADER_DEPS)
+$(BUILD_DIR)/tests/317-text-bridge-test:  $(BUILD_DIR)/src/011-spec-registry.o \
+                                          $(SPEC_LOADER_DEPS)
+$(BUILD_DIR)/tests/307-c-spec-test:       $(BUILD_DIR)/src/011-spec-registry.o \
+                                          $(SPEC_LOADER_DEPS)
+$(BUILD_DIR)/tests/308-bash-spec-test:    $(BUILD_DIR)/src/011-spec-registry.o \
+                                          $(SPEC_LOADER_DEPS)
 $(BUILD_DIR)/tests/314-json-test:         $(BUILD_DIR)/libs/json/json.o
 $(BUILD_DIR)/tests/017-box-id-test:       $(BUILD_DIR)/src/017-box-id.o
+$(BUILD_DIR)/tests/020-sentinels-test:    $(BUILD_DIR)/src/020-sentinels.o \
+                                          $(BUILD_DIR)/libs/json/json.o
 
 # Pattern: link a test binary. $^ collects the .o files declared
 # above plus the test's own .o file.

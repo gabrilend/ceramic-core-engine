@@ -1,0 +1,6 @@
+{
+  "name": "318-lang-opaque",
+  "description": "Issue 318 fixture: a Lua producer fans out a table containing a Lua function to BOTH a Lua consumer (which calls the function) AND a write box (which forces the producer to JSON-encode for the cross-language ring). The Lua consumer reconstructs the $lang_opaque function from the producer's per-worker registry and calls it. Proves intra-Lua $lang_opaque round-trips through the JSON ring.",
+  "entry_box_id": "producer",
+  "src_dirs": ["tests/maps/318-lang-opaque/src"]
+}

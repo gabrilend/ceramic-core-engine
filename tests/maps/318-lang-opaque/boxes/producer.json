@@ -1,0 +1,19 @@
+{
+  "id": "producer",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/producer.lua",
+  "fn": "producer",
+  "inputs": [
+    {"name": "n", "type": "string"}
+  ],
+  "routing": {"kind": "plain"},
+  "output_capacity": 1024,
+  "ui": {"x": 300, "y": 100},
+  "connections": [
+    {"from_box": "producer", "from_branch": null,
+     "to_box": "consumer", "to_input": "bundle"},
+    {"from_box": "producer", "from_branch": null,
+     "to_box": "writer",   "to_input": "value"}
+  ]
+}
