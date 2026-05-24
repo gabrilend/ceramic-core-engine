@@ -46,21 +46,37 @@ end
 -- }}}
 
 -- {{{ valid_routing_kinds
--- Issue 233's unified `routing` field. Six kinds shipped:
---   plain       — single output port, fan to every wire
---   comparator  — numeric threshold(s), pick lt/eq/gt or named bands
---   iterator    — round-robin over n_outputs ports, multi-spawn
---   randomizer  — hash(counter) mod n_outputs (issue 240)
---   weighted    — cumulative-band lookup over weights (issue 241)
---   distributor — argmin over downstream slot fill (issue 242)
+-- Issue 233's unified `routing` field. Seven kinds shipped:
+--   plain         — single output port, fan to every wire
+--   comparator    — numeric threshold(s), pick lt/eq/gt or named bands
+--   iterator      — round-robin over n_outputs ports, multi-spawn
+--   randomizer    — hash(counter) mod n_outputs (issue 240)
+--   weighted      — cumulative-band lookup over weights (issue 241)
+--   distributor   — argmin over downstream slot fill (issue 242)
+--   nonlinearity  — value-transforming: maps input to a smoothed
+--                   score via one of three intent-named variants
+--                   (decision / confidence / calibration), issue 250
 local valid_routing_kinds = {
-    plain       = true,
-    comparator  = true,
-    iterator    = true,
-    randomizer  = true,
-    weighted    = true,
-    distributor = true,
+    plain        = true,
+    comparator   = true,
+    iterator     = true,
+    randomizer   = true,
+    weighted     = true,
+    distributor  = true,
+    nonlinearity = true,
 }
+
+-- {{{ valid_nonlinearity_shapes (issue 250)
+-- Intent-named variants picked from a dropdown rather than by
+-- the underlying curve's mathematician's name. The C dispatch
+-- maps each to its curve: decision → tanh, confidence → sigmoid,
+-- calibration → linear.
+local valid_nonlinearity_shapes = {
+    decision    = true,
+    confidence  = true,
+    calibration = true,
+}
+-- }}}
 -- }}}
 
 -- {{{ err
@@ -194,6 +210,35 @@ function M.validate_box(box)
                             break
                         end
                     end
+                end
+            elseif r.kind == "nonlinearity" then
+                -- Issue 250: shape is required and must be one of
+                -- the three intent-named variants. min / max /
+                -- midpoint are all optional — their PRESENCE is
+                -- the mode-flag for that side, so the loader needs
+                -- to distinguish "field absent" from "field set to
+                -- zero." The Lua schema just sanity-checks types;
+                -- the C loader records per-bound is_fixed flags.
+                if type(r.shape) ~= "string"
+                   or not valid_nonlinearity_shapes[r.shape] then
+                    err(errors, "nonlinearity 'routing.shape' must be one of " ..
+                        "'decision' / 'confidence' / 'calibration'")
+                end
+                if r.min      ~= nil and type(r.min)      ~= "number" then
+                    err(errors, "nonlinearity 'routing.min' must be a number when set")
+                end
+                if r.max      ~= nil and type(r.max)      ~= "number" then
+                    err(errors, "nonlinearity 'routing.max' must be a number when set")
+                end
+                if r.midpoint ~= nil and type(r.midpoint) ~= "number" then
+                    err(errors, "nonlinearity 'routing.midpoint' must be a number when set")
+                end
+                if r.min ~= nil and r.max ~= nil and r.min >= r.max then
+                    err(errors, "nonlinearity 'routing.min' (" .. tostring(r.min) ..
+                        ") must be less than 'routing.max' (" .. tostring(r.max) .. ")")
+                end
+                if r.k ~= nil and (type(r.k) ~= "number" or r.k <= 0) then
+                    err(errors, "nonlinearity 'routing.k' (steepness) must be a positive number when set")
                 end
             end
         end

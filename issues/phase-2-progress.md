@@ -51,6 +51,7 @@ model the phase 3 runtime will consume.
 | 241  | routing kind: weighted (cumulative-band lookup over weights) | complete · schema + editor dropdown + weights text input + canvas out_<i> rendering per weights.length + fixture |
 | 242  | routing kind: distributor (argmin over downstream fill + counter tiebreaker) | complete · schema + editor dropdown + shared n_outputs control + canvas out_<i> rendering + fixture |
 | 243  | routing kind: multi-band comparator (thresholds array carves N+1 bands) | complete · schema + C loader thresholds parsing + dispatch band picker (below/between/above + eq for doubled) + canvas band-named rendering + inspector thresholds text input + legacy single-comparand still accepted + fixture |
+| 250  | routing kind: nonlinearity (value-transforming, three intent-named variants) | complete · schema + C loader nonlinearity routing fields + dispatch picker (sigmoid / tanh / linear remap per variant) + per-box atomic running min/max with EMA dampening + presence-is-mode bounds + clamp under fixed (confidence / decision) vs extrapolate (calibration) + editor variant dropdown and bounds/midpoint/k controls + three fixtures (one per variant) |
 
 ## Phase goal checklist
 

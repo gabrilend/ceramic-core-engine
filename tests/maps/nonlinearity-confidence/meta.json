@@ -1,0 +1,6 @@
+{
+  "name": "nonlinearity-confidence",
+  "description": "Issue 250 confidence variant. Fixed bounds [0, 100]. The seed value 50 sits exactly at the midpoint, so the sigmoid emits 0.5. The downstream tagger echoes the received score; the test asserts 'tagger → 0.5' appears in stderr.",
+  "entry_box_id": "seed",
+  "src_dirs": ["tests/maps/nonlinearity-confidence/src"]
+}

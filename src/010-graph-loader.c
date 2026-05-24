@@ -25,6 +25,7 @@
 #include "json.h"
 
 #include <dirent.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdatomic.h>
 #include <pthread.h>
@@ -349,10 +350,91 @@ static int parse_routing(const json_node_t *r, routing_t *out,
         }
         return 0;
     }
+    if (strcmp(kind, "nonlinearity") == 0) {
+        /* Issue 250 — value-transforming routing. Emits a scoring
+         * response (the smoothed [0,1] or [-1,1] number) on a
+         * single output port. The Lua schema already validated the
+         * shape string and number types; here we just thread the
+         * fields onto the routing struct.
+         *
+         * Presence vs absence of min / max / midpoint is the
+         * mode-flag for each side — supplied means "fixed; clamp
+         * past it"; absent means "track it via the atomic running
+         * cells, decay toward midpoint via EMA on every fire." */
+        out->kind = ROUTING_NONLINEARITY;
+        out->n_outputs = 1;
+        out->nl_shape = NL_CONFIDENCE;     /* default if shape missing/unknown */
+        out->nl_steepness = 1.0;
+        out->nl_min_is_fixed = 0;
+        out->nl_max_is_fixed = 0;
+        out->nl_mid_is_fixed = 0;
+        out->nl_fixed_min = 0.0;
+        out->nl_fixed_max = 1.0;
+        out->nl_fixed_mid = 0.0;
+        /* Running cells initialised so the first observed value
+         * always widens both sides. Using sentinel bit patterns
+         * (+inf for min, -inf for max) makes the first compare
+         * deterministic. */
+        union { double d; uint64_t u; } pos_inf, neg_inf;
+        pos_inf.d =  (double)INFINITY;
+        neg_inf.d = -(double)INFINITY;
+        atomic_init(&out->nl_running_min, pos_inf.u);
+        atomic_init(&out->nl_running_max, neg_inf.u);
+
+        json_node_t *sh = json_object_get(r, "shape");
+        if (!sh || json_kind(sh) != JSON_STRING) {
+            *err = err_fmt("box '%s': nonlinearity routing requires "
+                           "'shape' string (decision / confidence / calibration)",
+                           box_id);
+            return -1;
+        }
+        const char *s = json_string_value(sh);
+        if      (strcmp(s, "confidence")  == 0) out->nl_shape = NL_CONFIDENCE;
+        else if (strcmp(s, "decision")    == 0) out->nl_shape = NL_DECISION;
+        else if (strcmp(s, "calibration") == 0) out->nl_shape = NL_CALIBRATION;
+        else {
+            *err = err_fmt("box '%s': nonlinearity 'shape' = '%s' must be "
+                           "'decision' / 'confidence' / 'calibration'", box_id, s);
+            return -1;
+        }
+
+        json_node_t *mn = json_object_get(r, "min");
+        if (mn && json_kind(mn) == JSON_NUMBER) {
+            out->nl_fixed_min = json_number_value(mn);
+            out->nl_min_is_fixed = 1;
+        }
+        json_node_t *mx = json_object_get(r, "max");
+        if (mx && json_kind(mx) == JSON_NUMBER) {
+            out->nl_fixed_max = json_number_value(mx);
+            out->nl_max_is_fixed = 1;
+        }
+        if (out->nl_min_is_fixed && out->nl_max_is_fixed &&
+            out->nl_fixed_min >= out->nl_fixed_max) {
+            *err = err_fmt("box '%s': nonlinearity 'min' (%g) must be less than "
+                           "'max' (%g)", box_id, out->nl_fixed_min, out->nl_fixed_max);
+            return -1;
+        }
+        json_node_t *md = json_object_get(r, "midpoint");
+        if (md && json_kind(md) == JSON_NUMBER) {
+            out->nl_fixed_mid = json_number_value(md);
+            out->nl_mid_is_fixed = 1;
+        }
+        json_node_t *kk = json_object_get(r, "k");
+        if (kk && json_kind(kk) == JSON_NUMBER) {
+            double v = json_number_value(kk);
+            if (v <= 0.0) {
+                *err = err_fmt("box '%s': nonlinearity 'k' (%g) must be positive",
+                               box_id, v);
+                return -1;
+            }
+            out->nl_steepness = v;
+        }
+        return 0;
+    }
 
     *err = err_fmt("box '%s': unknown routing.kind '%s' "
                    "(supported: plain, comparator, iterator, "
-                   "randomizer, weighted, distributor)",
+                   "randomizer, weighted, distributor, nonlinearity)",
                    box_id, kind);
     return -1;
 }

@@ -361,11 +361,16 @@ const Inspector = (() => {
   // flipping the dropdown leaves the box in a schema-valid
   // state without the user having to fill in any control first.
   function default_routing_for(kind) {
-    if (kind === 'comparator')  return { kind: 'comparator',  comparand: 0 };
-    if (kind === 'iterator')    return { kind: 'iterator',    n_outputs: 2 };
-    if (kind === 'randomizer')  return { kind: 'randomizer',  n_outputs: 2 };
-    if (kind === 'distributor') return { kind: 'distributor', n_outputs: 2 };
-    if (kind === 'weighted')    return { kind: 'weighted',    weights:   [0.5, 0.5] };
+    if (kind === 'comparator')   return { kind: 'comparator',   comparand: 0 };
+    if (kind === 'iterator')     return { kind: 'iterator',     n_outputs: 2 };
+    if (kind === 'randomizer')   return { kind: 'randomizer',   n_outputs: 2 };
+    if (kind === 'distributor')  return { kind: 'distributor',  n_outputs: 2 };
+    if (kind === 'weighted')     return { kind: 'weighted',     weights:   [0.5, 0.5] };
+    // Issue 250: nonlinearity defaults to the confidence variant
+    // with fully-auto bounds (no min, no max, no midpoint set) and
+    // a gentle steepness. The user pins values when they want
+    // fixed bounds; leaving them absent means the box tracks them.
+    if (kind === 'nonlinearity') return { kind: 'nonlinearity', shape: 'confidence', k: 1 };
     return { kind: 'plain' };
   }
   // }}}
@@ -437,6 +442,39 @@ const Inspector = (() => {
     // Remove the legacy field so the loader picks the
     // multi-band path unambiguously.
     delete current_box.routing.comparand;
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+  // }}}
+
+  // {{{ async function set_nl_field()
+  // Issue 250 — nonlinearity routing field setter. The bounds
+  // (min / max / midpoint) follow the presence-is-mode rule: a
+  // blank input value means "delete the field, auto-track this
+  // side"; a number means "pin this side." `shape` and `k` are
+  // simple field writes — never deleted, always present in
+  // schema-valid form. No outgoing wires get severed because
+  // nonlinearity always has one output port; the wire shape
+  // doesn't depend on the routing parameters.
+  async function set_nl_field(key, raw) {
+    if (!current_box || routing_kind(current_box) !== 'nonlinearity') return;
+    current_box.routing = current_box.routing || { kind: 'nonlinearity' };
+    if (key === 'shape') {
+      current_box.routing.shape = String(raw);
+    } else if (key === 'k') {
+      const v = parseFloat(raw);
+      if (!isNaN(v) && v > 0) current_box.routing.k = v;
+    } else {
+      // min / max / midpoint — empty string deletes; number sets.
+      const s = String(raw).trim();
+      if (s === '') {
+        delete current_box.routing[key];
+      } else {
+        const v = parseFloat(s);
+        if (!isNaN(v)) current_box.routing[key] = v;
+      }
+    }
     await save();
     Canvas.mark_dirty();
     show(current_box, on_change_cb, on_delete_cb);
@@ -1303,7 +1341,7 @@ const Inspector = (() => {
     // transition for the same reason the variadic input toggle
     // clears its inputs.
     const mode_sel = document.createElement('select');
-    ['plain', 'comparator', 'iterator', 'randomizer', 'weighted', 'distributor'].forEach(k => {
+    ['plain', 'comparator', 'iterator', 'randomizer', 'weighted', 'distributor', 'nonlinearity'].forEach(k => {
       const opt = document.createElement('option');
       opt.value = k; opt.textContent = k;
       if (k === routing_kind(box)) opt.selected = true;
@@ -1519,6 +1557,53 @@ const Inspector = (() => {
       w_note.style.cssText = 'font-size:10px;color:#6c72a0;margin-top:4px;';
       w_note.textContent = 'comma-separated non-negative numbers. dispatch normalises to a probability table.';
       fields.appendChild(w_note);
+    } else if (rk === 'nonlinearity') {
+      // Issue 250 — variant + bounds + steepness controls. The
+      // bounds use the presence-is-the-mode rule: a blank field
+      // means "auto-track this side"; a number means "pin this
+      // side as a fixed bound, clamp past it." set_nl_bounds()
+      // applies that rule when the user edits a field.
+      const variant_sel = document.createElement('select');
+      [['decision',    'soft +/- with clear neutral'],
+       ['confidence',  'soft yes/no with uncertainty'],
+       ['calibration', 'pure range remap, no curve']].forEach(([k, hint]) => {
+        const opt = document.createElement('option');
+        opt.value = k; opt.textContent = k;
+        opt.title  = hint;
+        if (k === (box.routing && box.routing.shape)) opt.selected = true;
+        variant_sel.appendChild(opt);
+      });
+      variant_sel.addEventListener('change', () => set_nl_field('shape', variant_sel.value));
+      fields.appendChild(mk_row('variant', variant_sel));
+
+      const mk_bound = (label, key, placeholder) => {
+        const inp = document.createElement('input');
+        inp.type        = 'number';
+        inp.value       = (box.routing && box.routing[key] != null) ? String(box.routing[key]) : '';
+        inp.placeholder = placeholder;
+        inp.style.cssText = 'width:100%;background:#0f1117;border:1px solid #2a2f45;' +
+          'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+        inp.addEventListener('change', () => set_nl_field(key, inp.value));
+        fields.appendChild(mk_row(label, inp));
+      };
+      mk_bound('min',      'min',      '(blank = auto-track)');
+      mk_bound('max',      'max',      '(blank = auto-track)');
+      mk_bound('midpoint', 'midpoint', '(blank = (min+max)/2)');
+
+      const k_inp = document.createElement('input');
+      k_inp.type        = 'number';
+      k_inp.step        = '0.1';
+      k_inp.min         = '0.01';
+      k_inp.value       = String((box.routing && box.routing.k) ?? 1);
+      k_inp.style.cssText = 'width:100%;background:#0f1117;border:1px solid #2a2f45;' +
+        'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      k_inp.addEventListener('change', () => set_nl_field('k', k_inp.value));
+      fields.appendChild(mk_row('steepness (k)', k_inp));
+
+      const nl_note = document.createElement('div');
+      nl_note.style.cssText = 'font-size:10px;color:#6c72a0;margin-top:4px;line-height:1.4;';
+      nl_note.textContent = 'output is the SCORE, not the scaled input. blank bounds auto-track; pinned bounds clamp past them (confidence / decision) or extrapolate (calibration).';
+      fields.appendChild(nl_note);
     }
   }
   // }}}

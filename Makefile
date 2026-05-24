@@ -54,7 +54,7 @@ else
   CFLAGS = -O2 -Wall -pthread -fPIC
 endif
 
-LDFLAGS = -ldl -pthread -rdynamic
+LDFLAGS = -ldl -lm -pthread -rdynamic
 # -rdynamic exports the runner's symbols to dlopen'd spec.so
 # plugins. Specs need this for the issue-319d self-construction
 # builtins (runtime_create_box / runtime_connect) — those live in

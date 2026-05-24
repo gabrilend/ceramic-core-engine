@@ -39,6 +39,7 @@
 #define SORAMECH_GRAPH_LOADER_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdatomic.h>
 
 #ifdef __cplusplus
@@ -83,7 +84,21 @@ typedef enum {
     ROUTING_RANDOMIZER,
     ROUTING_WEIGHTED,
     ROUTING_DISTRIBUTOR,
+    ROUTING_NONLINEARITY,    /* issue 250 — value-transforming routing */
 } routing_kind_t;
+
+/* Issue 250 — three intent-named nonlinearity variants. The user
+ * picks the variant by what the box is for, not by the underlying
+ * curve's mathematician's name. Under the hood:
+ *   decision    — tanh,    output [-1, 1], midpoint 0
+ *   confidence  — sigmoid, output [0,  1], midpoint 0.5
+ *   calibration — linear,  output [0,  1], no midpoint
+ */
+typedef enum {
+    NL_CONFIDENCE = 0,        /* default for fresh boxes */
+    NL_DECISION,
+    NL_CALIBRATION,
+} nonlinearity_shape_t;
 
 typedef struct {
     routing_kind_t kind;
@@ -106,6 +121,31 @@ typedef struct {
      *   value > t_{n-1}      → "above_<t_{n-1}>". */
     int            n_thresholds;
     const double  *thresholds;
+    /* Issue 250 — nonlinearity routing. Three intent-named
+     * variants (decision / confidence / calibration) plus the
+     * bounds the input is normalised against. Presence-vs-absence
+     * of each bound on the JSON side becomes the per-side
+     * "is_fixed" flag here: when the field was supplied, the
+     * bound is locked and clamping fires past it; when absent,
+     * the bound is auto-tracked via the running cells below.
+     * Same rule for midpoint. The user emits the response (the
+     * smoothed score in [0,1] or [-1,1]) on the box's single
+     * output port; the original input value isn't forwarded. */
+    nonlinearity_shape_t nl_shape;
+    int            nl_min_is_fixed;
+    int            nl_max_is_fixed;
+    int            nl_mid_is_fixed;
+    double         nl_fixed_min;
+    double         nl_fixed_max;
+    double         nl_fixed_mid;
+    double         nl_steepness;          /* k; default 1.0 */
+    /* Auto-tracked running bounds for auto sides. Stored as
+     * uint64 bit patterns so the existing atomic helpers cover
+     * them; the dispatch picker bit-casts to/from double on
+     * every fire. Initialised to ±DBL_MAX (so the first value's
+     * widen always succeeds) on load. */
+    _Atomic uint64_t nl_running_min;
+    _Atomic uint64_t nl_running_max;
 } routing_t;
 /* }}} */
 

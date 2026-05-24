@@ -195,6 +195,22 @@ check_map "multi-band-comparator-route" \
     "tagger_1 → got_1:5" \
     "tagger_2 → (no output)"
 
+# Issue 250 — nonlinearity routing, three intent-named variants.
+# Each fixture pins fixed bounds and feeds a value that lands on
+# a deterministic point of the curve. The downstream tagger
+# echoes the score the routing kind emitted; the test asserts
+# the score value appears in stderr.
+#
+#   confidence : sigmoid, bounds [0, 100], input 50 → 0.5 (midpoint)
+#   decision   : tanh,    bounds [-10, 10], input 0  → 0   (midpoint)
+#   calibration: linear,  bounds [0, 200], input 50 → 0.25 (1/4 of the way through)
+check_map "nonlinearity-confidence" \
+    "tagger → 0.5"
+check_map "nonlinearity-decision" \
+    "tagger → 0"
+check_map "nonlinearity-calibration" \
+    "tagger → 0.25"
+
 check_map "pipeline" \
     "double → 10" \
     "addone → 11" \
