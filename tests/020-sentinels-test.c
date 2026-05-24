@@ -144,6 +144,73 @@ static int test_ref_store(void)
 }
 /* }}} */
 
+/* {{{ $ref refcount: dec to zero frees the chunk */
+static int test_ref_refcount_dec(void)
+{
+    sentinel_ref_store_clear();
+    uintptr_t p = sentinel_ref_alloc("hello", 5);
+    ASSERT(p != 0);
+    int len = 0;
+    ASSERT(sentinel_ref_lookup(p, &len) != NULL);
+    ASSERT(len == 5);
+
+    /* Initial refcount is 1. A single dec brings it to 0 and the
+     * chunk is freed; lookup misses. */
+    sentinel_ref_dec(p);
+    ASSERT(sentinel_ref_lookup(p, &len) == NULL);
+    return 1;
+}
+/* }}} */
+
+/* {{{ $ref refcount: inc balances dec */
+static int test_ref_refcount_inc_dec(void)
+{
+    sentinel_ref_store_clear();
+    uintptr_t p = sentinel_ref_alloc("balanced", 8);
+    ASSERT(p != 0);
+
+    /* refcount 1 → 3 via two incs. Two decs leaves it at 1; chunk
+     * still present. Third dec brings it to 0; chunk freed. */
+    sentinel_ref_inc(p);
+    sentinel_ref_inc(p);
+    sentinel_ref_dec(p);
+    sentinel_ref_dec(p);
+    int len = 0;
+    ASSERT(sentinel_ref_lookup(p, &len) != NULL);
+    ASSERT(len == 8);
+
+    sentinel_ref_dec(p);
+    ASSERT(sentinel_ref_lookup(p, &len) == NULL);
+    return 1;
+}
+/* }}} */
+
+/* {{{ $ref slot reuse — a freed slot is reused by the next alloc */
+static int test_ref_slot_reuse(void)
+{
+    sentinel_ref_store_clear();
+    uintptr_t p1 = sentinel_ref_alloc("aaa", 3);
+    uintptr_t p2 = sentinel_ref_alloc("bbb", 3);
+    ASSERT(p1 != 0 && p2 != 0 && p1 != p2);
+
+    /* Free p1. Allocate p3 — it should land in the same table
+     * slot p1 occupied (not extend the table further). We can't
+     * assert the slot index directly through the public API, but
+     * we can assert that after freeing one and allocating one,
+     * lookups behave: p1 misses, p2 hits, p3 hits. */
+    sentinel_ref_dec(p1);
+    int len = 0;
+    ASSERT(sentinel_ref_lookup(p1, &len) == NULL);
+    ASSERT(sentinel_ref_lookup(p2, &len) != NULL);
+
+    uintptr_t p3 = sentinel_ref_alloc("ccc", 3);
+    ASSERT(p3 != 0);
+    ASSERT(sentinel_ref_lookup(p3, &len) != NULL);
+    ASSERT(len == 3);
+    return 1;
+}
+/* }}} */
+
 /* {{{ Capability validation */
 static int test_validate(void)
 {
@@ -188,6 +255,9 @@ int main(void)
     RUN(detect_round_trip_function_pointer_stub);
     RUN(detect_skips_plain_objects);
     RUN(ref_store);
+    RUN(ref_refcount_dec);
+    RUN(ref_refcount_inc_dec);
+    RUN(ref_slot_reuse);
     RUN(validate);
     RUN(kind_names);
     printf("\n  %d passed, %d failed\n",

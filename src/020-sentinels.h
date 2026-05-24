@@ -81,20 +81,40 @@ void sentinel_write_function_pointer_stub(json_writer_t *w,
                                           const char *signature);
 /* }}} */
 
-/* {{{ $ref bytes store (process-wide, leak-per-run)
+/* {{{ $ref bytes store (process-wide, refcounted)
  *
  * `sentinel_ref_alloc` copies `bytes` into a process-wide pool and
  * returns a chunk pointer that the producer embeds in its sentinel.
- * The consumer's `sentinel_ref_lookup` returns the same byte
- * pointer.
+ * Each allocation starts with refcount = 1 (the producer's own
+ * reference); the chunk's bytes stay alive until the refcount
+ * reaches 0.
  *
- * Slice-1 lifetime model: bytes live until process exit (or until
- * `sentinel_ref_store_clear()` is called by the test harness).
- * Proper refcount-driven release tied to consumer reads is a
- * follow-on — the issue documents the lifetime concern but the
- * simpler shape unblocks end-to-end testing today. */
+ * Lifetime protocol:
+ *   - Producer: `alloc` → refcount=1; emit the sentinel; when the
+ *     producer knows the value will no longer be referenced, call
+ *     `dec` to release the initial reference. For dispatch-driven
+ *     fan-out, the producer can `inc` once per consumer if it
+ *     knows the fan-out count, then dec its own ref; or it can
+ *     hold the initial ref until end-of-run and call
+ *     `sentinel_ref_store_clear` for bulk teardown.
+ *   - Consumer: `lookup` returns the bytes without changing
+ *     refcount. A consumer that wants to release a transferred
+ *     ref calls `dec`.
+ *
+ * `sentinel_ref_lookup` is read-only — it does not touch the
+ * refcount. The refcount machinery is opt-in: callers that don't
+ * use inc/dec get the old leak-per-run behaviour with a single
+ * `sentinel_ref_store_clear` at end of run, exactly as before.
+ *
+ * Slot reuse: when a chunk's refcount hits 0 its bytes are freed
+ * and its slot in the internal table becomes available for the
+ * next `alloc`. Long-running processes that allocate many $refs
+ * over time stay bounded in memory provided the producer calls
+ * `dec` on chunks it no longer needs. */
 uintptr_t        sentinel_ref_alloc (const void *bytes, int len);
 const void      *sentinel_ref_lookup(uintptr_t chunk_ptr, int *out_len);
+void             sentinel_ref_inc   (uintptr_t chunk_ptr);
+void             sentinel_ref_dec   (uintptr_t chunk_ptr);
 void             sentinel_ref_store_clear(void);
 /* }}} */
 
