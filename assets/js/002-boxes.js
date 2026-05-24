@@ -19,11 +19,15 @@ const Boxes = (() => {
   // KIND_COLOR drives the box header colour on the canvas. `read`
   // keeps the green that data boxes used to wear; `write` takes a
   // warm cheddar so source-of-value and sink-to-disk read as
-  // clearly different at a glance (issue 229).
+  // clearly different at a glance (issue 229). `map` (issue 248,
+  // encapsulated sub-map) takes a violet — different enough from
+  // the call/read/write triad that the reader sees "this is a
+  // different category of box" at a glance.
   const KIND_COLOR = {
     call:  '#4a9eff',
     read:  '#4caf7d',
     write: '#d4762a',
+    map:   '#a96dd8',
   };
 
   // Issue 235: input ports with a literal value show the value on the
@@ -42,6 +46,7 @@ const Boxes = (() => {
     write:      'write',
     comparator: 'comparator',
     iterator:   'iterator',
+    map:        'sub-map',
   };
 
   // Comparator branch colors: lt=orange, eq=blue, gt=green
@@ -62,6 +67,13 @@ const Boxes = (() => {
   function default_header(box) {
     if (box.kind === 'call' && box.ref) {
       const parts = String(box.ref).split('/');
+      return parts[parts.length - 1] || box.ref;
+    }
+    // Encapsulated map (issue 248): basename of the sub-map's
+    // ref reads more usefully than the literal "sub-map" generic,
+    // mirroring how call boxes show their source-file basename.
+    if (box.kind === 'map' && box.ref) {
+      const parts = String(box.ref).split('/').filter(s => s.length > 0);
       return parts[parts.length - 1] || box.ref;
     }
     return KIND_HEADER[box.kind] || box.kind || box.id;
@@ -171,11 +183,16 @@ const Boxes = (() => {
     // Output rows are decided by the unified routing kind (issue
     // 233). Sink boxes (has_output === false) override every kind
     // with zero outputs. Otherwise: plain = 1 dot, comparator = 3
-    // (lt/eq/gt), iterator = routing.n_outputs.
+    // (lt/eq/gt), iterator = routing.n_outputs. Encapsulated map
+    // boxes (issue 248) are the documented exception to single-
+    // output-per-box: n_out follows the declared `outputs` array
+    // (zero allowed — a sub-map with only side-effecting writers).
     const rk = box.routing && box.routing.kind;
     let n_out;
     if (box.has_output === false) {
       n_out = 0;
+    } else if (box.kind === 'map') {
+      n_out = (box.outputs || []).length;
     } else if (rk === 'iterator') {
       n_out = (box.routing && box.routing.n_outputs) || 1;
     } else if (rk === 'comparator') {
@@ -210,6 +227,18 @@ const Boxes = (() => {
       // sink box — function has no return values (issue 226). No output
       // port, no wire-grab target, nothing for the inspector to render.
       out_pts = [];
+    } else if (box.kind === 'map') {
+      // Encapsulated sub-map (issue 248): one output port per
+      // entry in the declared outputs array. The from_branch
+      // string on a wire leaving the encap is matched against
+      // these names at graph load to find the corresponding
+      // externally-consumed write box inside the sub-map.
+      const outs = box.outputs || [];
+      out_pts = outs.map((o, i) => ({
+        name: o.name, side: 'output',
+        x: bx + BOX_W,
+        y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
+      }));
     } else if (rk === 'iterator') {
       // iterator routing (issue 233): n_outputs ports named
       // `out_0` through `out_<n-1>`. The naming is fixed by the

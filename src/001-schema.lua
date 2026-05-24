@@ -11,8 +11,20 @@ local M = {}
 -- `call` runs a language function. `read` and `write` are dispatch-
 -- layer IO primitives (issue 229) — `read` emits an inline literal
 -- or file contents, `write` commits a `value` to disk and emits a
--- boolean done signal.
-local valid_kinds = { call = true, read = true, write = true }
+-- boolean done signal. `map` is the encapsulated-sub-map box from
+-- issue 248: it names a sub-map directory via `ref`, declares its
+-- own input and output ports, and is replaced at graph-load by
+-- the inlined sub-map's boxes via the encapsulation splice.
+local valid_kinds = { call = true, read = true, write = true, map = true }
+-- }}}
+
+-- {{{ valid_external_kinds (issue 248)
+-- A `read` box marked externally-supplied OR a `write` box marked
+-- externally-consumed carries an `external` block whose `kind`
+-- picks one of three binding shapes. The C loader's
+-- parse_external_binding is the canonical parser; this table is
+-- the lexical gate.
+local valid_external_kinds = { positional = true, numbered = true, named = true }
 -- }}}
 
 -- {{{ valid_branches
@@ -56,11 +68,18 @@ local function validate_connection(c, i, errors)
     if c.from_box == nil then
         err(errors, "connection[" .. i .. "] missing 'from_box'")
     end
+    -- from_branch accepts: nil, the three comparator branches,
+    -- iterator slot names, OR any non-empty string (issue 248 —
+    -- encapsulated map boxes use the from_branch slot to carry a
+    -- declared output port name; the graph-level loader's
+    -- output-side splice is the source of truth for whether the
+    -- port actually exists on the producer).
     if c.from_branch ~= nil
        and not valid_branches[c.from_branch]
-       and not is_iterator_branch_name(c.from_branch) then
+       and not is_iterator_branch_name(c.from_branch)
+       and not (type(c.from_branch) == "string" and #c.from_branch > 0) then
         err(errors, "connection[" .. i .. "] 'from_branch' must be nil, " ..
-            "'lt'/'eq'/'gt' (comparator), or 'out_<n>' (iterator)")
+            "'lt'/'eq'/'gt', 'out_<n>', or a non-empty string")
     end
     if c.to_box == nil then
         err(errors, "connection[" .. i .. "] missing 'to_box'")
@@ -85,7 +104,7 @@ function M.validate_box(box)
         err(errors, "missing or non-string 'label'")
     end
     if box.kind == nil or not valid_kinds[box.kind] then
-        err(errors, "missing or invalid 'kind' (must be 'call', 'read', or 'write')")
+        err(errors, "missing or invalid 'kind' (must be 'call', 'read', 'write', or 'map')")
     end
 
     if box.kind == "call" then
@@ -197,6 +216,57 @@ function M.validate_box(box)
         end
         if box.inputs ~= nil and type(box.inputs) ~= "table" then
             err(errors, "'inputs' must be an array")
+        end
+        if box.connections ~= nil then
+            for i, c in ipairs(box.connections) do
+                validate_connection(c, i, errors)
+            end
+        end
+        -- Issue 248: optional `external` block. Marks a read box as
+        -- externally-supplied (its value comes from the encapsulating
+        -- parent's wire) or a write box as externally-consumed (its
+        -- emitted value surfaces back to the parent on a wire). The
+        -- block carries a binding kind plus either a name or an
+        -- index, matched by the loader's encapsulation splice.
+        if box.external ~= nil then
+            if type(box.external) ~= "table" then
+                err(errors, "'external' must be a table")
+            else
+                if type(box.external.kind) ~= "string"
+                   or not valid_external_kinds[box.external.kind] then
+                    err(errors, "'external.kind' must be 'positional', 'numbered', or 'named'")
+                elseif box.external.kind == "named" then
+                    if type(box.external.name) ~= "string" or #box.external.name == 0 then
+                        err(errors, "'external.kind' = 'named' requires non-empty 'external.name'")
+                    end
+                else
+                    if type(box.external.index) ~= "number"
+                       or box.external.index < 0
+                       or box.external.index ~= math.floor(box.external.index) then
+                        err(errors, "'external.kind' = '" .. box.external.kind ..
+                            "' requires non-negative integer 'external.index'")
+                    end
+                end
+            end
+        end
+    end
+
+    -- Issue 248: encapsulated sub-map box. `ref` points at a sub-map
+    -- directory (relative to the parent map, or absolute). `inputs`
+    -- and `outputs` declare the encap box's port set on the canvas;
+    -- they're matched at graph load to the sub-map's
+    -- externally-supplied / externally-consumed marked boxes by
+    -- name or index. The C loader's encapsulation pass is the
+    -- canonical resolver; this schema only checks lexical shape.
+    if box.kind == "map" then
+        if box.ref == nil or type(box.ref) ~= "string" or #box.ref == 0 then
+            err(errors, "map box missing 'ref' (path to sub-map directory)")
+        end
+        if box.inputs ~= nil and type(box.inputs) ~= "table" then
+            err(errors, "'inputs' must be an array")
+        end
+        if box.outputs ~= nil and type(box.outputs) ~= "table" then
+            err(errors, "'outputs' must be an array")
         end
         if box.connections ~= nil then
             for i, c in ipairs(box.connections) do

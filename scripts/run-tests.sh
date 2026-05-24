@@ -225,6 +225,29 @@ check_map "319-cross-lang-create" \
 check_map "248-encap-input-only" \
     "encap__writer → true"
 
+# Issue 248 output-side encapsulation. The encap declares an output
+# port; the sub-map's externally-consumed write box emits its
+# `value` bytes downstream (rather than the usual "true" success
+# string) and the encapsulation pass appends the parent's downstream
+# wire onto that write box's connections. The renamed sub-writer
+# emits the payload value, and the parent's writer then reports
+# "true" after writing that value to disk.
+check_map "248-encap-output-only" \
+    "encap__external_writer → round-trip-through-encap" \
+    "parent_writer → true"
+
+# Issue 248 recursion. A two-level nesting: the parent encapsulates
+# the outer sub-map, which itself encapsulates the inner sub-map.
+# The inline-encapsulations pass has to iterate twice (once per
+# nesting level), and both the input- and output-side splices have
+# to compose through the prefixed-twice ids. All three writes report
+# the same value, proving the splice carried it through both
+# boundaries.
+check_map "248-encap-recursive" \
+    "encap_outer__encap_inner__inner_writer → twice-nested-greeting" \
+    "encap_outer__outer_writer → twice-nested-greeting" \
+    "parent_writer → true"
+
 # {{{ encap_input_only_file_check() — input-side encap reaches disk
 encap_input_only_file_check() {
     local file="/tmp/soramech-248-encap-out.txt"
@@ -250,9 +273,76 @@ encap_input_only_file_check() {
 }
 # }}}
 
+# {{{ encap_recursive_file_check() — recursion exercises every disk
+# artifact across both nesting levels. The inner sub-map's writer
+# writes one file, the outer sub-map's writer writes another, and
+# the parent's writer writes a third — all three should hold the
+# same byte sequence, proving the value flowed from the parent
+# through both encapsulation boundaries.
+encap_recursive_file_check() {
+    local inner_file="/tmp/soramech-248-encap-recursive-inner.txt"
+    local outer_file="/tmp/soramech-248-encap-recursive-outer.txt"
+    local parent_file="/tmp/soramech-248-encap-recursive-parent.txt"
+    rm -f "$inner_file" "$outer_file" "$parent_file"
+    "$DIR/soramech-pool" "$DIR/tests/maps/248-encap-recursive" >/dev/null 2>&1
+    printf "  %-44s " "encap recursive write outputs"
+    local detail=""
+    local want="twice-nested-greeting"
+    [[ -f "$inner_file"  && "$(cat "$inner_file")"  == "$want" ]] || \
+        detail+="inner='$(cat "$inner_file" 2>/dev/null)' "
+    [[ -f "$outer_file"  && "$(cat "$outer_file")"  == "$want" ]] || \
+        detail+="outer='$(cat "$outer_file" 2>/dev/null)' "
+    [[ -f "$parent_file" && "$(cat "$parent_file")" == "$want" ]] || \
+        detail+="parent='$(cat "$parent_file" 2>/dev/null)' "
+    if [[ -z "$detail" ]]; then
+        printf "ok\n"
+        pass=$((pass + 1))
+    else
+        printf "FAIL — %s\n" "$detail"
+        fail=$((fail + 1))
+        failures+=("encap-recursive: $detail")
+    fi
+}
+# }}}
+
+# {{{ encap_output_only_file_check() — output-side encap reaches both
+# the sub-map's disk artifact AND the parent's disk artifact via the
+# spliced wire. The two files should be byte-identical because the
+# write box does its disk write THEN pushes the same value bytes
+# downstream to the parent's writer.
+encap_output_only_file_check() {
+    local sub_file="/tmp/soramech-248-encap-output-sub.txt"
+    local out_file="/tmp/soramech-248-encap-output-out.txt"
+    rm -f "$sub_file" "$out_file"
+    "$DIR/soramech-pool" "$DIR/tests/maps/248-encap-output-only" >/dev/null 2>&1
+    printf "  %-44s " "encap output-only write outputs"
+    local sub_ok=0 out_ok=0 detail=""
+    if [[ -f "$sub_file" && "$(cat "$sub_file")" == "round-trip-through-encap" ]]; then
+        sub_ok=1
+    else
+        detail+="sub-file=${sub_file}:'$(cat "$sub_file" 2>/dev/null)' "
+    fi
+    if [[ -f "$out_file" && "$(cat "$out_file")" == "round-trip-through-encap" ]]; then
+        out_ok=1
+    else
+        detail+="out-file=${out_file}:'$(cat "$out_file" 2>/dev/null)' "
+    fi
+    if [[ $sub_ok -eq 1 && $out_ok -eq 1 ]]; then
+        printf "ok\n"
+        pass=$((pass + 1))
+    else
+        printf "FAIL — %s\n" "$detail"
+        fail=$((fail + 1))
+        failures+=("encap-output: $detail")
+    fi
+}
+# }}}
+
 pipeline_output_check
 compile_pipeline_check
 encap_input_only_file_check
+encap_output_only_file_check
+encap_recursive_file_check
 # }}}
 
 # {{{ parser_tests() — issue 232: unit tests for langs/<lang>/parser.js

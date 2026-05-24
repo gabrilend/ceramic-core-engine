@@ -200,6 +200,20 @@ typedef struct box {
     /* Common */
     int            n_inputs;
     input_decl_t  *inputs;
+
+    /* Issue 248 — declared output ports for encapsulated maps.
+     * Meaningful only on BOX_MAP records (the documented exception
+     * to issue 218's "single output per box" rule). Each entry
+     * declares one output port; the parent wires its own outgoing
+     * connections from the encap box with `from_branch` set to the
+     * port's name. The encapsulation pass matches each such
+     * connection to an externally-consumed write box inside the
+     * sub-map by name (named binding) or by port index
+     * (positional / numbered) and splices the wire onto that write
+     * box's connections array. After the splice the BOX_MAP record
+     * is inert. Other box kinds leave these at 0 / NULL. */
+    int            n_outputs;
+    input_decl_t  *outputs;
     /* Connections grow at runtime via runtime_connect (issue 319d).
      * Writers allocate a new array, copy + append, atomic-store the
      * new connections pointer, then atomic-store the new count;

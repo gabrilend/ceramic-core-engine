@@ -1,0 +1,4 @@
+{
+  "name": "248-encap-output-sub",
+  "description": "Sub-map: one externally-supplied read box (named binding 'msg') feeds an externally-consumed write box (named binding 'result'). The write box keeps a `path` so it still lands its own file on disk; in addition the encapsulation pass attaches the parent's downstream consumer onto its connections array so the value also surfaces to the parent."
+}

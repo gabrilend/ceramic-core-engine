@@ -1,0 +1,14 @@
+{
+  "id": "encap_outer",
+  "kind": "map",
+  "ref": "../248-encap-recursive-outer",
+  "inputs": [
+    { "name": "msg",    "type": "string" }
+  ],
+  "outputs": [
+    { "name": "result", "type": "string" }
+  ],
+  "connections": [
+    { "to_box": "parent_writer", "to_input": "value", "from_branch": "result" }
+  ]
+}

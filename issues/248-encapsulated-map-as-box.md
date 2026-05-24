@@ -1,46 +1,109 @@
 # 248 — Encapsulated map as box
 
 ## Status
-in progress · input-side load-time inlining shipped; output-side
-(ext-consumed write boxes), editor UI, and recursion across mixed
-ext-consumed wires deferred
+in progress · runtime (input-side and output-side load-time
+inlining), recursion verification, and editor UI all shipped;
+the remaining open question is the multi-output fixture (the
+runtime supports it; no fixture exercises it yet)
 
 ## Current behavior
 
-Input-side encapsulation runs at graph load. The loader recognizes
-`kind: "map"` with a `ref` to a sub-map directory. A new pass between
-`load_boxes` and `resolve_topology` walks every BOX_MAP record,
-loads the sub-map's boxes into the parent's arena, prefix-renames
-their ids with `<encap_id>__<sub_id>`, splices them into the parent's
-flat box list, then rewires each parent producer's connection that
-targeted the encapsulating box. The rewire splices THROUGH the
-externally-supplied data box: each parent wire to `encap.port` is
-replaced with copies pointing to the matching data box's
-downstreams, preserving each from_branch tag. Externally-supplied
-data boxes are matched to the encapsulating box's input ports by
-the issue's three binding kinds (positional / numbered by index,
-named by string).
+Encapsulation runs at graph load in both directions. The loader
+recognizes `kind: "map"` with a `ref` to a sub-map directory. A
+new pass between `load_boxes` and `resolve_topology` walks every
+BOX_MAP record, loads the sub-map's boxes into the parent's arena,
+prefix-renames their ids with `<encap_id>__<sub_id>`, splices them
+into the parent's flat box list, then rewrites the wires in both
+directions:
 
-After inlining, the encap box stays in the index but is inert
+**Input side.** Each parent producer's connection that targets the
+encapsulating box is replaced with copies pointing to the matching
+externally-supplied read box's downstreams — preserving each
+from_branch tag. The binding follows the issue's three kinds
+(positional / numbered by index, named by string). The ext-supplied
+read box itself is orphaned (its outgoing connections were absorbed
+into the parent producer; the cache pass skips it so the "neither
+value nor path" check doesn't reject the value-less shape).
+
+**Output side.** Each wire the parent drew leaving the encap box
+gets matched (by `from_branch` against the encap's declared
+`outputs` array) to an externally-consumed write box inside the
+sub-map and appended to that write box's connections array. The
+externally-consumed write box's dispatch path emits its `value`
+input bytes downstream rather than the literal `"true"` success
+string, so the spliced wire carries the actual computed value to
+the parent's consumer. The disk write at `path` still happens —
+the two destinations are independent. The "set path:null to opt
+out of the disk write" path described above lands with the editor
+schema slice once the path input is allowed to be optional.
+
+After both splices, the encap box stays in the index but is inert
 (connections cleared, `ref` stripped — the loader skips it on
-subsequent passes, dispatch's BOX_MAP case is a logged no-op). The
-ext-supplied data box is also orphaned (its outgoing connections
-were absorbed into the parent producer; the cache pass skips it so
-the "neither value nor path" check doesn't reject the value-less
-shape).
+subsequent passes, dispatch's BOX_MAP case is a logged no-op).
 
-The end-to-end fixture `tests/maps/248-encap-input-only/` proves
-the splice reaches disk: a parent read box wires
-`"encapsulated-greeting"` to a BOX_MAP whose sub-map has one
-externally-supplied data box feeding a write box; the parent's
-bytes land in `/tmp/soramech-248-encap-out.txt`.
+Three end-to-end fixtures prove the splices reach disk:
 
-Output-side encapsulation (externally-consumed write boxes
-surfacing as the encap's output ports) is not yet wired. Wires
-the user drew from `encap.port_x` to a parent consumer don't fire
-in this slice. The editor toggles, file-browser Encapsulate
-action, and the multi-output exception to issue 218 also remain
-ahead.
+- `tests/maps/248-encap-input-only/` — input-side only. A parent
+  read box wires `"encapsulated-greeting"` to a BOX_MAP whose
+  sub-map has one externally-supplied read box feeding a write
+  box; the parent's bytes land in `/tmp/soramech-248-encap-out.txt`.
+- `tests/maps/248-encap-output-only/` — both sides. A parent
+  read box wires `"round-trip-through-encap"` into the encap;
+  the sub-map's externally-consumed write box surfaces the value
+  back onto the encap's output port; a parent-side write box
+  receives the value and lands it on disk. Both the sub-map's
+  write and the parent's write produce identical files,
+  confirming the value flowed through the encapsulation in
+  both directions.
+- `tests/maps/248-encap-recursive/` — two levels of nesting. The
+  parent encapsulates an outer sub-map; the outer sub-map itself
+  encapsulates an inner sub-map. The inline-encapsulations pass
+  iterates twice and both input- and output-side splices compose
+  through the prefixed-twice ids
+  (`encap_outer__encap_inner__inner_writer` is the
+  doubly-namespaced inner writer). All three writers land
+  identical bytes on disk.
+
+Multi-output (more than one externally-consumed write box per
+encap) is supported by the schema — `outputs` is an array — but
+isn't covered by a fixture yet.
+
+**Editor side** also lands in this slice:
+
+- The **inspector kind dropdown** grows a fourth option, `map`.
+  Selecting it switches the inspector to a specialised view
+  (`render_map_box`) that shows the sub-map's `ref` path plus an
+  editable list of input + output ports. The single-output rule
+  on every other kind doesn't apply here; the user can add or
+  remove output entries directly.
+- The inspector for `read` and `write` boxes grows an
+  **externally-supplied / externally-consumed toggle**
+  (`render_external_binding`). Off by default; when on, a
+  binding-kind dropdown (named / positional / numbered) appears,
+  followed by either a name input or an integer index input.
+  The block written to the box record is the same shape the C
+  loader's `parse_external_binding` reads.
+- The **map picker rows** grow an inline `encap` button. Clicking
+  it fetches the target sub-map's boxes via the new
+  `API.list_boxes_for(name)` helper, derives the encap box's
+  `inputs` and `outputs` arrays from the sub-map's
+  externally-marked read and write boxes, and drops a fresh
+  `kind: "map"` box at the current viewport's center. The
+  user can then wire it in like any other box. The button is
+  suppressed for rows whose server URL doesn't match the
+  picker's, because cross-server encapsulation has no clean
+  ref-string convention.
+- The **canvas** colours encap boxes violet (distinct from the
+  blue/green/cheddar triad of call/read/write) and lays out
+  output ports per the declared `outputs` array. The kind badge
+  in the box header reads "MAP" so encaps are recognisable at a
+  glance.
+- The **Lua schema** (`src/001-schema.lua`) gains
+  `kind: "map"`, the `external` block on read/write boxes, and a
+  loosened `from_branch` rule that accepts any non-empty string
+  (encap output ports use the slot to carry a port name). The
+  schema accepts every existing fixture shape and rejects the
+  bad ones with precise diagnostics.
 
 ## Concept
 

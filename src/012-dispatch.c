@@ -1075,7 +1075,17 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
  * On success, the box pushes the boolean string `"true"` to its
  * outgoing connections. A `write` box with no downstream wire
  * still produces the boolean; the dispatch fans to zero consumers
- * and the value is discarded (unwired-output rule). */
+ * and the value is discarded (unwired-output rule).
+ *
+ * Issue 248 — externally-consumed write boxes (inside an
+ * encapsulated sub-map) push the `value` input bytes downstream
+ * INSTEAD of "true", so the wire the encapsulation pass spliced
+ * onto this box carries the actual computed value into the
+ * parent map. The disk write at `path` still happens — the two
+ * destinations are independent. The "opt out of the disk write
+ * by setting path:null" path described in issue 248 lands with
+ * the editor-UI slice once the path input can be schema-optional;
+ * for now an ext-consumed write box must keep its path. */
 static int do_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
                         char *out_buf, int out_capacity, int *out_size)
 {
@@ -1141,9 +1151,23 @@ static int do_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     }
     release_inputs(ctx, b->n_inputs, bufs, buf_chunks);
 
-    if (rc == 0 && out_buf && out_capacity >= 4) {
-        memcpy(out_buf, "true", 4);
-        *out_size = 4;
+    if (rc == 0 && out_buf) {
+        if (b->external.kind != EXTERNAL_NONE) {
+            /* Ext-consumed: emit the value bytes downstream so the
+             * encapsulating splice carries the value into the
+             * parent map. Truncate if the consumer's slot is
+             * smaller than the value — same shape as a too-large
+             * call-box return. */
+            int want = sizes[value_idx];
+            if (want > out_capacity) want = out_capacity;
+            if (want > 0) memcpy(out_buf, datas[value_idx], (size_t)want);
+            *out_size = want;
+        } else if (out_capacity >= 4) {
+            memcpy(out_buf, "true", 4);
+            *out_size = 4;
+        } else {
+            *out_size = 0;
+        }
     } else {
         *out_size = 0;
     }

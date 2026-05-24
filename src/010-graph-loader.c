@@ -374,6 +374,57 @@ static int parse_inputs(json_node_t *node, box_t *box,
 }
 /* }}} */
 
+/* {{{ parse_outputs() — output port array, issue 248 BOX_MAP only
+ *
+ * Mirrors parse_inputs but with the smaller field set output ports
+ * carry — name and type. No literal, no optional, no custom shim;
+ * an output port is just a labelled wire endpoint on the encap
+ * box. Absent or empty array means the encap exposes no outputs,
+ * which is legal (a sub-map that's purely side-effecting from the
+ * parent's perspective). */
+static int parse_outputs(json_node_t *node, box_t *box,
+                         const char *box_id, char **err)
+{
+    if (!node) {
+        box->n_outputs = 0;
+        box->outputs   = NULL;
+        return 0;
+    }
+    if (json_kind(node) != JSON_ARRAY) {
+        *err = err_fmt("box '%s': 'outputs' is not an array", box_id);
+        return -1;
+    }
+    int n = json_array_size(node);
+    box->n_outputs = n;
+    if (n == 0) { box->outputs = NULL; return 0; }
+
+    box->outputs = calloc((size_t)n, sizeof(input_decl_t));
+    if (!box->outputs) {
+        *err = err_fmt("out of memory");
+        return -1;
+    }
+    for (int i = 0; i < n; i++) {
+        json_node_t *item = json_array_at(node, i);
+        if (!item || json_kind(item) != JSON_OBJECT) {
+            *err = err_fmt("box '%s': output port %d is not an object",
+                           box_id, i);
+            return -1;
+        }
+        json_node_t *name_n = json_object_get(item, "name");
+        if (!name_n || json_kind(name_n) != JSON_STRING) {
+            *err = err_fmt("box '%s': output port %d missing 'name'",
+                           box_id, i);
+            return -1;
+        }
+        box->outputs[i].name = json_string_value(name_n);
+        json_node_t *type_n = json_object_get(item, "type");
+        box->outputs[i].type = (type_n && json_kind(type_n) == JSON_STRING)
+                                 ? json_string_value(type_n) : "string";
+    }
+    return 0;
+}
+/* }}} */
+
 /* {{{ parse_connections() — outgoing connection array */
 static int parse_connections(json_node_t *node, box_t *box,
                              const char *box_id, char **err)
@@ -652,13 +703,23 @@ static int parse_box_file(graph_t *g, box_t *box,
     } else if (box->kind == BOX_MAP) {
         /* Issue 248 — encapsulated sub-map. `ref` names the sub-map
          * directory relative to the parent map directory (or absolute).
-         * The encapsulation pass loads it and splices its boxes in. */
+         * The encapsulation pass loads it and splices its boxes in.
+         *
+         * `outputs` (optional) declares the encap box's output ports.
+         * Parent wires leaving the encap carry `from_branch` set to
+         * one of these names; the encapsulation pass uses the name to
+         * find the externally-consumed write box inside the sub-map.
+         * Absent / empty means the encap exposes no outputs, which is
+         * legal — a sub-map that's purely side-effecting from the
+         * parent's perspective. */
         json_node_t *ref_n = json_object_get(n, "ref");
         if (!ref_n || json_kind(ref_n) != JSON_STRING) {
             *err = err_fmt("%s: map box '%s' missing 'ref'", path, box->id);
             return -1;
         }
         box->ref = json_string_value(ref_n);
+        if (parse_outputs(json_object_get(n, "outputs"),
+                          box, box->id, err) != 0) return -1;
     }
     /* write boxes: nothing additional beyond inputs. */
 
@@ -1145,6 +1206,59 @@ static int find_input_port_index(const box_t *b, const char *port_name)
 }
 /* }}} */
 
+/* {{{ find_output_port_index() — encap output-port name → index
+ *
+ * Mirrors find_input_port_index but walks the encap's outputs[] list
+ * instead. A NULL or empty `from_branch` is treated as "the first
+ * output port" — a friendly default for the common single-output
+ * case, so the editor can leave the field unset on encap boxes that
+ * declare just one output. Returns -1 if no match and the encap has
+ * more than one declared output (forcing the caller to surface a
+ * precise error). */
+static int find_output_port_index(const box_t *encap, const char *port_name)
+{
+    if (encap->n_outputs <= 0) return -1;
+    if (!port_name || !port_name[0]) return 0;
+    for (int i = 0; i < encap->n_outputs; i++) {
+        if (strcmp(encap->outputs[i].name, port_name) == 0) return i;
+    }
+    return -1;
+}
+/* }}} */
+
+/* {{{ find_ext_consumed_for_port() — locate the sub-map's write box
+ *
+ * Mirror of find_ext_supplied_for_port for the output side. Given the
+ * encap box and one of its output port indices, scan the sub-map's
+ * boxes for the externally-consumed write box that binds to it. The
+ * matching rules are symmetric with the input side:
+ *
+ *   positional / numbered — W.external.index == port_idx
+ *   named                 — W.external.name  == encap.outputs[port_idx].name
+ *
+ * Returns NULL if no write box matches — the caller turns that into
+ * a precise load-time error so a sub-map missing an ext-consumed
+ * port doesn't silently drop the wire. */
+static box_t *find_ext_consumed_for_port(box_t **sub_boxes, int sub_n,
+                                         const box_t *encap, int port_idx)
+{
+    if (port_idx < 0 || port_idx >= encap->n_outputs) return NULL;
+    const char *port_name = encap->outputs[port_idx].name;
+    for (int i = 0; i < sub_n; i++) {
+        box_t *w = sub_boxes[i];
+        if (w->kind != BOX_WRITE) continue;
+        if (w->external.kind == EXTERNAL_NONE) continue;
+        if (w->external.kind == EXTERNAL_NAMED) {
+            if (w->external.name && port_name &&
+                strcmp(w->external.name, port_name) == 0) return w;
+        } else {
+            if (w->external.index == port_idx) return w;
+        }
+    }
+    return NULL;
+}
+/* }}} */
+
 /* {{{ find_ext_supplied_for_port() — locate the sub-map's data box
  *
  * Given the encapsulating BOX_MAP and one of its input port indices,
@@ -1246,11 +1360,12 @@ static int load_sub_map_boxes(graph_t *g, const char *sub_dir,
 
 /* {{{ inline_one_encapsulation()
  *
- * Splice the sub-map at encap->ref into the parent graph, replacing the
- * BOX_MAP at encap_idx with its sub-map boxes. Input-side rewiring
- * only this slice: each parent wire targeting encap.port_a is replaced
- * with copies pointing to the downstream consumers of the matching
- * externally-supplied data box, preserving from_branch tags.
+ * Splice the sub-map at encap->ref into the parent graph, replacing
+ * the BOX_MAP at encap_idx with its sub-map boxes. Both directions
+ * of rewiring run here: parent wires landing on the encap's input
+ * ports get redirected through ext-supplied read boxes, and parent
+ * wires leaving the encap's output ports get appended to the matching
+ * ext-consumed write box's connections array.
  *
  * Steps:
  *   1. Resolve sub_dir relative to parent's map_dir.
@@ -1258,15 +1373,19 @@ static int load_sub_map_boxes(graph_t *g, const char *sub_dir,
  *   3. Prefix-rename every sub-box id with `<encap_id>__<sub_id>`,
  *      then rewrite each sub-box's connections.to_box strings that
  *      reference sibling sub-boxes to the renamed form.
- *   4. For each parent producer, walk its connections; any that target
- *      encap_id get replaced (1→N) by the corresponding ext-supplied
- *      data box's downstream targets.
- *   5. Append sub-boxes to parent's box array (grow capacity if needed).
- *   6. Orphan the encap box (clear its connections; kind stays BOX_MAP
- *      so dispatch's no-op case never confuses it for a live producer).
- *
- * Output-side (externally-consumed write boxes) is deferred to the
- * next slice. Wires originally leaving encap.port_x are dropped.
+ *   4. INPUT-side: for each parent producer, walk its connections;
+ *      any that target encap_id get replaced (1→N) by the
+ *      corresponding ext-supplied read box's downstream targets.
+ *   5. Append sub-boxes to parent's box array (grow capacity if
+ *      needed) — appending must precede the output-side splice so
+ *      the write boxes we're attaching wires to are graph-resident.
+ *   6. OUTPUT-side: for each wire on the encap's own connections
+ *      array, look up the from_branch in the encap's outputs[]
+ *      declaration, find the matching ext-consumed write box, and
+ *      append the wire to that write box's connections array.
+ *   7. Orphan the encap box (clear its now-spliced connections; kind
+ *      stays BOX_MAP so the dispatch's no-op case never confuses it
+ *      for a live producer).
  */
 static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
 {
@@ -1507,26 +1626,80 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
     }
     atomic_store_explicit(&g->n_boxes, cur_n + (uint32_t)sub_n,
                           memory_order_release);
-    free(sub_boxes);
+    /* Note: free(sub_boxes) is deferred to after the output-side
+     * splice below — that splice still indexes into sub_boxes[] to
+     * locate the matching ext-consumed write box. The records the
+     * pointers point at have been published into g->boxes and are
+     * not freed here. */
 
-    /* Orphan the encap box. Its outgoing connections (if any) were
-     * the output-side wiring path which this slice doesn't implement
-     * yet; dropping them means any wires the user drew from encap's
-     * output ports won't fire. The box itself stays in the index
-     * (so its slot id remains valid for any unfixed references) but
-     * becomes inert — BOX_MAP has a no-op dispatch case. */
-    int n_old_out = atomic_load_explicit(&encap->n_connections,
-                                         memory_order_relaxed);
-    connection_t *old_out =
+    /* OUTPUT-side rewiring. Walk every wire the parent drew leaving
+     * the encap box; each one's from_branch names an output port on
+     * the encap, which maps to an externally-consumed write box
+     * inside the sub-map. Splice the wire onto that write box's
+     * connections array so that when the write box fires, its value
+     * surfaces to whichever parent consumers the user wired.
+     *
+     * The wires are originally on the encap's own connections array
+     * (the encap is the producer). After the splice they live on the
+     * matching write box's connections array; the encap's array is
+     * cleared. */
+    int n_encap_out = atomic_load_explicit(&encap->n_connections,
+                                           memory_order_relaxed);
+    connection_t *encap_out =
         atomic_load_explicit(&encap->connections, memory_order_relaxed);
-    (void)n_old_out;
-    if (old_out) {
-        free(old_out);
+    for (int k = 0; k < n_encap_out; k++) {
+        connection_t *c = &encap_out[k];
+        int port_idx = find_output_port_index(encap, c->from_branch);
+        if (port_idx < 0) {
+            *err = err_fmt("encap '%s': outgoing wire to '%s.%s' references "
+                           "unknown output port '%s'",
+                           encap->id, c->to_box, c->to_input,
+                           c->from_branch ? c->from_branch : "(default)");
+            return -1;
+        }
+        box_t *W = find_ext_consumed_for_port(sub_boxes, sub_n,
+                                              encap, port_idx);
+        if (!W) {
+            *err = err_fmt("encap '%s': output port '%s' has no matching "
+                           "externally-consumed write box in sub-map",
+                           encap->id, encap->outputs[port_idx].name);
+            return -1;
+        }
+
+        /* The find returns a sub_boxes[] pointer, but the sub-boxes
+         * were just appended to g->boxes — same record, same heap
+         * address. Append the encap wire to the write box's
+         * connections via copy-and-grow. */
+        int w_n = atomic_load_explicit(&W->n_connections,
+                                       memory_order_relaxed);
+        connection_t *w_old =
+            atomic_load_explicit(&W->connections, memory_order_relaxed);
+        connection_t *w_new = calloc((size_t)(w_n + 1), sizeof(connection_t));
+        if (!w_new) {
+            *err = err_fmt("out of memory");
+            return -1;
+        }
+        if (w_n > 0) memcpy(w_new, w_old, (size_t)w_n * sizeof(connection_t));
+        w_new[w_n].to_box       = c->to_box;
+        w_new[w_n].to_input     = c->to_input;
+        w_new[w_n].from_branch  = NULL;       /* write boxes have one output */
+        w_new[w_n].to_box_idx   = -1;
+        w_new[w_n].to_input_idx = -1;
+        if (w_old) free(w_old);
+        atomic_store_explicit(&W->connections, w_new, memory_order_release);
+        atomic_store_explicit(&W->n_connections, w_n + 1,
+                              memory_order_release);
+    }
+    if (encap_out) {
+        free(encap_out);
         atomic_store_explicit(&encap->connections, NULL,
                               memory_order_release);
         atomic_store_explicit(&encap->n_connections, 0,
                               memory_order_release);
     }
+    /* sub_boxes pointer-array can now go — the records it pointed at
+     * are reachable via g->boxes and stay alive for the run. */
+    free(sub_boxes);
     /* Strip the encap's `ref` so inline_encapsulations' find-loop
      * doesn't pick this same record up on the next iteration and
      * inline its sub-map a second time. The record stays in the
@@ -1700,6 +1873,9 @@ void graph_destroy(graph_t *g)
             box_t *b = boxes[i];
             if (!b) continue;
             free(b->inputs);
+            /* Issue 248 — only BOX_MAP records ever allocate outputs[];
+             * other kinds leave it NULL, and free(NULL) is fine. */
+            free(b->outputs);
             free(b->connections);
             free(b->input_slot_ids);
             free(b->input_slot_modes);

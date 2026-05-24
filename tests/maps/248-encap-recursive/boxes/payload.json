@@ -1,0 +1,8 @@
+{
+  "id": "payload",
+  "kind": "read",
+  "value": "twice-nested-greeting",
+  "connections": [
+    { "to_box": "encap_outer", "to_input": "msg" }
+  ]
+}

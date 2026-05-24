@@ -1,0 +1,4 @@
+{
+  "name": "248-encap-output-only",
+  "description": "Issue 248 output-side encapsulation. Parent's read box wires a value into a BOX_MAP whose sub-map has one externally-supplied read box feeding an externally-consumed write box. The encap's output port wires onward to a parent-side write box. After load-time inlining the sub-map's write box's value surfaces back onto the parent's wire and lands in the parent writer's on-disk artifact. Both the sub-map writer and the parent writer should hold the same bytes."
+}

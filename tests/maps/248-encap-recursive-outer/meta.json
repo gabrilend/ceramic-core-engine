@@ -1,0 +1,4 @@
+{
+  "name": "248-encap-recursive-outer",
+  "description": "Outer sub-map for the recursive encap test. Itself encapsulates the inner sub-map. Its externally-supplied read box (named 'msg') feeds the inner encap's input; the inner encap's output wires to an externally-consumed write box (named 'result') which both writes to its own path and surfaces the value back to the parent."
+}

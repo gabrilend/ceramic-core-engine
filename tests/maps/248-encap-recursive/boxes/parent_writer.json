@@ -1,0 +1,8 @@
+{
+  "id": "parent_writer",
+  "kind": "write",
+  "inputs": [
+    { "name": "path",  "type": "string", "value": "/tmp/soramech-248-encap-recursive-parent.txt" },
+    { "name": "value", "type": "string" }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "outer_writer",
+  "kind": "write",
+  "external": { "kind": "named", "name": "result" },
+  "inputs": [
+    { "name": "path",  "type": "string", "value": "/tmp/soramech-248-encap-recursive-outer.txt" },
+    { "name": "value", "type": "string" }
+  ]
+}

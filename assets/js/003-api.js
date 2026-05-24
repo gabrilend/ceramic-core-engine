@@ -35,6 +35,18 @@ const API = (() => {
   }
   // }}}
 
+  // {{{ list_boxes_for
+  // Same endpoint shape as list_boxes, but targets another map by
+  // name. Used by the encapsulate action (issue 248) to fetch the
+  // sub-map's box list so the new encap box's `inputs` and
+  // `outputs` arrays can be derived from the sub-map's
+  // externally-supplied read boxes and externally-consumed write
+  // boxes without making the user re-declare them.
+  async function list_boxes_for(other_map_name) {
+    return request('GET', `/maps/${other_map_name}/boxes`);
+  }
+  // }}}
+
   // {{{ get_box
   async function get_box(id) {
     return request('GET', `/maps/${map_name}/boxes/${id}`);
@@ -135,7 +147,7 @@ const API = (() => {
   }
   // }}}
 
-  return { init, list_maps, list_boxes, get_box, put_box, delete_box,
+  return { init, list_maps, list_boxes, list_boxes_for, get_box, put_box, delete_box,
            get_meta, put_meta, get_data, put_data,
            list_src_files, get_src_file,
            list_extra_src, get_extra_src_file,

@@ -1,0 +1,8 @@
+{
+  "id": "outer_in",
+  "kind": "read",
+  "external": { "kind": "named", "name": "msg" },
+  "connections": [
+    { "to_box": "encap_inner", "to_input": "msg" }
+  ]
+}

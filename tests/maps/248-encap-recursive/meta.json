@@ -1,0 +1,4 @@
+{
+  "name": "248-encap-recursive",
+  "description": "Issue 248 recursion. Parent encapsulates the outer sub-map; the outer sub-map itself encapsulates the inner sub-map. After the load-time inline pass iterates twice, the flat graph reaches three writers: the inner sub-map's externally-consumed write box, the outer sub-map's externally-consumed write box, and the parent-side write box. All three should land identical bytes on disk, proving that input-side and output-side splices both compose across nesting."
+}

@@ -674,19 +674,122 @@ const App = (() => {
         return { wrap, body };
       }
 
-      // -- helper: clickable map row
-      function mk_map_row(name, subtitle, onclick) {
+      // -- helper: clickable map row, plus an inline "encap" button
+      // (issue 248) that drops the row's map onto the currently-edited
+      // parent map as a single BOX_MAP. The row's click still
+      // switches the active map (the familiar behaviour); the encap
+      // button is suppressed when `same_server` is false because the
+      // sub-map fetch and the file-path reference assume the picker
+      // and the editor are talking to the same server.
+      function mk_map_row(name, subtitle, onclick, same_server) {
         const row = document.createElement('div');
         row.className   = 'fb-file-row';
-        row.textContent = name;
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
+        const lbl = document.createElement('span');
+        lbl.style.cssText = 'flex:1;cursor:pointer;';
+        lbl.textContent = name;
         if (subtitle) {
           const s = document.createElement('span');
           s.style.cssText = 'font-size:9px;color:#3a3f55;margin-left:6px;font-family:monospace;';
           s.textContent   = subtitle;
-          row.appendChild(s);
+          lbl.appendChild(s);
         }
-        row.onclick = onclick;
+        lbl.onclick = onclick;
+        row.appendChild(lbl);
+
+        // The encap button is intentionally suppressed when the row
+        // refers to a map on a DIFFERENT server. Encapsulation needs
+        // to fetch the sub-map's box list to derive port shapes, and
+        // the convention of `../<name>` as a ref string only holds
+        // when both maps live as siblings under one filesystem root.
+        if (same_server && API.list_boxes_for) {
+          const encap_btn = document.createElement('button');
+          encap_btn.className   = 'toolbar-btn';
+          encap_btn.textContent = 'encap';
+          encap_btn.style.cssText = 'padding:2px 6px;font-size:10px;';
+          encap_btn.title       = 'drop ' + name + ' onto the current map as a sub-map box';
+          encap_btn.onclick = (e) => {
+            e.stopPropagation();
+            encapsulate_map(name);
+          };
+          row.appendChild(encap_btn);
+        }
+
         return row;
+      }
+
+      // -- encapsulate_map: implements the file-browser "Encapsulate"
+      // action from issue 248. Fetches the target sub-map's boxes,
+      // derives the encap box's `inputs` / `outputs` arrays from
+      // every externally-supplied read box and every
+      // externally-consumed write box, and PUTs the new box at the
+      // current viewport's center.
+      async function encapsulate_map(sub_name) {
+        let sub_boxes;
+        try {
+          sub_boxes = await API.list_boxes_for(sub_name);
+        } catch (e) {
+          status_msg('encapsulate: cannot fetch ' + sub_name + ': ' + e.message, 'error');
+          return;
+        }
+
+        // Derive inputs from externally-supplied reads, outputs from
+        // externally-consumed writes. The `external.name` (named
+        // binding) becomes the encap port's name; positional /
+        // numbered bindings synthesize a default name from the kind
+        // and index so the canvas has something readable.
+        const inputs  = [];
+        const outputs = [];
+        const port_name = (b) => {
+          if (b.external && b.external.kind === 'named' && b.external.name) {
+            return b.external.name;
+          }
+          const i = (b.external && b.external.index) || 0;
+          return (b.kind === 'read' ? 'in_' : 'out_') + i;
+        };
+        for (const b of (sub_boxes || [])) {
+          if (!b.external || !b.external.kind) continue;
+          if (b.kind === 'read')  inputs.push({ name: port_name(b), type: 'string' });
+          if (b.kind === 'write') outputs.push({ name: port_name(b), type: 'string' });
+        }
+
+        // Drop the new box at the visible viewport center so the
+        // user sees it immediately rather than having to pan to find
+        // a fixed (0,0) origin.
+        const cw = Canvas.el.clientWidth, ch = Canvas.el.clientHeight;
+        const center = Canvas.screen_to_world(cw / 2, ch / 2);
+
+        const id = 'encap-' + Date.now().toString(36);
+        const box = {
+          id,
+          label: sub_name,
+          kind:  'map',
+          ref:   '../' + sub_name,
+          inputs,
+          outputs,
+          connections: [],
+          ui: { x: Math.round(center.x - 90), y: Math.round(center.y - 40) },
+        };
+        try {
+          await API.put_box(id, box);
+          Boxes.boxes[id] = box;
+          Inspector.show(box,
+            () => Canvas.mark_dirty(),
+            () => { /* parent's delete_box machinery isn't reachable
+                     * from the picker context; the user can delete
+                     * via the inspector's delete button which calls
+                     * this closure — left as a no-op here, the
+                     * inspector hides on delete. */ }
+          );
+          Canvas.mark_dirty();
+          status_msg('encapsulated ' + sub_name + ' (' + inputs.length +
+                     ' input' + (inputs.length === 1 ? '' : 's') + ', ' +
+                     outputs.length + ' output' + (outputs.length === 1 ? '' : 's') +
+                     ')', 'info');
+        } catch (e) {
+          status_msg('encapsulate: put failed: ' + e.message, 'error');
+        }
       }
 
       // -- server URL input row at the top.
@@ -749,7 +852,13 @@ const App = (() => {
           const g = mk_group('recent');
           recent.forEach(({ server_url: su, map_name: mn }) => {
             const sub = su !== url ? su : null;
-            g.body.appendChild(mk_map_row(mn, sub, () => switch_to_map(su, mn)));
+            // Encap is offered only when the recent row's server
+            // matches the picker's server URL; cross-server encap
+            // would mean fetching boxes from one place and writing
+            // a path-relative ref that means something on the
+            // other. Suppress to avoid the confusion.
+            const same_srv = su === url;
+            g.body.appendChild(mk_map_row(mn, sub, () => switch_to_map(su, mn), same_srv));
           });
           maps_section.appendChild(g.wrap);
         }
@@ -763,7 +872,8 @@ const App = (() => {
         } else if (available.length > 0) {
           const g = mk_group('on this server');
           available.forEach(mn => {
-            g.body.appendChild(mk_map_row(mn, null, () => switch_to_map(url, mn)));
+            // Same-server group: encap is always offered.
+            g.body.appendChild(mk_map_row(mn, null, () => switch_to_map(url, mn), true));
           });
           maps_section.appendChild(g.wrap);
         } else if (recent.length === 0) {

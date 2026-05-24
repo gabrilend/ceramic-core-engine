@@ -1,0 +1,8 @@
+{
+  "id": "inner_in",
+  "kind": "read",
+  "external": { "kind": "named", "name": "msg" },
+  "connections": [
+    { "to_box": "inner_writer", "to_input": "value" }
+  ]
+}

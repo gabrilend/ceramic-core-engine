@@ -1,0 +1,8 @@
+{
+  "id": "payload",
+  "kind": "read",
+  "value": "round-trip-through-encap",
+  "connections": [
+    { "to_box": "encap", "to_input": "msg" }
+  ]
+}

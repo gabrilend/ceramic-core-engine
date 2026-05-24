@@ -868,6 +868,216 @@ const Inspector = (() => {
   }
   // }}}
 
+  // {{{ render_external_binding (issue 248)
+  // Inspector affordance for the `external` block on `read` and
+  // `write` boxes. When toggled on, marks a read box as
+  // **externally-supplied** (its value comes from the encapsulating
+  // parent's wire) or a write box as **externally-consumed** (its
+  // emitted value surfaces back to the parent on a wire). Same
+  // visual idiom for both; the only difference is what the
+  // marking means in the encapsulation splice.
+  //
+  // The block records a binding kind plus either a name (for
+  // named matching against the encap's port list) or an index
+  // (for positional / numbered). The loader's
+  // encapsulation pass reads this to wire the parent's
+  // producers through to the corresponding sub-map data flow.
+  function render_external_binding(fields, box) {
+    if (box.kind !== 'read' && box.kind !== 'write') return;
+
+    const role = box.kind === 'read' ? 'externally-supplied'
+                                     : 'externally-consumed';
+    const sec = document.createElement('div');
+    sec.className   = 'section-label';
+    sec.textContent = role + ' (issue 248)';
+    fields.appendChild(sec);
+
+    // Top row: checkbox toggle on / off. When off, the rest of
+    // the block doesn't render — the port behaves as a normal
+    // read literal / write file sink. When on, the binding kind
+    // dropdown + the matching name / index field appear below.
+    const toggle_wrap = document.createElement('div');
+    toggle_wrap.style.cssText = 'display:flex;gap:6px;align-items:center;';
+    const toggle = document.createElement('input');
+    toggle.type    = 'checkbox';
+    toggle.checked = !!(box.external && box.external.kind);
+    const toggle_lbl = document.createElement('span');
+    toggle_lbl.style.cssText = 'font-size:11px;color:#9ea3c0;';
+    toggle_lbl.textContent = toggle.checked
+      ? 'bound to encapsulating parent'
+      : '(off — port behaves normally)';
+    toggle.addEventListener('change', () => {
+      if (toggle.checked) {
+        current_box.external = current_box.external && current_box.external.kind
+          ? current_box.external
+          : { kind: 'named', name: '' };
+      } else {
+        delete current_box.external;
+      }
+      show(current_box, on_change_cb, on_delete_cb);
+      save();
+    });
+    toggle_wrap.appendChild(toggle);
+    toggle_wrap.appendChild(toggle_lbl);
+    fields.appendChild(mk_row('external', toggle_wrap));
+
+    if (!toggle.checked) return;
+
+    // Binding-kind dropdown. The three kinds mirror the matching
+    // rules the encapsulation splice uses:
+    //   named       → matched by string against encap port's name
+    //   positional  → matched by argument order
+    //   numbered    → matched by an explicit integer index
+    const kind_sel = document.createElement('select');
+    ['named', 'positional', 'numbered'].forEach(k => {
+      const opt = document.createElement('option');
+      opt.value = k; opt.textContent = k;
+      if (k === (box.external && box.external.kind)) opt.selected = true;
+      kind_sel.appendChild(opt);
+    });
+    kind_sel.addEventListener('change', () => {
+      const next = kind_sel.value;
+      const prev = current_box.external || {};
+      // Preserve a name if we're keeping `named`; reset on a kind
+      // change to avoid stale fields tagging along.
+      if (next === 'named') {
+        current_box.external = { kind: 'named', name: prev.name || '' };
+      } else {
+        current_box.external = { kind: next, index: prev.index || 0 };
+      }
+      show(current_box, on_change_cb, on_delete_cb);
+      save();
+    });
+    fields.appendChild(mk_row('kind', kind_sel));
+
+    if (box.external.kind === 'named') {
+      const name_inp = document.createElement('input');
+      name_inp.type        = 'text';
+      name_inp.value       = box.external.name || '';
+      name_inp.placeholder = 'port name on encap';
+      name_inp.style.cssText = 'flex:1;background:#0f1117;border:1px solid #2a2f45;' +
+        'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      name_inp.addEventListener('input', () => {
+        current_box.external.name = name_inp.value;
+        save();
+      });
+      fields.appendChild(mk_row('name', name_inp));
+    } else {
+      const idx_inp = document.createElement('input');
+      idx_inp.type    = 'number';
+      idx_inp.min     = '0';
+      idx_inp.value   = String(box.external.index ?? 0);
+      idx_inp.style.cssText = 'width:80px;background:#0f1117;border:1px solid #2a2f45;' +
+        'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      idx_inp.addEventListener('change', () => {
+        const v = parseInt(idx_inp.value, 10);
+        if (!isNaN(v) && v >= 0) {
+          current_box.external.index = v;
+          save();
+        }
+      });
+      fields.appendChild(mk_row('index', idx_inp));
+    }
+  }
+  // }}}
+
+  // {{{ render_map_box (issue 248)
+  // Specialized inspector for `kind: "map"` boxes (encapsulated
+  // sub-maps). Shows the ref path (the sub-map directory it
+  // points at) and the declared input + output port arrays —
+  // the user can edit each port's name. The arrays are normally
+  // populated by the encapsulate action at box-creation time
+  // (derived from the sub-map's externally-marked boxes) but
+  // remain editable here so the user can rename or re-sync when
+  // the sub-map drifts.
+  function render_map_box(fields, box) {
+    if (box.kind !== 'map') return;
+
+    // ref display + edit input. Free-text rather than a file
+    // picker because the path is a directory, not a source file,
+    // and the existing file browser doesn't browse directories
+    // outside the source-search-path. A future slice can add a
+    // map-directory picker.
+    const ref_inp = document.createElement('input');
+    ref_inp.type        = 'text';
+    ref_inp.value       = box.ref || '';
+    ref_inp.placeholder = '../some-other-map';
+    ref_inp.style.cssText = 'flex:1;background:#0f1117;border:1px solid #2a2f45;' +
+      'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+    ref_inp.addEventListener('input', () => {
+      current_box.ref = ref_inp.value;
+      save();
+    });
+    fields.appendChild(mk_row('ref', ref_inp));
+
+    // Helper: render an editable list of {name, type} entries
+    // backed by the named field on the box. Each row is a
+    // text input for the name; "+" appends, "−" on each row
+    // removes. Used for both inputs[] and outputs[].
+    const mk_port_list = (label, key) => {
+      const sec = document.createElement('div');
+      sec.className   = 'section-label';
+      sec.textContent = label;
+      fields.appendChild(sec);
+
+      const list_wrap = document.createElement('div');
+      list_wrap.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
+      const entries = box[key] || [];
+      entries.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:4px;align-items:center;';
+        const name_inp = document.createElement('input');
+        name_inp.type  = 'text';
+        name_inp.value = p.name || '';
+        name_inp.placeholder = label.slice(0, -1) + ' name';
+        name_inp.style.cssText = 'flex:1;background:#0f1117;border:1px solid #2a2f45;' +
+          'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:3px 5px;';
+        name_inp.addEventListener('input', () => {
+          (current_box[key] || [])[i].name = name_inp.value;
+          save();
+        });
+        const rm_btn = document.createElement('button');
+        rm_btn.className   = 'toolbar-btn';
+        rm_btn.textContent = '−';
+        rm_btn.style.cssText = 'padding:2px 8px;';
+        rm_btn.onclick = () => {
+          (current_box[key] || []).splice(i, 1);
+          show(current_box, on_change_cb, on_delete_cb);
+          save();
+        };
+        row.appendChild(name_inp);
+        row.appendChild(rm_btn);
+        list_wrap.appendChild(row);
+      });
+      const add_btn = document.createElement('button');
+      add_btn.className   = 'toolbar-btn';
+      add_btn.textContent = '+ ' + label.slice(0, -1);
+      add_btn.style.alignSelf = 'flex-start';
+      add_btn.onclick = () => {
+        current_box[key] = current_box[key] || [];
+        current_box[key].push({
+          name: label.slice(0, -1) + '_' + current_box[key].length,
+          type: 'string',
+        });
+        show(current_box, on_change_cb, on_delete_cb);
+        save();
+      };
+      list_wrap.appendChild(add_btn);
+      fields.appendChild(list_wrap);
+    };
+
+    mk_port_list('inputs',  'inputs');
+    mk_port_list('outputs', 'outputs');
+
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:10px;color:#6c72a0;margin-top:8px;line-height:1.4;';
+    note.textContent = 'inputs / outputs match the sub-map’s ' +
+      'externally-supplied read boxes and externally-consumed write ' +
+      'boxes by name (or by index for positional / numbered bindings).';
+    fields.appendChild(note);
+  }
+  // }}}
+
   // {{{ render_io_box
   // Issue 229: `read` boxes carry an optional inline `value` literal
   // that, when set, hides the `path` input port on the canvas and
@@ -950,7 +1160,11 @@ const Inspector = (() => {
 
     fields.appendChild(mk_row('kind', (() => {
       const sel = document.createElement('select');
-      ['call', 'read', 'write'].forEach(k => {
+      // 'map' (issue 248) is the encapsulated-sub-map kind — picks
+      // a sub-map directory as a single box on the parent canvas.
+      // Flipping to or away from 'map' changes the box's port
+      // shape, so the canvas re-renders below via show().
+      ['call', 'read', 'write', 'map'].forEach(k => {
         const opt = document.createElement('option');
         opt.value = k; opt.textContent = k;
         if (k === box.kind) opt.selected = true;
@@ -977,6 +1191,19 @@ const Inspector = (() => {
       in_sec.textContent = 'inputs';
       fields.appendChild(in_sec);
       fields.appendChild(mk_port_display(box.inputs));
+      // Issue 248: externally-supplied / externally-consumed
+      // binding to the encapsulating parent. Off by default;
+      // when on, this box's role flips from disk-IO to wire-IO
+      // through the parent's encapsulation splice.
+      render_external_binding(fields, box);
+      return;
+    }
+
+    // Issue 248: encapsulated sub-map box. ref + inputs + outputs
+    // arrays; no routing, no language function. Stop here so the
+    // call-box machinery below doesn't try to attach a fn / refs.
+    if (box.kind === 'map') {
+      render_map_box(fields, box);
       return;
     }
 

@@ -1,0 +1,4 @@
+{
+  "name": "248-encap-recursive-inner",
+  "description": "Inner sub-map for the recursive encap test. A pure pipe: externally-supplied read box (named 'msg') feeds an externally-consumed write box (named 'result') that also writes to its own disk path. When inlined twice (once into the outer sub-map, then into the parent), the value flows all the way from the parent through both levels of encapsulation."
+}
