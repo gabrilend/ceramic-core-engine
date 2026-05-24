@@ -1,0 +1,14 @@
+{
+  "id": "echo",
+  "kind": "call",
+  "lang": "c",
+  "ref": "src/echo.c",
+  "fn": "echo",
+  "inputs": [
+    {"name": "msg", "type": "string",
+     "custom_translation": "translations/echo__msg.c"}
+  ],
+  "routing": {"kind": "plain"},
+  "output_capacity": 256,
+  "ui": {"x": 300, "y": 100}
+}

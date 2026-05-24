@@ -1,0 +1,6 @@
+{
+  "name": "246-c-shim",
+  "description": "Issue 246 fixture (C): a C call box has one input port with a custom_translation shim that uppercases the incoming bytes before invoke sees them. Verifies the dispatch routes through the shim and the spec's invoke receives the translated bytes.",
+  "entry_box_id": "echo",
+  "src_dirs": ["tests/maps/246-c-shim/src", "tests/maps/246-c-shim/translations"]
+}

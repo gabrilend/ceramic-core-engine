@@ -114,9 +114,31 @@ const API = (() => {
   }
   // }}}
 
+  // {{{ Translation file CRUD — issue 246
+  // Translation files (per-port custom translation shims) live under
+  // maps/<name>/translations/. The inspector creates them via "New"
+  // (PUT), views them via "View" (GET), and the file browser can
+  // delete them outright (DELETE). The inspector's own delete
+  // affordance only clears the box's `custom_translation` field — it
+  // does not call delete_translation.
+  async function list_translations() {
+    return request('GET', `/maps/${map_name}/translations`);
+  }
+  async function get_translation(filename) {
+    return request('GET', `/maps/${map_name}/translations/${filename}`);
+  }
+  async function put_translation(filename, content) {
+    return request('PUT', `/maps/${map_name}/translations/${filename}`, content);
+  }
+  async function delete_translation(filename) {
+    return request('DELETE', `/maps/${map_name}/translations/${filename}`);
+  }
+  // }}}
+
   return { init, list_maps, list_boxes, get_box, put_box, delete_box,
            get_meta, put_meta, get_data, put_data,
            list_src_files, get_src_file,
            list_extra_src, get_extra_src_file,
+           list_translations, get_translation, put_translation, delete_translation,
            list_dirs };
 })();

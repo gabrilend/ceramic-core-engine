@@ -1,0 +1,6 @@
+{
+  "name": "246-lua-shim",
+  "description": "Issue 246 fixture (Lua): a Lua call box has one input port with a custom_translation shim that prepends a marker and reverses the bytes before invoke sees them. Verifies the Lua spec's translate callback works end-to-end.",
+  "entry_box_id": "echo",
+  "src_dirs": ["tests/maps/246-lua-shim/src", "tests/maps/246-lua-shim/translations"]
+}

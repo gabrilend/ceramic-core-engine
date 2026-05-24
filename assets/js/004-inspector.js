@@ -525,6 +525,82 @@ const Inspector = (() => {
   }
   // }}}
 
+  // {{{ create_shim_for — issue 246
+  // Creates a per-port custom translation file with default-spec-
+  // equivalent content (identity pass-through) and sets the port's
+  // `custom_translation` field on the current box. The filename
+  // convention matches issue 246: <box_id>__<port_name>.<lang_ext>.
+  function shim_default_content(lang) {
+    if (lang === 'lua') {
+      return [
+        '-- Per-port custom translation shim (issue 246).',
+        '-- The file returns a single function taking the raw bytes',
+        '-- and a "raw_native" flag (true if the bytes came from a',
+        '-- same-language producer, false if from a cross-language',
+        '-- producer via JSON). Return the translated bytes the box',
+        '-- function will see in place of the raw bytes.',
+        '--',
+        '-- Default: identity pass-through. Edit to add your',
+        '-- per-port decode / coerce / validate logic.',
+        '',
+        'return function(raw, raw_native)',
+        '    return raw',
+        'end',
+        '',
+      ].join('\n');
+    }
+    if (lang === 'c') {
+      return [
+        '/* Per-port custom translation shim (issue 246).',
+        ' * sm_translate is the entry symbol. Default is identity',
+        ' * pass-through — edit to add decode / coerce / validate */',
+        '#include <string.h>',
+        '',
+        'int sm_translate(const void *raw, int raw_size, int raw_native,',
+        '                 void *out_buf, int out_capacity, int *out_size)',
+        '{',
+        '    (void)raw_native;',
+        '    if (raw_size > out_capacity) return -1;',
+        '    memcpy(out_buf, raw, (size_t)raw_size);',
+        '    *out_size = raw_size;',
+        '    return 0;',
+        '}',
+        '',
+      ].join('\n');
+    }
+    // Unknown language — give the user an empty file so they can
+    // author whatever's right; the spec will error at task time if
+    // the shape doesn't match its translate callback's expectations.
+    return '-- Custom translation shim — author for lang: ' + lang + '\n';
+  }
+
+  function shim_ext_for(lang) {
+    if (lang === 'lua') return 'lua';
+    if (lang === 'c')   return 'c';
+    if (lang === 'bash')return 'sh';
+    return 'txt';
+  }
+
+  async function create_shim_for(port) {
+    if (!current_box || !current_box.id || !port || !port.name) return;
+    const lang = current_box.lang || 'lua';
+    const ext  = shim_ext_for(lang);
+    const fname = current_box.id + '__' + port.name + '.' + ext;
+    const content = shim_default_content(lang);
+    try {
+      await API.put_translation(fname, content);
+    } catch (e) {
+      status_msg('shim create failed: ' + e.message, 'error');
+      return;
+    }
+    port.custom_translation = 'translations/' + fname;
+    await save();
+    status_msg('created shim: translations/' + fname);
+    show(current_box, on_change_cb, on_delete_cb);
+    Canvas.mark_dirty();
+  }
+  // }}}
+
   // {{{ mk_port_display
   // Renders input ports as a two-row block per port: name field +
   // variadic toggle on the top row, value field on the bottom row.
@@ -631,6 +707,49 @@ const Inspector = (() => {
           show(current_box, on_change_cb, on_delete_cb);
         };
         top_row.appendChild(opt_btn);
+
+        // {{{ Custom translation shim affordance (issue 246)
+        // Three states:
+        //   - no custom_translation: "+xlate" button — creates a
+        //     default shim file matching the box's language and
+        //     sets the port's custom_translation field.
+        //   - custom_translation set: "xlate" button opens the shim
+        //     in the source-view window; small "×" clears the field
+        //     (file stays on disk per the issue's delete rule).
+        // Suppressed entirely when the box has no language (read /
+        // data / write boxes — shims only make sense on call boxes
+        // whose spec runs the translate callback). */
+        if (current_box && current_box.kind === 'call' && current_box.lang) {
+          const has_shim = !!ports[i].custom_translation;
+          if (!has_shim) {
+            const new_btn = document.createElement('button');
+            new_btn.style.cssText = btn_style;
+            new_btn.textContent   = '+xlate';
+            new_btn.title         = 'add a per-port custom translation shim (issue 246)';
+            new_btn.onclick       = () => create_shim_for(ports[i]);
+            top_row.appendChild(new_btn);
+          } else {
+            const view_btn = document.createElement('button');
+            view_btn.style.cssText = btn_style + 'border-color:#e8a317;color:#e8a317;';
+            view_btn.textContent   = 'xlate';
+            view_btn.title         = 'view shim: ' + ports[i].custom_translation;
+            view_btn.onclick       = () =>
+              SourceView.open_source_view(ports[i].custom_translation, current_box);
+            top_row.appendChild(view_btn);
+
+            const clr_btn = document.createElement('button');
+            clr_btn.style.cssText = btn_style + 'border-color:#e8a317;color:#e8a317;';
+            clr_btn.textContent   = '×';
+            clr_btn.title         = 'clear shim reference (file stays on disk)';
+            clr_btn.onclick       = () => {
+              ports[i].custom_translation = undefined;
+              save();
+              show(current_box, on_change_cb, on_delete_cb);
+            };
+            top_row.appendChild(clr_btn);
+          }
+        }
+        // }}}
 
         block.appendChild(top_row);
 

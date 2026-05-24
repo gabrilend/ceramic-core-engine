@@ -457,6 +457,89 @@ local function handle_get_src(client, req, maps_root)
 end
 -- }}}
 
+-- {{{ Translation file CRUD — issue 246
+-- Per-port custom translation shims live at
+--   maps/<name>/translations/<box_id>__<port_name>.<lang_ext>
+-- The handlers below read / write / list those files. Box JSON
+-- references them by relative path in the per-input
+-- `custom_translation` field; the editor uses these endpoints to
+-- create / inspect / replace the shim file contents.
+
+-- List translation files under maps/<name>/translations/.
+-- Returns an array of plain filenames; empty array if the dir
+-- doesn't exist yet (a brand-new map hasn't been forced to create
+-- the directory).
+local function handle_list_translations(client, req, maps_root)
+    local map_name = req.parts[2]
+    local dir = safe_path(maps_root, map_name, "translations")
+    if not dir then return json_err(client, "400 Bad Request", "invalid path") end
+    local handle = io.popen("ls " .. dir .. "/ 2>/dev/null")
+    local files = {}
+    if handle then
+        local listing = handle:read("*a")
+        handle:close()
+        for name in listing:gmatch("[^\n]+") do
+            if name ~= "" then files[#files + 1] = name end
+        end
+    end
+    json_ok(client, files)
+end
+
+-- Read one translation file as plain text.
+local function handle_get_translation(client, req, maps_root)
+    local map_name  = req.parts[2]
+    local file_name = req.parts[4]
+    if file_name:find("%.%.", 1, true) or file_name:find("/", 1, true) then
+        return json_err(client, "400 Bad Request", "invalid filename")
+    end
+    local path = safe_path(maps_root, map_name, "translations", file_name)
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+    local raw, err = read_file(path)
+    if not raw then return json_err(client, "404 Not Found", tostring(err)) end
+    respond(client, "200 OK", raw, "text/plain")
+end
+
+-- Write (create or overwrite) one translation file. Creates the
+-- translations/ directory on demand.
+local function handle_put_translation(client, req, maps_root)
+    local map_name  = req.parts[2]
+    local file_name = req.parts[4]
+    if file_name:find("%.%.", 1, true) or file_name:find("/", 1, true) then
+        return json_err(client, "400 Bad Request", "invalid filename")
+    end
+    local dir = safe_path(maps_root, map_name, "translations")
+    if not dir then return json_err(client, "400 Bad Request", "invalid path") end
+    -- Make the directory; mkdir -p is idempotent so existing dirs
+    -- don't error.
+    os.execute("mkdir -p " .. dir)
+    local path = dir .. "/" .. file_name
+    local ok, werr = write_file_atomic(path, req.body or "")
+    if not ok then return json_err(client, "500 Internal Server Error", tostring(werr)) end
+    json_ok(client, { ok = true, path = path })
+end
+
+-- Delete a translation file outright. Distinct from the inspector's
+-- "Delete" affordance which only clears the box's reference — this
+-- is the file-browser-side hard delete.
+local function handle_delete_translation(client, req, maps_root)
+    local map_name  = req.parts[2]
+    local file_name = req.parts[4]
+    if file_name:find("%.%.", 1, true) or file_name:find("/", 1, true) then
+        return json_err(client, "400 Bad Request", "invalid filename")
+    end
+    local path = safe_path(maps_root, map_name, "translations", file_name)
+    if not path then return json_err(client, "400 Bad Request", "invalid path") end
+    local f = io.open(path, "rb")
+    if not f then
+        return json_err(client, "404 Not Found", "no such translation file")
+    end
+    f:close()
+    local ok, err = os.remove(path)
+    if not ok then return json_err(client, "500 Internal Server Error", tostring(err)) end
+    json_ok(client, { ok = true })
+end
+-- }}}
+
 -- {{{ handle_get_data
 local function handle_get_data(client, req, maps_root)
     local map_name  = req.parts[2]
@@ -621,6 +704,18 @@ local function dispatch(client, req, maps_root)
     -- GET /maps/<name>/src/<file>
     if m == "GET" and #p == 4 and p[1] == "maps" and p[3] == "src" then
         return handle_get_src(client, req, maps_root)
+    end
+
+    -- GET /maps/<name>/translations  (issue 246 — list shim files)
+    if m == "GET" and #p == 3 and p[1] == "maps" and p[3] == "translations" then
+        return handle_list_translations(client, req, maps_root)
+    end
+
+    -- GET/PUT/DELETE /maps/<name>/translations/<file>  (issue 246)
+    if #p == 4 and p[1] == "maps" and p[3] == "translations" then
+        if m == "GET"    then return handle_get_translation(client, req, maps_root) end
+        if m == "PUT"    then return handle_put_translation(client, req, maps_root) end
+        if m == "DELETE" then return handle_delete_translation(client, req, maps_root) end
     end
 
     -- GET /maps/<name>/extrasrc  (list all extra dirs + their files)

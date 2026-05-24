@@ -588,6 +588,41 @@ static int c_json_to_native(void *handle,
 }
 /* }}} */
 
+/* {{{ c_translate() — per-port custom translation shim (issue 246)
+ *
+ * The shim is a .c file the user wrote. Its exported function name
+ * is `sm_translate` with the signature documented in the issue.
+ * Lazy-compile + dlopen + dlsym, cached by path in the same
+ * per-worker handle the C spec uses for box bodies. */
+typedef int (*c_shim_fn_t)(const void *raw, int raw_size, int raw_native,
+                           void *out_buf, int out_capacity, int *out_size);
+
+static int c_translate(void *handle,
+                       const char *shim_path,
+                       const void *raw, int raw_size, int raw_native,
+                       void *out_buf, int out_capacity, int *out_size)
+{
+    c_handle_t *h = (c_handle_t *)handle;
+    if (!h || !shim_path) return -1;
+
+    char so_buf[4096];
+    const char *to_open = maybe_lazy_compile(shim_path, so_buf, sizeof so_buf);
+    if (!to_open) {
+        fprintf(stderr, "c spec: shim compile failed for '%s'\n", shim_path);
+        return -1;
+    }
+    void *dl = get_or_load(h, to_open);
+    if (!dl) return -1;
+    c_shim_fn_t fn = (c_shim_fn_t)dlsym(dl, "sm_translate");
+    if (!fn) {
+        fprintf(stderr, "c spec: shim '%s' has no sm_translate symbol\n",
+                shim_path);
+        return -1;
+    }
+    return fn(raw, raw_size, raw_native, out_buf, out_capacity, out_size);
+}
+/* }}} */
+
 /* {{{ soramech_lang_spec */
 lang_spec_t soramech_lang_spec = {
     .name           = "c",
@@ -598,5 +633,6 @@ lang_spec_t soramech_lang_spec = {
     .invoke         = c_invoke,
     .native_to_json = c_native_to_json,
     .json_to_native = c_json_to_native,
+    .translate      = c_translate,
 };
 /* }}} */

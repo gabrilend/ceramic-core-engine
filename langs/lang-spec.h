@@ -165,6 +165,34 @@ typedef struct lang_spec {
      * specs (Lua, future Python / Ruby) ignore the unused half. */
     lang_bridge_fn native_to_json;
     lang_bridge_fn json_to_native;
+
+    /* Per-port custom translation shim (issue 246). Optional. When
+     * a box's input port has its `custom_translation` field set,
+     * the dispatch routes the raw bytes through this callback
+     * instead of the default decode for that port. The shim's
+     * file lives at `shim_path` (absolute, already resolved by
+     * dispatch from the map dir). Caching is the spec's
+     * responsibility — both C and Lua specs cache loaded shims
+     * keyed by path so the per-call cost is one hash lookup.
+     *
+     * `raw` / `raw_size` carry the bytes the producer wrote into
+     * the slot; `raw_native` is 1 if those bytes are the spec's
+     * own native form, 0 if they are JSON from a cross-language
+     * producer (matches the per-input native flag dispatch uses
+     * for normal invoke). `out_buf` / `out_capacity` is the
+     * destination for the translated bytes; the shim writes
+     * native bytes (the spec's invoke sees the translated value
+     * with input_native=1 regardless of raw_native).
+     *
+     * Returns 0 on success with *out_size filled; nonzero on
+     * failure (fatal — dispatch aborts the task). Specs that
+     * don't support shims leave this NULL; dispatch errors at
+     * task time if a box references a custom_translation on a
+     * spec without support. */
+    int (*translate)(void *handle,
+                     const char *shim_path,
+                     const void *raw, int raw_size, int raw_native,
+                     void *out_buf, int out_capacity, int *out_size);
 } lang_spec_t;
 /* }}} */
 

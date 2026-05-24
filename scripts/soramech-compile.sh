@@ -118,6 +118,14 @@ if [[ -d "$MAP/data" ]]; then
     cp -r "$MAP/data/." "$COMPILED/data/"
 fi
 
+# Issue 246 — per-port custom translation shims. Box JSONs reference
+# them by relative path under translations/; the runtime resolves
+# the path relative to the compiled map dir at dispatch time.
+if [[ -d "$MAP/translations" ]]; then
+    mkdir -p "$COMPILED/translations"
+    cp -r "$MAP/translations/." "$COMPILED/translations/"
+fi
+
 # Top-level data files (input.txt, names.txt, etc) — the runner
 # resolves file_write/data refs relative to the map root.
 shopt -s nullglob

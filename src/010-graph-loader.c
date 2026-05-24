@@ -352,6 +352,14 @@ static int parse_inputs(json_node_t *node, box_t *box,
         json_node_t *opt_n = json_object_get(item, "optional");
         box->inputs[i].optional = (opt_n && json_kind(opt_n) == JSON_BOOL)
                                     ? json_bool_value(opt_n) : 0;
+
+        /* Issue 246: optional per-port custom translation shim. The
+         * value is a file path relative to the map dir; absence
+         * means "use the default decode for this port." */
+        json_node_t *xlate_n = json_object_get(item, "custom_translation");
+        box->inputs[i].custom_translation =
+            (xlate_n && json_kind(xlate_n) == JSON_STRING)
+                ? json_string_value(xlate_n) : NULL;
     }
     return 0;
 }

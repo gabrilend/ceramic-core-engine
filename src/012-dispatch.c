@@ -859,6 +859,62 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     /* Verbose: emit the input payloads now, before the spec runs. */
     emit_input_events(ctx, task_id, bufs, sizes, n_present);
 
+    /* Issue 246: per-port custom translation shims. For each input
+     * port that carries a `custom_translation` file path, route the
+     * raw bytes through the spec's translate callback and replace
+     * the per-port data + size with the shim's output. The shim's
+     * output is always native bytes (the spec's invoke sees it that
+     * way regardless of what raw_native was). Skip silently for
+     * ports without a shim — the default decode path inside invoke
+     * runs as before. */
+    ua_t *xlate_heap = slot_store_allocator(ctx->slots);
+    ua_chunk_t *xlate_chunks[n_arr]; memset(xlate_chunks, 0, sizeof xlate_chunks);
+    for (int i = 0; i < n_present; i++) {
+        const char *shim_rel = b->inputs[i].custom_translation;
+        if (!shim_rel) continue;
+        if (!spec->translate) {
+            fprintf(stderr,
+                "dispatch: box '%s' port '%s' has custom_translation but "
+                "spec '%s' doesn't support shims\n",
+                b->id, b->inputs[i].name, spec->name ? spec->name : "?");
+            for (int k = 0; k <= i; k++) {
+                if (xlate_chunks[k]) ua_unref(xlate_heap, xlate_chunks[k]);
+            }
+            release_inputs(ctx, n, bufs, buf_chunks);
+            return -1;
+        }
+        int xlate_cap = ctx->default_out_capacity;
+        ua_chunk_t *xc = ua_alloc(xlate_heap, (size_t)xlate_cap);
+        if (!xc) {
+            fprintf(stderr, "dispatch: '%s' port '%s' shim out-of-memory\n",
+                    b->id, b->inputs[i].name);
+            release_inputs(ctx, n, bufs, buf_chunks);
+            return -1;
+        }
+        xlate_chunks[i] = xc;
+        char *xbuf = ua_data(xc);
+        int xsize = 0;
+        char *shim_path = resolve_path(ctx, shim_rel);
+        int rc_xlate = spec->translate(handle,
+                                       shim_path ? shim_path : shim_rel,
+                                       datas[i], sizes[i],
+                                       input_native[i],
+                                       xbuf, xlate_cap, &xsize);
+        free(shim_path);
+        if (rc_xlate != 0) {
+            fprintf(stderr, "dispatch: '%s' port '%s' shim failed (rc=%d)\n",
+                    b->id, b->inputs[i].name, rc_xlate);
+            for (int k = 0; k <= i; k++) {
+                if (xlate_chunks[k]) ua_unref(xlate_heap, xlate_chunks[k]);
+            }
+            release_inputs(ctx, n, bufs, buf_chunks);
+            return -1;
+        }
+        datas[i]        = xbuf;
+        sizes[i]        = xsize;
+        input_native[i] = 1;
+    }
+
     /* Resolve the box's source file relative to map_dir. */
     char *ref_path = b->ref ? resolve_path(ctx, b->ref) : NULL;
 
@@ -879,6 +935,9 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
                 output_native,
                 out_buf, out_capacity, out_size);
     free(ref_path);
+    for (int i = 0; i < n_arr; i++) {
+        if (xlate_chunks[i]) ua_unref(xlate_heap, xlate_chunks[i]);
+    }
     release_inputs(ctx, n, bufs, buf_chunks);
     return rc;
 }

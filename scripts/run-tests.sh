@@ -167,6 +167,12 @@ check_map "319e-c-create" \
     "trigger → c-trigger-fired:auto_" \
     "c-echo-received:c-trigger-fired:auto_"
 
+check_map "246-c-shim" \
+    "echo → seen:HELLO-FROM-SEED"
+
+check_map "246-lua-shim" \
+    "echo → seen:REV-fedcba"
+
 pipeline_output_check
 compile_pipeline_check
 # }}}

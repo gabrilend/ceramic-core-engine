@@ -141,6 +141,12 @@ static int build_inputs(const json_node_t *inputs_node,
                           : NULL;
         arr[i].literal = NULL;
         arr[i].optional = 0;
+        /* Issue 246: per-port custom translation shim — optional. */
+        json_node_t *xlate_n = json_object_get(e, "custom_translation");
+        arr[i].custom_translation =
+            (xlate_n && json_kind(xlate_n) == JSON_STRING)
+                ? arena_strdup(NULL, json_string_value(xlate_n))
+                : NULL;
     }
     *out_inputs = arr;
     *out_n      = n;

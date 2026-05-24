@@ -91,6 +91,13 @@ const SourceView = (() => {
   async function fetch_source(ref) {
     if (!ref) throw new Error('no ref set on this box');
 
+    // Custom translation shims live under translations/; route them
+    // through the dedicated translation endpoint (issue 246).
+    if (ref.startsWith('translations/')) {
+      const fname = ref.slice('translations/'.length);
+      return await API.get_translation(fname);
+    }
+
     const stripped = ref.replace(/^src\//, '');
 
     try { return await API.get_src_file(stripped); } catch (e) { /* fall through */ }

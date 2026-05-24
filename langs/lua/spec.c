@@ -803,6 +803,103 @@ static int lua_json_to_native(void *handle,
 }
 /* }}} */
 
+/* {{{ lua_translate() — per-port custom translation shim (issue 246)
+ *
+ * The shim is a .lua file the user wrote. It is expected to return
+ * a single function with the signature
+ *
+ *   function(raw_bytes, raw_native) -> translated_bytes
+ *
+ * Cached per-worker in a registry table keyed by shim path so
+ * repeat invocations skip the load. The cache table is created
+ * lazily on first use. */
+#define LUA_SHIM_CACHE_KEY "soramech.shim_cache"
+
+static int lua_translate(void *handle,
+                         const char *shim_path,
+                         const void *raw, int raw_size, int raw_native,
+                         void *out_buf, int out_capacity, int *out_size)
+{
+    lua_State *L = (lua_State *)handle;
+    if (!L || !shim_path) return -1;
+    int baseline = lua_gettop(L);
+
+    /* Find or create the cache table. */
+    lua_getfield(L, LUA_REGISTRYINDEX, LUA_SHIM_CACHE_KEY);
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, LUA_REGISTRYINDEX, LUA_SHIM_CACHE_KEY);
+    }
+    /* Stack: ..., cache */
+
+    /* Cache miss → load. */
+    lua_getfield(L, -1, shim_path);
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        if (luaL_loadfile(L, shim_path) != 0) {
+            fprintf(stderr, "lua spec: shim loadfile('%s'): %s\n",
+                    shim_path, lua_tostring(L, -1));
+            lua_settop(L, baseline);
+            return -1;
+        }
+        if (lua_pcall(L, 0, 1, 0) != 0) {
+            fprintf(stderr, "lua spec: shim chunk exec '%s': %s\n",
+                    shim_path, lua_tostring(L, -1));
+            lua_settop(L, baseline);
+            return -1;
+        }
+        if (!lua_isfunction(L, -1)) {
+            fprintf(stderr, "lua spec: shim '%s' did not return a function\n",
+                    shim_path);
+            lua_settop(L, baseline);
+            return -1;
+        }
+        /* Cache: store function under the path. */
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, shim_path);
+    }
+    /* Stack: ..., cache, fn */
+
+    /* Call fn(raw_bytes, raw_native) → translated string. */
+    lua_pushlstring(L, (const char *)raw, (size_t)raw_size);
+    lua_pushboolean(L, raw_native ? 1 : 0);
+    if (lua_pcall(L, 2, 1, 0) != 0) {
+        fprintf(stderr, "lua spec: shim '%s' call: %s\n",
+                shim_path, lua_tostring(L, -1));
+        lua_settop(L, baseline);
+        return -1;
+    }
+    /* Stack: ..., cache, result */
+
+    size_t out_len = 0;
+    const char *out_ptr = NULL;
+    if (lua_isstring(L, -1)) {
+        out_ptr = lua_tolstring(L, -1, &out_len);
+    } else if (lua_isnumber(L, -1)) {
+        out_ptr = lua_tolstring(L, -1, &out_len);  /* coerces */
+    } else if (lua_isnil(L, -1)) {
+        out_len = 0;
+        out_ptr = "";
+    } else {
+        fprintf(stderr, "lua spec: shim '%s' returned non-string\n", shim_path);
+        lua_settop(L, baseline);
+        return -1;
+    }
+    if ((int)out_len > out_capacity) {
+        fprintf(stderr, "lua spec: shim '%s' output %zu > capacity %d\n",
+                shim_path, out_len, out_capacity);
+        lua_settop(L, baseline);
+        return -1;
+    }
+    if (out_len > 0) memcpy(out_buf, out_ptr, out_len);
+    if (out_size) *out_size = (int)out_len;
+    lua_settop(L, baseline);
+    return 0;
+}
+/* }}} */
+
 /* {{{ soramech_lang_spec */
 lang_spec_t soramech_lang_spec = {
     .name           = "lua",
@@ -813,5 +910,6 @@ lang_spec_t soramech_lang_spec = {
     .invoke         = lua_invoke,
     .native_to_json = lua_native_to_json,
     .json_to_native = lua_json_to_native,
+    .translate      = lua_translate,
 };
 /* }}} */

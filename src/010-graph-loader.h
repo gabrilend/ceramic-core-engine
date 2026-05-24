@@ -79,6 +79,14 @@ typedef struct {
     const char *type;       /* "string" by convention     */
     const char *literal;    /* NULL or arena-owned value  */
     int         optional;   /* issue 230 optional flag    */
+    /* Per-port custom translation shim (issue 246). When non-NULL,
+     * names a file relative to the map dir that contains a
+     * user-written shim. The shim runs at the start of the
+     * consumer's task and replaces the default decode for THIS
+     * port only — other ports keep the default path. The shim's
+     * language is implied by the box's `lang` field; the file is
+     * compiled / loaded by the appropriate spec's machinery. */
+    const char *custom_translation;
 } input_decl_t;
 /* }}} */
 
