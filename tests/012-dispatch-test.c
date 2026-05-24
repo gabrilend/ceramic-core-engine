@@ -140,9 +140,9 @@ static int test_end_to_end_calc(void)
     ASSERT(atomic_load(&rt.ctx.tasks_dispatched) == 1);
 
     /* Captured output for the add box must be "42". */
-    ASSERT(rt.ctx.last_outputs);
-    ASSERT(rt.ctx.last_outputs[entry] != NULL);
-    ASSERT(strcmp(rt.ctx.last_outputs[entry], "42") == 0);
+    ASSERT(rt.ctx.capture_outputs);
+    ASSERT(dispatch_captured_output(&rt.ctx, entry, NULL) != NULL);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, entry, NULL), "42") == 0);
 
     runtime_teardown(&rt);
     return 1;
@@ -180,8 +180,8 @@ static int test_calc_mul(void)
      * verify add(6, 7) = "13". */
     dispatch_spawn_if_ready(&rt.ctx, entry, 0);
     pool_wait_quiescent(rt.pool);
-    ASSERT(rt.ctx.last_outputs[entry] != NULL);
-    ASSERT(strcmp(rt.ctx.last_outputs[entry], "13") == 0);
+    ASSERT(dispatch_captured_output(&rt.ctx, entry, NULL) != NULL);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, entry, NULL), "13") == 0);
 
     runtime_teardown(&rt);
     return 1;
@@ -206,7 +206,7 @@ static int test_dispatch_counter_burst(void)
     for (int i = 0; i < N; i++) dispatch_spawn(&rt.ctx, entry, 0);
     pool_wait_quiescent(rt.pool);
     ASSERT(atomic_load(&rt.ctx.tasks_dispatched) == N);
-    ASSERT(strcmp(rt.ctx.last_outputs[entry], "42") == 0);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, entry, NULL), "42") == 0);
 
     runtime_teardown(&rt);
     return 1;
@@ -236,12 +236,12 @@ static int test_comparator_routing(void)
     pool_wait_quiescent(rt.pool);
 
     /* classify ran; only the "gt" branch (high) ran behind it. */
-    ASSERT(rt.ctx.last_outputs[classify] != NULL);
-    ASSERT(strcmp(rt.ctx.last_outputs[classify], "8") == 0);
-    ASSERT(rt.ctx.last_outputs[high] != NULL);
-    ASSERT(strcmp(rt.ctx.last_outputs[high], "HIGH:8") == 0);
-    ASSERT(rt.ctx.last_outputs[low] == NULL);
-    ASSERT(rt.ctx.last_outputs[mid] == NULL);
+    ASSERT(dispatch_captured_output(&rt.ctx, classify, NULL) != NULL);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, classify, NULL), "8") == 0);
+    ASSERT(dispatch_captured_output(&rt.ctx, high, NULL) != NULL);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, high, NULL), "HIGH:8") == 0);
+    ASSERT(dispatch_captured_output(&rt.ctx, low, NULL) == NULL);
+    ASSERT(dispatch_captured_output(&rt.ctx, mid, NULL) == NULL);
 
     runtime_teardown(&rt);
     return 1;
@@ -270,10 +270,10 @@ static int test_iterator_routing_single_fire(void)
     pool_wait_quiescent(rt.pool);
 
     /* counter=0 → out_0 → a. */
-    ASSERT(strcmp(rt.ctx.last_outputs[iter], "hi") == 0);
-    ASSERT(strcmp(rt.ctx.last_outputs[a], "A:hi") == 0);
-    ASSERT(rt.ctx.last_outputs[b] == NULL);
-    ASSERT(rt.ctx.last_outputs[c] == NULL);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, iter, NULL), "hi") == 0);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, a, NULL), "A:hi") == 0);
+    ASSERT(dispatch_captured_output(&rt.ctx, b, NULL) == NULL);
+    ASSERT(dispatch_captured_output(&rt.ctx, c, NULL) == NULL);
 
     runtime_teardown(&rt);
     return 1;
@@ -313,12 +313,12 @@ static int test_iterator_multi_fire(void)
     dispatch_spawn(&rt.ctx, iter, 0);
     pool_wait_quiescent(rt.pool);
 
-    ASSERT(rt.ctx.last_outputs[a]  != NULL);
-    ASSERT(rt.ctx.last_outputs[bx] != NULL);
-    ASSERT(rt.ctx.last_outputs[c]  != NULL);
-    ASSERT(strcmp(rt.ctx.last_outputs[a],  "A:hi")  == 0);
-    ASSERT(strcmp(rt.ctx.last_outputs[bx], "B:hi2") == 0);
-    ASSERT(strcmp(rt.ctx.last_outputs[c],  "C:hi3") == 0);
+    ASSERT(dispatch_captured_output(&rt.ctx, a, NULL) != NULL);
+    ASSERT(dispatch_captured_output(&rt.ctx, bx, NULL) != NULL);
+    ASSERT(dispatch_captured_output(&rt.ctx, c, NULL) != NULL);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, a, NULL),  "A:hi")  == 0);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, bx, NULL), "B:hi2") == 0);
+    ASSERT(strcmp(dispatch_captured_output(&rt.ctx, c, NULL),  "C:hi3") == 0);
 
     runtime_teardown(&rt);
     return 1;
@@ -390,8 +390,8 @@ static int test_read_predecessor_rotation(void)
 
             dispatch_spawn(&rt.ctx, sink, 0);
             pool_wait_quiescent(rt.pool);
-            ASSERT(rt.ctx.last_outputs[sink]);
-            ASSERT(strcmp(rt.ctx.last_outputs[sink],
+            ASSERT(dispatch_captured_output(&rt.ctx, sink, NULL) != NULL);
+            ASSERT(strcmp(dispatch_captured_output(&rt.ctx, sink, NULL),
                           pred->cached_value) == 0);
         }
     }
@@ -480,10 +480,10 @@ static int test_dual_ring_per_cell_format(void)
                                 bytes, n, 0) == 0);
         dispatch_spawn_if_ready(&rt.ctx, sink, 0);
         pool_wait_quiescent(rt.pool);
-        ASSERT(rt.ctx.last_outputs[sink] != NULL);
-        if (strncmp(rt.ctx.last_outputs[sink], "string:", 7) != 0) {
+        ASSERT(dispatch_captured_output(&rt.ctx, sink, NULL) != NULL);
+        if (strncmp(dispatch_captured_output(&rt.ctx, sink, NULL), "string:", 7) != 0) {
             fprintf(stderr, "      native half got: %s\n",
-                    rt.ctx.last_outputs[sink]);
+                    dispatch_captured_output(&rt.ctx, sink, NULL));
             ok = 0;
         }
         runtime_teardown(&rt);
@@ -503,10 +503,10 @@ static int test_dual_ring_per_cell_format(void)
                               bytes, n, 0) == 0);
         dispatch_spawn_if_ready(&rt.ctx, sink, 0);
         pool_wait_quiescent(rt.pool);
-        ASSERT(rt.ctx.last_outputs[sink] != NULL);
-        if (strcmp(rt.ctx.last_outputs[sink], "table:42") != 0) {
+        ASSERT(dispatch_captured_output(&rt.ctx, sink, NULL) != NULL);
+        if (strcmp(dispatch_captured_output(&rt.ctx, sink, NULL), "table:42") != 0) {
             fprintf(stderr, "      json half got: %s\n",
-                    rt.ctx.last_outputs[sink]);
+                    dispatch_captured_output(&rt.ctx, sink, NULL));
             ok = 0;
         }
         runtime_teardown(&rt);
@@ -622,8 +622,8 @@ static int distributor_case(const char *dir, int pre_fill_branch,
 
     int picked    = targets[expect_picked];
     int rejected  = targets[1 - expect_picked];
-    ASSERT(rt.ctx.last_outputs[picked]   != NULL);
-    ASSERT(rt.ctx.last_outputs[rejected] == NULL);
+    ASSERT(dispatch_captured_output(&rt.ctx, picked, NULL) != NULL);
+    ASSERT(dispatch_captured_output(&rt.ctx, rejected, NULL) == NULL);
 
     runtime_teardown(&rt);
     return 1;

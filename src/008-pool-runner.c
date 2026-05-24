@@ -150,18 +150,18 @@ static event_queue_t *open_event_queue(const char *map_dir,
  * graph via consumer pulls, observed in the consumers' outputs. */
 static void print_outputs(const dispatch_ctx_t *ctx)
 {
-    if (!ctx->last_outputs) return;
-    /* Iterate over the graph's current box count rather than
-     * ctx->n_boxes — the latter includes 319d's runtime-headroom
-     * slots for boxes that may have been created at runtime; the
-     * graph's atomic count reflects the actual population. Skip
-     * any NULL entries defensively in case of races. */
+    if (!ctx->capture_outputs) return;
+    /* Iterate over the graph's current box count — chunks-based
+     * storage in dispatch (issue 319 follow-on) reaches each box
+     * via dispatch_captured_output rather than indexing a flat
+     * array. Read boxes are skipped: they don't run as tasks. */
     int n = graph_n_boxes(ctx->graph);
     for (int i = 0; i < n; i++) {
         const box_t *b = graph_box(ctx->graph, i);
         if (!b) continue;
         if (b->kind == BOX_READ) continue;
-        const char *out = ctx->last_outputs[i];
+        int sz = 0;
+        const char *out = dispatch_captured_output(ctx, i, &sz);
         if (out) {
             fprintf(stderr, "  %s → %s\n", b->id, out);
         } else {

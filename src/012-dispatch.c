@@ -43,6 +43,69 @@
 #include <sys/stat.h>
 #include <time.h>
 
+/* {{{ Per-box ctx chunks — issue 319 follow-on to lift the
+ * RUNTIME_BOX_HEADROOM cap. The dispatch carries per-box state
+ * (spawn guard + optional output capture) in chunked-append
+ * chunks: each chunk holds CTX_CHUNK_SIZE slots, and the
+ * top-level array of chunk pointers grows as new boxes appear
+ * (graph load + runtime create_box). Slots never move once
+ * allocated; the array of chunk pointers can grow via realloc
+ * because callers reach individual slots through pointer
+ * indirection. */
+#define CTX_CHUNK_SIZE 64
+
+typedef struct ctx_box_chunk {
+    _Atomic int spawned   [CTX_CHUNK_SIZE];
+    char       *outputs   [CTX_CHUNK_SIZE];
+    int         out_sizes [CTX_CHUNK_SIZE];
+} ctx_box_chunk_t;
+
+/* Return the slot info for box_id, growing the chunk array as
+ * needed if create_if_missing is set. Returns the chunk pointer;
+ * callers index by `box_id % CTX_CHUNK_SIZE`. Returns NULL when
+ * create_if_missing is 0 and the chunk hasn't been allocated. */
+static ctx_box_chunk_t *ctx_box_chunk(dispatch_ctx_t *ctx, unsigned int box_id,
+                                      int create_if_missing)
+{
+    unsigned int ci = box_id / CTX_CHUNK_SIZE;
+    unsigned int n  = atomic_load_explicit(&ctx->n_box_chunks,
+                                           memory_order_acquire);
+    ctx_box_chunk_t **chunks = ctx->box_chunks_opaque;
+    if (ci < n && chunks && chunks[ci]) return chunks[ci];
+    if (!create_if_missing) return NULL;
+
+    pthread_mutex_lock(&ctx->box_chunks_mu);
+    n      = atomic_load_explicit(&ctx->n_box_chunks, memory_order_relaxed);
+    chunks = ctx->box_chunks_opaque;
+    if (ci >= n) {
+        /* Grow the top-level array to cover ci+1 chunks. The array
+         * is realloc'd; callers don't hold pointers into it (they
+         * reach individual slots through the chunk pointers, which
+         * stay stable once published). */
+        unsigned int new_n = n == 0 ? 8 : n;
+        while (new_n <= ci) new_n *= 2;
+        ctx_box_chunk_t **grown = realloc(chunks,
+                                          (size_t)new_n * sizeof *grown);
+        if (!grown) { pthread_mutex_unlock(&ctx->box_chunks_mu); return NULL; }
+        for (unsigned int k = n; k < new_n; k++) grown[k] = NULL;
+        ctx->box_chunks_opaque = grown;
+        atomic_store_explicit(&ctx->n_box_chunks, new_n, memory_order_release);
+        chunks = grown;
+    }
+    if (!chunks[ci]) {
+        ctx_box_chunk_t *fresh = calloc(1, sizeof *fresh);
+        if (!fresh) { pthread_mutex_unlock(&ctx->box_chunks_mu); return NULL; }
+        for (int i = 0; i < CTX_CHUNK_SIZE; i++) {
+            atomic_init(&fresh->spawned[i], 0);
+        }
+        chunks[ci] = fresh;
+    }
+    ctx_box_chunk_t *result = chunks[ci];
+    pthread_mutex_unlock(&ctx->box_chunks_mu);
+    return result;
+}
+/* }}} */
+
 /* Sanity ceiling on per-box input count. The per-call input
  * arrays are VLAs sized to the box's actual input count; this
  * cap exists to keep a runaway graph loader from blowing the
@@ -121,40 +184,19 @@ int dispatch_ctx_init(dispatch_ctx_t *ctx,
     ctx->pool  = p;
     atomic_init(&ctx->tasks_dispatched, 0);
     atomic_init(&ctx->next_task_id,     0);
-    /* Issue 319d: ctx's per-box arrays (box_ever_spawned,
-     * last_outputs, last_output_sizes) need to be large enough to
-     * cover boxes added at runtime via create_box, not just the
-     * boxes present at graph load. The proper fix is growable
-     * arrays under a mutex; the slice-1 expedient is to oversize
-     * generously at init. RUNTIME_BOX_HEADROOM bounds how many
-     * boxes can be runtime-created. If a workload trips the cap,
-     * raise it or land the growable-array version. */
-#define RUNTIME_BOX_HEADROOM 4096
-    ctx->n_boxes              = graph_n_boxes(g) + RUNTIME_BOX_HEADROOM;
     ctx->default_out_capacity = 4096;
     ctx->events               = NULL;     /* opt-in via caller assignment */
     ctx->log_values           = 0;        /* opt-in via SORAMECH_LOG_VALUES=1 */
 
-    if (ctx->n_boxes > 0) {
-        ctx->box_ever_spawned = calloc((size_t)ctx->n_boxes, sizeof(_Atomic int));
-        if (!ctx->box_ever_spawned) {
-            if (err) *err = err_fmt("out of memory");
-            return -1;
-        }
-        for (int i = 0; i < ctx->n_boxes; i++) {
-            atomic_init(&ctx->box_ever_spawned[i], 0);
-        }
-
-        if (enable_output_capture) {
-            ctx->capture_outputs    = 1;
-            ctx->last_outputs       = calloc((size_t)ctx->n_boxes, sizeof(char *));
-            ctx->last_output_sizes  = calloc((size_t)ctx->n_boxes, sizeof(int));
-            if (!ctx->last_outputs || !ctx->last_output_sizes) {
-                if (err) *err = err_fmt("out of memory");
-                return -1;
-            }
-        }
-    }
+    /* Per-box runtime state lives in chunked-append chunks
+     * (issue 319 follow-on, replaces the slice-1 RUNTIME_BOX_HEADROOM
+     * cap that was 4096 boxes). At init we allocate zero chunks;
+     * the per-box helper grows on demand. The capture flag is
+     * recorded here; chunks honor it when first touched. */
+    ctx->capture_outputs   = enable_output_capture ? 1 : 0;
+    atomic_init(&ctx->n_box_chunks, 0u);
+    ctx->box_chunks_opaque = NULL;
+    pthread_mutex_init(&ctx->box_chunks_mu, NULL);
     return 0;
 }
 /* }}} */
@@ -163,12 +205,25 @@ int dispatch_ctx_init(dispatch_ctx_t *ctx,
 void dispatch_ctx_destroy(dispatch_ctx_t *ctx)
 {
     if (!ctx) return;
-    if (ctx->last_outputs) {
-        for (int i = 0; i < ctx->n_boxes; i++) free(ctx->last_outputs[i]);
-        free(ctx->last_outputs);
+    /* Walk the per-box chunks; free any captured outputs, then the
+     * chunks themselves. */
+    unsigned int n_chunks = atomic_load_explicit(&ctx->n_box_chunks,
+                                                 memory_order_relaxed);
+    ctx_box_chunk_t **chunks = ctx->box_chunks_opaque;
+    if (chunks) {
+        for (unsigned int c = 0; c < n_chunks; c++) {
+            ctx_box_chunk_t *chunk = chunks[c];
+            if (!chunk) continue;
+            if (ctx->capture_outputs) {
+                for (int i = 0; i < CTX_CHUNK_SIZE; i++) {
+                    if (chunk->outputs[i]) free(chunk->outputs[i]);
+                }
+            }
+            free(chunk);
+        }
+        free(chunks);
     }
-    free(ctx->last_output_sizes);
-    free(ctx->box_ever_spawned);
+    pthread_mutex_destroy(&ctx->box_chunks_mu);
     memset(ctx, 0, sizeof *ctx);
 }
 /* }}} */
@@ -254,7 +309,7 @@ void dispatch_spawn(const dispatch_ctx_t *ctx, int box_id, int priority)
 void dispatch_spawn_if_ready(dispatch_ctx_t *ctx, int box_id, int priority)
 {
     if (!ctx) return;
-    if (box_id < 0 || box_id >= ctx->n_boxes) return;
+    if (box_id < 0) return;
     if (!box_is_ready(ctx, box_id)) return;
 
     const box_t *b = graph_box(ctx->graph, box_id);
@@ -275,10 +330,15 @@ void dispatch_spawn_if_ready(dispatch_ctx_t *ctx, int box_id, int priority)
 
     /* Single-spawn case: CAS the per-box guard. The first push that
      * finds the consumer ready wins; everyone else short-circuits.
-     * The 1-cell peek model spawns each box at most once per run. */
+     * The 1-cell peek model spawns each box at most once per run.
+     * The chunk grows on demand so runtime-created boxes get a
+     * slot without any pre-sized cap. */
+    ctx_box_chunk_t *chunk = ctx_box_chunk(ctx, (unsigned int)box_id, 1);
+    if (!chunk) return;
     int expected = 0;
-    if (atomic_compare_exchange_strong(&ctx->box_ever_spawned[box_id],
-                                       &expected, 1)) {
+    if (atomic_compare_exchange_strong(
+            &chunk->spawned[(unsigned int)box_id % CTX_CHUNK_SIZE],
+            &expected, 1)) {
         dispatch_spawn(ctx, box_id, priority);
     }
 }
@@ -291,7 +351,8 @@ int dispatch_push_literals(dispatch_ctx_t *ctx, char **err)
         if (err) *err = err_fmt("dispatch_push_literals: NULL ctx");
         return -1;
     }
-    for (int i = 0; i < ctx->n_boxes; i++) {
+    int n_boxes = graph_n_boxes(ctx->graph);
+    for (int i = 0; i < n_boxes; i++) {
         const box_t *b = graph_box(ctx->graph, i);
         if (!b || !b->input_slot_ids) continue;
         for (int j = 0; j < b->n_inputs; j++) {
@@ -796,18 +857,42 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
 /* }}} */
 
 /* {{{ capture() — optional test hook, memcpy output into ctx */
+const char *dispatch_captured_output(const dispatch_ctx_t *ctx,
+                                     int box_id, int *out_size)
+{
+    if (!ctx || !ctx->capture_outputs || box_id < 0) {
+        if (out_size) *out_size = 0;
+        return NULL;
+    }
+    /* Hot read: peek without growing. The cast away from const is
+     * benign here — ctx_box_chunk doesn't actually mutate the ctx
+     * when create_if_missing is 0. */
+    ctx_box_chunk_t *chunk = ctx_box_chunk((dispatch_ctx_t *)ctx,
+                                           (unsigned int)box_id, 0);
+    if (!chunk) {
+        if (out_size) *out_size = 0;
+        return NULL;
+    }
+    int slot = (int)((unsigned int)box_id % CTX_CHUNK_SIZE);
+    if (out_size) *out_size = chunk->out_sizes[slot];
+    return chunk->outputs[slot];
+}
+
 static void capture(dispatch_ctx_t *ctx, int box_id,
                     const void *bytes, int size)
 {
-    if (!ctx->capture_outputs || !ctx->last_outputs) return;
-    if (box_id < 0 || box_id >= ctx->n_boxes) return;
-    free(ctx->last_outputs[box_id]);
+    if (!ctx->capture_outputs) return;
+    if (box_id < 0) return;
+    ctx_box_chunk_t *chunk = ctx_box_chunk(ctx, (unsigned int)box_id, 1);
+    if (!chunk) return;
+    int slot = (int)((unsigned int)box_id % CTX_CHUNK_SIZE);
+    free(chunk->outputs[slot]);
     char *copy = malloc((size_t)size + 1);
     if (!copy) return;
     if (size > 0) memcpy(copy, bytes, (size_t)size);
     copy[size] = '\0';
-    ctx->last_outputs[box_id]      = copy;
-    ctx->last_output_sizes[box_id] = size;
+    chunk->outputs[slot]   = copy;
+    chunk->out_sizes[slot] = size;
 }
 /* }}} */
 

@@ -25,6 +25,7 @@
 
 #include <stdatomic.h>
 #include <stdint.h>
+#include <pthread.h>
 
 #include "010-graph-loader.h"
 #include "011-spec-registry.h"
@@ -46,17 +47,17 @@ typedef struct dispatch_ctx {
     /* Diagnostic: incremented each time dispatch_action runs. */
     _Atomic int           tasks_dispatched;
 
-    /* Per-box spawn guard (n_boxes entries). The 1-cell peek model
-     * spawns each box at most once; this flag is the CAS target
-     * that enforces "only one push wins the spawn." */
-    int                   n_boxes;
-    _Atomic int          *box_ever_spawned;
-
-    /* Per-box output capture (opt-in, for tests). When non-NULL,
-     * dispatch_action copies the box's output bytes here on
-     * completion. n_boxes entries. */
-    char                **last_outputs;
-    int                  *last_output_sizes;
+    /* Per-box runtime state (spawn guard + optional output capture)
+     * lives in chunked-append chunks (see ctx_box_chunk_t in
+     * dispatch.c). The old flat-arrays-with-headroom model imposed
+     * a 4096-box runtime cap that issue 319's create_box could
+     * exceed; chunks remove the cap by growing on demand.
+     *
+     * Access goes through the private ctx_box_slot helper in
+     * dispatch.c; callers don't touch these directly. */
+    void                 *box_chunks_opaque;   /* ctx_box_chunk_t**, hidden type */
+    _Atomic unsigned int  n_box_chunks;
+    pthread_mutex_t       box_chunks_mu;
     int                   capture_outputs;
 
     /* Optional default output buffer size for invoke calls. If 0,
@@ -122,6 +123,16 @@ int  dispatch_ctx_init   (dispatch_ctx_t *ctx,
 /* Free per-box runtime arrays; does not touch the externally-owned
  * graph / slots / specs / pool fields. */
 void dispatch_ctx_destroy(dispatch_ctx_t *ctx);
+
+/* Read a previously-captured output (issue 319 follow-on: callers
+ * no longer touch the per-box arrays directly because those moved
+ * into private chunked storage). Returns the NUL-terminated bytes
+ * if capture was enabled at init AND a previous task on `box_id`
+ * wrote something; NULL otherwise. `*out_size` is filled with the
+ * stored byte count on a hit. The returned pointer is valid until
+ * the next capture for the same box or dispatch_ctx_destroy. */
+const char *dispatch_captured_output(const dispatch_ctx_t *ctx,
+                                     int box_id, int *out_size);
 /* }}} */
 
 /* {{{ Startup helpers */
