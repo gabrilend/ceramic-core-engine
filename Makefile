@@ -16,7 +16,14 @@
 # those issues land.
 
 # {{{ Resolve project root
-DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+# Immediate (:=) assignment so DIR is captured once at parse time
+# from the project's own Makefile path. Recursive (?=) assignment
+# would re-evaluate $(MAKEFILE_LIST) every time DIR is expanded —
+# which becomes wrong after `-include` of build/**/*.d files at
+# the bottom of this file, since the .d files become the last
+# member of $(MAKEFILE_LIST) and their dir (build/src/, etc.) is
+# not the project root.
+DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 # }}}
 
 # {{{ Toolchain & flags
@@ -24,7 +31,19 @@ CC      ?= gcc
 
 # Shared header search path: every C source can find langs/lang-spec.h
 # and any future libs/<name>/ headers via -I flags below.
-CPPFLAGS = -I$(DIR)/langs -I$(DIR)/libs/task-pool -I$(DIR)/libs/json -I$(DIR)/src
+#
+# -MMD -MP makes gcc emit a `.d` file alongside each `.o` recording
+# every header that translation unit included. The `-include $(DEPS)`
+# below pulls those .d files back in so changing a header
+# (e.g. extending box_t with a new field) reliably triggers a
+# rebuild of every .o that includes it. Without this, a header
+# field change can produce a mixed object set where different
+# translation units see different struct layouts — field reads
+# through a struct pointer land at wrong offsets and surface as
+# bewildering memory-corruption symptoms. (Diagnosed on 319's
+# runtime self-construction path after the 248 / 243 layout
+# changes to box_t / routing_t.)
+CPPFLAGS = -I$(DIR)/langs -I$(DIR)/libs/task-pool -I$(DIR)/libs/json -I$(DIR)/src -MMD -MP
 
 # Default to release; DEBUG and STRICT toggle alternates.
 ifeq ($(DEBUG),1)
@@ -190,4 +209,15 @@ $(BUILD_DIR)/tests/020-sentinels-test:    $(BUILD_DIR)/src/020-sentinels.o \
 $(BUILD_DIR)/tests/%: $(BUILD_DIR)/tests/%.o
 	@echo "  → $(patsubst $(DIR)/%,%,$@)"
 	@$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Auto-generated header dependencies (one .d per .o, courtesy of
+# -MMD -MP in CPPFLAGS). Wildcard-include whatever .d files
+# exist in the build tree — empty on a fresh build, populated
+# after the first compile. Once an .o is compiled its .d travels
+# with it until clean; touching any header it lists forces a
+# rebuild of every dependent .o automatically.
+-include $(wildcard $(BUILD_DIR)/src/*.d)
+-include $(wildcard $(BUILD_DIR)/libs/task-pool/*.d)
+-include $(wildcard $(BUILD_DIR)/libs/json/*.d)
+-include $(wildcard $(BUILD_DIR)/tests/*.d)
 # }}}

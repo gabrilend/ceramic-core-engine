@@ -703,9 +703,18 @@ static int push_branch(dispatch_ctx_t *ctx, const box_t *b,
                        const void *out_bytes, int out_size,
                        uint32_t tag, int output_native)
 {
+    /* The producer's connections array and its count are atomic
+     * fields published by box_add_connection (issue 319d) with
+     * memory_order_release. Reading them with matching acquire
+     * semantics is the right paradigm — a concurrent worker
+     * inside box_add_connection on this box could otherwise
+     * split the snapshot (new count, stale array pointer) and
+     * index past the end of an old array. */
+    int n_c = atomic_load_explicit(&b->n_connections, memory_order_acquire);
+    connection_t *cs = atomic_load_explicit(&b->connections, memory_order_acquire);
     int fired = 0;
-    for (int i = 0; i < b->n_connections; i++) {
-        const connection_t *c = &b->connections[i];
+    for (int i = 0; i < n_c; i++) {
+        const connection_t *c = &cs[i];
         if (!c->from_branch) continue;
         if (strcmp(c->from_branch, branch) != 0) continue;
         if (push_one_connection(ctx, b, c, out_bytes, out_size, tag,
@@ -727,8 +736,12 @@ static int push_to_downstream(dispatch_ctx_t *ctx, const box_t *b,
                               const void *out_bytes, int out_size,
                               int output_native)
 {
-    for (int i = 0; i < b->n_connections; i++) {
-        if (push_one_connection(ctx, b, &b->connections[i],
+    /* Atomic-acquire pair with box_add_connection's release
+     * stores. See push_branch above for the longer rationale. */
+    int n_c = atomic_load_explicit(&b->n_connections, memory_order_acquire);
+    connection_t *cs = atomic_load_explicit(&b->connections, memory_order_acquire);
+    for (int i = 0; i < n_c; i++) {
+        if (push_one_connection(ctx, b, &cs[i],
                                 out_bytes, out_size, 0, output_native) != 0)
             return -1;
     }

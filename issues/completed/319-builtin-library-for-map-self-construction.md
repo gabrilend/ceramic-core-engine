@@ -13,19 +13,36 @@ suite's four runtime-create fixtures (319d-runtime-create,
 319e-c-create, 319-box-kind-create, 319-cross-lang-create)
 all pass.
 
-**Latent visibility caveat.** The same-thread visibility of a
-freshly-created box's input_slot_ids field is not strictly
-synchronised — the field is read through a const box_t pointer
-and the compiler's optimiser can, under some build layouts,
-cache a stale NULL from the pre-population state. The current
-build has these tests passing reliably (30/30 stress on each)
-but the timing is layout-dependent. A future hardening pass
-(make input_slot_ids atomic, or add an explicit acquire fence
-after the graph_box lookup in push_one_connection) would close
-the latent race at the source level. Tracked as a follow-up
-note, not as a deferred-from-319 item — the create_box and
-connect surfaces are complete; the hardening is a separate
-concern in the dispatch layer.
+**Bug postscript** (originally reported here as a latent
+visibility race, now resolved at the source): runtime-create
+tests intermittently failed with `dst->n_inputs` and
+`dst->input_slot_ids` reading as their calloc'd zero values
+even after `runtime_create_box` had populated them. Diagnosed
+via the issue-311 push events (`result=to-input-out-of-range`
+visible in the JSONL transcript) plus a one-off stderr trace at
+the skip site: the dst pointer was valid (`dst->id` read
+correctly) but field reads landed at wrong offsets. **Root
+cause was a partial-rebuild trap in the Makefile**, not a
+memory ordering issue: changing fields on `box_t` or `routing_t`
+(issue 248 added n_outputs/outputs, issue 243 added
+n_thresholds/thresholds) didn't trigger rebuilds of every .o
+file that included the header, so different translation units
+saw different struct layouts and field offsets disagreed. A
+clean rebuild lined them up; the "layout-dependent timing" we
+saw earlier was whichever .o files Make happened to remake from
+incidental other touches. The Makefile now compiles with
+`-MMD -MP` and `-include`s the generated .d files so a header
+change propagates to every dependent .o automatically — the
+partial-rebuild trap can't recur.
+
+A small dispatch-side hardening also landed alongside the fix:
+`push_branch` and `push_to_downstream` now read `b->n_connections`
+and `b->connections` with explicit atomic-acquire (paired with
+the existing atomic-release in `box_add_connection`). That isn't
+load-bearing for the recurrence-prevention — the bug was at the
+build layer — but it's the correct paradigm for the
+atomic-stored fields and rules out a real cross-thread split
+between a concurrent connect and a concurrent fan-out.
 
 ## Concept
 
