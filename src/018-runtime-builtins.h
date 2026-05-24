@@ -31,21 +31,26 @@
 struct graph;
 struct slot_store;
 struct spec_registry;
+struct event_queue;
 
 /* {{{ Active runtime context (thread-local)
  *
  * Set by dispatch_action immediately before invoking a spec, cleared
  * immediately after. Spec code (including the language bindings that
  * call into runtime_create_box / runtime_connect) reads these to find
- * the graph and runtime resources. */
+ * the graph and runtime resources. Issue 311 extension: the event
+ * queue is carried too, so the builtins can emit box_create /
+ * wire_add events that thread into the JSONL transcript. */
 void runtime_set_active_context(struct graph         *g,
                                 struct slot_store    *s,
-                                struct spec_registry *r);
+                                struct spec_registry *r,
+                                struct event_queue   *e);
 void runtime_clear_active_context(void);
 
 struct graph         *runtime_active_graph(void);
 struct slot_store    *runtime_active_slots(void);
 struct spec_registry *runtime_active_specs(void);
+struct event_queue   *runtime_active_events(void);
 /* }}} */
 
 /* {{{ runtime_create_box()

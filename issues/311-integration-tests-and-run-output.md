@@ -1,7 +1,16 @@
 # 311 — Integration tests & run output (`last-run.json`)
 
 ## Status
-open
+in progress · JSONL writer, multi-producer event queue, dedicated
+writer thread, optional value events (`SORAMECH_LOG_VALUES`),
+optional slot events (`SORAMECH_LOG_SLOTS`), runtime-mutation
+events (box_create / wire_add / runtime slot_alloc), per-push
+events with skip-reason result field, and the
+`scripts/run-tests.sh` integration runner all shipped. The
+remaining open items are the lock-free MPSC ring (current
+mutex-based queue is a placeholder), the JSONL normaliser for
+diff-based fixture verification (current tests substring-match
+against stderr), and the phase-3 demo map.
 
 ## Current behavior
 
@@ -352,3 +361,56 @@ Six fixture checks at the moment:
 - `pipeline`        — five-box multilang chain
 - `pipeline file`   — verifies the file_write sink wrote
   `"11!"` to `/tmp/soramech-pipeline-out.txt`
+
+### Runtime-mutation and per-push events — 2026-05-24
+
+Three new events extend the JSONL transcript to cover the
+runtime self-construction path from issue 319, which previously
+left no trace in the log even with `SORAMECH_LOG_VALUES=1`
+because the events fire from inside a spec's invoke rather than
+from the dispatch's task lifecycle.
+
+- **`box_create`** — fires from `runtime_create_box` after the
+  new box is published into the graph. Records id, kind, lang,
+  ref, fn. Always emits when an event queue is open (rare and
+  load-bearing — no verbosity gate).
+- **`wire_add`** — fires from `runtime_connect` after the
+  connection is appended to the producer's array. Records
+  from_box, from_branch, to_box, to_input. Always emits.
+- **`slot_alloc`** (runtime variant) — fires from
+  `runtime_create_box`'s per-input-port slot allocation loop.
+  Same shape as the startup slot enumeration but for the
+  runtime path. Always emits.
+- **`push`** — fires from `push_one_connection` on every
+  attempt, with a `result` field carrying either `"ok"` or a
+  short skip reason (`no-to-box-idx`, `dst-null`,
+  `input-slots-null`, `to-input-out-of-range`, `push-failed`).
+  Opt-in via `SORAMECH_LOG_SLOTS=1` — would be too noisy by
+  default. Crucial for diagnosing the latent visibility race
+  noted on 319's completed status: a `push` event with
+  `result=input-slots-null` is the immediately-recognisable
+  signature.
+
+The runtime context that `dispatch_action` publishes via TLS
+grew an `event_queue *` slot so the runtime builtins reach the
+same writer the dispatch uses. The pool runner reads
+`SORAMECH_LOG_SLOTS` into a `ctx->log_slots` flag that gates
+both the startup slot enumeration AND the per-push events —
+one env var, one slot-level verbosity story.
+
+End-to-end check: running `319d-runtime-create` with
+`SORAMECH_LOG_SLOTS=1` produces a transcript where the
+mutation timeline is fully visible — `task_start →
+slot_alloc → box_create → wire_add → push(result=ok) →
+task_submit → task_end → task_start → task_end`. If the
+visibility race resurfaces under some build layout, the push
+event flips to `result=input-slots-null` and the diagnosis is
+in the log without a rebuild.
+
+What's still ahead inside 311:
+- Lock-free Vyukov MPSC ring with sequence numbers — the
+  architecture doc's preferred design. The mutex queue is a
+  placeholder; upgrade once contention shows up.
+- JSONL normalizer for diff-based test verification (currently
+  the test harness uses substring matching against stderr).
+- Phase-3 demo map under `issues/completed/demos/phase-3/`.

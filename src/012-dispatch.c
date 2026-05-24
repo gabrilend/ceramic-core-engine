@@ -187,6 +187,7 @@ int dispatch_ctx_init(dispatch_ctx_t *ctx,
     ctx->default_out_capacity = 4096;
     ctx->events               = NULL;     /* opt-in via caller assignment */
     ctx->log_values           = 0;        /* opt-in via SORAMECH_LOG_VALUES=1 */
+    ctx->log_slots            = 0;        /* opt-in via SORAMECH_LOG_SLOTS=1 */
 
     /* Per-box runtime state lives in chunked-append chunks
      * (issue 319 follow-on, replaces the slice-1 RUNTIME_BOX_HEADROOM
@@ -598,10 +599,47 @@ static int push_one_connection(dispatch_ctx_t *ctx, const box_t *b,
                                uint32_t tag,
                                int output_native)
 {
-    if (c->to_box_idx < 0) return 0;
+    /* Issue 311 + 319 diagnosis: every push_one_connection attempt
+     * gets logged when SORAMECH_LOG_SLOTS=1, with a short result
+     * string. The skip paths name *why* a push was skipped so a
+     * race like 319's "input_slot_ids reads as NULL even after
+     * runtime_create_box populated it" shows up in the JSONL as a
+     * "input-slots-null" push event instead of as a phantom
+     * missing event. */
+    int log_pushes = ctx->log_slots && ctx->events;
+    if (c->to_box_idx < 0) {
+        if (log_pushes) {
+            event_queue_push(ctx->events, now_secs(),
+                             b->id, c->to_box, c->to_input,
+                             -1, out_size, "no-to-box-idx");
+        }
+        return 0;
+    }
     const box_t *dst = graph_box(ctx->graph, c->to_box_idx);
-    if (!dst || !dst->input_slot_ids) return 0;
-    if (c->to_input_idx < 0 || c->to_input_idx >= dst->n_inputs) return 0;
+    if (!dst) {
+        if (log_pushes) {
+            event_queue_push(ctx->events, now_secs(),
+                             b->id, c->to_box, c->to_input,
+                             -1, out_size, "dst-null");
+        }
+        return 0;
+    }
+    if (!dst->input_slot_ids) {
+        if (log_pushes) {
+            event_queue_push(ctx->events, now_secs(),
+                             b->id, dst->id, c->to_input,
+                             -1, out_size, "input-slots-null");
+        }
+        return 0;
+    }
+    if (c->to_input_idx < 0 || c->to_input_idx >= dst->n_inputs) {
+        if (log_pushes) {
+            event_queue_push(ctx->events, now_secs(),
+                             b->id, dst->id, c->to_input,
+                             -1, out_size, "to-input-out-of-range");
+        }
+        return 0;
+    }
 
     int     dst_slot = dst->input_slot_ids[c->to_input_idx];
     int32_t dst_flags = slot_flags(ctx->slots, dst_slot);
@@ -637,9 +675,19 @@ static int push_one_connection(dispatch_ctx_t *ctx, const box_t *b,
     }
 
     if (rc != 0) {
+        if (log_pushes) {
+            event_queue_push(ctx->events, now_secs(),
+                             b->id, dst->id, c->to_input,
+                             dst_slot, out_size, "push-failed");
+        }
         fprintf(stderr, "dispatch: '%s' → '%s'.%s: push failed\n",
                 b->id, dst->id, c->to_input);
         return -1;
+    }
+    if (log_pushes) {
+        event_queue_push(ctx->events, now_secs(),
+                         b->id, dst->id, c->to_input,
+                         dst_slot, out_size, "ok");
     }
     dispatch_spawn_if_ready(ctx, c->to_box_idx, 0);
     return 0;
@@ -1289,10 +1337,14 @@ void dispatch_action(void *arg)
     /* Issue 319d: publish the active runtime context to thread-local
      * storage so any spec that calls runtime_create_box /
      * runtime_connect during its invoke can reach the graph + slot
-     * store + spec registry. Cleared at the end of this task. */
+     * store + spec registry. Issue 311 extension: the event queue
+     * threads through too so the builtins can emit box_create /
+     * wire_add / slot_alloc events into the JSONL transcript.
+     * Cleared at the end of this task. */
     runtime_set_active_context((struct graph *)ctx->graph,
                                ctx->slots,
-                               ctx->specs);
+                               ctx->specs,
+                               ctx->events);
 
     atomic_fetch_add_explicit(&ctx->tasks_dispatched, 1, memory_order_relaxed);
 

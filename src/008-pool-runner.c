@@ -309,14 +309,20 @@ int main(int argc, char **argv)
         const char *lv = getenv("SORAMECH_LOG_VALUES");
         ctx.log_values = (lv && lv[0] && lv[0] != '0') ? 1 : 0;
 
+        /* SORAMECH_LOG_SLOTS gates both the startup slot-layout
+         * enumeration below AND the per-push events emitted from
+         * push_one_connection. One env var, one slot-level
+         * verbosity story. */
+        const char *ls = getenv("SORAMECH_LOG_SLOTS");
+        ctx.log_slots = (ls && ls[0] && ls[0] != '0') ? 1 : 0;
+
         event_queue_run_start(events, now_secs(),
                               graph_name(g), pool_n_workers(pool));
 
         /* Slot allocator events — one per input slot, plus one per
          * iterator counter slot, all fired right after attach so
          * the run log records the full slot layout up front. */
-        const char *ls = getenv("SORAMECH_LOG_SLOTS");
-        if (ls && ls[0] && ls[0] != '0') {
+        if (ctx.log_slots) {
             double ts = now_secs();
             for (int i = 0; i < graph_n_boxes(g); i++) {
                 const box_t *b = graph_box(g, i);

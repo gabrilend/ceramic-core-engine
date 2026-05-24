@@ -267,3 +267,65 @@ int jsonl_emit_slot_alloc(jsonl_writer_t *w, double ts,
     return flush_line(w, &jw, buf);
 }
 /* }}} */
+
+/* {{{ jsonl_emit_box_create() — runtime graph mutation (issue 319) */
+int jsonl_emit_box_create(jsonl_writer_t *w, double ts,
+                          const char *box_id, const char *kind,
+                          const char *lang, const char *ref,
+                          const char *fn)
+{
+    if (!w) return -1;
+    char buf[EVENT_BUF];
+    json_writer_t jw;
+    json_writer_init(&jw, buf, EVENT_BUF);
+    begin_event(&jw, "box_create", ts);
+    if (box_id) { json_writer_key(&jw, "box_id"); json_writer_string(&jw, box_id); }
+    if (kind)   { json_writer_key(&jw, "kind");   json_writer_string(&jw, kind);   }
+    if (lang)   { json_writer_key(&jw, "lang");   json_writer_string(&jw, lang);   }
+    if (ref)    { json_writer_key(&jw, "ref");    json_writer_string(&jw, ref);    }
+    if (fn)     { json_writer_key(&jw, "fn");     json_writer_string(&jw, fn);     }
+    json_writer_end(&jw);
+    return flush_line(w, &jw, buf);
+}
+/* }}} */
+
+/* {{{ jsonl_emit_wire_add() — runtime wire mutation (issue 319) */
+int jsonl_emit_wire_add(jsonl_writer_t *w, double ts,
+                        const char *from_box, const char *from_branch,
+                        const char *to_box, const char *to_input)
+{
+    if (!w) return -1;
+    char buf[EVENT_BUF];
+    json_writer_t jw;
+    json_writer_init(&jw, buf, EVENT_BUF);
+    begin_event(&jw, "wire_add", ts);
+    if (from_box)    { json_writer_key(&jw, "from_box");    json_writer_string(&jw, from_box); }
+    if (from_branch) { json_writer_key(&jw, "from_branch"); json_writer_string(&jw, from_branch); }
+    if (to_box)      { json_writer_key(&jw, "to_box");      json_writer_string(&jw, to_box); }
+    if (to_input)    { json_writer_key(&jw, "to_input");    json_writer_string(&jw, to_input); }
+    json_writer_end(&jw);
+    return flush_line(w, &jw, buf);
+}
+/* }}} */
+
+/* {{{ jsonl_emit_push() — per-push dispatch attempt */
+int jsonl_emit_push(jsonl_writer_t *w, double ts,
+                    const char *from_box, const char *to_box,
+                    const char *to_input, int slot_id,
+                    int n_bytes, const char *result)
+{
+    if (!w) return -1;
+    char buf[EVENT_BUF];
+    json_writer_t jw;
+    json_writer_init(&jw, buf, EVENT_BUF);
+    begin_event(&jw, "push", ts);
+    if (from_box) { json_writer_key(&jw, "from_box"); json_writer_string(&jw, from_box); }
+    if (to_box)   { json_writer_key(&jw, "to_box");   json_writer_string(&jw, to_box); }
+    if (to_input) { json_writer_key(&jw, "to_input"); json_writer_string(&jw, to_input); }
+    json_writer_key(&jw, "slot_id"); json_writer_int(&jw, slot_id);
+    json_writer_key(&jw, "n_bytes"); json_writer_int(&jw, n_bytes);
+    if (result)   { json_writer_key(&jw, "result");   json_writer_string(&jw, result); }
+    json_writer_end(&jw);
+    return flush_line(w, &jw, buf);
+}
+/* }}} */

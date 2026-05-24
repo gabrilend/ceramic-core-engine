@@ -13,6 +13,8 @@
 #include "010-graph-loader.h"
 #include "009-slot-store.h"
 #include "011-spec-registry.h"
+#include "013-jsonl-events.h"
+#include "014-event-queue.h"
 #include "017-box-id.h"
 #include "json.h"
 #include "lang-spec.h"
@@ -21,31 +23,46 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 /* {{{ Thread-local active context */
 static __thread struct graph         *tls_graph;
 static __thread struct slot_store    *tls_slots;
 static __thread struct spec_registry *tls_specs;
+static __thread struct event_queue   *tls_events;
 
 void runtime_set_active_context(struct graph         *g,
                                 struct slot_store    *s,
-                                struct spec_registry *r)
+                                struct spec_registry *r,
+                                struct event_queue   *e)
 {
-    tls_graph = g;
-    tls_slots = s;
-    tls_specs = r;
+    tls_graph  = g;
+    tls_slots  = s;
+    tls_specs  = r;
+    tls_events = e;
 }
 
 void runtime_clear_active_context(void)
 {
-    tls_graph = NULL;
-    tls_slots = NULL;
-    tls_specs = NULL;
+    tls_graph  = NULL;
+    tls_slots  = NULL;
+    tls_specs  = NULL;
+    tls_events = NULL;
 }
 
-struct graph         *runtime_active_graph(void) { return tls_graph; }
-struct slot_store    *runtime_active_slots(void) { return tls_slots; }
-struct spec_registry *runtime_active_specs(void) { return tls_specs; }
+struct graph         *runtime_active_graph(void)  { return tls_graph; }
+struct slot_store    *runtime_active_slots(void)  { return tls_slots; }
+struct spec_registry *runtime_active_specs(void)  { return tls_specs; }
+struct event_queue   *runtime_active_events(void) { return tls_events; }
+
+/* now_secs: monotonic timestamp for event emission. Matches the
+ * choice the pool runner uses so all events share one clock. */
+static double rt_now_secs(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
 /* }}} */
 
 /* {{{ Small error-formatting helper */
@@ -326,6 +343,14 @@ int runtime_create_box(const char *spec_json, int spec_len,
             }
             b->input_slot_ids[i]   = sid;
             b->input_slot_modes[i] = 0;  /* SLOT_MODE_PEEK */
+            /* Issue 311 + 319: log each runtime slot allocation so
+             * the JSONL transcript shows when the new box's input
+             * slots came into existence. Opt-in via SORAMECH_LOG_SLOTS
+             * (the queue silently ignores the call when no writer
+             * was opened with that env var). */
+            event_queue_slot_alloc(tls_events, rt_now_secs(), sid,
+                                   b->output_capacity, 1,
+                                   b->id, b->inputs[i].name);
         }
     }
 
@@ -348,6 +373,13 @@ int runtime_create_box(const char *spec_json, int spec_len,
 
     /* Fill the caller's out_id buffer. */
     snprintf(out_id, out_id_size, "%s", b->id);
+
+    /* Issue 311 + 319: the JSONL transcript records every runtime
+     * graph mutation so the trace from create_box → push fan-out is
+     * inspectable after the fact. The event fires AFTER graph_add_box
+     * so the publish is already visible to any downstream walker. */
+    event_queue_box_create(tls_events, rt_now_secs(),
+                           b->id, "call", b->lang, b->ref, b->fn);
 
     json_arena_destroy(arena);
     return 0;
@@ -468,13 +500,23 @@ int runtime_connect(const char *conn_json, int conn_len, char **err_out)
     (void)boxes;
 
     int rc = box_add_connection(g, from_box, c);
-    json_arena_destroy(arena);
     if (rc != 0) {
+        json_arena_destroy(arena);
         free((void *)c.to_box);
         free((void *)c.to_input);
         free((void *)c.from_branch);
         return set_err(err_out, "connect: box_add_connection failed");
     }
+    /* Issue 311 + 319: log the runtime wire so the JSONL transcript
+     * records the connect → push order. Emitted AFTER the
+     * connection is appended (and atomic-published) so any reader
+     * acting on this event sees a consistent producer record. */
+    event_queue_wire_add(tls_events, rt_now_secs(),
+                         from_id,
+                         c.from_branch,
+                         to_id,
+                         port);
+    json_arena_destroy(arena);
     return 0;
 }
 /* }}} */

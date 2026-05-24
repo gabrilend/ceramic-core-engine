@@ -76,6 +76,16 @@ typedef struct dispatch_ctx {
      * (truncated to 4 KB per the architecture doc). */
     int                   log_values;
 
+    /* Slot-event gate (issue 311 SORAMECH_LOG_SLOTS=1). Gates two
+     * categories: (a) the per-slot enumeration at startup that the
+     * pool runner emits after graph_attach_runtime, and (b) the
+     * per-push events emitted from push_one_connection (every push
+     * attempt, including skip paths with their reason). Together
+     * the two paint the complete slot-level timeline. Slot
+     * allocations from runtime_create_box ALWAYS emit when an
+     * events queue is present — they're rare and load-bearing. */
+    int                   log_slots;
+
     /* Monotonic task id counter for run-log correlation. */
     _Atomic int           next_task_id;
 } dispatch_ctx_t;

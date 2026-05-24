@@ -80,10 +80,37 @@ void event_queue_task_output(event_queue_t *q, double ts,
  * the value events, these bypass the queue and write directly so
  * the soramech-pool can emit them in a tight loop right after
  * graph_attach_runtime without inflating the queue with many
- * fixed-size records that all fire at the same instant. */
+ * fixed-size records that all fire at the same instant. Issue 319
+ * also emits one per slot when a runtime create_box allocates
+ * input ports mid-run. */
 void event_queue_slot_alloc (event_queue_t *q, double ts,
                              int slot_id, int cell_capacity, int n_cells,
                              const char *owner_box, const char *owner_port);
+
+/* Runtime graph mutation events (issue 319 / 248 self-construction).
+ * Always emitted when an active queue is present — mutations are
+ * rare enough that they don't need a verbosity gate. The trio
+ * brackets every runtime-create + runtime-connect + per-push
+ * fan-out so the JSONL transcript captures the full
+ * mutate-then-dispatch timeline. The `result` field on push
+ * carries either "ok" or a short skip reason — invaluable for
+ * diagnosing visibility races where the new box's fields aren't
+ * yet seen by the producer's fan-out (see 319's status note). */
+void event_queue_box_create (event_queue_t *q, double ts,
+                             const char *box_id, const char *kind,
+                             const char *lang, const char *ref,
+                             const char *fn);
+
+void event_queue_wire_add   (event_queue_t *q, double ts,
+                             const char *from_box, const char *from_branch,
+                             const char *to_box, const char *to_input);
+
+/* Per-push event (opt-in via SORAMECH_LOG_SLOTS=1, since pushes
+ * are slot-level activity). */
+void event_queue_push       (event_queue_t *q, double ts,
+                             const char *from_box, const char *to_box,
+                             const char *to_input, int slot_id,
+                             int n_bytes, const char *result);
 /* }}} */
 
 /* {{{ Inspection */

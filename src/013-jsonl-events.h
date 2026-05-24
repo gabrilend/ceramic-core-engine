@@ -66,10 +66,44 @@ int jsonl_emit_task_output(jsonl_writer_t *w, double ts,
 
 /* Slot allocator events (opt-in via SORAMECH_LOG_SLOTS=1). Emitted
  * once per slot at graph_attach_runtime time so the run log
- * records the slot layout the dispatch will use. */
+ * records the slot layout the dispatch will use. Issue 319's
+ * runtime self-construction also emits one per slot when a new
+ * box is allocated mid-run via create_box. */
 int jsonl_emit_slot_alloc (jsonl_writer_t *w, double ts,
                            int slot_id, int cell_capacity, int n_cells,
                            const char *owner_box, const char *owner_port);
+
+/* Runtime graph mutation events (issue 319 / 248 self-construction
+ * paths). Always emitted when an active event-queue is present —
+ * graph mutations are rare enough that they don't need a verbosity
+ * gate. `box_create` fires after the new box is published into
+ * the graph; `wire_add` fires after the connection has been
+ * appended to the producer's array. Tracing these reveals the
+ * order of mutation operations relative to the dispatch's
+ * fan-out, which is the load-bearing question for diagnosing
+ * runtime-create-then-push races. */
+int jsonl_emit_box_create (jsonl_writer_t *w, double ts,
+                           const char *box_id, const char *kind,
+                           const char *lang, const char *ref,
+                           const char *fn);
+
+int jsonl_emit_wire_add   (jsonl_writer_t *w, double ts,
+                           const char *from_box, const char *from_branch,
+                           const char *to_box, const char *to_input);
+
+/* Per-push events (opt-in via SORAMECH_LOG_SLOTS=1, same gate as
+ * slot_alloc since they're the slot-level activity counterpart).
+ * Emitted from push_one_connection on every attempt, including
+ * the skipped paths — the `result` field carries either "ok" or
+ * a short skip reason ("no-to-box-idx", "dst-null",
+ * "input-slots-null", "to-input-out-of-range", "push-failed").
+ * Crucial for diagnosing the 319 visibility race where the new
+ * box's input_slot_ids field reads as NULL at push time even
+ * though runtime_create_box populated it. */
+int jsonl_emit_push       (jsonl_writer_t *w, double ts,
+                           const char *from_box, const char *to_box,
+                           const char *to_input, int slot_id,
+                           int n_bytes, const char *result);
 /* }}} */
 
 #ifdef __cplusplus
