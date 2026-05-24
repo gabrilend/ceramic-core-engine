@@ -324,10 +324,20 @@ const Inspector = (() => {
 
   // {{{ Routing helpers (issue 233)
   // Every call box carries a `routing` field declaring how its
-  // single output reaches downstream wires. Three kinds ship
-  // today (plain / comparator / iterator); randomizer / weighted
-  // / distributor / multi-band-comparator have their own follow-on
-  // issues (240–243).
+  // single output reaches downstream wires. Six kinds ship:
+  //
+  //   plain       — single output, fan to every wire
+  //   comparator  — lt/eq/gt by `comparand`, OR multi-band by
+  //                 `thresholds` array (issue 243); the band names
+  //                 are below_<t> / between_<a>_<b> / above_<t>
+  //                 (plus eq_<t> for doubled adjacent thresholds)
+  //   iterator    — round-robin over N `out_<i>` ports, multi-spawn
+  //   randomizer  — hash(counter) mod N pick over `out_<i>` ports
+  //                 (issue 240)
+  //   weighted    — probability-weighted pick over `out_<i>` ports,
+  //                 weights array length = output count (issue 241)
+  //   distributor — argmin over downstream slot fill, picks the
+  //                 least-busy `out_<i>` (issue 242)
   //
   // Plain is the default for a newly-created box. Switching kinds
   // severs every outgoing wire because the output port shape
@@ -347,9 +357,15 @@ const Inspector = (() => {
   // }}}
 
   // {{{ function default_routing_for()
+  // Every kind has its own minimum-viable starting shape so
+  // flipping the dropdown leaves the box in a schema-valid
+  // state without the user having to fill in any control first.
   function default_routing_for(kind) {
-    if (kind === 'comparator') return { kind: 'comparator', comparand: 0 };
-    if (kind === 'iterator')   return { kind: 'iterator',   n_outputs: 2 };
+    if (kind === 'comparator')  return { kind: 'comparator',  comparand: 0 };
+    if (kind === 'iterator')    return { kind: 'iterator',    n_outputs: 2 };
+    if (kind === 'randomizer')  return { kind: 'randomizer',  n_outputs: 2 };
+    if (kind === 'distributor') return { kind: 'distributor', n_outputs: 2 };
+    if (kind === 'weighted')    return { kind: 'weighted',    weights:   [0.5, 0.5] };
     return { kind: 'plain' };
   }
   // }}}
@@ -387,14 +403,79 @@ const Inspector = (() => {
   }
   // }}}
 
+  // {{{ async function set_thresholds()
+  // Issue 243 — multi-band-comparator thresholds setter. Parses a
+  // comma-separated text input into a numeric array; an empty
+  // input restores single-comparand mode (clears the thresholds
+  // field so the loader's legacy path runs). Non-decreasing is
+  // enforced by sorting silently — if the user typed "7, 3" we
+  // store "3, 7". Changing thresholds renames every output
+  // port (the band names embed the threshold values), so this
+  // severs all outgoing wires the same way iterator's
+  // n_outputs change does.
+  async function set_thresholds(text) {
+    if (!current_box || routing_kind(current_box) !== 'comparator') return;
+    const trimmed = String(text || '').trim();
+    if (trimmed === '') {
+      // Empty input → single-comparand mode. Drop the array.
+      if ('thresholds' in (current_box.routing || {})) {
+        await sever_output_wires();
+        delete current_box.routing.thresholds;
+        await save();
+        Canvas.mark_dirty();
+        show(current_box, on_change_cb, on_delete_cb);
+      }
+      return;
+    }
+    const nums = trimmed.split(',')
+      .map(s => parseFloat(s.trim()))
+      .filter(n => !isNaN(n));
+    if (nums.length === 0) return;
+    nums.sort((a, b) => a - b);
+    await sever_output_wires();
+    current_box.routing.thresholds = nums;
+    // Remove the legacy field so the loader picks the
+    // multi-band path unambiguously.
+    delete current_box.routing.comparand;
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+  // }}}
+
+  // {{{ async function set_weights()
+  // Issue 241 — weighted routing weights setter. Parses a
+  // comma-separated text input into a non-negative number array.
+  // Changing the array length changes the n_out shape (one port
+  // per weight), so this severs all outgoing wires.
+  async function set_weights(text) {
+    if (!current_box || routing_kind(current_box) !== 'weighted') return;
+    const trimmed = String(text || '').trim();
+    if (trimmed === '') return;
+    const nums = trimmed.split(',')
+      .map(s => parseFloat(s.trim()))
+      .filter(n => !isNaN(n) && n >= 0);
+    if (nums.length === 0) return;
+    await sever_output_wires();
+    current_box.routing.weights = nums;
+    await save();
+    Canvas.mark_dirty();
+    show(current_box, on_change_cb, on_delete_cb);
+  }
+  // }}}
+
   // {{{ async function set_n_outputs()
-  // Iterator routing's port count. Shrinking the count means
-  // wires whose from_branch is `out_<i>` with i >= new_n no longer
-  // have a port to attach to — sever them on the source side and
-  // on each destination box's copy, same pattern as the iterator
+  // Shared n_outputs port-count setter for iterator (issue 233),
+  // randomizer (240), and distributor (242) — all three use
+  // `out_<i>` ports. Shrinking the count means wires whose
+  // from_branch is `out_<i>` with i >= new_n no longer have a
+  // port to attach to — sever them on the source side and on
+  // each destination box's copy, same pattern as the iterator
   // slot removal used under the legacy schema.
   async function set_n_outputs(n) {
-    if (!current_box || routing_kind(current_box) !== 'iterator') return;
+    if (!current_box) return;
+    const rk = routing_kind(current_box);
+    if (rk !== 'iterator' && rk !== 'randomizer' && rk !== 'distributor') return;
     if (typeof n !== 'number' || n < 1 || n !== Math.floor(n)) return;
     const old_n = current_box.routing.n_outputs || 1;
     current_box.routing.n_outputs = n;
@@ -1209,15 +1290,20 @@ const Inspector = (() => {
 
     // Routing-kind dropdown (issue 233). The mode picks which
     // dispatch-layer rule decides where this box's output goes:
-    //   plain      → fan to every wire on the single output
-    //   comparator → lt/eq/gt branches by numeric comparison
-    //   iterator   → N round-robin output ports (out_0..out_<n-1>)
+    //   plain       → fan to every wire on the single output
+    //   comparator  → lt/eq/gt by comparand, OR multi-band by
+    //                 thresholds[] (issue 243)
+    //   iterator    → N round-robin out_<i> ports (multi-spawn)
+    //   randomizer  → hash(counter) mod N over out_<i> (issue 240)
+    //   weighted    → cumulative-band lookup over weights (issue 241)
+    //   distributor → least-busy of out_<i> by downstream fill
+    //                 (issue 242)
     // Switching kinds changes the output-port shape on the
     // canvas; set_routing_kind severs every outgoing wire on the
     // transition for the same reason the variadic input toggle
     // clears its inputs.
     const mode_sel = document.createElement('select');
-    ['plain', 'comparator', 'iterator'].forEach(k => {
+    ['plain', 'comparator', 'iterator', 'randomizer', 'weighted', 'distributor'].forEach(k => {
       const opt = document.createElement('option');
       opt.value = k; opt.textContent = k;
       if (k === routing_kind(box)) opt.selected = true;
@@ -1349,22 +1435,90 @@ const Inspector = (() => {
     out_sec.textContent = 'output';
     fields.appendChild(out_sec);
 
-    // Comparator routing exposes one number knob — the value the
-    // output is compared against. The mode dropdown already
-    // declared the kind; the inspector just needs the value here.
-    // Plain routing has no per-kind control.
-    if (routing_kind(box) === 'comparator') {
+    // Per-kind controls. Plain has no per-kind knob; comparator,
+    // randomizer, weighted, distributor each carry their own.
+    const rk = routing_kind(box);
+    if (rk === 'comparator') {
+      // Issue 233 single-comparand UI stays the default; issue 243
+      // adds an inline thresholds editor underneath. The two
+      // schema-side fields are mutually exclusive — the loader
+      // prefers `thresholds` when both are present. The editor
+      // mirrors that: typing into the threshold list switches the
+      // box to multi-band mode (comparand removed), clearing the
+      // list returns to single-comparand mode (thresholds removed).
       const cmp_inp = document.createElement('input');
       cmp_inp.type        = 'number';
       cmp_inp.value       = String((box.routing && box.routing.comparand) ?? 0);
       cmp_inp.placeholder = 'number';
       cmp_inp.style.cssText = 'width:100%;background:#0f1117;border:1px solid #2a2f45;' +
         'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      cmp_inp.disabled = Array.isArray(box.routing && box.routing.thresholds)
+                         && box.routing.thresholds.length > 0;
       cmp_inp.addEventListener('input', () => {
         const v = parseFloat(cmp_inp.value);
         if (!isNaN(v)) set_comparand(v);
       });
       fields.appendChild(mk_row('comparand', cmp_inp));
+
+      // Multi-band threshold list (issue 243). Comma-separated
+      // numbers in a text input keeps the UX minimal; a richer
+      // sortable list with +/− buttons can land later if the
+      // textarea becomes painful. Doubled adjacent values mark
+      // zero-width equality bands (e.g. "3,3,7,7" gives the
+      // < 3 / == 3 / 3<x<7 / == 7 / > 7 layout).
+      const ts_inp = document.createElement('input');
+      ts_inp.type        = 'text';
+      ts_inp.placeholder = 'e.g. 3, 7, 11 (multi-band)';
+      ts_inp.value       = Array.isArray(box.routing && box.routing.thresholds)
+                             ? box.routing.thresholds.join(', ')
+                             : '';
+      ts_inp.style.cssText = 'width:100%;background:#0f1117;border:1px solid #2a2f45;' +
+        'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      ts_inp.addEventListener('change', () => set_thresholds(ts_inp.value));
+      fields.appendChild(mk_row('thresholds', ts_inp));
+
+      const ts_note = document.createElement('div');
+      ts_note.style.cssText = 'font-size:10px;color:#6c72a0;margin-top:4px;';
+      ts_note.textContent = 'comma-separated, non-decreasing. doubled values carve equality bands.';
+      fields.appendChild(ts_note);
+    } else if (rk === 'randomizer' || rk === 'distributor') {
+      // Same n_outputs control iterator uses, but the routing
+      // semantics are different — randomizer (240) picks branches
+      // pseudo-randomly via a hashed counter; distributor (242)
+      // picks the least-busy downstream branch by reading slot
+      // fill levels at dispatch time.
+      const n_inp = document.createElement('input');
+      n_inp.type        = 'number';
+      n_inp.min         = '1';
+      n_inp.value       = String((box.routing && box.routing.n_outputs) || 2);
+      n_inp.style.cssText = 'width:80px;background:#0f1117;border:1px solid #2a2f45;' +
+        'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      n_inp.addEventListener('change', () => {
+        const v = parseInt(n_inp.value, 10);
+        if (!isNaN(v) && v >= 1) set_n_outputs(v);
+      });
+      fields.appendChild(mk_row('n_outputs', n_inp));
+    } else if (rk === 'weighted') {
+      // Issue 241: weights array editor. Minimum viable shape is
+      // a comma-separated textbox; same upgrade path as the
+      // multi-band thresholds list — replace with sliders later
+      // if a real visual band UI earns its keep. Non-negative
+      // numbers only; the dispatch normalises at run time so
+      // they don't have to sum to 1.0.
+      const ws = (box.routing && box.routing.weights) || [];
+      const w_inp = document.createElement('input');
+      w_inp.type        = 'text';
+      w_inp.placeholder = 'e.g. 0.8, 0.2';
+      w_inp.value       = ws.join(', ');
+      w_inp.style.cssText = 'width:100%;background:#0f1117;border:1px solid #2a2f45;' +
+        'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      w_inp.addEventListener('change', () => set_weights(w_inp.value));
+      fields.appendChild(mk_row('weights', w_inp));
+
+      const w_note = document.createElement('div');
+      w_note.style.cssText = 'font-size:10px;color:#6c72a0;margin-top:4px;';
+      w_note.textContent = 'comma-separated non-negative numbers. dispatch normalises to a probability table.';
+      fields.appendChild(w_note);
     }
   }
   // }}}

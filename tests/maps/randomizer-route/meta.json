@@ -1,0 +1,6 @@
+{
+  "name": "randomizer-route",
+  "description": "Issue 240 fixture: a randomizer-routing call box with 3 outputs. The first invocation is deterministic — counter=0 → hash(0)=0 → branch_idx=0 — so only tagger_0 fires. Proves the picker is hooked up end-to-end through the Lua schema, C loader, C dispatch, and downstream wire fan-out.",
+  "entry_box_id": "seed",
+  "src_dirs": ["tests/maps/randomizer-route/src"]
+}

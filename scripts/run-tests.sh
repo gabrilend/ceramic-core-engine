@@ -160,6 +160,14 @@ check_map "iter-route" \
     "b → (no output)" \
     "c → (no output)"
 
+# Issue 240 — randomizer routing. Hash(counter=0) mod 3 = 0, so
+# the first invocation deterministically lands on branch 0;
+# tagger_0 fires, tagger_1 and tagger_2 stay silent.
+check_map "randomizer-route" \
+    "tagger_0 → got_0:hi" \
+    "tagger_1 → (no output)" \
+    "tagger_2 → (no output)"
+
 check_map "pipeline" \
     "double → 10" \
     "addone → 11" \

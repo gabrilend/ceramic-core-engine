@@ -46,14 +46,21 @@ end
 -- }}}
 
 -- {{{ valid_routing_kinds
--- Issue 233's unified `routing` field. Plain is the default
--- shape for a call box that wants its single output fanned to
--- all wires. Comparator and iterator are the two routing kinds
--- shipped under 233. Randomizer / weighted / distributor /
--- multi-band-comparator have their own follow-on issues
--- (240–243); until those ship, the schema rejects their kind
--- values so we don't accumulate dead state.
-local valid_routing_kinds = { plain = true, comparator = true, iterator = true }
+-- Issue 233's unified `routing` field. Six kinds shipped:
+--   plain       — single output port, fan to every wire
+--   comparator  — numeric threshold(s), pick lt/eq/gt or named bands
+--   iterator    — round-robin over n_outputs ports, multi-spawn
+--   randomizer  — hash(counter) mod n_outputs (issue 240)
+--   weighted    — cumulative-band lookup over weights (issue 241)
+--   distributor — argmin over downstream slot fill (issue 242)
+local valid_routing_kinds = {
+    plain       = true,
+    comparator  = true,
+    iterator    = true,
+    randomizer  = true,
+    weighted    = true,
+    distributor = true,
+}
 -- }}}
 
 -- {{{ err
@@ -124,12 +131,36 @@ function M.validate_box(box)
             err(errors, "'routing.kind' must be a string")
         elseif not valid_routing_kinds[r.kind] then
             err(errors, "'routing.kind' = '" .. r.kind ..
-                "' is not one of 'plain'/'comparator'/'iterator' " ..
-                "(other kinds belong to follow-on issues 240–243)")
+                "' is not one of 'plain' / 'comparator' / 'iterator' / " ..
+                "'randomizer' / 'weighted' / 'distributor'")
         else
             if r.kind == "comparator" then
-                if type(r.comparand) ~= "number" then
-                    err(errors, "comparator routing requires numeric 'routing.comparand'")
+                -- Issue 243: multi-band-comparator accepts a non-empty
+                -- `thresholds` array (non-decreasing; doubled values
+                -- carve out equality bands) as the modern shape.
+                -- Single-comparand legacy form is still accepted for
+                -- backwards compat — the loader normalises it to
+                -- `thresholds = [c, c]` on the C side.
+                if r.thresholds ~= nil then
+                    if type(r.thresholds) ~= "table" or #r.thresholds == 0 then
+                        err(errors, "comparator 'routing.thresholds' must be a non-empty array")
+                    else
+                        local last = nil
+                        for i, t in ipairs(r.thresholds) do
+                            if type(t) ~= "number" then
+                                err(errors, "comparator 'routing.thresholds[" .. i .. "]' must be a number")
+                                break
+                            elseif last ~= nil and t < last then
+                                err(errors, "comparator 'routing.thresholds' must be non-decreasing " ..
+                                    "(saw " .. tostring(last) .. " then " .. tostring(t) .. ")")
+                                break
+                            end
+                            last = t
+                        end
+                    end
+                elseif type(r.comparand) ~= "number" then
+                    err(errors, "comparator routing requires numeric 'routing.comparand' " ..
+                        "or non-empty 'routing.thresholds' array")
                 end
             elseif r.kind == "iterator" then
                 is_routing_primitive = true
@@ -137,6 +168,32 @@ function M.validate_box(box)
                    or r.n_outputs < 1
                    or r.n_outputs ~= math.floor(r.n_outputs) then
                     err(errors, "iterator routing requires 'routing.n_outputs' to be a positive integer")
+                end
+            elseif r.kind == "randomizer" or r.kind == "distributor" then
+                -- Same shape as iterator: a positive-integer
+                -- n_outputs. Randomizer (issue 240) and distributor
+                -- (issue 242) share the counter-driven dispatch
+                -- machinery iterator uses, just with a different
+                -- picker.
+                if type(r.n_outputs) ~= "number"
+                   or r.n_outputs < 1
+                   or r.n_outputs ~= math.floor(r.n_outputs) then
+                    err(errors, r.kind .. " routing requires 'routing.n_outputs' to be a positive integer")
+                end
+            elseif r.kind == "weighted" then
+                -- Issue 241: weights is a non-empty array of
+                -- non-negative numbers. The dispatch normalises at
+                -- run time (cumulative table on a fixed-precision
+                -- scale), so the user doesn't have to sum to 1.0.
+                if type(r.weights) ~= "table" or #r.weights == 0 then
+                    err(errors, "weighted routing requires non-empty 'routing.weights' array")
+                else
+                    for i, w in ipairs(r.weights) do
+                        if type(w) ~= "number" or w < 0 then
+                            err(errors, "weighted 'routing.weights[" .. i .. "]' must be a non-negative number")
+                            break
+                        end
+                    end
                 end
             end
         end

@@ -178,29 +178,64 @@ const Boxes = (() => {
   // }}}
 
   // {{{ box_height
+  // Per-kind output-port count drives the row count. The
+  // single-output-per-box rule (issue 218) is the default;
+  // exceptions: comparator (3 lt/eq/gt or N+1 band ports per
+  // 243), iterator / randomizer / distributor (n_outputs ports
+  // per 233/240/242), weighted (weights.length ports per 241),
+  // map (declared outputs[] per 248), sink (zero per 226).
   function box_height(box) {
     const n_in  = visible_inputs(box).length;
-    // Output rows are decided by the unified routing kind (issue
-    // 233). Sink boxes (has_output === false) override every kind
-    // with zero outputs. Otherwise: plain = 1 dot, comparator = 3
-    // (lt/eq/gt), iterator = routing.n_outputs. Encapsulated map
-    // boxes (issue 248) are the documented exception to single-
-    // output-per-box: n_out follows the declared `outputs` array
-    // (zero allowed — a sub-map with only side-effecting writers).
-    const rk = box.routing && box.routing.kind;
+    const rk    = box.routing && box.routing.kind;
     let n_out;
     if (box.has_output === false) {
       n_out = 0;
     } else if (box.kind === 'map') {
       n_out = (box.outputs || []).length;
-    } else if (rk === 'iterator') {
+    } else if (rk === 'iterator' || rk === 'randomizer' || rk === 'distributor') {
       n_out = (box.routing && box.routing.n_outputs) || 1;
+    } else if (rk === 'weighted') {
+      n_out = (box.routing && box.routing.weights ? box.routing.weights.length : 0) || 1;
     } else if (rk === 'comparator') {
-      n_out = 3;
+      // Issue 243: multi-band comparator carves N+1 bands from N
+      // thresholds. Legacy single-comparand stays at 3 (lt/eq/gt).
+      const ts = box.routing && box.routing.thresholds;
+      n_out = Array.isArray(ts) && ts.length > 0 ? ts.length + 1 : 3;
     } else {
       n_out = 1;
     }
     return Math.max(MIN_BOX_H, BOX_HEADER + Math.max(n_in, n_out) * PORT_ROW_H + 8);
+  }
+  // }}}
+
+  // {{{ comparator_band_names
+  // Builds the multi-band comparator's output port name list
+  // (issue 243). N thresholds → N+1 names. Doubled adjacent
+  // thresholds (t_i == t_{i+1}) collapse one between band into
+  // an equality band named `eq_<t>`. The number formatter matches
+  // the C dispatch's `%g` so wire from_branch strings match
+  // exactly between the loader's parsed names and the canvas's
+  // rendered names. Returns the array of strings in port order.
+  function comparator_band_names(thresholds) {
+    const ts = (thresholds || []).slice();
+    if (ts.length === 0) return ['lt', 'eq', 'gt'];
+    const fmt = (n) => {
+      // Mirror C's %g: trim trailing zeros, no fixed-decimal cap
+      // for integers. JS's default toString matches %g closely
+      // enough for typical threshold ranges.
+      const s = Number(n).toString();
+      return s;
+    };
+    const names = ['below_' + fmt(ts[0])];
+    for (let i = 0; i + 1 < ts.length; i++) {
+      if (ts[i] === ts[i + 1]) {
+        names.push('eq_' + fmt(ts[i]));
+      } else {
+        names.push('between_' + fmt(ts[i]) + '_' + fmt(ts[i + 1]));
+      }
+    }
+    names.push('above_' + fmt(ts[ts.length - 1]));
+    return names;
   }
   // }}}
 
@@ -239,8 +274,9 @@ const Boxes = (() => {
         x: bx + BOX_W,
         y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
       }));
-    } else if (rk === 'iterator') {
-      // iterator routing (issue 233): n_outputs ports named
+    } else if (rk === 'iterator' || rk === 'randomizer' || rk === 'distributor') {
+      // Counter-driven routing kinds (233 iterator, 240
+      // randomizer, 242 distributor): n_outputs ports named
       // `out_0` through `out_<n-1>`. The naming is fixed by the
       // schema; from_branch on wires matches these names exactly.
       const n = (box.routing && box.routing.n_outputs) || 1;
@@ -252,9 +288,29 @@ const Boxes = (() => {
           y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
         });
       }
+    } else if (rk === 'weighted') {
+      // Issue 241: one port per declared weight. Same `out_<i>`
+      // naming convention as iterator / randomizer / distributor.
+      const ws = (box.routing && box.routing.weights) || [];
+      const n  = ws.length > 0 ? ws.length : 1;
+      out_pts = [];
+      for (let i = 0; i < n; i++) {
+        out_pts.push({
+          name: 'out_' + i, side: 'output',
+          x: bx + BOX_W,
+          y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,
+        });
+      }
     } else if (rk === 'comparator') {
-      // three comparator dots — lt/eq/gt
-      out_pts = ['lt', 'eq', 'gt'].map((branch, i) => ({
+      // Issue 243: multi-band comparator emits per-band ports
+      // named via comparator_band_names() (below_t / between_a_b /
+      // above_t / eq_t for doubled thresholds). Legacy
+      // single-comparand stays at three lt/eq/gt dots.
+      const ts = box.routing && box.routing.thresholds;
+      const names = Array.isArray(ts) && ts.length > 0
+        ? comparator_band_names(ts)
+        : ['lt', 'eq', 'gt'];
+      out_pts = names.map((branch, i) => ({
         name: branch, side: 'output',
         x: bx + BOX_W,
         y: by + BOX_HEADER + PORT_ROW_H * i + PORT_ROW_H / 2,

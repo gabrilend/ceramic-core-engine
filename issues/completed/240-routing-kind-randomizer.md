@@ -1,7 +1,13 @@
 # 240 — Routing kind: randomizer
 
 ## Status
-open · design carried forward from issue 233
+complete · schema accepts `kind: "randomizer"` with `n_outputs`;
+loader and dispatch picker already shipped (the C side preserved
+the design's hash-of-counter mod n_outputs picker); editor
+dropdown grows the option, reuses the iterator's n_outputs
+control; `out_<i>` canvas rendering shared with iterator and
+distributor; `tests/maps/randomizer-route/` fixture asserts the
+deterministic first-call branch (hash(0)=0 → branch 0) wins.
 
 ## Current behavior
 

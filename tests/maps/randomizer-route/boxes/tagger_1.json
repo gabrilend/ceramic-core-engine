@@ -1,0 +1,10 @@
+{
+  "id": "tagger_1",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/tagger.lua",
+  "fn": "tag_1",
+  "inputs": [ { "name": "text", "type": "string" } ],
+  "routing": { "kind": "plain" },
+  "ui": { "x": 560, "y": 130 }
+}

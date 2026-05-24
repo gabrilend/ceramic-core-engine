@@ -47,6 +47,7 @@ model the phase 3 runtime will consume.
 | 221  | iterator box (editor surface only)             | complete |
 | 222  | compile button and assets directory            | complete |
 | 248  | encapsulated map as a box (sub-maps via load-time inlining) | complete · input + output splice + recursion across nested encaps + full editor surface (kind dropdown, external bindings on read/write, file-browser encapsulate action); three on-disk fixtures green |
+| 240  | routing kind: randomizer (hash-of-counter mod n_outputs) | complete · schema + editor dropdown + n_outputs control + canvas out_<i> rendering + fixture |
 
 ## Phase goal checklist
 

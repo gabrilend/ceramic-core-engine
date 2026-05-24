@@ -1,0 +1,15 @@
+{
+  "id": "router",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/router.lua",
+  "fn": "identity",
+  "inputs": [ { "name": "text", "type": "string" } ],
+  "routing": { "kind": "randomizer", "n_outputs": 3 },
+  "ui": { "x": 320, "y": 100 },
+  "connections": [
+    { "from_box": "router", "from_branch": "out_0", "to_box": "tagger_0", "to_input": "text" },
+    { "from_box": "router", "from_branch": "out_1", "to_box": "tagger_1", "to_input": "text" },
+    { "from_box": "router", "from_branch": "out_2", "to_box": "tagger_2", "to_input": "text" }
+  ]
+}
