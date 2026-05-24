@@ -31,12 +31,13 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 315 | reference-counted compiled-map artifacts                    | complete · acquire/release/list/count/reap helper + fork-on-live-refs compile + PID + start-ticks back pointer + optional marker file as second liveness signal; 12 unit scenarios + end-to-end pinned-generation integration check |
 | 316 | simple test-runner script                                   | folded into 232 |
 | 317 | language spec JSON bridge for data boxes                    | complete · Lua fidelity-preserving, C+Bash pass-through-or-string-wrap, shared test harness |
-| 319 | built-in library for map self-construction (`create_box`, `connect`) | open · design complete; sub-issues 319a–e |
+| 319 | built-in library for map self-construction (`create_box`, `connect`) | complete · every Q1–Q5 resolved, six sub-issues 319a–f shipped, four runtime-create fixtures green; latent same-thread visibility note on input_slot_ids tracked as future hardening |
 | 319a | dispatch input cap removal (VLA + named constant)           | complete · 20-input fixture passes end-to-end |
 | 319b | slot store growth (two-level chunked-append index)          | complete · 5000-slot growth test preserves all early pointers |
 | 319c | box id generator (compile-cache concept folded into spec.so loaders) | complete · 8-thread concurrent uniqueness test passes |
 | 319d | `create_box` + `connect` runtime built-ins (Lua bindings, call boxes, plain routing) | complete · end-to-end fixture: Lua box creates and wires a downstream box that runs and produces output |
 | 319e | C bindings + end-to-end test + docs (Bash deferred) | complete · C-to-C runtime self-construction fixture passes |
+| 319f | create_box / connect as language-agnostic dispatch box kinds | complete · BOX_CREATE_BOX and BOX_CONNECT dispatch primitives; works uniformly across every language including Bash |
 
 ## Phase goal checklist
 
