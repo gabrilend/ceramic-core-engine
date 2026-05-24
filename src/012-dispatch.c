@@ -845,6 +845,18 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
     void *handle = pool_current_worker
         ? pool_current_worker->handles[b->spec_idx]
         : NULL;
+    if (!handle && pool_current_worker && spec && spec->init) {
+        /* Issue 319 follow-on: lazy-init the spec on this worker
+         * when a runtime-created box (319d / 319f) introduced a
+         * language the graph loader's filter didn't pre-warm at
+         * pool startup. spec_registry_init_worker_filtered runs
+         * per the static graph's language set; languages
+         * introduced later need an on-demand init. */
+        handle = spec->init(pool_current_worker->thread_idx);
+        if (handle) {
+            pool_current_worker->handles[b->spec_idx] = handle;
+        }
+    }
     if (!handle) {
         fprintf(stderr, "dispatch: '%s' worker handle for spec[%d] is NULL\n",
                 b->id, b->spec_idx);

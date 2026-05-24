@@ -1,0 +1,6 @@
+{
+  "name": "319-cross-lang-create",
+  "description": "Cross-language self-construction: a C trigger box uses the runtime API to create a LUA box at runtime. The Lua spec isn't in the static graph's language set, so the worker's Lua handle is NULL at pool startup. The dispatch's lazy-init kicks in on the new box's invoke and populates the handle on demand. Verifies issue 319's auto-init follow-on.",
+  "entry_box_id": "trigger",
+  "src_dirs": ["tests/maps/319-cross-lang-create/src"]
+}

@@ -206,6 +206,15 @@ check_map "318-lang-opaque" \
 check_map "319-box-kind-create" \
     "creator → auto_"
 
+# 319 auto-init follow-on: a C trigger creates a Lua box at
+# runtime; the Lua spec wasn't in the static graph's language set,
+# so the worker's Lua handle was NULL at pool startup. The
+# dispatch's lazy-init populates the handle on demand and the new
+# box fires.
+check_map "319-cross-lang-create" \
+    "trigger → c-trigger-fired:auto_" \
+    "lua-echo-from-runtime-init:c-trigger-fired:auto_"
+
 pipeline_output_check
 compile_pipeline_check
 # }}}

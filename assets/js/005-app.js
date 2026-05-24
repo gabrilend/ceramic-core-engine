@@ -555,10 +555,27 @@ const App = (() => {
 
   // {{{ delete_box
   // Strips all connection records referencing this box from other boxes first,
-  // then deletes the box. No confirmation — deletion is always immediate.
+  // then deletes the box.
+  //
+  // Issue 246 follow-on: if any input port has a custom_translation
+  // shim attached, prompt before deletion. The shim files themselves
+  // stay on disk per the issue's "delete doesn't delete files" rule;
+  // only the box's references are removed. The prompt tells the user
+  // how many translations are about to be orphaned so they're not
+  // surprised by `ls translations/` later.
   async function delete_box(id) {
     const b = Boxes.boxes[id];
     if (!b) return;
+    const shim_inputs = (b.inputs || []).filter(p => p && p.custom_translation);
+    if (shim_inputs.length > 0) {
+      const list = shim_inputs.map(p => '  · ' + p.name + ' → ' + p.custom_translation).join('\n');
+      const ok = window.confirm(
+        'Box "' + id + '" has ' + shim_inputs.length +
+        ' custom translation shim(s):\n\n' + list +
+        '\n\nThe box and its references go; the shim files stay on disk.\n' +
+        'Continue?');
+      if (!ok) { status_msg('delete cancelled — kept ' + id); return; }
+    }
     try {
       // remove all connection records that reference this box from every other box
       const other_ids = Object.keys(Boxes.boxes).filter(bid => bid !== id);
