@@ -13,6 +13,59 @@ const Wires = (() => {
   // Colors for comparator branch wires; plain wire uses default
   const BRANCH_COLOR = { lt: '#ff8c42', eq: '#4a9eff', gt: '#4caf7d' };
 
+  // {{{ Language-pairing classification (issue 245)
+  // Three categories, with the visible palette tuned for the dark canvas:
+  //
+  //   native  — producer and consumer share a language; native bytes
+  //             pass without translation. Dim slate-blue, the original
+  //             default. (Was the only color in the old palette.)
+  //   json    — cross-language wire; the runtime JSON-encodes at the
+  //             producer and decodes at the consumer. Forest green so
+  //             box authors can see the encode/decode cost at a glance.
+  //   custom  — the destination input port has a user-written
+  //             translation shim (issue 246). Goldenrod-cheddar; this
+  //             signal dominates the others because user code is the
+  //             more interesting thing to surface.
+  //
+  // For branch wires the branch color drives the stroke and the
+  // classification drives a small mid-wire dot; for plain wires the
+  // classification IS the stroke color.
+  const CLASS_COLOR = {
+    native: '#4a6080',   // dim slate-blue, the historical default
+    json:   '#228b22',   // forest green
+    custom: '#e8a317',   // bright goldenrod cheddar
+  };
+
+  // The box kinds that don't carry a `lang` (read / write / data deal
+  // in language-agnostic bytes — any consumer reads them through its
+  // JSON bridge, so wires to/from them are cross-language by default).
+  const LANG_AGNOSTIC_KINDS = new Set(['read', 'write', 'data']);
+
+  // {{{ classify_wire
+  // Returns one of "native", "json", "custom" for the given connection.
+  // Defensive against missing boxes and missing fields — the editor's
+  // box cache may be out of sync mid-edit.
+  function classify_wire(c) {
+    const from = Boxes.boxes[c.from_box];
+    const to   = Boxes.boxes[c.to_box];
+    if (!from || !to) return 'native';
+
+    // Custom translation shim on the destination port dominates.
+    // Issue 246's field; tolerate it being absent until that lands.
+    const port = (to.inputs || []).find(p => p && p.name === c.to_input);
+    if (port && port.custom_translation) return 'custom';
+
+    // Language-agnostic box kinds force the cross-language path.
+    if (LANG_AGNOSTIC_KINDS.has(from.kind) ||
+        LANG_AGNOSTIC_KINDS.has(to.kind))   return 'json';
+
+    // Both are typed call boxes — compare langs.
+    if (from.lang && to.lang && from.lang === to.lang) return 'native';
+    return 'json';
+  }
+  // }}}
+  // }}}
+
   let _selected_wire = null;  // { from_box, from_branch, to_box, to_input }
 
   // {{{ selected_wire
@@ -118,8 +171,17 @@ const Wires = (() => {
         const dst = Boxes.get_port_world_pos(c.to_box,   c.to_input,            'input');
         if (!src || !dst) continue;
 
-        // comparator branches get distinct colors; plain wire uses dim default
-        const color = c.from_branch ? (BRANCH_COLOR[c.from_branch] || '#4a6080') : '#4a6080';
+        // Two orthogonal signals on each wire (issue 245):
+        //  - branch color (routing kind: lt / eq / gt etc.)
+        //  - language-pairing classification (native / json / custom)
+        // Plain wires (no branch) use the classification as their stroke;
+        // branch wires keep the branch color as stroke and surface the
+        // classification via a small midpoint dot below.
+        const klass = classify_wire(c);
+        const class_color = CLASS_COLOR[klass];
+        const color = c.from_branch
+          ? (BRANCH_COLOR[c.from_branch] || class_color)
+          : class_color;
 
         const is_selected = _selected_wire &&
           _selected_wire.from_box    === c.from_box &&
@@ -133,8 +195,53 @@ const Wires = (() => {
         const { cx0, cy0, cx1, cy1 } = endpoint_controls(src, dst, self_box);
         draw_bezier_cp(ctx, src.x, src.y, cx0, cy0, cx1, cy1, dst.x, dst.y,
                        color, is_selected);
+
+        // If the wire's stroke color was the branch color (so the
+        // classification was hidden), surface the classification as a
+        // small dot at the midpoint of the bezier. Skip for plain
+        // wires — their stroke already conveys the classification.
+        if (c.from_branch) {
+          const mid = bezier_point(0.5, src.x, src.y, cx0, cy0, cx1, cy1, dst.x, dst.y);
+          ctx.fillStyle = class_color;
+          ctx.beginPath();
+          ctx.arc(mid.x, mid.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
+  }
+  // }}}
+
+  // {{{ draw_legend
+  // Small bottom-left swatch indexing the language-pairing palette.
+  // Drawn in screen space (not world space) so panning / zooming
+  // doesn't move it. Sits where the user can glance for translation.
+  function draw_legend(ctx) {
+    const w = 168, h = 64;
+    const x = 12, y = ctx.canvas.height - h - 12;
+    ctx.save();
+    // Reset any world transform so we draw in screen-space pixels.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = 'rgba(20, 24, 32, 0.78)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+    ctx.font = '11px monospace';
+    ctx.textBaseline = 'middle';
+    const rows = [
+      ['native  (same lang)',     CLASS_COLOR.native],
+      ['json    (cross-lang)',    CLASS_COLOR.json],
+      ['custom  (user shim)',     CLASS_COLOR.custom],
+    ];
+    rows.forEach(([label, col], i) => {
+      const cy = y + 14 + i * 16;
+      ctx.fillStyle = col;
+      ctx.fillRect(x + 10, cy - 5, 18, 10);
+      ctx.fillStyle = '#cfd2d8';
+      ctx.fillText(label, x + 36, cy);
+    });
+    ctx.restore();
   }
   // }}}
 
@@ -296,6 +403,6 @@ const Wires = (() => {
   }
   // }}}
 
-  return { draw_all, draw_bezier, hit_test_wire, create_connection,
-           delete_connection, selected_wire };
+  return { draw_all, draw_bezier, draw_legend, hit_test_wire,
+           create_connection, delete_connection, selected_wire };
 })();

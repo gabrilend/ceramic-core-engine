@@ -306,6 +306,10 @@ const App = (() => {
       const ctx = Canvas.ctx;
       Wires.draw_all(ctx, selected_id);
       Boxes.draw_all(ctx, selected_id);
+      // Bottom-left language-pairing palette legend (issue 245). Drawn
+      // before any other screen-space overlays so a status overlay or
+      // empty-canvas hint can still appear above it if needed.
+      Wires.draw_legend(ctx);
 
       // draw in-progress wire
       if (drawing_wire) {
