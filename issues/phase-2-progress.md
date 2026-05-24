@@ -32,7 +32,7 @@ model the phase 3 runtime will consume.
 | 229  | `read` / `write` box kinds (language-agnostic IO) | complete (phase 3 + editor; phase 2 mirror skipped per teardown) |
 | 230  | required inputs and the optional flag           | complete (compile-time; runtime arg-list shortening deferred) |
 | 231  | move signature parsers into langs/              | complete |
-| 232  | test coverage map (parser tests landed; tracks gaps) | ongoing |
+| 232  | test coverage map (now lives at `docs/006-test-coverage-map.md`) | converted to docs |
 | 233  | unified routing schema (comparator+iterator)    | complete |
 | 234  | middle-click duplicates the selected box        | complete |
 | 235  | literal value replaces port name on the canvas  | complete |
