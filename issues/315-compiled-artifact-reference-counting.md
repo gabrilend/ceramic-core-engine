@@ -1,30 +1,97 @@
 # 315 — Reference-counted compiled-map artifacts
 
 ## Status
-open
+in progress · reference helper, fork-on-live-references compile,
+unit tests and integration test all shipped; a handful of
+follow-on questions (runner self-acquire, reap-all across
+generations, .refs log versioning, editor extension) remain open
 
 ## Current behavior
 
-`scripts/soramech-compile.sh` from issue 309 is destructive at the
-top:
+A compiled artifact directory now carries a reference log
+(`.refs`) and the compile pipeline checks it before deciding
+where to write. The pieces:
+
+**`scripts/soramech-ref.sh`** is the helper any holder uses. The
+five actions:
+- `acquire <compiled-dir> [--id <id>] [--marker <path>]` — append
+  one acquire record, print the assigned id (so the holder knows
+  what to release later).
+- `release <compiled-dir> --id <id>` — append the matching
+  release record.
+- `list <compiled-dir>` — emit a JSON array of every record with
+  a per-entry `valid` flag (the back pointer's liveness verdict).
+- `count <compiled-dir>` — print a single integer, the number of
+  live references (used by the compile script's fork decision).
+- `reap <compiled-dir>` — rewrite the log to drop released and
+  invalidated entries. Takes a `mkdir`-style lock; steady-state
+  acquire / release are lock-free.
+
+The back pointer is **PID + `/proc/<pid>/stat` field 22**
+(process start time in clock ticks since boot). The PID alone
+isn't enough — PIDs recycle — so the start-time match is what
+distinguishes "the original holder is still alive" from "a
+different process happens to have the same PID now." An optional
+marker path acts as a second liveness signal: if the holder
+maintains a marker file, its absence means the holder is gone
+even if the PID still validates.
+
+**`scripts/soramech-compile.sh`** consults the log via `count`
+before deciding where to build:
+1. If `<map>/compiled/` doesn't exist → build there fresh.
+2. If it exists with zero live references → wipe and rebuild
+   there (same destructive shape as before).
+3. If it exists with one or more live references → pick the next
+   `compiled.N` sibling (N = max existing index + 1) and build
+   there. The original `compiled/` stays intact. The new
+   manifest carries a `forked_from` field naming the parent
+   generation.
+
+Convention: the canonical `compiled/` remains the first
+generation (the non-fork case); fork siblings are
+`compiled.1/`, `compiled.2/`, etc. There is no `compiled`
+symlink in this slice — callers who want "the latest" run the
+compile and use whatever path it prints. Callers who want a
+specific pinned generation use whichever path they acquired
+their reference against.
+
+**`tests/315-refs-test.sh`** covers the helper end-to-end: fresh
+dir → acquire → list (1 valid) → release → count (0); two
+independent acquires with partial release; a fabricated dead-PID
+entry that validates as stale and is dropped by `reap`; a
+marker-path entry whose validity flips when the marker is
+removed; and a JSON-shape spot-check on `list`. All 12 scenarios
+pass.
+
+**Integration check in `scripts/run-tests.sh`** compiles the
+pipeline fixture, acquires a reference on `compiled/`, compiles
+again, asserts `compiled.1/` was created with `forked_from`
+pointing back at `compiled/`, AND that the original pinned
+generation still runs (its `pool-runner` and `spec.so` files
+are untouched). After the assertion the test releases the
+reference and clears every generation so the rest of the suite
+runs against a clean slate.
+
+The reference count remains **expected to be unreliable**: a
+crashing holder doesn't get the chance to release. The back
+pointer (PID + start time + optional marker) lets `list` and
+`reap` independently verify whether any given acquire is still
+meaningful. The compile pipeline forks if ANY ref exists,
+stale or otherwise — operators run `reap` first if they want
+to consolidate. The philosophy is unchanged: the artifact
+directory belongs to its readers until proven otherwise, and an
+extra build dir is cheap compared to a use-after-rebuild crash.
+
+The previous destructive behaviour:
 
 ```bash
 rm -rf "$COMPILED"
 mkdir -p "$COMPILED" "$COMPILED/boxes" "$COMPILED/src" ...
 ```
 
-Whatever lived in `<map>/compiled/` before the rebuild is gone. If
-another process — a long-running runner, a different shell, a
-sibling tool that opened the artifact yesterday — had pinned to
-that exact compiled layout (a particular `pool-runner` binary, a
-particular `spec.so` ABI, a particular set of pre-compiled C
-boxes), the rebuild yanks the rug. The holder either crashes,
-silently retains stale `dlopen` handles, or starts reading new
-files mid-flight.
-
-This is fine in single-user development. It stops being fine the
-moment a SoraMech artifact is the kind of thing other programs
-hold onto across time.
+still runs unchanged when there are zero live references (the
+common single-user-development case). The fork path only fires
+when something else is pinning the directory.
 
 ## Intended behavior
 

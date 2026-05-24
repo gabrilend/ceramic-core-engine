@@ -84,7 +84,61 @@ if [[ ! -x "$DIR/soramech-pool" ]]; then
     exit 1
 fi
 
-COMPILED="$MAP/compiled"
+COMPILED_BASE="$MAP/compiled"
+# }}}
+
+# {{{ pick_target_dir — fork-to-sibling if the base has live references
+# Issue 315: a compiled directory carries a `.refs` log; other
+# programs may have pinned the artifact while it's still in use.
+# Rebuilding on top of a pinned directory would yank the rug out
+# from under those holders (dlopen handles go stale, files change
+# mid-flight). If anything is holding a reference, we build into a
+# sibling directory (`compiled.1`, `compiled.2`, …) and leave the
+# original alone.
+#
+# If the base doesn't exist → build there fresh.
+# If the base exists with zero live refs → wipe and rebuild there
+#   (same destructive shape as before — no holders, nothing to
+#   protect).
+# If the base exists with one or more live refs → pick the next
+#   `compiled.N` sibling and build there. FORKED_FROM is set so
+#   the manifest records the lineage.
+pick_target_dir() {
+    if [[ ! -d "$COMPILED_BASE" ]]; then
+        COMPILED="$COMPILED_BASE"
+        FORKED_FROM=""
+        return
+    fi
+    local live=0
+    if [[ -x "$DIR/scripts/soramech-ref.sh" ]] && [[ -f "$COMPILED_BASE/.refs" ]]; then
+        live=$("$DIR/scripts/soramech-ref.sh" count "$COMPILED_BASE" 2>/dev/null || echo 0)
+    fi
+    if [[ "$live" -eq 0 ]]; then
+        COMPILED="$COMPILED_BASE"
+        FORKED_FROM=""
+        rm -rf "$COMPILED"
+        return
+    fi
+    # Find the highest existing compiled.N and add 1. shopt nullglob
+    # so the glob expands to nothing when no siblings exist yet.
+    local highest=0
+    shopt -s nullglob
+    local sibling
+    for sibling in "$MAP"/compiled.*; do
+        local base
+        base=$(basename "$sibling")
+        local n="${base#compiled.}"
+        if [[ "$n" =~ ^[0-9]+$ ]]; then
+            if [[ "$n" -gt "$highest" ]]; then highest=$n; fi
+        fi
+    done
+    shopt -u nullglob
+    local next=$((highest + 1))
+    COMPILED="$MAP/compiled.$next"
+    FORKED_FROM="$COMPILED_BASE"
+    echo "soramech-compile: $live live reference(s) on $COMPILED_BASE — forking to $COMPILED"
+}
+pick_target_dir
 # }}}
 
 # {{{ box_field — pull a top-level string field from a box JSON file
@@ -101,6 +155,9 @@ box_field() {
 # }}}
 
 # {{{ wipe & lay out the compiled directory
+# pick_target_dir already cleared $COMPILED if it was a destructive
+# rebuild on the base. For a fork, $COMPILED is a fresh sibling
+# name that doesn't exist yet, so the rm is a no-op.
 rm -rf "$COMPILED"
 mkdir -p "$COMPILED" "$COMPILED/boxes" "$COMPILED/src" "$COMPILED/bin" "$COMPILED/langs"
 # }}}
@@ -274,6 +331,10 @@ done
 compiled_at=$(date -Iseconds 2>/dev/null || date)
 map_name=$(basename "$MAP")
 
+forked_from_field=""
+if [[ -n "$FORKED_FROM" ]]; then
+    forked_from_field=$(printf ',\n    "forked_from": "%s"' "$FORKED_FROM")
+fi
 cat > "$COMPILED/manifest.json" <<EOF
 {
     "name": "$map_name",
@@ -282,7 +343,7 @@ cat > "$COMPILED/manifest.json" <<EOF
     "n_languages": $n_langs,
     "languages": [$langs_json],
     "c_boxes_precompiled": $n_c_compiled,
-    "source_map_dir": "$MAP"
+    "source_map_dir": "$MAP"$forked_from_field
 }
 EOF
 # }}}

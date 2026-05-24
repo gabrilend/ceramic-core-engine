@@ -12,8 +12,12 @@ soramech-pool
 
 # Per-map compile artifacts produced by scripts/soramech-compile.sh.
 # Derived from the source map and the language plugins; regenerated
-# with `scripts/soramech-compile.sh <map>`.
+# with `scripts/soramech-compile.sh <map>`. Issue 315 adds the
+# sibling-generation pattern (compiled.1/, compiled.2/, …) for
+# fork-on-live-references — every generation is derived, so the
+# whole family is ignored.
 tests/maps/*/compiled/
+tests/maps/*/compiled.*/
 
 # Linux coredumps — the kernel core_pattern drops these at the cwd
 # of the crashing process, which is usually the project root.

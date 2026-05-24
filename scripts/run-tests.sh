@@ -305,6 +305,73 @@ encap_recursive_file_check() {
 }
 # }}}
 
+# {{{ refs_unit_tests() — issue 315: ref helper acquire/release/list/reap
+# Runs the dedicated 315-refs-test.sh and folds its overall pass/fail
+# into the suite's counters. The detailed per-scenario output goes
+# only on failure to keep the suite quiet on green.
+refs_unit_tests() {
+    printf "  %-44s " "315-refs unit tests"
+    local out
+    out=$("$DIR/tests/315-refs-test.sh" --dir "$DIR" 2>&1)
+    local rc=$?
+    if [[ $rc -eq 0 ]]; then
+        printf "ok\n"
+        pass=$((pass + 1))
+    else
+        printf "FAIL\n"
+        echo "$out" | sed 's/^/      /'
+        fail=$((fail + 1))
+        failures+=("315-refs unit: rc=$rc")
+    fi
+}
+# }}}
+
+# {{{ refs_fork_on_live_check() — issue 315: compile forks on live refs
+# End-to-end integration. Compile the pipeline fixture, acquire a
+# reference on the result, compile again — the second run should
+# fork to a sibling generation (`compiled.1/`) and leave the original
+# untouched. The pinned generation must remain runnable after the
+# fork (its pool-runner / spec.so / sources are still where they
+# were). After the assertion the test releases the reference and
+# clears every generation directory so it doesn't interfere with the
+# compile_pipeline_check that runs alongside.
+refs_fork_on_live_check() {
+    local map="$DIR/tests/maps/pipeline"
+    local base="$map/compiled"
+    printf "  %-44s " "315 compile fork on live refs"
+
+    rm -rf "$base" "$map"/compiled.*
+    "$DIR/scripts/soramech-compile.sh" "$map" --dir "$DIR" >/dev/null 2>&1
+
+    local id
+    id=$("$DIR/scripts/soramech-ref.sh" acquire "$base")
+    "$DIR/scripts/soramech-compile.sh" "$map" --dir "$DIR" >/dev/null 2>&1
+
+    local detail=""
+    [[ -d "$base"        ]] || detail+="compiled/ missing; "
+    [[ -d "$map/compiled.1" ]] || detail+="compiled.1/ missing; "
+    grep -q '"forked_from"' "$map/compiled.1/manifest.json" 2>/dev/null \
+        || detail+="forked_from missing from compiled.1; "
+    # Pinned generation must still run. Capture stdout/err so a
+    # crash on the pinned dir surfaces clearly.
+    if ! (cd /tmp && "$base/pool-runner" "$base" >/dev/null 2>&1); then
+        detail+="pinned generation no longer runs; "
+    fi
+
+    "$DIR/scripts/soramech-ref.sh" release "$base" --id "$id" >/dev/null
+    rm -rf "$base" "$map"/compiled.*
+
+    if [[ -z "$detail" ]]; then
+        printf "ok\n"
+        pass=$((pass + 1))
+    else
+        printf "FAIL — %s\n" "$detail"
+        fail=$((fail + 1))
+        failures+=("315-refs fork: $detail")
+    fi
+}
+# }}}
+
 # {{{ encap_output_only_file_check() — output-side encap reaches both
 # the sub-map's disk artifact AND the parent's disk artifact via the
 # spliced wire. The two files should be byte-identical because the
@@ -343,6 +410,8 @@ compile_pipeline_check
 encap_input_only_file_check
 encap_output_only_file_check
 encap_recursive_file_check
+refs_unit_tests
+refs_fork_on_live_check
 # }}}
 
 # {{{ parser_tests() — issue 232: unit tests for langs/<lang>/parser.js
