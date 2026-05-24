@@ -158,6 +158,11 @@ check_map "read-literal" \
 check_map "319a-many-inputs" \
     "combine → count=20 sum=210"
 
+check_map "319d-runtime-create" \
+    "trigger → trigger-fired:auto_" \
+    "auto_" \
+    "echo_dyn-received:trigger-fired:auto_"
+
 pipeline_output_check
 compile_pipeline_check
 # }}}

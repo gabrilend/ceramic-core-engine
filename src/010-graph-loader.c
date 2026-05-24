@@ -26,11 +26,32 @@
 
 #include <dirent.h>
 #include <stdarg.h>
+#include <stdatomic.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* {{{ Graph struct */
+/* {{{ Graph struct
+ *
+ * Box storage uses pointers-to-records so box addresses stay stable
+ * across runtime growth (issue 319d). Each box_t is its own malloc;
+ * `boxes` is an array of pointers indexed by box id. Growing the
+ * pointer array uses copy-and-publish — allocate a new bigger
+ * pointer array, memcpy the old pointers in, atomic-store the new
+ * array, and stash the old array on stale_box_arrs so any in-flight
+ * reader walking the old array completes safely.
+ *
+ * The hot read path (graph_box, graph_n_boxes) atomic-loads the
+ * boxes pointer and n_boxes count; no mutex held. Mutations
+ * (graph_add_box for runtime additions, graph_load for initial
+ * population) take graph_mu.
+ */
+struct stale_arr {
+    void              *ptr;
+    struct stale_arr  *next;
+};
+
 struct graph {
     json_arena_t *arena;
 
@@ -40,8 +61,11 @@ struct graph {
     char         *map_dir;     /* malloc'd; remembered for dispatch (read boxes,
                                  * source-file resolution). */
 
-    int           n_boxes;
-    box_t        *boxes;
+    _Atomic(box_t **) boxes;        /* array of box pointers; stable per box */
+    _Atomic uint32_t  n_boxes;      /* number of valid entries in `boxes` */
+    _Atomic uint32_t  box_capacity; /* allocated length of `boxes`        */
+    pthread_mutex_t   graph_mu;     /* serializes runtime additions       */
+    struct stale_arr *stale_box_arrs;
 
     int           n_languages;
     const char  **languages;   /* arena-owned strings */
@@ -102,7 +126,7 @@ static input_feeders_t scan_input_feeders(const struct graph *g,
 {
     input_feeders_t f = {0};
     for (int p = 0; p < g->n_boxes; p++) {
-        const box_t *prod = &g->boxes[p];
+        const box_t *prod = g->boxes[p];
         for (int k = 0; k < prod->n_connections; k++) {
             const connection_t *c = &prod->connections[k];
             if (c->to_box_idx   != dst_box)  continue;
@@ -626,10 +650,24 @@ static int load_boxes(graph_t *g, const char *map_dir, char **err)
     int n = count_json_files_in_dir(dir, err);
     if (n < 0) return -1;
 
-    g->n_boxes = n;
-    if (n == 0) { g->boxes = NULL; return 0; }
-    g->boxes = calloc((size_t)n, sizeof(box_t));
-    if (!g->boxes) { *err = err_fmt("out of memory"); return -1; }
+    /* Allocate a pointer-array (the index that maps id → box record)
+     * sized for the initial load count, with the same generous
+     * capacity slot store uses (issue 319b) so runtime add_box calls
+     * have room without immediate growth. Each box record is its own
+     * malloc so its address stays stable across pointer-array
+     * growth. */
+    uint32_t initial_cap = (uint32_t)n;
+    if (initial_cap < 16u) initial_cap = 16u;
+    box_t **box_ptrs = calloc((size_t)initial_cap, sizeof(box_t *));
+    if (!box_ptrs) { *err = err_fmt("out of memory"); return -1; }
+    atomic_store_explicit(&g->boxes,        box_ptrs,    memory_order_release);
+    atomic_store_explicit(&g->box_capacity, initial_cap, memory_order_release);
+    atomic_store_explicit(&g->n_boxes,      (uint32_t)n, memory_order_release);
+    if (n == 0) return 0;
+    for (int i = 0; i < n; i++) {
+        box_ptrs[i] = calloc(1, sizeof(box_t));
+        if (!box_ptrs[i]) { *err = err_fmt("out of memory"); return -1; }
+    }
 
     DIR *d = opendir(dir);
     if (!d) { *err = err_fmt("cannot open directory '%s'", dir); return -1; }
@@ -648,7 +686,7 @@ static int load_boxes(graph_t *g, const char *map_dir, char **err)
             return -1;
         }
 
-        if (parse_box_file(g, &g->boxes[i], path, err) != 0) {
+        if (parse_box_file(g, g->boxes[i], path, err) != 0) {
             closedir(d);
             return -1;
         }
@@ -659,8 +697,8 @@ static int load_boxes(graph_t *g, const char *map_dir, char **err)
     /* Validate id uniqueness (O(n^2) scan; n is small). */
     for (int j = 0; j < n; j++) {
         for (int k = j + 1; k < n; k++) {
-            if (strcmp(g->boxes[j].id, g->boxes[k].id) == 0) {
-                *err = err_fmt("duplicate box id '%s'", g->boxes[j].id);
+            if (strcmp(g->boxes[j]->id, g->boxes[k]->id) == 0) {
+                *err = err_fmt("duplicate box id '%s'", g->boxes[j]->id);
                 return -1;
             }
         }
@@ -689,7 +727,7 @@ static int dfs_cycle(const graph_t *g, int box_id, char *color,
                      int *culprit_box)
 {
     color[box_id] = 1;
-    const box_t *src = &g->boxes[box_id];
+    const box_t *src = g->boxes[box_id];
 
     /* Skip outgoing edges from iterator boxes. The iterator naturally
      * terminates on input-queue empty, so cycles that loop through
@@ -723,7 +761,7 @@ static int detect_cycles(const graph_t *g, char **err)
             *err = err_fmt("non-iterator cycle detected (back-edge from "
                            "box '%s'); cycles must pass through an "
                            "iterator-routing box",
-                           g->boxes[culprit].id);
+                           g->boxes[culprit]->id);
             free(color);
             return -1;
         }
@@ -743,7 +781,7 @@ static int detect_cycles(const graph_t *g, char **err)
 static int cache_read_box_values(graph_t *g, char **err)
 {
     for (int i = 0; i < g->n_boxes; i++) {
-        box_t *b = &g->boxes[i];
+        box_t *b = g->boxes[i];
         if (b->kind != BOX_READ) continue;
 
         if (b->value) {
@@ -825,7 +863,7 @@ static int cache_read_box_values(graph_t *g, char **err)
 static int build_read_predecessor_lists(graph_t *g, char **err)
 {
     for (int i = 0; i < g->n_boxes; i++) {
-        box_t *b = &g->boxes[i];
+        box_t *b = g->boxes[i];
         if (b->kind != BOX_CALL && b->kind != BOX_WRITE) continue;
         if (b->n_inputs <= 0) continue;
 
@@ -843,7 +881,7 @@ static int build_read_predecessor_lists(graph_t *g, char **err)
             /* First pass: count. */
             int n = 0;
             for (int p = 0; p < g->n_boxes; p++) {
-                const box_t *prod = &g->boxes[p];
+                const box_t *prod = g->boxes[p];
                 if (prod->kind != BOX_READ) continue;
                 for (int k = 0; k < prod->n_connections; k++) {
                     const connection_t *c = &prod->connections[k];
@@ -858,7 +896,7 @@ static int build_read_predecessor_lists(graph_t *g, char **err)
             /* Second pass: fill. */
             int idx = 0;
             for (int p = 0; p < g->n_boxes; p++) {
-                const box_t *prod = &g->boxes[p];
+                const box_t *prod = g->boxes[p];
                 if (prod->kind != BOX_READ) continue;
                 for (int k = 0; k < prod->n_connections; k++) {
                     const connection_t *c = &prod->connections[k];
@@ -903,7 +941,7 @@ static int detect_entry_boxes(graph_t *g, char **err)
 
     int count = 0;
     for (int i = 0; i < g->n_boxes; i++) {
-        const box_t *b = &g->boxes[i];
+        const box_t *b = g->boxes[i];
         if (b->kind != BOX_CALL && b->kind != BOX_WRITE) continue;
 
         int qualifies = 1;
@@ -929,7 +967,7 @@ static int detect_entry_boxes(graph_t *g, char **err)
 static int resolve_topology(graph_t *g, char **err)
 {
     for (int i = 0; i < g->n_boxes; i++) {
-        box_t *src = &g->boxes[i];
+        box_t *src = g->boxes[i];
         for (int j = 0; j < src->n_connections; j++) {
             connection_t *c = &src->connections[j];
             c->to_box_idx   = -1;
@@ -937,7 +975,7 @@ static int resolve_topology(graph_t *g, char **err)
 
             int found_box = -1;
             for (int k = 0; k < g->n_boxes; k++) {
-                if (strcmp(g->boxes[k].id, c->to_box) == 0) { found_box = k; break; }
+                if (strcmp(g->boxes[k]->id, c->to_box) == 0) { found_box = k; break; }
             }
             if (found_box < 0) {
                 *err = err_fmt("box '%s' has a connection to nonexistent box '%s'",
@@ -946,7 +984,7 @@ static int resolve_topology(graph_t *g, char **err)
             }
             c->to_box_idx = found_box;
 
-            const box_t *dst = &g->boxes[found_box];
+            const box_t *dst = g->boxes[found_box];
             int found_in = -1;
             for (int k = 0; k < dst->n_inputs; k++) {
                 if (strcmp(dst->inputs[k].name, c->to_input) == 0) {
@@ -977,6 +1015,11 @@ graph_t *graph_load(const char *map_dir, char **err)
 
     graph_t *g = calloc(1, sizeof *g);
     if (!g) { if (err) *err = err_fmt("out of memory"); return NULL; }
+    pthread_mutex_init(&g->graph_mu, NULL);
+    atomic_init(&g->boxes,        NULL);
+    atomic_init(&g->n_boxes,      0u);
+    atomic_init(&g->box_capacity, 0u);
+    g->stale_box_arrs = NULL;
 
     g->arena = json_arena_create();
     if (!g->arena) {
@@ -1013,7 +1056,7 @@ graph_t *graph_load(const char *map_dir, char **err)
      * pick the producer's push ring (native vs JSON) and to set
      * the consumer's `input_native[i]` flag at read time. */
     for (int i = 0; i < g->n_boxes; i++) {
-        box_t *b = &g->boxes[i];
+        box_t *b = g->boxes[i];
         b->input_edge_native  = NULL;
         b->output_edge_native = NULL;
         if (b->kind != BOX_CALL || !b->lang) continue;
@@ -1040,7 +1083,7 @@ graph_t *graph_load(const char *map_dir, char **err)
         for (int j = 0; j < b->n_connections; j++) {
             int dst = b->connections[j].to_box_idx;
             if (dst < 0) { all_outs_native = 0; continue; }
-            const box_t *c = &g->boxes[dst];
+            const box_t *c = g->boxes[dst];
             int native = (c->kind == BOX_CALL && c->lang
                           && strcmp(c->lang, b->lang) == 0);
             b->output_edge_native[j] = native;
@@ -1068,9 +1111,12 @@ graph_t *graph_load(const char *map_dir, char **err)
 void graph_destroy(graph_t *g)
 {
     if (!g) return;
-    if (g->boxes) {
-        for (int i = 0; i < g->n_boxes; i++) {
-            box_t *b = &g->boxes[i];
+    box_t **boxes = atomic_load_explicit(&g->boxes, memory_order_relaxed);
+    uint32_t n    = atomic_load_explicit(&g->n_boxes, memory_order_relaxed);
+    if (boxes) {
+        for (uint32_t i = 0; i < n; i++) {
+            box_t *b = boxes[i];
+            if (!b) continue;
             free(b->inputs);
             free(b->connections);
             free(b->input_slot_ids);
@@ -1092,9 +1138,21 @@ void graph_destroy(graph_t *g)
             }
             free(b->n_read_predecessors);
             free(b->read_pred_counter_slot);
+            free(b);
         }
-        free(g->boxes);
+        free(boxes);
     }
+    /* Free any stale pointer-arrays parked by runtime growth. The
+     * box records they pointed to are the same records already
+     * freed above (growth never deep-copies records). */
+    struct stale_arr *st = g->stale_box_arrs;
+    while (st) {
+        struct stale_arr *next = st->next;
+        free(st->ptr);
+        free(st);
+        st = next;
+    }
+    pthread_mutex_destroy(&g->graph_mu);
     free(g->languages);    /* element strings live in the arena */
     free(g->entry_box_ids);
     free(g->size_classes);
@@ -1104,24 +1162,115 @@ void graph_destroy(graph_t *g)
 }
 /* }}} */
 
+/* {{{ Runtime mutation — graph_add_box() (issue 319d)
+ *
+ * Appends a pre-built box to the graph's pointer index. The pointer
+ * array grows via copy-and-publish (allocate at 2x capacity, memcpy
+ * the old pointers in, atomic-store the new array, park the old on
+ * stale_box_arrs for destroy-time reclamation). The new box's count
+ * is published last with release semantics so a reader seeing
+ * count = N also sees box N-1 fully published into the index. */
+int graph_add_box(graph_t *g, box_t *box)
+{
+    if (!g || !box) return -1;
+    pthread_mutex_lock(&g->graph_mu);
+
+    uint32_t n   = atomic_load_explicit(&g->n_boxes,      memory_order_relaxed);
+    uint32_t cap = atomic_load_explicit(&g->box_capacity, memory_order_relaxed);
+
+    if (n + 1u > cap) {
+        uint32_t new_cap = cap == 0 ? 16u : cap * 2u;
+        box_t **new_boxes = calloc((size_t)new_cap, sizeof(box_t *));
+        if (!new_boxes) {
+            pthread_mutex_unlock(&g->graph_mu);
+            return -1;
+        }
+        box_t **old_boxes = atomic_load_explicit(&g->boxes, memory_order_relaxed);
+        if (old_boxes && n > 0) {
+            memcpy(new_boxes, old_boxes, (size_t)n * sizeof(box_t *));
+        }
+        struct stale_arr *st = malloc(sizeof *st);
+        if (!st) { free(new_boxes); pthread_mutex_unlock(&g->graph_mu); return -1; }
+        st->ptr  = old_boxes;
+        st->next = g->stale_box_arrs;
+        g->stale_box_arrs = st;
+        atomic_store_explicit(&g->boxes,        new_boxes, memory_order_release);
+        atomic_store_explicit(&g->box_capacity, new_cap,   memory_order_release);
+    }
+
+    box_t **boxes = atomic_load_explicit(&g->boxes, memory_order_relaxed);
+    boxes[n] = box;
+    atomic_store_explicit(&g->n_boxes, n + 1u, memory_order_release);
+
+    pthread_mutex_unlock(&g->graph_mu);
+    return (int)n;
+}
+/* }}} */
+
+/* {{{ Runtime mutation — box_add_connection() (issue 319d)
+ *
+ * Appends one connection to box `b`'s connections array via the
+ * same copy-and-publish discipline used for boxes: allocate a
+ * new connections[] sized current+1, copy the old in, append the
+ * new connection, atomic-store the new connections pointer, then
+ * atomic-store the new count. The old connections array is parked
+ * on stale_box_arrs (the list is generic, not box-specific) and
+ * freed at graph_destroy. */
+int box_add_connection(graph_t *g, box_t *b, connection_t conn)
+{
+    if (!g || !b) return -1;
+    pthread_mutex_lock(&g->graph_mu);
+
+    int n_old = atomic_load_explicit(&b->n_connections, memory_order_relaxed);
+    connection_t *old = atomic_load_explicit(&b->connections, memory_order_relaxed);
+
+    connection_t *new_conns = malloc((size_t)(n_old + 1) * sizeof(connection_t));
+    if (!new_conns) { pthread_mutex_unlock(&g->graph_mu); return -1; }
+    if (old && n_old > 0) {
+        memcpy(new_conns, old, (size_t)n_old * sizeof(connection_t));
+    }
+    new_conns[n_old] = conn;
+
+    if (old) {
+        struct stale_arr *st = malloc(sizeof *st);
+        if (!st) { free(new_conns); pthread_mutex_unlock(&g->graph_mu); return -1; }
+        st->ptr  = old;
+        st->next = g->stale_box_arrs;
+        g->stale_box_arrs = st;
+    }
+
+    atomic_store_explicit(&b->connections,   new_conns, memory_order_release);
+    atomic_store_explicit(&b->n_connections, n_old + 1, memory_order_release);
+
+    pthread_mutex_unlock(&g->graph_mu);
+    return 0;
+}
+/* }}} */
+
 /* {{{ Accessors */
 const char *graph_name(const graph_t *g)         { return g ? g->name : NULL; }
 const char *graph_description(const graph_t *g)  { return g ? g->description : NULL; }
 const char *graph_entry_box_id(const graph_t *g) { return g ? g->entry_box_id : NULL; }
 const char *graph_map_dir(const graph_t *g)      { return g ? g->map_dir : NULL; }
-int         graph_n_boxes(const graph_t *g)      { return g ? g->n_boxes : 0; }
+int         graph_n_boxes(const graph_t *g)
+{
+    return g ? (int)atomic_load_explicit(&g->n_boxes, memory_order_acquire) : 0;
+}
 
 const box_t *graph_box(const graph_t *g, int i)
 {
-    if (!g || i < 0 || i >= g->n_boxes) return NULL;
-    return &g->boxes[i];
+    if (!g || i < 0) return NULL;
+    uint32_t n = atomic_load_explicit(&g->n_boxes, memory_order_acquire);
+    if ((uint32_t)i >= n) return NULL;
+    box_t **boxes = atomic_load_explicit(&g->boxes, memory_order_acquire);
+    return boxes[i];
 }
 
 const box_t *graph_box_by_id(const graph_t *g, const char *id)
 {
     if (!g || !id) return NULL;
     for (int i = 0; i < g->n_boxes; i++) {
-        if (strcmp(g->boxes[i].id, id) == 0) return &g->boxes[i];
+        if (strcmp(g->boxes[i]->id, id) == 0) return g->boxes[i];
     }
     return NULL;
 }
@@ -1130,7 +1279,7 @@ int graph_box_index(const graph_t *g, const char *id)
 {
     if (!g || !id) return -1;
     for (int i = 0; i < g->n_boxes; i++) {
-        if (strcmp(g->boxes[i].id, id) == 0) return i;
+        if (strcmp(g->boxes[i]->id, id) == 0) return i;
     }
     return -1;
 }
@@ -1197,7 +1346,7 @@ static void propagate_multi_spawn(graph_t *g)
 {
     /* Seed: every iterator-routing call box is multi_spawn. */
     for (int i = 0; i < g->n_boxes; i++) {
-        box_t *b = &g->boxes[i];
+        box_t *b = g->boxes[i];
         b->multi_spawn = (b->kind == BOX_CALL &&
                           b->routing.kind == ROUTING_ITERATOR) ? 1 : 0;
     }
@@ -1208,13 +1357,13 @@ static void propagate_multi_spawn(graph_t *g)
     while (changed) {
         changed = 0;
         for (int i = 0; i < g->n_boxes; i++) {
-            const box_t *b = &g->boxes[i];
+            const box_t *b = g->boxes[i];
             if (!b->multi_spawn) continue;
             for (int j = 0; j < b->n_connections; j++) {
                 int dst = b->connections[j].to_box_idx;
                 if (dst < 0) continue;
-                if (!g->boxes[dst].multi_spawn) {
-                    g->boxes[dst].multi_spawn = 1;
+                if (!g->boxes[dst]->multi_spawn) {
+                    g->boxes[dst]->multi_spawn = 1;
                     changed = 1;
                 }
             }
@@ -1241,7 +1390,7 @@ int graph_attach_runtime(graph_t *g,
     propagate_multi_spawn(g);
 
     for (int i = 0; i < g->n_boxes; i++) {
-        box_t *b = &g->boxes[i];
+        box_t *b = g->boxes[i];
 
         /* Allocate slots per input port. Multi-spawn boxes get
          * N-cell pop rings so producers' multiple pushes accumulate
@@ -1367,7 +1516,7 @@ int graph_attach_runtime(graph_t *g,
             return -1;
         }
         for (int i = 0; i < g->n_boxes; i++) {
-            const box_t *b = &g->boxes[i];
+            const box_t *b = g->boxes[i];
             if (b->kind != BOX_CALL || !b->lang) continue;
             int seen = 0;
             for (int k = 0; k < g->n_languages; k++) {
@@ -1387,7 +1536,7 @@ int graph_attach_runtime(graph_t *g,
     g->size_classes   = NULL;
     g->n_size_classes = 0;
     int total_ports = 0;
-    for (int i = 0; i < g->n_boxes; i++) total_ports += g->boxes[i].n_inputs;
+    for (int i = 0; i < g->n_boxes; i++) total_ports += g->boxes[i]->n_inputs;
     if (total_ports > 0) {
         g->size_classes = calloc((size_t)total_ports, sizeof(int));
         if (!g->size_classes) {
@@ -1395,7 +1544,7 @@ int graph_attach_runtime(graph_t *g,
             return -1;
         }
         for (int i = 0; i < g->n_boxes; i++) {
-            const box_t *b = &g->boxes[i];
+            const box_t *b = g->boxes[i];
             for (int j = 0; j < b->n_inputs; j++) {
                 input_feeders_t fdr = scan_input_feeders(g, i, j, NULL);
                 int width = (fdr.max_capacity > default_cell_bytes)

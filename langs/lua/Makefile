@@ -18,7 +18,7 @@ CC          ?= gcc
 LUA_INCLUDE ?= /usr/include/luajit-2.1
 LUA_LIB     ?= /usr/lib
 
-CFLAGS  = -shared -fPIC -O2 -Wall -I$(LUA_INCLUDE) -I$(DIR)/langs -I$(DIR)/libs/json
+CFLAGS  = -shared -fPIC -O2 -Wall -I$(LUA_INCLUDE) -I$(DIR)/langs -I$(DIR)/libs/json -I$(DIR)/src
 LDFLAGS = -L$(LUA_LIB) -lluajit-5.1
 # }}}
 

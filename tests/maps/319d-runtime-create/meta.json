@@ -1,0 +1,6 @@
+{
+  "name": "319d-runtime-create",
+  "description": "Issue 319d fixture: a Lua box uses soramech.create_box to spawn a downstream box and soramech.connect to wire to it. The downstream box runs and produces output, proving runtime self-construction end-to-end.",
+  "entry_box_id": "trigger",
+  "src_dirs": ["tests/maps/319d-runtime-create/src"]
+}

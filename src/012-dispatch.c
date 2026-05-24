@@ -33,6 +33,7 @@
 
 #include "012-dispatch.h"
 #include "016-unified-allocator.h"
+#include "018-runtime-builtins.h"   /* runtime_set_active_context — 319d */
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -119,7 +120,16 @@ int dispatch_ctx_init(dispatch_ctx_t *ctx,
     ctx->pool  = p;
     atomic_init(&ctx->tasks_dispatched, 0);
     atomic_init(&ctx->next_task_id,     0);
-    ctx->n_boxes              = graph_n_boxes(g);
+    /* Issue 319d: ctx's per-box arrays (box_ever_spawned,
+     * last_outputs, last_output_sizes) need to be large enough to
+     * cover boxes added at runtime via create_box, not just the
+     * boxes present at graph load. The proper fix is growable
+     * arrays under a mutex; the slice-1 expedient is to oversize
+     * generously at init. RUNTIME_BOX_HEADROOM bounds how many
+     * boxes can be runtime-created. If a workload trips the cap,
+     * raise it or land the growable-array version. */
+#define RUNTIME_BOX_HEADROOM 4096
+    ctx->n_boxes              = graph_n_boxes(g) + RUNTIME_BOX_HEADROOM;
     ctx->default_out_capacity = 4096;
     ctx->events               = NULL;     /* opt-in via caller assignment */
     ctx->log_values           = 0;        /* opt-in via SORAMECH_LOG_VALUES=1 */
@@ -966,6 +976,14 @@ void dispatch_action(void *arg)
     dispatch_ctx_t *ctx = (dispatch_ctx_t *)t->ctx;
     const box_t *b = graph_box(ctx->graph, t->box_id);
 
+    /* Issue 319d: publish the active runtime context to thread-local
+     * storage so any spec that calls runtime_create_box /
+     * runtime_connect during its invoke can reach the graph + slot
+     * store + spec registry. Cleared at the end of this task. */
+    runtime_set_active_context((struct graph *)ctx->graph,
+                               ctx->slots,
+                               ctx->specs);
+
     atomic_fetch_add_explicit(&ctx->tasks_dispatched, 1, memory_order_relaxed);
 
     int task_id    = t->task_id;
@@ -1041,5 +1059,10 @@ void dispatch_action(void *arg)
     /* Release the task cell back to the slab. The chunk pointer
      * was stashed on the task by dispatch_spawn. */
     if (t->chunk) ua_unref(heap, t->chunk);
+
+    /* Clear the runtime-builtins TLS so a later task on this worker
+     * that runs without dispatch_action (e.g. main-thread setup)
+     * doesn't see a stale graph pointer. */
+    runtime_clear_active_context();
 }
 /* }}} */

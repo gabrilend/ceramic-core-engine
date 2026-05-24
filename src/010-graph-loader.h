@@ -39,6 +39,7 @@
 #define SORAMECH_GRAPH_LOADER_H
 
 #include <stddef.h>
+#include <stdatomic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -138,8 +139,16 @@ typedef struct box {
     /* Common */
     int            n_inputs;
     input_decl_t  *inputs;
-    int            n_connections;
-    connection_t  *connections;
+    /* Connections grow at runtime via runtime_connect (issue 319d).
+     * Writers allocate a new array, copy + append, atomic-store the
+     * new connections pointer, then atomic-store the new count;
+     * old arrays are parked on the graph's stale list and freed at
+     * graph_destroy. Readers see either (old, old) / (new, old) /
+     * (new, new) — never (old, new) — so iteration is always safe
+     * against a concurrent grow. Implicit atomic loads via C11
+     * cover the common access patterns. */
+    _Atomic int                n_connections;
+    _Atomic(connection_t *)    connections;
 
     /* Runtime state — populated by graph_attach_runtime, left at
      * defaults (-1 / NULL / 0) by graph_load alone. */
@@ -230,6 +239,35 @@ int          graph_entry_box    (const graph_t *g, int i);
  * The slot store can use this to pre-populate free lists. */
 int          graph_n_size_classes(const graph_t *g);
 int          graph_size_class    (const graph_t *g, int i);
+/* }}} */
+
+/* {{{ Runtime mutation primitives (issue 319d)
+ *
+ * graph_add_box appends a pre-built box record to the graph's
+ * index. The caller owns the box record's construction — fills in
+ * id / kind / lang / ref / fn / inputs / etc. — and hands the
+ * malloc'd `box` pointer to this function. After the call the box
+ * is owned by the graph; graph_destroy will free it. Returns the
+ * new box's index (>= 0) or -1 on allocation failure.
+ *
+ * box_add_connection appends a connection entry to the given box's
+ * `connections` array via atomic copy-and-publish: a new array is
+ * allocated at current_n+1 entries, the old entries are copied in,
+ * the new entry is appended, and the new array pointer is published
+ * before the new count. The old array is parked on the graph's
+ * stale-list and freed at graph_destroy. Concurrent dispatch reads
+ * of the producer's connections see either the pre-append snapshot
+ * or the post-append snapshot, never a half-published state.
+ *
+ * Single-spawn box invariant: the dispatch never reads a producer's
+ * connections concurrently from two workers (single-spawn CAS guard
+ * in dispatch). The common case for box_add_connection is a spec
+ * calling `connect()` from inside its own invoke; the producer
+ * isn't firing on any other worker at that moment.
+ *
+ * Returns 0 on success, -1 on allocation failure. */
+int graph_add_box       (graph_t *g, box_t *box);
+int box_add_connection  (graph_t *g, box_t *b, connection_t conn);
 /* }}} */
 
 /* {{{ Runtime attach

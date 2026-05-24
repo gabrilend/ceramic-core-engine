@@ -151,9 +151,16 @@ static event_queue_t *open_event_queue(const char *map_dir,
 static void print_outputs(const dispatch_ctx_t *ctx)
 {
     if (!ctx->last_outputs) return;
-    for (int i = 0; i < ctx->n_boxes; i++) {
+    /* Iterate over the graph's current box count rather than
+     * ctx->n_boxes — the latter includes 319d's runtime-headroom
+     * slots for boxes that may have been created at runtime; the
+     * graph's atomic count reflects the actual population. Skip
+     * any NULL entries defensively in case of races. */
+    int n = graph_n_boxes(ctx->graph);
+    for (int i = 0; i < n; i++) {
         const box_t *b = graph_box(ctx->graph, i);
-        if (b && b->kind == BOX_READ) continue;
+        if (!b) continue;
+        if (b->kind == BOX_READ) continue;
         const char *out = ctx->last_outputs[i];
         if (out) {
             fprintf(stderr, "  %s → %s\n", b->id, out);
