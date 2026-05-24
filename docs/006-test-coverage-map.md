@@ -153,9 +153,13 @@ JSON-Lines run-output writer also fold into the same suite via
   then invokes `scripts/run-tests.sh`. Slow on a clean tree because
   it does a full rebuild + spec build before any test runs.
 
-A cheap, build-free unit-test runner that lets you iterate without
-paying for the rebuild is **planned** — see the issue file for
-that work for design notes.
+- **`scripts/run-unit-tests.sh`** (issue 252) — cheap, build-free
+  runner for the C unit-test binaries. Runs whatever's already
+  built under `build/tests/`, prints one row per binary plus a
+  total. `--quiet` collapses to just the total; `--verbose`
+  dumps each binary's full output; a positional argument filters
+  to binaries whose names start with that prefix. `make
+  quicktest` is the alias; `make quicktest ARGS=009` filters.
 
 ## Suggested next test additions (ranked)
 

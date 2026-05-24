@@ -87,7 +87,7 @@ LANGS = lua c bash
 # }}}
 
 # {{{ Public targets
-.PHONY: all runner specs clean test help
+.PHONY: all runner specs clean test quicktest help
 
 all: runner specs
 
@@ -118,13 +118,23 @@ test: all $(TEST_BINS)
 	fi; \
 	exit $$fail
 
+# Issue 252 — cheap iteration loop. Runs whatever C unit-test
+# binaries are already built under build/tests/ without
+# rebuilding anything and without invoking the integration
+# fixtures. Forwards any extra args (e.g. `make quicktest ARGS=009`
+# filters to binaries starting with "009").
+quicktest:
+	@$(DIR)/scripts/run-unit-tests.sh --dir $(DIR) $(ARGS)
+
 help:
 	@echo "SoraMech build:"
-	@echo "  make          — build runner + specs (release)"
-	@echo "  make DEBUG=1  — debug info, no optimization"
-	@echo "  make STRICT=1 — promote warnings to errors"
-	@echo "  make clean    — remove every built artifact"
-	@echo "  make test     — run integration tests (when 311 lands)"
+	@echo "  make             — build runner + specs (release)"
+	@echo "  make DEBUG=1     — debug info, no optimization"
+	@echo "  make STRICT=1    — promote warnings to errors"
+	@echo "  make clean       — remove every built artifact"
+	@echo "  make test        — full suite: build + run C unit tests + run integration fixtures"
+	@echo "  make quicktest   — run already-built C unit tests only (no rebuild, no integration)"
+	@echo "                     filter:  make quicktest ARGS=009"
 # }}}
 
 # {{{ Build rules
@@ -152,6 +162,8 @@ $(BUILD_DIR)/tests/010-graph-loader-test: $(BUILD_DIR)/src/010-graph-loader.o \
                                           $(BUILD_DIR)/src/017-box-id.o \
                                           $(BUILD_DIR)/src/018-runtime-builtins.o \
                                           $(BUILD_DIR)/src/020-sentinels.o \
+                                          $(BUILD_DIR)/src/013-jsonl-events.o \
+                                          $(BUILD_DIR)/src/014-event-queue.o \
                                           $(BUILD_DIR)/libs/json/json.o
 # Every test binary that loads a language spec via dlopen needs the
 # runner-side symbols the specs call back into (issue 318's
@@ -164,6 +176,8 @@ SPEC_LOADER_DEPS = $(BUILD_DIR)/src/020-sentinels.o \
                    $(BUILD_DIR)/src/010-graph-loader.o \
                    $(BUILD_DIR)/src/009-slot-store.o \
                    $(BUILD_DIR)/src/016-unified-allocator.o \
+                   $(BUILD_DIR)/src/013-jsonl-events.o \
+                   $(BUILD_DIR)/src/014-event-queue.o \
                    $(BUILD_DIR)/libs/json/json.o
 
 $(BUILD_DIR)/tests/011-spec-registry-test: $(BUILD_DIR)/src/011-spec-registry.o \

@@ -1,9 +1,13 @@
 # 252 — Cheap, build-free unit-test runner
 
 ## Status
-open — design lifted out of the old 232 issue file when it
-was converted to `docs/006-test-coverage-map.md`. The script
-hasn't been written; this file is the surviving design note.
+complete — `scripts/run-unit-tests.sh` ships with the
+pretty-default + `--quiet` + `--verbose` + name-prefix filter
+modes the design called for. `make quicktest` is the alias;
+`make quicktest ARGS=009` forwards the filter. The runner
+honestly identifies pre-existing failures (a longstanding
+`307-c-spec-test` failure surfaces immediately when the
+runner first runs against the built tree).
 
 ## Current behavior
 
