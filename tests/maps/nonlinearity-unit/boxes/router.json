@@ -5,9 +5,9 @@
   "ref": "src/router.lua",
   "fn": "identity",
   "inputs": [ { "name": "x", "type": "string" } ],
-  "routing": { "kind": "nonlinearity", "shape": "decision", "min": -10, "max": 10 },
+  "routing": { "kind": "nonlinearity", "range": "unit" },
   "ui": { "x": 320, "y": 100 },
   "connections": [
-    { "from_box": "router", "from_branch": null, "to_box": "tagger", "to_input": "score" }
+    { "from_box": "router", "from_branch": null, "to_box": "tagger", "to_input": "gated" }
   ]
 }

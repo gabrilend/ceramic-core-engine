@@ -370,7 +370,7 @@ const Inspector = (() => {
     // with fully-auto bounds (no min, no max, no midpoint set) and
     // a gentle steepness. The user pins values when they want
     // fixed bounds; leaving them absent means the box tracks them.
-    if (kind === 'nonlinearity') return { kind: 'nonlinearity', shape: 'confidence', k: 1 };
+    if (kind === 'nonlinearity') return { kind: 'nonlinearity', range: 'signed', memory: 16, k: 1 };
     return { kind: 'plain' };
   }
   // }}}
@@ -449,31 +449,22 @@ const Inspector = (() => {
   // }}}
 
   // {{{ async function set_nl_field()
-  // Issue 250 — nonlinearity routing field setter. The bounds
-  // (min / max / midpoint) follow the presence-is-mode rule: a
-  // blank input value means "delete the field, auto-track this
-  // side"; a number means "pin this side." `shape` and `k` are
-  // simple field writes — never deleted, always present in
-  // schema-valid form. No outgoing wires get severed because
+  // Issue 253 — nonlinearity field setter (refactored). Three
+  // fields: range (signed | unit), memory (positive int), k
+  // (positive number). No outgoing wires get severed because
   // nonlinearity always has one output port; the wire shape
   // doesn't depend on the routing parameters.
   async function set_nl_field(key, raw) {
     if (!current_box || routing_kind(current_box) !== 'nonlinearity') return;
     current_box.routing = current_box.routing || { kind: 'nonlinearity' };
-    if (key === 'shape') {
-      current_box.routing.shape = String(raw);
+    if (key === 'range') {
+      current_box.routing.range = String(raw);
     } else if (key === 'k') {
       const v = parseFloat(raw);
       if (!isNaN(v) && v > 0) current_box.routing.k = v;
-    } else {
-      // min / max / midpoint — empty string deletes; number sets.
-      const s = String(raw).trim();
-      if (s === '') {
-        delete current_box.routing[key];
-      } else {
-        const v = parseFloat(s);
-        if (!isNaN(v)) current_box.routing[key] = v;
-      }
+    } else if (key === 'memory') {
+      const v = parseInt(raw, 10);
+      if (!isNaN(v) && v >= 1) current_box.routing.memory = v;
     }
     await save();
     Canvas.mark_dirty();
@@ -1558,37 +1549,33 @@ const Inspector = (() => {
       w_note.textContent = 'comma-separated non-negative numbers. dispatch normalises to a probability table.';
       fields.appendChild(w_note);
     } else if (rk === 'nonlinearity') {
-      // Issue 250 — variant + bounds + steepness controls. The
-      // bounds use the presence-is-the-mode rule: a blank field
-      // means "auto-track this side"; a number means "pin this
-      // side as a fixed bound, clamp past it." set_nl_bounds()
-      // applies that rule when the user edits a field.
-      const variant_sel = document.createElement('select');
-      [['decision',    'soft +/- with clear neutral'],
-       ['confidence',  'soft yes/no with uncertainty'],
-       ['calibration', 'pure range remap, no curve']].forEach(([k, hint]) => {
+      // Issue 253 — refactored nonlinearity. range toggle picks
+      // both output range and S-curve (signed → tanh [-1,1];
+      // unit → sigmoid [0,1]); memory is the ring-buffer size
+      // for auto-calibration; k is steepness. Output is
+      // v × score (gated linear unit), composed for soft-AND
+      // decision lattices.
+      const range_sel = document.createElement('select');
+      [['signed', 'tanh, output [-1, 1], midpoint 0'],
+       ['unit',   'sigmoid, output [0, 1], midpoint 0.5']].forEach(([k, hint]) => {
         const opt = document.createElement('option');
         opt.value = k; opt.textContent = k;
         opt.title  = hint;
-        if (k === (box.routing && box.routing.shape)) opt.selected = true;
-        variant_sel.appendChild(opt);
+        if (k === (box.routing && box.routing.range)) opt.selected = true;
+        range_sel.appendChild(opt);
       });
-      variant_sel.addEventListener('change', () => set_nl_field('shape', variant_sel.value));
-      fields.appendChild(mk_row('variant', variant_sel));
+      range_sel.addEventListener('change', () => set_nl_field('range', range_sel.value));
+      fields.appendChild(mk_row('range', range_sel));
 
-      const mk_bound = (label, key, placeholder) => {
-        const inp = document.createElement('input');
-        inp.type        = 'number';
-        inp.value       = (box.routing && box.routing[key] != null) ? String(box.routing[key]) : '';
-        inp.placeholder = placeholder;
-        inp.style.cssText = 'width:100%;background:#0f1117;border:1px solid #2a2f45;' +
-          'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
-        inp.addEventListener('change', () => set_nl_field(key, inp.value));
-        fields.appendChild(mk_row(label, inp));
-      };
-      mk_bound('min',      'min',      '(blank = auto-track)');
-      mk_bound('max',      'max',      '(blank = auto-track)');
-      mk_bound('midpoint', 'midpoint', '(blank = (min+max)/2)');
+      const mem_inp = document.createElement('input');
+      mem_inp.type        = 'number';
+      mem_inp.min         = '1';
+      mem_inp.step        = '1';
+      mem_inp.value       = String((box.routing && box.routing.memory) ?? 16);
+      mem_inp.style.cssText = 'width:100%;background:#0f1117;border:1px solid #2a2f45;' +
+        'border-radius:3px;color:#e8eaf6;font-family:monospace;font-size:11px;padding:4px 6px;';
+      mem_inp.addEventListener('change', () => set_nl_field('memory', mem_inp.value));
+      fields.appendChild(mk_row('memory', mem_inp));
 
       const k_inp = document.createElement('input');
       k_inp.type        = 'number';
@@ -1602,7 +1589,7 @@ const Inspector = (() => {
 
       const nl_note = document.createElement('div');
       nl_note.style.cssText = 'font-size:10px;color:#6c72a0;margin-top:4px;line-height:1.4;';
-      nl_note.textContent = 'output is the SCORE, not the scaled input. blank bounds auto-track; pinned bounds clamp past them (confidence / decision) or extrapolate (calibration).';
+      nl_note.textContent = 'auto-calibrates from the last `memory` values. output is v × score: the input gated by the S-curve. cold start emits v × 0 (signed) or v × 0.5 (unit) while the buffer fills.';
       fields.appendChild(nl_note);
     }
   }

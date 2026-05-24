@@ -1,0 +1,6 @@
+{
+  "name": "nonlinearity-signed",
+  "description": "Issue 253 signed-range nonlinearity. Single fire of v=5; the ring buffer holds one value so n_filled<2 → neutral score 0 (tanh's neutral) → output = 5 × 0 = 0. Asserts the cold-start gated-output path.",
+  "entry_box_id": "seed",
+  "src_dirs": ["tests/maps/nonlinearity-signed/src"]
+}

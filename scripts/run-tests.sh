@@ -195,21 +195,21 @@ check_map "multi-band-comparator-route" \
     "tagger_1 → got_1:5" \
     "tagger_2 → (no output)"
 
-# Issue 250 — nonlinearity routing, three intent-named variants.
-# Each fixture pins fixed bounds and feeds a value that lands on
-# a deterministic point of the curve. The downstream tagger
-# echoes the score the routing kind emitted; the test asserts
-# the score value appears in stderr.
+# Issue 253 — nonlinearity refactor. The routing kind grew an
+# auto-calibrating ring buffer for bounds, dropped the variant
+# names in favour of a `range` toggle, and the output is now
+# v × score (gated linear unit) rather than score alone. Single-
+# fire fixtures cover the cold-start path: the buffer has only
+# the one observed value, n_filled < 2 triggers the neutral
+# score (0 for signed, 0.5 for unit), and the gated output is
+# v × neutral.
 #
-#   confidence : sigmoid, bounds [0, 100], input 50 → 0.5 (midpoint)
-#   decision   : tanh,    bounds [-10, 10], input 0  → 0   (midpoint)
-#   calibration: linear,  bounds [0, 200], input 50 → 0.25 (1/4 of the way through)
-check_map "nonlinearity-confidence" \
-    "tagger → 0.5"
-check_map "nonlinearity-decision" \
+#   signed : tanh,   input v=5  → score 0 (cold start) → v×0 = 0
+#   unit   : sigmoid, input v=10 → score 0.5 (cold start) → v×0.5 = 5
+check_map "nonlinearity-signed" \
     "tagger → 0"
-check_map "nonlinearity-calibration" \
-    "tagger → 0.25"
+check_map "nonlinearity-unit" \
+    "tagger → 5"
 
 check_map "pipeline" \
     "double → 10" \

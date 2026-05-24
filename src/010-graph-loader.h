@@ -87,18 +87,15 @@ typedef enum {
     ROUTING_NONLINEARITY,    /* issue 250 — value-transforming routing */
 } routing_kind_t;
 
-/* Issue 250 — three intent-named nonlinearity variants. The user
- * picks the variant by what the box is for, not by the underlying
- * curve's mathematician's name. Under the hood:
- *   decision    — tanh,    output [-1, 1], midpoint 0
- *   confidence  — sigmoid, output [0,  1], midpoint 0.5
- *   calibration — linear,  output [0,  1], no midpoint
- */
+/* Issue 253 — nonlinearity refactor. The original 250 shipped
+ * three intent-named variants; the refactor collapses those to a
+ * single `range` toggle (signed picks tanh + [-1, 1]; unit picks
+ * sigmoid + [0, 1]). Output is v × score (gated linear unit
+ * style), not score alone — soft-AND composition is intrinsic. */
 typedef enum {
-    NL_CONFIDENCE = 0,        /* default for fresh boxes */
-    NL_DECISION,
-    NL_CALIBRATION,
-} nonlinearity_shape_t;
+    NL_SIGNED = 0,            /* default: tanh, output [-1, 1] */
+    NL_UNIT,                  /* sigmoid, output [0, 1] */
+} nonlinearity_range_t;
 
 typedef struct {
     routing_kind_t kind;
@@ -121,31 +118,26 @@ typedef struct {
      *   value > t_{n-1}      → "above_<t_{n-1}>". */
     int            n_thresholds;
     const double  *thresholds;
-    /* Issue 250 — nonlinearity routing. Three intent-named
-     * variants (decision / confidence / calibration) plus the
-     * bounds the input is normalised against. Presence-vs-absence
-     * of each bound on the JSON side becomes the per-side
-     * "is_fixed" flag here: when the field was supplied, the
-     * bound is locked and clamping fires past it; when absent,
-     * the bound is auto-tracked via the running cells below.
-     * Same rule for midpoint. The user emits the response (the
-     * smoothed score in [0,1] or [-1,1]) on the box's single
-     * output port; the original input value isn't forwarded. */
-    nonlinearity_shape_t nl_shape;
-    int            nl_min_is_fixed;
-    int            nl_max_is_fixed;
-    int            nl_mid_is_fixed;
-    double         nl_fixed_min;
-    double         nl_fixed_max;
-    double         nl_fixed_mid;
+    /* Issue 253 — nonlinearity refactor. The `range` toggle
+     * picks both the output range and the S-curve:
+     *   NL_SIGNED → tanh,    output [-1, 1]
+     *   NL_UNIT   → sigmoid, output [0,  1]
+     * The bounds the input is normalised against come from a
+     * per-box ring buffer holding the last `nl_memory` observed
+     * values. Output is v × score (gated linear unit pattern).
+     *
+     * Concurrency: a per-box pthread_mutex guards the ring
+     * buffer's append + min/max recompute. The mutex pointer is
+     * heap-allocated (so the routing_t struct stays POD-shaped
+     * for the calloc/free pattern the rest of the loader uses);
+     * NULL when the routing kind isn't nonlinearity. */
+    nonlinearity_range_t nl_range;
+    int            nl_memory;            /* ring buffer size N */
     double         nl_steepness;          /* k; default 1.0 */
-    /* Auto-tracked running bounds for auto sides. Stored as
-     * uint64 bit patterns so the existing atomic helpers cover
-     * them; the dispatch picker bit-casts to/from double on
-     * every fire. Initialised to ±DBL_MAX (so the first value's
-     * widen always succeeds) on load. */
-    _Atomic uint64_t nl_running_min;
-    _Atomic uint64_t nl_running_max;
+    double        *nl_buffer;             /* N-cell ring; NULL if not nonlinearity */
+    int            nl_write_idx;          /* next slot to overwrite */
+    int            nl_n_filled;           /* how many slots have real data so far */
+    void          *nl_mutex;              /* pthread_mutex_t * */
 } routing_t;
 /* }}} */
 

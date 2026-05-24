@@ -351,73 +351,46 @@ static int parse_routing(const json_node_t *r, routing_t *out,
         return 0;
     }
     if (strcmp(kind, "nonlinearity") == 0) {
-        /* Issue 250 — value-transforming routing. Emits a scoring
-         * response (the smoothed [0,1] or [-1,1] number) on a
-         * single output port. The Lua schema already validated the
-         * shape string and number types; here we just thread the
-         * fields onto the routing struct.
-         *
-         * Presence vs absence of min / max / midpoint is the
-         * mode-flag for each side — supplied means "fixed; clamp
-         * past it"; absent means "track it via the atomic running
-         * cells, decay toward midpoint via EMA on every fire." */
+        /* Issue 253 — refined nonlinearity routing. Auto-calibrates
+         * bounds via a per-box ring buffer of the last `memory`
+         * observed values; output is v × score where score is the
+         * S-curve (tanh for signed range, sigmoid for unit) of v
+         * normalised against the current bounds. */
         out->kind = ROUTING_NONLINEARITY;
         out->n_outputs = 1;
-        out->nl_shape = NL_CONFIDENCE;     /* default if shape missing/unknown */
+        out->nl_range = NL_SIGNED;
+        out->nl_memory = 16;
         out->nl_steepness = 1.0;
-        out->nl_min_is_fixed = 0;
-        out->nl_max_is_fixed = 0;
-        out->nl_mid_is_fixed = 0;
-        out->nl_fixed_min = 0.0;
-        out->nl_fixed_max = 1.0;
-        out->nl_fixed_mid = 0.0;
-        /* Running cells initialised so the first observed value
-         * always widens both sides. Using sentinel bit patterns
-         * (+inf for min, -inf for max) makes the first compare
-         * deterministic. */
-        union { double d; uint64_t u; } pos_inf, neg_inf;
-        pos_inf.d =  (double)INFINITY;
-        neg_inf.d = -(double)INFINITY;
-        atomic_init(&out->nl_running_min, pos_inf.u);
-        atomic_init(&out->nl_running_max, neg_inf.u);
+        out->nl_buffer = NULL;
+        out->nl_write_idx = 0;
+        out->nl_n_filled = 0;
+        out->nl_mutex = NULL;
 
-        json_node_t *sh = json_object_get(r, "shape");
-        if (!sh || json_kind(sh) != JSON_STRING) {
+        json_node_t *rg = json_object_get(r, "range");
+        if (!rg || json_kind(rg) != JSON_STRING) {
             *err = err_fmt("box '%s': nonlinearity routing requires "
-                           "'shape' string (decision / confidence / calibration)",
-                           box_id);
+                           "'range' string ('signed' or 'unit')", box_id);
             return -1;
         }
-        const char *s = json_string_value(sh);
-        if      (strcmp(s, "confidence")  == 0) out->nl_shape = NL_CONFIDENCE;
-        else if (strcmp(s, "decision")    == 0) out->nl_shape = NL_DECISION;
-        else if (strcmp(s, "calibration") == 0) out->nl_shape = NL_CALIBRATION;
+        const char *s = json_string_value(rg);
+        if      (strcmp(s, "signed") == 0) out->nl_range = NL_SIGNED;
+        else if (strcmp(s, "unit")   == 0) out->nl_range = NL_UNIT;
         else {
-            *err = err_fmt("box '%s': nonlinearity 'shape' = '%s' must be "
-                           "'decision' / 'confidence' / 'calibration'", box_id, s);
+            *err = err_fmt("box '%s': nonlinearity 'range' = '%s' must be "
+                           "'signed' or 'unit'", box_id, s);
             return -1;
         }
 
-        json_node_t *mn = json_object_get(r, "min");
-        if (mn && json_kind(mn) == JSON_NUMBER) {
-            out->nl_fixed_min = json_number_value(mn);
-            out->nl_min_is_fixed = 1;
-        }
-        json_node_t *mx = json_object_get(r, "max");
-        if (mx && json_kind(mx) == JSON_NUMBER) {
-            out->nl_fixed_max = json_number_value(mx);
-            out->nl_max_is_fixed = 1;
-        }
-        if (out->nl_min_is_fixed && out->nl_max_is_fixed &&
-            out->nl_fixed_min >= out->nl_fixed_max) {
-            *err = err_fmt("box '%s': nonlinearity 'min' (%g) must be less than "
-                           "'max' (%g)", box_id, out->nl_fixed_min, out->nl_fixed_max);
-            return -1;
-        }
-        json_node_t *md = json_object_get(r, "midpoint");
-        if (md && json_kind(md) == JSON_NUMBER) {
-            out->nl_fixed_mid = json_number_value(md);
-            out->nl_mid_is_fixed = 1;
+        json_node_t *mem = json_object_get(r, "memory");
+        if (mem && json_kind(mem) == JSON_NUMBER) {
+            double mv = json_number_value(mem);
+            int mvi = (int)mv;
+            if (mvi < 1 || (double)mvi != mv) {
+                *err = err_fmt("box '%s': nonlinearity 'memory' must be a "
+                               "positive integer (got %g)", box_id, mv);
+                return -1;
+            }
+            out->nl_memory = mvi;
         }
         json_node_t *kk = json_object_get(r, "k");
         if (kk && json_kind(kk) == JSON_NUMBER) {
@@ -429,6 +402,25 @@ static int parse_routing(const json_node_t *r, routing_t *out,
             }
             out->nl_steepness = v;
         }
+
+        /* Allocate the ring buffer + its guarding mutex. The
+         * buffer holds nl_memory doubles; nl_n_filled grows from
+         * 0 to nl_memory as the box sees values, then stays at
+         * nl_memory while the write index wraps. */
+        out->nl_buffer = calloc((size_t)out->nl_memory, sizeof(double));
+        if (!out->nl_buffer) {
+            *err = err_fmt("out of memory (nonlinearity ring buffer for '%s')", box_id);
+            return -1;
+        }
+        pthread_mutex_t *m = malloc(sizeof *m);
+        if (!m) {
+            free(out->nl_buffer);
+            out->nl_buffer = NULL;
+            *err = err_fmt("out of memory (nonlinearity mutex for '%s')", box_id);
+            return -1;
+        }
+        pthread_mutex_init(m, NULL);
+        out->nl_mutex = m;
         return 0;
     }
 
@@ -2010,6 +2002,14 @@ void graph_destroy(graph_t *g)
             free(b->output_edge_native);
             free((double *)b->routing.weights);
             free((double *)b->routing.thresholds);   /* issue 243 */
+            /* Issue 253 — nonlinearity ring buffer + mutex. Both
+             * are NULL for non-nonlinearity routing kinds; the
+             * frees are no-ops then. */
+            free(b->routing.nl_buffer);
+            if (b->routing.nl_mutex) {
+                pthread_mutex_destroy((pthread_mutex_t *)b->routing.nl_mutex);
+                free(b->routing.nl_mutex);
+            }
             /* per-box compile hint pointer arrays (strings inside
              * are arena-owned; only the array itself is heap) */
             free((void *)b->link_libs);

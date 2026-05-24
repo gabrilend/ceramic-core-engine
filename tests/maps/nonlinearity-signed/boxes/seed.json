@@ -1,7 +1,7 @@
 {
   "id": "seed",
   "kind": "read",
-  "value": "50",
+  "value": "5",
   "ui": { "x": 100, "y": 100 },
   "connections": [
     { "from_box": "seed", "from_branch": null,

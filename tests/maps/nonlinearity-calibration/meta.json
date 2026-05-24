@@ -1,6 +1,0 @@
-{
-  "name": "nonlinearity-calibration",
-  "description": "Issue 250 calibration variant. Fixed bounds [0, 200]. The seed value 50 lands 25% of the way through the range, so the linear remap emits 0.25. No clamping under calibration; the downstream tagger echoes the score; the test asserts 'tagger → 0.25' appears in stderr.",
-  "entry_box_id": "seed",
-  "src_dirs": ["tests/maps/nonlinearity-calibration/src"]
-}

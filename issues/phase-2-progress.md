@@ -51,7 +51,8 @@ model the phase 3 runtime will consume.
 | 241  | routing kind: weighted (cumulative-band lookup over weights) | complete · schema + editor dropdown + weights text input + canvas out_<i> rendering per weights.length + fixture |
 | 242  | routing kind: distributor (argmin over downstream fill + counter tiebreaker) | complete · schema + editor dropdown + shared n_outputs control + canvas out_<i> rendering + fixture |
 | 243  | routing kind: multi-band comparator (thresholds array carves N+1 bands) | complete · schema + C loader thresholds parsing + dispatch band picker (below/between/above + eq for doubled) + canvas band-named rendering + inspector thresholds text input + legacy single-comparand still accepted + fixture |
-| 250  | routing kind: nonlinearity (value-transforming, three intent-named variants) | complete · schema + C loader nonlinearity routing fields + dispatch picker (sigmoid / tanh / linear remap per variant) + per-box atomic running min/max with EMA dampening + presence-is-mode bounds + clamp under fixed (confidence / decision) vs extrapolate (calibration) + editor variant dropdown and bounds/midpoint/k controls + three fixtures (one per variant) |
+| 250  | routing kind: nonlinearity (value-transforming, three intent-named variants) | complete · superseded by 253's refactor; 250's first slice landed and stays as the historical record of the original shape (variant dropdown + EMA-decayed bounds + score-only output) |
+| 253  | nonlinearity refactor: auto-calibration + gated output | complete · single `range` toggle (signed → tanh [-1,1] / unit → sigmoid [0,1]) replaces the three variant names; per-box ring buffer of last `memory` values replaces EMA decay; output is v × score (gated linear unit) instead of score alone; editor surfaces the simplified controls; two cold-start fixtures cover both ranges |
 
 ## Phase goal checklist
 

@@ -1,0 +1,6 @@
+{
+  "name": "nonlinearity-unit",
+  "description": "Issue 253 unit-range nonlinearity. Single fire of v=10; the ring buffer holds one value so n_filled<2 → neutral score 0.5 (sigmoid's neutral) → output = 10 × 0.5 = 5. Asserts the cold-start gated-output path on the unit range.",
+  "entry_box_id": "seed",
+  "src_dirs": ["tests/maps/nonlinearity-unit/src"]
+}

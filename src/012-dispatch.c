@@ -985,161 +985,78 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
         }
 
         case ROUTING_NONLINEARITY: {
-            /* Issue 250 — value-transforming routing. Read the
-             * input value (coerce string→double via strtod, treat
-             * "true"/"false" as 1/0), update the auto-tracked
-             * running cells (CAS loop with EMA decay), normalise
-             * against the effective bounds, apply the variant's
-             * curve, clamp per the per-variant rule, emit the
-             * response as a "%g"-formatted double on the single
-             * output port. The original input value isn't
-             * forwarded — the wire carries the SCORE, by design
-             * (the user composes input × score in a downstream
-             * multiplier if they want the scaled input). */
+            /* Issue 253 — auto-calibrating gated nonlinearity. Read
+             * the input, append it to the per-box ring buffer of
+             * the last N observed values (mutex-guarded so parallel
+             * fires don't corrupt the buffer), compute min/max from
+             * the buffer, normalise v to the variant's domain,
+             * apply the S-curve, return v × score on the wire.
+             * Output is the GATED input value, not the score alone
+             * — the soft-AND composition the original 250 doc
+             * described is now intrinsic. */
             double v = parse_double(out_bytes, out_size);
-            /* Boolean coercion: strtod on "true" or "false"
-             * returns 0 (parse fail), so check explicitly. */
             if (out_bytes && out_size > 0) {
                 if      (out_size == 4 && memcmp(out_bytes, "true",  4) == 0) v = 1.0;
                 else if (out_size == 5 && memcmp(out_bytes, "false", 5) == 0) v = 0.0;
             }
 
-            const routing_t *r = &b->routing;
-
-            /* Pull the effective bounds: fixed where pinned,
-             * auto-tracked where not. The atomic running cells
-             * hold bit-cast doubles; the load is acquire so
-             * concurrent widens from sibling fires are visible. */
-            union { double d; uint64_t u; } pun;
-            double lo, hi;
-            if (r->nl_min_is_fixed) {
-                lo = r->nl_fixed_min;
-            } else {
-                pun.u = atomic_load_explicit(&((routing_t *)r)->nl_running_min,
-                                             memory_order_acquire);
-                lo = pun.d;
-            }
-            if (r->nl_max_is_fixed) {
-                hi = r->nl_fixed_max;
-            } else {
-                pun.u = atomic_load_explicit(&((routing_t *)r)->nl_running_max,
-                                             memory_order_acquire);
-                hi = pun.d;
+            routing_t *r = (routing_t *)&b->routing;
+            pthread_mutex_t *m = (pthread_mutex_t *)r->nl_mutex;
+            if (!m || !r->nl_buffer || r->nl_memory < 1) {
+                /* Misconfigured — push the raw value through and
+                 * skip; the loader should have caught this. */
+                return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
             }
 
-            /* Auto-side widen on out-of-range, via a CAS loop.
-             * No widen on fixed sides — clamp instead. */
-            if (!r->nl_min_is_fixed && v < lo) {
-                uint64_t cur = atomic_load_explicit(
-                    &((routing_t *)r)->nl_running_min, memory_order_relaxed);
-                for (;;) {
-                    pun.u = cur;
-                    if (v >= pun.d) break;
-                    pun.d = v;
-                    if (atomic_compare_exchange_weak_explicit(
-                            &((routing_t *)r)->nl_running_min,
-                            &cur, pun.u,
-                            memory_order_release, memory_order_relaxed)) {
-                        lo = v;
-                        break;
-                    }
-                }
+            pthread_mutex_lock(m);
+            /* Append v to the ring buffer (overwrites oldest). */
+            r->nl_buffer[r->nl_write_idx] = v;
+            r->nl_write_idx = (r->nl_write_idx + 1) % r->nl_memory;
+            if (r->nl_n_filled < r->nl_memory) r->nl_n_filled++;
+
+            /* Compute bounds over the filled portion of the buffer. */
+            double lo = r->nl_buffer[0];
+            double hi = r->nl_buffer[0];
+            for (int i = 1; i < r->nl_n_filled; i++) {
+                double bv = r->nl_buffer[i];
+                if (bv < lo) lo = bv;
+                if (bv > hi) hi = bv;
             }
-            if (!r->nl_max_is_fixed && v > hi) {
-                uint64_t cur = atomic_load_explicit(
-                    &((routing_t *)r)->nl_running_max, memory_order_relaxed);
-                for (;;) {
-                    pun.u = cur;
-                    if (v <= pun.d) break;
-                    pun.d = v;
-                    if (atomic_compare_exchange_weak_explicit(
-                            &((routing_t *)r)->nl_running_max,
-                            &cur, pun.u,
-                            memory_order_release, memory_order_relaxed)) {
-                        hi = v;
-                        break;
-                    }
-                }
-            }
+            int n_filled = r->nl_n_filled;
+            pthread_mutex_unlock(m);
 
-            /* Effective midpoint: supplied wins; otherwise the
-             * dynamic (min + max) / 2. */
-            double mid = r->nl_mid_is_fixed
-                           ? r->nl_fixed_mid
-                           : (lo + hi) * 0.5;
-
-            /* Bootstrap: if both sides are still at the sentinel
-             * (no auto data, no fix) — emit the variant's neutral
-             * value rather than dividing by an infinite range. */
-            int bounds_ready = (hi > lo) && isfinite(lo) && isfinite(hi);
-
-            double score;
+            /* Compute the score. On a single-value buffer (warm-up
+             * first fire) there's no range to normalise against,
+             * so the score is the variant's neutral value (0.5
+             * for unit, 0 for signed) — output becomes v × neutral
+             * which is half the input or zero. */
             const double k = r->nl_steepness;
-            switch (r->nl_shape) {
-                case NL_DECISION: {
-                    /* tanh centred on the midpoint, mapped into
-                     * [-1, 1]. Saturates gracefully past either
-                     * bound; under fixed mode we clamp anyway so
-                     * the saturation is exact at +/-1. */
-                    if (!bounds_ready) { score = 0.0; break; }
-                    if (r->nl_min_is_fixed && v <= lo) { score = -1.0; break; }
-                    if (r->nl_max_is_fixed && v >= hi) { score = +1.0; break; }
-                    double t = (v - mid) / ((hi - lo) * 0.5);  /* roughly in [-1, 1] */
-                    score = tanh(k * t);
-                    break;
-                }
-                case NL_CONFIDENCE: {
-                    /* Logistic sigmoid centred on the midpoint,
-                     * mapped into [0, 1]. Clamp under fixed mode. */
-                    if (!bounds_ready) { score = 0.5; break; }
-                    if (r->nl_min_is_fixed && v <= lo) { score = 0.0; break; }
-                    if (r->nl_max_is_fixed && v >= hi) { score = 1.0; break; }
-                    double t = (v - mid) / ((hi - lo) * 0.5);
-                    score = 1.0 / (1.0 + exp(-k * t * 3.0));   /* *3 brings k=1 close to the doc's 0.27/0.73 mid-80% */
-                    break;
-                }
-                case NL_CALIBRATION:
-                default: {
-                    /* Linear remap into [0, 1] (or beyond if input
-                     * is out of range — calibration extrapolates,
-                     * no clamp per the design). */
-                    if (!bounds_ready) { score = 0.0; break; }
-                    score = (v - lo) / (hi - lo);
-                    break;
-                }
+            double score;
+            if (n_filled < 2 || hi <= lo) {
+                score = (r->nl_range == NL_UNIT) ? 0.5 : 0.0;
+            } else if (r->nl_range == NL_SIGNED) {
+                /* Map v into [-1, 1] using the midpoint of the
+                 * current bounds. tanh centred at 0. */
+                double mid = (lo + hi) * 0.5;
+                double t = (v - mid) / ((hi - lo) * 0.5);
+                score = tanh(k * t);
+            } else {
+                /* unit: map v into [0, 1] using the bounds.
+                 * Sigmoid centred at 0.5 of the input domain. */
+                double t = (v - lo) / (hi - lo);   /* 0..1 over the bounds */
+                /* Recentre to (-1, 1) then sigmoid; the *3 keeps
+                 * k=1 close to the doc's 0.27/0.73 mid-80% target. */
+                double tc = (t - 0.5) * 2.0;
+                score = 1.0 / (1.0 + exp(-k * tc * 3.0));
             }
 
-            /* EMA dampening for auto sides — pull the auto bound
-             * slightly toward the midpoint each fire so a one-time
-             * outlier ages out. Skip on fixed sides. */
-            static const double NL_DECAY = 0.99;
-            if (!r->nl_min_is_fixed && isfinite(lo)) {
-                double new_lo = NL_DECAY * lo + (1.0 - NL_DECAY) * mid;
-                uint64_t cur = atomic_load_explicit(
-                    &((routing_t *)r)->nl_running_min, memory_order_relaxed);
-                pun.d = new_lo;
-                /* Single non-CAS store; widen path above handles
-                 * out-of-range. Drift races between two fires are
-                 * benign — both are pulling toward the same
-                 * midpoint, the later store wins. */
-                atomic_store_explicit(
-                    &((routing_t *)r)->nl_running_min, pun.u,
-                    memory_order_release);
-                (void)cur;
-            }
-            if (!r->nl_max_is_fixed && isfinite(hi)) {
-                double new_hi = NL_DECAY * hi + (1.0 - NL_DECAY) * mid;
-                pun.d = new_hi;
-                atomic_store_explicit(
-                    &((routing_t *)r)->nl_running_max, pun.u,
-                    memory_order_release);
-            }
-
-            /* Format the score and push downstream on the single
-             * output port. The plain-routing fan-out fires every
-             * wire (the nonlinearity has no branch labels). */
+            /* Format the GATED value (v × score) and push
+             * downstream on the single output port. The
+             * plain-routing fan-out fires every wire (the
+             * nonlinearity has no branch labels). */
+            double gated = v * score;
             char buf[64];
-            int n = snprintf(buf, sizeof buf, "%g", score);
+            int n = snprintf(buf, sizeof buf, "%g", gated);
             if (n < 0) n = 0;
             if (n > (int)sizeof buf - 1) n = (int)sizeof buf - 1;
             return push_to_downstream(ctx, b, buf, n, output_native);
