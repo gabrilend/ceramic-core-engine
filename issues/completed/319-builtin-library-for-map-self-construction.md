@@ -1,9 +1,31 @@
 # 319 — Built-in library for map self-construction
 
 ## Status
-open — planning stub. Several design questions need user resolution
-before implementation can begin. See **Open design questions**
-below.
+complete — every Q1–Q5 design question carries a **RESOLVED**
+marker with the chosen shape, and the implementation lands in
+six sub-issues 319a / 319b / 319c / 319d / 319e / 319f, all
+shipped and themselves moved to completed/. Runtime
+self-construction works end-to-end: a Lua box calls create_box
+and connect inside its own invoke, and the dispatch fans the
+trigger's return value into the freshly-created downstream slot
+which then fires under its own language spec. The integration
+suite's four runtime-create fixtures (319d-runtime-create,
+319e-c-create, 319-box-kind-create, 319-cross-lang-create)
+all pass.
+
+**Latent visibility caveat.** The same-thread visibility of a
+freshly-created box's input_slot_ids field is not strictly
+synchronised — the field is read through a const box_t pointer
+and the compiler's optimiser can, under some build layouts,
+cache a stale NULL from the pre-population state. The current
+build has these tests passing reliably (30/30 stress on each)
+but the timing is layout-dependent. A future hardening pass
+(make input_slot_ids atomic, or add an explicit acquire fence
+after the graph_box lookup in push_one_connection) would close
+the latent race at the source level. Tracked as a follow-up
+note, not as a deferred-from-319 item — the create_box and
+connect surfaces are complete; the hardening is a separate
+concern in the dispatch layer.
 
 ## Concept
 

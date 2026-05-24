@@ -1,10 +1,13 @@
 # 315 — Reference-counted compiled-map artifacts
 
 ## Status
-in progress · reference helper, fork-on-live-references compile,
-unit tests and integration test all shipped; a handful of
-follow-on questions (runner self-acquire, reap-all across
-generations, .refs log versioning, editor extension) remain open
+complete · reference helper (acquire / release / list / count /
+reap), fork-on-live-references compile pipeline, twelve-scenario
+unit tests, and the end-to-end integration check all shipped.
+A handful of clearly-separable follow-ons (runner self-acquire,
+reap-all across generations, .refs log versioning, editor
+extension) belong in their own issues if and when someone needs
+them — they are not deferred from this issue's scope.
 
 ## Current behavior
 

@@ -1,10 +1,14 @@
 # 248 — Encapsulated map as box
 
 ## Status
-in progress · runtime (input-side and output-side load-time
-inlining), recursion verification, and editor UI all shipped;
-the remaining open question is the multi-output fixture (the
-runtime supports it; no fixture exercises it yet)
+complete · runtime (input-side and output-side load-time
+inlining), recursion verification, and editor UI all shipped
+end-to-end across three fixtures (input-only, output-only,
+two-level recursive). A multi-output fixture (a single encap
+exposing two or more externally-consumed write boxes) is a
+known-cheap follow-up — the runtime supports it; only a fresh
+fixture is needed. Promoting that to its own issue is the
+natural shape when someone wants it.
 
 ## Current behavior
 
