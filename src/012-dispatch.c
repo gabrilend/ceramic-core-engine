@@ -116,13 +116,15 @@ static ctx_box_chunk_t *ctx_box_chunk(dispatch_ctx_t *ctx, unsigned int box_id,
  * earlier hardcoded cap of 16.) */
 #define DISPATCH_MAX_INPUTS_PER_BOX 4096
 
-/* Max formatted length for branch names like "out_<index>".
- * Worst case for the current format is "out_-2147483648\0" =
- * 16 bytes; 32 leaves headroom for any future format change.
+/* Max formatted length for branch names. Worst case is the
+ * multi-band-comparator's "between_%g_%g" format (issue 243),
+ * which can run up to ~36 bytes for two %g-formatted doubles
+ * plus the literal "between__" surround. 64 leaves comfortable
+ * headroom and stays cache-line-aligned on the stack frame.
  * Used by every routing kind that emits a branch label via
- * snprintf — comparator, iterator, randomizer, weighted,
- * distributor. (Issue 319a — single source of truth.) */
-#define MAX_BRANCH_NAME 32
+ * snprintf — comparator (including multi-band), iterator,
+ * randomizer, weighted, distributor. */
+#define MAX_BRANCH_NAME 64
 
 /* Per-task value buffers (per-input scratch and the output buffer)
  * come from the slot store's unified allocator now, not malloc.
@@ -776,10 +778,81 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
 
         case ROUTING_COMPARATOR: {
             double v = parse_double(out_bytes, out_size);
-            const char *branch =
+            /* Issue 243 — multi-band comparator: when thresholds is
+             * set, carve N+1 bands and emit on the matching port.
+             * Doubled adjacent thresholds (t_i == t_{i+1}) carve a
+             * zero-width equality band. Branch-name format strings:
+             *   "below_<t0>" / "eq_<t>" / "between_<a>_<b>" / "above_<tN-1>"
+             * Numbers formatted with %g (trims trailing zeros for
+             * integer-valued doubles; the canvas + inspector use the
+             * same formatter so wires lookup matches). When thresholds
+             * is unset the picker falls back to the legacy lt/eq/gt
+             * single-comparand shape. */
+            char branch[MAX_BRANCH_NAME];
+            if (b->routing.n_thresholds > 0 && b->routing.thresholds) {
+                const double *t  = b->routing.thresholds;
+                int           nt = b->routing.n_thresholds;
+                if (v < t[0]) {
+                    snprintf(branch, sizeof branch, "below_%g", t[0]);
+                } else if (v > t[nt - 1]) {
+                    snprintf(branch, sizeof branch, "above_%g", t[nt - 1]);
+                } else {
+                    /* Walk doubled-pair equality bands first; any
+                     * remaining open interval is a between band. */
+                    int matched = 0;
+                    for (int i = 0; i + 1 < nt; i++) {
+                        if (t[i] == t[i + 1] && v == t[i]) {
+                            snprintf(branch, sizeof branch, "eq_%g", t[i]);
+                            matched = 1;
+                            break;
+                        }
+                    }
+                    if (!matched) {
+                        for (int i = 0; i + 1 < nt; i++) {
+                            if (t[i] == t[i + 1]) continue;   /* zero-width */
+                            if (v > t[i] && v < t[i + 1]) {
+                                snprintf(branch, sizeof branch, "between_%g_%g",
+                                         t[i], t[i + 1]);
+                                matched = 1;
+                                break;
+                            }
+                        }
+                    }
+                    if (!matched) {
+                        /* Value sits exactly on a non-doubled
+                         * threshold. Convention: pick the
+                         * less-than-or-equal side (the lower
+                         * adjacent band) so x == t[i] lands in
+                         * the band that ENDS at t[i]. */
+                        for (int i = 0; i < nt; i++) {
+                            if (v == t[i]) {
+                                if (i == 0) {
+                                    snprintf(branch, sizeof branch, "below_%g", t[0]);
+                                } else if (t[i - 1] == t[i]) {
+                                    /* doubled — already handled above */
+                                    snprintf(branch, sizeof branch, "eq_%g", t[i]);
+                                } else {
+                                    snprintf(branch, sizeof branch, "between_%g_%g",
+                                             t[i - 1], t[i]);
+                                }
+                                matched = 1;
+                                break;
+                            }
+                        }
+                    }
+                    if (!matched) {
+                        /* Should be unreachable given the dichotomy
+                         * checks above; fall back to plain so a
+                         * pathological case doesn't drop the wire. */
+                        return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
+                    }
+                }
+                return push_branch(ctx, b, branch, out_bytes, out_size, 0, output_native) < 0 ? -1 : 0;
+            }
+            const char *legacy_branch =
                 (v < b->routing.comparand) ? "lt" :
                 (v > b->routing.comparand) ? "gt" : "eq";
-            return push_branch(ctx, b, branch, out_bytes, out_size, 0, output_native) < 0 ? -1 : 0;
+            return push_branch(ctx, b, legacy_branch, out_bytes, out_size, 0, output_native) < 0 ? -1 : 0;
         }
 
         case ROUTING_ITERATOR: {

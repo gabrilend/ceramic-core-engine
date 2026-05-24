@@ -1,0 +1,6 @@
+{
+  "name": "multi-band-comparator-route",
+  "description": "Issue 243 fixture: a comparator-routing call box with thresholds [3, 7]. Carves three bands — below_3 / between_3_7 / above_7. The seed value is 5, so only the between_3_7 branch fires. Proves the multi-band picker walks thresholds correctly, formats the band names with %g, and matches them against wire from_branch strings.",
+  "entry_box_id": "seed",
+  "src_dirs": ["tests/maps/multi-band-comparator-route/src"]
+}

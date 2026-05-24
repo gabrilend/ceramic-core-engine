@@ -185,6 +185,16 @@ check_map "distributor-route" \
     "tagger_1 → (no output)" \
     "tagger_2 → (no output)"
 
+# Issue 243 — multi-band comparator. Thresholds [3, 7] carve
+# three bands. Seed value 5 lands strictly between 3 and 7, so
+# only the between_3_7 branch fires (tagger_1). The picker also
+# proves the band-name formatter matches between dispatch and
+# the wire's from_branch string.
+check_map "multi-band-comparator-route" \
+    "tagger_0 → (no output)" \
+    "tagger_1 → got_1:5" \
+    "tagger_2 → (no output)"
+
 check_map "pipeline" \
     "double → 10" \
     "addone → 11" \

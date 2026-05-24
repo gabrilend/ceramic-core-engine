@@ -185,10 +185,55 @@ static int parse_routing(const json_node_t *r, routing_t *out,
     }
     if (strcmp(kind, "comparator") == 0) {
         out->kind = ROUTING_COMPARATOR;
-        out->n_outputs = 3;
+        out->n_outputs = 3;          /* lt/eq/gt for legacy form */
+        out->n_thresholds = 0;
+        out->thresholds   = NULL;
+        /* Issue 243 — preferred shape: a non-empty `thresholds`
+         * array carves N+1 bands. Falls back to the single
+         * `comparand` (legacy lt/eq/gt) when thresholds is absent.
+         * If both are present, thresholds wins and comparand is
+         * ignored. */
+        json_node_t *t_arr = json_object_get(r, "thresholds");
+        if (t_arr) {
+            if (json_kind(t_arr) != JSON_ARRAY) {
+                *err = err_fmt("box '%s': comparator 'thresholds' must be an array", box_id);
+                return -1;
+            }
+            int nt = json_array_size(t_arr);
+            if (nt == 0) {
+                *err = err_fmt("box '%s': comparator 'thresholds' must be non-empty", box_id);
+                return -1;
+            }
+            double *arr = malloc((size_t)nt * sizeof(double));
+            if (!arr) { *err = err_fmt("out of memory"); return -1; }
+            double prev = 0.0;
+            for (int i = 0; i < nt; i++) {
+                json_node_t *e = json_array_at(t_arr, i);
+                if (!e || json_kind(e) != JSON_NUMBER) {
+                    free(arr);
+                    *err = err_fmt("box '%s': comparator thresholds[%d] is not a number",
+                                   box_id, i);
+                    return -1;
+                }
+                double v = json_number_value(e);
+                if (i > 0 && v < prev) {
+                    free(arr);
+                    *err = err_fmt("box '%s': comparator thresholds must be non-decreasing "
+                                   "(thresholds[%d]=%g < thresholds[%d]=%g)",
+                                   box_id, i, v, i - 1, prev);
+                    return -1;
+                }
+                arr[i] = v;
+                prev   = v;
+            }
+            out->thresholds   = arr;
+            out->n_thresholds = nt;
+            out->n_outputs    = nt + 1;
+            return 0;
+        }
         json_node_t *c = json_object_get(r, "comparand");
         if (!c) {
-            *err = err_fmt("box '%s': comparator routing missing 'comparand'", box_id);
+            *err = err_fmt("box '%s': comparator routing missing 'comparand' or 'thresholds'", box_id);
             return -1;
         }
         if (json_kind(c) == JSON_NUMBER) {
@@ -1882,6 +1927,7 @@ void graph_destroy(graph_t *g)
             free(b->input_edge_native);
             free(b->output_edge_native);
             free((double *)b->routing.weights);
+            free((double *)b->routing.thresholds);   /* issue 243 */
             /* per-box compile hint pointer arrays (strings inside
              * are arena-owned; only the array itself is heap) */
             free((void *)b->link_libs);

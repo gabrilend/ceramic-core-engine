@@ -88,10 +88,24 @@ typedef enum {
 typedef struct {
     routing_kind_t kind;
     int            n_outputs;   /* iterator / randomizer / weighted / distributor */
-    double         comparand;   /* comparator */
+    double         comparand;   /* comparator (single-threshold legacy form) */
     /* Weighted routing: arena-owned double array of n_outputs
      * entries. Normalised at runtime. NULL for other kinds. */
     const double  *weights;
+    /* Issue 243 — multi-band comparator: a non-empty, non-decreasing
+     * array of N thresholds carves the number line into N+1 bands.
+     * Doubled consecutive values (t_i == t_{i+1}) mark zero-width
+     * equality bands, so the legacy single-comparand form is
+     * representable as `thresholds = [c, c]` (the loader fills
+     * thresholds = NULL when only `comparand` is set; dispatch's
+     * comparator branch falls back to the lt/eq/gt path in that
+     * case). Port naming follows the band shape:
+     *   value <  t0          → "below_<t0>"
+     *   value == t0 == t1    → "==_<t0>"        (doubled threshold)
+     *   t_i < value < t_{i+1}→ "between_<t_i>_<t_{i+1}>"
+     *   value > t_{n-1}      → "above_<t_{n-1}>". */
+    int            n_thresholds;
+    const double  *thresholds;
 } routing_t;
 /* }}} */
 

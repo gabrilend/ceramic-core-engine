@@ -1,7 +1,17 @@
 # 243 — Multi-band comparator routing
 
 ## Status
-open · design carried forward from issue 233
+complete · schema accepts `routing.thresholds` as a non-empty,
+non-decreasing number array; loader parses it into a malloc'd
+double array on the routing_t struct; dispatch's comparator
+branch picker walks thresholds and emits `below_<t0>` /
+`between_<t_i>_<t_{i+1}>` / `above_<t_{n-1}>` (plus `eq_<t>`
+for doubled adjacent thresholds carving zero-width equality
+bands); canvas + inspector match the dispatch's `%g` formatter
+so wire from_branch strings stay consistent; legacy
+single-`comparand` form still accepted for backwards compat;
+`tests/maps/multi-band-comparator-route/` asserts thresholds
+[3,7] with seed value 5 routes to the between_3_7 branch only.
 
 ## Current behavior
 
