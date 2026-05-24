@@ -197,6 +197,14 @@ check_map "318-lang-opaque" \
     '"lang":"lua"' \
     '"shape":"function"'
 
+# Language-agnostic create_box / connect box kinds (319
+# design-correction follow-on). A read box emits a box spec; a
+# create_box-kind box consumes it; the new box's id is captured
+# downstream. No per-language wrapper involved — same shape works
+# for Lua, C, and Bash producers.
+check_map "319-box-kind-create" \
+    "creator → auto_"
+
 pipeline_output_check
 compile_pipeline_check
 # }}}

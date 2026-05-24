@@ -1,0 +1,6 @@
+{
+  "name": "319-box-kind-create",
+  "description": "Issue 319 design-correction follow-on: demonstrates create_box and connect as LANGUAGE-AGNOSTIC BOX KINDS rather than per-language wrappers. A read box emits a box spec on its wire; a create_box-kind box consumes the spec and emits the new box's id; the id is captured downstream. Same shape works for any language — no per-language wrapper needed.",
+  "entry_box_id": "creator",
+  "src_dirs": []
+}

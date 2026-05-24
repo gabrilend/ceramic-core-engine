@@ -455,9 +455,11 @@ static int parse_box_file(graph_t *g, box_t *box,
         return -1;
     }
     const char *kind_str = json_string_value(kind_n);
-    if      (strcmp(kind_str, "call")  == 0) box->kind = BOX_CALL;
-    else if (strcmp(kind_str, "read")  == 0) box->kind = BOX_READ;
-    else if (strcmp(kind_str, "write") == 0) box->kind = BOX_WRITE;
+    if      (strcmp(kind_str, "call")       == 0) box->kind = BOX_CALL;
+    else if (strcmp(kind_str, "read")       == 0) box->kind = BOX_READ;
+    else if (strcmp(kind_str, "write")      == 0) box->kind = BOX_WRITE;
+    else if (strcmp(kind_str, "create_box") == 0) box->kind = BOX_CREATE_BOX;
+    else if (strcmp(kind_str, "connect")    == 0) box->kind = BOX_CONNECT;
     else {
         *err = err_fmt("%s: box '%s': unknown kind '%s'", path, box->id, kind_str);
         return -1;
@@ -872,7 +874,12 @@ static int build_read_predecessor_lists(graph_t *g, char **err)
 {
     for (int i = 0; i < g->n_boxes; i++) {
         box_t *b = g->boxes[i];
-        if (b->kind != BOX_CALL && b->kind != BOX_WRITE) continue;
+        /* The kinds that run as tasks. BOX_CREATE_BOX and BOX_CONNECT
+         * join the list with the box-kind path for runtime self-
+         * construction (319 design-correction). BOX_READ never runs
+         * as a task (it's pull-on-demand per issue 244). */
+        if (b->kind != BOX_CALL && b->kind != BOX_WRITE &&
+            b->kind != BOX_CREATE_BOX && b->kind != BOX_CONNECT) continue;
         if (b->n_inputs <= 0) continue;
 
         b->n_read_predecessors    = calloc((size_t)b->n_inputs, sizeof(int));
@@ -950,7 +957,12 @@ static int detect_entry_boxes(graph_t *g, char **err)
     int count = 0;
     for (int i = 0; i < g->n_boxes; i++) {
         const box_t *b = g->boxes[i];
-        if (b->kind != BOX_CALL && b->kind != BOX_WRITE) continue;
+        /* The kinds that run as tasks. BOX_CREATE_BOX and BOX_CONNECT
+         * join the list with the box-kind path for runtime self-
+         * construction (319 design-correction). BOX_READ never runs
+         * as a task (it's pull-on-demand per issue 244). */
+        if (b->kind != BOX_CALL && b->kind != BOX_WRITE &&
+            b->kind != BOX_CREATE_BOX && b->kind != BOX_CONNECT) continue;
 
         int qualifies = 1;
         for (int port = 0; port < b->n_inputs; port++) {

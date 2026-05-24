@@ -47,9 +47,23 @@ extern "C" {
 
 /* {{{ Box kinds */
 typedef enum {
-    BOX_CALL,    /* runs a function via a language spec                */
-    BOX_READ,    /* value source — inline literal or file at `path`    */
-    BOX_WRITE,   /* file sink — writes one input, emits "true" downstream */
+    BOX_CALL,        /* runs a function via a language spec                */
+    BOX_READ,        /* value source — inline literal or file at `path`    */
+    BOX_WRITE,       /* file sink — writes one input, emits "true" downstream */
+    /* Runtime self-construction (issue 319, design-correction follow-on
+     * to 319d/319e). These are language-agnostic box kinds — the same
+     * shape as read/write boxes, no `lang` field. Their `do_*`
+     * implementations live in the dispatch layer and call
+     * runtime_create_box / runtime_connect internally.
+     *
+     * The per-language wrappers (langs/lua/spec.c's
+     * `soramech.create_box`, langs/c/soramech.h's
+     * `soramech_create_box`) remain as backwards-compatible
+     * convenience entry points; the box-kind path is the new idiomatic
+     * way and the only path that works uniformly across every
+     * language (including Bash, which has no per-language wrapper). */
+    BOX_CREATE_BOX,  /* construct a new box from a spec on the input wire  */
+    BOX_CONNECT,     /* attach a wire described by a connection-entry input */
 } box_kind_t;
 /* }}} */
 
