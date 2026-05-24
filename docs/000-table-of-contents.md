@@ -15,6 +15,7 @@ An HTML rendering of every doc on this page lives at [docs/HTML/](HTML/index.htm
 - [docs/003-driver-system.md](003-driver-system.md) — phase 2 driver scripts; phase 3 language spec overview
 - [docs/004-ipc-and-threading.md](004-ipc-and-threading.md) — IPC options, threading roadmap, blocking semantics, Unix domain socket model
 - [docs/005-language-specs.md](005-language-specs.md) — guide to writing a language spec (stub; filled out as 306–308 are implemented)
+- [docs/006-test-coverage-map.md](006-test-coverage-map.md) — what's tested, what isn't, and what runs the tests
 
 ## Source
 
