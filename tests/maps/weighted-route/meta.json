@@ -1,0 +1,6 @@
+{
+  "name": "weighted-route",
+  "description": "Issue 241 fixture: a weighted-routing call box with weights [1, 0, 0] — all probability mass on branch 0, the other two never fire. Picks the band lookup over the cumulative table deterministic and asserts that only tagger_0 produces output.",
+  "entry_box_id": "seed",
+  "src_dirs": ["tests/maps/weighted-route/src"]
+}

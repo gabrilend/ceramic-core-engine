@@ -1,7 +1,14 @@
 # 241 — Routing kind: weighted
 
 ## Status
-open · design carried forward from issue 233
+complete · schema accepts `kind: "weighted"` with a non-empty
+`weights` array of non-negative numbers; loader and dispatch's
+cumulative-band picker already shipped (issue 233's groundwork);
+editor dropdown grows the option, with a comma-separated weights
+text input that severs outgoing wires on edit (the array length
+sets the output-port count); `out_<i>` canvas rendering reads
+weights.length; `tests/maps/weighted-route/` asserts that
+weights = [1, 0, 0] routes deterministically to branch 0.
 
 ## Current behavior
 

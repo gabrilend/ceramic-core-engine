@@ -168,6 +168,14 @@ check_map "randomizer-route" \
     "tagger_1 → (no output)" \
     "tagger_2 → (no output)"
 
+# Issue 241 — weighted routing. weights = [1, 0, 0] puts all
+# probability mass on branch 0; the cumulative-band lookup
+# always picks tagger_0, the other two never fire.
+check_map "weighted-route" \
+    "tagger_0 → got_0:hi" \
+    "tagger_1 → (no output)" \
+    "tagger_2 → (no output)"
+
 check_map "pipeline" \
     "double → 10" \
     "addone → 11" \

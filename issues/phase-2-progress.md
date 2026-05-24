@@ -48,6 +48,7 @@ model the phase 3 runtime will consume.
 | 222  | compile button and assets directory            | complete |
 | 248  | encapsulated map as a box (sub-maps via load-time inlining) | complete · input + output splice + recursion across nested encaps + full editor surface (kind dropdown, external bindings on read/write, file-browser encapsulate action); three on-disk fixtures green |
 | 240  | routing kind: randomizer (hash-of-counter mod n_outputs) | complete · schema + editor dropdown + n_outputs control + canvas out_<i> rendering + fixture |
+| 241  | routing kind: weighted (cumulative-band lookup over weights) | complete · schema + editor dropdown + weights text input + canvas out_<i> rendering per weights.length + fixture |
 
 ## Phase goal checklist
 
