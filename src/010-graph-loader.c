@@ -52,6 +52,14 @@ struct stale_arr {
     struct stale_arr  *next;
 };
 
+/* Per-graph list of heap-allocated strings the loader produced
+ * (e.g. issue 248 prefix-renamed sub-map ids). Arena strings come
+ * from JSON parses; these don't, so they need their own free pass. */
+struct owned_str {
+    char              *str;
+    struct owned_str  *next;
+};
+
 struct graph {
     json_arena_t *arena;
 
@@ -66,6 +74,7 @@ struct graph {
     _Atomic uint32_t  box_capacity; /* allocated length of `boxes`        */
     pthread_mutex_t   graph_mu;     /* serializes runtime additions       */
     struct stale_arr *stale_box_arrs;
+    struct owned_str *owned_strs;   /* per-graph heap strings (issue 248) */
 
     int           n_languages;
     const char  **languages;   /* arena-owned strings */
@@ -419,6 +428,71 @@ static int parse_connections(json_node_t *node, box_t *box,
 }
 /* }}} */
 
+/* {{{ parse_external_binding() — optional `external` block on a box
+ *
+ * Issue 248. Present on `read` boxes inside a sub-map that should
+ * source their value from the encapsulating map's input, and on
+ * `write` boxes that should surface their value back to the
+ * encapsulating map's output. Absent → external.kind = EXTERNAL_NONE
+ * (the box behaves as a normal local read/write).
+ *
+ * Shape (any of the three is valid):
+ *
+ *   { "kind": "positional", "index": 0 }
+ *   { "kind": "numbered",   "index": 7 }
+ *   { "kind": "named",      "name":  "count" }
+ */
+static int parse_external_binding(json_node_t *ext_n, box_t *box,
+                                  const char *box_id, char **err)
+{
+    box->external.kind  = EXTERNAL_NONE;
+    box->external.index = -1;
+    box->external.name  = NULL;
+
+    if (!ext_n) return 0;
+    if (json_kind(ext_n) != JSON_OBJECT) {
+        *err = err_fmt("box '%s': 'external' is not an object", box_id);
+        return -1;
+    }
+    json_node_t *kn = json_object_get(ext_n, "kind");
+    if (!kn || json_kind(kn) != JSON_STRING) {
+        *err = err_fmt("box '%s': external.kind missing or not a string", box_id);
+        return -1;
+    }
+    const char *ks = json_string_value(kn);
+    if (strcmp(ks, "positional") == 0) box->external.kind = EXTERNAL_POSITIONAL;
+    else if (strcmp(ks, "numbered") == 0) box->external.kind = EXTERNAL_NUMBERED;
+    else if (strcmp(ks, "named")    == 0) box->external.kind = EXTERNAL_NAMED;
+    else {
+        *err = err_fmt("box '%s': external.kind '%s' not recognized "
+                       "(positional | numbered | named)", box_id, ks);
+        return -1;
+    }
+    if (box->external.kind == EXTERNAL_NAMED) {
+        json_node_t *nn = json_object_get(ext_n, "name");
+        if (!nn || json_kind(nn) != JSON_STRING) {
+            *err = err_fmt("box '%s': external.kind=named requires 'name' string",
+                           box_id);
+            return -1;
+        }
+        box->external.name = json_string_value(nn);
+    } else {
+        json_node_t *in = json_object_get(ext_n, "index");
+        if (!in || json_kind(in) != JSON_NUMBER) {
+            *err = err_fmt("box '%s': external.kind=%s requires 'index' number",
+                           box_id, ks);
+            return -1;
+        }
+        box->external.index = (int)json_number_value(in);
+        if (box->external.index < 0) {
+            *err = err_fmt("box '%s': external.index must be >= 0", box_id);
+            return -1;
+        }
+    }
+    return 0;
+}
+/* }}} */
+
 /* {{{ parse_box_file() — read one boxes/<id>.json into a box_t */
 static int parse_box_file(graph_t *g, box_t *box,
                           const char *path, char **err)
@@ -460,6 +534,7 @@ static int parse_box_file(graph_t *g, box_t *box,
     else if (strcmp(kind_str, "write")      == 0) box->kind = BOX_WRITE;
     else if (strcmp(kind_str, "create_box") == 0) box->kind = BOX_CREATE_BOX;
     else if (strcmp(kind_str, "connect")    == 0) box->kind = BOX_CONNECT;
+    else if (strcmp(kind_str, "map")        == 0) box->kind = BOX_MAP;
     else {
         *err = err_fmt("%s: box '%s': unknown kind '%s'", path, box->id, kind_str);
         return -1;
@@ -574,8 +649,25 @@ static int parse_box_file(graph_t *g, box_t *box,
         if (path_n && json_kind(path_n) == JSON_STRING) {
             box->path = json_string_value(path_n);
         }
+    } else if (box->kind == BOX_MAP) {
+        /* Issue 248 — encapsulated sub-map. `ref` names the sub-map
+         * directory relative to the parent map directory (or absolute).
+         * The encapsulation pass loads it and splices its boxes in. */
+        json_node_t *ref_n = json_object_get(n, "ref");
+        if (!ref_n || json_kind(ref_n) != JSON_STRING) {
+            *err = err_fmt("%s: map box '%s' missing 'ref'", path, box->id);
+            return -1;
+        }
+        box->ref = json_string_value(ref_n);
     }
     /* write boxes: nothing additional beyond inputs. */
+
+    /* Issue 248 — externally-supplied (read) or externally-consumed (write)
+     * binding. The block is meaningful on read and write boxes; tolerated
+     * (parsed and stored) on others so the editor can carry the field
+     * without the loader rejecting it. */
+    if (parse_external_binding(json_object_get(n, "external"),
+                               box, box->id, err) != 0) return -1;
 
     if (parse_inputs(json_object_get(n, "inputs"),
                      box, box->id, err) != 0) return -1;
@@ -793,6 +885,13 @@ static int cache_read_box_values(graph_t *g, char **err)
     for (int i = 0; i < g->n_boxes; i++) {
         box_t *b = g->boxes[i];
         if (b->kind != BOX_READ) continue;
+        /* Issue 248 — externally-supplied read boxes are orphaned by
+         * the encapsulation inlining pass (their downstream wires
+         * were spliced through to the parent's producer). They have
+         * no `value` / `path` because the value comes from outside,
+         * and they never fire — skip the cache step so the "neither
+         * value nor path" check below doesn't reject them. */
+        if (b->external.kind != EXTERNAL_NONE) continue;
 
         if (b->value) {
             int n = (int)strlen(b->value);
@@ -1024,6 +1123,453 @@ static int resolve_topology(graph_t *g, char **err)
 }
 /* }}} */
 
+/* {{{ track_owned_str() — remember a heap string to free at destroy */
+static int track_owned_str(graph_t *g, char *s)
+{
+    struct owned_str *o = malloc(sizeof *o);
+    if (!o) return -1;
+    o->str  = s;
+    o->next = g->owned_strs;
+    g->owned_strs = o;
+    return 0;
+}
+/* }}} */
+
+/* {{{ find_input_port_index() — look up a named input port on a box */
+static int find_input_port_index(const box_t *b, const char *port_name)
+{
+    for (int i = 0; i < b->n_inputs; i++) {
+        if (strcmp(b->inputs[i].name, port_name) == 0) return i;
+    }
+    return -1;
+}
+/* }}} */
+
+/* {{{ find_ext_supplied_for_port() — locate the sub-map's data box
+ *
+ * Given the encapsulating BOX_MAP and one of its input port indices,
+ * scan the sub-map's boxes for the externally-supplied read box that
+ * binds to it. Matching rules (issue 248):
+ *
+ *   positional / numbered — D.external.index == port_idx
+ *   named                 — D.external.name  == encap.inputs[port_idx].name
+ *
+ * The two index-based kinds collapse to the same lookup here; the
+ * editor preserves the user-meaningful distinction even though the
+ * loader doesn't need it. */
+static box_t *find_ext_supplied_for_port(box_t **sub_boxes, int sub_n,
+                                         const box_t *encap, int port_idx)
+{
+    const char *port_name = encap->inputs[port_idx].name;
+    for (int i = 0; i < sub_n; i++) {
+        box_t *d = sub_boxes[i];
+        if (d->kind != BOX_READ) continue;
+        if (d->external.kind == EXTERNAL_NONE) continue;
+        if (d->external.kind == EXTERNAL_NAMED) {
+            if (d->external.name && port_name &&
+                strcmp(d->external.name, port_name) == 0) return d;
+        } else {
+            if (d->external.index == port_idx) return d;
+        }
+    }
+    return NULL;
+}
+/* }}} */
+
+/* {{{ load_sub_map_boxes() — parse every .json under sub_dir/boxes
+ *
+ * Just the box layer — no meta.json, no topology resolution. Boxes go
+ * into a fresh malloc'd array which the caller takes ownership of
+ * (and either splices into the parent or frees on error). Strings are
+ * arena-allocated in g->arena, same as the parent. */
+static int load_sub_map_boxes(graph_t *g, const char *sub_dir,
+                              box_t ***out_boxes, int *out_n, char **err)
+{
+    char boxes_dir[4096];
+    int w = snprintf(boxes_dir, sizeof boxes_dir, "%s/boxes", sub_dir);
+    if (w < 0 || w >= (int)sizeof boxes_dir) {
+        *err = err_fmt("sub-map boxes path too long");
+        return -1;
+    }
+
+    int n = count_json_files_in_dir(boxes_dir, err);
+    if (n < 0) return -1;
+    if (n == 0) { *out_boxes = NULL; *out_n = 0; return 0; }
+
+    box_t **arr = calloc((size_t)n, sizeof(box_t *));
+    if (!arr) { *err = err_fmt("out of memory"); return -1; }
+    for (int i = 0; i < n; i++) {
+        arr[i] = calloc(1, sizeof(box_t));
+        if (!arr[i]) {
+            for (int k = 0; k < i; k++) free(arr[k]);
+            free(arr);
+            *err = err_fmt("out of memory");
+            return -1;
+        }
+    }
+
+    DIR *d = opendir(boxes_dir);
+    if (!d) {
+        for (int k = 0; k < n; k++) free(arr[k]);
+        free(arr);
+        *err = err_fmt("cannot open directory '%s'", boxes_dir);
+        return -1;
+    }
+    int i = 0;
+    struct dirent *e;
+    while ((e = readdir(d))) {
+        if (e->d_name[0] == '.')            continue;
+        if (!ends_with(e->d_name, ".json")) continue;
+        char path[4096];
+        int wp = snprintf(path, sizeof path, "%s/%s", boxes_dir, e->d_name);
+        if (wp < 0 || wp >= (int)sizeof path) {
+            closedir(d);
+            for (int k = 0; k < n; k++) free(arr[k]);
+            free(arr);
+            *err = err_fmt("sub-map box path too long");
+            return -1;
+        }
+        if (parse_box_file(g, arr[i], path, err) != 0) {
+            closedir(d);
+            for (int k = 0; k < n; k++) free(arr[k]);
+            free(arr);
+            return -1;
+        }
+        i++;
+    }
+    closedir(d);
+    *out_boxes = arr;
+    *out_n     = n;
+    return 0;
+}
+/* }}} */
+
+/* {{{ inline_one_encapsulation()
+ *
+ * Splice the sub-map at encap->ref into the parent graph, replacing the
+ * BOX_MAP at encap_idx with its sub-map boxes. Input-side rewiring
+ * only this slice: each parent wire targeting encap.port_a is replaced
+ * with copies pointing to the downstream consumers of the matching
+ * externally-supplied data box, preserving from_branch tags.
+ *
+ * Steps:
+ *   1. Resolve sub_dir relative to parent's map_dir.
+ *   2. Load sub-map's boxes into a temporary array (separate parse).
+ *   3. Prefix-rename every sub-box id with `<encap_id>__<sub_id>`,
+ *      then rewrite each sub-box's connections.to_box strings that
+ *      reference sibling sub-boxes to the renamed form.
+ *   4. For each parent producer, walk its connections; any that target
+ *      encap_id get replaced (1→N) by the corresponding ext-supplied
+ *      data box's downstream targets.
+ *   5. Append sub-boxes to parent's box array (grow capacity if needed).
+ *   6. Orphan the encap box (clear its connections; kind stays BOX_MAP
+ *      so dispatch's no-op case never confuses it for a live producer).
+ *
+ * Output-side (externally-consumed write boxes) is deferred to the
+ * next slice. Wires originally leaving encap.port_x are dropped.
+ */
+static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
+{
+    box_t **boxes = atomic_load_explicit(&g->boxes, memory_order_relaxed);
+    box_t  *encap = boxes[encap_idx];
+
+    if (!encap->ref) {
+        *err = err_fmt("box '%s': BOX_MAP missing 'ref'", encap->id);
+        return -1;
+    }
+
+    char sub_dir[4096];
+    if (encap->ref[0] == '/') {
+        int w = snprintf(sub_dir, sizeof sub_dir, "%s", encap->ref);
+        if (w < 0 || w >= (int)sizeof sub_dir) {
+            *err = err_fmt("encap '%s': sub-map path too long", encap->id);
+            return -1;
+        }
+    } else {
+        int w = snprintf(sub_dir, sizeof sub_dir, "%s/%s",
+                         g->map_dir, encap->ref);
+        if (w < 0 || w >= (int)sizeof sub_dir) {
+            *err = err_fmt("encap '%s': sub-map path too long", encap->id);
+            return -1;
+        }
+    }
+
+    box_t **sub_boxes = NULL;
+    int     sub_n     = 0;
+    if (load_sub_map_boxes(g, sub_dir, &sub_boxes, &sub_n, err) != 0) {
+        return -1;
+    }
+
+    /* Save the pre-rename ids so we can rewrite intra-sub-map
+     * connection refs before clobbering the ids on the box records. */
+    const char **old_ids = calloc((size_t)sub_n, sizeof(const char *));
+    char       **new_ids = calloc((size_t)sub_n, sizeof(char *));
+    if ((sub_n > 0 && !old_ids) || (sub_n > 0 && !new_ids)) {
+        free(old_ids); free(new_ids);
+        for (int k = 0; k < sub_n; k++) free(sub_boxes[k]);
+        free(sub_boxes);
+        *err = err_fmt("out of memory");
+        return -1;
+    }
+
+    const char *prefix = encap->id;
+    size_t      plen   = strlen(prefix);
+    for (int i = 0; i < sub_n; i++) {
+        old_ids[i] = sub_boxes[i]->id;
+        size_t need = plen + 2 + strlen(old_ids[i]) + 1;
+        char *nid = malloc(need);
+        if (!nid) {
+            for (int k = 0; k < i; k++) free(new_ids[k]);
+            free(old_ids); free(new_ids);
+            for (int k = 0; k < sub_n; k++) free(sub_boxes[k]);
+            free(sub_boxes);
+            *err = err_fmt("out of memory");
+            return -1;
+        }
+        snprintf(nid, need, "%s__%s", prefix, old_ids[i]);
+        new_ids[i] = nid;
+    }
+
+    /* Rewrite intra-sub-map connection refs to use the renamed ids.
+     * Connections that already target an outside-the-sub-map id (which
+     * shouldn't happen at this layer, but guard anyway) are left alone. */
+    for (int i = 0; i < sub_n; i++) {
+        int n_c = atomic_load_explicit(&sub_boxes[i]->n_connections,
+                                       memory_order_relaxed);
+        connection_t *cs =
+            atomic_load_explicit(&sub_boxes[i]->connections,
+                                 memory_order_relaxed);
+        for (int k = 0; k < n_c; k++) {
+            for (int j = 0; j < sub_n; j++) {
+                if (strcmp(cs[k].to_box, old_ids[j]) == 0) {
+                    cs[k].to_box = new_ids[j];
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Adopt the renamed ids onto the sub-box records. From this point
+     * on, the sub-boxes look like normal parent boxes with namespaced
+     * ids. The malloc'd new_ids strings move into the graph's
+     * owned-strings list. */
+    for (int i = 0; i < sub_n; i++) {
+        sub_boxes[i]->id = new_ids[i];
+        if (track_owned_str(g, new_ids[i]) != 0) {
+            /* Leak the rest of new_ids on this rare failure; we're
+             * about to error out anyway. */
+            free(old_ids); free(new_ids);
+            *err = err_fmt("out of memory");
+            return -1;
+        }
+    }
+    free(new_ids);    /* the strings live on; only the temp array goes */
+
+    /* INPUT-side rewiring. Each parent producer's connection that
+     * targets (encap_id, port) becomes one-or-more new connections
+     * targeting the matching ext-supplied data box's downstreams. */
+    uint32_t cur_n = atomic_load_explicit(&g->n_boxes, memory_order_relaxed);
+    for (uint32_t p = 0; p < cur_n; p++) {
+        box_t *prod = g->boxes[p];
+        if (prod == encap) continue;
+
+        int n_c = atomic_load_explicit(&prod->n_connections,
+                                       memory_order_relaxed);
+        if (n_c == 0) continue;
+        connection_t *cs =
+            atomic_load_explicit(&prod->connections, memory_order_relaxed);
+
+        /* First pass: compute the new array's size. Each connection
+         * to encap explodes to N entries where N = matched data box's
+         * out-degree (potentially 0; that prunes the wire). */
+        int new_cap = 0;
+        int touches_encap = 0;
+        for (int k = 0; k < n_c; k++) {
+            if (strcmp(cs[k].to_box, encap->id) != 0) {
+                new_cap += 1;
+                continue;
+            }
+            touches_encap = 1;
+            int port_idx = find_input_port_index(encap, cs[k].to_input);
+            if (port_idx < 0) {
+                *err = err_fmt("encap '%s': producer '%s' wires to unknown "
+                               "port '%s'",
+                               encap->id, prod->id, cs[k].to_input);
+                free(old_ids);
+                return -1;
+            }
+            box_t *D = find_ext_supplied_for_port(sub_boxes, sub_n,
+                                                  encap, port_idx);
+            if (!D) {
+                *err = err_fmt("encap '%s': port '%s' has no matching "
+                               "externally-supplied data box in sub-map",
+                               encap->id, cs[k].to_input);
+                free(old_ids);
+                return -1;
+            }
+            new_cap += atomic_load_explicit(&D->n_connections,
+                                            memory_order_relaxed);
+        }
+        if (!touches_encap) continue;
+
+        /* Second pass: build the new array. */
+        connection_t *new_cs =
+            (new_cap > 0) ? calloc((size_t)new_cap, sizeof(connection_t)) : NULL;
+        if (new_cap > 0 && !new_cs) {
+            free(old_ids);
+            *err = err_fmt("out of memory");
+            return -1;
+        }
+        int new_n = 0;
+        for (int k = 0; k < n_c; k++) {
+            if (strcmp(cs[k].to_box, encap->id) != 0) {
+                new_cs[new_n] = cs[k];
+                new_cs[new_n].to_box_idx   = -1;
+                new_cs[new_n].to_input_idx = -1;
+                new_n++;
+                continue;
+            }
+            int port_idx = find_input_port_index(encap, cs[k].to_input);
+            box_t *D = find_ext_supplied_for_port(sub_boxes, sub_n,
+                                                  encap, port_idx);
+            int dn = atomic_load_explicit(&D->n_connections,
+                                          memory_order_relaxed);
+            connection_t *dc =
+                atomic_load_explicit(&D->connections, memory_order_relaxed);
+            for (int j = 0; j < dn; j++) {
+                new_cs[new_n].to_box      = dc[j].to_box;
+                new_cs[new_n].to_input    = dc[j].to_input;
+                new_cs[new_n].from_branch = cs[k].from_branch;
+                new_cs[new_n].to_box_idx   = -1;
+                new_cs[new_n].to_input_idx = -1;
+                new_n++;
+            }
+        }
+
+        free(cs);
+        atomic_store_explicit(&prod->connections, new_cs,
+                              memory_order_release);
+        atomic_store_explicit(&prod->n_connections, new_n,
+                              memory_order_release);
+    }
+    free(old_ids);
+
+    /* Orphan each ext-supplied data box: its outgoing connections
+     * (now spliced into the parent producer's array) must be cleared
+     * so build_read_predecessor_lists doesn't double-count them as
+     * a feeder of the same consumer the parent producer is also
+     * feeding. The string pointers inside the original connection
+     * entries are arena-owned and remain valid for the parent's
+     * copies; only the array itself goes. */
+    for (int i = 0; i < sub_n; i++) {
+        box_t *d = sub_boxes[i];
+        if (d->kind != BOX_READ) continue;
+        if (d->external.kind == EXTERNAL_NONE) continue;
+        connection_t *dc =
+            atomic_load_explicit(&d->connections, memory_order_relaxed);
+        if (dc) free(dc);
+        atomic_store_explicit(&d->connections, NULL, memory_order_release);
+        atomic_store_explicit(&d->n_connections, 0, memory_order_release);
+    }
+
+    /* Grow the parent's box pointer array if needed and append the
+     * sub-boxes. No atomic publish ordering needed at load time
+     * (single-threaded), but we keep the same shape as graph_add_box
+     * for consistency. */
+    uint32_t cap = atomic_load_explicit(&g->box_capacity,
+                                        memory_order_relaxed);
+    uint32_t want = cur_n + (uint32_t)sub_n;
+    if (want > cap) {
+        uint32_t new_cap = cap ? cap : 16u;
+        while (new_cap < want) new_cap *= 2u;
+        box_t **new_arr = calloc((size_t)new_cap, sizeof(box_t *));
+        if (!new_arr) {
+            for (int k = 0; k < sub_n; k++) free(sub_boxes[k]);
+            free(sub_boxes);
+            *err = err_fmt("out of memory");
+            return -1;
+        }
+        box_t **old_arr =
+            atomic_load_explicit(&g->boxes, memory_order_relaxed);
+        if (old_arr) {
+            memcpy(new_arr, old_arr, cur_n * sizeof(box_t *));
+            struct stale_arr *st = malloc(sizeof *st);
+            if (st) { st->ptr = old_arr; st->next = g->stale_box_arrs;
+                      g->stale_box_arrs = st; }
+        }
+        atomic_store_explicit(&g->boxes, new_arr, memory_order_release);
+        atomic_store_explicit(&g->box_capacity, new_cap,
+                              memory_order_release);
+    }
+    box_t **arr = atomic_load_explicit(&g->boxes, memory_order_relaxed);
+    for (int i = 0; i < sub_n; i++) {
+        arr[cur_n + (uint32_t)i] = sub_boxes[i];
+    }
+    atomic_store_explicit(&g->n_boxes, cur_n + (uint32_t)sub_n,
+                          memory_order_release);
+    free(sub_boxes);
+
+    /* Orphan the encap box. Its outgoing connections (if any) were
+     * the output-side wiring path which this slice doesn't implement
+     * yet; dropping them means any wires the user drew from encap's
+     * output ports won't fire. The box itself stays in the index
+     * (so its slot id remains valid for any unfixed references) but
+     * becomes inert — BOX_MAP has a no-op dispatch case. */
+    int n_old_out = atomic_load_explicit(&encap->n_connections,
+                                         memory_order_relaxed);
+    connection_t *old_out =
+        atomic_load_explicit(&encap->connections, memory_order_relaxed);
+    (void)n_old_out;
+    if (old_out) {
+        free(old_out);
+        atomic_store_explicit(&encap->connections, NULL,
+                              memory_order_release);
+        atomic_store_explicit(&encap->n_connections, 0,
+                              memory_order_release);
+    }
+    /* Strip the encap's `ref` so inline_encapsulations' find-loop
+     * doesn't pick this same record up on the next iteration and
+     * inline its sub-map a second time. The record stays in the
+     * box list as an inert BOX_MAP; the no-op dispatch case
+     * handles the (should-not-happen) reach. */
+    encap->ref = NULL;
+
+    return 0;
+}
+/* }}} */
+
+/* {{{ inline_encapsulations() — splice every BOX_MAP into the graph
+ *
+ * Iterates until no BOX_MAP remains. Sub-maps that themselves contain
+ * a BOX_MAP get picked up on the next iteration once their boxes are
+ * in the parent list. A high iteration bound guards against
+ * pathological recursion (which would also imply a cycle, caught
+ * later by detect_cycles in the flat form). */
+static int inline_encapsulations(graph_t *g, char **err)
+{
+    for (int iter = 0; iter < 1024; iter++) {
+        uint32_t n = atomic_load_explicit(&g->n_boxes,
+                                          memory_order_relaxed);
+        box_t **boxes =
+            atomic_load_explicit(&g->boxes, memory_order_relaxed);
+        int found = -1;
+        for (uint32_t i = 0; i < n; i++) {
+            /* `ref` cleared after inlining → skip already-handled boxes.
+             * Without this, the orphaned BOX_MAP record keeps matching
+             * and the pass loops forever inlining the same sub-map. */
+            if (boxes[i]->kind == BOX_MAP && boxes[i]->ref) {
+                found = (int)i; break;
+            }
+        }
+        if (found < 0) return 0;
+        if (inline_one_encapsulation(g, found, err) != 0) return -1;
+    }
+    *err = err_fmt("inline_encapsulations: exceeded recursion limit (1024) "
+                   "— likely a sub-map cycle");
+    return -1;
+}
+/* }}} */
+
 /* {{{ graph_load() */
 graph_t *graph_load(const char *map_dir, char **err)
 {
@@ -1057,6 +1603,11 @@ graph_t *graph_load(const char *map_dir, char **err)
 
     if (load_meta(g, map_dir, err)            != 0) { graph_destroy(g); return NULL; }
     if (load_boxes(g, map_dir, err)           != 0) { graph_destroy(g); return NULL; }
+    /* Issue 248 — splice any BOX_MAP into the parent's flat box list
+     * before topology resolution. After this pass the graph is one
+     * flat program with namespaced sub-map ids; resolve_topology
+     * never has to know encapsulation existed. */
+    if (inline_encapsulations(g, err)         != 0) { graph_destroy(g); return NULL; }
     if (resolve_topology(g, err)              != 0) { graph_destroy(g); return NULL; }
     if (detect_cycles(g, err)                 != 0) { graph_destroy(g); return NULL; }
     if (cache_read_box_values(g, err)         != 0) { graph_destroy(g); return NULL; }
@@ -1184,6 +1735,14 @@ void graph_destroy(graph_t *g)
         st = next;
     }
     pthread_mutex_destroy(&g->graph_mu);
+    /* Free per-graph heap strings (issue 248 prefix-renamed ids). */
+    struct owned_str *os = g->owned_strs;
+    while (os) {
+        struct owned_str *next = os->next;
+        free(os->str);
+        free(os);
+        os = next;
+    }
     free(g->languages);    /* element strings live in the arena */
     free(g->entry_box_ids);
     free(g->size_classes);

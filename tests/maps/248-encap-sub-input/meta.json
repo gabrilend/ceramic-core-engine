@@ -1,0 +1,4 @@
+{
+  "name": "248-encap-sub-input",
+  "description": "Sub-map: one externally-supplied data box bound by name (msg), feeding a write box that emits the value to disk. Stand-alone-runnable with `value` substituted; encapsulated, the value arrives from the parent's wire."
+}

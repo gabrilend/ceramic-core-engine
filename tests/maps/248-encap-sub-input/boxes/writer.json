@@ -1,0 +1,8 @@
+{
+  "id": "writer",
+  "kind": "write",
+  "inputs": [
+    { "name": "path",  "type": "string", "value": "/tmp/soramech-248-encap-out.txt" },
+    { "name": "value", "type": "string" }
+  ]
+}

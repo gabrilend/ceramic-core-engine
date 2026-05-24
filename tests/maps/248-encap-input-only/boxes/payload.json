@@ -1,0 +1,8 @@
+{
+  "id": "payload",
+  "kind": "read",
+  "value": "encapsulated-greeting",
+  "connections": [
+    { "to_box": "encap", "to_input": "msg" }
+  ]
+}

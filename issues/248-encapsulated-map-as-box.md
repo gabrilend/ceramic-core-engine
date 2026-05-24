@@ -1,7 +1,46 @@
 # 248 — Encapsulated map as box
 
 ## Status
-open
+in progress · input-side load-time inlining shipped; output-side
+(ext-consumed write boxes), editor UI, and recursion across mixed
+ext-consumed wires deferred
+
+## Current behavior
+
+Input-side encapsulation runs at graph load. The loader recognizes
+`kind: "map"` with a `ref` to a sub-map directory. A new pass between
+`load_boxes` and `resolve_topology` walks every BOX_MAP record,
+loads the sub-map's boxes into the parent's arena, prefix-renames
+their ids with `<encap_id>__<sub_id>`, splices them into the parent's
+flat box list, then rewires each parent producer's connection that
+targeted the encapsulating box. The rewire splices THROUGH the
+externally-supplied data box: each parent wire to `encap.port` is
+replaced with copies pointing to the matching data box's
+downstreams, preserving each from_branch tag. Externally-supplied
+data boxes are matched to the encapsulating box's input ports by
+the issue's three binding kinds (positional / numbered by index,
+named by string).
+
+After inlining, the encap box stays in the index but is inert
+(connections cleared, `ref` stripped — the loader skips it on
+subsequent passes, dispatch's BOX_MAP case is a logged no-op). The
+ext-supplied data box is also orphaned (its outgoing connections
+were absorbed into the parent producer; the cache pass skips it so
+the "neither value nor path" check doesn't reject the value-less
+shape).
+
+The end-to-end fixture `tests/maps/248-encap-input-only/` proves
+the splice reaches disk: a parent read box wires
+`"encapsulated-greeting"` to a BOX_MAP whose sub-map has one
+externally-supplied data box feeding a write box; the parent's
+bytes land in `/tmp/soramech-248-encap-out.txt`.
+
+Output-side encapsulation (externally-consumed write boxes
+surfacing as the encap's output ports) is not yet wired. Wires
+the user drew from `encap.port_x` to a parent consumer don't fire
+in this slice. The editor toggles, file-browser Encapsulate
+action, and the multi-output exception to issue 218 also remain
+ahead.
 
 ## Concept
 

@@ -1,0 +1,8 @@
+{
+  "id": "encap",
+  "kind": "map",
+  "ref": "../248-encap-sub-input",
+  "inputs": [
+    { "name": "msg", "type": "string" }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "name": "248-encap-input-only",
+  "description": "Issue 248 input-side encapsulation. Parent's read box wires a value into a BOX_MAP whose sub-map has one externally-supplied data box. After load-time inlining the parent's wire reaches the sub-map's write box directly. Verifies the splice-through transformation end-to-end via the on-disk artifact."
+}

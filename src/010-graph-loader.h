@@ -64,6 +64,14 @@ typedef enum {
      * language (including Bash, which has no per-language wrapper). */
     BOX_CREATE_BOX,  /* construct a new box from a spec on the input wire  */
     BOX_CONNECT,     /* attach a wire described by a connection-entry input */
+    /* Issue 248: encapsulated map. A box of this kind names a
+     * sub-map directory via `ref`; at graph load the loader
+     * recursively loads the sub-map's boxes, splices them into
+     * the parent with id prefixes, and rewires the parent's
+     * wires that reach this box to instead reach the sub-map's
+     * externally-marked data / write boxes. After inlining the
+     * box itself becomes inert — it never dispatches. */
+    BOX_MAP,
 } box_kind_t;
 /* }}} */
 
@@ -117,6 +125,27 @@ typedef struct {
 } connection_t;
 /* }}} */
 
+/* {{{ External binding (issue 248)
+ *
+ * A `data` box marked externally-supplied OR a `write` box marked
+ * externally-consumed carries one of these. The kind picks how the
+ * box's port maps to the encapsulating BOX_MAP's input/output
+ * port list: `positional` by argument order, `numbered` by an
+ * explicit index, `named` by a string. */
+typedef enum {
+    EXTERNAL_NONE = 0,
+    EXTERNAL_POSITIONAL,
+    EXTERNAL_NUMBERED,
+    EXTERNAL_NAMED,
+} external_kind_t;
+
+typedef struct {
+    external_kind_t kind;
+    int             index;     /* positional / numbered */
+    const char     *name;      /* named; arena-owned */
+} external_binding_t;
+/* }}} */
+
 /* {{{ Box */
 /* Tagged so the forward declaration `typedef struct box box_t;` in
  * langs/lang-spec.h matches and the compile callback can accept a
@@ -149,6 +178,16 @@ typedef struct box {
     /* Read boxes */
     const char    *path;          /* file path (read only; ignored if value set) */
     const char    *value;         /* inline literal; if set, read emits this directly */
+
+    /* Issue 248 — externally-supplied / externally-consumed binding.
+     * Present on `data` boxes inside a sub-map that should source
+     * their value from the parent's encapsulating box's input, OR
+     * on `write` boxes whose `value` should also surface back to
+     * the parent. EXTERNAL_NONE means "not bound to the parent."
+     * The loader's encapsulation pass reads this to rewire wires;
+     * the dispatch never looks at it (the rewiring happens
+     * entirely at load time). */
+    external_binding_t external;
 
     /* Read-box value cache (issue 244): the bytes a downstream consumer
      * pulls when it needs this read box's value. Populated at graph

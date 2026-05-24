@@ -215,8 +215,44 @@ check_map "319-cross-lang-create" \
     "trigger → c-trigger-fired:auto_" \
     "lua-echo-from-runtime-init:c-trigger-fired:auto_"
 
+# Issue 248 input-side encapsulation. The parent's read box wires
+# a value into a BOX_MAP whose sub-map has one externally-supplied
+# data box; the graph loader splices the parent's wire through to
+# the sub-map's write box at load time. Verification is split: the
+# stdout check confirms the renamed write box fires; the disk file
+# check confirms the parent's bytes actually arrived through the
+# splice (the only path that produces the file's content).
+check_map "248-encap-input-only" \
+    "encap__writer → true"
+
+# {{{ encap_input_only_file_check() — input-side encap reaches disk
+encap_input_only_file_check() {
+    local file="/tmp/soramech-248-encap-out.txt"
+    rm -f "$file"
+    "$DIR/soramech-pool" "$DIR/tests/maps/248-encap-input-only" >/dev/null 2>&1
+    printf "  %-44s " "encap input-only write output"
+    if [[ -f "$file" ]]; then
+        local content
+        content=$(cat "$file")
+        if [[ "$content" == "encapsulated-greeting" ]]; then
+            printf "ok\n"
+            pass=$((pass + 1))
+        else
+            printf "FAIL — expected 'encapsulated-greeting', got '%s'\n" "$content"
+            fail=$((fail + 1))
+            failures+=("encap-input file: $content")
+        fi
+    else
+        printf "FAIL — output file missing\n"
+        fail=$((fail + 1))
+        failures+=("encap-input: $file missing")
+    fi
+}
+# }}}
+
 pipeline_output_check
 compile_pipeline_check
+encap_input_only_file_check
 # }}}
 
 # {{{ parser_tests() — issue 232: unit tests for langs/<lang>/parser.js

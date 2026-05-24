@@ -1323,6 +1323,20 @@ void dispatch_action(void *arg)
                                 "reached dispatch_action\n", b->id);
                 rc = -1;
                 break;
+            case BOX_MAP:
+                /* 248: encapsulated sub-map. The graph loader splices
+                 * the sub-map's boxes into the parent at load time and
+                 * orphans this box (no incoming wires after inlining).
+                 * Reaching here means either inlining didn't run or a
+                 * runtime path-B sub-graph dispatch was added later
+                 * without updating this case. For now, no-op
+                 * successfully so a stray dispatch doesn't crash. */
+                fprintf(stderr, "dispatch: BOX_MAP '%s' reached dispatch_action; "
+                                "input-side inlining should have removed it\n",
+                                b->id);
+                out_size = 0;
+                rc = 0;
+                break;
         }
     }
 
