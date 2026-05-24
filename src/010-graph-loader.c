@@ -1116,7 +1116,18 @@ graph_t *graph_load(const char *map_dir, char **err)
          * it has at least one feeder AND every feeder is a call box
          * sharing this box's language. A mixed-language fan-in
          * downgrades the port to JSON — the slot can carry only one
-         * format and JSON is the common denominator. */
+         * format and JSON is the common denominator.
+         *
+         * NOTE (issue 318 follow-on): this per-edge classification is
+         * the FALLBACK on single-ring slots. For dual-ring slots
+         * (issue 312), the consumer's read path uses the per-cell
+         * which_ring tag returned by slot_pop_ordered instead. The
+         * dual-ring path is what makes intra-Lua $lang_opaque survive
+         * a producer that was forced to JSON by a cross-language
+         * sibling consumer — each cell carries its own format flag,
+         * so the consumer doesn't have to trust a per-edge
+         * approximation that lies when the producer's per-call
+         * output_native is 0. */
         for (int port = 0; port < b->n_inputs; port++) {
             input_feeders_t f = scan_input_feeders(g, i, port, b->lang);
             b->input_edge_native[port] = (f.n_feeders > 0 &&

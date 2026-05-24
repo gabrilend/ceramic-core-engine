@@ -534,7 +534,8 @@ static int all_wires_native(const box_t *b)
 static int push_one_connection(dispatch_ctx_t *ctx, const box_t *b,
                                const connection_t *c,
                                const void *out_bytes, int out_size,
-                               uint32_t tag)
+                               uint32_t tag,
+                               int output_native)
 {
     if (c->to_box_idx < 0) return 0;
     const box_t *dst = graph_box(ctx->graph, c->to_box_idx);
@@ -545,15 +546,25 @@ static int push_one_connection(dispatch_ctx_t *ctx, const box_t *b,
     int32_t dst_flags = slot_flags(ctx->slots, dst_slot);
     int     rc;
 
-    /* Each wire carries its own writing style — same-language wires
-     * push native, cross-language wires push JSON. The format is
-     * decided per outgoing connection (per-edge bit), not per call.
-     * A box with mixed fan-out (some same-lang, some cross-lang)
-     * lets each consumer get the right format for its own wire,
-     * which is what the dual-ring slot's per-cell tag preserves. */
+    /* Ring choice on dual-ring slots: when the producer's per-call
+     * output_native is 0 (because some sibling consumer of this
+     * producer is cross-language), the bytes in out_bytes are JSON
+     * regardless of THIS wire's per-edge classification. We must
+     * push to the JSON ring so the consumer's slot_pop_ordered
+     * returns the correct which_ring tag and the consumer's spec
+     * runs json_to_native rather than treating the JSON bytes as
+     * its language's native form. (Issue 318 follow-on: the
+     * per-edge bit alone lies about a per-call decision.)
+     *
+     * When output_native is 1 the producer wrote native bytes
+     * intended for same-language consumers; cross-language
+     * consumers on the same producer get the per-edge bit's
+     * direction (push to JSON ring with a wrapper or fall back —
+     * the wrapper path is captured elsewhere). */
     if (dst_flags >= 0 && (dst_flags & SLOT_FLAG_DUAL_RING)) {
         int native_edge = wire_is_native(b, c);
-        if (native_edge) {
+        int push_native = output_native && native_edge;
+        if (push_native) {
             rc = slot_push_native(ctx->slots, dst_slot,
                                   out_bytes, out_size, tag);
         } else {
@@ -581,14 +592,15 @@ static int push_one_connection(dispatch_ctx_t *ctx, const box_t *b,
 static int push_branch(dispatch_ctx_t *ctx, const box_t *b,
                        const char *branch,
                        const void *out_bytes, int out_size,
-                       uint32_t tag)
+                       uint32_t tag, int output_native)
 {
     int fired = 0;
     for (int i = 0; i < b->n_connections; i++) {
         const connection_t *c = &b->connections[i];
         if (!c->from_branch) continue;
         if (strcmp(c->from_branch, branch) != 0) continue;
-        if (push_one_connection(ctx, b, c, out_bytes, out_size, tag) != 0)
+        if (push_one_connection(ctx, b, c, out_bytes, out_size, tag,
+                                output_native) != 0)
             return -1;
         fired++;
     }
@@ -599,13 +611,17 @@ static int push_branch(dispatch_ctx_t *ctx, const box_t *b,
 /* {{{ push_to_downstream() — fan output to every outgoing connection */
 /* The push triggers spawn_if_ready on the consumer. Tag = 0 for
  * the plain fan-out case; iterator routing uses push_branch with a
- * non-zero tag. */
+ * non-zero tag. `output_native` is the per-call format flag from
+ * the producer's invoke (issue 312); it threads through so
+ * push_one_connection can route to the correct dual-ring side. */
 static int push_to_downstream(dispatch_ctx_t *ctx, const box_t *b,
-                              const void *out_bytes, int out_size)
+                              const void *out_bytes, int out_size,
+                              int output_native)
 {
     for (int i = 0; i < b->n_connections; i++) {
         if (push_one_connection(ctx, b, &b->connections[i],
-                                out_bytes, out_size, 0) != 0) return -1;
+                                out_bytes, out_size, 0, output_native) != 0)
+            return -1;
     }
     return 0;
 }
@@ -624,29 +640,30 @@ static double parse_double(const void *bytes, int size)
 
 /* {{{ push_routed() — branch picker over routing.kind, then push */
 static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
-                       const void *out_bytes, int out_size)
+                       const void *out_bytes, int out_size,
+                       int output_native)
 {
     /* Read and write boxes don't carry a routing kind; their
      * output fans plain. Same for call boxes with no routing set
      * (treated as plain). */
-    if (b->kind != BOX_CALL) return push_to_downstream(ctx, b, out_bytes, out_size);
+    if (b->kind != BOX_CALL) return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
 
     switch (b->routing.kind) {
         case ROUTING_PLAIN:
-            return push_to_downstream(ctx, b, out_bytes, out_size);
+            return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
 
         case ROUTING_COMPARATOR: {
             double v = parse_double(out_bytes, out_size);
             const char *branch =
                 (v < b->routing.comparand) ? "lt" :
                 (v > b->routing.comparand) ? "gt" : "eq";
-            return push_branch(ctx, b, branch, out_bytes, out_size, 0) < 0 ? -1 : 0;
+            return push_branch(ctx, b, branch, out_bytes, out_size, 0, output_native) < 0 ? -1 : 0;
         }
 
         case ROUTING_ITERATOR: {
             if (b->counter_slot_id < 0 || b->routing.n_outputs < 1) {
                 /* No counter slot or zero outputs — fall back to plain. */
-                return push_to_downstream(ctx, b, out_bytes, out_size);
+                return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
             }
             /* The counter is both the branch selector AND the order
              * tag for the consumer slot (issue 304 cell-tagged
@@ -657,12 +674,12 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
                                          (uint32_t)b->routing.n_outputs);
             char branch[MAX_BRANCH_NAME];
             snprintf(branch, sizeof branch, "out_%u", idx);
-            return push_branch(ctx, b, branch, out_bytes, out_size, idx) < 0 ? -1 : 0;
+            return push_branch(ctx, b, branch, out_bytes, out_size, idx, output_native) < 0 ? -1 : 0;
         }
 
         case ROUTING_RANDOMIZER: {
             if (b->counter_slot_id < 0 || b->routing.n_outputs < 1) {
-                return push_to_downstream(ctx, b, out_bytes, out_size);
+                return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
             }
             /* Mix the monotonic counter so consecutive invocations
              * don't go to consecutive branches. xorshift32-style,
@@ -677,13 +694,13 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
             snprintf(branch, sizeof branch, "out_%u", branch_idx);
             /* Randomizer is also multi-spawn-aware; pass i as tag so
              * any downstream tagged slot still serves in order. */
-            return push_branch(ctx, b, branch, out_bytes, out_size, i) < 0 ? -1 : 0;
+            return push_branch(ctx, b, branch, out_bytes, out_size, i, output_native) < 0 ? -1 : 0;
         }
 
         case ROUTING_WEIGHTED: {
             if (b->counter_slot_id < 0 || b->routing.n_outputs < 1 ||
                 !b->routing.weights) {
-                return push_to_downstream(ctx, b, out_bytes, out_size);
+                return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
             }
             /* Cumulative-band lookup against a counter scaled to a
              * fixed precision. The last band absorbs floating-point
@@ -696,7 +713,7 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
                 total += b->routing.weights[k];
             }
             if (total <= 0.0) {
-                return push_to_downstream(ctx, b, out_bytes, out_size);
+                return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
             }
             int branch_idx = b->routing.n_outputs - 1;
             double acc = 0.0;
@@ -706,7 +723,7 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
             }
             char branch[MAX_BRANCH_NAME];
             snprintf(branch, sizeof branch, "out_%d", branch_idx);
-            return push_branch(ctx, b, branch, out_bytes, out_size, i) < 0 ? -1 : 0;
+            return push_branch(ctx, b, branch, out_bytes, out_size, i, output_native) < 0 ? -1 : 0;
         }
 
         case ROUTING_DISTRIBUTOR: {
@@ -720,7 +737,7 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
              * across equally-empty branches instead of always
              * picking the same low-index one. */
             if (b->counter_slot_id < 0 || b->routing.n_outputs < 1) {
-                return push_to_downstream(ctx, b, out_bytes, out_size);
+                return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
             }
             /* Read the counter once. Use it both as the rotation
              * offset (so ties between equally-loaded branches break
@@ -763,17 +780,17 @@ static int push_routed(dispatch_ctx_t *ctx, const box_t *b,
                 /* No outgoing connection on any branch — falling
                  * back to plain still pushes nothing useful, but
                  * keeps the action's contract (return 0 means OK). */
-                return push_to_downstream(ctx, b, out_bytes, out_size);
+                return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
             }
             char branch[MAX_BRANCH_NAME];
             snprintf(branch, sizeof branch, "out_%d", best_branch);
-            return push_branch(ctx, b, branch, out_bytes, out_size, tag) < 0
+            return push_branch(ctx, b, branch, out_bytes, out_size, tag, output_native) < 0
                        ? -1 : 0;
         }
 
         default:
             /* Unknown routing kind — push plain as the safe default. */
-            return push_to_downstream(ctx, b, out_bytes, out_size);
+            return push_to_downstream(ctx, b, out_bytes, out_size, output_native);
     }
 }
 /* }}} */
@@ -795,9 +812,15 @@ static void capture(dispatch_ctx_t *ctx, int box_id,
 /* }}} */
 
 /* {{{ do_call_box() — invoke a call box's language spec */
+/* `out_native` is filled with the per-call output format flag the
+ * spec was asked to write (1 = native, 0 = JSON). Issue 318
+ * follow-on: dispatch_action threads this through to push_routed
+ * so the push side routes to the correct dual-ring side. */
 static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
-                       char *out_buf, int out_capacity, int *out_size)
+                       char *out_buf, int out_capacity, int *out_size,
+                       int *out_native)
 {
+    if (out_native) *out_native = 1;
     if (b->spec_idx < 0) {
         fprintf(stderr, "dispatch: '%s' has no resolved spec\n", b->id);
         return -1;
@@ -930,6 +953,9 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
      * cross-language sibling; the precision tradeoff is captured in
      * issue 312's "Resolved design choice" section. */
     int output_native = all_wires_native(b);
+    /* Surface to caller so push_routed can pick the right ring side
+     * for dual-ring slots (issue 318 follow-on). */
+    if (out_native) *out_native = output_native;
 
     int rc = fn(handle, b, ref_path ? ref_path : b->ref, b->fn,
                 datas, sizes, input_native, n_present,
@@ -1167,10 +1193,17 @@ void dispatch_action(void *arg)
     ua_chunk_t *out_chunk = ua_alloc(heap, (size_t)out_capacity);
     char *out_buf = out_chunk ? ua_data(out_chunk) : NULL;
     int rc = -1;
+    /* Per-call output format flag (issue 318 follow-on). Defaults
+     * to 1 (native) for box kinds whose output is plain bytes
+     * (read / write / create_box / connect — they don't carry a
+     * language and don't JSON-serialize). do_call_box overwrites
+     * with the spec's per-call decision. */
+    int output_native = 1;
     if (out_buf && b) {
         switch (b->kind) {
             case BOX_CALL:
-                rc = do_call_box(ctx, b, task_id, out_buf, out_capacity, &out_size);
+                rc = do_call_box(ctx, b, task_id, out_buf, out_capacity,
+                                 &out_size, &output_native);
                 break;
             case BOX_WRITE:
                 rc = do_write_box(ctx, b, task_id,
@@ -1207,7 +1240,7 @@ void dispatch_action(void *arg)
         /* Every kind pushes — even write, which emits its "true"
          * boolean for any downstream wires (unwired output is just
          * discarded, per the 229 unwired-output rule). */
-        push_routed(ctx, b, out_buf, out_size);
+        push_routed(ctx, b, out_buf, out_size, output_native);
         /* Iterator-style re-spawn: if this is a multi-spawn box and
          * any POP input still has queued values, schedule another
          * task on the same box. This is how an iterator "loops"

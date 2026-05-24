@@ -195,7 +195,8 @@ check_map "246-lua-shim" \
 check_map "318-lang-opaque" \
     '"$lang_opaque"' \
     '"lang":"lua"' \
-    '"shape":"function"'
+    '"shape":"function"' \
+    'consumer → doubled=42'
 
 # Language-agnostic create_box / connect box kinds (319
 # design-correction follow-on). A read box emits a box spec; a
