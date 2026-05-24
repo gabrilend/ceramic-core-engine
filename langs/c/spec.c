@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -232,11 +233,46 @@ static unsigned long hash_path(const char *p)
 
 /* {{{ maybe_lazy_compile() — if file_path is a .c source, compile it
  * to a /tmp .so and return that path; otherwise return file_path
- * unchanged. The output buffer is the caller-supplied so_buf. */
+ * unchanged. The output buffer is the caller-supplied so_buf.
+ *
+ * Issue 313 follow-on (C eager-precompile): if the compile
+ * pipeline (scripts/soramech-compile.sh) ran for this map, it
+ * already produced a per-box .so in <map_dir>/bin/<basename>.so.
+ * Prefer that artifact over re-running gcc at dispatch time.
+ * Falls through to lazy compile when running from a source tree
+ * the compile pipeline hasn't touched (i.e. the live `maps/`
+ * editor flow). */
 static const char *maybe_lazy_compile(const char *file_path,
                                       char *so_buf, size_t so_cap)
 {
     if (!ends_in_dot_c(file_path)) return file_path;
+
+    /* Try compiled artifact first. The pipeline puts each .c box's
+     * .so at <prefix>/bin/<basename>.so where <prefix> is the
+     * compiled map dir. file_path here is absolute, looking like
+     * "<compiled-map-dir>/src/<basename>.c"; transform to
+     * "<compiled-map-dir>/bin/<basename>.so" and use it if it
+     * exists. */
+    const char *base = strrchr(file_path, '/');
+    const char *src_seg = strstr(file_path, "/src/");
+    if (base && src_seg) {
+        char precompiled[4096];
+        int prefix_len = (int)(src_seg - file_path);
+        const char *fname = base + 1;
+        const char *ext   = strrchr(fname, '.');
+        int name_len = ext ? (int)(ext - fname) : (int)strlen(fname);
+        int n = snprintf(precompiled, sizeof precompiled,
+                         "%.*s/bin/%.*s.so",
+                         prefix_len, file_path, name_len, fname);
+        if (n > 0 && (size_t)n < sizeof precompiled) {
+            struct stat st;
+            if (stat(precompiled, &st) == 0) {
+                int copy_n = snprintf(so_buf, so_cap, "%s", precompiled);
+                if (copy_n > 0 && (size_t)copy_n < so_cap) return so_buf;
+            }
+        }
+    }
+
     /* Hash the source path so repeat opens of the same source file
      * pick up the same .so. Concurrent invokes will race on gcc but
      * the inputs are identical, so the output converges. */

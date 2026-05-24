@@ -37,6 +37,29 @@ set -u
 
 declare -A sourced
 
+# {{{ Pre-source files listed in SORAMECH_BASH_PRESOURCE_FILES
+# Issue 313 follow-on (Bash merge): the runner publishes a
+# colon-separated list of every distinct bash box ref at pool
+# startup. Sourcing them here moves the cost out of the request
+# loop (which previously did a lazy `source` on first call). The
+# `sourced` cache still tracks file paths so subsequent per-call
+# checks short-circuit immediately. Function-name collisions
+# across files remain last-write-wins; sourcing eagerly doesn't
+# change those semantics, so user code that wants per-box
+# uniqueness should namespace its function names.
+if [[ -n "${SORAMECH_BASH_PRESOURCE_FILES:-}" ]]; then
+    IFS=':' read -ra _presource <<< "$SORAMECH_BASH_PRESOURCE_FILES"
+    for _f in "${_presource[@]}"; do
+        [[ -z "$_f" || ! -f "$_f" ]] && continue
+        # shellcheck disable=SC1090
+        if source "$_f" 2>/dev/null; then
+            sourced[$_f]=1
+        fi
+    done
+    unset _presource _f
+fi
+# }}}
+
 while IFS= read -r n_args; do
     [[ "$n_args" == "QUIT" ]] && break
 

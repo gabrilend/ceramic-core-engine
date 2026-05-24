@@ -216,6 +216,46 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
+    /* Issue 313 follow-on (Bash merge): collect every distinct
+     * bash box's ref into a colon-separated list and publish it
+     * via SORAMECH_BASH_PRESOURCE_FILES. bash-server.sh reads the
+     * env var at startup and sources each file before entering
+     * the request loop. Replaces the per-call lazy `source` cost
+     * with a single startup cost per worker. Function-name
+     * collisions across boxes are last-write-wins as before;
+     * sourcing eagerly doesn't change those semantics. */
+    {
+        char  presource[8192]; presource[0] = '\0';
+        int   total_len = 0;
+        int   first = 1;
+        int   n_boxes = graph_n_boxes(g);
+        const char *mdir = graph_map_dir(g);
+        for (int i = 0; i < n_boxes; i++) {
+            const box_t *b = graph_box(g, i);
+            if (!b || b->kind != BOX_CALL) continue;
+            if (!b->lang || strcmp(b->lang, "bash") != 0) continue;
+            if (!b->ref) continue;
+            /* Compose absolute path. */
+            char abspath[4096];
+            int an;
+            if (b->ref[0] == '/' || !mdir) {
+                an = snprintf(abspath, sizeof abspath, "%s", b->ref);
+            } else {
+                an = snprintf(abspath, sizeof abspath, "%s/%s", mdir, b->ref);
+            }
+            if (an < 0 || an >= (int)sizeof abspath) continue;
+            /* Dedup against what's already in presource. */
+            if (strstr(presource, abspath)) continue;
+            int add = snprintf(presource + total_len,
+                               sizeof presource - (size_t)total_len,
+                               "%s%s", first ? "" : ":", abspath);
+            if (add < 0 || total_len + add >= (int)sizeof presource) break;
+            total_len += add;
+            first = 0;
+        }
+        if (total_len > 0) setenv("SORAMECH_BASH_PRESOURCE_FILES", presource, 1);
+    }
+
     /* 3. Pool. */
     pool = pool_create(0);   /* default n_workers */
     if (!pool) {
