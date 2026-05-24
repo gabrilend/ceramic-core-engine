@@ -176,6 +176,15 @@ check_map "weighted-route" \
     "tagger_1 → (no output)" \
     "tagger_2 → (no output)"
 
+# Issue 242 — distributor routing. All downstream slots empty
+# means the argmin sees a tie; the tiebreaker counter at 0
+# picks branch 0. Subsequent calls would rotate via the
+# counter; this fixture exercises the first call only.
+check_map "distributor-route" \
+    "tagger_0 → got_0:hi" \
+    "tagger_1 → (no output)" \
+    "tagger_2 → (no output)"
+
 check_map "pipeline" \
     "double → 10" \
     "addone → 11" \

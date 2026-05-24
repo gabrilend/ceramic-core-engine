@@ -1,7 +1,13 @@
 # 242 — Routing kind: distributor (load-aware)
 
 ## Status
-open · design carried forward from issue 233
+complete · schema accepts `kind: "distributor"` with
+`n_outputs`; loader and dispatch's argmin-over-downstream-fill
+picker (with counter-driven tiebreaker) already shipped; editor
+dropdown grows the option, reuses the iterator's n_outputs
+control; `out_<i>` canvas rendering shared with iterator and
+randomizer; `tests/maps/distributor-route/` asserts the
+empty-everywhere case (tiebreaker counter at 0 → branch 0) wins.
 
 ## Current behavior
 

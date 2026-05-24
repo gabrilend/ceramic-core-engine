@@ -1,0 +1,6 @@
+{
+  "name": "distributor-route",
+  "description": "Issue 242 fixture: a distributor-routing call box with 3 outputs. All downstreams start empty so the picker's argmin sees a tie; the tiebreaker counter starts at 0 and the rotation lands on branch 0 for the first call. Proves the downstream-fill argmin + counter-driven tiebreaker hooks all wire correctly.",
+  "entry_box_id": "seed",
+  "src_dirs": ["tests/maps/distributor-route/src"]
+}
