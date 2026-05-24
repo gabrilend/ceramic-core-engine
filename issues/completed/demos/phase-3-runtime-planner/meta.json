@@ -1,0 +1,6 @@
+{
+  "name": "phase-3-runtime-planner",
+  "description": "Phase 3 demo: a planner Lua box receives a seed string and uses the runtime self-construction primitives (issue 319) to spawn three worker boxes mid-run, each running a different transformation function from src/worker.lua, then wires its own output into each of them so the value fans out to the freshly-built workers. Showcases everything phase 3 delivered: the C thread pool runner, the slot store, language specs running concurrently, the runtime mutation primitives (create_box / connect), the JSONL transcript with the new runtime-mutation events from issue 311, and the dispatch's same-thread visibility from create-then-push.",
+  "entry_box_id": "seed",
+  "src_dirs": ["issues/completed/demos/phase-3-runtime-planner/src"]
+}

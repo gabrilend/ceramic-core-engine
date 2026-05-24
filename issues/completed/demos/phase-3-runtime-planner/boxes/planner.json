@@ -1,0 +1,13 @@
+{
+  "id": "planner",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/planner.lua",
+  "fn": "plan",
+  "inputs": [
+    { "name": "seed_text", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 256,
+  "ui": { "x": 320, "y": 100 }
+}

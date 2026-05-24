@@ -5,12 +5,12 @@ in progress · JSONL writer, multi-producer event queue, dedicated
 writer thread, optional value events (`SORAMECH_LOG_VALUES`),
 optional slot events (`SORAMECH_LOG_SLOTS`), runtime-mutation
 events (box_create / wire_add / runtime slot_alloc), per-push
-events with skip-reason result field, and the
-`scripts/run-tests.sh` integration runner all shipped. The
-remaining open items are the lock-free MPSC ring (current
-mutex-based queue is a placeholder), the JSONL normaliser for
-diff-based fixture verification (current tests substring-match
-against stderr), and the phase-3 demo map.
+events with skip-reason result field, the `scripts/run-tests.sh`
+integration runner, and the phase-3 runtime-planner demo all
+shipped. The remaining open items are the lock-free MPSC ring
+(current mutex-based queue is a placeholder) and the JSONL
+normaliser for diff-based fixture verification (current tests
+substring-match against stderr).
 
 ## Current behavior
 
@@ -413,4 +413,25 @@ What's still ahead inside 311:
   placeholder; upgrade once contention shows up.
 - JSONL normalizer for diff-based test verification (currently
   the test harness uses substring matching against stderr).
-- Phase-3 demo map under `issues/completed/demos/phase-3/`.
+
+### Phase-3 demo — 2026-05-24
+
+`issues/completed/demos/phase-3-runtime-planner/` is the phase-3
+deliverable: a Lua planner box receives a seed string and uses
+`soramech.create_box` + `soramech.connect` inside its invoke to
+spawn three downstream worker boxes mid-run (each running a
+different transformation function from `src/worker.lua`), then
+fans the seed value into all three. The accompanying `run.sh`
+runs the map with `SORAMECH_LOG_VALUES` and `SORAMECH_LOG_SLOTS`
+on and extracts the story from the JSONL transcript: the seed
+value, the boxes that got created mid-run, the wires that got
+added, each worker's distinct output, and a small statistics
+block (tasks fired, runtime slots, runtime boxes, runtime wires,
+total duration).
+
+Top-level `demo.sh 3` invokes the demo's own `run.sh`, matching
+the existing phase-1 pattern. The new demo proves end-to-end
+that the C thread pool runner (301), the slot store (302), the
+Lua spec (306), the dispatch (304), the runtime self-construction
+primitives (319), and the JSONL transcript with the new
+runtime-mutation events all work together on a single map.

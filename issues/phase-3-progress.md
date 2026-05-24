@@ -24,7 +24,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 308 | Bash language spec implementation                           | complete · persistent socketpair + line-protocol invoke + dladdr-based server lookup |
 | 309 | build system & Makefile orchestration                       | complete · scaffolding + spec discovery + soramech-compile portable artifact |
 | 310 | priority queue: wired in, no-op behaviorally                | complete · API + ordering done |
-| 311 | integration tests & run output (`last-run.jsonl`)           | in progress · writer + queue + thread + LOG_VALUES + LOG_SLOTS + run-tests.sh + compile-pipeline check + runtime-mutation events (box_create / wire_add / runtime slot_alloc) + per-push events with skip-reason result field; lock-free MPSC ring, JSONL diff normaliser, and phase-3 demo map are the remaining open items |
+| 311 | integration tests & run output (`last-run.jsonl`)           | in progress · writer + queue + thread + LOG_VALUES + LOG_SLOTS + run-tests.sh + compile-pipeline check + runtime-mutation events (box_create / wire_add / runtime slot_alloc) + per-push events with skip-reason result field + phase-3 runtime-planner demo; lock-free MPSC ring and JSONL diff normaliser are the remaining open items |
 | 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | complete · dual-ring slots + per-edge classification + per-cell ordering; spec contract has single invoke + two bridges; Lua native-bytes optimisation tracked as a future slice |
 | 313 | research: whole-program same-language merge                 | complete · Lua merged module + C precompile preference + bash pre-source; inline-into-dispatch stays open research |
 | 314 | small C JSON parser written for this project                | complete · parser + writer + strict leading-zero |
@@ -55,7 +55,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 - [x] Variable-size outputs work via the large-value heap
 - [x] `last-run.jsonl` written for every run
 - [ ] All 11 integration test maps pass
-- [ ] Phase 3 demo map runs and produces expected output
+- [x] Phase 3 demo map runs and produces expected output (runtime-planner under issues/completed/demos/phase-3-runtime-planner/; ./demo.sh 3)
 - [ ] Phase 2 synchronous runner retired (`src/004-executor.lua`,
       `src/007-runner-main.lua`, `src/003-loader.lua`, `drivers/*.sh`)
 
