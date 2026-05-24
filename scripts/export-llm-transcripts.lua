@@ -2,29 +2,41 @@
 -- scripts/export-llm-transcripts.lua — local transcript exporter.
 --
 -- What it does, in one sentence: walks every Claude conversation
--- JSONL for this project under ~/.claude/projects/, renders each
--- one at six verbosity levels into per-conversation markdown
--- files under llm-transcripts/v{N}-{name}/, and skips
--- conversations whose source JSONL hasn't changed since the last
--- render.
+-- JSONL for this project, renders each one at six verbosity levels
+-- into per-conversation markdown files, sets each file's mtime to
+-- the conversation's last-message timestamp (and atime to its
+-- first-message timestamp), and skips conversations whose source
+-- JSONL hasn't changed since the last render.
+--
+-- File naming: `<slug>-<short-id>.md` where the slug is derived
+-- from the first user message (truncated, lower-cased, hyphen-
+-- separated) and short-id is the first 8 chars of the conversation
+-- UUID. This gives human-readable filenames you can scan in `ls`
+-- without losing per-conversation uniqueness.
+--
+-- Per-level context inclusion (a small frontmatter at the top of
+-- each rendered file):
+--   v0..v2  — conversation metadata only (id, slug, timestamps)
+--   v3      — also includes the project's CLAUDE.md if present
+--   v4..v5  — also includes the global CLAUDE.md AND the project's
+--             auto-memory files (~/.claude/projects/<id>/memory/)
+--
+-- The included CLAUDE.md content is what's on disk NOW, not a
+-- historical snapshot — the JSONL doesn't carry CLAUDE.md content,
+-- and Claude Code doesn't keep per-conversation CLAUDE.md
+-- snapshots. A note in the frontmatter calls this out so a reader
+-- doesn't assume what's shown is exactly what the conversation saw.
+--
+-- Timestamp note: mtime and atime are settable post-creation;
+-- birth time (`btime` / statx) is not, so it stays as the file's
+-- actual creation moment. Most file browsers and tools key off
+-- mtime, so the last-message-timestamp anchor is the practical
+-- one. atime carries the first-message timestamp for tools that
+-- prefer "when did this conversation start?"
 --
 -- Replaces an earlier wrapper around an external exporter that
--- (a) guessed at which project's conversations to read and got it
--- wrong for projects outside /home/ritz/programming/ai-stuff/,
--- (b) re-rendered every conversation top-to-bottom every run, and
--- (c) injected global CLAUDE.md text into the output. This local
--- version reads the right project (the path is encoded directly
--- from $DIR), supports incremental refresh, and never includes
--- ambient context.
---
--- Output layout:
---   llm-transcripts/
---     v0-minimal/    one file per conversation: code blocks only
---     v1-compact/    user prompts + assistant text + tool signatures
---     v2-standard/   v1 + truncated tool results (200-line cap)
---     v3-verbose/    v2 + full tool results
---     v4-complete/   v3 + tool metadata (names, durations if known)
---     v5-raw/        pretty-printed JSONL, one entry per chunk
+-- guessed at which project's conversations to read and got it
+-- wrong for projects outside /home/ritz/programming/ai-stuff/.
 
 local DIR = arg and arg[1] or "/mnt/mtwo/programs/sora/soramech"
 
@@ -34,8 +46,6 @@ local json = require("dkjson")
 -- }}}
 
 -- {{{ paths
--- Compute the Claude conversation directory by encoding the project
--- path the same way Claude does — replace every "/" with "-".
 local function claude_project_dir()
     local home = os.getenv("HOME")
     local encoded = DIR:gsub("/", "-")
@@ -89,6 +99,27 @@ end
 local function basename_no_ext(path, ext)
     local b = path:match("([^/]+)$") or path
     return (b:gsub("%." .. ext .. "$", ""))
+end
+-- }}}
+
+-- {{{ helpers — slugify
+-- Turn arbitrary text into a filename-safe ASCII slug. Lowercases,
+-- replaces every non-alphanumeric run with a single hyphen, trims
+-- leading/trailing hyphens, caps length so the resulting filename
+-- doesn't exceed common filesystem limits (255 chars is typical;
+-- 40 leaves room for the short-id suffix and extension).
+local function slugify(text, max_len)
+    if not text or text == "" then return "untitled" end
+    -- Strip ASCII control chars and replace anything non-alnum with -.
+    local s = text:lower()
+    s = s:gsub("[^a-z0-9]+", "-")
+    s = s:gsub("^%-+", ""):gsub("%-+$", "")
+    if s == "" then return "untitled" end
+    if max_len and #s > max_len then
+        s = s:sub(1, max_len):gsub("%-+$", "")
+        if s == "" then s = "untitled" end
+    end
+    return s
 end
 -- }}}
 
@@ -158,7 +189,6 @@ local function tool_result_text(item)
     return ""
 end
 
--- Pull every fenced code block out of a markdown string.
 local function extract_code_blocks(text)
     if not text or text == "" then return {} end
     local blocks = {}
@@ -168,7 +198,6 @@ local function extract_code_blocks(text)
     return blocks
 end
 
--- Truncate a multi-line string to at most N lines, marking the tail.
 local function truncate_lines(text, max_lines)
     if not text or text == "" then return text end
     local count = 0
@@ -183,14 +212,100 @@ local function truncate_lines(text, max_lines)
 end
 -- }}}
 
--- {{{ render — one conversation at one verbosity level
--- Returns a string. Each level walks the JSONL entries once and
--- emits a different subset.
+-- {{{ helpers — auto-included context (CLAUDE.md, memory)
+-- Tiered by verbosity per the export feature spec. The content is
+-- read from disk at export time; the JSONL itself doesn't carry
+-- it, and there's no historical-snapshot mechanism, so the included
+-- content is "current" content and may differ from what the
+-- conversation actually saw. The frontmatter calls this out.
 
+local function project_claude_md()
+    return read_all(DIR .. "/CLAUDE.md")
+end
+
+local function global_claude_md()
+    return read_all(os.getenv("HOME") .. "/.claude/CLAUDE.md")
+end
+
+local function project_memory_files()
+    local memdir = SRC_DIR .. "/memory"
+    local f = io.popen("ls '" .. memdir .. "'/*.md 2>/dev/null")
+    if not f then return {} end
+    local files = {}
+    for line in f:lines() do
+        local content = read_all(line)
+        if content then
+            files[#files + 1] = {
+                name    = line:match("([^/]+)$") or line,
+                content = content,
+            }
+        end
+    end
+    f:close()
+    return files
+end
+
+local function frontmatter(meta, level)
+    local out = {
+        "<!--",
+        "Conversation transcript — generated by",
+        "scripts/export-llm-transcripts.lua.",
+        "",
+        "id          : " .. meta.id,
+        "slug        : " .. meta.slug,
+        "first prompt: " .. (meta.first_user or "(none)"),
+        "first ts    : " .. (meta.first_ts or "(unknown)"),
+        "last ts     : " .. (meta.last_ts  or "(unknown)"),
+        "entry count : " .. meta.n_entries,
+        "verbosity   : v" .. level.n .. " " .. level.name,
+        "-->",
+        "",
+    }
+
+    -- v3+ : project CLAUDE.md (if it exists on disk now).
+    if level.n >= 3 then
+        local pcm = project_claude_md()
+        if pcm then
+            out[#out + 1] = "## Project CLAUDE.md\n"
+            out[#out + 1] = "_Content read from disk at export time; may not"
+                         .. " reflect exactly what the conversation saw._\n"
+            out[#out + 1] = "```markdown"
+            out[#out + 1] = pcm
+            out[#out + 1] = "```\n"
+        end
+    end
+
+    -- v4+ : global CLAUDE.md AND project memory files.
+    if level.n >= 4 then
+        local gcm = global_claude_md()
+        if gcm then
+            out[#out + 1] = "## Global CLAUDE.md (~/.claude/CLAUDE.md)\n"
+            out[#out + 1] = "_Content read from disk at export time._\n"
+            out[#out + 1] = "```markdown"
+            out[#out + 1] = gcm
+            out[#out + 1] = "```\n"
+        end
+        local mems = project_memory_files()
+        if #mems > 0 then
+            out[#out + 1] = "## Project auto-memory ("
+                         .. SRC_DIR .. "/memory/)\n"
+            out[#out + 1] = "_Snapshot at export time._\n"
+            for _, m in ipairs(mems) do
+                out[#out + 1] = "### " .. m.name .. "\n"
+                out[#out + 1] = "```markdown"
+                out[#out + 1] = m.content
+                out[#out + 1] = "```\n"
+            end
+        end
+    end
+
+    out[#out + 1] = "---\n"
+    return table.concat(out, "\n")
+end
+-- }}}
+
+-- {{{ render — one conversation at one verbosity level
 local function render_v0_minimal(entries)
-    -- Code blocks from assistant text only. The interesting
-    -- artifacts when you want to skim "what got written" without
-    -- the surrounding discussion.
     local out = { "# Code-only transcript\n" }
     for _, e in ipairs(entries) do
         if e.type == "assistant" then
@@ -209,8 +324,6 @@ local function render_v0_minimal(entries)
 end
 
 local function render_v1_compact(entries)
-    -- Conversation outline: user prompts, assistant prose, tool
-    -- call signatures. Tool results are omitted.
     local out = { "# Compact transcript\n" }
     for _, e in ipairs(entries) do
         if e.type == "user" then
@@ -311,7 +424,6 @@ local function render_v2_standard(entries) return render_with_tool_results(entri
 local function render_v3_verbose(entries)  return render_with_tool_results(entries, 0)   end
 
 local function render_v4_complete(entries)
-    -- Everything v3 has, plus session metadata and entry-type tags.
     local out = { "# Complete transcript with metadata\n" }
     for i, e in ipairs(entries) do
         local t = e.type or "?"
@@ -350,7 +462,6 @@ local function render_v4_complete(entries)
 end
 
 local function render_v5_raw(entries)
-    -- Pretty-printed JSONL: one entry per chunk, properly indented.
     local out = { "# Raw conversation entries\n" }
     for i, e in ipairs(entries) do
         out[#out + 1] = "## [" .. i .. "]\n"
@@ -371,21 +482,100 @@ local LEVELS = {
 }
 -- }}}
 
--- {{{ parse one JSONL file into a list of entry tables
-local function parse_jsonl(path)
+-- {{{ parse one JSONL file → (entries, meta)
+-- meta carries: id, slug, first_user (text), first_ts, last_ts,
+-- n_entries. Used both for the filename slug and the per-file
+-- frontmatter rendering.
+local function parse_jsonl(path, conv_id)
     local entries = {}
+    local first_user = nil
+    local first_ts   = nil
+    local last_ts    = nil
+
     local f = io.open(path, "rb")
-    if not f then return entries end
+    if not f then
+        return entries, { id = conv_id, slug = "unreadable" }
+    end
     for line in f:lines() do
         if line ~= "" then
             local ok, dec = pcall(json.decode, line)
             if ok and type(dec) == "table" then
                 entries[#entries + 1] = dec
+                if dec.timestamp then
+                    if not first_ts then first_ts = dec.timestamp end
+                    last_ts = dec.timestamp
+                end
+                if (not first_user) and dec.type == "user" then
+                    local t = get_user_text(dec)
+                    if t and t:match("%S") then
+                        first_user = t
+                    end
+                end
             end
         end
     end
     f:close()
-    return entries
+
+    local slug = slugify(first_user or "untitled", 40)
+    return entries, {
+        id          = conv_id,
+        short_id    = conv_id:sub(1, 8),
+        slug        = slug,
+        first_user  = first_user,
+        first_ts    = first_ts,
+        last_ts     = last_ts,
+        n_entries   = #entries,
+    }
+end
+-- }}}
+
+-- {{{ set_times — anchor atime / mtime to conversation timestamps
+-- Uses `touch -d <iso>` which accepts ISO 8601. atime = first
+-- message timestamp; mtime = last message timestamp. btime is
+-- not settable post-creation by standard tools; documented in
+-- the file-level comment.
+local function set_times(path, first_ts, last_ts)
+    if last_ts then
+        os.execute(string.format(
+            "touch -m -d '%s' '%s' 2>/dev/null", last_ts, path))
+    end
+    if first_ts then
+        os.execute(string.format(
+            "touch -a -d '%s' '%s' 2>/dev/null", first_ts, path))
+    end
+end
+-- }}}
+
+-- {{{ state file — incremental tracking that survives mtime anchoring
+-- Because we anchor each output's mtime to the conversation's
+-- last-message timestamp (user-visible feature), the output's
+-- mtime intentionally diverges from the source JSONL's mtime —
+-- the JSONL is often touched after its last timestamped entry
+-- (timestamp-less entries, write buffering, etc.). So we can't
+-- use the output's own mtime for the skip check. Instead, a single
+-- state file at OUT_DIR/.export-state records the source mtime at
+-- the moment of last successful render per conversation; the skip
+-- check compares the live source mtime against that record.
+local STATE_PATH = OUT_DIR .. "/.export-state"
+
+local function load_state()
+    local s = read_all(STATE_PATH)
+    local state = {}
+    if not s then return state end
+    for line in s:gmatch("[^\n]+") do
+        local id, ts = line:match("^([^=]+)=(%d+)$")
+        if id and ts then state[id] = tonumber(ts) end
+    end
+    return state
+end
+
+local function save_state(state)
+    local rows = {}
+    for id, ts in pairs(state) do
+        rows[#rows + 1] = id .. "=" .. tostring(ts)
+    end
+    table.sort(rows)
+    write_all(STATE_PATH, table.concat(rows, "\n") .. "\n")
 end
 -- }}}
 
@@ -412,42 +602,56 @@ local function main()
         ensure_dir(OUT_DIR .. "/v" .. lvl.n .. "-" .. lvl.name)
     end
 
+    local state = load_state()
     local total_rendered = 0
     local total_skipped  = 0
     for _, src_path in ipairs(jsonls) do
         local conv_id = basename_no_ext(src_path, "jsonl")
         local src_m = file_mtime(src_path)
 
-        -- Incremental check: skip only if EVERY level's output is
-        -- newer than the source. The first run always renders all
-        -- levels for every conversation.
-        local need_render = false
-        for _, lvl in ipairs(LEVELS) do
-            local out_path = OUT_DIR .. "/v" .. lvl.n .. "-" .. lvl.name ..
-                             "/" .. conv_id .. ".md"
-            if file_mtime(out_path) <= src_m then
-                need_render = true
-                break
-            end
-        end
-        if not need_render then
+        -- Incremental skip check via the state file. The output
+        -- file's own mtime can't be used because we deliberately
+        -- backdate it to the conversation's last-message timestamp.
+        if state[conv_id] and state[conv_id] >= src_m then
             total_skipped = total_skipped + 1
-        else
-            local entries = parse_jsonl(src_path)
+            goto continue
+        end
+
+        -- Parse and render.
+        do
+        local entries, meta = parse_jsonl(src_path, conv_id)
+
+        local base_name = meta.slug .. "-" .. meta.short_id .. ".md"
+        local need_render = true
             for _, lvl in ipairs(LEVELS) do
                 local out_path = OUT_DIR .. "/v" .. lvl.n .. "-" .. lvl.name ..
+                                 "/" .. base_name
+                -- One-time migration: if a previous-version file
+                -- named <conv-id>.md exists in this level dir,
+                -- remove it so we don't leave orphans behind.
+                local old_path = OUT_DIR .. "/v" .. lvl.n .. "-" .. lvl.name ..
                                  "/" .. conv_id .. ".md"
-                local body = lvl.render(entries)
+                if file_mtime(old_path) > 0 then
+                    os.remove(old_path)
+                end
+
+                local body = frontmatter(meta, lvl) .. "\n" ..
+                             lvl.render(entries)
                 local ok, werr = write_all(out_path, body)
                 if not ok then
                     io.stderr:write("  WARN write " .. out_path .. ": " ..
                                     tostring(werr) .. "\n")
+                else
+                    set_times(out_path, meta.first_ts, meta.last_ts)
                 end
             end
             total_rendered = total_rendered + 1
+            state[conv_id] = src_m
         end
+        ::continue::
     end
 
+    save_state(state)
     io.stderr:write("Rendered " .. total_rendered ..
                     " conversation(s), skipped " .. total_skipped ..
                     " unchanged.\n")
