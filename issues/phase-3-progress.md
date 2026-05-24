@@ -36,6 +36,7 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 319b | slot store growth (two-level chunked-append index)          | complete · 5000-slot growth test preserves all early pointers |
 | 319c | box id generator (compile-cache concept folded into spec.so loaders) | complete · 8-thread concurrent uniqueness test passes |
 | 319d | `create_box` + `connect` runtime built-ins (Lua bindings, call boxes, plain routing) | complete · end-to-end fixture: Lua box creates and wires a downstream box that runs and produces output |
+| 319e | C bindings + end-to-end test + docs (Bash deferred) | complete · C-to-C runtime self-construction fixture passes |
 
 ## Phase goal checklist
 

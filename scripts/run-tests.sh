@@ -163,6 +163,10 @@ check_map "319d-runtime-create" \
     "auto_" \
     "echo_dyn-received:trigger-fired:auto_"
 
+check_map "319e-c-create" \
+    "trigger → c-trigger-fired:auto_" \
+    "c-echo-received:c-trigger-fired:auto_"
+
 pipeline_output_check
 compile_pipeline_check
 # }}}

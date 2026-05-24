@@ -302,6 +302,73 @@ Same-language Lua wires are direct function calls — no IPC at all.
 
 ---
 
+## Runtime self-construction (issue 319)
+
+User box code can spawn new boxes and wire them into the live graph
+mid-run. Two primitives, exposed as language-native function calls
+that thin-wrap a single underlying C runtime API:
+
+- **`create_box(spec)`** — takes a structured value matching the
+  on-disk box JSON schema (a Lua table, a JSON string, etc.).
+  Returns the new box's id. The runtime parses the spec, allocates
+  a box record + one slot per input port (slot store growth — 319b),
+  and appends to the graph's box index (graph 319d).
+
+- **`connect(connection)`** — takes a structured value matching one
+  entry in `connections[]` on disk (`{from_box, from_branch,
+  to_box, to_input}`). Appends a wire to the producer's atomic
+  connections array via copy-and-publish; the dispatcher walks the
+  new array on the producer's next push.
+
+**Plumbing.** Specs reach the active graph and slot store via a
+thread-local that `dispatch_action` sets immediately before each
+spec invoke and clears immediately after. The runner is linked
+with `-rdynamic` so dlopen'd spec plugins can call back into the
+runner's `runtime_*` symbols at load time.
+
+**Three growable structures back the feature**:
+
+- Slot store: two-level chunked-append index for slot pointers
+  (319b). Slot records and chunks never move; only the top-level
+  index can grow, via copy-and-publish + defer-free.
+- Graph box index: pointer-array of individually-allocated box
+  records, grown under a graph-level mutex via the same pattern.
+- Per-box connection lists: atomic copy-and-publish under the
+  graph mutex; old arrays stay alive on a stale-list until
+  graph teardown.
+
+In all three cases the hot read path is lock-free; mutation takes
+a mutex on the rare path. The pattern is the same recipe applied
+at three layers.
+
+**Documented limits in slice 1 (issues 319d / 319e)**:
+
+- The dispatch context's per-box arrays (spawn guards, output
+  capture) are sized at init with a 4096-box headroom for runtime
+  additions. Beyond the cap, spawns silently fail. Growable arrays
+  are a follow-on.
+- A worker can only dispatch boxes whose language spec was
+  initialised on that worker. Specs are initialised at pool start
+  based on the static graph's language set; a `create_box` call
+  introducing a new language fails at dispatch time with "worker
+  handle NULL." Workaround: include one static box of every
+  language you intend to runtime-create.
+- The connect primitive is race-safe when called from the spec
+  of the currently-firing producer (the single-spawn CAS guard
+  prevents concurrent reads of that box's connections array).
+  Calling `connect` to add a wire FROM a different, potentially-
+  firing box is not guaranteed race-safe.
+- Lua and C bindings ship in 319e. Bash bindings need the bash
+  server line protocol extended with new request types — deferred
+  to a follow-on slice.
+- The primitives are exposed as per-language function callbacks
+  rather than as box kinds (`kind: "create_box"`, `kind: "connect"`).
+  The box-kind shape would be more in line with the rest of
+  SoraMech's data-flow philosophy; the per-language shape is
+  documented as a slice-1 expedient pending a refactor.
+
+---
+
 ## Relevant files
 
 - `src/004-executor.lua` — `run_task` boundary, ready-queue

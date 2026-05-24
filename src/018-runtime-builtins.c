@@ -204,18 +204,27 @@ int runtime_create_box(const char *spec_json, int spec_len,
                                 "in this slice (issue 319d)");
     }
 
-    /* Required: lang. Slice 1 — only "lua" is supported. */
+    /* Required: lang. Issue 319e extends supported langs to any
+     * spec that's already registered AND whose per-worker state
+     * has been initialised on the current worker. The "already
+     * initialised" constraint surfaces as a runtime error when
+     * the new box gets dispatched (worker handle NULL); the
+     * compile pipeline's spec filter is what decides which langs
+     * a worker init's, and that filter runs at graph load.
+     * Workaround: include at least one static box of each lang
+     * you intend to create_box at runtime. Lifting this is a
+     * follow-on (on-demand spec init). */
     json_node_t *lang_n = json_object_get(root, "lang");
-    if (!lang_n || json_kind(lang_n) != JSON_STRING ||
-        strcmp(json_string_value(lang_n), "lua") != 0) {
+    if (!lang_n || json_kind(lang_n) != JSON_STRING) {
         json_arena_destroy(arena);
-        return set_err(err_out, "create_box: only lang='lua' is supported "
-                                "in this slice (issue 319d)");
+        return set_err(err_out, "create_box: 'lang' string required");
     }
-    int spec_idx = find_spec_idx(specs, "lua");
+    const char *lang = json_string_value(lang_n);
+    int spec_idx = find_spec_idx(specs, lang);
     if (spec_idx < 0) {
         json_arena_destroy(arena);
-        return set_err(err_out, "create_box: lua spec not registered");
+        return set_err(err_out, "create_box: lang='%s' not registered "
+                                "in the spec registry", lang);
     }
 
     /* Required: ref + fn */
@@ -259,7 +268,7 @@ int runtime_create_box(const char *spec_json, int spec_len,
     }
     b->id   = arena_strdup(NULL, id_source);
     b->kind = BOX_CALL;
-    b->lang = arena_strdup(NULL, "lua");
+    b->lang = arena_strdup(NULL, lang);
     b->ref  = arena_strdup(NULL, json_string_value(ref_n));
     b->fn   = arena_strdup(NULL, json_string_value(fn_n));
     b->returns = NULL;

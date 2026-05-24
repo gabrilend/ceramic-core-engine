@@ -1,0 +1,13 @@
+{
+  "id": "trigger",
+  "kind": "call",
+  "lang": "c",
+  "ref": "src/trigger.c",
+  "fn": "trigger",
+  "inputs": [
+    {"name": "input", "type": "string"}
+  ],
+  "routing": {"kind": "plain"},
+  "output_capacity": 256,
+  "ui": {"x": 300, "y": 100}
+}

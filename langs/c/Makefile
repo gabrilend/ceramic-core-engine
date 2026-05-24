@@ -14,7 +14,8 @@ DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../..)
 # {{{ Toolchain & flags
 CC ?= gcc
 
-CFLAGS  = -shared -fPIC -O2 -Wall -I$(DIR)/langs -I$(DIR)/libs/json -I$(DIR)/src
+CFLAGS  = -shared -fPIC -O2 -Wall -I$(DIR)/langs -I$(DIR)/libs/json -I$(DIR)/src \
+          -DSORAMECH_LANGS_C_INCLUDE=\"$(DIR)/langs/c\"
 LDFLAGS = -ldl
 # }}}
 
