@@ -1,4 +1,4 @@
-# 319e — C bindings, end-to-end test, docs (Bash deferred)
+# 428 — C bindings, end-to-end test, docs (Bash deferred) (rolled-back prior attempt)
 
 ## Rolled back — superseded by phase 4
 
@@ -15,11 +15,14 @@ The historical-behavior text below describes what the
 rolled-back C bindings did.
 
 ## Status
-complete (slice 1 — C). Bash bindings deferred to a follow-on.
+rolled back · phase 4 · renumbered from 319e during the
+phase-4 consolidation. Historical implementation status was
+"complete (slice 1 — C). Bash bindings deferred to a follow-on."
 
 ## Parent issue
-Sub-issue of 319. Extends 319d's runtime self-construction
-primitives from Lua-only to also include C, with an end-to-end
+Sub-issue of 425 (was 319). Extends 427's (was 319d) runtime
+self-construction primitives from Lua-only to also include C,
+with an end-to-end
 test fixture and the docs update for `docs/004-ipc-and-threading.md`.
 
 ## What lands

@@ -66,13 +66,14 @@ of box-kinds, id-as-input instead of wire-endpoint-as-target,
 three separate paths for create/reconfigure/delete) that the
 broader redesign walks back from.
 
-The five rolled-back issue files (319, 319c, 319d, 319e, 319f)
-sit in `issues/` with "Rolled back — superseded by phase 4"
-headers explaining the shift; their historical-behavior text
-documents what the prior implementation did. The two
-infrastructure pieces that genuinely served general-purpose
-needs (319a's input cap removal, 319b's slot store growth)
-remain in `completed/`.
+The five rolled-back issue files were renumbered into phase 4
+as 425 / 426 / 427 / 428 / 429 (originally 319 / 319c / 319d /
+319e / 319f). They sit in `issues/` with "Rolled back" headers
+explaining the shift; their historical-behavior text documents
+what the prior implementation did. The two infrastructure
+pieces that genuinely served general-purpose needs (319a's
+input cap removal, 319b's slot store growth) stayed at their
+original numbers and remain in `completed/`.
 
 The phase-4 redesign lives in
 [`phase-4-progress.md`](phase-4-progress.md) with the parent

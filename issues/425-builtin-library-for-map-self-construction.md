@@ -1,4 +1,4 @@
-# 319 — Built-in library for map self-construction
+# 425 — Built-in library for map self-construction (rolled-back prior attempt)
 
 ## Rolled back — superseded by phase 4
 
@@ -18,6 +18,14 @@ implementation did; the runtime no longer contains any of this
 code.
 
 ## Status
+rolled back · phase 4 · this file documents the prior attempt
+that shipped under phase 3 and was reverted before the
+release candidate. Renumbered from 319 during the phase-4
+consolidation. The historical-behavior text below describes
+what the rolled-back implementation did.
+
+The (now-historical) status line as the implementation landed:
+
 complete — every Q1–Q5 design question carries a **RESOLVED**
 marker with the chosen shape, and the implementation lands in
 six sub-issues 319a / 319b / 319c / 319d / 319e / 319f, all

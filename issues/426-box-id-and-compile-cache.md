@@ -1,4 +1,4 @@
-# 319c — Box id generator and compile cache
+# 426 — Box id generator and compile cache (rolled-back prior attempt)
 
 ## Rolled back — superseded by phase 4
 
@@ -15,11 +15,13 @@ The historical-behavior text below describes what the
 rolled-back generator did.
 
 ## Status
-complete
+rolled back · phase 4 · renumbered from 319c during the
+phase-4 consolidation. Historical implementation status was
+"complete."
 
 ## Parent issue
-Sub-issue of 319. Provides the box id generator that
-`create_box` (319d) returns when the caller doesn't supply an
+Sub-issue of 425 (was 319). Provides the box id generator that
+`create_box` (427, was 319d) returns when the caller doesn't supply an
 explicit `id`.
 
 ## Reduced scope — compile cache not needed as a separate module

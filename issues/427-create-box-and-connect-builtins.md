@@ -1,4 +1,4 @@
-# 319d — `create_box` and `connect` runtime built-ins, Lua bindings
+# 427 — `create_box` and `connect` runtime built-ins, Lua bindings (rolled-back prior attempt)
 
 ## Rolled back — superseded by phase 4
 
@@ -19,7 +19,9 @@ for the new architectural ground rules. The historical-behavior
 text below describes what the rolled-back implementation did.
 
 ## Status
-complete (slice 1)
+rolled back · phase 4 · renumbered from 319d during the
+phase-4 consolidation. Historical implementation status was
+"complete (slice 1)."
 
 ## Parent issue
 Sub-issue of 319. Lands the headline self-construction feature

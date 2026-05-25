@@ -9,9 +9,10 @@ carry the per-sub-feature detail.
 ## Why this phase exists
 
 Phase 3 attempted runtime graph mutation under the original 319
-family (issues 319, 319c, 319d, 319e, 319f — all now in
-`issues/` with "Rolled back — superseded by phase 4" markers
-explaining why they came back). The shipped mechanism worked
+family (issues 425 / 426 / 427 / 428 / 429, originally numbered
+319 / 319c / 319d / 319e / 319f, all renumbered into phase 4
+during the consolidation and carrying "Rolled back" markers
+that explain why they came back). The shipped mechanism worked
 end-to-end but committed to surfaces the broader design walks
 back from:
 
@@ -122,10 +123,10 @@ mid, dense, voice). These are scratch documents, not promoted
 to docs/; rewrite into `docs/datapath-graph-mutation.md` once the
 open questions resolve and the shape is final.
 
-The rolled-back 319-family issues in `issues/319*.md` describe
-what the prior attempt built. The historical-behavior sections
-inside those files are the closest thing to executable design
-specs for what NOT to repeat.
+The rolled-back prior-attempt issues (425 / 426 / 427 / 428 /
+429) describe what the prior attempt built. The
+historical-behavior sections inside those files are the closest
+thing to executable design specs for what NOT to repeat.
 
 ## Relevant files (anticipated, not committed)
 

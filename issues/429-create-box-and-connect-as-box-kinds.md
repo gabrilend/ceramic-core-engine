@@ -1,4 +1,4 @@
-# 319f — `create_box` and `connect` as language-agnostic box kinds
+# 429 — `create_box` and `connect` as language-agnostic box kinds (rolled-back prior attempt)
 
 ## Rolled back — superseded by phase 4
 
@@ -16,10 +16,13 @@ for the redesign. The historical-behavior text below describes
 what the rolled-back box kinds did.
 
 ## Status
-complete
+rolled back · phase 4 · renumbered from 319f during the
+phase-4 consolidation. Historical implementation status was
+"complete."
 
 ## Parent issue
-Design-correction follow-on to 319d/319e. Per parent-issue
+Design-correction follow-on to 427/428 (was 319d/319e). Per
+parent-issue
 review feedback, the per-language wrappers added in 319d (Lua
 binding) and 319e (C binding) are an architectural smell — they
 add work per implementer rather than per primitive. The right
