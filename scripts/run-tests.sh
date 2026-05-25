@@ -70,6 +70,68 @@ check_map() {
 }
 # }}}
 
+# {{{ check_jsonl() — JSONL transcript diff against an expected fixture
+# Stricter than check_map: runs the map, normalises the transcript
+# (drops ts / durations / worker_idx / slot_id / task_id / n_workers,
+# sorts events alphabetically), and diffs against tests/expected/<map>.jsonl.
+# A divergence here means the map's runtime behaviour changed in a way
+# that the substring-checks in check_map wouldn't catch — e.g. a new
+# event type appearing, a box firing an extra time, an output size
+# changing.
+#
+# Re-baselining: a fixture's expected file is updated by running the
+# map manually:
+#   ./soramech-pool tests/maps/<name> > /dev/null
+#   scripts/normalise-jsonl.lua /tmp/soramech-last-run.jsonl \
+#     > tests/expected/<name>.jsonl
+# and committing the result.
+check_jsonl() {
+    local map="$1"
+    local expected="$DIR/tests/expected/$map.jsonl"
+    local actual_raw="/tmp/soramech-last-run.jsonl"
+    local actual_norm="/tmp/soramech-norm-$map-$$.jsonl"
+
+    printf "  %-44s " "$map (transcript diff)"
+
+    if [[ ! -f "$expected" ]]; then
+        printf "FAIL — expected fixture missing: %s\n" "$expected"
+        fail=$((fail + 1))
+        failures+=("$map transcript: expected missing")
+        return
+    fi
+
+    rm -f "$actual_raw"
+    local rc
+    if [[ -f "$DIR/tests/maps/$map/.test_workers" ]]; then
+        local workers_env
+        workers_env=$(cat "$DIR/tests/maps/$map/.test_workers")
+        SORAMECH_WORKERS="$workers_env" "$DIR/soramech-pool" "$DIR/tests/maps/$map" >/dev/null 2>&1
+        rc=$?
+    else
+        "$DIR/soramech-pool" "$DIR/tests/maps/$map" >/dev/null 2>&1
+        rc=$?
+    fi
+    if [[ $rc -ne 0 ]]; then
+        printf "FAIL — pool exit=%d\n" "$rc"
+        fail=$((fail + 1))
+        failures+=("$map transcript: pool exit=$rc")
+        return
+    fi
+
+    "$DIR/scripts/normalise-jsonl.lua" --dir "$DIR" "$actual_raw" > "$actual_norm"
+    if ! diff -u "$expected" "$actual_norm" >/tmp/jsonl-diff-$$.txt 2>&1; then
+        printf "FAIL — transcript diverges\n"
+        sed 's/^/      /' /tmp/jsonl-diff-$$.txt
+        fail=$((fail + 1))
+        failures+=("$map transcript: diff failed")
+    else
+        printf "ok\n"
+        pass=$((pass + 1))
+    fi
+    rm -f "$actual_norm" /tmp/jsonl-diff-$$.txt
+}
+# }}}
+
 # {{{ pipeline_output_check() — additional: the pipeline writes to disk
 pipeline_output_check() {
     local file="/tmp/soramech-pipeline-out.txt"
@@ -147,6 +209,12 @@ check_map "calc" \
 
 check_map "hello" \
     "greet → Hello, World!"
+# Opt-in transcript diff. The hello fixture is the simplest map
+# in the suite — one box, one fire — so it's the cleanest place
+# to demonstrate the normalised-JSONL check. Other fixtures
+# adopt it as their transcripts stabilise.
+check_jsonl "hello"
+check_jsonl "pipeline"
 
 check_map "comparator" \
     "classify → 8" \

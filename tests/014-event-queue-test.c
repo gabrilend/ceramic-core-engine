@@ -193,6 +193,119 @@ static int test_shutdown_drains_late_events(void)
 }
 /* }}} */
 
+/* {{{ test_high_contention_burst() — MPSC ring stress
+ *
+ * Drives much more parallelism than test_concurrent_burst:
+ * 32 producer threads × 4000 events each = 128 000 lines, each
+ * thread firing back-to-back with no sleeps. This exists to
+ * exercise the Vyukov-style ring's CAS retry path and the
+ * has_data / has_space CV interplay under heavy contention.
+ *
+ * Validation: line count must equal n_threads × per_thread, and
+ * every line must parse as valid JSON. Within-thread ordering is
+ * preserved by the ring (the task_id field counts up monotonically
+ * per producer worker_idx). */
+struct stress_args { event_queue_t *q; int n; int worker_idx; };
+
+static void *stress_producer(void *arg)
+{
+    struct stress_args *a = arg;
+    for (int i = 0; i < a->n; i++) {
+        /* task_id == i so the consumer can verify per-thread
+         * monotonicity if it cares. */
+        event_queue_task_start(a->q, (double)i, i, a->worker_idx);
+    }
+    return NULL;
+}
+
+static int test_high_contention_burst(void)
+{
+    char path[256]; tmp_path(path, sizeof path);
+    event_queue_t *q = event_queue_create(path);
+    ASSERT(q);
+
+    enum { N_PROD = 32, PER = 4000 };
+    pthread_t threads[N_PROD];
+    struct stress_args args[N_PROD];
+    for (int t = 0; t < N_PROD; t++) {
+        args[t].q = q; args[t].n = PER; args[t].worker_idx = t;
+        pthread_create(&threads[t], NULL, stress_producer, &args[t]);
+    }
+    for (int t = 0; t < N_PROD; t++) pthread_join(threads[t], NULL);
+
+    event_queue_destroy(q);
+
+    size_t len = 0;
+    char *body = slurp_file(path, &len);
+    ASSERT(body);
+    int lines = count_lines(body, len);
+    ASSERT(lines == N_PROD * PER);
+
+    /* Verify per-thread monotonicity: scan every line, group by
+     * worker_idx, check each group's task_id sequence is
+     * monotonically non-decreasing. (Cross-thread interleaving is
+     * allowed and expected; within a single producer the ring
+     * must preserve emit order.) */
+    int last_task_id[N_PROD];
+    int seen_count  [N_PROD];
+    for (int i = 0; i < N_PROD; i++) { last_task_id[i] = -1; seen_count[i] = 0; }
+    json_arena_t *a = json_arena_create();
+    char *p = body;
+    while (*p) {
+        char *nl = strchr(p, '\n');
+        if (!nl) break;
+        *nl = '\0';
+        json_node_t *n = json_parse(a, p, NULL, NULL);
+        ASSERT(n);
+        int widx = (int)json_number_value(json_object_get(n, "worker_idx"));
+        int tid  = (int)json_number_value(json_object_get(n, "task_id"));
+        ASSERT(widx >= 0 && widx < N_PROD);
+        ASSERT(tid >= last_task_id[widx]);
+        last_task_id[widx] = tid;
+        seen_count[widx]++;
+        p = nl + 1;
+    }
+    for (int i = 0; i < N_PROD; i++) ASSERT(seen_count[i] == PER);
+
+    json_arena_destroy(a);
+    free(body);
+    unlink(path);
+    return 1;
+}
+/* }}} */
+
+/* {{{ test_ring_full_blocks_producer() — exercise has_space CV
+ *
+ * Fills the ring beyond capacity from a single producer with no
+ * consumer drain pressure (the writer thread is slow because it's
+ * doing fwrite per line). The producer must block on has_space
+ * rather than dropping events, and every emitted event must
+ * eventually land in the file.
+ *
+ * 10 000 events exceeds the 4096-slot ring capacity by ~2.4x, so
+ * the producer will hit the full-ring path multiple times. */
+static int test_ring_full_blocks_producer(void)
+{
+    char path[256]; tmp_path(path, sizeof path);
+    event_queue_t *q = event_queue_create(path);
+    ASSERT(q);
+
+    const int N = 10000;
+    for (int i = 0; i < N; i++) {
+        event_queue_task_start(q, (double)i, i, 0);
+    }
+    event_queue_destroy(q);
+
+    size_t len = 0;
+    char *body = slurp_file(path, &len);
+    ASSERT(body);
+    ASSERT(count_lines(body, len) == N);
+    free(body);
+    unlink(path);
+    return 1;
+}
+/* }}} */
+
 /* {{{ test_pending_count() */
 static int test_pending_count(void)
 {
@@ -221,6 +334,8 @@ int main(void)
     RUN(concurrent_burst);
     RUN(shutdown_drains_late_events);
     RUN(pending_count);
+    RUN(high_contention_burst);
+    RUN(ring_full_blocks_producer);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

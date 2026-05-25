@@ -1,0 +1,14 @@
+{"box_id":"addone","event":"task_submit"}
+{"box_id":"double","event":"task_submit"}
+{"box_id":"output","event":"task_submit"}
+{"box_id":"shout","event":"task_submit"}
+{"event":"run_end","n_tasks":4}
+{"event":"run_start","map":"pipeline"}
+{"event":"task_end","output_size":2}
+{"event":"task_end","output_size":2}
+{"event":"task_end","output_size":3}
+{"event":"task_end","output_size":4}
+{"event":"task_start"}
+{"event":"task_start"}
+{"event":"task_start"}
+{"event":"task_start"}

@@ -1,16 +1,15 @@
 # 311 — Integration tests & run output (`last-run.json`)
 
 ## Status
-in progress · JSONL writer, multi-producer event queue, dedicated
-writer thread, optional value events (`SORAMECH_LOG_VALUES`),
-optional slot events (`SORAMECH_LOG_SLOTS`), runtime-mutation
-events (box_create / wire_add / runtime slot_alloc), per-push
-events with skip-reason result field, the `scripts/run-tests.sh`
-integration runner, and the phase-3 runtime-planner demo all
-shipped. The remaining open items are the lock-free MPSC ring
-(current mutex-based queue is a placeholder) and the JSONL
-normaliser for diff-based fixture verification (current tests
-substring-match against stderr).
+complete · JSONL writer, multi-producer event queue (now a
+Vyukov-style bounded MPSC ring), dedicated writer thread,
+optional value events (`SORAMECH_LOG_VALUES`), optional slot
+events (`SORAMECH_LOG_SLOTS`), runtime-mutation events
+(box_create / wire_add / runtime slot_alloc), per-push events
+with skip-reason result field, the `scripts/run-tests.sh`
+integration runner, the phase-3 runtime-planner demo, and the
+JSONL transcript normaliser + `check_jsonl` diff-against-expected
+test harness all shipped.
 
 ## Current behavior
 
@@ -413,6 +412,39 @@ What's still ahead inside 311:
   placeholder; upgrade once contention shows up.
 - JSONL normalizer for diff-based test verification (currently
   the test harness uses substring matching against stderr).
+
+### Vyukov-style MPSC ring + transcript normaliser — 2026-05-24
+
+The two open items above both landed.
+
+The event queue's mutex + linked-list implementation became a
+4096-slot Vyukov-style ring with per-slot atomic sequence
+numbers (`src/014-event-queue.c`). Producers do one CAS on
+`enqueue_pos` (no mutex on the hot path) and publish via a
+release-ordered store on the slot's seq counter; the consumer
+reads slots in order and frees them by bumping the seq forward
+by `EQ_RING_SIZE`. On full-ring contention, producers block on a
+`has_space` CV rather than dropping events — losing audit-trail
+events is worse than briefly blocking a producer. Two new tests:
+a 32-producer × 4000-event burst (128 k lines, per-thread
+monotonicity preserved) and a single-producer 10 k-event overflow
+that exceeds capacity by 2.4× and proves blocking-on-full lands
+every line in the file.
+
+The transcript normaliser is `scripts/normalise-jsonl.lua`. It
+parses each line with dkjson, drops the timing / scheduling
+fields that vary across runs (`ts`, `duration_us`, `worker_idx`,
+`slot_id`, `task_id`, `n_workers`), re-emits remaining keys in
+alphabetical order, and sorts the lines lexicographically. The
+combination of within-object key-sort and across-line line-sort
+makes the result invariant under both within-event reordering
+AND scheduling reordering. `scripts/run-tests.sh` grew a
+`check_jsonl <map>` helper that runs the map, normalises the
+transcript, and diffs it against `tests/expected/<map>.jsonl`;
+re-baselining is the obvious sequence (`soramech-pool` →
+`normalise-jsonl.lua` → commit). Two fixtures opt in today —
+`hello` and `pipeline` — as proof; future fixtures snapshot
+their expected transcript at the same time the map lands.
 
 ### Phase-3 demo — 2026-05-24
 

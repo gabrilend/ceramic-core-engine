@@ -1,0 +1,5 @@
+{"box_id":"greet","event":"task_submit"}
+{"event":"run_end","n_tasks":1}
+{"event":"run_start","map":"hello"}
+{"event":"task_end","output_size":13}
+{"event":"task_start"}
