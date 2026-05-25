@@ -24,20 +24,15 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 308 | Bash language spec implementation                           | complete · persistent socketpair + line-protocol invoke + dladdr-based server lookup |
 | 309 | build system & Makefile orchestration                       | complete · scaffolding + spec discovery + soramech-compile portable artifact |
 | 310 | priority queue: wired in, no-op behaviorally                | complete · API + ordering done |
-| 311 | integration tests & run output (`last-run.jsonl`)           | complete · writer + queue + thread + LOG_VALUES + LOG_SLOTS + run-tests.sh + compile-pipeline check + runtime-mutation events (box_create / wire_add / runtime slot_alloc) + per-push events with skip-reason result field + phase-3 runtime-planner demo + Vyukov-style MPSC ring + transcript normaliser + `check_jsonl` diff-against-expected harness |
+| 311 | integration tests & run output (`last-run.jsonl`)           | complete · writer + queue + thread + LOG_VALUES + LOG_SLOTS + run-tests.sh + compile-pipeline check + per-push events with skip-reason result field + Vyukov-style MPSC ring + transcript normaliser + `check_jsonl` diff-against-expected harness |
 | 312 | same-language wire fast path (skip JSON for Lua→Lua etc.)   | complete · dual-ring slots + per-edge classification + per-cell ordering; spec contract has single invoke + two bridges; Lua native-bytes optimisation tracked as a future slice |
 | 313 | research: whole-program same-language merge                 | complete · Lua merged module + C precompile preference + bash pre-source; inline-into-dispatch stays open research |
 | 314 | small C JSON parser written for this project                | complete · parser + writer + strict leading-zero |
 | 315 | reference-counted compiled-map artifacts                    | complete · acquire/release/list/count/reap helper + fork-on-live-refs compile + PID + start-ticks back pointer + optional marker file as second liveness signal; 12 unit scenarios + end-to-end pinned-generation integration check |
 | 316 | simple test-runner script                                   | folded into 232 |
 | 317 | language spec JSON bridge for data boxes                    | complete · Lua fidelity-preserving, C+Bash pass-through-or-string-wrap, shared test harness |
-| 319 | built-in library for map self-construction (`create_box`, `connect`) | complete · every Q1–Q5 resolved, six sub-issues 319a–f shipped, four runtime-create fixtures green; latent same-thread visibility note on input_slot_ids tracked as future hardening |
 | 319a | dispatch input cap removal (VLA + named constant)           | complete · 20-input fixture passes end-to-end |
 | 319b | slot store growth (two-level chunked-append index)          | complete · 5000-slot growth test preserves all early pointers |
-| 319c | box id generator (compile-cache concept folded into spec.so loaders) | complete · 8-thread concurrent uniqueness test passes |
-| 319d | `create_box` + `connect` runtime built-ins (Lua bindings, call boxes, plain routing) | complete · end-to-end fixture: Lua box creates and wires a downstream box that runs and produces output |
-| 319e | C bindings + end-to-end test + docs (Bash deferred) | complete · C-to-C runtime self-construction fixture passes |
-| 319f | create_box / connect as language-agnostic dispatch box kinds | complete · BOX_CREATE_BOX and BOX_CONNECT dispatch primitives; works uniformly across every language including Bash |
 
 ## Phase goal checklist
 
@@ -54,10 +49,39 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 - [x] Comparator box routes via dispatch layer (via spec output)
 - [x] Variable-size outputs work via the large-value heap
 - [x] `last-run.jsonl` written for every run
-- [ ] All 11 integration test maps pass
-- [x] Phase 3 demo map runs and produces expected output (runtime-planner under issues/completed/demos/phase-3-runtime-planner/; ./demo.sh 3)
+- [ ] All integration test maps pass
+- [x] Phase 3 demo map runs and produces expected output (thread-pool-fanout under issues/completed/demos/phase-3-thread-pool-fanout/; ./demo.sh 3)
 - [ ] Phase 2 synchronous runner retired (`src/004-executor.lua`,
       `src/007-runner-main.lua`, `src/003-loader.lua`, `drivers/*.sh`)
+
+## Rolled-back work — deferred to phase 4
+
+Runtime graph mutation (the original 319 family — `create_box`,
+`connect`, the per-language wrappers, the dispatch box-kinds,
+the runtime mutation JSONL events, the runtime-planner demo
+under `issues/completed/demos/phase-3-runtime-planner/`) shipped
+and was then reverted before the phase 3 release candidate. The
+design committed to surfaces (language-bridge functions instead
+of box-kinds, id-as-input instead of wire-endpoint-as-target,
+three separate paths for create/reconfigure/delete) that the
+broader redesign walks back from.
+
+The five rolled-back issue files (319, 319c, 319d, 319e, 319f)
+sit in `issues/` with "Rolled back — superseded by phase 4"
+headers explaining the shift; their historical-behavior text
+documents what the prior implementation did. The two
+infrastructure pieces that genuinely served general-purpose
+needs (319a's input cap removal, 319b's slot store growth)
+remain in `completed/`.
+
+The phase-4 redesign lives in
+[`phase-4-progress.md`](phase-4-progress.md) with the parent
+issue at [`419-runtime-graph-mutation.md`](419-runtime-graph-mutation.md).
+The runtime-planner demo directory stays under
+`issues/completed/demos/` as historical artifact per the
+immutability convention; `demo.sh 3` now points at the new
+thread-pool-fanout demo that shows what phase 3 actually
+delivered.
 
 ## Implementation order suggestion
 
