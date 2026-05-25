@@ -67,15 +67,6 @@ later boxes can chain off the write.
 An entire sub-graph appearing as one box on the parent canvas.
 See "Encapsulation" below for the full story.
 
-### `create_box` / `connect` — runtime self-construction
-
-A running box can spawn new boxes and wire them up mid-run. The
-`create_box` and `connect` kinds are the language-agnostic
-dispatch primitives; per-language wrappers like Lua's
-`soramech.create_box{...}` are convenience over the same path.
-See [`docs/005-writing-boxes.md`](005-writing-boxes.md) for the
-calling shape.
-
 ## Wires (connections)
 
 A wire lives on the **producer** box's `connections[]` array. Each

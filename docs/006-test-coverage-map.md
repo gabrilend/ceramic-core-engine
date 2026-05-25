@@ -122,10 +122,6 @@ asserts expected output substrings appear in stderr.
 | `pipeline` | five-box multilang chain (also covers the compile pipeline) |
 | `read-literal` | inline-value source on a read box |
 | `319a-many-inputs` | dispatch input cap removed; box with 20 inputs |
-| `319d-runtime-create` | Lua box uses runtime self-construction to spawn + wire a downstream Lua box |
-| `319e-c-create` | C-to-C runtime self-construction |
-| `319-box-kind-create` | language-agnostic create_box / connect dispatch box kinds |
-| `319-cross-lang-create` | C trigger creates a Lua box at runtime; lazy spec init |
 | `246-c-shim` | per-port custom translation shim (C side) |
 | `246-lua-shim` | per-port custom translation shim (Lua side) |
 | `318-lang-opaque` | $lang_opaque sentinel emit + dual-ring consumer |

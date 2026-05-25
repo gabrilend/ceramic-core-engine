@@ -3,9 +3,7 @@
 Three languages ship with first-class support: Lua, C, and Bash.
 Each follows the same dataflow contract — a box function takes
 input values, returns one output value — but the calling shape
-differs per language. This doc covers each language's
-quickstart plus the runtime self-construction API every spec
-exposes.
+differs per language. This doc covers each language's quickstart.
 
 ## The contract, in plain english
 
@@ -49,34 +47,6 @@ Wired up via the box JSON:
 The Lua spec keeps a `lua_State` per worker, so consecutive
 fires of the same box reuse the same Lua state — module
 imports and closures persist across calls within a run.
-
-### Lua's runtime self-construction
-
-Inside a Lua box's function, you can spawn new boxes and wire
-them on the fly:
-
-```lua
-function M.planner(seed)
-    local id = soramech.create_box{
-        kind = "call",
-        lang = "lua",
-        ref  = "src/worker.lua",
-        fn   = "process",
-        inputs = { { name = "x", type = "string" } }
-    }
-    soramech.connect{
-        from_box = "planner",
-        to_box   = id,
-        to_input = "x"
-    }
-    return seed   -- the dispatch fans this to the new wire
-end
-```
-
-The freshly-created box fires after the planner's return value
-hits its newly-attached connection. The new box's id (returned
-by `create_box`) is auto-generated unless you pass an explicit
-`id` field in the spec.
 
 ### Lua values across wires
 
@@ -145,35 +115,6 @@ Two optional fields on the box JSON let you tune the build:
 individual argv entries to gcc. `link_libs` produces `-l<name>`
 entries.
 
-### C's runtime self-construction
-
-C boxes can use the same `create_box` / `connect` primitives via
-the bindings in `langs/c/soramech.h`:
-
-```c
-#include "soramech.h"
-
-int planner(const void **inputs, const int *sizes, int n,
-            void *out_buf, int out_capacity, int *out_size)
-{
-    char id_buf[SORAMECH_BOX_ID_BUF_SIZE];
-    soramech_create_box(
-        "{ \"kind\":\"call\", \"lang\":\"c\", "
-        "  \"ref\":\"src/worker.c\", \"fn\":\"process\","
-        "  \"inputs\":[{\"name\":\"x\",\"type\":\"string\"}] }",
-        id_buf, sizeof id_buf);
-    char conn[256];
-    snprintf(conn, sizeof conn,
-        "{\"from_box\":\"planner\",\"to_box\":\"%s\",\"to_input\":\"x\"}",
-        id_buf);
-    soramech_connect(conn);
-    /* return the seed; the dispatch fans it to the new wire */
-    memcpy(out_buf, inputs[0], sizes[0]);
-    *out_size = sizes[0];
-    return 0;
-}
-```
-
 ## Bash
 
 ```bash
@@ -204,25 +145,6 @@ protocol. The function reads its inputs as positional args and
 writes its output to stdout. Function source is loaded into the
 helper's environment once per worker; subsequent invocations
 reuse the same helper.
-
-Bash doesn't have a native dict, so the runtime
-self-construction API uses JSON-string arguments (same shape as
-the C bindings):
-
-```bash
-planner() {
-    local id=$(soramech_create_box \
-        '{"kind":"call","lang":"bash","ref":"src/worker.sh",
-          "fn":"process","inputs":[{"name":"x","type":"string"}]}')
-    soramech_connect \
-        "{\"from_box\":\"planner\",\"to_box\":\"$id\",\"to_input\":\"x\"}"
-    echo "$1"
-}
-```
-
-(The `soramech_create_box` and `soramech_connect` bash
-functions get pre-defined in every worker's helper environment
-by the spec.)
 
 ## Choosing a language
 

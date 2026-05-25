@@ -52,14 +52,7 @@ Default events (always emitted):
 | `task_start`    | a worker picks it up |
 | `task_end`      | the box's function returns; carries duration_us, output_size |
 | `run_end`       | every task drained, no more queued |
-
-For runtime graph mutations (issue 319 self-construction):
-
-| Event         | When |
-|---------------|------|
-| `box_create`  | `create_box` succeeds; records the new box's id + kind + lang + ref + fn |
-| `wire_add`    | `connect` succeeds; records the from→to wire |
-| `slot_alloc`  | a runtime-created box allocates an input slot |
+| `slot_alloc`    | a slot is allocated for an input port (startup-time enumeration) |
 
 Opt-in verbosity, via env vars:
 
@@ -74,17 +67,14 @@ Opt-in verbosity, via env vars:
   load-bearing diagnostic when a box fires but the value
   doesn't seem to reach its consumer.
 
-Sample (a runtime-create run with `SORAMECH_LOG_SLOTS=1`):
+Sample (a small run with `SORAMECH_LOG_SLOTS=1`):
 
 ```jsonl
 {"event":"slot_alloc","ts":...,"slot_id":0,"cell_capacity":4,...,"box":"trigger","port":"input"}
-{"event":"run_start","ts":...,"map":"runtime-planner","n_workers":14}
+{"event":"run_start","ts":...,"map":"hello","n_workers":14}
 {"event":"task_submit","ts":...,"task_id":0,"box_id":"trigger","worker_idx":-1}
 {"event":"task_start","ts":...,"task_id":0,"worker_idx":3}
-{"event":"slot_alloc","ts":...,"slot_id":1,"box":"auto_00000000","port":"x"}
-{"event":"box_create","ts":...,"box_id":"auto_00000000","kind":"call","lang":"lua",...}
-{"event":"wire_add","ts":...,"from_box":"trigger","to_box":"auto_00000000","to_input":"x"}
-{"event":"push","ts":...,"from_box":"trigger","to_box":"auto_00000000","slot_id":1,"result":"ok"}
+{"event":"push","ts":...,"from_box":"trigger","to_box":"echo","slot_id":1,"result":"ok"}
 {"event":"task_end","ts":...,"task_id":0,"duration_us":418,"output_size":46}
 {"event":"task_start","ts":...,"task_id":1,"worker_idx":11}
 {"event":"task_end","ts":...,"task_id":1,"duration_us":78,"output_size":64}
