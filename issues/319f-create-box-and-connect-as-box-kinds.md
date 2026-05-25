@@ -1,5 +1,20 @@
 # 319f — `create_box` and `connect` as language-agnostic box kinds
 
+## Rolled back — superseded by phase 4
+
+This issue introduced the language-agnostic `create_box` and
+`connect` box kinds — the design-correction over 319d/319e's
+per-language wrappers. Both kinds shipped and were then reverted
+with the rest of the runtime-mutation surface; the broader
+redesign collapses create / reconfigure / delete into a single
+utility-box kind, which is a different shape than this issue's
+two-kind partition.
+
+See
+[`issues/419-runtime-graph-mutation.md`](419-runtime-graph-mutation.md)
+for the redesign. The historical-behavior text below describes
+what the rolled-back box kinds did.
+
 ## Status
 complete
 

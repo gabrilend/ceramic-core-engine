@@ -1,5 +1,22 @@
 # 319 — Built-in library for map self-construction
 
+## Rolled back — superseded by phase 4
+
+The implementation this issue described shipped and then was
+reverted before the phase 3 release candidate. The design didn't
+converge: open questions about wire-as-target vs id-as-input
+semantics, ids-as-editor-only vs runtime-fresh creation, and how
+the new box's id flows out of the utility-box without a second
+output port remained unresolved.
+
+The redesigned approach lives under phase 4 — see
+[`issues/419-runtime-graph-mutation.md`](419-runtime-graph-mutation.md)
+for the new architectural ground rules and the open questions
+that still need resolution before implementation restarts. The
+historical-behavior text below describes what the rolled-back
+implementation did; the runtime no longer contains any of this
+code.
+
 ## Status
 complete — every Q1–Q5 design question carries a **RESOLVED**
 marker with the chosen shape, and the implementation lands in

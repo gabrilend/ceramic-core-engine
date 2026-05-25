@@ -1,9 +1,12 @@
-# 322 — Box delete: the user-facing experience
+# 422 — Box delete: the user-facing experience
 
 ## Status
-open · the underlying mechanism is part of 320; this issue
-covers the user-facing API and the explicit-vs-implicit-deletion
-design decision
+open · phase 4 · sub-issue of [419](419-runtime-graph-mutation.md).
+The underlying mechanism is part of [420](420-utility-box-kind.md);
+this issue covers the user-facing API and the
+explicit-vs-implicit-deletion design decision. Renumbered from
+322 when runtime graph mutation moved to phase 4 as part of the
+phase-3 release-candidate rollback.
 
 ## Current behavior
 

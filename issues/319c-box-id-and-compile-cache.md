@@ -1,5 +1,19 @@
 # 319c — Box id generator and compile cache
 
+## Rolled back — superseded by phase 4
+
+The box-id generator (`box_id_generate` in `src/017-box-id.*`)
+only existed to name runtime-created boxes; with the runtime
+mutation paths gone, the generator went with them. The
+compile-cache framing of this issue stayed conceptual — no
+separate module shipped, and the artifact-refcounting work
+that absorbed it (issue 315) is independent of runtime mutation.
+
+The redesigned runtime mutation arrives under phase 4. See
+[`issues/419-runtime-graph-mutation.md`](419-runtime-graph-mutation.md).
+The historical-behavior text below describes what the
+rolled-back generator did.
+
 ## Status
 complete
 

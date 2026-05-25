@@ -1,8 +1,11 @@
-# 321 — Unify connections-array mutation through the 320 box-swap path
+# 421 — Unify connections-array mutation through the 420 box-swap path
 
 ## Status
-open · waits on 320 landing first; design is straightforward
-once the box-swap mechanism exists
+open · phase 4 · sub-issue of [419](419-runtime-graph-mutation.md).
+Waits on [420](420-utility-box-kind.md) landing first; design is
+straightforward once the box-swap mechanism exists. Renumbered
+from 321 when runtime graph mutation moved to phase 4 as part of
+the phase-3 release-candidate rollback.
 
 ## Current behavior
 

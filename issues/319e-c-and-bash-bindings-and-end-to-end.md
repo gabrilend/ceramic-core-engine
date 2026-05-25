@@ -1,5 +1,19 @@
 # 319e — C bindings, end-to-end test, docs (Bash deferred)
 
+## Rolled back — superseded by phase 4
+
+The C bindings that shipped here (`soramech_create_box`,
+`soramech_connect` aliases in `langs/c/soramech.h`) and the
+cross-language end-to-end fixture were reverted with the rest of
+the runtime-mutation surface. The Bash bindings were never
+built; they were deferred at the time, and now stay deferred
+inside the phase-4 redesign.
+
+The redesigned approach lives under phase 4. See
+[`issues/419-runtime-graph-mutation.md`](419-runtime-graph-mutation.md).
+The historical-behavior text below describes what the
+rolled-back C bindings did.
+
 ## Status
 complete (slice 1 — C). Bash bindings deferred to a follow-on.
 

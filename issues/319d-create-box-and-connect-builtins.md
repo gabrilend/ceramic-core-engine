@@ -1,5 +1,23 @@
 # 319d — `create_box` and `connect` runtime built-ins, Lua bindings
 
+## Rolled back — superseded by phase 4
+
+The runtime built-ins this issue introduced
+(`runtime_create_box`, `runtime_connect`, the Lua bridges
+`soramech.create_box` and `soramech.connect`, the dispatch
+thread-local active context) all shipped and were then reverted
+before the phase 3 release candidate. The design committed to a
+shape — graph mutation as a language-bridge function, id-as-input,
+three separate code paths — that the broader redesign walks back
+from.
+
+The redesigned approach uses a single box-kind for create /
+reconfigure / delete with wire endpoints as the targeting
+language. See
+[`issues/419-runtime-graph-mutation.md`](419-runtime-graph-mutation.md)
+for the new architectural ground rules. The historical-behavior
+text below describes what the rolled-back implementation did.
+
 ## Status
 complete (slice 1)
 
