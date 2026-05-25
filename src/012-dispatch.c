@@ -600,13 +600,12 @@ static int push_one_connection(dispatch_ctx_t *ctx, const box_t *b,
                                uint32_t tag,
                                int output_native)
 {
-    /* Issue 311 + 319 diagnosis: every push_one_connection attempt
-     * gets logged when SORAMECH_LOG_SLOTS=1, with a short result
+    /* Issue 311 diagnosis: every push_one_connection attempt gets
+     * logged when SORAMECH_LOG_SLOTS=1, with a short result
      * string. The skip paths name *why* a push was skipped so a
-     * race like 319's "input_slot_ids reads as NULL even after
-     * runtime_create_box populated it" shows up in the JSONL as a
-     * "input-slots-null" push event instead of as a phantom
-     * missing event. */
+     * misconfigured wire shows up in the JSONL as a
+     * "input-slots-null" or "to-input-out-of-range" push event
+     * instead of as a phantom missing event. */
     int log_pushes = ctx->log_slots && ctx->events;
     if (c->to_box_idx < 0) {
         if (log_pushes) {

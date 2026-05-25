@@ -78,10 +78,7 @@ int jsonl_emit_slot_alloc (jsonl_writer_t *w, double ts,
  * Emitted from push_one_connection on every attempt, including
  * the skipped paths — the `result` field carries either "ok" or
  * a short skip reason ("no-to-box-idx", "dst-null",
- * "input-slots-null", "to-input-out-of-range", "push-failed").
- * Crucial for diagnosing the 319 visibility race where the new
- * box's input_slot_ids field reads as NULL at push time even
- * though runtime_create_box populated it. */
+ * "input-slots-null", "to-input-out-of-range", "push-failed"). */
 int jsonl_emit_push       (jsonl_writer_t *w, double ts,
                            const char *from_box, const char *to_box,
                            const char *to_input, int slot_id,

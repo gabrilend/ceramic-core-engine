@@ -94,8 +94,6 @@ Best-covered area of the project; phase 3 was built test-first.
 | `src/014-event-queue.c` | `[x]` | `tests/014-event-queue-test.c` |
 | `src/015-large-value-heap.c` | `[x]` | `tests/015-large-value-heap-test.c` |
 | `src/016-unified-allocator.c` | `[x]` | `tests/016-unified-allocator-test.c` |
-| `src/017-box-id.c` | `[x]` | `tests/017-box-id-test.c` |
-| `src/018-runtime-builtins.c` | `[~]` | exercised through `tests/012-dispatch-test.c` and the runtime-create integration fixtures |
 | `src/020-sentinels.c` | `[x]` | `tests/020-sentinels-test.c` |
 | `libs/json/json.c` | `[x]` | `tests/314-json-test.c` |
 
