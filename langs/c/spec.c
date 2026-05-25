@@ -119,9 +119,10 @@ static int c_compile(const char *src_path, const char *out_path,
     argv_view[n++] = "-fPIC";
     argv_view[n++] = "-O2";
     argv_view[n++] = "-Wall";
-    /* Default include path: the project's langs/c dir, so user
-     * box source can `#include "soramech.h"` for the runtime
-     * self-construction bindings (issue 319e). */
+    /* Default include path: the project's langs/c dir, kept as
+     * the compile-time convention even though no headers ship
+     * there in phase 3. Phase 4's runtime mutation work will add
+     * a user-facing header here when it lands. */
     argv_view[n++] = "-I" SORAMECH_LANGS_C_INCLUDE;
 
     /* Per-box cflags: split on whitespace into individual tokens. */

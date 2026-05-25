@@ -24,8 +24,6 @@
 
 #include "lang-spec.h"
 #include "json.h"
-#include "018-runtime-builtins.h"   /* runtime_create_box / runtime_connect — 319d */
-#include "017-box-id.h"             /* BOX_ID_GEN_BUF_SIZE — 319d */
 #include "020-sentinels.h"          /* sentinel emit / detect — 318 */
 
 #include <lua.h>
@@ -58,87 +56,6 @@ static int parse_json_to_stack(lua_State *L,
 static int encode_value(lua_State *L, int abs_idx, json_writer_t *w);
 static int load_via_merged(lua_State *L, const char *file_path);
 
-/* {{{ Soramech runtime-builtins: create_box and connect (issue 319d)
- *
- * Two Lua-callable functions exposed under the global `soramech`
- * table. Both take Lua tables shaped like the on-disk box JSON
- * schema (for create_box) or a single connection entry (for
- * connect, variadic). The tables are encoded to JSON via the same
- * encode_value machinery the spec uses for cross-language wire
- * serialization, then handed to the C runtime API. Errors
- * hard-crash via luaL_error, which propagates as a Lua error and
- * unwinds the spec's invoke. */
-static int lua_soramech_create_box(lua_State *L)
-{
-    luaL_checktype(L, 1, LUA_TTABLE);
-
-    /* Stack-allocated 4 KB scratch is big enough for any sane box
-     * spec; if a real workload trips this the buffer becomes a
-     * heap allocation. Slice-1 keeps it simple. */
-    char json_buf[4096];
-    json_writer_t w;
-    json_writer_init(&w, json_buf, sizeof json_buf);
-    if (encode_value(L, 1, &w) != 0) {
-        return luaL_error(L, "soramech.create_box: failed to encode spec to JSON");
-    }
-    int json_len = json_writer_finish(&w);
-    if (json_len < 0) {
-        return luaL_error(L, "soramech.create_box: JSON encode overflow (spec exceeds %zu bytes)",
-                          sizeof json_buf);
-    }
-
-    char id_buf[BOX_ID_GEN_BUF_SIZE];
-    char *err = NULL;
-    if (runtime_create_box(json_buf, json_len, id_buf, sizeof id_buf, &err) != 0) {
-        char msg[1024];
-        snprintf(msg, sizeof msg, "%s", err ? err : "(no message)");
-        free(err);
-        return luaL_error(L, "soramech.create_box: %s", msg);
-    }
-    lua_pushstring(L, id_buf);
-    return 1;
-}
-
-static int lua_soramech_connect(lua_State *L)
-{
-    int n = lua_gettop(L);
-    if (n == 0) {
-        return luaL_error(L, "soramech.connect: expected at least one connection");
-    }
-    char json_buf[2048];
-    for (int i = 1; i <= n; i++) {
-        luaL_checktype(L, i, LUA_TTABLE);
-        json_writer_t w;
-        json_writer_init(&w, json_buf, sizeof json_buf);
-        if (encode_value(L, i, &w) != 0) {
-            return luaL_error(L, "soramech.connect: failed to encode connection #%d", i);
-        }
-        int json_len = json_writer_finish(&w);
-        if (json_len < 0) {
-            return luaL_error(L, "soramech.connect: JSON encode overflow on connection #%d", i);
-        }
-        char *err = NULL;
-        if (runtime_connect(json_buf, json_len, &err) != 0) {
-            char msg[1024];
-            snprintf(msg, sizeof msg, "%s", err ? err : "(no message)");
-            free(err);
-            return luaL_error(L, "soramech.connect: %s", msg);
-        }
-    }
-    return 0;
-}
-
-static void register_soramech_builtins(lua_State *L)
-{
-    lua_newtable(L);
-    lua_pushcfunction(L, lua_soramech_create_box);
-    lua_setfield(L, -2, "create_box");
-    lua_pushcfunction(L, lua_soramech_connect);
-    lua_setfield(L, -2, "connect");
-    lua_setglobal(L, "soramech");
-}
-/* }}} */
-
 /* {{{ lua_init() — create a state, open standard libs, seed cache */
 static void *lua_init(int worker_idx)
 {
@@ -149,10 +66,6 @@ static void *lua_init(int worker_idx)
     /* Seed the empty cache table. */
     lua_newtable(L);
     lua_setfield(L, LUA_REGISTRYINDEX, LUA_CACHE_KEY);
-    /* Register the self-construction builtins (issue 319d). They
-     * read the active runtime context from thread-local storage
-     * that dispatch_action sets before each invoke. */
-    register_soramech_builtins(L);
     return L;
 }
 /* }}} */
