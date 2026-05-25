@@ -46,56 +46,60 @@ and sees the next cell tagged `reconfigure`, it doesn't push the
 bytes into an input buffer for the box function; it interprets
 them as a re-parse of the box's own JSON.
 
-### The mixed-stream scenario
+### The pre-gather scenario (post-audit)
 
-Imagine a box with three input ports under the old config. The
-dispatch begins gathering inputs for the next fire and pops cells
-in turn:
+The audit confirmed it: `read_inputs` in `src/012-dispatch.c`
+walks each input port exactly once and does exactly one
+peek / pop per port per fire (line 459: `for (int i = 0; i <
+b->n_inputs; i++)`). There is no "second pop on the same port
+in one fire" — the original mixed-stream scenario was wrong, and
+this section is the corrected design.
 
-```
-port_a → native value (popped, retained)
-port_b → JSON value   (popped, retained)
-port_a → native value (popped, retained — second value on a)
-port_c → RECONFIGURE
-```
+Because each fire consumes at most one cell per port, a
+reconfigure cell on any port's third ring will be observed at
+most once per fire of the target box. The cleanest place to
+observe it is **before any value-pop**: at the top of
+`read_inputs`, walk every input port once and check the third
+ring's `slot_has_value` / peek. If any port has a reconfigure
+queued, apply it (under YARQ) before any value cells are popped.
+Then drop into the regular gather loop under whatever shape
+exists after.
 
-The worker:
+This means:
 
-1. Sees the `reconfigure` tag on `port_c`'s next cell.
-2. **Keeps every already-popped value** for ports a / b / a-second
-   in worker-local stack buffers.
-3. Acquires the YARQ barrier (see below). If acquisition fails
-   because another worker is already inside the box, this worker
-   re-submits its task to the tail of the pool queue and exits;
-   the re-submission picks up later, after the contended box is
-   done.
-4. Pops the reconfigure-tagged cell, runs the JSON through the
-   same `parse_box_file` machinery (operating on the in-memory
-   buffer instead of a path), and rewrites the box record in
-   place.
-5. Releases the YARQ barrier.
-6. Resumes input-gathering for the SAME fire — pops once more
-   from the same port (or the next one per the new config's port
-   shape) and continues until every required input is satisfied.
-7. Fires the box under the new config, passing the retained
-   already-popped values plus the new pops in the order the
-   new config expects.
+1. The worker enters `read_inputs` for box B.
+2. **Pre-gather sweep**: for each port `i`, check the third ring.
+   For every port with a queued reconfigure:
+   - Try CAS-acquire YARQ. On fail, yield-and-requeue (see
+     below) and exit.
+   - On success, pop the reconfigure cell, run the JSON through
+     the same `parse_box_file` machinery (operating on the
+     in-memory buffer instead of a path), and rewrite the box
+     record in place via `reconfigure_apply`.
+   - Release YARQ.
+3. **Gather**: walk each input port (under the now-possibly-new
+   shape) and pop / peek values as usual.
+4. Fire the box under the now-current config.
 
-The fire that triggered the gather still happens. The reconfigure
-is a side-effect that lands between the start of input-gathering
-and the function call itself, not a separate scheduling unit.
+The "what about pre-popped values" question dissolves: nothing is
+popped before reconfigures are applied, so there's nothing to
+retain or rebind. Port renames / additions / removals between
+reconfigure and gather are uneventful because the value-pop loop
+runs against whatever `box->inputs[]` / `box->input_slot_ids[]`
+the reconfigured box now exposes.
 
-### What about the values popped before the reconfigure?
+### What about reconfigures that arrive mid-gather?
 
-The retained values were popped under the OLD port shape. If the
-new config keeps every original port (rename allowed, add allowed,
-remove disallowed in this slice → see open questions), the
-retained values still map by port name. If the new config renames
-a port that has a retained value, the retained value follows the
-rename via the port's previous-name → new-name correspondence
-recorded during reconfigure. If a future slice allows port
-removal mid-gather, the retained values for the removed port get
-dropped on the floor and a JSONL event records the discard.
+If worker A starts gather (post-sweep), and worker B pushes a
+new reconfigure cell while A is mid-value-pop, A doesn't notice
+— the sweep has already run. The reconfigure waits on the third
+ring; the **next** fire of the box picks it up in its pre-gather
+sweep. This is fine: gathered values were collected under the
+shape A observed, and the box function runs under that same
+shape. The new reconfigure simply lands one fire later than
+strictly possible. We trade tightness for simplicity, and the
+trade is good because pre-gather application removes all the
+in-flight-snapshot bookkeeping.
 
 ## YARQ — the yield-and-requeue barrier
 
@@ -131,12 +135,54 @@ primitive is *cooperative with the scheduler* rather than
 best (managing many small units of work fairly), and the barrier
 just nudges contended workers to circle back later.
 
-The YARQ barrier is acquired by **every** path that mutates the
-box record — not just reconfigure but also `connect` (issue
-319d's runtime wire attachment, which already does its own
-copy-and-publish atomic dance on the connections array). Folding
-those into the same barrier means the two mutation paths can't
+The YARQ barrier is acquired by **every path that MUTATES the
+box record** — reconfigure_apply and runtime_connect (issue
+319d's wire attachment, which already does its own copy-and-
+publish atomic dance on the connections array). Folding those
+into the same barrier means the two mutation paths can't
 interleave dangerously when both fire at once.
+
+**Workers that only READ the box record (input-gather + box
+function invocation) DO NOT acquire YARQ.** They're not mutating
+anything; making them block on the mutator path would burn
+worker time for no consistency win. They read the box's mutable
+fields through the same atomic-load patterns issue 319d already
+uses for `connections` / `n_connections`.
+
+### Reader consistency under mutation — design knob
+
+Today, `n_connections` and `connections` are an `_Atomic` pair
+with a "pointer first, count second" publish order so a reader
+doing "count first, pointer second" sees either the old pair or
+the new pair. That pattern relies on the connections array being
+append-only — the new array's first `old_n` entries are
+identical to the old array.
+
+Reconfigure can SHRINK or REORDER the inputs array, so the same
+trick doesn't work for `inputs[]` / `input_slot_ids[]` /
+`input_slot_modes[]` / `input_edge_native[]` / `n_inputs`.
+Three viable shapes:
+
+- **A — bundle into one atomic-swap struct**. Allocate an
+  `input_config_t` containing every per-port array + n_inputs;
+  reconfigure_apply allocates a new config and atomic-stores the
+  pointer; readers do ONE atomic load and use the snapshot.
+  Clean and contention-free, but restructures box_t.
+
+- **B — generation counter retry**. Add `_Atomic uint32_t
+  inputs_gen`. Reader reads gen, reads arrays, reads gen again;
+  on mismatch, retry. Less restructuring; small overhead per
+  read; the retry case is rare. Doesn't capture the "snapshot
+  is internally consistent" property as strongly as A — readers
+  rely on retry to catch torn reads.
+
+- **C — workers DO acquire YARQ for reads**. Simplest mechanism
+  but contradicts the user's stated preference and adds a CAS to
+  every fire.
+
+This is a real fork in the road; the rest of the design
+proceeds the same way for any of the three. Defer the pick until
+the user weighs in.
 
 ## Schema for the third-ring message
 
@@ -194,9 +240,9 @@ That means slice 1 has to handle, in one pass:
     removal case).
   - Re-resolution of every producer's connection
     `to_input_idx` against the new port names.
-  - Rebinding of retained pre-pop values via the old-name →
-    new-name correspondence (rename allowed; removal of a
-    retained port drops its values to the JSONL transcript).
+  - No retained-value rebind needed (the audited pre-gather
+    model never has retained values; reconfigures apply BEFORE
+    any value-pop).
 - **Kind changes** (BOX_CALL ↔ BOX_WRITE, etc.) — the dispatch
   table is already keyed off kind; flipping the field flips
   which branch runs next. BOX_MAP is the special case (would
@@ -252,10 +298,14 @@ reconfigure lands.
    merges it into a live box, handling port-rename via name
    correspondence, slot growth / shrink, connection array swap,
    and producer re-resolution.
-7. **Teach the dispatch's input-gather loop** to peek the
-   ring-selector tag and, on `RING_RECONFIGURE`, acquire YARQ,
-   retain pre-popped values, apply the reconfigure, release
-   YARQ, then resume gathering under the new shape.
+7. **Add a pre-gather sweep** to the dispatch's `read_inputs`.
+   Walk every input port once, check the third ring on each
+   port. For every port with a queued reconfigure: acquire
+   YARQ (or yield-and-requeue on contention), pop the cell,
+   apply via `reconfigure_apply`, release YARQ. Then drop into
+   the existing value-pop loop under the now-current shape.
+   No value cells are popped before reconfigures land, so no
+   retain-and-rebind bookkeeping.
 8. **Implement the `reconfigure` box kind** in
    `src/012-dispatch.c` and add parse-side support in
    `src/010-graph-loader.c`.
@@ -355,13 +405,15 @@ reconfigure lands.
   so the transcript is self-describing without cross-event
   reasoning.
 - **Pre-popped retained values that don't fit the new schema.**
-  Reconfigure renames port `x` → `y` and adds port `z`; the
-  worker had already popped a value for `x` before hitting
-  the reconfigure cell. Rebind by name correspondence? If
-  the new config has no port `y` after a removal-rename
-  (effectively a delete), the retained value goes to the
-  JSONL transcript as a discard event and the box still fires
-  with whatever the new shape requires.
+  RESOLVED by the audit: the pre-gather model applies
+  reconfigures before any value cell is popped, so there are
+  no retained values to rebind. Question is moot.
+
+- **Reader consistency across mutation** (new, surfaced by
+  the audit). See "Reader consistency under mutation — design
+  knob" in the YARQ section. Three viable shapes (atomic-swap
+  bundled struct / generation-counter retry / workers acquire
+  YARQ); user picks before implementation lands.
 
 ## Design history
 
