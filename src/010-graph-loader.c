@@ -35,23 +35,13 @@
 
 /* {{{ Graph struct
  *
- * Box storage uses pointers-to-records so box addresses stay stable
- * across runtime growth (issue 319d). Each box_t is its own malloc;
- * `boxes` is an array of pointers indexed by box id. Growing the
- * pointer array uses copy-and-publish — allocate a new bigger
- * pointer array, memcpy the old pointers in, atomic-store the new
- * array, and stash the old array on stale_box_arrs so any in-flight
- * reader walking the old array completes safely.
- *
- * The hot read path (graph_box, graph_n_boxes) atomic-loads the
- * boxes pointer and n_boxes count; no mutex held. Mutations
- * (graph_add_box for runtime additions, graph_load for initial
- * population) take graph_mu.
+ * Box storage uses pointers-to-records so box addresses stay stable.
+ * Each box_t is its own malloc; `boxes` is an array of pointers
+ * indexed by box id. The graph's box count and pointer array stay
+ * atomic-shaped to keep the storage compatible with phase 4's
+ * runtime mutation work; phase 3 doesn't grow at runtime so the
+ * mutex `graph_mu` is uncontended.
  */
-struct stale_arr {
-    void              *ptr;
-    struct stale_arr  *next;
-};
 
 /* Per-graph list of heap-allocated strings the loader produced
  * (e.g. issue 248 prefix-renamed sub-map ids). Arena strings come
@@ -73,8 +63,7 @@ struct graph {
     _Atomic(box_t **) boxes;        /* array of box pointers; stable per box */
     _Atomic uint32_t  n_boxes;      /* number of valid entries in `boxes` */
     _Atomic uint32_t  box_capacity; /* allocated length of `boxes`        */
-    pthread_mutex_t   graph_mu;     /* serializes runtime additions       */
-    struct stale_arr *stale_box_arrs;
+    pthread_mutex_t   graph_mu;     /* serializes box-array growth (rare) */
     struct owned_str *owned_strs;   /* per-graph heap strings (issue 248) */
 
     int           n_languages;
@@ -702,8 +691,6 @@ static int parse_box_file(graph_t *g, box_t *box,
     if      (strcmp(kind_str, "call")       == 0) box->kind = BOX_CALL;
     else if (strcmp(kind_str, "read")       == 0) box->kind = BOX_READ;
     else if (strcmp(kind_str, "write")      == 0) box->kind = BOX_WRITE;
-    else if (strcmp(kind_str, "create_box") == 0) box->kind = BOX_CREATE_BOX;
-    else if (strcmp(kind_str, "connect")    == 0) box->kind = BOX_CONNECT;
     else if (strcmp(kind_str, "map")        == 0) box->kind = BOX_MAP;
     else {
         *err = err_fmt("%s: box '%s': unknown kind '%s'", path, box->id, kind_str);
@@ -1153,12 +1140,9 @@ static int build_read_predecessor_lists(graph_t *g, char **err)
 {
     for (int i = 0; i < g->n_boxes; i++) {
         box_t *b = g->boxes[i];
-        /* The kinds that run as tasks. BOX_CREATE_BOX and BOX_CONNECT
-         * join the list with the box-kind path for runtime self-
-         * construction (319 design-correction). BOX_READ never runs
-         * as a task (it's pull-on-demand per issue 244). */
-        if (b->kind != BOX_CALL && b->kind != BOX_WRITE &&
-            b->kind != BOX_CREATE_BOX && b->kind != BOX_CONNECT) continue;
+        /* The kinds that run as tasks. BOX_READ never runs as a
+         * task (it's pull-on-demand per issue 244). */
+        if (b->kind != BOX_CALL && b->kind != BOX_WRITE) continue;
         if (b->n_inputs <= 0) continue;
 
         b->n_read_predecessors    = calloc((size_t)b->n_inputs, sizeof(int));
@@ -1236,12 +1220,9 @@ static int detect_entry_boxes(graph_t *g, char **err)
     int count = 0;
     for (int i = 0; i < g->n_boxes; i++) {
         const box_t *b = g->boxes[i];
-        /* The kinds that run as tasks. BOX_CREATE_BOX and BOX_CONNECT
-         * join the list with the box-kind path for runtime self-
-         * construction (319 design-correction). BOX_READ never runs
-         * as a task (it's pull-on-demand per issue 244). */
-        if (b->kind != BOX_CALL && b->kind != BOX_WRITE &&
-            b->kind != BOX_CREATE_BOX && b->kind != BOX_CONNECT) continue;
+        /* The kinds that run as tasks. BOX_READ never runs as a
+         * task (it's pull-on-demand per issue 244). */
+        if (b->kind != BOX_CALL && b->kind != BOX_WRITE) continue;
 
         int qualifies = 1;
         for (int port = 0; port < b->n_inputs; port++) {
@@ -1572,11 +1553,8 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
      * Connections that already target an outside-the-sub-map id (which
      * shouldn't happen at this layer, but guard anyway) are left alone. */
     for (int i = 0; i < sub_n; i++) {
-        int n_c = atomic_load_explicit(&sub_boxes[i]->n_connections,
-                                       memory_order_relaxed);
-        connection_t *cs =
-            atomic_load_explicit(&sub_boxes[i]->connections,
-                                 memory_order_relaxed);
+        int n_c = sub_boxes[i]->n_connections;
+        connection_t *cs = sub_boxes[i]->connections;
         for (int k = 0; k < n_c; k++) {
             for (int j = 0; j < sub_n; j++) {
                 if (strcmp(cs[k].to_box, old_ids[j]) == 0) {
@@ -1611,11 +1589,9 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
         box_t *prod = g->boxes[p];
         if (prod == encap) continue;
 
-        int n_c = atomic_load_explicit(&prod->n_connections,
-                                       memory_order_relaxed);
+        int n_c = prod->n_connections;
         if (n_c == 0) continue;
-        connection_t *cs =
-            atomic_load_explicit(&prod->connections, memory_order_relaxed);
+        connection_t *cs = prod->connections;
 
         /* First pass: compute the new array's size. Each connection
          * to encap explodes to N entries where N = matched data box's
@@ -1645,8 +1621,7 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
                 free(old_ids);
                 return -1;
             }
-            new_cap += atomic_load_explicit(&D->n_connections,
-                                            memory_order_relaxed);
+            new_cap += D->n_connections;
         }
         if (!touches_encap) continue;
 
@@ -1670,10 +1645,8 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
             int port_idx = find_input_port_index(encap, cs[k].to_input);
             box_t *D = find_ext_supplied_for_port(sub_boxes, sub_n,
                                                   encap, port_idx);
-            int dn = atomic_load_explicit(&D->n_connections,
-                                          memory_order_relaxed);
-            connection_t *dc =
-                atomic_load_explicit(&D->connections, memory_order_relaxed);
+            int dn = D->n_connections;
+            connection_t *dc = D->connections;
             for (int j = 0; j < dn; j++) {
                 new_cs[new_n].to_box      = dc[j].to_box;
                 new_cs[new_n].to_input    = dc[j].to_input;
@@ -1685,10 +1658,8 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
         }
 
         free(cs);
-        atomic_store_explicit(&prod->connections, new_cs,
-                              memory_order_release);
-        atomic_store_explicit(&prod->n_connections, new_n,
-                              memory_order_release);
+        prod->connections = new_cs;
+        prod->n_connections = new_n;
     }
     free(old_ids);
 
@@ -1703,17 +1674,15 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
         box_t *d = sub_boxes[i];
         if (d->kind != BOX_READ) continue;
         if (d->external.kind == EXTERNAL_NONE) continue;
-        connection_t *dc =
-            atomic_load_explicit(&d->connections, memory_order_relaxed);
+        connection_t *dc = d->connections;
         if (dc) free(dc);
-        atomic_store_explicit(&d->connections, NULL, memory_order_release);
-        atomic_store_explicit(&d->n_connections, 0, memory_order_release);
+        d->connections = NULL;
+        d->n_connections = 0;
     }
 
     /* Grow the parent's box pointer array if needed and append the
-     * sub-boxes. No atomic publish ordering needed at load time
-     * (single-threaded), but we keep the same shape as graph_add_box
-     * for consistency. */
+     * sub-boxes. Load time is single-threaded, so the old array can
+     * be freed directly after the memcpy. */
     uint32_t cap = atomic_load_explicit(&g->box_capacity,
                                         memory_order_relaxed);
     uint32_t want = cur_n + (uint32_t)sub_n;
@@ -1731,9 +1700,7 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
             atomic_load_explicit(&g->boxes, memory_order_relaxed);
         if (old_arr) {
             memcpy(new_arr, old_arr, cur_n * sizeof(box_t *));
-            struct stale_arr *st = malloc(sizeof *st);
-            if (st) { st->ptr = old_arr; st->next = g->stale_box_arrs;
-                      g->stale_box_arrs = st; }
+            free(old_arr);
         }
         atomic_store_explicit(&g->boxes, new_arr, memory_order_release);
         atomic_store_explicit(&g->box_capacity, new_cap,
@@ -1762,10 +1729,8 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
      * (the encap is the producer). After the splice they live on the
      * matching write box's connections array; the encap's array is
      * cleared. */
-    int n_encap_out = atomic_load_explicit(&encap->n_connections,
-                                           memory_order_relaxed);
-    connection_t *encap_out =
-        atomic_load_explicit(&encap->connections, memory_order_relaxed);
+    int n_encap_out = encap->n_connections;
+    connection_t *encap_out = encap->connections;
     for (int k = 0; k < n_encap_out; k++) {
         connection_t *c = &encap_out[k];
         int port_idx = find_output_port_index(encap, c->from_branch);
@@ -1789,10 +1754,8 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
          * were just appended to g->boxes — same record, same heap
          * address. Append the encap wire to the write box's
          * connections via copy-and-grow. */
-        int w_n = atomic_load_explicit(&W->n_connections,
-                                       memory_order_relaxed);
-        connection_t *w_old =
-            atomic_load_explicit(&W->connections, memory_order_relaxed);
+        int w_n = W->n_connections;
+        connection_t *w_old = W->connections;
         connection_t *w_new = calloc((size_t)(w_n + 1), sizeof(connection_t));
         if (!w_new) {
             *err = err_fmt("out of memory");
@@ -1805,16 +1768,13 @@ static int inline_one_encapsulation(graph_t *g, int encap_idx, char **err)
         w_new[w_n].to_box_idx   = -1;
         w_new[w_n].to_input_idx = -1;
         if (w_old) free(w_old);
-        atomic_store_explicit(&W->connections, w_new, memory_order_release);
-        atomic_store_explicit(&W->n_connections, w_n + 1,
-                              memory_order_release);
+        W->connections = w_new;
+        W->n_connections = w_n + 1;
     }
     if (encap_out) {
         free(encap_out);
-        atomic_store_explicit(&encap->connections, NULL,
-                              memory_order_release);
-        atomic_store_explicit(&encap->n_connections, 0,
-                              memory_order_release);
+        encap->connections = NULL;
+        encap->n_connections = 0;
     }
     /* sub_boxes pointer-array can now go — the records it pointed at
      * are reachable via g->boxes and stay alive for the run. */
@@ -1877,7 +1837,6 @@ graph_t *graph_load(const char *map_dir, char **err)
     atomic_init(&g->boxes,        NULL);
     atomic_init(&g->n_boxes,      0u);
     atomic_init(&g->box_capacity, 0u);
-    g->stale_box_arrs = NULL;
 
     g->arena = json_arena_create();
     if (!g->arena) {
@@ -2028,16 +1987,6 @@ void graph_destroy(graph_t *g)
         }
         free(boxes);
     }
-    /* Free any stale pointer-arrays parked by runtime growth. The
-     * box records they pointed to are the same records already
-     * freed above (growth never deep-copies records). */
-    struct stale_arr *st = g->stale_box_arrs;
-    while (st) {
-        struct stale_arr *next = st->next;
-        free(st->ptr);
-        free(st);
-        st = next;
-    }
     pthread_mutex_destroy(&g->graph_mu);
     /* Free per-graph heap strings (issue 248 prefix-renamed ids). */
     struct owned_str *os = g->owned_strs;
@@ -2053,91 +2002,6 @@ void graph_destroy(graph_t *g)
     free(g->map_dir);
     json_arena_destroy(g->arena);
     free(g);
-}
-/* }}} */
-
-/* {{{ Runtime mutation — graph_add_box() (issue 319d)
- *
- * Appends a pre-built box to the graph's pointer index. The pointer
- * array grows via copy-and-publish (allocate at 2x capacity, memcpy
- * the old pointers in, atomic-store the new array, park the old on
- * stale_box_arrs for destroy-time reclamation). The new box's count
- * is published last with release semantics so a reader seeing
- * count = N also sees box N-1 fully published into the index. */
-int graph_add_box(graph_t *g, box_t *box)
-{
-    if (!g || !box) return -1;
-    pthread_mutex_lock(&g->graph_mu);
-
-    uint32_t n   = atomic_load_explicit(&g->n_boxes,      memory_order_relaxed);
-    uint32_t cap = atomic_load_explicit(&g->box_capacity, memory_order_relaxed);
-
-    if (n + 1u > cap) {
-        uint32_t new_cap = cap == 0 ? 16u : cap * 2u;
-        box_t **new_boxes = calloc((size_t)new_cap, sizeof(box_t *));
-        if (!new_boxes) {
-            pthread_mutex_unlock(&g->graph_mu);
-            return -1;
-        }
-        box_t **old_boxes = atomic_load_explicit(&g->boxes, memory_order_relaxed);
-        if (old_boxes && n > 0) {
-            memcpy(new_boxes, old_boxes, (size_t)n * sizeof(box_t *));
-        }
-        struct stale_arr *st = malloc(sizeof *st);
-        if (!st) { free(new_boxes); pthread_mutex_unlock(&g->graph_mu); return -1; }
-        st->ptr  = old_boxes;
-        st->next = g->stale_box_arrs;
-        g->stale_box_arrs = st;
-        atomic_store_explicit(&g->boxes,        new_boxes, memory_order_release);
-        atomic_store_explicit(&g->box_capacity, new_cap,   memory_order_release);
-    }
-
-    box_t **boxes = atomic_load_explicit(&g->boxes, memory_order_relaxed);
-    boxes[n] = box;
-    atomic_store_explicit(&g->n_boxes, n + 1u, memory_order_release);
-
-    pthread_mutex_unlock(&g->graph_mu);
-    return (int)n;
-}
-/* }}} */
-
-/* {{{ Runtime mutation — box_add_connection() (issue 319d)
- *
- * Appends one connection to box `b`'s connections array via the
- * same copy-and-publish discipline used for boxes: allocate a
- * new connections[] sized current+1, copy the old in, append the
- * new connection, atomic-store the new connections pointer, then
- * atomic-store the new count. The old connections array is parked
- * on stale_box_arrs (the list is generic, not box-specific) and
- * freed at graph_destroy. */
-int box_add_connection(graph_t *g, box_t *b, connection_t conn)
-{
-    if (!g || !b) return -1;
-    pthread_mutex_lock(&g->graph_mu);
-
-    int n_old = atomic_load_explicit(&b->n_connections, memory_order_relaxed);
-    connection_t *old = atomic_load_explicit(&b->connections, memory_order_relaxed);
-
-    connection_t *new_conns = malloc((size_t)(n_old + 1) * sizeof(connection_t));
-    if (!new_conns) { pthread_mutex_unlock(&g->graph_mu); return -1; }
-    if (old && n_old > 0) {
-        memcpy(new_conns, old, (size_t)n_old * sizeof(connection_t));
-    }
-    new_conns[n_old] = conn;
-
-    if (old) {
-        struct stale_arr *st = malloc(sizeof *st);
-        if (!st) { free(new_conns); pthread_mutex_unlock(&g->graph_mu); return -1; }
-        st->ptr  = old;
-        st->next = g->stale_box_arrs;
-        g->stale_box_arrs = st;
-    }
-
-    atomic_store_explicit(&b->connections,   new_conns, memory_order_release);
-    atomic_store_explicit(&b->n_connections, n_old + 1, memory_order_release);
-
-    pthread_mutex_unlock(&g->graph_mu);
-    return 0;
 }
 /* }}} */
 

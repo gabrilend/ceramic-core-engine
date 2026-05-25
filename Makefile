@@ -56,10 +56,8 @@ endif
 
 LDFLAGS = -ldl -lm -pthread -rdynamic
 # -rdynamic exports the runner's symbols to dlopen'd spec.so
-# plugins. Specs need this for the issue-319d self-construction
-# builtins (runtime_create_box / runtime_connect) — those live in
-# src/018-runtime-builtins.c, owned by the runner, and the Lua /
-# C / Bash spec.so binaries call back into them at runtime.
+# plugins so they can call back into the runner (sentinel helpers,
+# etc.).
 # }}}
 
 # {{{ Paths and source discovery
@@ -159,20 +157,15 @@ $(BUILD_DIR)/tests/010-graph-loader-test: $(BUILD_DIR)/src/010-graph-loader.o \
                                           $(BUILD_DIR)/src/009-slot-store.o \
                                           $(BUILD_DIR)/src/016-unified-allocator.o \
                                           $(BUILD_DIR)/src/011-spec-registry.o \
-                                          $(BUILD_DIR)/src/017-box-id.o \
-                                          $(BUILD_DIR)/src/018-runtime-builtins.o \
                                           $(BUILD_DIR)/src/020-sentinels.o \
                                           $(BUILD_DIR)/src/013-jsonl-events.o \
                                           $(BUILD_DIR)/src/014-event-queue.o \
                                           $(BUILD_DIR)/libs/json/json.o
 # Every test binary that loads a language spec via dlopen needs the
 # runner-side symbols the specs call back into (issue 318's
-# sentinel_*, issue 319d's runtime_set_active_context, etc.). The
-# pool runner pulls them in through POOL_SOURCES' wildcard; tests
-# name them explicitly.
+# sentinel_*, etc.). The pool runner pulls them in through
+# POOL_SOURCES' wildcard; tests name them explicitly.
 SPEC_LOADER_DEPS = $(BUILD_DIR)/src/020-sentinels.o \
-                   $(BUILD_DIR)/src/018-runtime-builtins.o \
-                   $(BUILD_DIR)/src/017-box-id.o \
                    $(BUILD_DIR)/src/010-graph-loader.o \
                    $(BUILD_DIR)/src/009-slot-store.o \
                    $(BUILD_DIR)/src/016-unified-allocator.o \
@@ -189,8 +182,6 @@ $(BUILD_DIR)/tests/012-dispatch-test:      $(BUILD_DIR)/src/012-dispatch.o \
                                            $(BUILD_DIR)/src/016-unified-allocator.o \
                                            $(BUILD_DIR)/src/013-jsonl-events.o \
                                            $(BUILD_DIR)/src/014-event-queue.o \
-                                           $(BUILD_DIR)/src/017-box-id.o \
-                                           $(BUILD_DIR)/src/018-runtime-builtins.o \
                                            $(BUILD_DIR)/src/020-sentinels.o \
                                            $(BUILD_DIR)/libs/json/json.o \
                                            $(BUILD_DIR)/libs/task-pool/pool.o
@@ -214,7 +205,6 @@ $(BUILD_DIR)/tests/307-c-spec-test:       $(BUILD_DIR)/src/011-spec-registry.o \
 $(BUILD_DIR)/tests/308-bash-spec-test:    $(BUILD_DIR)/src/011-spec-registry.o \
                                           $(SPEC_LOADER_DEPS)
 $(BUILD_DIR)/tests/314-json-test:         $(BUILD_DIR)/libs/json/json.o
-$(BUILD_DIR)/tests/017-box-id-test:       $(BUILD_DIR)/src/017-box-id.o
 $(BUILD_DIR)/tests/020-sentinels-test:    $(BUILD_DIR)/src/020-sentinels.o \
                                           $(BUILD_DIR)/libs/json/json.o
 
