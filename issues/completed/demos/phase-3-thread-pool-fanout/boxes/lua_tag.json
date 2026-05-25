@@ -1,0 +1,17 @@
+{
+  "id": "lua_tag",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/tag.lua",
+  "fn": "tag_lua",
+  "inputs": [
+    { "name": "v", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 128,
+  "ui": { "x": 500, "y": 100 },
+  "connections": [
+    { "from_box": "lua_tag", "from_branch": null,
+      "to_box": "out_lua", "to_input": "value" }
+  ]
+}

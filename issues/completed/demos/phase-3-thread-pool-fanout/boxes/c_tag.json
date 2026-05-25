@@ -1,0 +1,17 @@
+{
+  "id": "c_tag",
+  "kind": "call",
+  "lang": "c",
+  "ref": "src/tag.c",
+  "fn": "tag_c",
+  "inputs": [
+    { "name": "v", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 128,
+  "ui": { "x": 500, "y": 200 },
+  "connections": [
+    { "from_box": "c_tag", "from_branch": null,
+      "to_box": "out_c", "to_input": "value" }
+  ]
+}

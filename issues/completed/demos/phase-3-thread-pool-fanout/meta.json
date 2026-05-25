@@ -1,0 +1,5 @@
+{
+  "name": "phase-3-thread-pool-fanout",
+  "description": "Iterator routing fans one seed value to three same-time workers — one Lua, one C, one Bash — each tagging the value and writing to its own file. Showcases the phase-3 C thread pool, multi-language dispatch, iterator routing, and the JSONL transcript layer.",
+  "entry_box_id": "seed"
+}

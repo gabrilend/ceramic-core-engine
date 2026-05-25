@@ -1,0 +1,17 @@
+{
+  "id": "bash_tag",
+  "kind": "call",
+  "lang": "bash",
+  "ref": "src/tag.sh",
+  "fn": "tag_bash",
+  "inputs": [
+    { "name": "v", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 128,
+  "ui": { "x": 500, "y": 300 },
+  "connections": [
+    { "from_box": "bash_tag", "from_branch": null,
+      "to_box": "out_bash", "to_input": "value" }
+  ]
+}

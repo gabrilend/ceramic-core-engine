@@ -1,0 +1,21 @@
+{
+  "id": "fan",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/fan.lua",
+  "fn": "passthrough",
+  "inputs": [
+    { "name": "v", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "ui": { "x": 280, "y": 200 },
+  "connections": [
+    { "from_box": "fan", "from_branch": null,
+      "to_box": "lua_tag",  "to_input": "v" },
+    { "from_box": "fan", "from_branch": null,
+      "to_box": "c_tag",    "to_input": "v" },
+    { "from_box": "fan", "from_branch": null,
+      "to_box": "bash_tag", "to_input": "v" }
+  ]
+}

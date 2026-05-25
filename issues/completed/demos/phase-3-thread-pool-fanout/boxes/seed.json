@@ -1,0 +1,10 @@
+{
+  "id": "seed",
+  "kind": "read",
+  "value": "hello-phase-3",
+  "ui": { "x": 80, "y": 200 },
+  "connections": [
+    { "from_box": "seed", "from_branch": null,
+      "to_box": "fan", "to_input": "v" }
+  ]
+}

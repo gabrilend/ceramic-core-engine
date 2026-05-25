@@ -1,0 +1,9 @@
+{
+  "id": "out_bash",
+  "kind": "write",
+  "inputs": [
+    { "name": "path",  "type": "string", "value": "/tmp/soramech-phase-3-bash.txt" },
+    { "name": "value", "type": "string" }
+  ],
+  "ui": { "x": 720, "y": 300 }
+}
