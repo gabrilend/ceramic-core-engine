@@ -494,27 +494,6 @@ void event_queue_slot_alloc(event_queue_t *q, double ts,
                           owner_box, owner_port);
 }
 
-/* Runtime mutation events (issue 319 / 248 self-construction). Same
- * direct-write path as the verbose events — graph mutations are
- * infrequent and the payload is variable-length string data that
- * doesn't fit cleanly into a fixed-size queue record. */
-void event_queue_box_create(event_queue_t *q, double ts,
-                            const char *box_id, const char *kind,
-                            const char *lang, const char *ref,
-                            const char *fn)
-{
-    if (!q) return;
-    jsonl_emit_box_create(q->writer, ts, box_id, kind, lang, ref, fn);
-}
-
-void event_queue_wire_add(event_queue_t *q, double ts,
-                          const char *from_box, const char *from_branch,
-                          const char *to_box, const char *to_input)
-{
-    if (!q) return;
-    jsonl_emit_wire_add(q->writer, ts, from_box, from_branch, to_box, to_input);
-}
-
 void event_queue_push(event_queue_t *q, double ts,
                       const char *from_box, const char *to_box,
                       const char *to_input, int slot_id,
