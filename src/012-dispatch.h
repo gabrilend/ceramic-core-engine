@@ -49,9 +49,9 @@ typedef struct dispatch_ctx {
 
     /* Per-box runtime state (spawn guard + optional output capture)
      * lives in chunked-append chunks (see ctx_box_chunk_t in
-     * dispatch.c). The old flat-arrays-with-headroom model imposed
-     * a 4096-box runtime cap that issue 319's create_box could
-     * exceed; chunks remove the cap by growing on demand.
+     * dispatch.c). The chunked storage was introduced to support
+     * unbounded box counts; phase 3 doesn't grow the graph at
+     * runtime, but the storage shape stays in place for phase 4.
      *
      * Access goes through the private ctx_box_slot helper in
      * dispatch.c; callers don't touch these directly. */
@@ -81,9 +81,7 @@ typedef struct dispatch_ctx {
      * pool runner emits after graph_attach_runtime, and (b) the
      * per-push events emitted from push_one_connection (every push
      * attempt, including skip paths with their reason). Together
-     * the two paint the complete slot-level timeline. Slot
-     * allocations from runtime_create_box ALWAYS emit when an
-     * events queue is present — they're rare and load-bearing. */
+     * the two paint the complete slot-level timeline. */
     int                   log_slots;
 
     /* Monotonic task id counter for run-log correlation. */

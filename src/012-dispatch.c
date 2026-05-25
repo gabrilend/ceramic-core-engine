@@ -33,8 +33,6 @@
 
 #include "012-dispatch.h"
 #include "016-unified-allocator.h"
-#include "017-box-id.h"             /* BOX_ID_GEN_BUF_SIZE — 319d/box-kind */
-#include "018-runtime-builtins.h"   /* runtime_set_active_context — 319d */
 
 #include <math.h>
 #include <stdarg.h>
@@ -706,15 +704,10 @@ static int push_branch(dispatch_ctx_t *ctx, const box_t *b,
                        const void *out_bytes, int out_size,
                        uint32_t tag, int output_native)
 {
-    /* The producer's connections array and its count are atomic
-     * fields published by box_add_connection (issue 319d) with
-     * memory_order_release. Reading them with matching acquire
-     * semantics is the right paradigm — a concurrent worker
-     * inside box_add_connection on this box could otherwise
-     * split the snapshot (new count, stale array pointer) and
-     * index past the end of an old array. */
-    int n_c = atomic_load_explicit(&b->n_connections, memory_order_acquire);
-    connection_t *cs = atomic_load_explicit(&b->connections, memory_order_acquire);
+    /* Connections are fixed at graph load — no runtime mutation
+     * in phase 3. Plain field reads. */
+    int n_c = b->n_connections;
+    connection_t *cs = b->connections;
     int fired = 0;
     for (int i = 0; i < n_c; i++) {
         const connection_t *c = &cs[i];
@@ -739,10 +732,8 @@ static int push_to_downstream(dispatch_ctx_t *ctx, const box_t *b,
                               const void *out_bytes, int out_size,
                               int output_native)
 {
-    /* Atomic-acquire pair with box_add_connection's release
-     * stores. See push_branch above for the longer rationale. */
-    int n_c = atomic_load_explicit(&b->n_connections, memory_order_acquire);
-    connection_t *cs = atomic_load_explicit(&b->connections, memory_order_acquire);
+    int n_c = b->n_connections;
+    connection_t *cs = b->connections;
     for (int i = 0; i < n_c; i++) {
         if (push_one_connection(ctx, b, &cs[i],
                                 out_bytes, out_size, 0, output_native) != 0)
@@ -1388,109 +1379,6 @@ static int do_write_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
 }
 /* }}} */
 
-/* {{{ do_create_box_box() — runtime self-construction box kind
- *
- * Issue 319 / 246 design-correction follow-on: instead of (or
- * alongside) the per-language `soramech.create_box` wrappers from
- * 319d/319e, a box of kind "create_box" performs the same operation
- * driven by data on its `spec` input wire. This is the
- * language-agnostic shape — the same way `write` boxes are the
- * file-sink primitive available to every language.
- *
- * The single input port is named `spec`. Its value carries the box
- * JSON schema text. Same-language fast-path producers might have
- * sent native bytes that aren't yet JSON-shaped, but in practice
- * create_box boxes have no `lang` of their own, so producers'
- * output_edge_native bit is 0 and the JSON form is what arrives.
- *
- * On success the new box's id is written to out_buf so downstream
- * consumers (typically a `connect` kind box) can wire the new box
- * up. */
-static int do_create_box_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
-                             char *out_buf, int out_capacity, int *out_size)
-{
-    int n = b->n_inputs;
-    if (n < 0 || n > DISPATCH_MAX_INPUTS_PER_BOX) return -1;
-    size_t n_arr = (n > 0) ? (size_t)n : 1;
-    char        *bufs[n_arr];        memset(bufs,       0, sizeof bufs);
-    ua_chunk_t  *buf_chunks[n_arr];  memset(buf_chunks, 0, sizeof buf_chunks);
-    const void  *datas[n_arr];       memset(datas,      0, sizeof datas);
-    int          sizes[n_arr];       memset(sizes,      0, sizeof sizes);
-    int failed = 0;
-    int n_present = read_inputs(ctx, b, bufs, buf_chunks, datas, sizes,
-                                NULL, ctx->default_out_capacity, &failed);
-    emit_input_events(ctx, task_id, bufs, sizes, n_present);
-    if (failed || n_present < 1) {
-        release_inputs(ctx, n, bufs, buf_chunks);
-        return -1;
-    }
-
-    /* The TLS active context is already set by dispatch_action's
-     * prologue, so runtime_create_box finds the graph + slot store
-     * + spec registry it needs. */
-    char id_buf[BOX_ID_GEN_BUF_SIZE];
-    char *err = NULL;
-    int rc = runtime_create_box((const char *)datas[0], sizes[0],
-                                id_buf, sizeof id_buf, &err);
-    release_inputs(ctx, n, bufs, buf_chunks);
-    if (rc != 0) {
-        fprintf(stderr, "create_box box '%s': %s\n",
-                b->id, err ? err : "(no message)");
-        free(err);
-        return -1;
-    }
-
-    int written = snprintf(out_buf, (size_t)out_capacity, "%s", id_buf);
-    if (written < 0 || written >= out_capacity) return -1;
-    *out_size = written;
-    return 0;
-}
-/* }}} */
-
-/* {{{ do_connect_box() — runtime wire-creation box kind
- *
- * Sister to do_create_box_box. The single input port is named
- * `connection` and carries one connection-entry shape (the same
- * JSON object that goes inside a box JSON's `connections[]`
- * array). On success the box emits the literal string "true"
- * so downstream consumers can chain off the side effect. */
-static int do_connect_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
-                          char *out_buf, int out_capacity, int *out_size)
-{
-    int n = b->n_inputs;
-    if (n < 0 || n > DISPATCH_MAX_INPUTS_PER_BOX) return -1;
-    size_t n_arr = (n > 0) ? (size_t)n : 1;
-    char        *bufs[n_arr];        memset(bufs,       0, sizeof bufs);
-    ua_chunk_t  *buf_chunks[n_arr];  memset(buf_chunks, 0, sizeof buf_chunks);
-    const void  *datas[n_arr];       memset(datas,      0, sizeof datas);
-    int          sizes[n_arr];       memset(sizes,      0, sizeof sizes);
-    int failed = 0;
-    int n_present = read_inputs(ctx, b, bufs, buf_chunks, datas, sizes,
-                                NULL, ctx->default_out_capacity, &failed);
-    emit_input_events(ctx, task_id, bufs, sizes, n_present);
-    if (failed || n_present < 1) {
-        release_inputs(ctx, n, bufs, buf_chunks);
-        return -1;
-    }
-    char *err = NULL;
-    int rc = runtime_connect((const char *)datas[0], sizes[0], &err);
-    release_inputs(ctx, n, bufs, buf_chunks);
-    if (rc != 0) {
-        fprintf(stderr, "connect box '%s': %s\n",
-                b->id, err ? err : "(no message)");
-        free(err);
-        return -1;
-    }
-    if (out_capacity >= 4) {
-        memcpy(out_buf, "true", 4);
-        *out_size = 4;
-    } else {
-        *out_size = 0;
-    }
-    return 0;
-}
-/* }}} */
-
 /* {{{ dispatch_action() — the pool action body */
 void dispatch_action(void *arg)
 {
@@ -1498,18 +1386,6 @@ void dispatch_action(void *arg)
     if (!t) return;
     dispatch_ctx_t *ctx = (dispatch_ctx_t *)t->ctx;
     const box_t *b = graph_box(ctx->graph, t->box_id);
-
-    /* Issue 319d: publish the active runtime context to thread-local
-     * storage so any spec that calls runtime_create_box /
-     * runtime_connect during its invoke can reach the graph + slot
-     * store + spec registry. Issue 311 extension: the event queue
-     * threads through too so the builtins can emit box_create /
-     * wire_add / slot_alloc events into the JSONL transcript.
-     * Cleared at the end of this task. */
-    runtime_set_active_context((struct graph *)ctx->graph,
-                               ctx->slots,
-                               ctx->specs,
-                               ctx->events);
 
     atomic_fetch_add_explicit(&ctx->tasks_dispatched, 1, memory_order_relaxed);
 
@@ -1533,9 +1409,9 @@ void dispatch_action(void *arg)
     int rc = -1;
     /* Per-call output format flag (issue 318 follow-on). Defaults
      * to 1 (native) for box kinds whose output is plain bytes
-     * (read / write / create_box / connect — they don't carry a
-     * language and don't JSON-serialize). do_call_box overwrites
-     * with the spec's per-call decision. */
+     * (read / write — they don't carry a language and don't
+     * JSON-serialize). do_call_box overwrites with the spec's
+     * per-call decision. */
     int output_native = 1;
     if (out_buf && b) {
         switch (b->kind) {
@@ -1546,14 +1422,6 @@ void dispatch_action(void *arg)
             case BOX_WRITE:
                 rc = do_write_box(ctx, b, task_id,
                                   out_buf, out_capacity, &out_size);
-                break;
-            case BOX_CREATE_BOX:
-                rc = do_create_box_box(ctx, b, task_id,
-                                       out_buf, out_capacity, &out_size);
-                break;
-            case BOX_CONNECT:
-                rc = do_connect_box(ctx, b, task_id,
-                                    out_buf, out_capacity, &out_size);
                 break;
             case BOX_READ:
                 /* 244: read boxes are pull-on-demand value sources;
@@ -1615,10 +1483,5 @@ void dispatch_action(void *arg)
     /* Release the task cell back to the slab. The chunk pointer
      * was stashed on the task by dispatch_spawn. */
     if (t->chunk) ua_unref(heap, t->chunk);
-
-    /* Clear the runtime-builtins TLS so a later task on this worker
-     * that runs without dispatch_action (e.g. main-thread setup)
-     * doesn't see a stale graph pointer. */
-    runtime_clear_active_context();
 }
 /* }}} */
