@@ -12,8 +12,9 @@ to the scheduler** — not to camp on the worker until the
 boundary clears.
 
 YARQ — yield-and-requeue, the primitive that protects in-place
-box mutation in issue 320 — is the project's name for this
-pattern in one specific place. The shape is general: any time a
+box mutation in issue 420 (formerly 320, renumbered when runtime
+graph mutation moved to phase 4) — is the project's name for
+this pattern in one specific place. The shape is general: any time a
 worker realises "I can't finish this task right now," it should
 re-submit the task to the pool queue and return its body to the
 scheduler for the next ready unit of work.
@@ -107,11 +108,11 @@ ordering is broken by waits the lock owns.
 
 ## Related issues
 
-- Issue 320 — the box reconfigure path that introduces YARQ to
-  this project.
-- Issue 319d — `box_add_connection`'s copy-and-publish atomic
-  dance; the comprehensive YARQ-folded design subsumes it
-  under the same barrier.
+- Issue 420 — the box reconfigure path that introduces YARQ to
+  this project (renumbered from 320 during the phase-4 split).
+- Issue 421 — the unified connections-array mutation path; the
+  comprehensive YARQ-folded design subsumes the old
+  copy-and-publish atomic dance under the same barrier.
 - Issue 301 / 304 — the pool runner and dispatch layer whose
   scheduler-vocabulary YARQ speaks. The fact that the pool
   already routes tasks by re-submission is what makes YARQ
