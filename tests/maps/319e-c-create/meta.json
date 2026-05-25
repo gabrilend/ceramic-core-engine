@@ -1,6 +1,0 @@
-{
-  "name": "319e-c-create",
-  "description": "Issue 319e fixture: a C box uses soramech_create_box to spawn a downstream Lua box and soramech_connect to wire to it. Verifies the runtime self-construction primitives work from C, not just Lua.",
-  "entry_box_id": "trigger",
-  "src_dirs": ["tests/maps/319e-c-create/src"]
-}

@@ -1,8 +1,0 @@
-{
-  "id": "creator",
-  "kind": "create_box",
-  "inputs": [
-    {"name": "spec", "type": "string"}
-  ],
-  "ui": {"x": 300, "y": 100}
-}

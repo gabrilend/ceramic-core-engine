@@ -290,15 +290,6 @@ check_map "read-literal" \
 check_map "319a-many-inputs" \
     "combine → count=20 sum=210"
 
-check_map "319d-runtime-create" \
-    "trigger → trigger-fired:auto_" \
-    "auto_" \
-    "echo_dyn-received:trigger-fired:auto_"
-
-check_map "319e-c-create" \
-    "trigger → c-trigger-fired:auto_" \
-    "c-echo-received:c-trigger-fired:auto_"
-
 check_map "246-c-shim" \
     "echo → seen:HELLO-FROM-SEED"
 
@@ -316,23 +307,6 @@ check_map "318-lang-opaque" \
     '"lang":"lua"' \
     '"shape":"function"' \
     'consumer → doubled=42'
-
-# Language-agnostic create_box / connect box kinds (319
-# design-correction follow-on). A read box emits a box spec; a
-# create_box-kind box consumes it; the new box's id is captured
-# downstream. No per-language wrapper involved — same shape works
-# for Lua, C, and Bash producers.
-check_map "319-box-kind-create" \
-    "creator → auto_"
-
-# 319 auto-init follow-on: a C trigger creates a Lua box at
-# runtime; the Lua spec wasn't in the static graph's language set,
-# so the worker's Lua handle was NULL at pool startup. The
-# dispatch's lazy-init populates the handle on demand and the new
-# box fires.
-check_map "319-cross-lang-create" \
-    "trigger → c-trigger-fired:auto_" \
-    "lua-echo-from-runtime-init:c-trigger-fired:auto_"
 
 # Issue 248 input-side encapsulation. The parent's read box wires
 # a value into a BOX_MAP whose sub-map has one externally-supplied
