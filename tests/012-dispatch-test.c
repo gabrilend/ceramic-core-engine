@@ -206,6 +206,12 @@ static int test_dispatch_counter_burst(void)
     for (int i = 0; i < N; i++) dispatch_spawn(&rt.ctx, entry, 0);
     pool_wait_quiescent(rt.pool);
     ASSERT(atomic_load(&rt.ctx.tasks_dispatched) == N);
+    /* Zero failures, asserted. Before bug 324's fix, literal-fed
+     * ports were always-popping dual-ring slots: seven of these
+     * eight concurrent tasks raced for one cell, read empty
+     * inputs, and failed — visible only as stderr noise while the
+     * test stayed green on the one winner's captured output. */
+    ASSERT(atomic_load(&rt.ctx.tasks_failed) == 0);
     ASSERT(strcmp(dispatch_captured_output(&rt.ctx, entry, NULL), "42") == 0);
 
     runtime_teardown(&rt);

@@ -47,6 +47,12 @@ typedef struct dispatch_ctx {
     /* Diagnostic: incremented each time dispatch_action runs. */
     _Atomic int           tasks_dispatched;
 
+    /* Diagnostic: tasks whose box invoke returned failure. Tests
+     * assert this stays zero — bug 324's cousin hid for months
+     * because a unit test tolerated seven-of-eight task failures
+     * that only stderr ever saw. */
+    _Atomic int           tasks_failed;
+
     /* Per-box runtime state (spawn guard + optional output capture)
      * lives in chunked-append chunks (see ctx_box_chunk_t in
      * dispatch.c). The chunked storage was introduced to support

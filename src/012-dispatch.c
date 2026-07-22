@@ -184,6 +184,7 @@ int dispatch_ctx_init(dispatch_ctx_t *ctx,
     ctx->specs = r;
     ctx->pool  = p;
     atomic_init(&ctx->tasks_dispatched, 0);
+    atomic_init(&ctx->tasks_failed, 0);
     atomic_init(&ctx->next_task_id,     0);
     ctx->default_out_capacity = 4096;
     ctx->events               = NULL;     /* opt-in via caller assignment */
@@ -1475,6 +1476,10 @@ void dispatch_action(void *arg)
         }
     } else if (b) {
         fprintf(stderr, "dispatch: box '%s' failed (rc=%d)\n", b->id, rc);
+        /* Counted, not just printed: a failure that only stderr
+         * sees can hide inside a passing test for months. */
+        atomic_fetch_add_explicit(&ctx->tasks_failed, 1,
+                                  memory_order_relaxed);
     }
 
     long end_us = mono_us();
