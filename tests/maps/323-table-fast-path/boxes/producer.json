@@ -1,0 +1,17 @@
+{
+  "id": "producer",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/tablegen.lua",
+  "fn": "make",
+  "inputs": [
+    { "name": "tag", "type": "string", "value": "x" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 256,
+  "ui": { "x": 100, "y": 100 },
+  "connections": [
+    { "from_box": "producer", "from_branch": null,
+      "to_box": "consumer", "to_input": "t" }
+  ]
+}

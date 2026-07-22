@@ -414,14 +414,18 @@ static int test_read_predecessor_rotation(void)
  * by the producer at push time and consulted by the dispatch's
  * read_inputs at pop time to seed the consumer spec's
  * input_native[i] flag. This test exercises the flow with a
- * Lua consumer whose function visibly distinguishes the two
- * cases: M.describe returns "table:..." on a parsed-JSON table
- * input and "string:..." on a raw-bytes string input. Pushing
- * the same bytes (`{"a":42}`) once through slot_push_native and
- * once through slot_push_json verifies the per-cell tag
- * propagates correctly.
+ * Lua consumer whose function visibly distinguishes what arrived:
+ * M.describe returns "table:..." for a parsed table input and
+ * "string:..." for a raw-bytes string input.
  *
- * Each half uses a fresh fixture: dual-ring slots are single-cell
+ * Three cases since the bug-323 fix amended the native contract
+ * (tables cross same-language wires as JSON, cell still tagged
+ * native, consumer sniffs a leading '{' / '['):
+ *   1. native tag + unstructured bytes  → raw string, untouched
+ *   2. json tag                          → parsed, as always
+ *   3. native tag + structured bytes    → parsed (the 323 sniff)
+ *
+ * Each case uses a fresh fixture: dual-ring slots are single-cell
  * (slice 1 deferred DUAL_RING + multi-cell combining), so we
  * can't push two cells to the same slot in one run.  */
 static int build_describe_fixture(char *dir, size_t cap)
@@ -467,7 +471,10 @@ static int test_dual_ring_per_cell_format(void)
     int         n      = (int)strlen(bytes);
     int ok = 1;
 
-    /* Half 1: native push → Lua sees raw string → "string:..." */
+    /* Case 1: native push of an unstructured payload → Lua sees the
+     * raw string. The raw-fidelity claim is made with bytes that
+     * don't look like JSON; structured-looking native bytes are
+     * case 3's territory since the 323 fix. */
     {
         char dir[1024];
         ASSERT(build_describe_fixture(dir, sizeof dir) == 0);
@@ -476,8 +483,9 @@ static int test_dual_ring_per_cell_format(void)
         int sink = graph_box_index(rt.graph, "sink");
         ASSERT(sink >= 0);
         const box_t *sb = graph_box(rt.graph, sink);
+        const char *plain = "plain-42";
         ASSERT(slot_push_native(rt.slots, sb->input_slot_ids[0],
-                                bytes, n, 0) == 0);
+                                plain, (int)strlen(plain), 0) == 0);
         dispatch_spawn_if_ready(&rt.ctx, sink, 0);
         pool_wait_quiescent(rt.pool);
         ASSERT(dispatch_captured_output(&rt.ctx, sink, NULL) != NULL);
@@ -506,6 +514,34 @@ static int test_dual_ring_per_cell_format(void)
         ASSERT(dispatch_captured_output(&rt.ctx, sink, NULL) != NULL);
         if (strcmp(dispatch_captured_output(&rt.ctx, sink, NULL), "table:42") != 0) {
             fprintf(stderr, "      json half got: %s\n",
+                    dispatch_captured_output(&rt.ctx, sink, NULL));
+            ok = 0;
+        }
+        runtime_teardown(&rt);
+        cleanup_describe_fixture(dir);
+    }
+
+    /* Case 3: native push of structured-looking bytes → parsed
+     * anyway. Bug 323's floor fix: tables cross same-language wires
+     * as JSON with the cell still tagged native, so the Lua input
+     * side sniffs the leading brace and rebuilds the value. Pinned
+     * here at the unit level; tests/maps/323-table-fast-path covers
+     * the same contract end-to-end. */
+    {
+        char dir[1024];
+        ASSERT(build_describe_fixture(dir, sizeof dir) == 0);
+        runtime_t rt;
+        ASSERT(runtime_setup(&rt, dir, 2, 1) == 0);
+        int sink = graph_box_index(rt.graph, "sink");
+        ASSERT(sink >= 0);
+        const box_t *sb = graph_box(rt.graph, sink);
+        ASSERT(slot_push_native(rt.slots, sb->input_slot_ids[0],
+                                bytes, n, 0) == 0);
+        dispatch_spawn_if_ready(&rt.ctx, sink, 0);
+        pool_wait_quiescent(rt.pool);
+        ASSERT(dispatch_captured_output(&rt.ctx, sink, NULL) != NULL);
+        if (strcmp(dispatch_captured_output(&rt.ctx, sink, NULL), "table:42") != 0) {
+            fprintf(stderr, "      structured-native half got: %s\n",
                     dispatch_captured_output(&rt.ctx, sink, NULL));
             ok = 0;
         }

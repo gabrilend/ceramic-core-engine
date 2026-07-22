@@ -1,0 +1,13 @@
+{
+  "id": "consumer",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/tablegen.lua",
+  "fn": "use",
+  "inputs": [
+    { "name": "t", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 256,
+  "ui": { "x": 300, "y": 100 }
+}

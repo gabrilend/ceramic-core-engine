@@ -195,8 +195,22 @@ static int lua_invoke(void *handle,
         }
         int is_native = (input_native == NULL) || (input_native[i] != 0);
         if (is_native) {
-            lua_pushlstring(L, (const char *)input_data[i],
-                            (size_t)input_sizes[i]);
+            /* Issue 323: tables now ride same-language wires as JSON
+             * (see the output path below), so a native input that
+             * looks structured — first byte '{' or '[' — is parsed
+             * back into a real Lua value. Primitives keep the raw-
+             * string fast path untouched. Parse failure falls back
+             * to raw bytes so a legitimate brace-leading string
+             * still arrives; issue 325's per-pair shims replace
+             * this sniff with an explicit declaration. */
+            const char *bytes = (const char *)input_data[i];
+            int structured = input_sizes[i] > 0 &&
+                             (bytes[0] == '{' || bytes[0] == '[');
+            if (!structured ||
+                parse_json_to_stack(L, bytes,
+                                    input_sizes[i], /*verbose=*/0) != 0) {
+                lua_pushlstring(L, bytes, (size_t)input_sizes[i]);
+            }
         } else {
             /* Cross-language input: try JSON. On parse failure,
              * push the raw bytes as a string so existing
@@ -252,18 +266,52 @@ static int lua_invoke(void *handle,
         return 0;
     }
 
-    /* Fast same-language path: tostring coercion. Handles strings /
-     * numbers / booleans / nil; tables come back as "table: 0x..."
-     * which is useless to consumers — only invoked when every
-     * downstream consumer is itself Lua, and even then a Lua
-     * function expecting a table from another Lua box should
-     * receive the actual table (a slice-on-top of issue 313's
-     * whole-program merge would let the runtime pass the value
-     * by reference). For now: documented limitation, primitive-
-     * only on the fast path. */
+    /* Fast same-language path: tostring coercion for primitives.
+     * NOTE — the comment that used to sit here claimed tables "come
+     * back as 'table: 0x...'". That was wrong: raw lua_tolstring
+     * returns NULL for a table (the 'table: 0x...' string is what
+     * luaL_tolstring / tostring() produce), and the NULL branch
+     * below reported *success* with a zero-byte wire. That was bug
+     * 323: every table return in an all-Lua graph silently
+     * evaporated after one hop. Tables now take the same JSON
+     * encoder as the cross-language path; the consumer's native
+     * input sniff (above) rebuilds the value. Issue 313's
+     * whole-program merge remains the by-reference ceiling, and
+     * issue 325 reframes this pairing as an explicitly declared
+     * Lua→Lua shim. */
+    if (lua_istable(L, -1)) {
+        json_writer_t w;
+        json_writer_init(&w, (char *)out_buf, out_buf_capacity);
+        int top = lua_gettop(L);
+        if (encode_value(L, top, &w) != 0) {
+            fprintf(stderr, "lua spec: %s.%s: JSON-encoding table return "
+                            "on same-language wire failed\n",
+                    file_path, fn_name);
+            lua_settop(L, baseline);
+            return -1;
+        }
+        int n = json_writer_finish(&w);
+        if (n < 0) {
+            fprintf(stderr, "lua spec: %s.%s: JSON output (%d bytes) "
+                            "exceeds buffer\n",
+                    file_path, fn_name, out_buf_capacity);
+            lua_settop(L, baseline);
+            return -1;
+        }
+        if (out_size) *out_size = n;
+        lua_settop(L, baseline);
+        return 0;
+    }
     size_t len = 0;
     const char *result = lua_tolstring(L, -1, &len);
     if (!result) {
+        /* Non-coercible, non-table return (nil / boolean / function
+         * / userdata). Zero bytes stays the contract for a no-value
+         * return, but per 323's "never silent" rule the drop now
+         * announces itself on stderr instead of passing unseen. */
+        fprintf(stderr, "lua spec: %s.%s: %s return coerced to empty "
+                        "output on same-language wire\n",
+                file_path, fn_name, lua_typename(L, lua_type(L, -1)));
         if (out_size) *out_size = 0;
         lua_settop(L, baseline);
         return 0;

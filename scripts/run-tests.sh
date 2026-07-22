@@ -317,6 +317,14 @@ check_map "246-c-shim" \
 check_map "246-lua-shim" \
     "echo → seen:REV-fedcba"
 
+# Bug 323 — a table returned on the all-Lua fast path used to hit
+# lua_tolstring's NULL return and leave as a silent zero-byte wire.
+# The producer's table now rides the wire as JSON and the consumer
+# receives a real table; the fixture's consumer names the actual
+# received type on failure so a regression reads clearly.
+check_map "323-table-fast-path" \
+    'consumer → sum=42:x'
+
 # Issue 318 — the producer's output proves the emit side works
 # end-to-end (Lua function → $lang_opaque sentinel in JSON). The
 # consumer's reconstruction needs the dual-ring slot to surface

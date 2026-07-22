@@ -1,0 +1,6 @@
+{
+  "name": "323-table-fast-path",
+  "description": "Regression fixture for bug 323: a Lua box returns a table to a Lua consumer over the same-language fast path. Before the fix the table silently became a zero-byte wire; now it rides as JSON and the consumer receives a real table.",
+  "entry_box_id": "producer",
+  "src_dirs": ["tests/maps/323-table-fast-path/src"]
+}
