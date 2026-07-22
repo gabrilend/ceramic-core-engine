@@ -1,0 +1,19 @@
+{
+  "id": "x_c",
+  "kind": "call",
+  "lang": "c",
+  "ref": "src/pairs.c",
+  "fn": "addone",
+  "inputs": [
+    { "name": "s", "type": "string", "value": "54" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "x_c", "from_branch": null,
+      "to_box": "c_to_lua", "to_input": "x" },
+    { "from_box": "x_c", "from_branch": null,
+      "to_box": "c_to_bash", "to_input": "x" }
+  ],
+  "ui": { "x": 100, "y": 500 }
+}

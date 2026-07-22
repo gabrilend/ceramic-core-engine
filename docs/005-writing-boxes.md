@@ -177,6 +177,23 @@ consumer's side, while the same value sent on a Lua → C wire
 arrives as a JSON sentinel the C side can pass back to Lua
 unchanged.
 
+Every cross-language pairing is **declared, not assumed** (issue
+325): a spec lists the languages it can serialize values for in
+its `translate_targets`, and the graph loader refuses to load a
+map whose wire crosses an undeclared pair — the error names the
+pair and the fix. All three shipped specs declare each other,
+with JSON as the declared translation for every pair. The full
+nine-pair contract is pinned by the `tests/maps/325-pair-matrix`
+fixture, one consumer box per pair, named for its pair.
+
+The dispatch routes each pushed value by the form the spec
+**actually wrote**, not the form it asked for. A spec can report
+its actual output form after each invoke (the optional
+`invoke_wrote_native` accessor) — which is how a Lua table asked
+for in native form still crosses correctly: the spec writes
+JSON, reports it, and the value lands on the JSON side of the
+dual ring, where the per-cell tag tells the consumer to parse.
+
 ## Adding a language
 
 If you need a fourth language (Python, JavaScript, …), the
@@ -194,6 +211,8 @@ typedef struct {
                            char *out_buf, int out_cap, int *out_size);
     int  (*json_to_native)(const void *handle, const void *bytes, int size,
                            char *out_buf, int out_cap, int *out_size);
+    const char *const *translate_targets;      /* declared pairs (issue 325) */
+    int  (*invoke_wrote_native)(void *handle); /* actual-form report (325)   */
     /* ... see the header for the full surface */
 } lang_spec_t;
 ```
@@ -203,3 +222,20 @@ the registration entrypoint, and the spec registry picks it up
 on startup. The Lua / C / Bash specs are working references —
 `langs/lua/spec.c` is the most heavily-commented and the easiest
 starting point.
+
+Two contract duties beyond the callbacks:
+
+- **Declare your translation story.** `translate_targets` is the
+  NULL-terminated list of languages your spec can serialize
+  values for. Until a pair is declared, any map wiring your
+  language across that pair refuses to load — loudly, naming the
+  pair. Declaring a target means your serialized output is
+  something that consumer's spec can decode; the shipped specs
+  all declare each other, with JSON as each pair's translation.
+- **Report what you actually wrote** — only if your invoke can
+  ever produce a different output form than it was asked for.
+  The optional `invoke_wrote_native` accessor is read by the
+  dispatch right after each invoke, on the same worker thread.
+  Omit it when your spec always writes the requested form (true
+  for the shipped C and Bash specs; the Lua spec provides it
+  because tables ride native asks as JSON).

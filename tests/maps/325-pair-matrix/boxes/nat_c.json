@@ -1,0 +1,17 @@
+{
+  "id": "nat_c",
+  "kind": "call",
+  "lang": "c",
+  "ref": "src/pairs.c",
+  "fn": "produce",
+  "inputs": [
+    { "name": "seed", "type": "string", "value": "B" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "nat_c", "from_branch": null,
+      "to_box": "c_to_c", "to_input": "x" }
+  ],
+  "ui": { "x": 100, "y": 200 }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "nat_bash",
+  "kind": "call",
+  "lang": "bash",
+  "ref": "src/pairs.sh",
+  "fn": "produce",
+  "inputs": [
+    { "name": "seed", "type": "string", "value": "C" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "nat_bash", "from_branch": null,
+      "to_box": "bash_to_bash", "to_input": "x" }
+  ],
+  "ui": { "x": 100, "y": 300 }
+}

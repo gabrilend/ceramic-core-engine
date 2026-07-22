@@ -44,7 +44,7 @@ propagating with no error — which makes them the priority kind to fix.
 |-----|-------------------------------------------------------------|----------|
 | [323](completed/323-same-language-fast-path-drops-table-values.md) | same-language fast path silently drops table values | complete · floor fix landed (tables ride native wires as JSON + input-side sniff); by-reference ceiling stays with 313/325 |
 | [324](completed/324-multi-fire-boxes-consume-their-literal-inputs.md) | multi-fire boxes consume their literal inputs after one revolution | complete · design ruling: slots are the two input methods (consumed vs referenced on use); a wire-less typed-in constant is referenced and survives every lap |
-| [325](325-language-spec-serialization-shims.md) | language-spec serialization shims: translate values to the target language | open · design directive; settles 323's open decision — per-language-pair shims replace implicit coercion |
+| [325](completed/325-language-spec-serialization-shims.md) | language-spec serialization shims: translate values to the target language | complete · pairs declared as data + fatal wire walker + actual-form routing + nine-pair matrix fixture + author doc; per-pair custom wire forms remain a reserved extension point |
 
 ## Phase goal checklist
 

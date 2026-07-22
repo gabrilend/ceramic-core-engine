@@ -2,9 +2,12 @@
 
 ## Status
 
-open · design directive captured 2026-07-21; this settles the
+complete · design directive captured 2026-07-21 (settling the
 "decision to settle" left open in
-[323](323-same-language-fast-path-drops-table-values.md).
+[323](completed/323-same-language-fast-path-drops-table-values.md));
+landed across three slices, 2026-07-22. The per-pair custom wire
+form is a reserved extension point, not deferred work — see the
+completion notes.
 
 ## Current behavior
 
@@ -58,9 +61,18 @@ grounded in how the dispatch actually works (recon 2026-07-22):
   individual cell), and its comment now states it as that ring
   family's decode rule. Pinned by a spec-level unit test (table
   ask-native → JSON bytes + report 0; primitive → report 1).
-- Per-pair fixtures asserting byte-level expectations for all
-  nine shipped pairs; the writing-boxes doc teaching the
-  declaration and the actual-form contract.
+- **Third slice landed 2026-07-22 — every pair pinned, and the
+  contract taught.** The `tests/maps/325-pair-matrix` fixture
+  runs nine chains in one map — three same-language, six cross —
+  with every consumer box named for its pair, so a failing
+  assertion names the pair. The Lua consumers report the received
+  type as well as the value, pinning decode fidelity: a
+  cross-language JSON number arrives as a real Lua number; native
+  raw bytes arrive as a string. `docs/005-writing-boxes.md` now
+  teaches both contract duties to language authors: declare your
+  translation story (`translate_targets`), and report what you
+  actually wrote (`invoke_wrote_native`) if your invoke can ever
+  diverge from the asked form.
 
 ## Intended behavior
 
@@ -108,6 +120,42 @@ Consequences:
    a user adding a language writes the shims for each language
    they want to interoperate with — the spec is where translation
    is explained, in executable form.
+
+## Completion notes (2026-07-22)
+
+What landed, across three slices and three commits:
+
+1. **Declarations** — `translate_targets` on the spec struct; all
+   three shipped specs declare each other; the wire walker makes
+   an undeclared cross-language pair a fatal load error naming
+   the pair (unlike the neighboring sentinel check, which warns,
+   because a pair mismatch is certain rather than possible). Pure
+   lookup helper in the spec registry, unit-tested on synthetic
+   and real specs.
+2. **Truthful routing** — the optional `invoke_wrote_native`
+   accessor; the dispatch routes each push by the form actually
+   written. Lua records its form at every invoke exit (tables ride
+   native asks as JSON); C and Bash omit the accessor, meaning
+   "I write what I'm asked," which is true. The brace-sniff
+   narrowed to single-ring cells and is documented as that ring
+   family's decode rule.
+3. **Pins and teaching** — the nine-pair matrix fixture and the
+   writing-boxes documentation described in Current behavior.
+
+Reserved extension point (not deferred work): a per-pair custom
+serialize callback at push time. The recon that reshaped this
+issue showed values leave the language's working store when
+invoke returns, so per-pair custom forms need value retention —
+build that when a pair genuinely wants non-JSON wire bytes; the
+declaration layer already reserves its seat.
+
+Known softness, recorded for a future tightening: a bare Bash
+string crosses cross-language wires unquoted (the
+pass-through-or-string-wrap choice of issue 317 passes it
+through), so it is not valid JSON and consumers accept it via
+the parse-failure fallback. The matrix pins the current bytes;
+if Bash output ever gets string-wrapped, the `bash_to_lua` /
+`bash_to_c` rows are the ones that will speak up.
 
 ## Related tools / files
 

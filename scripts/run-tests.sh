@@ -334,6 +334,25 @@ check_map "323-table-fast-path" \
 check_map "324-literal-multi-fire" \
     'done → D:3'
 
+# Issue 325 — the nine-pair wire matrix. Every shipped language
+# pair carries a value with pinned expectations; consumer boxes
+# are named for their pair so a failure names the pair. The Lua
+# consumers also pin decode fidelity: a cross-language JSON number
+# arrives as a Lua number, native raw bytes arrive as a string.
+# Known softness recorded in the issue: a bare Bash string crosses
+# unquoted (not valid JSON), so language consumers accept it via
+# the parse-failure fallback.
+check_map "325-pair-matrix" \
+    'lua_to_lua → lua-saw:A-p:string' \
+    'c_to_c → c-saw:B-p' \
+    'bash_to_bash → bash-saw:C-p' \
+    'lua_to_c → c-saw:42' \
+    'lua_to_bash → bash-saw:42' \
+    'c_to_lua → lua-saw:55:number' \
+    'c_to_bash → bash-saw:55' \
+    'bash_to_lua → lua-saw:hi-p:string' \
+    'bash_to_c → c-saw:hi-p'
+
 # Issue 318 — the producer's output proves the emit side works
 # end-to-end (Lua function → $lang_opaque sentinel in JSON). The
 # consumer's reconstruction needs the dual-ring slot to surface

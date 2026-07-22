@@ -1,0 +1,13 @@
+{
+  "id": "c_to_c",
+  "kind": "call",
+  "lang": "c",
+  "ref": "src/pairs.c",
+  "fn": "reflect",
+  "inputs": [
+    { "name": "x", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "ui": { "x": 300, "y": 200 }
+}

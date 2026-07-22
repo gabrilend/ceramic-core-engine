@@ -1,0 +1,17 @@
+{
+  "id": "nat_lua",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/pairs.lua",
+  "fn": "produce",
+  "inputs": [
+    { "name": "seed", "type": "string", "value": "A" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "nat_lua", "from_branch": null,
+      "to_box": "lua_to_lua", "to_input": "x" }
+  ],
+  "ui": { "x": 100, "y": 100 }
+}

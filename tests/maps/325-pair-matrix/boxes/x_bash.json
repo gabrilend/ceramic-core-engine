@@ -1,0 +1,19 @@
+{
+  "id": "x_bash",
+  "kind": "call",
+  "lang": "bash",
+  "ref": "src/pairs.sh",
+  "fn": "produce",
+  "inputs": [
+    { "name": "seed", "type": "string", "value": "hi" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "x_bash", "from_branch": null,
+      "to_box": "bash_to_lua", "to_input": "x" },
+    { "from_box": "x_bash", "from_branch": null,
+      "to_box": "bash_to_c", "to_input": "x" }
+  ],
+  "ui": { "x": 100, "y": 600 }
+}

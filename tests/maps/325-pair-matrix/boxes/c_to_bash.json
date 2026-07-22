@@ -1,0 +1,13 @@
+{
+  "id": "c_to_bash",
+  "kind": "call",
+  "lang": "bash",
+  "ref": "src/pairs.sh",
+  "fn": "reflect",
+  "inputs": [
+    { "name": "x", "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "ui": { "x": 300, "y": 540 }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "325-pair-matrix",
+  "description": "Nine chains pin the wire contract for every shipped language pair (issue 325): three same-language chains ride the native form, three cross producers fan out in JSON, and every consumer box is named for its pair so a failure names the pair. Lua consumers also report the received type, pinning decode fidelity.",
+  "entry_box_id": "nat_lua",
+  "src_dirs": ["tests/maps/325-pair-matrix/src"]
+}
