@@ -8,7 +8,51 @@ Builds on: [304](completed/304-task-dispatch-layer.md) (dispatch / readiness),
 [221](completed/221-iterator-box.md) (iterator marks downstream multi-fire),
 [244](completed/244-data-box-pull-on-demand.md) (read boxes / pull-on-demand).
 
+## Status
+
+complete · resolved 2026-07-21 by a design ruling from the map
+author, close to option (b) below but grounded in a cleaner
+principle — see Current behavior.
+
 ## Current behavior
+
+The design ruling: the two slot kinds are not loop bookkeeping —
+they are the **two input methods**. A value entering a port is
+either *consumed on use* (each fire takes one delivery) or
+*referenced on use* (read in place, never spent). And there is no
+such thing as a "loop" in the traditional sense: a map is a
+network of boxes that recurse through themselves and iteratively
+re-process data or memory locations. The input method on each port
+is what shapes how values survive that recursion.
+
+Concretely:
+
+- A typed-in constant whose port has **no incoming wire** is
+  referenced: startup delivers it once, every fire re-reads it,
+  and it is never spent. This holds no matter how many times the
+  box fires.
+- **Exception one — the iterator's intake.** An iterator-routing
+  box is a recursion source and its input IS the conveyor; a
+  literal typed there is the first delivery on the belt, not
+  configuration. It stays consuming.
+- **Exception two — seed ports.** A port carrying a literal AND
+  wires stays consuming: the literal is a seed, and the network
+  re-feeds the port each revolution. Pinning it would re-fire
+  forever.
+- Mechanics: referenced literal ports allocate one-cell single-ring
+  peek slots — single-ring because the dual-ring read path always
+  pops through its ordering ring regardless of port mode (that was
+  the hidden second half of this bug) — and classify as native,
+  since the literal is configured in the consumer's own box file
+  and belongs to the consumer's language.
+
+Validated by the `tests/maps/324-literal-multi-fire` fixture: a
+recursing pair counts to three, which requires the constant to
+survive three laps, with a wrong constant surfacing as a named
+sentinel. The runtime documentation (docs/004-runtime.md,
+Parallelism) now describes the two input methods in these terms.
+
+### As reported (historical)
 
 Two mechanisms collide.
 
@@ -74,6 +118,35 @@ model already in place.
 - `src/012-dispatch.c` — readiness check and the read-box satisfied clause
 - `src/010-graph-loader.c` — the forward multi-fire marking walk
 - `src/009-slot-store.c` / `.h` — peek vs pop cell semantics
+
+## Completion notes (2026-07-21)
+
+Steps taken, for reconstruction:
+
+1. In the graph loader's runtime-attach pass, slot mode became a
+   per-port decision: a port whose only source is its typed-in
+   literal (and whose box is not iterator-routing) gets a one-cell
+   peek slot with no ordering ring and no dual-ring flag; all
+   other ports keep the box-wide mode from the recursion walk.
+2. The per-edge format classification learned the same rule: a
+   feeder-less literal port classifies native, mirroring the push
+   side's "literals belong to the consumer's language" reasoning.
+   Two loader unit-test assertions that pinned the old
+   approximation (literal ports classified as JSON, kept working
+   only by the parse-failure fallback) were updated with the rule
+   spelled out.
+3. A note now sits in the dispatch's input reader recording that
+   the dual-ring branch always pops — the reason referenced ports
+   must be single-ring.
+4. New integration fixture `tests/maps/324-literal-multi-fire`
+   wired into the suite; docs/004-runtime.md gained the
+   input-methods paragraph.
+
+Debugging detour worth remembering: the first fix (slot mode only)
+looked correct but changed nothing at runtime, because the
+dual-ring reader ignored the mode entirely. The transcript's
+slot-allocation and push events were what exposed it — the
+back-edge push reported "ok" while the constant's slot drained.
 
 ---
 

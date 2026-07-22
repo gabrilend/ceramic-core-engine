@@ -7,7 +7,39 @@ Builds on / corrects: [312](completed/312-same-language-wire-fast-path.md)
 (same-language fast path), [313](completed/313-research-whole-program-same-language-merge.md)
 (whole-program merge), [306](completed/306-lua-language-spec.md) (Lua spec).
 
+## Status
+
+complete · the floor fix landed 2026-07-21. The by-reference
+ceiling stays with [313](completed/313-research-whole-program-same-language-merge.md);
+the "decision to settle" below was settled by
+[325](325-language-spec-serialization-shims.md): the floor is
+always-on, and the pairing becomes an explicitly declared Lua→Lua
+shim when 325 lands.
+
 ## Current behavior
+
+A box author returns a table; the wire's language pairing no longer
+decides whether it survives:
+
+- On a same-language (native) wire the Lua spec routes table
+  returns through the same JSON encoder the cross-language path
+  uses. The cell keeps its native tag, and the Lua input side
+  rebuilds the value by parsing native bytes whose first byte is
+  `{` or `[` (parse failure falls back to the raw string).
+- Primitives keep the raw-bytes fast path untouched.
+- The remaining non-coercible returns (nil / boolean / function /
+  userdata) still travel as zero bytes but announce themselves on
+  stderr — never silently.
+- The misleading source comment (which claimed tables coerce to
+  `table: 0x...` strings) is corrected at the fix site.
+
+Validated twice: the dual-ring unit test now pins three cases
+(native+plain stays raw, json parses, native+structured parses),
+and the `tests/maps/323-table-fast-path` integration fixture proves
+a producer's table crosses an all-Lua wire and arrives as a real
+table.
+
+### As reported (historical)
 
 A Lua box's return value reaches the next box by one of two paths, chosen
 per-wire by the dispatch layer via the `output_native` flag:
@@ -80,6 +112,33 @@ discussion in the appendix and the parallelism-vs-by-reference tension.
 - `encode_value` (same file) — the JSON encoder both paths can share
 - `src/012-dispatch.c` — where `output_native` is decided per wire
 - [244](completed/244-data-box-pull-on-demand.md) — a related pull model
+
+## Completion notes (2026-07-21)
+
+Steps taken, for reconstruction:
+
+1. Output side (`langs/lua/spec.c`, same-language branch): a table
+   return is detected before the string coercion and routed through
+   the shared JSON encoder; encode failure and buffer overflow are
+   loud errors. The stale comment was replaced with one explaining
+   the actual NULL-return mechanism and the amended contract.
+2. The silent zero-byte branch now writes a typed notice to stderr
+   for non-coercible, non-table returns.
+3. Input side (same file, native branch): first-byte sniff for
+   `{` / `[` parses structured native bytes back into real values;
+   everything else keeps the raw-string fast path.
+4. The dual-ring per-cell-format unit test was amended: its raw-
+   fidelity half now uses unstructured bytes, and a third case pins
+   the structured-native sniff. The fixture helper's comment
+   (`tests/maps/calc/src/calc.lua`) was updated to match.
+5. New integration fixture `tests/maps/323-table-fast-path` wired
+   into the suite.
+
+Discovery worth keeping: the issue-317 fidelity convention means an
+integer `n` field on a user's table is read as an array-length
+declaration by the encoder — the fixture initially tripped over it.
+Box authors returning objects should avoid a bare integer `n` key;
+325's shim redesign is the place to revisit that edge.
 
 ---
 
