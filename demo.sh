@@ -28,7 +28,10 @@ if [ "${PHASE}" = "1" ]; then
     echo "input:"
     cat "${DIR}/maps/classify-demo/data/input.json"
     echo ""
-    luajit "${DIR}/soramech-runner.lua" "${DIR}/maps/classify-demo"
+    # The interpreter entry point moved into src/ during the
+    # entry-point cleanup (issue 220); the old root-level
+    # soramech-runner.lua no longer exists.
+    luajit "${DIR}/src/007-runner-main.lua" "${DIR}/maps/classify-demo"
     echo ""
     echo "output:"
     cat "${DIR}/maps/classify-demo/data/output.json"

@@ -25,3 +25,13 @@ Goal: a map you can edit in the browser and execute from the terminal.
 - [x] Write a custom driver and have the runner use it
 - [x] Branch box routes correctly based on a predicate
 - [x] Data file read and write from within a box function
+
+## Post-phase maintenance
+
+The phase-1 demo maps (user content under `maps/`, gitignored) were
+found gutted on disk long after the phase closed; they were restored
+from git history but predate the unified routing schema.
+
+| ID  | Title                                    | Status    |
+|-----|------------------------------------------|-----------|
+| [111](111-restore-phase-1-demo-maps-to-current-schema.md) | restore the phase-1 demo maps to the current schema | open · files recovered; schema migration remains; 003-data-test folded into the suite, 004-driver-test blocked on this |

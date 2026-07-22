@@ -13,9 +13,39 @@ esac
 # }}}
 
 DIR="/mnt/mtwo/programs/sora/soramech"
-MAPS_ROOT="${1:-${DIR}/maps}"
 PORT="${2:-7701}"
 BASE="http://localhost:${PORT}"
+
+# Logs are ephemeral output; they belong in the RAM tier that
+# ensure-tmp.sh establishes (never on spinning disk).
+"${DIR}/scripts/ensure-tmp.sh" "${DIR}" >/dev/null
+LOG="${DIR}/tmp/shared-memory/test-server.log"
+
+# {{{ scratch maps root — never smoke-test against user content
+# This test used to point the server at ${DIR}/maps, which is live
+# user content: the assertions rotted as the user's boxes evolved,
+# and the PUT/DELETE tests mutated real maps. Instead it serves a
+# scratch copy of the current-schema hello fixture from the RAM
+# tier. Pass a maps root as $1 to override.
+SCRATCH_MAPS="${DIR}/tmp/shared-memory/test-server-maps"
+if [ -z "${1:-}" ]; then
+    rm -rf "${SCRATCH_MAPS}"
+    mkdir -p "${SCRATCH_MAPS}"
+    cp -r "${DIR}/tests/maps/hello" "${SCRATCH_MAPS}/hello"
+    # the C-runner fixture carries no drivers.json; the server's
+    # drivers route needs one, so seed it with the built-ins
+    cat > "${SCRATCH_MAPS}/hello/drivers.json" << DRIVERSJSON
+{
+  ".lua": "${DIR}/drivers/lua.sh",
+  ".c":   "${DIR}/drivers/c.sh",
+  ".sh":  "${DIR}/drivers/bash.sh"
+}
+DRIVERSJSON
+    MAPS_ROOT="${SCRATCH_MAPS}"
+else
+    MAPS_ROOT="${1}"
+fi
+# }}}
 
 PASS=0
 FAIL=0
@@ -38,11 +68,14 @@ assert_contains() {
 # }}}
 
 # {{{ start_server
-luajit "${DIR}/soramech-server.lua" "${MAPS_ROOT}" "${PORT}" > /tmp/soramech-test-server.log 2>&1 &
+# The server entry point moved into src/ during the entry-point
+# cleanup (issue 220); the old root-level soramech-server.lua no
+# longer exists.
+luajit "${DIR}/src/006-server-main.lua" "${MAPS_ROOT}" "${PORT}" > "${LOG}" 2>&1 &
 SERVER_PID=$!
 sleep 0.5
 if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
-    echo "FAIL: server did not start (check /tmp/soramech-test-server.log)"
+    echo "FAIL: server did not start (check ${LOG})"
     exit 1
 fi
 echo "server started (pid ${SERVER_PID})"
@@ -67,7 +100,9 @@ assert_contains "GET /maps/hello/boxes/greet has id field" '"id"' "${RESULT}"
 assert_contains "GET /maps/hello/boxes/greet has greet id" '"greet"' "${RESULT}"
 
 # Test 4: create a new box (PUT)
-NEW_BOX='{"id":"test-box","label":"Test","kind":"call","ref":"src/test.lua","fn":"run","inputs":[],"outputs":[],"connections":[],"ui":{"x":0,"y":0}}'
+# routing is required on call boxes since the unified routing
+# schema (issue 233); the old payload predated it and was rejected
+NEW_BOX='{"id":"test-box","label":"Test","kind":"call","ref":"src/test.lua","fn":"run","routing":{"kind":"plain"},"inputs":[],"outputs":[],"connections":[],"ui":{"x":0,"y":0}}'
 RESULT=$(curl -s -X PUT -H "Content-Type: application/json" \
     -d "${NEW_BOX}" "${BASE}/maps/hello/boxes/test-box")
 assert_contains "PUT new box returns ok" '"ok"' "${RESULT}"
@@ -77,7 +112,7 @@ RESULT=$(curl -s "${BASE}/maps/hello/boxes/test-box")
 assert_contains "GET new box has label" '"Test"' "${RESULT}"
 
 # Test 6: update it
-UPDATED='{"id":"test-box","label":"Updated","kind":"call","ref":"src/test.lua","fn":"run","inputs":[],"outputs":[],"connections":[],"ui":{"x":10,"y":10}}'
+UPDATED='{"id":"test-box","label":"Updated","kind":"call","ref":"src/test.lua","fn":"run","routing":{"kind":"plain"},"inputs":[],"outputs":[],"connections":[],"ui":{"x":10,"y":10}}'
 RESULT=$(curl -s -X PUT -H "Content-Type: application/json" \
     -d "${UPDATED}" "${BASE}/maps/hello/boxes/test-box")
 assert_contains "PUT updated box returns ok" '"ok"' "${RESULT}"

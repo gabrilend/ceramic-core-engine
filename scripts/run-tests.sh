@@ -519,6 +519,30 @@ encap_output_only_file_check() {
 }
 # }}}
 
+# {{{ legacy_data_tests() — phase-1 data library unit tests
+# 003-data-test.lua predates the C runner but covers the still-live
+# libs/soramech-data.lua semantics (constants, refused writes,
+# missing-field errors). Folded in here so it runs on every suite
+# pass instead of silently rotting outside any test target. Its
+# sibling 004-driver-test-runner.lua stays out: it needs the
+# old-schema maps/driver-test map (see issue 111).
+legacy_data_tests() {
+    printf "  %-44s " "003-data unit tests (lua)"
+    local out
+    out=$(luajit "$DIR/tests/003-data-test.lua" 2>&1)
+    local rc=$?
+    if [[ $rc -eq 0 && "$out" == *"All data tests passed."* ]]; then
+        printf "ok\n"
+        pass=$((pass + 1))
+    else
+        printf "FAIL\n"
+        echo "$out" | sed 's/^/      /'
+        fail=$((fail + 1))
+        failures+=("003-data: rc=$rc")
+    fi
+}
+# }}}
+
 pipeline_output_check
 compile_pipeline_check
 encap_input_only_file_check
@@ -526,6 +550,7 @@ encap_output_only_file_check
 encap_recursive_file_check
 refs_unit_tests
 refs_fork_on_live_check
+legacy_data_tests
 # }}}
 
 # {{{ parser_tests() — issue 232: unit tests for langs/<lang>/parser.js
