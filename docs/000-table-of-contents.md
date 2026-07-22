@@ -20,6 +20,7 @@ If you're new to SoraMech, read these in order:
 - [libs/soramech-data.info.md](../libs/soramech-data.info.md) — `data.get` / `data.set` / `data.load` API reference
 - [libs/text.lua.info.md](../libs/text.lua.info.md) — `text.concat` / `text.split` / `text.replace` / ... API reference
 - [libs/files.lua.info.md](../libs/files.lua.info.md) — `files.read_text` / `files.read_data` API reference
+- [libs/ollama.lua.info.md](../libs/ollama.lua.info.md) — **deprecated** Ollama client; retirement tracked in the llama.cpp replacement issue (254)
 
 ## Project tracking
 
@@ -28,3 +29,4 @@ Per-issue files live under `issues/` (open) and `issues/completed/` (done). The 
 - [issues/phase-1-progress.md](../issues/phase-1-progress.md) — phase 1 (foundation): complete
 - [issues/phase-2-progress.md](../issues/phase-2-progress.md) — phase 2 (editor + graph model)
 - [issues/phase-3-progress.md](../issues/phase-3-progress.md) — phase 3 (C pool runner)
+- [issues/phase-4-progress.md](../issues/phase-4-progress.md) — phase 4 (runtime graph mutation): in design
