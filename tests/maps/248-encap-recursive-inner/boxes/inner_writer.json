@@ -3,7 +3,7 @@
   "kind": "write",
   "external": { "kind": "named", "name": "result" },
   "inputs": [
-    { "name": "path",  "type": "string", "value": "/tmp/soramech-248-encap-recursive-inner.txt" },
+    { "name": "path",  "type": "string", "value": "/dev/shm/soramech/tests/248-encap-recursive-inner.txt" },
     { "name": "value", "type": "string" }
   ]
 }

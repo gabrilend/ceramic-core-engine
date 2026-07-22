@@ -2,7 +2,7 @@
   "id": "output",
   "kind": "write",
   "inputs": [
-    { "name": "path",  "type": "string", "value": "/tmp/soramech-pipeline-out.txt" },
+    { "name": "path",  "type": "string", "value": "/dev/shm/soramech/tests/pipeline-out.txt" },
     { "name": "value", "type": "string" }
   ],
   "ui": { "x": 900, "y": 100 }

@@ -85,12 +85,13 @@ if [[ ! -d "$TESTS_DIR" ]]; then
     exit 1
 fi
 
-# Captures live in tmp/ (the project's RAM-backed dir per
-# CLAUDE.md). Fall back to /tmp if the symlink isn't set up.
-CAPTURE_DIR="$DIR/tmp/run-unit-tests"
-if [[ ! -d "$DIR/tmp" ]]; then
-    CAPTURE_DIR="/tmp/soramech-run-unit-tests"
-fi
+# Captures are ephemeral artifacts; they live in the RAM tier.
+# ensure-tmp.sh builds the tmp/ symlink scheme if it's missing, so
+# the old fall-back-to-/tmp branch is gone — if the tier can't be
+# established, failing loudly here is correct (fallbacks are
+# warnings, warnings are errors).
+"$DIR/scripts/ensure-tmp.sh" "$DIR" >/dev/null
+CAPTURE_DIR="$DIR/tmp/shared-memory/run-unit-tests"
 mkdir -p "$CAPTURE_DIR"
 # }}}
 

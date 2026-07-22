@@ -2,7 +2,7 @@
   "id": "out_c",
   "kind": "write",
   "inputs": [
-    { "name": "path",  "type": "string", "value": "/tmp/soramech-phase-3-c.txt" },
+    { "name": "path",  "type": "string", "value": "/dev/shm/soramech/demo/phase-3-c.txt" },
     { "name": "value", "type": "string" }
   ],
   "ui": { "x": 720, "y": 200 }

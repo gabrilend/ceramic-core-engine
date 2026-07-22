@@ -2,7 +2,7 @@
   "id": "out_lua",
   "kind": "write",
   "inputs": [
-    { "name": "path",  "type": "string", "value": "/tmp/soramech-phase-3-lua.txt" },
+    { "name": "path",  "type": "string", "value": "/dev/shm/soramech/demo/phase-3-lua.txt" },
     { "name": "value", "type": "string" }
   ],
   "ui": { "x": 720, "y": 100 }

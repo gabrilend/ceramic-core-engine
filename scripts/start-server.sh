@@ -14,6 +14,10 @@ esac
 
 DIR="/mnt/mtwo/programs/sora/soramech"
 
+# Make sure the RAM-backed tmp/ tier exists before the server runs —
+# logs and other ephemeral output belong there, never on disk.
+"${DIR}/scripts/ensure-tmp.sh" "${DIR}" >/dev/null
+
 PORT="${1:-7700}"
 
 echo "SoraMech server starting on http://localhost:${PORT}"

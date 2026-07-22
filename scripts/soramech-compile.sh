@@ -272,6 +272,10 @@ merge_lua_sources
 # step is purely informational: it surfaces compile errors at compile
 # time rather than at run time, and produces artifacts the user can
 # inspect or distribute alongside the source.
+# gcc diagnostics are captured to the RAM log tier; ensure-tmp.sh
+# builds the tmp/ symlink scheme if it's missing.
+"$DIR/scripts/ensure-tmp.sh" "$DIR" >/dev/null
+CC_LOG="$DIR/tmp/shared-memory/soramech-compile-cc.log"
 n_c_compiled=0
 n_c_failed=0
 for box in "$COMPILED"/boxes/*.json; do
@@ -287,9 +291,9 @@ for box in "$COMPILED"/boxes/*.json; do
     fi
     base=$(basename "$ref" .c)
     out="$COMPILED/bin/$base.so"
-    if ! gcc -shared -fPIC -O2 -Wall -o "$out" "$src_path" 2>/tmp/soramech-compile-cc.log; then
+    if ! gcc -shared -fPIC -O2 -Wall -o "$out" "$src_path" 2>"$CC_LOG"; then
         echo "soramech-compile: gcc failed for $ref:" >&2
-        cat /tmp/soramech-compile-cc.log >&2
+        cat "$CC_LOG" >&2
         n_c_failed=$((n_c_failed + 1))
         continue
     fi

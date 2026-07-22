@@ -29,6 +29,15 @@ fi
 
 cd "$DIR"
 
+# Establish the RAM-backed temp tiers before anything writes a log
+# or scratch file (project convention: ephemeral output never lands
+# on spinning disk). TEST_SCRATCH must stay literally in sync with
+# the absolute paths baked into fixture write boxes under
+# tests/maps/*/boxes/ — box JSON has no variable expansion.
+"$DIR/scripts/ensure-tmp.sh" "$DIR" >/dev/null
+TEST_SCRATCH="/dev/shm/soramech/tests"
+mkdir -p "$TEST_SCRATCH"
+
 pass=0
 fail=0
 failures=()
@@ -97,8 +106,11 @@ check_map() {
 check_jsonl() {
     local map="$1"
     local expected="$DIR/tests/expected/$map.jsonl"
+    # actual_raw is the C pool runner's own no-map-tmp fallback path
+    # (see src/008-pool-runner.c) — a runner contract, not a scratch
+    # location this script chooses.
     local actual_raw="/tmp/soramech-last-run.jsonl"
-    local actual_norm="/tmp/soramech-norm-$map-$$.jsonl"
+    local actual_norm="$TEST_SCRATCH/norm-$map-$$.jsonl"
 
     printf "  %-44s " "$map (transcript diff)"
 
@@ -128,22 +140,22 @@ check_jsonl() {
     fi
 
     "$DIR/scripts/normalise-jsonl.lua" --dir "$DIR" "$actual_raw" > "$actual_norm"
-    if ! diff -u "$expected" "$actual_norm" >/tmp/jsonl-diff-$$.txt 2>&1; then
+    if ! diff -u "$expected" "$actual_norm" >"$TEST_SCRATCH/jsonl-diff-$$.txt" 2>&1; then
         printf "FAIL — transcript diverges\n"
-        sed 's/^/      /' /tmp/jsonl-diff-$$.txt
+        sed 's/^/      /' "$TEST_SCRATCH/jsonl-diff-$$.txt"
         fail=$((fail + 1))
         failures+=("$map transcript: diff failed")
     else
         printf "ok\n"
         pass=$((pass + 1))
     fi
-    rm -f "$actual_norm" /tmp/jsonl-diff-$$.txt
+    rm -f "$actual_norm" "$TEST_SCRATCH/jsonl-diff-$$.txt"
 }
 # }}}
 
 # {{{ pipeline_output_check() — additional: the pipeline writes to disk
 pipeline_output_check() {
-    local file="/tmp/soramech-pipeline-out.txt"
+    local file="$TEST_SCRATCH/pipeline-out.txt"
     rm -f "$file"
     "$DIR/soramech-pool" "$DIR/tests/maps/pipeline" > /dev/null 2>&1
     printf "  %-44s " "pipeline write output"
@@ -174,7 +186,7 @@ pipeline_output_check() {
 compile_pipeline_check() {
     local map="$DIR/tests/maps/pipeline"
     local compiled="$map/compiled"
-    local file="/tmp/soramech-pipeline-out.txt"
+    local file="$TEST_SCRATCH/pipeline-out.txt"
 
     printf "  %-44s " "compile pipeline (portable run)"
 
@@ -352,7 +364,7 @@ check_map "248-encap-recursive" \
 
 # {{{ encap_input_only_file_check() — input-side encap reaches disk
 encap_input_only_file_check() {
-    local file="/tmp/soramech-248-encap-out.txt"
+    local file="$TEST_SCRATCH/248-encap-out.txt"
     rm -f "$file"
     "$DIR/soramech-pool" "$DIR/tests/maps/248-encap-input-only" >/dev/null 2>&1
     printf "  %-44s " "encap input-only write output"
@@ -382,9 +394,9 @@ encap_input_only_file_check() {
 # same byte sequence, proving the value flowed from the parent
 # through both encapsulation boundaries.
 encap_recursive_file_check() {
-    local inner_file="/tmp/soramech-248-encap-recursive-inner.txt"
-    local outer_file="/tmp/soramech-248-encap-recursive-outer.txt"
-    local parent_file="/tmp/soramech-248-encap-recursive-parent.txt"
+    local inner_file="$TEST_SCRATCH/248-encap-recursive-inner.txt"
+    local outer_file="$TEST_SCRATCH/248-encap-recursive-outer.txt"
+    local parent_file="$TEST_SCRATCH/248-encap-recursive-parent.txt"
     rm -f "$inner_file" "$outer_file" "$parent_file"
     "$DIR/soramech-pool" "$DIR/tests/maps/248-encap-recursive" >/dev/null 2>&1
     printf "  %-44s " "encap recursive write outputs"
@@ -480,8 +492,8 @@ refs_fork_on_live_check() {
 # write box does its disk write THEN pushes the same value bytes
 # downstream to the parent's writer.
 encap_output_only_file_check() {
-    local sub_file="/tmp/soramech-248-encap-output-sub.txt"
-    local out_file="/tmp/soramech-248-encap-output-out.txt"
+    local sub_file="$TEST_SCRATCH/248-encap-output-sub.txt"
+    local out_file="$TEST_SCRATCH/248-encap-output-out.txt"
     rm -f "$sub_file" "$out_file"
     "$DIR/soramech-pool" "$DIR/tests/maps/248-encap-output-only" >/dev/null 2>&1
     printf "  %-44s " "encap output-only write outputs"

@@ -22,9 +22,14 @@ if [[ $# -ge 1 ]] && [[ "$1" == "--dir" ]]; then
 fi
 MAP="$DIR/issues/completed/demos/phase-3-thread-pool-fanout"
 LOG="/tmp/soramech-last-run.jsonl"
-OUT_LUA="/tmp/soramech-phase-3-lua.txt"
-OUT_C="/tmp/soramech-phase-3-c.txt"
-OUT_BASH="/tmp/soramech-phase-3-bash.txt"
+# Output files live in the RAM tier (/dev/shm), matching the literal
+# paths in this demo's write boxes — ephemeral output never lands on
+# spinning disk. Box JSON has no variable expansion, so these must
+# stay literally in sync with boxes/out_*.json.
+DEMO_SHM="/dev/shm/soramech/demo"
+OUT_LUA="$DEMO_SHM/phase-3-lua.txt"
+OUT_C="$DEMO_SHM/phase-3-c.txt"
+OUT_BASH="$DEMO_SHM/phase-3-bash.txt"
 # }}}
 
 # {{{ sanity-check the runner binary exists
@@ -36,6 +41,7 @@ fi
 # }}}
 
 # {{{ clean previous outputs so the demo's writes are fresh
+mkdir -p "$DEMO_SHM"
 rm -f "$OUT_LUA" "$OUT_C" "$OUT_BASH"
 # }}}
 
