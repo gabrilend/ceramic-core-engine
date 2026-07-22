@@ -1,3 +1,9 @@
+-- DEPRECATED — retired by issue 254 (llama.cpp client replacing Ollama).
+-- New maps should not adopt this library; libs/llamacpp.lua replaces it
+-- with the same two public signatures. Known forbidden-fallback: a nil
+-- model / host silently becomes DEFAULT_MODEL / DEFAULT_HOST below —
+-- part of why this file is being retired rather than extended.
+--
 -- Ollama API client — shared library and ready-to-use box source.
 -- require("ollama") from any Lua function, or copy to a map's src/ directory
 -- to use it directly as a call box via the file browser.
