@@ -62,6 +62,7 @@ model the phase 3 runtime will consume.
 | 249  | tap input mode: radial-bubble ports and emoji box labels    | open · concept — touch-first editing mode alongside the desktop mouse model |
 | 251  | timer box: tick-tock emitter                                | open · design draft — wall-clock scheduling; the load-bearing question is the pool idle-wait deadline |
 | 258  | HTML documentation mirror rebuild                           | open · stale handcrafted pages removed; regenerate from current markdown via a generator tool |
+| 259  | code-extraction box: LLM text in, code appended to the main-file-slice | open · concept — extract `[code]:` blocks, checkbox-vs-wire comment policy, retry branch wired back upstream |
 
 ## Phase goal checklist
 
