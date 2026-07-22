@@ -1,0 +1,17 @@
+{
+  "id": "loop",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/cycle.lua",
+  "fn": "identity",
+  "inputs": [
+    { "name": "v", "type": "string", "value": "0" }
+  ],
+  "routing": { "kind": "iterator", "n_outputs": 1 },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "loop", "from_branch": "out_0",
+      "to_box": "think", "to_input": "tick" }
+  ],
+  "ui": { "x": 100, "y": 100 }
+}

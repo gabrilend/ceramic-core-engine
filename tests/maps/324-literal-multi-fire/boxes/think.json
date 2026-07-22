@@ -1,0 +1,22 @@
+{
+  "id": "think",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/cycle.lua",
+  "fn": "step",
+  "inputs": [
+    { "name": "tick",  "type": "string" },
+    { "name": "const", "type": "string", "value": "elara" }
+  ],
+  "routing": { "kind": "comparator", "comparand": 3 },
+  "output_capacity": 64,
+  "connections": [
+    { "from_box": "think", "from_branch": "lt",
+      "to_box": "loop", "to_input": "v" },
+    { "from_box": "think", "from_branch": "eq",
+      "to_box": "done", "to_input": "v" },
+    { "from_box": "think", "from_branch": "gt",
+      "to_box": "done", "to_input": "v" }
+  ],
+  "ui": { "x": 300, "y": 100 }
+}

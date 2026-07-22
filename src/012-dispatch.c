@@ -470,6 +470,11 @@ static int read_inputs(const dispatch_ctx_t *ctx, const box_t *b,
          * port — every cell in a single-ring slot is the same
          * format because the producers were all classified the
          * same way at graph load). */
+        /* NOTE: the dual-ring branch always pops (the ordering ring
+         * drives the read), so a port that must be REFERENCED rather
+         * than consumed must not be allocated dual-ring — the loader
+         * keeps reference-mode literal ports single-ring for exactly
+         * this reason (bug 324). */
         int32_t flags  = slot_flags(ctx->slots, b->input_slot_ids[i]);
         int     native = 1;
         if (flags >= 0 && (flags & SLOT_FLAG_DUAL_RING)) {

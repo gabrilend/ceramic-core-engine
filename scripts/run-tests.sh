@@ -325,6 +325,15 @@ check_map "246-lua-shim" \
 check_map "323-table-fast-path" \
     'consumer → sum=42:x'
 
+# Bug 324 — a typed-in constant on a re-firing box used to be
+# consumed on the first lap (the recursion walk made every port a
+# consuming slot), silently stopping the network after one
+# revolution. Constants are now referenced on use, not consumed:
+# the counter must reach 3, which takes three laps with the
+# constant surviving each one. A wrong constant surfaces as D:99.
+check_map "324-literal-multi-fire" \
+    'done → D:3'
+
 # Issue 318 — the producer's output proves the emit side works
 # end-to-end (Lua function → $lang_opaque sentinel in JSON). The
 # consumer's reconstruction needs the dual-ring slot to surface

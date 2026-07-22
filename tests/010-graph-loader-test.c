@@ -113,8 +113,11 @@ static int test_load_hello(void)
  *
  *  - input_edge_native[port]  is 1 iff every producer feeding
  *    that port is a call box in the consumer's language.
- *    Literals and data-box producers count as NOT native — they
- *    emit JSON text the consumer's spec must parse.
+ *    Data-box producers count as NOT native — they emit JSON
+ *    text the consumer's spec must parse. A port fed ONLY by its
+ *    typed-in literal is native (bug 324): the bytes live in the
+ *    consumer's own box JSON, so they belong to the consumer's
+ *    language, matching the push side's treatment.
  *  - output_edge_native[edge] is 1 iff the consumer at the other
  *    end of that connection is a call box in this box's language.
  *  - use_native_invoke remains as the per-box AND of every edge,
@@ -123,10 +126,10 @@ static int test_native_invoke_classification(void)
 {
     char *err = NULL;
 
-    /* hello: greet (lua) has a literal-fed input → input edge is
-     * JSON. greet has no outgoing connections in this fixture.
-     * Per-edge: input 0 not native; vacuous all-outs. Per-box AND
-     * = 0 because the input is a JSON edge. */
+    /* hello: greet (lua) port 0 is fed by a read box (JSON edge);
+     * port 1 is fed only by its typed-in literal, which since bug
+     * 324 classifies native — the literal is the consumer's own
+     * configured bytes. greet has no outgoing connections here. */
     {
         graph_t *g = graph_load("tests/maps/hello", &err);
         ASSERT(g);
@@ -136,25 +139,25 @@ static int test_native_invoke_classification(void)
         ASSERT(greet->n_inputs == 2);
         ASSERT(greet->input_edge_native != NULL);
         ASSERT(greet->input_edge_native[0] == 0);  /* fed by read box `who` */
-        ASSERT(greet->input_edge_native[1] == 0);  /* literal */
+        ASSERT(greet->input_edge_native[1] == 1);  /* literal-only → native (324) */
         /* Slice 5 of issue 312 removed the per-box use_native_invoke
          * field. Per-edge bits above carry the same information with
          * better resolution. */
         graph_destroy(g);
     }
 
-    /* comparator: classify (lua) has a literal input but its
-     * three outgoing edges all feed lua call boxes → outputs are
-     * native, input is JSON. low/mid/high have no outgoing
-     * connections and their input comes from classify (a Lua call
-     * box) → input native, vacuous outs, all-native = use_native. */
+    /* comparator: classify (lua) has a literal-only input (native
+     * since 324) and its three outgoing edges all feed lua call
+     * boxes → outputs native. low/mid/high have no outgoing
+     * connections; their "v" comes from classify (a Lua call box)
+     * → native, and their "tag" is literal-only → native. */
     {
         graph_t *g = graph_load("tests/maps/comparator", &err);
         ASSERT(g);
         const box_t *classify = graph_box_by_id(g, "classify");
         const box_t *low      = graph_box_by_id(g, "low");
 
-        ASSERT(classify->input_edge_native[0]  == 0);  /* literal */
+        ASSERT(classify->input_edge_native[0]  == 1);  /* literal-only → native (324) */
         ASSERT(classify->n_connections         == 3);
         ASSERT(classify->output_edge_native[0] == 1);  /* lt → low (lua) */
         ASSERT(classify->output_edge_native[1] == 1);  /* eq → mid (lua) */
@@ -163,7 +166,7 @@ static int test_native_invoke_classification(void)
         /* low has two inputs: port 0 "tag" (literal) and port 1
          * "v" (fed by classify, a Lua call box). */
         ASSERT(low->n_inputs               == 2);
-        ASSERT(low->input_edge_native[0]   == 0);   /* literal "tag"      */
+        ASSERT(low->input_edge_native[0]   == 1);   /* literal-only "tag" → native (324) */
         ASSERT(low->input_edge_native[1]   == 1);   /* lua classify → "v" */
         graph_destroy(g);
     }

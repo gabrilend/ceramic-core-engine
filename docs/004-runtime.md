@@ -181,6 +181,22 @@ routing and any box downstream of an iterator: those boxes are
 marked multi-spawn, and the dispatch re-fires them while their
 input slots have queued values to drain.
 
+An input port receives values through one of two **input
+methods**, and the difference is whether the value is *consumed
+on use* or *referenced on use*. A consuming port gives up one
+queued delivery per fire — right for wire-fed ports on a
+re-firing box, where each lap wants a fresh delivery. A
+referencing port reads its value in place, never spending it. A
+typed-in constant whose port has no incoming wire is always
+referenced: startup delivers it once and every fire re-reads it.
+A port carrying both a constant and a wire consumes — there the
+constant is only the seed, and the network re-feeds the port on
+every revolution. Note the model has no "loops" in the
+traditional sense: a map is a network of boxes that recurse
+through themselves, iteratively re-processing data or memory
+locations, and the input method on each port is what shapes how
+values survive that recursion.
+
 Cross-language wires are atomic at the value level. The slot
 store carries values as native bytes (when both sides share a
 language) or JSON (when the sides differ); the dispatch picks

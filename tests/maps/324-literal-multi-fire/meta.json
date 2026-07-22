@@ -1,0 +1,6 @@
+{
+  "name": "324-literal-multi-fire",
+  "description": "Regression fixture for bug 324: a literal-fed box inside an iterator cycle must keep firing. The loop counts to 3 before exiting; reaching 3 requires the constant port to survive three pops, which was impossible while the startup literal drained after one revolution.",
+  "entry_box_id": "loop",
+  "src_dirs": ["tests/maps/324-literal-multi-fire/src"]
+}

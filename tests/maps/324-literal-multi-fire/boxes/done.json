@@ -1,0 +1,14 @@
+{
+  "id": "done",
+  "kind": "call",
+  "lang": "lua",
+  "ref": "src/cycle.lua",
+  "fn": "tag",
+  "inputs": [
+    { "name": "tag", "type": "string", "value": "D" },
+    { "name": "v",   "type": "string" }
+  ],
+  "routing": { "kind": "plain" },
+  "output_capacity": 64,
+  "ui": { "x": 500, "y": 100 }
+}

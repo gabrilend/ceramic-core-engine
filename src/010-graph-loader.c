@@ -1932,6 +1932,17 @@ graph_t *graph_load(const char *map_dir, char **err)
          * output_native is 0. */
         for (int port = 0; port < b->n_inputs; port++) {
             input_feeders_t f = scan_input_feeders(g, i, port, b->lang);
+            /* A feeder-less port fed only by its typed-in literal is
+             * native: the bytes are configured in the consumer's own
+             * box JSON, so they belong to the consumer's language
+             * (the same reasoning dispatch_push_literals applies on
+             * the push side). Without this, a reference-mode literal
+             * port on the single-ring path would be classified 0 and
+             * the spec would try to JSON-parse the raw literal. */
+            if (f.n_feeders == 0 && b->inputs[port].literal) {
+                b->input_edge_native[port] = 1;
+                continue;
+            }
             b->input_edge_native[port] = (f.n_feeders > 0 &&
                                           f.n_native == f.n_feeders) ? 1 : 0;
         }
@@ -2176,7 +2187,60 @@ int graph_attach_runtime(graph_t *g,
                  * since they emit arbitrary file contents; a call
                  * box opts in by setting output_capacity to 0. */
                 input_feeders_t fdr = scan_input_feeders(g, i, j, NULL);
-                int slot_flags = base_flags;
+
+                /* Bug 324, resolved by a design ruling from the map
+                 * author: the two slot kinds are not loop
+                 * bookkeeping — they are the two input methods. A
+                 * value entering a port is either CONSUMED on use
+                 * (pop: each fire takes one delivery) or REFERENCED
+                 * on use (peek: read in place, never spent). And the
+                 * graph has no "loops" in the traditional sense —
+                 * it is a network of boxes that recurse through
+                 * themselves and iteratively re-process data or
+                 * memory locations.
+                 *
+                 * The recursion walk (propagate_multi_spawn) rightly
+                 * gives wire-fed ports consume semantics — each lap
+                 * of a recursing network wants a fresh delivery. But
+                 * it must not override a typed-in constant, which is
+                 * referenced by nature; startup pushes it once and
+                 * nothing ever re-supplies it. Before this ruling
+                 * the first fire consumed the constant and the
+                 * network silently starved after one revolution.
+                 *
+                 * A port carrying a literal AND wires stays
+                 * consuming: there the literal is a seed and the
+                 * network re-feeds the port every lap (the loop-seed
+                 * port in tests/maps/324-literal-multi-fire is the
+                 * living example — pinning it would re-fire forever). */
+                int port_mode  = mode;
+                int port_cells = n_cells;
+                int port_flags = base_flags;
+                /* One exception to the reference rule: an iterator-
+                 * routing box is a recursion source, and its intake
+                 * IS the conveyor — a literal typed there is the
+                 * first delivery on the belt, not configuration.
+                 * Reference semantics would jam the belt (and hide
+                 * later deliveries pushed by wires or, in the unit
+                 * tests, pushed directly). */
+                int port_dual_ok = 1;
+                if (b->inputs[j].literal && fdr.n_feeders == 0 &&
+                    !box_is_iterator(b)) {
+                    port_mode  = SLOT_MODE_PEEK;   /* referenced, not consumed */
+                    port_cells = 1;                /* one pinned value          */
+                    port_flags = 0;                /* no ordering ring needed   */
+                    /* Bug 324's second half: the dual-ring read path
+                     * (read_inputs) always pops via the ordering
+                     * ring, ignoring the port mode — a dual-ring
+                     * "referenced" port would still be consumed. A
+                     * pinned constant has exactly one producer (the
+                     * startup push, always native), so dual-ring's
+                     * per-cell format tagging buys it nothing:
+                     * single-ring honors peek. */
+                    port_dual_ok = 0;
+                }
+
+                int slot_flags = port_flags;
                 if (fdr.has_variable) slot_flags |= SLOT_FLAG_LARGE_VALUE;
 
                 int cell_bytes = (fdr.max_capacity > default_cell_bytes)
@@ -2187,13 +2251,13 @@ int graph_attach_runtime(graph_t *g,
                  * JSON per per-edge classification. DUAL_RING doesn't
                  * combine with LARGE_VALUE / TAGGED yet, so ports
                  * requiring those fall back to single-ring. */
-                if (b->kind == BOX_CALL && b->lang &&
+                if (port_dual_ok && b->kind == BOX_CALL && b->lang &&
                     !(slot_flags & (SLOT_FLAG_LARGE_VALUE | SLOT_FLAG_TAGGED))) {
                     slot_flags |= SLOT_FLAG_DUAL_RING;
                 }
 
                 slot_id_t id = slot_alloc((slot_store_t *)slots,
-                                          cell_bytes, n_cells,
+                                          cell_bytes, port_cells,
                                           slot_flags);
                 if (id == SLOT_INVALID) {
                     if (err) *err = err_fmt("box '%s': failed to allocate "
@@ -2202,7 +2266,7 @@ int graph_attach_runtime(graph_t *g,
                     return -1;
                 }
                 b->input_slot_ids[j]   = (int)id;
-                b->input_slot_modes[j] = mode;
+                b->input_slot_modes[j] = port_mode;
             }
         }
 
