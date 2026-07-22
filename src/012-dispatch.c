@@ -1267,6 +1267,17 @@ static int do_call_box(dispatch_ctx_t *ctx, const box_t *b, int task_id,
                 datas, sizes, input_native, n_present,
                 output_native,
                 out_buf, out_capacity, out_size);
+    /* Issue 325 slice 2: route by the form the spec ACTUALLY wrote,
+     * not the form it was asked for. The one divergence today is
+     * Lua writing a table as JSON on a native ask (bug 323's floor
+     * fix); reporting it lands those bytes on the JSON ring of
+     * dual-ring slots, where the per-cell tag tells the consumer
+     * to parse — no byte-sniffing on that path. Specs without the
+     * accessor write what they are asked (the historical
+     * assumption, still true for C and Bash). */
+    if (rc == 0 && out_native && spec->invoke_wrote_native) {
+        *out_native = spec->invoke_wrote_native(handle);
+    }
     free(ref_path);
     for (int i = 0; i < n_arr; i++) {
         if (xlate_chunks[i]) ua_unref(xlate_heap, xlate_chunks[i]);

@@ -103,6 +103,53 @@ static int test_invoke_greet_both_args(void)
 }
 /* }}} */
 
+/* {{{ test_wrote_native_report() — issue 325 slice 2 */
+/* The actual-output-form accessor: a table return on a native ask
+ * writes JSON (bug 323's floor fix) and must report 0 so the
+ * dispatch routes it to the JSON ring; a primitive return on the
+ * same ask writes raw bytes and must report 1. */
+static int test_wrote_native_report(void)
+{
+    spec_registry_t *r = NULL;
+    const lang_spec_t *lua = load_lua_spec(&r);
+    ASSERT(lua);
+    ASSERT(lua->invoke_wrote_native != NULL);
+    void *h = lua->init(0);
+    ASSERT(h);
+
+    const char *tag = "x";
+    const void *args[1]  = { tag };
+    int         sizes[1] = { 1 };
+    char buf[256];
+    int n = 0;
+
+    /* Table return, native ask → JSON bytes, report 0. */
+    int rc = lua->invoke(h, NULL,
+                         "tests/maps/323-table-fast-path/src/tablegen.lua",
+                         "make", args, sizes, NULL, 1, 1,
+                         buf, sizeof buf, &n);
+    ASSERT(rc == 0);
+    ASSERT(n > 0);
+    ASSERT(buf[0] == '{');                       /* JSON object bytes */
+    ASSERT(lua->invoke_wrote_native(h) == 0);    /* reported JSON     */
+
+    /* Primitive return, native ask → raw bytes, report 1. */
+    const char *name = "World";
+    const char *sal  = "Hi";
+    const void *args2[2]  = { name, sal };
+    int         sizes2[2] = { (int)strlen(name), (int)strlen(sal) };
+    rc = lua->invoke(h, NULL, "tests/maps/hello/src/hello.lua", "greet",
+                     args2, sizes2, NULL, 2, 1,
+                     buf, sizeof buf, &n);
+    ASSERT(rc == 0);
+    ASSERT(lua->invoke_wrote_native(h) == 1);    /* reported native */
+
+    lua->teardown(h);
+    spec_registry_destroy(r);
+    return 1;
+}
+/* }}} */
+
 /* {{{ test_invoke_greet_default_salutation() */
 /* greet(name) — salutation defaults to "Hello" inside the function. */
 static int test_invoke_greet_default_salutation(void)
@@ -348,6 +395,7 @@ int main(void)
     printf("306-lua-spec-test:\n");
     RUN(init_teardown);
     RUN(invoke_greet_both_args);
+    RUN(wrote_native_report);
     RUN(invoke_greet_default_salutation);
     RUN(invoke_missing_function);
     RUN(invoke_missing_file);

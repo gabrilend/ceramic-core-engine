@@ -41,19 +41,23 @@ grounded in how the dispatch actually works (recon 2026-07-22):
   no bytes today. Build it when a pair genuinely wants non-JSON
   wire bytes; the declaration layer (slice 1) already reserves
   the seat.
-- **The real slice 2 — invoke reports the form it actually
-  wrote.** The dispatch currently assumes the spec produced the
-  form it asked for; the 323 table fix bends exactly that
-  assumption (asked native, wrote JSON), which is why the input
-  side needs the brace-sniff. Extend the invoke contract with an
-  actually-wrote-native out-flag; the dispatch pushes by the
-  actual form, so a table lands on the JSON ring of a dual-ring
-  slot and the consumer's per-cell tag says "parse me" — no
-  guessing. The sniff then narrows to the one place per-cell tags
-  don't exist: single-ring slots (the tagged pop rings of
-  multi-fire ports), whose per-port classification is static.
-  Document the narrowed sniff as that ring family's declared
-  decode rule rather than a fallback.
+- **Second slice landed 2026-07-22 — invoke reports the form it
+  actually wrote.** The spec interface gains an optional
+  per-handle accessor (`invoke_wrote_native`): the dispatch reads
+  it right after a successful invoke, on the same worker thread,
+  and routes the push by the ACTUAL form instead of the form it
+  asked for. Lua — the one shipped spec whose invoke diverges
+  (table-as-JSON on a native ask, bug 323) — records the form at
+  each invoke exit in its state registry; C and Bash omit the
+  accessor, which means "I write what I'm asked", still true.
+  Tables now land on the JSON ring of dual-ring slots where the
+  per-cell tag says parse-me — no guessing on that path. The
+  brace-sniff narrowed to its one remaining home, single-ring
+  cells (the tagged pop rings of multi-fire ports, whose
+  per-port classification is static and cannot mark an
+  individual cell), and its comment now states it as that ring
+  family's decode rule. Pinned by a spec-level unit test (table
+  ask-native → JSON bytes + report 0; primitive → report 1).
 - Per-pair fixtures asserting byte-level expectations for all
   nine shipped pairs; the writing-boxes doc teaching the
   declaration and the actual-form contract.

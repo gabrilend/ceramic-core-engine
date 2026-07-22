@@ -227,6 +227,21 @@ typedef struct lang_spec {
      * which is the right default for a user-added language whose
      * author hasn't yet written its translation story. */
     const char *const *translate_targets;
+
+    /* Actual-output-form report (issue 325, second slice).
+     * Optional. Called by the dispatch immediately after a
+     * successful invoke, on the same worker thread, with the same
+     * handle: returns 1 if the invoke wrote its native byte form,
+     * 0 if it wrote JSON. The dispatch routes the push by this
+     * ACTUAL form rather than the form it asked for — the one
+     * divergence today is Lua writing a table as JSON on a native
+     * ask (bug 323's floor fix), which this report lands on the
+     * JSON ring of dual-ring slots where the per-cell tag already
+     * tells the consumer to parse. Per-handle and read on the
+     * invoking thread, so there is no cross-worker race. NULL
+     * means "this spec always writes the form it was asked" —
+     * the historical assumption, still true for C and Bash. */
+    int (*invoke_wrote_native)(void *handle);
 } lang_spec_t;
 /* }}} */
 

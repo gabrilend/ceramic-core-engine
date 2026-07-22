@@ -45,6 +45,13 @@
  * touches the cache. */
 #define LUA_CACHE_KEY "soramech.module_cache"
 
+/* Registry key for the actual-output-form report (issue 325,
+ * second slice): each invoke records whether it wrote native bytes
+ * or JSON; the dispatch reads it back through the spec's
+ * invoke_wrote_native accessor right after the call, on the same
+ * worker thread. */
+#define LUA_WROTE_NATIVE_KEY "soramech.wrote_native"
+
 /* Forward declarations — these live further down, but lua_invoke
  * needs them. parse_json_to_stack and encode_value: slices 4 and
  * 4.5 of issue 312 (per-input native/JSON branch, per-call output
@@ -74,6 +81,30 @@ static void *lua_init(int worker_idx)
 static void lua_teardown(void *handle)
 {
     if (handle) lua_close((lua_State *)handle);
+}
+/* }}} */
+
+/* {{{ note_wrote_native() / lua_spec_wrote_native() — issue 325 */
+/* One boolean in the state's registry records the output form the
+ * last invoke actually wrote. Written on every successful invoke
+ * exit; read by the dispatch immediately after the call on the
+ * same worker thread, so there is no cross-worker race. */
+static void note_wrote_native(lua_State *L, int native)
+{
+    lua_pushboolean(L, native);
+    lua_setfield(L, LUA_REGISTRYINDEX, LUA_WROTE_NATIVE_KEY);
+}
+
+static int lua_spec_wrote_native(void *handle)
+{
+    lua_State *L = (lua_State *)handle;
+    if (!L) return 1;
+    lua_getfield(L, LUA_REGISTRYINDEX, LUA_WROTE_NATIVE_KEY);
+    /* Unset (no invoke recorded yet) reads as native — the
+     * historical assumption for a call that hasn't diverged. */
+    int v = lua_isnil(L, -1) ? 1 : lua_toboolean(L, -1);
+    lua_pop(L, 1);
+    return v;
 }
 /* }}} */
 
@@ -195,14 +226,19 @@ static int lua_invoke(void *handle,
         }
         int is_native = (input_native == NULL) || (input_native[i] != 0);
         if (is_native) {
-            /* Issue 323: tables now ride same-language wires as JSON
-             * (see the output path below), so a native input that
-             * looks structured — first byte '{' or '[' — is parsed
-             * back into a real Lua value. Primitives keep the raw-
-             * string fast path untouched. Parse failure falls back
-             * to raw bytes so a legitimate brace-leading string
-             * still arrives; issue 325's per-pair shims replace
-             * this sniff with an explicit declaration. */
+            /* Issues 323 / 325: tables ride same-language wires as
+             * JSON. On dual-ring slots the actual-form report (325
+             * slice 2) tags those cells JSON, so they arrive here
+             * with input_native = 0 and this branch never sees
+             * them. This sniff is the decode rule for SINGLE-ring
+             * cells — the tagged pop rings of multi-fire ports —
+             * whose per-port classification is static and cannot
+             * mark an individual cell: a native input that looks
+             * structured (first byte '{' or '[') is parsed back
+             * into a real Lua value. Primitives keep the raw-
+             * string fast path untouched, and parse failure falls
+             * back to raw bytes so a legitimate brace-leading
+             * string still arrives. */
             const char *bytes = (const char *)input_data[i];
             int structured = input_sizes[i] > 0 &&
                              (bytes[0] == '{' || bytes[0] == '[');
@@ -262,6 +298,7 @@ static int lua_invoke(void *handle,
             return -1;
         }
         if (out_size) *out_size = n;
+        note_wrote_native(L, 0);   /* wrote JSON */
         lua_settop(L, baseline);
         return 0;
     }
@@ -299,6 +336,7 @@ static int lua_invoke(void *handle,
             return -1;
         }
         if (out_size) *out_size = n;
+        note_wrote_native(L, 0);   /* wrote JSON */
         lua_settop(L, baseline);
         return 0;
     }
@@ -313,6 +351,7 @@ static int lua_invoke(void *handle,
                         "output on same-language wire\n",
                 file_path, fn_name, lua_typename(L, lua_type(L, -1)));
         if (out_size) *out_size = 0;
+        note_wrote_native(L, 1);   /* empty native bytes */
         lua_settop(L, baseline);
         return 0;
     }
@@ -326,6 +365,7 @@ static int lua_invoke(void *handle,
     if (out_buf && len > 0) memcpy(out_buf, result, len);
     if (out_size) *out_size = (int)len;
 
+    note_wrote_native(L, 1);       /* raw primitive bytes */
     lua_settop(L, baseline);
     return 0;
 }
@@ -959,5 +999,10 @@ lang_spec_t soramech_lang_spec = {
      * the JSON encoder — an explicit per-pair declaration (JSON is
      * the chosen shim for these pairs, not an implicit fallback). */
     .translate_targets         = (const char *const[]){ "c", "bash", NULL },
+    /* Issue 325 slice 2: Lua is the one shipped spec whose invoke
+     * can write a different form than asked (table-as-JSON on a
+     * native ask, bug 323); the report lets the dispatch route by
+     * the actual form. */
+    .invoke_wrote_native       = lua_spec_wrote_native,
 };
 /* }}} */
