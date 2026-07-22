@@ -28,11 +28,35 @@ per-pair serialization layer is still the shared JSON machinery.
   Underneath, bugs 323 and 324 already fixed how tables and
   typed-in constants travel.
 
-Still open — the serialization layer itself: a per-pair serialize
-callback the dispatch consults at push time in place of the single
-JSON bridge; replacing the same-language brace-sniff with the
-declared Lua→Lua shim; per-pair fixtures asserting byte-level
-expectations; the writing-boxes doc teaching the declaration.
+Still open — the serialization layer itself, with the design now
+grounded in how the dispatch actually works (recon 2026-07-22):
+
+- **A push-time per-pair callback is premature.** Serialization
+  happens *inside* invoke (the per-call output-format flag picks
+  native or JSON), and the value leaves the language's working
+  store the moment invoke returns — there is nothing left to
+  serialize at push time. Retrofitting value retention across the
+  call is major surgery, and every shipped pair's declared shim
+  is "JSON via my encoder" anyway, so the callback would change
+  no bytes today. Build it when a pair genuinely wants non-JSON
+  wire bytes; the declaration layer (slice 1) already reserves
+  the seat.
+- **The real slice 2 — invoke reports the form it actually
+  wrote.** The dispatch currently assumes the spec produced the
+  form it asked for; the 323 table fix bends exactly that
+  assumption (asked native, wrote JSON), which is why the input
+  side needs the brace-sniff. Extend the invoke contract with an
+  actually-wrote-native out-flag; the dispatch pushes by the
+  actual form, so a table lands on the JSON ring of a dual-ring
+  slot and the consumer's per-cell tag says "parse me" — no
+  guessing. The sniff then narrows to the one place per-cell tags
+  don't exist: single-ring slots (the tagged pop rings of
+  multi-fire ports), whose per-port classification is static.
+  Document the narrowed sniff as that ring family's declared
+  decode rule rather than a fallback.
+- Per-pair fixtures asserting byte-level expectations for all
+  nine shipped pairs; the writing-boxes doc teaching the
+  declaration and the actual-form contract.
 
 ## Intended behavior
 
