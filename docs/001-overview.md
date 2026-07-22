@@ -5,9 +5,25 @@
 SoraMech is a **visual dataflow runtime**. You build a *map* — a
 graph of boxes connected by wires — in the browser-based editor.
 Each box runs a function (in Lua, C, or Bash). When you run the
-map, the runtime fires boxes whose inputs are ready, threads the
-outputs along wires to downstream boxes, and keeps going until
-quiescence. Multiple boxes run in parallel across a thread pool.
+map, the runtime fires boxes whose inputs are ready and threads
+the outputs along wires to downstream boxes. Multiple boxes run
+in parallel across a thread pool.
+
+Most maps are **long-running by design** — that is SoraMech's
+primary purpose, not a special case. Because a box fires whenever
+its inputs arrive, a map can be wired to feed itself: a loop of
+boxes that re-arm each other, turning indefinitely — frame after
+frame, request after request, thought after thought. A game's
+render tick, an LLM reasoning loop that feeds its own next
+prompt, a server or control system polling its inputs — none of
+these "finish." They run until a quit signal reaches them. (The
+loop must be built from the runtime's cycle-safe constructs — an
+iterator-routing box, or a re-arming heartbeat — not a raw
+back-edge, which the loader rejects as a deadlock risk; see the
+[runtime doc](004-runtime.md).) A map that *does* run dry — a
+batch pipeline with no feedback loop — simply hits quiescence and
+exits. Both are normal; the circular, always-on shape is the one
+the runtime is built around.
 
 The runtime is structural. It guarantees that wires deliver
 values from producers to consumers; that boxes fire when their
@@ -20,6 +36,10 @@ authors and library authors design the rooms.
 
 SoraMech fits well when:
 
+- The system is **long-running and cyclic** — a loop of boxes
+  that feed each other and never quiesce, kept alive until a quit
+  signal (game loops, inference loops, servers, sensor pollers).
+  This is the shape it's built around.
 - The problem is naturally a dataflow: inputs flow through a
   sequence of transformations to outputs.
 - You want to mix languages — a Lua planner driving C boxes that

@@ -263,7 +263,7 @@ extern lang_spec_t soramech_lang_spec;</pre>
 
         <h3 id="startup">Startup, quiescence, termination</h3>
         <p><strong>Startup:</strong> the pool runner pushes literal-input values into the corresponding slots, then spawns first tasks for boxes whose input sets are now satisfied. Iterator counter slots start at 0.</p>
-        <p><strong>Quiescence:</strong> the main thread waits on a condition variable that signals when the pool's active-task counter reaches zero with no pending spawns. That's the run-over signal. The graph validator at load time rejects non-iterator cycles, so the run cannot deadlock — an iterator with no upstream pushes simply contributes nothing further, and once the counter drains, termination fires.</p>
+        <p><strong>Quiescence</strong> is only the <em>batch</em> fate. Long-running circular maps are the primary shape SoraMech is built around: a map wired to feed itself — through an iterator-routing box, or the re-arming timer-box heartbeat (issue 251, design draft) — never runs dry and stays up until a quit signal (Ctrl-C) reaches it. A straight-through pipeline with no such loop drains instead: the main thread waits on a condition variable that signals when the pool's active-task counter reaches zero with no pending spawns, and that's the run-over signal. The graph validator at load time rejects non-iterator cycles, so the run cannot deadlock — an iterator with no upstream pushes simply contributes nothing further, and once the counter drains, termination fires.</p>
         <p><strong>Hard-crash error policy:</strong> a nonzero <code>invoke_*</code> return aborts the process. No retry, no per-task failed state, no fallback executor.</p>
 
         <h3 id="blocking">Blocking-aware iterator pattern</h3>

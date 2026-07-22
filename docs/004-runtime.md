@@ -187,13 +187,55 @@ language) or JSON (when the sides differ); the dispatch picks
 the right format per-wire. Each consumer sees a consistent
 snapshot of the value, never a partial one.
 
-## Quiescence
+## Termination: circular vs. quiescent
 
-The runner exits when the work queue is empty AND every
-in-flight task has completed AND no boxes have queued values
-waiting to fire. Long-running maps (e.g., the timer-box design
-in issue 251) prevent quiescence by re-arming after each fire —
-the runner stays up until you Ctrl-C.
+A run ends one of two ways, and the **long-running way is the
+primary one** — it's what the runtime is built around. A map
+that loops back on itself stays up and serves indefinitely; a
+straight-through pipeline drains and exits. Which fate a map
+meets is decided entirely by whether its wiring forms a legal
+cycle.
+
+**Circular maps run until a quit signal.** Because a box fires
+whenever its inputs arrive, a map can be wired to feed itself so
+the graph never runs dry — each turn re-arms the next. This is
+the intended shape for most maps: a game's frame tick driving
+read → solve → render and back to the tick, an LLM loop feeding
+its own next prompt, a server re-arming on each request. Two
+constructs form a legal loop:
+
+- **Iterator-routing boxes cut the cycle.** A cycle that passes
+  *through* an iterator box is legal: the iterator re-fires as
+  long as its input queue has values to drain and terminates
+  cleanly when the queue empties. This is how a data-driven loop
+  sustains itself — the iterator is the box the validator trusts
+  not to deadlock.
+- **A re-arming heartbeat drives a wall-clock loop.** The timer
+  box (issue 251, currently a design draft — not yet built)
+  fires, pushes a tick downstream, and schedules its own next
+  fire at `now + rate_ms`. It's the first box whose schedule
+  comes from the clock rather than from data arrival, and it
+  keeps a loop turning at a fixed rate (a 60 Hz frame tick, a
+  cron-like "every N minutes" pipeline) until a quit signal —
+  Ctrl-C, or a `rate_ms` of 0 — stops it.
+
+**Cycle validation happens at load, not at run.** The graph is
+DFS-walked for back-edges before the first box ever fires. A
+back-edge that does *not* pass through an iterator box is
+rejected outright — `non-iterator cycle detected` — so a
+deadlock-prone loop fails loud at load instead of hanging
+mid-run. During the walk the validator skips an iterator's
+outgoing edges, which is how it expresses "this edge doesn't
+propagate cycle reachability."
+
+**Batch maps hit quiescence and exit.** A map with no feedback
+loop eventually drains: the work queue empties, every in-flight
+task completes, and no box has queued values waiting to fire.
+With nothing left to do, the runner exits on its own — the right
+behavior for a one-shot pipeline (seed → transform → report).
+
+Neither is a special case bolted onto the other; they are the
+two natural fates of a dataflow graph.
 
 ## Running tests
 
