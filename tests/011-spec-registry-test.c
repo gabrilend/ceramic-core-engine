@@ -156,6 +156,46 @@ static int test_worker_init_teardown(void)
 }
 /* }}} */
 
+/* {{{ test_translate_pair_declarations() — issue 325 */
+/* The pair-declaration lookup is a pure function, so synthetic
+ * specs probe the edge cases; the real dlopened specs then prove
+ * every shipped pair is declared both ways (the wire walker makes
+ * an undeclared pair a load error, so a regression here would
+ * break every cross-language map at load). */
+static int test_translate_pair_declarations(void)
+{
+    /* Synthetic: declares only "c". */
+    static const char *const targets[] = { "c", NULL };
+    lang_spec_t synth = { 0 };
+    synth.name = "synthlang";
+    synth.translate_targets = targets;
+
+    ASSERT(spec_declares_target(&synth, "c")         == 1);
+    ASSERT(spec_declares_target(&synth, "synthlang") == 1); /* self: implicit */
+    ASSERT(spec_declares_target(&synth, "bash")      == 0); /* undeclared    */
+    synth.translate_targets = NULL;
+    ASSERT(spec_declares_target(&synth, "c")         == 0); /* NULL declares nothing */
+    ASSERT(spec_declares_target(&synth, "synthlang") == 1); /* self still implicit   */
+    ASSERT(spec_declares_target(NULL,   "c")         == 0);
+    ASSERT(spec_declares_target(&synth, NULL)        == 0);
+
+    /* Real specs: every shipped pair declared in both directions. */
+    char *err = NULL;
+    spec_registry_t *r = spec_registry_load("langs", &err);
+    ASSERT(r);
+    const char *names[] = { "lua", "c", "bash" };
+    for (int a = 0; a < 3; a++) {
+        for (int b = 0; b < 3; b++) {
+            const lang_spec_t *s = spec_registry_get(r, names[a]);
+            ASSERT(s);
+            ASSERT(spec_declares_target(s, names[b]) == 1);
+        }
+    }
+    spec_registry_destroy(r);
+    return 1;
+}
+/* }}} */
+
 /* {{{ main() */
 int main(void)
 {
@@ -172,6 +212,7 @@ int main(void)
     RUN(null_dir);
     RUN(null_safety);
     RUN(worker_init_teardown);
+    RUN(translate_pair_declarations);
     printf("\n  %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

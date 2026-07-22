@@ -208,6 +208,25 @@ typedef struct lang_spec {
      * capability, default decode only" and emits no warning. */
     unsigned int sentinel_emit_mask;
     unsigned int sentinel_reconstruct_mask;
+
+    /* Per-language-pair translation declarations (issue 325). A
+     * NULL-terminated list of language names this spec declares it
+     * can serialize values FOR — "how my values translate to each
+     * included language", stated as data instead of assumed. Today
+     * every shipped spec translates through its JSON bridge and
+     * declares every other shipped language, which turns the old
+     * implicit everything-becomes-JSON behaviour into an explicit
+     * per-pair choice. The load-time wire walker
+     * (graph_attach_runtime) makes an undeclared pair a load
+     * ERROR, not a warning: unlike a sentinel-capability gap
+     * (which may never be hit), a wire between two languages WILL
+     * carry values, so a missing translation story is certain
+     * failure and fails loudly up front. Same-language edges are
+     * implicitly declared — identity needs no shim. NULL declares
+     * nothing: every cross-language edge out of this spec errors,
+     * which is the right default for a user-added language whose
+     * author hasn't yet written its translation story. */
+    const char *const *translate_targets;
 } lang_spec_t;
 /* }}} */
 

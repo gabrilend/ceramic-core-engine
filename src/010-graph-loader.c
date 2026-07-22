@@ -2380,21 +2380,29 @@ int graph_attach_runtime(graph_t *g,
         }
     }
 
-    /* Issue 318 / 7 — compile-time wire validation. Walk every
-     * outgoing edge of every call box; for cross-language edges,
-     * verify the producer's sentinel_emit_mask is a subset of the
-     * consumer's sentinel_reconstruct_mask. Mismatches surface as
-     * stderr warnings — they're not fatal because the producer's
-     * encode may never actually emit a sentinel for a given call,
-     * and erroring at graph load on a possibility that may never
-     * happen would block too many legitimate graphs. The warning
-     * gives the user information; behaviour stays unchanged. */
+    /* Compile-time wire validation, two checks per cross-language
+     * edge of every call box:
+     *
+     * Issue 325 — translation-pair declaration. The producer's
+     * spec must declare the consumer's language among its
+     * translate_targets ("how my values translate to each included
+     * language", stated as data). This one is FATAL: the wire will
+     * certainly carry values, so a missing translation story is
+     * certain failure, and the project fails loudly up front
+     * rather than coercing best-effort at run time.
+     *
+     * Issue 318 / 7 — sentinel capability. The producer's
+     * sentinel_emit_mask must be a subset of the consumer's
+     * sentinel_reconstruct_mask. Mismatches surface as stderr
+     * warnings — not fatal, because the producer's encode may
+     * never actually emit a sentinel for a given call, and
+     * erroring on a possibility would block legitimate graphs. */
     if (specs) {
         for (int i = 0; i < g->n_boxes; i++) {
             const box_t *p = g->boxes[i];
             if (p->kind != BOX_CALL || p->spec_idx < 0) continue;
             const lang_spec_t *p_spec = spec_registry_at(specs, p->spec_idx);
-            if (!p_spec || p_spec->sentinel_emit_mask == 0) continue;
+            if (!p_spec) continue;
             for (int j = 0; j < p->n_connections; j++) {
                 int dst = p->connections[j].to_box_idx;
                 if (dst < 0) continue;
@@ -2404,6 +2412,18 @@ int graph_attach_runtime(graph_t *g,
                     strcmp(p->lang, c->lang) == 0) continue; /* same-lang */
                 const lang_spec_t *c_spec = spec_registry_at(specs, c->spec_idx);
                 if (!c_spec) continue;
+                if (c->lang && !spec_declares_target(p_spec, c->lang)) {
+                    if (err) *err = err_fmt(
+                        "wire '%s' (%s) → '%s' (%s): the %s spec declares "
+                        "no translation for %s consumers — add \"%s\" to "
+                        "its translate_targets once its serialization for "
+                        "that pair exists (issue 325)",
+                        p->id, p->lang ? p->lang : "?",
+                        c->id, c->lang,
+                        p->lang ? p->lang : "?", c->lang, c->lang);
+                    return -1;
+                }
+                if (p_spec->sentinel_emit_mask == 0) continue;
                 unsigned int gap = p_spec->sentinel_emit_mask &
                                   ~c_spec->sentinel_reconstruct_mask;
                 if (gap != 0) {

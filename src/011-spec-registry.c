@@ -265,6 +265,24 @@ int spec_registry_init_worker_filtered(spec_registry_t *r, int worker_idx,
 }
 /* }}} */
 
+/* {{{ spec_declares_target() */
+/* Issue 325 — the pair-declaration lookup the load-time wire
+ * walker consults. Same-language is implicitly declared because
+ * identity needs no shim; everything else must appear in the
+ * spec's translate_targets list. Kept as a pure function over the
+ * struct so tests can probe it with synthetic specs. */
+int spec_declares_target(const lang_spec_t *spec, const char *lang)
+{
+    if (!spec || !lang) return 0;
+    if (spec->name && strcmp(spec->name, lang) == 0) return 1;
+    if (!spec->translate_targets) return 0;
+    for (const char *const *t = spec->translate_targets; *t; t++) {
+        if (strcmp(*t, lang) == 0) return 1;
+    }
+    return 0;
+}
+/* }}} */
+
 /* {{{ spec_registry_teardown_worker() */
 void spec_registry_teardown_worker(spec_registry_t *r,
                                    void **handles, int n_handles)

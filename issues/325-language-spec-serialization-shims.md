@@ -8,21 +8,31 @@ open · design directive captured 2026-07-21; this settles the
 
 ## Current behavior
 
-A value crossing a wire is rendered by machinery the producing
-language spec does not control per-consumer:
+First slice landed 2026-07-22: the declaration layer exists; the
+per-pair serialization layer is still the shared JSON machinery.
 
-- **Cross-language wires** go through the spec's generic JSON
-  encoder. The consumer gets JSON text and is expected to know
-  what to do with it.
-- **Same-language wires** take the fast path: a bare string
-  coercion (`lua_tolstring` in the Lua spec) that silently
-  produces an empty wire for tables — bug 323.
+- The spec interface (`langs/lang-spec.h`) carries
+  `translate_targets`: each spec names the languages it declares
+  it can serialize values for. All three shipped specs declare
+  every other shipped language — JSON is now the *declared shim
+  choice* for those pairs instead of an implicit fallback.
+- The load-time wire walker fails the load — fatally, naming the
+  pair and the fix — on any cross-language edge whose producer
+  does not declare the consumer's language. Same-language pairs
+  are implicitly declared (identity needs no shim). A user-added
+  language with no declarations errors on its first
+  cross-language wire, which is the intended onboarding shape:
+  the author writes the translation story first.
+- The lookup (`spec_declares_target` in the spec registry) is a
+  pure function with unit coverage over synthetic and real specs.
+  Underneath, bugs 323 and 324 already fixed how tables and
+  typed-in constants travel.
 
-How a producer's values should appear *to a specific consumer
-language* is nowhere expressed as executable code. Where the
-question has come up (sentinels, opaque values), the answer lives
-in comments and documentation — a reader learns the translation
-intent, but the runtime cannot act on it.
+Still open — the serialization layer itself: a per-pair serialize
+callback the dispatch consults at push time in place of the single
+JSON bridge; replacing the same-language brace-sniff with the
+declared Lua→Lua shim; per-pair fixtures asserting byte-level
+expectations; the writing-boxes doc teaching the declaration.
 
 ## Intended behavior
 

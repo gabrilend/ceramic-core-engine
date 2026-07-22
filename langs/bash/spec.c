@@ -459,5 +459,9 @@ lang_spec_t soramech_lang_spec = {
     .invoke         = bash_invoke,
     .native_to_json = bash_native_to_json,
     .json_to_native = bash_json_to_native,
+    /* Issue 325: Bash values (line-protocol text) translate to Lua
+     * and C consumers via the JSON bridge — an explicit per-pair
+     * declaration. */
+    .translate_targets = (const char *const[]){ "lua", "c", NULL },
 };
 /* }}} */

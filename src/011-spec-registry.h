@@ -49,6 +49,13 @@ const lang_spec_t *spec_registry_for_ext(const spec_registry_t *r, const char *f
 /* Enumerate registered specs by index for diagnostics / iteration. */
 const lang_spec_t *spec_registry_at(const spec_registry_t *r, int i);
 
+/* Issue 325 — translation-pair declaration lookup. True iff `spec`
+ * declares it can serialize values for consumers in language
+ * `lang`. Same-language is implicitly declared (identity needs no
+ * shim); a NULL target list declares nothing. Pure function over
+ * the spec struct — usable on synthetic specs in tests. */
+int spec_declares_target(const lang_spec_t *spec, const char *lang);
+
 /* {{{ Per-worker init / teardown
  *
  * The pool's `worker_main` calls these once per worker between TLS

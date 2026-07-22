@@ -955,5 +955,9 @@ lang_spec_t soramech_lang_spec = {
      * pending the amendment's wrapper-binary subsystem. */
     .sentinel_emit_mask        = SENTINEL_MASK_REF | SENTINEL_MASK_LANG_OPAQUE,
     .sentinel_reconstruct_mask = SENTINEL_MASK_REF | SENTINEL_MASK_LANG_OPAQUE,
+    /* Issue 325: Lua values translate to C and Bash consumers via
+     * the JSON encoder — an explicit per-pair declaration (JSON is
+     * the chosen shim for these pairs, not an implicit fallback). */
+    .translate_targets         = (const char *const[]){ "c", "bash", NULL },
 };
 /* }}} */

@@ -680,5 +680,8 @@ lang_spec_t soramech_lang_spec = {
      * the spec can in principle write today. */
     .sentinel_emit_mask        = SENTINEL_MASK_REF,
     .sentinel_reconstruct_mask = SENTINEL_MASK_REF,
+    /* Issue 325: C values translate to Lua and Bash consumers via
+     * the JSON wrapper — an explicit per-pair declaration. */
+    .translate_targets         = (const char *const[]){ "lua", "bash", NULL },
 };
 /* }}} */
