@@ -6,6 +6,32 @@ across many design conversations; eight open questions still
 gate implementation. Sub-issues 420 / 421 / 422 / 423 / 424
 carry the per-sub-feature detail.
 
+## Current behavior
+
+The runner builds its in-memory graph once, at load, from the
+map's meta and box JSON files; after that the box set and the
+wiring are fixed for the life of the run — there is no way to
+create, reconfigure, or delete a box mid-run. Phase 3 shipped a
+working mutation mechanism through per-language wrapper functions,
+and it was rolled back in full, so none of those surfaces remain
+in the tree. What exists today is design material: the ground
+rules below (distilled from the rolled-back attempt), five
+sub-issues carrying per-feature detail, and eight open questions
+that gate implementation.
+
+## Intended behavior
+
+Runtime graph mutation becomes something a user expresses by
+placing and wiring a box in the map, not by calling a runtime API
+from box code. A single utility-box kind absorbs create,
+reconfigure, and delete, dispatching on the spec it receives; its
+outgoing wire's endpoint is the target, and several wires fan one
+spec out to several targets in one fire. Reconfigure payloads
+travel through the existing input-slot machinery under a new ring
+tag, the live swap is a gather flag plus refcount plus atomic
+pointer store at the graph slot, and box ids remain editor-only
+metadata with no runtime role.
+
 ## Why this phase exists
 
 Phase 3 attempted runtime graph mutation under the original 319
@@ -114,6 +140,27 @@ parent-level inventory.
    abandoned slots leak today (no `slot_free`). Block 420 on
    building slot-free first, or accept the leak? Lean accept;
    defer reclamation to its own follow-on.
+
+## Suggested implementation steps
+
+Design-phase parent: the steps are the decisions that unblock the
+sub-issues.
+
+1. Settle empty-spec-as-delete — explicit tag versus null-payload
+   reconfigure (open question 1).
+2. Settle how the create path surfaces the new box's identity on a
+   single wire (question 2).
+3. Settle the id-versus-wire-endpoint rules, including conflicting
+   id + wire targeting (questions 3 and 5).
+4. Pick the box-kind name (question 4).
+5. Settle the push-to-deleted-target default (question 6).
+6. Settle the graph-array atomic mechanism and the slot-reclamation
+   stance (questions 7 and 8).
+7. Rewrite the scratch planning documents into a datapath doc once
+   the questions resolve.
+8. Implement in sub-issue order: slot tag (423), utility-box kind
+   (420), connection mutation (421), delete experience (422),
+   JSONL events (424).
 
 ## Prior art
 

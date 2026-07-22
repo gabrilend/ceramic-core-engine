@@ -58,6 +58,10 @@ model the phase 3 runtime will consume.
 | 255  | llama-server manager daemon (Ollama, re-implemented)       | planned · HTTP manager with a name→backend registry, lazy per-model spawn, idempotent start + notify-list rendezvous, routing; managed + external per model |
 | 256  | sampling controls and GBNF-constrained output              | planned · sampler knobs as box ports + grammar strings; number-grammar feeds the comparator box safely |
 | 257  | embeddings box                                              | planned · `M.embed` + `M.similarity`; similarity number drops onto a comparator for similarity-based routing |
+| 247  | debug build alternative and per-box statistics lens         | open · concept — compile-mode dropdown + transcript-driven canvas statistics lens |
+| 249  | tap input mode: radial-bubble ports and emoji box labels    | open · concept — touch-first editing mode alongside the desktop mouse model |
+| 251  | timer box: tick-tock emitter                                | open · design draft — wall-clock scheduling; the load-bearing question is the pool idle-wait deadline |
+| 258  | HTML documentation mirror rebuild                           | open · stale handcrafted pages removed; regenerate from current markdown via a generator tool |
 
 ## Phase goal checklist
 
@@ -68,7 +72,7 @@ model the phase 3 runtime will consume.
 - [x] Map can be switched from a list, not a text prompt
 - [x] Empty canvas shows interaction hints
 - [—] Entry box marker (won't implement — phase 3 auto-detects, see 305)
-- [ ] Comparator routing replaces the old branch box (issue 210)
+- [x] Comparator routing replaces the old branch box (issue 210)
 - [x] Iterator box with auto-grow output slots (editor; runtime in phase 3 / issue 304)
 - [x] Compile button (issue 222) — placeholder UI for the phase 3 build
 
