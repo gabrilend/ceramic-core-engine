@@ -18,6 +18,15 @@
 # a hard-coded ${DIR} path with an override argument; all paths
 # are relative to ${DIR}.
 
+# {{{ --help — render this script's header doc block and exit
+case "${1:-}" in
+    -h|--help)
+        sed -n '2,/^$/s/^# \?//p' "$0"
+        exit 0
+        ;;
+esac
+# }}}
+
 set -u
 
 DIR="/mnt/mtwo/programs/sora/soramech"

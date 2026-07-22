@@ -47,6 +47,17 @@ ID=""
 MARKER="-"
 # }}}
 
+# {{{ --help — render this script's header doc block and exit
+# Placed ahead of the arg-count check below so a lone -h/--help
+# prints help instead of tripping the "needs 2 args" usage error.
+case "${1:-}" in
+    -h|--help)
+        sed -n '2,/^$/s/^# \?//p' "$0"
+        exit 0
+        ;;
+esac
+# }}}
+
 # {{{ argv parse — action first, target second, then --flags
 if [[ $# -lt 2 ]]; then
     echo "usage: soramech-ref.sh <acquire|release|list|count|reap> <compiled-dir> [--id <id>] [--marker <path>] [--dir <project-root>]" >&2

@@ -3,6 +3,15 @@
 # The map directory is created under ${DIR}/maps/<name>.
 # Run: scripts/create-map.sh <map-name> [maps-root]
 
+# {{{ --help — render this script's header doc block and exit
+case "${1:-}" in
+    -h|--help)
+        sed -n '2,/^$/s/^# \?//p' "$0"
+        exit 0
+        ;;
+esac
+# }}}
+
 DIR="/mnt/mtwo/programs/sora/soramech"
 
 MAP_NAME="${1}"
@@ -26,11 +35,13 @@ mkdir -p "${MAP_DIR}/data"
 mkdir -p "${MAP_DIR}/src"
 mkdir -p "${MAP_DIR}/drivers"
 
-# create /tmp target before symlinking — logs/ and cache/ live there at runtime
-TMP_TARGET="/tmp/soramech-${MAP_NAME}"
+# create the RAM target before symlinking — logs/ and cache/ live there at
+# runtime. /dev/shm (not /tmp) so the scratch is RAM-backed on any Linux host,
+# not just where /tmp happens to be mounted as tmpfs.
+TMP_TARGET="/dev/shm/soramech-${MAP_NAME}"
 mkdir -p "${TMP_TARGET}"
 
-# tmp/ is a symlink to /tmp/soramech-<name>/ so ephemeral files stay in RAM
+# tmp/ is a symlink to /dev/shm/soramech-<name>/ so ephemeral files stay in RAM
 ln -s "${TMP_TARGET}" "${MAP_DIR}/tmp"
 
 # write meta.json — src_dirs seeds the file browser with this map's own src/ dir

@@ -3,6 +3,15 @@
 # Usage: ./demo.sh [phase-number]
 # If no phase is given, prompts for one.
 
+# {{{ --help — render this script's header doc block and exit
+case "${1:-}" in
+    -h|--help)
+        sed -n '2,/^$/s/^# \?//p' "$0"
+        exit 0
+        ;;
+esac
+# }}}
+
 DIR="/mnt/mtwo/programs/sora/soramech"
 
 PHASES=3

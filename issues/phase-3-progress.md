@@ -34,6 +34,17 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 319a | dispatch input cap removal (VLA + named constant)           | complete · 20-input fixture passes end-to-end |
 | 319b | slot store growth (two-level chunked-append index)          | complete · 5000-slot growth test preserves all early pointers |
 
+## Open bugs found post-phase
+
+Correctness bugs in shipped phase-3 data flow, surfaced by an all-Lua
+cycle downstream. Both are silent-failure cases — the run stops
+propagating with no error — which makes them the priority kind to fix.
+
+| ID  | Title                                                       | Status   |
+|-----|-------------------------------------------------------------|----------|
+| [323](323-same-language-fast-path-drops-table-values.md) | same-language fast path silently drops table values | open · corrects 312/313; floor fix (JSON on table) + ceiling fix (313 by-reference merge) |
+| [324](324-multi-fire-boxes-consume-their-literal-inputs.md) | multi-fire boxes consume their literal inputs after one revolution | open · read-box unblock known; literal-into-pop-slot policy to settle |
+
 ## Phase goal checklist
 
 - [x] SoraMech-owned task pool builds clean (3d-rts as design reference)

@@ -54,6 +54,10 @@ model the phase 3 runtime will consume.
 | 250  | routing kind: nonlinearity (value-transforming, three intent-named variants) | complete · superseded by 253's refactor; 250's first slice landed and stays as the historical record of the original shape (variant dropdown + EMA-decayed bounds + score-only output) |
 | 253  | nonlinearity refactor: auto-calibration + gated output | complete · single `range` toggle (signed → tanh [-1,1] / unit → sigmoid [0,1]) replaces the three variant names; per-box ring buffer of last `memory` values replaces EMA decay; output is v × score (gated linear unit) instead of score alone; editor surfaces the simplified controls; two cold-start fixtures cover both ranges |
 | 252  | build-free unit-test runner (`scripts/run-unit-tests.sh`) | complete · pretty-default + `--quiet` + `--verbose` + name-prefix filter; `make quicktest` alias with `ARGS=` forwarding; iterates over `build/tests/*-test` and parses each binary's trailing `N passed, M failed` line |
+| 254  | llama.cpp client library (replaces the Ollama client)      | planned · clean replacement of `libs/ollama.lua`; same `query`/`chat` signatures; targets the manager; `model` is the routing key |
+| 255  | llama-server manager daemon (Ollama, re-implemented)       | planned · HTTP manager with a name→backend registry, lazy per-model spawn, idempotent start + notify-list rendezvous, routing; managed + external per model |
+| 256  | sampling controls and GBNF-constrained output              | planned · sampler knobs as box ports + grammar strings; number-grammar feeds the comparator box safely |
+| 257  | embeddings box                                              | planned · `M.embed` + `M.similarity`; similarity number drops onto a comparator for similarity-based routing |
 
 ## Phase goal checklist
 

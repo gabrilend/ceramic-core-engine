@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help|-h)
-            grep '^#' "$0" | sed 's/^# \?//'
+            sed -n '2,/^$/s/^# \?//p' "$0"
             exit 0
             ;;
         --*)

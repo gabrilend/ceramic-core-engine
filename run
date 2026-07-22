@@ -4,6 +4,23 @@
 # then opens the visual editor in a browser.
 # Usage: ./run [port]
 
+# {{{ --help — render this script's header doc block and exit
+# A standalone guard rather than a full argv parser: run takes only
+# an optional [port], and catching -h/--help here means help works
+# before we try to bind a socket. This same printer will be stamped
+# verbatim into every SoraMech CLI entry point, so its exact shape
+# is a deliberate, one-place design choice.
+case "${1:-}" in
+    -h|--help)
+        # Print the top-of-file doc block as help: start at line 2
+        # (skip the shebang), stop at the first blank line (skip the
+        # inner fold/inline comments), strip the "# " marker.
+        sed -n '2,/^$/s/^# \?//p' "$0"
+        exit 0
+        ;;
+esac
+# }}}
+
 DIR="/mnt/mtwo/programs/sora/soramech"
 
 PORT="${1:-7700}"

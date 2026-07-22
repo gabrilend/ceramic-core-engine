@@ -3,6 +3,15 @@
 # Starts the server, runs curl tests against it, then kills it.
 # Exits 0 if all assertions pass, non-zero otherwise.
 
+# {{{ --help — render this script's header doc block and exit
+case "${1:-}" in
+    -h|--help)
+        sed -n '2,/^$/s/^# \?//p' "$0"
+        exit 0
+        ;;
+esac
+# }}}
+
 DIR="/mnt/mtwo/programs/sora/soramech"
 MAPS_ROOT="${1:-${DIR}/maps}"
 PORT="${2:-7701}"
