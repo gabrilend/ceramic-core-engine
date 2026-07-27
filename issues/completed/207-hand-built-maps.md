@@ -2,9 +2,18 @@
 
 ## Current behavior
 
-A station table exists and delivery works, but constructing a map means
-writing out struct initializers by hand at every call site, with no
-checking of any kind.
+Built as intended scaffolding. The construction calls — create a
+table, place a box with hand-supplied element sizes, connect a port
+to a destination, start the pool — live in the station layer, marked
+in the header as scaffolding with the replacing issues named, and
+kept minimal enough to be irritating: placement wants every size
+spelled out by hand, which is precisely the tedium phase 3 deletes.
+Hand-written shims in the exact shape the generator will emit sit in
+the phase 2 tests and demo, each carrying the deletion note naming
+issue 302; every cast inside them is an unchecked human promise. The
+worked example map is the phase 2 demo's. When phase 3 lands the
+shims go; when phase 6 lands the loader becomes the only caller of
+the construction calls.
 
 ## Intended behavior
 

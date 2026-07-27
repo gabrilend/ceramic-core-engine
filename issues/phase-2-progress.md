@@ -13,7 +13,7 @@ with maps hand-built and shims hand-written as deliberate scaffolding.
 | 204 — readiness check | complete | Dispatch-table walk at the tail of every write; claims popped under the mutex. |
 | 205 — delivery walk | complete | Port choice, destination walk, sinks free; the pool's finish hook. |
 | 206 — task struct | complete | One exact-size allocation: shim, station, port, input copies, output. |
-| 207 — hand-built maps | in progress | |
+| 207 — hand-built maps | complete | Construction calls kept irritating on purpose; hand shims carry their own death notes. |
 | 208 — phase 2 demo | not started | |
 
 Notes for the phase: the station layer landed as two files —
