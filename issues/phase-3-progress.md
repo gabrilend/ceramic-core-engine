@@ -10,7 +10,7 @@ to call it by name is derived from the C itself.
 | 302 — shim emission | complete | One generated call site per box, memcpy loads, exact task sizes. |
 | 303 — registry emission | complete | Name to shim to full type story; hand sizes became registry lookups. |
 | 304 — struct field tables | complete | Offsets from offsetof, kinds per field, nested tables linked. |
-| 305 — compare functions | in progress | |
+| 305 — compare functions | complete | Primitives generated, author orderings wrapped, availability in the registry. |
 | 306 — build integration | in progress | |
 | 307 — phase 3 demo | not started | |
 

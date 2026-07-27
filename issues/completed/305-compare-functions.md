@@ -2,8 +2,20 @@
 
 ## Current behavior
 
-Nothing compares anything. Comparators arrive in phase 5 and will need
-this to exist.
+Built. Every primitive that some box returns gets a generated
+three-way comparison; every author-written struct ordering, found by
+its suffix and validated to have exactly the right signature, gets a
+generic wrapper. Both copy bytes into real typed variables before
+comparing, because raw bytes lie — the tests prove minus five below
+three where unsigned bytes would disagree, minus two below one half
+where the float sign bit reads backwards, and zero equal to negative
+zero. Compare availability rides in each registry row (null when the
+return type has no ordering), so phase 5's refusal is one lookup. The
+demo vec3 ordering runs on squared magnitude — deliberately not the
+first field — so the tests can tell the semantic compare ran rather
+than anything positional. A struct return with no author compare
+simply carries a null, and the refusal lands at load time when a
+comparator actually asks, per issue 604.
 
 ## Intended behavior
 
