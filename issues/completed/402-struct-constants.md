@@ -2,9 +2,19 @@
 
 ## Current behavior
 
-A static entry can hold a number or a string. Anything structured has
-to be assembled by a box at runtime, which means a map cannot express a
-configuration value that happens to have more than one field.
+Built, inside the statics module: one generalized reader walking a
+field table and brace text together, recursing into nested tables,
+never one parser per type. Offsets come from the compiler through
+the generated offsetof tables, so the deliberately padded struct
+reads correctly. The string-field decision landed as the fixed-size
+character array: the bytes live inside the struct, nobody owns
+anything, and a value longer than the field is fatal rather than
+truncated — the reasoning sits as a comment where the decision lives.
+Every malformed case — too many values, too few, a string where a
+number belongs — dies at bind time naming the entry and field, each
+proven by a forked-child death test. Bytes are proven identical to a
+compiled initializer of the same value for the every-kind struct
+(primitive, nested, string, wide unsigned).
 
 ## Intended behavior
 

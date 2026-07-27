@@ -8,7 +8,7 @@ is used.
 | Issue | State | In one line |
 |---|---|---|
 | 401 — static slots | complete | Always full, never consumed; bytes shaped by the first binder's type. |
-| 402 — struct constants | in progress | |
+| 402 — struct constants | complete | One reader walks field tables and brace text; malformed is fatal at bind. |
 | 403 — gatherer slots | in progress | |
 | 404 — chains and cycles | in progress | |
 | 405 — statics mutation | in progress | |
