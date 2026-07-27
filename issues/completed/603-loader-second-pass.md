@@ -2,8 +2,18 @@
 
 ## Current behavior
 
-Every station exists with its slots, but no station points at any
-other. The map is a pile of boxes with no wires.
+Built. Every output line resolves its destination by name — forward
+references included, the reason the passes exist — checks the slot
+exists, and type-checks the wire by name at the first moment both
+ends are known: the deliverable message reads exactly as this issue
+asked, "head -> wrong.1: box returns int, slot takes double", both
+stations, the slot, both type names. Gather input lines resolve here
+too (their sources are names), type-checked the same way, bound
+through the cycle check. Destinations append in file order, which
+the eventual dump round-trip leans on. The name table is discarded
+when loading ends. Proven by the forward-reference map loading and
+by refusals for the missing station, the out-of-range slot, and the
+mismatched wire, each with its message checked word for word.
 
 ## Intended behavior
 
