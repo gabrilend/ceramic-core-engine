@@ -2,10 +2,22 @@
 
 ## Current behavior
 
-Every input slot is a ring buffer. A value that never changes — a
-threshold, a file path, a configuration number — has to be pumped in
-by an upstream box at exactly the same rate as the real data, or the
-station stalls after its first run.
+Built, in its own statics module. The table is numbered entries on
+the map, guarded by one mutex; a static slot is always full, never
+affects readiness, and claiming copies without consuming — proven by
+a station running fifty times off one entry, driven only by its
+buffer side, and by an all-static station that delivery can never
+wake. Binding requires the slot to know its type, which only
+registry placement provides — hand-placed stations cannot bind
+statics, a sharper rule than the issue stated.
+
+One deliberate departure, reasoned in the first-pass report: entries
+hold parsed bytes shaped by the first binder rather than re-parsed
+text per claim. Runtime mutation (issue 405) writes bytes, and a
+table that is sometimes text and sometimes bytes is two tables
+wearing one name; the docs' "two slots read one entry each their own
+way" narrows to same-size types. Statics remain slightly
+discouraged, as the design wants.
 
 ## Intended behavior
 

@@ -70,10 +70,16 @@ typedef struct slot {
     int   source;     /* gatherer only — upstream station index (phase 4) */
     int   static_id;  /* static only — statics table entry (phase 4) */
 
+    /* The type this slot feeds, as text from the registry — what
+     * lets a static entry's text become bytes of the right shape.
+     * Null on hand-placed stations, which therefore cannot bind
+     * statics; the loader always places by name (phase 4/6). */
+    const char *type_name;
+
     /* The growth story, written by issue 203 and read by phase 7:
      * how many times this buffer has doubled, and the deepest the
-     * backlog ever got. A slot that grows is a consumer slower than
-     * its producer, and memory quietly absorbing the difference. */
+     * backlog ever got. A growing slot is one input side outpacing
+     * its siblings, with memory absorbing the imbalance. */
     int growths;
     int high_water;
 } slot_t;
@@ -118,11 +124,42 @@ typedef struct station {
 } station_t;
 /* }}} */
 
-/* {{{ struct map */
+/* {{{ struct static_entry / struct map */
+/*
+ * One statics-table entry (issues 401, 402, 405). The text is what
+ * the map said; the bytes are its parse, produced when the first
+ * slot binds and sized to that slot's type. The first pass departs
+ * from the docs here deliberately: entries hold parsed bytes rather
+ * than being re-read from text at every claim, because runtime
+ * mutation (issue 405) writes bytes, and a table that is sometimes
+ * text and sometimes bytes is two tables wearing one name. The
+ * "two slots read one entry each their own way" side effect is
+ * narrowed to same-size types; the first-pass report carries the
+ * reasoning.
+ */
+typedef struct static_entry {
+    char          *text;            /* what the map said; owned here */
+    unsigned char *bytes;           /* the parse; what claims copy */
+    int            size;            /* bytes' length once parsed */
+    char          *string_storage;  /* for string entries: the characters
+                                     * the claimed pointer points at */
+} static_entry_t;
+
 typedef struct map {
     station_t *stations;
     int        n_stations;
     pool_t    *pool;            /* set by map_start; delivery pushes here */
+
+    /* The statics table: numbered constants, alive for the life of
+     * the program, guarded by one mutex the moment writes exist
+     * (issue 405). Reads are a memcpy under it; contention is nil. */
+    static_entry_t *statics;
+    int             n_statics;
+    pthread_mutex_t statics_mutex;
+
+    /* The deepest gather chain seen while wiring — the worst-case
+     * inline work a worker does assembling one task (issue 404). */
+    int gather_depth;
 } map_t;
 /* }}} */
 
@@ -201,11 +238,82 @@ void map_deliver(void *ctx, task_t *t);
 int map_slot_depth(map_t *m, int station, int slot);
 /* }}} */
 
-/* {{{ station_port() — internal joint between structure and motion */
+/* ------------------------------------------------------------------ */
+/* The statics table (issues 401, 402, 405). Lives in 033-statics.c.  */
+/* ------------------------------------------------------------------ */
+
+/* {{{ map_statics_alloc() / map_static_set_text() */
+/* Create the numbered table; give an entry its text. Text must be
+ * set before any slot binds the entry. */
+void map_statics_alloc(map_t *m, int n_entries);
+void map_static_set_text(map_t *m, int id, const char *text);
+/* }}} */
+
+/* {{{ map_slot_static() */
+/*
+ * Convert a slot from ring buffer to static, binding it to an entry.
+ * The entry's text is parsed here, into bytes shaped by the slot's
+ * registry type — which is why only stations placed by name can bind
+ * statics. Always full, never consumed, never affects readiness.
+ */
+void map_slot_static(map_t *m, int station, int slot, int static_id);
+/* }}} */
+
+/* {{{ map_static_write() / sora_static_write() */
+/*
+ * Alter an entry while the program runs (issue 405), size-checked
+ * against the entry. The bare-name variant reaches the active map,
+ * and exists so a box can call it — which is a back channel around
+ * "a box cannot remember": shared mutable state, relocated, wearing
+ * a table for a disguise. It works. Treat it with exactly the
+ * suspicion a global variable deserves, and for the same reason.
+ */
+void map_static_write(map_t *m, int id, const void *bytes, int size);
+void sora_static_write(int id, const void *bytes, int size);
+/* }}} */
+
+/* ------------------------------------------------------------------ */
+/* The pull path (issues 403, 404). Lives in 034-gather.c.            */
+/* ------------------------------------------------------------------ */
+
+/* {{{ map_slot_gather() */
+/*
+ * Convert a slot to a gatherer: its value is produced on demand by
+ * running the named upstream station inline at task assembly. The
+ * upstream must have no ring-buffer slots (nothing could ever fill
+ * them mid-gather), and the connection is refused if it would close
+ * a gather cycle — a cycle here is a call that never returns,
+ * surfacing as a bare segfault, so it is caught at wiring time when
+ * it can still say two station numbers out loud.
+ */
+void map_slot_gather(map_t *m, int station, int slot, int source_station);
+/* }}} */
+
+/* ------------------------------------------------------------------ */
+/* Internal joints between the engine's files. Not part of the       */
+/* surface a map author touches.                                      */
+/* ------------------------------------------------------------------ */
+
+/* {{{ station_port() */
 /* The port at an index, or null if never wired — which delivery
- * reads as "discard". Shared by the two engine files; not part of
- * the surface a map author touches. */
+ * reads as "discard". */
 port_t *station_port(station_t *s, int index);
+/* }}} */
+
+/* {{{ static_claim() / gather_claim() — task-build resolution */
+/* Called by task construction, outside the station's mutex: a
+ * static claim is a locked copy from the table; a gather claim runs
+ * the upstream box inline on the assembling thread's own stack. */
+void static_claim(map_t *m, const slot_t *sl, void *into);
+void gather_claim(map_t *m, const slot_t *sl, void *into);
+/* }}} */
+
+/* {{{ map_statics_free() — teardown joint */
+void map_statics_free(map_t *m);
+/* }}} */
+
+/* {{{ sora_active_map — the one live map, for box-reachable calls */
+extern map_t *sora_active_map;
 /* }}} */
 
 #endif

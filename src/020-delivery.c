@@ -265,11 +265,17 @@ static task_t *task_build(map_t *m, int station_index,
             /* Claimed under the mutex; copied into the task here. */
             memcpy(t->in[i], claimed + offset, (size_t)sl->elem_size);
             break;
-        case SLOT_GATHER:
         case SLOT_STATIC:
-            /* Resolved at build time — phase 4 (issues 401, 403). */
-            die("a slot kind from phase 4 was reached before phase 4 was built",
-                station_index);
+            /* A locked copy from the statics table (issue 401) —
+             * resolved here, outside the station's mutex, so the
+             * table's own lock never nests inside a station's. */
+            static_claim(m, sl, t->in[i]);
+            break;
+        case SLOT_GATHER:
+            /* The upstream box runs inline, right now, on this
+             * thread (issue 403) — after the station's mutex was
+             * released, so user code never runs under it. */
+            gather_claim(m, sl, t->in[i]);
             break;
         default:
             die("a slot of an unknown kind", station_index);

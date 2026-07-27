@@ -13,6 +13,9 @@
  * functions (private helpers, invisible to maps), and functions
  * named type__compare (that type's three-way ordering).
  */
+#include <stdio.h>
+#include <stdlib.h>
+
 /* A value type: three floats, no surprises. */
 typedef struct {
     float x;
@@ -106,6 +109,54 @@ record stamp_record(int a, vec3 pos, unsigned long stamp)
 void swallow(int x)
 {
     (void)x;
+}
+/* }}} */
+
+/* {{{ seven() */
+/* No inputs at all: every slot vacuously satisfied. A station
+ * placing this can only ever run by being gathered (or, later,
+ * seeded) — nothing can be written into it to discover it. */
+int seven(void)
+{
+    return 7;
+}
+/* }}} */
+
+/* {{{ double_it() */
+int double_it(int x)
+{
+    return x * 2;
+}
+/* }}} */
+
+/* {{{ read_int_file() */
+/*
+ * A read box, written as an ordinary function to prove no engine
+ * support is required — the dedicated read box type from the
+ * original vision dissolves into "a gatherable function". Opens,
+ * reads, closes: safe for two workers to be inside at the same
+ * instant, which a kept-open seeking handle would not be.
+ *
+ * A gatherer cannot decline (the task struct has a place waiting for
+ * bytes and no way to say absence), so a missing file stops the
+ * program and says so.
+ */
+int read_int_file(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "read_int_file: '%s' does not exist — a gathered "
+                        "value cannot be absent\n", path);
+        abort();
+    }
+    int value = 0;
+    if (fscanf(f, "%d", &value) != 1) {
+        fprintf(stderr, "read_int_file: '%s' holds no number\n", path);
+        fclose(f);
+        abort();
+    }
+    fclose(f);
+    return value;
 }
 /* }}} */
 

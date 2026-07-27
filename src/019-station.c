@@ -188,6 +188,11 @@ void map_start(map_t *m, int n_workers)
      * task, the map decides where its output goes. This is the whole
      * of the pool's knowledge of the engine — one function pointer. */
     m->pool = pool_create(n_workers, map_deliver, m);
+    /* The started map becomes the process's active map, which is how
+     * a box — which receives only values — can reach the statics
+     * table's write call. One live map per process is the standing
+     * assumption; the first-pass report weighs it. */
+    sora_active_map = m;
 }
 /* }}} */
 
@@ -215,6 +220,9 @@ void map_destroy(map_t *m)
 {
     if (m->pool)
         pool_destroy(m->pool);
+    if (sora_active_map == m)
+        sora_active_map = NULL;
+    map_statics_free(m);
 
     for (int i = 0; i < m->n_stations; i++) {
         station_t *s = &m->stations[i];

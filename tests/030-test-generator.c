@@ -62,7 +62,10 @@ static task_t *build_task(const box_info_t *b, void **values, void *out)
 /* {{{ test_registry_contents() */
 static void test_registry_contents(void)
 {
-    check(registry_n_boxes == 7, "expected seven boxes in the registry");
+    /* Grows as demo boxes are added; the point is that every box in
+     * the source is here exactly once, which the duplicate check in
+     * the generator enforces and the finds below sample. */
+    check(registry_n_boxes >= 7, "the demo boxes are all registered");
 
     const box_info_t *b = registry_find("add");
     check(b != NULL, "add present");

@@ -101,5 +101,17 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
         sizes[b->n_params] = b->return_size;
 
     map_place(m, station, b->shim, kind, n, sizes, b->return_size);
+
+    /* Registry placement knows what hand placement cannot: the type
+     * each slot feeds, as text. This is what lets a static entry's
+     * text become bytes of the right shape (issue 401), and what the
+     * wire checker will compare in phase 6. The comparator's extra
+     * slot is typed to the return value, since that is what it will
+     * be compared against. */
+    station_t *s = &m->stations[station];
+    for (int i = 0; i < b->n_params; i++)
+        s->slots[i].type_name = b->params[i].type_name;
+    if (extra)
+        s->slots[b->n_params].type_name = b->return_type;
 }
 /* }}} */
