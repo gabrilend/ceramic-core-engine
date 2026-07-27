@@ -1,0 +1,7 @@
+# Points editor tooling at the same include roots the Makefile uses,
+# so editor diagnostics describe the build that actually happens.
+CompileFlags:
+  Add: [-I/mnt/mtwo/programming/ai-playground/minimal-soramech/libs,
+        -I/mnt/mtwo/programming/ai-playground/minimal-soramech/src,
+        -pthread]
+  Compiler: clang

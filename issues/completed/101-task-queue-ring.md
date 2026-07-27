@@ -2,7 +2,15 @@
 
 ## Current behavior
 
-Nothing exists. This is the first thing built in the project.
+Built, in the pool library under `libs/`. The queue is a ring of task
+pointers guarded by one mutex, doubling when the tail would land on
+the head, with the wrapped portion unwrapped during the copy so the
+contents stay in first-in-first-out order. Push and pop never block;
+pop returns nothing on empty and the sleeping decision lives with the
+workers. The queue additionally records its high-water occupancy and
+growth count, placed early so the phase 1 demo could report measured
+numbers rather than constants. Covered by a growth-order test seeded
+with a wrapped ring and a many-threads push/pop test.
 
 ## Intended behavior
 
