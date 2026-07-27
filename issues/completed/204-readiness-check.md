@@ -2,8 +2,18 @@
 
 ## Current behavior
 
-Values can be written into a station's slots, but nothing notices when
-a station has everything it needs.
+Built, as the tail end of every write. The check walks the slots
+through a dispatch table keyed on the slot's kind — ring buffers
+answer by head-differs-from-tail, gatherer and static rows answer
+"always" from the start, exactly as planned. Claiming is a second
+table: ring values are popped into a caller-supplied stack buffer
+under the mutex, while the gatherer and static rows are deliberately
+null, meaning "resolved during task construction, outside the lock" —
+a refinement of this issue's text made so user code can never run
+under a station's mutex; the delivery-file comments carry the
+reasoning. Proven by a three-input box fed in all six arrival orders
+firing exactly once per set, and eight threads hammering one station
+for sixteen thousand claims with nothing lost, torn, or doubled.
 
 ## Intended behavior
 

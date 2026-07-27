@@ -10,7 +10,7 @@ with maps hand-built and shims hand-written as deliberate scaffolding.
 | 201 — station table | complete | Flat array of fixed-size records; nothing moves, everything indexed. |
 | 202 — ring-buffer slots | complete | Tagged slots, exact-size cells, write/pop as pure memcpy. |
 | 203 — slot buffer growth | complete | Doubling under the mutex with unwrap; growth count and high water kept for phase 7. |
-| 204 — readiness check | in progress | |
+| 204 — readiness check | complete | Dispatch-table walk at the tail of every write; claims popped under the mutex. |
 | 205 — delivery walk | in progress | |
 | 206 — task struct | in progress | |
 | 207 — hand-built maps | in progress | |
