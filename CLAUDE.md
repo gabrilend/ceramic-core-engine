@@ -47,3 +47,15 @@ src/008 through src/020).
 - Issue files are append-only blueprints. When one completes:
   move it to issues/completed/, update the phase progress page,
   and make one commit for that issue's changes only.
+- **Never link between issue files by path.** Write
+  `issue 305 (C graph loader)` — number for lookup, title so a
+  human knows what it is — not `[305](305-c-graph-loader.md)` or
+  `[305](completed/305-c-graph-loader.md)`. An issue's path
+  changes every time it completes or reopens, so a path link
+  between issues is wrong half the time. The historical failure
+  was issues written in `issues/` citing `completed/X`, then
+  moving to `completed/` themselves and resolving to
+  `completed/completed/X`. Docs cite issues the same way, for the
+  same reason. Turning issue numbers into clickable links is the
+  HTML mirror's job (issue 258), not the markdown's.
+  Doc-to-doc links stay relative links — docs don't move.

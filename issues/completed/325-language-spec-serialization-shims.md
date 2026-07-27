@@ -4,7 +4,7 @@
 
 complete · design directive captured 2026-07-21 (settling the
 "decision to settle" left open in
-[323](completed/323-same-language-fast-path-drops-table-values.md));
+[323](323-same-language-fast-path-drops-table-values.md));
 landed across three slices, 2026-07-22. The per-pair custom wire
 form is a reserved extension point, not deferred work — see the
 completion notes.
@@ -166,6 +166,6 @@ if Bash output ever gets string-wrapped, the `bash_to_lua` /
   shipped specs that gain shim tables
 - `src/020-sentinels.c` — the capability-mask walker the per-edge
   shim check rides alongside
-- [312](completed/312-same-language-wire-fast-path.md) /
-  [313](completed/313-research-whole-program-same-language-merge.md)
+- [312](312-same-language-wire-fast-path.md) /
+  [313](313-research-whole-program-same-language-merge.md)
   — the fast path and merge research this reframes

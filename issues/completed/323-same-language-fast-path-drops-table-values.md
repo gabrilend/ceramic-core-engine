@@ -3,14 +3,14 @@
 Phase 3 (thread-pool runtime). A correctness bug in the wire encoder,
 discovered downstream in a cycle where every box is Lua.
 
-Builds on / corrects: [312](completed/312-same-language-wire-fast-path.md)
-(same-language fast path), [313](completed/313-research-whole-program-same-language-merge.md)
-(whole-program merge), [306](completed/306-lua-language-spec.md) (Lua spec).
+Builds on / corrects: [312](312-same-language-wire-fast-path.md)
+(same-language fast path), [313](313-research-whole-program-same-language-merge.md)
+(whole-program merge), [306](306-lua-language-spec.md) (Lua spec).
 
 ## Status
 
 complete · the floor fix landed 2026-07-21. The by-reference
-ceiling stays with [313](completed/313-research-whole-program-same-language-merge.md);
+ceiling stays with [313](313-research-whole-program-same-language-merge.md);
 the "decision to settle" below was settled by
 [325](325-language-spec-serialization-shims.md): the floor is
 always-on, and the pairing becomes an explicitly declared Lua→Lua
@@ -111,7 +111,7 @@ discussion in the appendix and the parallelism-vs-by-reference tension.
 - `langs/lua/spec.c` — the two paths and the silent-drop branch
 - `encode_value` (same file) — the JSON encoder both paths can share
 - `src/012-dispatch.c` — where `output_native` is decided per wire
-- [244](completed/244-data-box-pull-on-demand.md) — a related pull model
+- [244](244-data-box-pull-on-demand.md) — a related pull model
 
 ## Completion notes (2026-07-21)
 

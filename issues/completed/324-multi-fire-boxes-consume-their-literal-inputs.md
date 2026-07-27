@@ -3,10 +3,10 @@
 Phase 3 (thread-pool runtime). A cycle dies silently after one lap because
 a pop-slot input eats its start-up literal and is never re-fed.
 
-Builds on: [304](completed/304-task-dispatch-layer.md) (dispatch / readiness),
-[302](completed/302-wire-value-slot-store.md) (slot store, peek vs pop),
-[221](completed/221-iterator-box.md) (iterator marks downstream multi-fire),
-[244](completed/244-data-box-pull-on-demand.md) (read boxes / pull-on-demand).
+Builds on: issue 304 (task dispatch layer — dispatch / readiness),
+issue 302 (wire-value slot store — peek vs pop), issue 221
+(iterator box — marks downstream multi-fire), issue 244 (read
+boxes, pull-on-demand).
 
 ## Status
 
