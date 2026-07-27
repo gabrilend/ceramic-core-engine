@@ -12,7 +12,10 @@ is used.
 | 403 — gatherer slots | complete | Inline pull at task build, outside every mutex; read box is just a function. |
 | 404 — chains and cycles | complete | One forward walk per new wire; refused loops name both ends; depth recorded. |
 | 405 — statics mutation | complete | One mutex, one copy's length; zero torn reads under a racing writer. |
-| 406 — phase 4 demo | not started | |
+| 406 — phase 4 demo | complete | Frozen vs fresh, the tax measured, the refusal beside the silent death. |
+
+Phase 4 is finished: values can now be current, not merely correct,
+and the map can carry configuration without pumping constants.
 
 Notes for the phase: statics and gathering landed as two modules
 (033, 034) joined to task construction through two claim calls,

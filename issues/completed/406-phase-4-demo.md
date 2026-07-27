@@ -2,9 +2,21 @@
 
 ## Current behavior
 
-Phase 3's demo shows that writing a box is writing a function. Every
-value in the engine still travels forward, so a value is as old as the
-moment it was produced.
+Built and discoverable from the root launcher. The file read both
+ways sits first: the frozen side keeps reporting 111 after the file
+turns to 999 mid-run while the gathered side follows — the whole
+reason the pull path exists, shown by contrast. The gather tax is
+measured honestly (a static second input against a deliberately
+expensive gathered one, roughly sixty times the per-task cost), with
+a subtlety the measuring itself surfaced: gathering happens at task
+assembly, so seeded values pay on the seeding thread — the first
+timing wrapped only the running and measured nothing. The chain
+scene shows depth three recorded at wiring and the walk's per-task
+cost. The refusal scene captures the engine's cycle message verbatim
+and then, in a second child, the alternative fate: killed by signal
+eleven saying nothing at all. The knob scene bends the output stream
+from 1000 to 5000 at the moment of a mid-run write. Mirrored to the
+shared-memory tier.
 
 ## Intended behavior
 

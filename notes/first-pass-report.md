@@ -185,7 +185,60 @@ one-line rule instead of a guess.
 
 ## Phase 4 — the pull path and configuration
 
-(appended as built)
+**The statics table is two designs wearing one name, and the docs
+never chose.** Docs 008 says entries are text "read into bytes at the
+moment a slot claims it" and that two slots of different types may
+read one entry each their own way; issue 405 says entries can be
+byte-written at runtime, size-checked. Text-at-claim and
+mutable-bytes cannot both be the table: per-claim parsing on the hot
+path is absurd, and byte-writes have no meaning against an entry that
+is authoritative text. First pass chose bytes-at-bind (first binder's
+type shapes the entry; same-size sharing only; mutation is
+byte-level), recorded the narrowing, and moved on. The second pass
+must pick one story in the docs — likely "text is the load-time
+serialization; bytes are the runtime truth" — and design two-type
+sharing away or in, explicitly.
+
+**A box cannot reach the engine, and issue 405 quietly requires it
+to.** Boxes receive values and return one; they hold no map pointer.
+"Make the statics write reachable from a box" therefore forced an
+ambient global — the active map — with a one-live-map-per-process
+assumption the design never states. Second pass: either bless the
+ambient map (and say one-per-process out loud), or give boxes an
+explicit capability argument, which touches the shim shape. This same
+door is where phase 7's control surface will want to enter.
+
+**Static binding needs the slot's type, so hand-built maps cannot
+bind statics.** Text becomes bytes only when the slot knows its type
+name, which only registry placement supplies. The scaffolding
+construction calls therefore cannot express phase 4 maps without a
+type-name backdoor (one test grants a name by hand). Harmless — the
+loader always places by name — but the issues present construction
+calls and statics as freely composable, and they are not.
+
+**Gather cost is paid wherever the task is assembled — including
+outside the pool.** The demo's first timing of the gather tax
+measured nothing, because seeded values assemble their tasks on the
+seeding thread before the workers ever release: the gather ran, at
+full cost, on the main thread, outside the timed window. Issue 702
+says "charge gather time to the pulling station"; the first pass adds:
+and note that the paying *thread* can be any deliverer, seeders
+included. Phase 7's attribution should follow the station, not the
+worker.
+
+**The engine-side type classifier duplicates the generator's.** The
+statics reader must classify type names (int-like, unsigned-like,
+float, string, struct) and so must the Lua generator; two lists must
+now agree forever. Second pass: emit the classification into the
+registry (a kind byte per param/field, which field tables already
+half-carry) so the engine never parses a type name at all.
+
+**Optimizers eat demonstration code.** Two demo scenes were silently
+hollowed out at -O2: a burn loop whose result folded to zero was
+deleted whole, and a deliberately endless recursion was tail-call
+optimized into a loop that overflows nothing. Both needed
+compiler-visible consumption to stay real. Lesson for any measured
+demo: prove the cost is still there (the numbers made it obvious).
 
 ## Phase 5 — routing kinds
 

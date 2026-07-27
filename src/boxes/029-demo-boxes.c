@@ -129,6 +129,29 @@ int double_it(int x)
 }
 /* }}} */
 
+/* {{{ slow_seven() */
+/*
+ * Seven, expensively: a gatherable box whose cost is measurable, so
+ * the phase 4 demo can show what "once per task assembled" charges
+ * the delivery path. Burns arithmetic rather than sleeping, because
+ * nothing in this engine is allowed to block.
+ */
+int slow_seven(void)
+{
+    unsigned long x = 88172645463325252UL;
+    for (int i = 0; i < 30000; i++) {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+    }
+    /* The result must be genuinely consumed or the optimizer deletes
+     * the entire loop and the cost this box exists to have. */
+    if (x == 0)
+        abort();
+    return 7;
+}
+/* }}} */
+
 /* {{{ read_int_file() */
 /*
  * A read box, written as an ordinary function to prove no engine
