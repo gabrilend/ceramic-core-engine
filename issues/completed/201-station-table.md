@@ -2,7 +2,17 @@
 
 ## Current behavior
 
-A working thread pool exists. Nothing describes a graph for it to run.
+Built, in the station layer under `src/`, split into a structural
+file (allocation, placement, wiring, teardown) and a motion file
+(everything that moves a value), so an error in one is findable
+without reading the other. The table is one flat allocation of
+identical fixed-size records; slots, ports, and destinations hang off
+pointers; every cross-reference is an index. Ports and destinations
+append at their list tails so wiring order is preserved, which the
+loader's round-trip will later rely on. The kind field and iterator
+cursor are placed and inert as planned. Proven by a test that floods
+one slot through seven doublings and confirms every station's address
+and every neighbour's contents are untouched.
 
 ## Intended behavior
 

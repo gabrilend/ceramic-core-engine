@@ -21,19 +21,35 @@
 #ifndef SORA_POOL_H
 #define SORA_POOL_H
 
+#include <stdint.h>
+
 /*
- * A task is one unit of work. The pool knows exactly one thing about
- * it: the first field is a function to call with the task itself as
- * argument. Everything after that field belongs to whoever created
- * the task — phase 1 tests hang synthetic payloads off it, and issue
- * 206 grows it into the engine's real task struct. The pool never
- * looks past `call`.
+ * A task is one invocation, made concrete (issue 206): created the
+ * moment a station's inputs are all present, destroyed by the worker
+ * that ran it. The pool reads exactly one field — `call` — and treats
+ * the rest as freight; everything the fields *mean* lives on the
+ * delivery path.
+ *
+ * The values behind `in` are copies, claimed under the station's
+ * mutex, so a task is self-contained: once built it depends on
+ * nothing another thread can change. The whole task — struct,
+ * pointer array, value bytes — is one allocation, sized exactly for
+ * its box, and freed with one call by the worker that ran it.
+ *
+ * Phase 1 tests still hang synthetic payloads off the end by
+ * embedding this struct first in a larger one; the pool cannot tell
+ * and does not care.
  */
 typedef struct task task_t;
 typedef void (*task_call_t)(task_t *t);
 
 struct task {
-    task_call_t call;
+    task_call_t call;     /* the shim to run */
+    int32_t     station;  /* which station produced it, so delivery knows where to look */
+    int32_t     port;     /* an iterator's assigned exit; inert until phase 5 */
+    int32_t     n_in;     /* how many input values ride along */
+    void      **in;       /* one claimed value per input slot, in parameter order */
+    void       *out;      /* where the return value lands; null for a sink */
 };
 
 typedef struct pool pool_t;

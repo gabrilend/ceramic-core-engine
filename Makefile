@@ -21,8 +21,10 @@ CC     ?= gcc
 CFLAGS := -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread
 CFLAGS += -I$(DIR)/libs -I$(DIR)/src
 
-# The pool is the only library so far; later phases append here.
-ENGINE_SRC := $(DIR)/libs/012-pool.c
+# Everything the engine is made of: the pool from libs/, the station
+# layer and what follows from src/. Discovered by wildcard so a new
+# engine file enrolls itself.
+ENGINE_SRC := $(wildcard $(DIR)/libs/*.c) $(wildcard $(DIR)/src/*.c)
 
 TEST_SRC  := $(wildcard $(DIR)/tests/*.c)
 TEST_BINS := $(patsubst $(DIR)/tests/%.c,$(BUILD)/%,$(TEST_SRC))

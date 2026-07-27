@@ -1,0 +1,21 @@
+# Phase 2 progress — stations and the push path
+
+Phase 2's goal: the first phase where a graph runs. Stations in one
+flat table, ring-buffer slots with exact cell sizing and growth, the
+delivery path, output ports with fan-out, and the real task struct —
+with maps hand-built and shims hand-written as deliberate scaffolding.
+
+| Issue | State | In one line |
+|---|---|---|
+| 201 — station table | complete | Flat array of fixed-size records; nothing moves, everything indexed. |
+| 202 — ring-buffer slots | in progress | |
+| 203 — slot buffer growth | in progress | |
+| 204 — readiness check | in progress | |
+| 205 — delivery walk | in progress | |
+| 206 — task struct | in progress | |
+| 207 — hand-built maps | in progress | |
+| 208 — phase 2 demo | not started | |
+
+Notes for the phase: the station layer landed as two files —
+structure and motion — with the phase's mechanisms built together and
+proven issue by issue, same pattern as phase 1.
