@@ -14,8 +14,15 @@ with maps hand-built and shims hand-written as deliberate scaffolding.
 | 205 — delivery walk | complete | Port choice, destination walk, sinks free; the pool's finish hook. |
 | 206 — task struct | complete | One exact-size allocation: shim, station, port, input copies, output. |
 | 207 — hand-built maps | complete | Construction calls kept irritating on purpose; hand shims carry their own death notes. |
-| 208 — phase 2 demo | not started | |
+| 208 — phase 2 demo | complete | Occupancy, overlap, both backlog kinds, fan-out cost, live backpressure. |
+
+Phase 2 is finished: the first phase where a graph runs. A map is
+described, values drop in, and the machine fills every core with no
+scheduler anywhere.
 
 Notes for the phase: the station layer landed as two files —
 structure and motion — with the phase's mechanisms built together and
-proven issue by issue, same pattern as phase 1.
+proven issue by issue, same pattern as phase 1. Building the demo
+surfaced the phase's best finding: the two kinds of backlog (slot
+versus task ring) and which mismatch produces which — docs 002 was
+corrected to match.

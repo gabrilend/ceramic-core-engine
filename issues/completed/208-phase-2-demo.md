@@ -2,8 +2,18 @@
 
 ## Current behavior
 
-Phase 1's demo shows a thread pool moving opaque work between threads.
-Nothing shows a graph propagating.
+Built and discoverable from the root launcher. Five scenes, all
+measured: a sixteen-wide map reaching full worker occupancy with
+nobody arranging it; one station with fourteen bodies inside it at
+once and an intact checksum; the two kinds of backlog shown side by
+side — a slow single-input consumer piling tasks into the pool's ring
+while its slot stays one deep, and a pairing station's starved side
+growing its buffer to hold four hundred waiting values (a distinction
+the design docs did not draw; docs 002 now corrected, first-pass
+report carries the lesson); fan-out cost measured at widths one, ten,
+and a hundred; and a live text view of six hundred values pooling
+behind a ticket gate and draining as tickets trickle in. Results
+mirror to the shared-memory tier.
 
 ## Intended behavior
 

@@ -90,8 +90,17 @@ copy inside a task struct. Nothing holds a pointer into the buffer.
 
 Growth is O(number of values held) but amortized to nothing, and it
 happens at most a couple dozen times in a process lifetime. A buffer
-that keeps growing is a signal worth logging: it means a consumer is
-slower than its producer and memory is absorbing the difference.
+that keeps growing is a signal worth logging: it means one input side
+of a station is being fed faster than its sibling slots, and memory
+is absorbing the imbalance while values wait for their partners.
+
+A correction from the first build pass: a *single-input* station can
+never accumulate a backlog in its slot, because every write completes
+its input set and is claimed immediately. A slow single-input consumer
+backs up the pool's task ring instead. Slot growth is specifically the
+signature of a multi-input station fed unevenly; queue growth is the
+signature of consumers slower than producers overall. Phase 7 reports
+both, and reading them together is what locates a bottleneck.
 
 ## Output ports
 

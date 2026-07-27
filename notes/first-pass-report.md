@@ -97,7 +97,51 @@ release → join → destroy, join implied by destroy, both callable).
 
 ## Phase 2 — stations and the push path
 
-(appended as built)
+**The docs tell the wrong story about where a backlog lives.** Docs
+002, issue 203, and issue 701 all say a growing ring buffer means "a
+consumer slower than its producer." Building the demo disproved the
+simple reading: a single-input station is ready on every write, so its
+values are claimed instantly and its slot depth never exceeds one —
+the backlog of a slow single-input consumer accumulates as tasks in
+the *pool's ring*, not in the slot. Slot growth is specifically the
+signature of a *multi-input* station fed unevenly, one side waiting
+for its siblings. Docs 002 now carries the correction. The second pass
+should design phase 7's reporting around both piles from the start —
+queue high-water and slot high-water are two different diagnoses and
+the original text conflates them.
+
+**Claiming statics and gathered values under the station mutex was
+quietly wrong, and the issues almost prescribe it.** Issue 204 says
+"claim one value from each" under the lock; issue 403 separately says
+gathering happens outside the lock. Following 204 literally for all
+three slot kinds would run user code (a gatherer) inside a station's
+contended section. The build resolved it by making the claim dispatch
+table honest about the split: ring slots claim under the mutex,
+gatherer and static rows are null meaning "resolved at task build,
+outside the lock." The second pass should state the rule once, in the
+delivery doc: no user code and no cross-structure locks inside a
+station's critical section, and the claim table's null rows are how
+that is enforced.
+
+**Nothing in phase 2 can stop a push loop, and nothing says so.** The
+docs celebrate push cycles as the engine's only memory (the counter
+pattern), but until phase 5's comparator exists there is no way for a
+loop to ever terminate — a phase 2 cycle runs forever by construction.
+The roadmap never mentions that the counter pattern is unusable for
+three phases. Harmless here, but a reader building phases in order and
+trying the documented counter as their first map would produce an
+unstoppable program. A sentence in docs 004 or the roadmap would have
+prevented the surprise.
+
+**The demo had to invent an outside-feeder idiom the design lacks.**
+Showing backpressure requires feeding a running map at a metered rate
+from the main thread — which is exactly the outside-submitter case
+issue 104 declared illegal-unless-registered. Every test and demo that
+trickles ended up using the registration API built in phase 1. It
+works, but it is load-bearing scaffolding the original design never
+drew; the second pass should give "feeding a live map from outside"
+a designed front door (and it is the same door phase 7's rewiring
+control surface will need).
 
 ## Phase 3 — the build path
 
