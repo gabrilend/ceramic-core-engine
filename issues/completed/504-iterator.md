@@ -2,9 +2,17 @@
 
 ## Current behavior
 
-A value either goes down one port, or down three chosen by comparison.
-There is no way to spread successive values across a set of
-destinations.
+Built. The cursor advances inside the readiness path, under the
+station's mutex, at the moment a task becomes due — the chosen port
+is written into the task and the box never sees any of it, exactly
+as this issue specified. The routing row on the way out just reads
+the recorded port. The cursor is an index into the port list, walked
+per delivery, consistency over cleverness as decided here. Proven by
+twenty-four hundred values from eight concurrent feeders landing
+exactly eight hundred on each of three ports — the no-two-tasks-
+one-port-per-cycle property made arithmetic. Arrival order remains
+unpromised, and the phase 5 demo shows the disorder beside the
+fairness: a spreader, not a funnel.
 
 ## Intended behavior
 
