@@ -2,9 +2,20 @@
 
 ## Current behavior
 
-A gatherer's slots may be static. If one is itself gathered, the
-gathering recurses — which works, and which will recurse forever if two
-gatherers point at each other.
+Built. Chains recurse inline exactly as designed — a three-deep
+chain (a constant source doubled twice into an adder) walks per task
+and its depth is recorded on the map at wiring time, where the cycle
+walk pays for it anyway. Every new gather wire runs the forward walk
+from its proposed source: reaching back to the destination refuses
+the edge naming both stations, so the graph stays acyclic by
+induction and the bare-segfault failure this issue dreads cannot be
+built. Two- and three-station cycles are each proven refused by
+watching a child process die of them. The push direction stays
+unchecked and legal, proven by a counter looping through a ring
+buffer — with a finding the design never mentions: a push loop needs
+a finite companion input (tickets) to ever stop before phase 5's
+comparator exists, and the test pairs its loop with one. The
+one-lock note for runtime rewiring sits as a comment at the check.
 
 ## Intended behavior
 
