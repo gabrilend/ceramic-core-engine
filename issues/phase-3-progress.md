@@ -9,7 +9,7 @@ to call it by name is derived from the C itself.
 | 301 — box-source parser | complete | Lua script; three shapes recognized, everything else stops the build with file:line. |
 | 302 — shim emission | complete | One generated call site per box, memcpy loads, exact task sizes. |
 | 303 — registry emission | complete | Name to shim to full type story; hand sizes became registry lookups. |
-| 304 — struct field tables | in progress | |
+| 304 — struct field tables | complete | Offsets from offsetof, kinds per field, nested tables linked. |
 | 305 — compare functions | in progress | |
 | 306 — build integration | in progress | |
 | 307 — phase 3 demo | not started | |

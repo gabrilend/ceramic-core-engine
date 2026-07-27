@@ -2,9 +2,17 @@
 
 ## Current behavior
 
-The registry knows every struct's total size, which is enough to
-allocate a ring buffer cell and copy bytes into it. It does not know
-what is inside one.
+Built. Every struct in the box sources gets a field table: name,
+offset, size, and kind (signed, unsigned, floating, fixed string, or
+nested struct) per field, with nested entries pointing into the
+shared struct table and fixed strings carrying their length. Every
+offset is an offsetof expression and every size a sizeof — the
+compiler computes them all, exactly as this issue demanded, so the
+deliberately awkward padded struct (char, then double, then int)
+reads correctly with its seven-byte hole. Proven against the
+compiler's own offsetof for the padded case, the nested case, and
+the string case. The reader that walks these tables against text is
+issue 402's, in phase 4, as planned.
 
 ## Intended behavior
 
