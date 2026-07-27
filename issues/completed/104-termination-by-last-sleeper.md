@@ -2,9 +2,35 @@
 
 ## Current behavior
 
-Workers sleep when there is nothing to do (issue 103) and wake when
-something arrives. Nothing decides that the program is finished, so a
-pool that runs out of work sleeps forever.
+Built. The worker whose registration brings the sleeping count to the
+worker total looks at the queue one final time; finding nothing, it
+sets the stop flag and wakes everyone, and each worker sees the flag
+and returns on its own — shutdown is a broadcast, never a break-out.
+Finding something instead, it deregisters and takes the work.
+
+Two departures from the text below, both deliberate:
+
+The race this issue describes cannot occur in the implementation as
+built, because the check and the registration happen inside a single
+hold of the queue mutex and the condition wait releases that mutex
+atomically — there is no moment between "checked empty" and
+"registered asleep" for another thread to slip through. The re-scan
+therefore survives as the last sleeper's final look rather than as a
+race repair, and the test that was to reproduce the race by delaying a
+worker between the two steps is unwritable: the window does not
+exist. The termination test file documents this where the test would
+have been, and the first-pass report carries the design lesson.
+
+The rule "nothing outside the pool pushes after startup" gained the
+registration mechanism this issue only hinted at: an outside submitter
+registers a standing promise that more work may come, and termination
+waits until no such promise is held. The sleep test's trickle feeder
+uses it, and dropping the last registration nudges an all-asleep pool
+so termination becomes decidable.
+
+Proven by chains of wildly uneven lengths that must all run to their
+ends, an empty pool that terminates at once, and two hundred fresh
+pools each running a burst to completion.
 
 ## Intended behavior
 
