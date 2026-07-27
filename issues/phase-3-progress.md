@@ -11,7 +11,7 @@ to call it by name is derived from the C itself.
 | 303 — registry emission | complete | Name to shim to full type story; hand sizes became registry lookups. |
 | 304 — struct field tables | complete | Offsets from offsetof, kinds per field, nested tables linked. |
 | 305 — compare functions | complete | Primitives generated, author orderings wrapped, availability in the registry. |
-| 306 — build integration | in progress | |
+| 306 — build integration | complete | Boxes discovered, registry regenerated on change, failure emits nothing. |
 | 307 — phase 3 demo | not started | |
 
 Notes for the phase: parser and emitters are one script with distinct

@@ -2,9 +2,17 @@
 
 ## Current behavior
 
-The generator exists and its emitters work, but running it is a manual
-step. Nothing guarantees the generated code in a build matches the box
-sources it was derived from.
+Built. Adding a box is writing a function: box sources are whatever
+sits under `src/boxes/`, discovered by wildcard, so a box cannot
+exist that the generator silently does not see. The make rule
+regenerates whenever any box source or the generator itself is newer
+than the emission; the emission lands in `src/generated/`, which is
+ignored by history because a derived file in the repository is a file
+that can be stale. A failing generator writes to a temporary name and
+never moves it into place, so the build can never compile against
+yesterday's registry — the no-partial-output guarantee is proven by a
+shell test alongside the regeneration-follows-an-edit test. The
+`describe` target prints what the parser saw.
 
 ## Intended behavior
 
