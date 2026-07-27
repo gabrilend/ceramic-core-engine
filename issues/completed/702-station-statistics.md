@@ -2,9 +2,19 @@
 
 ## Current behavior
 
-A running map is opaque. There is no way to learn which station is
-doing the work, which is idle, or where the time goes — only whether
-the program finished.
+Built. Run counts and produced-for-others ride the delivery path as
+atomics where the work already is, always on, costing a fetch-add.
+Timing — box time from inside the generated shims, mutex wait around
+the delivery lock, gather time charged to the pulling station at the
+exact call — exists only when SORA_STATS is compiled in; without the
+define every clock read compiles out of the shims and the delivery
+path both, so the apparatus can be removed entirely, and the demo
+measures its cost with it on and off rather than assuming. The
+report offers the three orderings as a dispatch table of
+comparators: by time, by contention, by count, because the
+interesting station is a different one under each. Counts proven
+exact on a loaded chain; the timing columns and the on/off overhead
+are the phase demo's scenes.
 
 ## Intended behavior
 
