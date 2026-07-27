@@ -2,8 +2,19 @@
 
 ## Current behavior
 
-Every value leaves its station down the same port. A map cannot make a
-decision; it can only transform.
+Built. Placement by name gives a comparator one slot more than its
+box has parameters — the threshold, at the end of the slots array,
+typed to the box's return value from the registry, exactly where
+this issue put it. The shim reads only the real parameters; the
+threshold rides the task as its last input and is consulted after
+the box returns, on the delivery path. It participates in readiness
+like any slot: the buffered-threshold test proves a station starving
+until its threshold arrives. All three outcomes reach their own
+ports; an unwired outcome discards ten values without a whisper. No
+operator setting exists anywhere — the operator table in this issue
+remains a statement about wiring, and the demo makes it in numbers.
+A sink asked to be a comparator, and a comparator whose return type
+has no ordering, are both refused at placement naming the fix.
 
 ## Intended behavior
 

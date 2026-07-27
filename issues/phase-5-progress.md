@@ -6,7 +6,7 @@ built as variations on one step of delivery and nothing else.
 | Issue | State | In one line |
 |---|---|---|
 | 501 — routing dispatch | complete | Three rows at one moment; port creation became kind-aware. |
-| 502 — comparator | in progress | |
+| 502 — comparator | complete | Threshold as last slot, three outcome ports, unwired outcomes discard. |
 | 503 — three-way comparison | in progress | |
 | 504 — iterator | in progress | |
 | 505 — phase 5 demo | not started | |
