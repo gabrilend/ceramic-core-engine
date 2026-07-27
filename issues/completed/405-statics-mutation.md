@@ -2,8 +2,18 @@
 
 ## Current behavior
 
-The statics table is filled when a map loads and read from then on.
-Nothing writes to it, so nothing needs to guard it.
+Built. One mutex over the table, taken on every claim and every
+write, held for the length of one copy — reads constant, writes
+rare, contention nil, exactly the analysis this issue made. The
+write call is size-checked against the entry and refuses entries no
+slot has bound, since their shape is unknown. Box-reachability
+landed as the bare-name write against the process's active map,
+because a box receives only values and has no map pointer — an
+ambient-global cost the first-pass report weighs; the warning
+comment sits at the call as demanded, naming the back channel for
+what it is. Proven by four thousand claims racing a writer
+alternating a struct between two self-consistent worlds: zero torn
+reads, and the last write visible to the next claim.
 
 ## Intended behavior
 

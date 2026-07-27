@@ -11,7 +11,7 @@ is used.
 | 402 — struct constants | complete | One reader walks field tables and brace text; malformed is fatal at bind. |
 | 403 — gatherer slots | complete | Inline pull at task build, outside every mutex; read box is just a function. |
 | 404 — chains and cycles | complete | One forward walk per new wire; refused loops name both ends; depth recorded. |
-| 405 — statics mutation | in progress | |
+| 405 — statics mutation | complete | One mutex, one copy's length; zero torn reads under a racing writer. |
 | 406 — phase 4 demo | not started | |
 
 Notes for the phase: statics and gathering landed as two modules
