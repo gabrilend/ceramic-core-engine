@@ -2,8 +2,24 @@
 
 ## Current behavior
 
-A map file goes in and a running program comes out. There is no way to
-see what the loader actually built, only what the file said.
+Built. The dump walks the live station table — never any remembered
+file text — and writes the map format back out: statics with their
+entries, station lines with kinds, in-lines for statics and gathers,
+out-lines per port in wiring order. Derived facts ride as `#`
+comments beside the lines that parse: each slot's resolved type and
+element size, buffer capacities, station indices, the gather depth —
+which required giving the format a comment syntax it never had
+(issue 601 records the addition) and required loaded maps to retain
+their station names, which the design had proudly discarded at load
+(the phase 6 record and the report carry that one). The round trip
+is proven at full strength: a map using every feature loads, dumps,
+loads its dump, dumps again, and the two dumps compare
+byte-identical. One honest gap for the second pass: statics render
+their load-time text, and a runtime byte-write is noted in a comment
+rather than re-serialized, because bytes cannot be turned back into
+words without the text-versus-bytes decision the statics table still
+owes. Callable at any moment; the demo asks a rewired map what it
+now is.
 
 ## Intended behavior
 
