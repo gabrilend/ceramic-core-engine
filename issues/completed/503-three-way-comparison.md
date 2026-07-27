@@ -2,9 +2,18 @@
 
 ## Current behavior
 
-A comparator has three ports and a threshold slot. Choosing between the
-ports requires comparing two values of a type known only at runtime,
-and nothing does that yet.
+Built. The compare function is resolved from the registry once, at
+placement, and stored on the station, so the delivery path does one
+call and a switch on the sign — minus one to the first port, zero to
+the second, one to the third. The comparator itself carries no
+comparison logic. A comparator whose return type has no ordering is
+refused at placement, naming the type and the fix; as this issue
+predicted, the check cannot live at build time because the generator
+never sees the map — placement (and phase 6's load) is the earliest
+moment, and the comment sits there as asked. Proven against the
+byte-order lie twice: a negative double routes below a positive
+threshold, and a vec3 with a large first field routes by its
+author's magnitude ordering.
 
 ## Intended behavior
 
