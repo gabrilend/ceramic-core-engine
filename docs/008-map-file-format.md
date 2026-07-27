@@ -35,6 +35,14 @@ config load p
   in 0 reader
 ```
 
+## Comments
+
+A `#` starts a comment that runs to the end of the line. Added in
+the first build pass: the dump (issue 703) writes derived facts —
+resolved types, element sizes, station indices — as comments beside
+the lines that parse, and the format as originally written had no
+way to carry them.
+
 ## The station line
 
 Three words: the station's name, the box function it places, and its

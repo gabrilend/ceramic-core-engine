@@ -173,6 +173,10 @@ typedef struct map {
     /* The deepest gather chain seen while wiring — the worst-case
      * inline work a worker does assembling one task (issue 404). */
     int gather_depth;
+
+    /* How many stations the seed sweep enqueued (issue 605). Zero
+     * on hand-built maps that seed by delivering. */
+    int seeded;
 } map_t;
 /* }}} */
 
@@ -323,6 +327,17 @@ void gather_claim(map_t *m, const slot_t *sl, void *into);
 
 /* {{{ map_statics_free() — teardown joint */
 void map_statics_free(map_t *m);
+/* }}} */
+
+/* {{{ task_build() — the one way a task comes into existence */
+/*
+ * Exposed so the seed sweep (issue 605) creates its first tasks
+ * through the same path delivery uses — one way, not two. The
+ * claimed buffer feeds ring slots only and may be null for a
+ * station that has none, which is the only kind the seed touches.
+ */
+task_t *task_build(map_t *m, int station_index,
+                   const unsigned char *claimed, int port);
 /* }}} */
 
 /* {{{ sora_active_map — the one live map, for box-reachable calls */

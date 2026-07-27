@@ -2,10 +2,18 @@
 
 ## Current behavior
 
-A map is built by calling construction functions from C (issue 207),
-which means changing the shape of a program means recompiling it, and
-the scaffolding that was supposed to be irritating has become the only
-way.
+Built, in its own parser file that reads and never constructs. Line
+oriented, first word dispatching exactly as designed: `in`, `out`,
+the `statics` section header, station lines as the remainder, the
+kind written as one letter so a forgotten threshold line errors
+instead of silently demoting. Statics values ride as raw text to the
+end of the line; the `$` stays for the reason this issue gives.
+Every malformed shape dies naming file, line, and expectation, each
+proven by a forked child whose dying words are checked. One
+addition the format needed and the design never specified: `#`
+comments to end of line, without which the dump (issue 703) would
+have nowhere to put derived facts — docs 008 now records it, and the
+first-pass report carries the gap.
 
 ## Intended behavior
 

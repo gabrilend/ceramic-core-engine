@@ -192,6 +192,25 @@ int read_int_file(const char *path)
 }
 /* }}} */
 
+/* {{{ write_int_file() */
+/*
+ * A write box: an ordinary void function, no engine support — the
+ * vision's dedicated write type stays dissolved, this time from the
+ * writing side. Overwrites; a map wanting history wires a different
+ * box.
+ */
+void write_int_file(const char *path, int value)
+{
+    FILE *f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "write_int_file: cannot open '%s'\n", path);
+        abort();
+    }
+    fprintf(f, "%d\n", value);
+    fclose(f);
+}
+/* }}} */
+
 /* {{{ vec3__compare() */
 /*
  * The author-supplied three-way ordering for vec3, found by suffix.

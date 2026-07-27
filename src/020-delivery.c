@@ -226,12 +226,13 @@ static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed)
  * One allocation, sized exactly for this box: the struct, the array
  * of input pointers, the input bytes, the output bytes. Runs after
  * the station's mutex is released, so a slow allocator delays one
- * task rather than everyone aiming at that station. This is also
- * where gathered and static slots will be resolved in phase 4 —
- * outside the lock, on the assembling thread's own time.
+ * task rather than everyone aiming at that station. Gathered and
+ * static slots are resolved here — outside the lock, on the
+ * assembling thread's own time. Non-static since phase 6: the seed
+ * sweep builds its first tasks through this same door.
  */
-static task_t *task_build(map_t *m, int station_index,
-                          const unsigned char *claimed, int port)
+task_t *task_build(map_t *m, int station_index,
+                   const unsigned char *claimed, int port)
 {
     station_t *s = &m->stations[station_index];
 
