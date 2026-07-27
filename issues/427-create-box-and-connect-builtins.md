@@ -105,13 +105,29 @@ invoke signature were required.
   to 4096 dynamically-created boxes. Beyond that, spawn checks
   silently fail. The cap is dispatch-internal; raise it or land
   growable arrays when needed.
-- **Single-spawn-firing-box assumption.** `connect` is safe when
-  called from the spec of the producer being wired (the common
-  case), since the single-spawn CAS guard means no other worker
-  is reading that box's connections concurrently. Calling
-  `connect` from one box's spec to add a wire FROM a different,
-  potentially-firing box is not race-safe; documented but not
-  enforced.
+- **Connection mutation is not race-safe — and its old safety
+  argument is void.** This restriction previously read that
+  `connect` is safe when called from the spec of the producer
+  being wired, "since the single-spawn CAS guard means no other
+  worker is reading that box's connections concurrently." That
+  guard is being removed: every box is multi-spawn,
+  unconditionally (see issue 304, task dispatch layer). A box
+  whose spec is calling `connect` on itself may be running on
+  several other workers at the same instant, each of them walking
+  the very `connections[]` array being mutated — so the case this
+  issue called "the common case" and "safe" is now the racy one.
+
+  Nothing about the calling-from-a-different-box case changes; it
+  was never safe. What changes is that there is no longer a safe
+  case to contrast it with. Runtime connection mutation needs its
+  own synchronisation before this slice can claim safety at all —
+  a per-box connections lock, a read-copy-update swap of the
+  array, or confining mutation to a quiescence point. This is now
+  a blocker on the slice, not a documented caveat.
+
+  The `spawned[]` per-box array that 304 deletes is also one of
+  the runtime-headroom arrays the cap above refers to; re-check
+  that cap's arithmetic once it is gone.
 
 ## Validation
 

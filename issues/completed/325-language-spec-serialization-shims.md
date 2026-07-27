@@ -56,7 +56,7 @@ grounded in how the dispatch actually works (recon 2026-07-22):
   Tables now land on the JSON ring of dual-ring slots where the
   per-cell tag says parse-me — no guessing on that path. The
   brace-sniff narrowed to its one remaining home, single-ring
-  cells (the tagged pop rings of multi-fire ports, whose
+  cells (the tagged pop rings of consuming ports, whose
   per-port classification is static and cannot mark an
   individual cell), and its comment now states it as that ring
   family's decode rule. Pinned by a spec-level unit test (table

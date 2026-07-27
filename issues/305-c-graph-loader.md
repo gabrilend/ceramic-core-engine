@@ -1,7 +1,18 @@
 # 305 — C graph loader (replaces 003-loader.lua)
 
 ## Status
-complete
+
+reopened 2026-07-26 — the loader shipped complete and is otherwise
+healthy, but one of its load-time passes computes a fact the
+project no longer recognises. There is no longer any such thing as
+a single-spawn box: **every box is multi-spawn, unconditionally.**
+`propagate_multi_spawn` and the three slot decisions that branch on
+its result have to come out.
+
+Everything else this issue delivered stands: the parse, the schema
+validation, endpoint resolution, cycle rejection, entry-box
+derivation, spec resolution, per-edge language classification, and
+the `scan_input_feeders` consolidation.
 
 ## Current behavior
 The C loader lives at `src/010-graph-loader.{c,h}` and replaces the
@@ -41,6 +52,79 @@ single pathway, no behavior change):
   `resolve_topology` all do linear scans by id; a small hashmap or
   sorted id list would collapse the O(n²) topology pass to O(n log
   n) without changing observable behaviour.
+
+**Non-conformant: the marker walk still runs.**
+`graph_attach_runtime` calls `propagate_multi_spawn`, a fixed-point
+forward BFS that seeds every iterator-routing call box with
+`multi_spawn = 1` and spreads the flag to everything reachable.
+Three slot decisions then branch on the result — cell count
+(`MULTI_SPAWN_RING_CELLS` = 16 vs 1), mode (`SLOT_MODE_POP` vs
+`SLOT_MODE_PEEK`), and flags (`SLOT_FLAG_TAGGED` vs none) — with a
+per-port override that pins a wire-less literal back to a 1-cell
+untagged peek slot.
+
+## Intended behavior
+
+Delete `propagate_multi_spawn` and the `multi_spawn` field on
+`box_t`. Every box is multi-spawn, so a per-box marker carries no
+information.
+
+The three slot decisions survive, but their basis moves from the
+box to the port — which is where issue 324 (multi-fire boxes
+consume their literal inputs) already said it belonged in its
+design ruling. That ruling stated the two
+slot kinds are not loop bookkeeping but the two **input methods**:
+a value is either consumed on use or referenced on use. The loader
+kept the box-level marker as the default and layered the port rule
+on top as an exception. With the marker gone, the port rule is
+simply the whole rule:
+
+- A port carrying a typed-in literal and **no** wire feeders is
+  **referenced** — 1 cell, peek mode, untagged, no dual ring.
+  Startup delivers it once and every fire re-reads it.
+- Every other port is **consumed** — N-cell tagged pop ring.
+  Wire-fed ports want a fresh delivery per lap; a port carrying
+  both a literal and a wire treats the literal as a seed.
+
+Note the existing iterator exception in that override
+(`!box_is_iterator(b)`) — a literal typed into an iterator's
+intake is the first delivery on the conveyor, not configuration.
+That exception is about the *port's* meaning on a routing box, not
+about spawn category, so it survives the deletion unchanged.
+
+Because every port that can be POP now is POP, the conservative
+note at the bottom of the "Per-input slot modes" log entry below
+resolves itself: there is no longer a finer-grained per-wire
+classification to want, since no box-level status can make a wire
+less multi-push than it is.
+
+### Suggested implementation steps
+
+1. `src/010-graph-loader.c` — delete `propagate_multi_spawn` and
+   its call in `graph_attach_runtime`.
+2. `src/010-graph-loader.c` — invert the slot-mode block: start
+   from consumed (N-cell, POP, TAGGED) and let the
+   literal-and-no-feeders test select referenced, instead of
+   deriving the default from `b->multi_spawn`.
+3. `src/010-graph-loader.h` — remove the `multi_spawn` field
+   (line 262) and fix the slot-shape comment (line 358) that
+   explains the choice in terms of spawn category.
+4. `src/008-pool-runner.c` line 330 — duplicates the 16-vs-1
+   decision off the same marker; it must follow the same
+   port-level rule or be deleted in favour of the loader's.
+5. `src/010-graph-loader.info.md` — check and update the
+   public-surface description.
+6. `tests/012-dispatch-test.c` line 310 asserts
+   `iter_box->multi_spawn == 1` on a field that will not exist.
+
+`MULTI_SPAWN_RING_CELLS` = 16 should be renamed rather than kept
+— it is now just the ring depth for a consuming port, and the
+name will otherwise outlive the concept it refers to.
+
+The dispatch half of this change — the spawn guard itself — is
+issue 304 (task dispatch layer). Neither issue is complete
+without the other; landing this one alone leaves a marker nobody
+sets still branching slot allocation.
 
 ## Concept
 
@@ -403,6 +487,12 @@ What's still deferred:
   workers init every spec rather than only the ones in use.
 
 ### Per-input slot modes + multi-spawn propagation — 2026-05-12
+
+> Superseded 2026-07-26 by the ruling in "Intended behavior"
+> above: the spawn category this pass computes no longer exists.
+> The per-port slot modes it introduced survive; the box-level
+> propagation that selected them does not. Kept as the record of
+> where the marker came from.
 
 `graph_attach_runtime` now picks the slot mode per input port:
 - A new BFS pass (`propagate_multi_spawn`) seeds every iterator-

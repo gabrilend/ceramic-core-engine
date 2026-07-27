@@ -17,8 +17,8 @@ Implementation began **2026-05-12** with the 309 build scaffolding.
 | 301 | thread pool lifecycle and per-worker initialization         | complete · pool + per-worker init/teardown hooks + priority queue |
 | 302 | per-task slot store with wire-held references               | complete · unified allocator + refcounted recycling on every byte path (slot cells, variable-size payloads, dispatch input/output buffers) + eager neighbor-merge + quiescence-trigger deep sweep |
 | 303 | language runtime spec (pluggable per-language invocation)   | complete · registry + per-worker init + pool hook + lang filtering |
-| 304 | task dispatch layer (C, replaces synchronous executor)      | complete · every routing kind, slab-allocated task structs, live_wire_count placeholder; attempt-task rewrite reconsidered |
-| 305 | C graph loader (replaces `003-loader.lua`)                  | complete · all seven phases + entry-box set + size classes + all six routing kinds |
+| 304 | task dispatch layer (C, replaces synchronous executor)      | **reopened 2026-07-26** · shipped complete, then the spawn rule under it was retired — every box is multi-spawn now, so the CAS once-only guard and its marker branch come out |
+| 305 | C graph loader (replaces `003-loader.lua`)                  | **reopened 2026-07-26** · shipped complete, then the spawn rule under it was retired — `propagate_multi_spawn` and the three slot decisions branching on it come out; the peek/pop choice moves fully onto the port |
 | 306 | Lua language spec implementation                            | complete · init + invoke + teardown + per-worker module cache + per-edge native/JSON in & out |
 | 307 | C language spec implementation                              | complete · compile + lazy .c→.so + invoke + per-worker dlopen cache + JSON in/out (string-wrap + primitive-passthrough); typed-wrapper generator deferred to future enhancement |
 | 308 | Bash language spec implementation                           | complete · persistent socketpair + line-protocol invoke + dladdr-based server lookup |
@@ -56,8 +56,10 @@ propagating with no error — which makes them the priority kind to fix.
 - [x] Bash spec runs an out-of-process box via persistent
       socketpair + line-protocol
 - [x] Pool runner runs a multi-language map with concurrent workers
-- [x] Iterator box routes via dispatch layer (with multi-spawn
-      re-fire via N-cell pop slots and auto-re-spawn)
+- [x] Iterator box routes via dispatch layer (re-fire via N-cell
+      pop slots and auto-re-spawn)
+- [ ] Spawn category deleted — every box multi-spawn, no CAS
+      guard, no marker walk (304 + 305, both reopened 2026-07-26)
 - [x] Comparator box routes via dispatch layer (via spec output)
 - [x] Variable-size outputs work via the large-value heap
 - [x] `last-run.jsonl` written for every run

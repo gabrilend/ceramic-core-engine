@@ -1,11 +1,18 @@
 # 304 — Task dispatch layer (C, replaces synchronous executor)
 
 ## Status
-complete — every routing kind ships, every fixture passes
-end-to-end, task structs are slab-allocated from the unified
-allocator (no per-spawn malloc bookkeeping), and the
-`live_wire_count` placeholder is in the struct layout for the
-future box-retirement slice.
+
+reopened 2026-07-26 — the dispatch layer shipped complete and is
+otherwise healthy, but it is built on a spawn rule the project has
+since retired. There is no longer any such thing as a single-spawn
+box: **every box is multi-spawn, unconditionally.** The CAS
+once-only guard and the marker it consults have to come out.
+
+Everything else this issue delivered stands. Every routing kind
+ships, every fixture passes end-to-end, task structs are
+slab-allocated from the unified allocator (no per-spawn malloc
+bookkeeping), and the `live_wire_count` placeholder is in the
+struct layout for the future box-retirement slice.
 
 The structural "attempt-task model rewrite" that was tracked
 here was reconsidered (see "Attempt-task rewrite — reconsidered"
@@ -23,6 +30,85 @@ connection's consumer slot. Each push fires `dispatch_spawn_if_ready`
 on the destination; consumers with all required inputs ready spawn
 as fresh tasks. Read boxes are pulled on demand by consumers, not
 spawned (issue 244).
+
+**Non-conformant: the spawn gate is still in place.**
+`dispatch_spawn_if_ready` splits on `b->multi_spawn`. A box the
+loader marked multi-spawn spawns on every push that leaves it
+ready. Every other box goes through a per-box atomic
+compare-exchange (`chunk->spawned[...]`) that lets it spawn at
+most once per run. `box_pop_ready` and the iterator re-spawn tail
+of `dispatch_action` are both written as multi-spawn special
+cases rather than as the ordinary path.
+
+## Intended behavior
+
+Delete the distinction. `dispatch_spawn_if_ready` keeps exactly
+two gates — is the box ready, and is it a read box (pull-on-demand,
+never spawns, per 244) — and then spawns. No CAS, no per-box
+`spawned[]` array, no branch on a marker.
+
+The re-spawn tail stops being an iterator special case: after any
+box's action completes, if its consuming inputs still hold queued
+deliveries, it re-spawns. That is the same rule the gate's
+multi-spawn side already implemented; it just stops being
+conditional.
+
+What replaces the gate as the safety story is the pair of
+invariants the runtime already upholds: each fire owns the input
+values popped for it, and each fire owns a unique return slot.
+Thread safety inside a box function becomes the box author's
+responsibility — documented in
+[`docs/005-writing-boxes.md`](../docs/005-writing-boxes.md).
+
+### Why
+
+Gating same-box re-entry throttles precisely the box that most
+wants to run in parallel: the one whose inputs refill fastest.
+The gate then needed an exemption for iterator routing and
+everything downstream of it, and the exemption cost a load-time
+marker walk (305), a second slot shape for exempt boxes, and a
+rule for what happens where the two shapes meet. Removing the
+category removes all of it.
+
+### Suggested implementation steps
+
+1. `src/012-dispatch.c` — strip the CAS branch from
+   `dispatch_spawn_if_ready`; keep the readiness check and the
+   read-box early return.
+2. `src/012-dispatch.c` — drop the `spawned[]` array from
+   `ctx_box_chunk_t` and its growth path, now unreferenced.
+3. `src/012-dispatch.c` — make the `dispatch_action` re-spawn
+   tail unconditional on box kind; it already gates on
+   `box_pop_ready`.
+4. `src/012-dispatch.c` — `box_pop_ready`'s `saw_pop` return
+   needs re-examining once every wire-fed port is a pop port:
+   a box whose ports are all referenced (pinned literals) has
+   no pop port and must not re-spawn forever.
+5. `src/012-dispatch.h` — the header comment describes the
+   single-spawn rule; rewrite.
+6. `src/012-dispatch.info.md` — same, in the public-surface doc.
+7. `tests/012-dispatch-test.c` — `test_iterator_routing_single_fire`
+   asserts the old category exists; rework it and
+   `test_iterator_multi_fire` into one test that shows a box
+   draining its queue regardless of routing kind. The comment
+   at line 202 about bypassing the single-spawn guard becomes
+   moot — the direct `dispatch_spawn` path is now what
+   `dispatch_spawn_if_ready` does anyway.
+8. `assets/js/004-inspector.js` — **done 2026-07-26**, the two
+   comments that labelled the iterator "multi-spawn" as though it
+   were a category no longer do. (They also miscounted the
+   routing kinds as six and omitted `nonlinearity`, fixed in the
+   same pass.) Nothing behavioural here — the editor never
+   implemented spawn rules — so it did not need to wait on the
+   runtime change.
+9. `src/001-schema.lua` — **done 2026-07-26**, the routing-kind
+   comment block no longer labels the iterator "multi-spawn".
+
+The loader half of this change — the marker walk and the slot
+shapes it selects — is issue 305 (C graph loader). Neither issue
+is complete without the other; the runtime is incoherent between
+them, because a marker nobody sets still branches slot
+allocation.
 
 Routing kinds, all implemented:
 

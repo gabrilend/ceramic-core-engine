@@ -331,7 +331,7 @@ const Inspector = (() => {
   //                 `thresholds` array (issue 243); the band names
   //                 are below_<t> / between_<a>_<b> / above_<t>
   //                 (plus eq_<t> for doubled adjacent thresholds)
-  //   iterator    — round-robin over N `out_<i>` ports, multi-spawn
+  //   iterator    — round-robin over N `out_<i>` ports
   //   randomizer  — hash(counter) mod N pick over `out_<i>` ports
   //                 (issue 240)
   //   weighted    — probability-weighted pick over `out_<i>` ports,
@@ -1322,7 +1322,7 @@ const Inspector = (() => {
     //   plain       → fan to every wire on the single output
     //   comparator  → lt/eq/gt by comparand, OR multi-band by
     //                 thresholds[] (issue 243)
-    //   iterator    → N round-robin out_<i> ports (multi-spawn)
+    //   iterator    → N round-robin out_<i> ports
     //   randomizer  → hash(counter) mod N over out_<i> (issue 240)
     //   weighted    → cumulative-band lookup over weights (issue 241)
     //   distributor → least-busy of out_<i> by downstream fill

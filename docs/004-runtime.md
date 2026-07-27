@@ -174,18 +174,46 @@ workers. Two boxes whose inputs both become ready at the same
 moment will run concurrently — there's no global lock on the
 graph.
 
-Same-box concurrent fires are gated. A box that has been
-spawned but not yet completed won't get spawned again until it
-finishes (single-spawn invariant). The exception is iterator
-routing and any box downstream of an iterator: those boxes are
-marked multi-spawn, and the dispatch re-fires them while their
-input slots have queued values to drain.
+Same-box concurrent fires are **not** gated. There is no
+single-spawn invariant and no multi-spawn marker: every box may
+be firing on several workers at once, and a box that is still
+running can be fired again the moment its inputs are ready
+again. The runtime's whole guarantee is two sentences — each
+fire owns the input values that were popped for it, and each
+fire owns a unique return slot for its output. Nothing else
+about a box's execution is serialised.
+
+The cost lands on box authors, who write thread-safe box
+functions: atomics for shared counters, no unsynchronised
+static mutable state, or pure functions that share nothing at
+all. See [`docs/005-writing-boxes.md`](005-writing-boxes.md)
+for the per-language contract.
+
+The gate used to exist, and why it went is worth recording.
+Gating same-box re-entry means the hot box — the one whose
+inputs refill fastest, the one that most wants to run on every
+idle worker — is exactly the box the runtime refuses to
+parallelise. The gate was then punched through for iterator
+routing and everything downstream of it, which cost a load-time
+forward walk to decide which boxes were exempt, a second slot
+shape for the exempt ones, and a rule for what happens where
+the two shapes meet. Deleting the distinction deletes the gate
+and all three of its costs at once.
+
+> **Runtime conformance.** The C runtime has not caught up to
+> this ruling yet — `soramech-pool` still carries the CAS spawn
+> guard and the iterator-seeded marker walk. Issues
+> [304](../issues/304-task-dispatch-layer.md) and
+> [305](../issues/305-c-graph-loader.md) are reopened to remove
+> them.
 
 An input port receives values through one of two **input
 methods**, and the difference is whether the value is *consumed
-on use* or *referenced on use*. A consuming port gives up one
-queued delivery per fire — right for wire-fed ports on a
-re-firing box, where each lap wants a fresh delivery. A
+on use* or *referenced on use*. The method is a property of the
+port alone — with the box-level marker gone, nothing about the
+box its port belongs to enters the decision. A consuming port
+gives up one queued delivery per fire, which is what a wire-fed
+port wants: each lap of a recursing network delivers fresh. A
 referencing port reads its value in place, never spending it. A
 typed-in constant whose port has no incoming wire is always
 referenced: startup delivers it once and every fire re-reads it.

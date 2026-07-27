@@ -16,6 +16,37 @@ Input port names are declared on the box's JSON. Input order
 matches the JSON's `inputs[]` order. The runtime delivers values
 in that order to your function.
 
+## Your function must be thread-safe
+
+Every box is multi-spawn. The runtime never gates re-entry: your
+box function can be running on three workers at the same moment,
+and a fire can begin while a previous fire of the same box is
+still in progress. There is no flag to opt out of this and no
+routing kind that is exempt.
+
+What the runtime does guarantee is exactly two things. Each fire
+receives its own input values, popped from the slots before the
+task was queued — no two fires share an input buffer. And each
+fire writes to its own unique return slot — no two fires race on
+the output. Everything between those two points is yours.
+
+So: no unsynchronised mutable state that outlives a call.
+Atomics or a lock for shared counters. Pure functions, sharing
+nothing, are always safe and are the default worth reaching for.
+
+The hazard is shaped differently per language, because the three
+specs hold their state differently:
+
+| Language | What's shared across concurrent fires | The hazard |
+|---|---|---|
+| **Lua** | A `lua_State` **per worker**, not per box. Two fires on different workers touch different states; two fires on one worker share one. | Not a data race — a *split brain*. A module-level counter counts once per worker, so it reads low and non-deterministically. Module imports and closures persist per worker, which is the intended benefit; mutable module state is the trap. |
+| **C** | The whole address space. `static` and global variables are genuinely shared by every worker. | A real data race with real torn reads. Use `stdatomic.h` for counters; keep everything else on the stack. |
+| **Bash** | Nothing in memory — each invoke is its own process. | The filesystem. Two fires appending to one path interleave. Write to distinct paths, or use an atomic rename. |
+
+If a box genuinely cannot be made re-entrant — it drives a device
+that admits one caller, say — serialise it *inside* the box with
+its own lock. The runtime will not do it for you.
+
 ## Lua
 
 ```lua
@@ -46,7 +77,11 @@ Wired up via the box JSON:
 
 The Lua spec keeps a `lua_State` per worker, so consecutive
 fires of the same box reuse the same Lua state — module
-imports and closures persist across calls within a run.
+imports and closures persist across calls within a run. Per
+*worker*, though, not per box: fires of one box that land on
+different workers see different states, so module-level mutable
+state does not add up the way it looks like it should. See the
+thread-safety contract above.
 
 ### Lua values across wires
 

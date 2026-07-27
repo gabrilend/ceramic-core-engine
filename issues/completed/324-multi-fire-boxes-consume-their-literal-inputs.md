@@ -14,6 +14,17 @@ complete · resolved 2026-07-21 by a design ruling from the map
 author, close to option (b) below but grounded in a cleaner
 principle — see Current behavior.
 
+> **Vocabulary note, 2026-07-26.** This issue's title and its
+> historical sections speak of "multi-fire boxes" as a subset of
+> boxes. That category has since been retired: every box is
+> multi-spawn, unconditionally, and the load-time walk that
+> marked the subset is being deleted in issue 305 (C graph
+> loader). The ruling recorded below is
+> unaffected and is in fact what the deletion leans on — it had
+> already moved the peek/pop choice off the box and onto the
+> port. Read "multi-fire box" below as "box", and "the marking
+> walk" as a mechanism that no longer exists.
+
 ## Current behavior
 
 The design ruling: the two slot kinds are not loop bookkeeping —

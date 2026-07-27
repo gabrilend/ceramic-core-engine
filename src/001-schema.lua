@@ -51,7 +51,7 @@ end
 -- Issue 233's unified `routing` field. Seven kinds shipped:
 --   plain         — single output port, fan to every wire
 --   comparator    — numeric threshold(s), pick lt/eq/gt or named bands
---   iterator      — round-robin over n_outputs ports, multi-spawn
+--   iterator      — round-robin over n_outputs ports
 --   randomizer    — hash(counter) mod n_outputs (issue 240)
 --   weighted      — cumulative-band lookup over weights (issue 241)
 --   distributor   — argmin over downstream slot fill (issue 242)
