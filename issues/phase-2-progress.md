@@ -11,7 +11,7 @@ model the phase 3 runtime will consume.
 | 202  | fit-to-view on map load                        | complete |
 | 203  | map picker panel                               | complete |
 | 204  | visible interaction hints                      | complete |
-| 206  | entry box designation                          | won't implement |
+| 206  | entry box designation                          | **reopened 2026-07-26** · the field did go vestigial as predicted, but was never retired — still mandatory in the schema, still printed in the runner banner, still commonly pointed at a read box that can't be an entry |
 | 207  | source file browser and port auto-population   | complete |
 | 208  | port literal values                            | complete |
 | 209  | ollama query library                           | complete |

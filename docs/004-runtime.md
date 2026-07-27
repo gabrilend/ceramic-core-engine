@@ -20,6 +20,38 @@ entry boxes as initial tasks. Workers pick tasks off the pool
 queue, run the box's spec function (Lua, C, or Bash), and push
 the output along the producer's outgoing connections.
 
+### Which boxes start the run
+
+The entry set is **derived from the graph's shape**, not declared.
+At load the runner walks every box and takes the ones that could
+not possibly be waiting on anything:
+
+- The box is a `call` or `write` box. A `read` box never runs as
+  a task at all, so it is never an entry box — no matter what
+  `meta.json` says.
+- Every non-optional input port on it has **zero non-read
+  feeders**. Read-box predecessors don't disqualify a box,
+  because a read box is pulled rather than awaited; a box fed
+  only by read boxes can fire immediately. Optional ports are
+  ignored entirely.
+
+A call box with no inputs at all passes vacuously and qualifies.
+Every box that clears both tests is submitted as an initial task,
+so a map can have many entry boxes — the count is whatever the
+wiring implies.
+
+> **`meta.json`'s `entry_box_id` is being removed.** There is no
+> single entry box and there never really was one — the field is
+> mandatory in the schema, parsed by the loader, and consumed by
+> nothing except the `entry <id>` word in the startup banner.
+> It is also commonly pointed at a `read` box, the one kind that
+> categorically cannot be an entry box, which makes that banner
+> line actively misleading. Issue 206 (entry box designation)
+> carries the removal: the schema stops requiring it, the loader
+> stops parsing it, and the banner starts reporting the derived
+> set. Maps that still carry the field will keep loading — it
+> becomes ignored, not an error.
+
 When all consumers are satisfied and no tasks remain, the run
 hits quiescence and the runner exits. The stderr summary prints
 each box's most recent output.
