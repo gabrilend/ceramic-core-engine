@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>003 — Datapath: delivery</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html" class="here">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>003 — Datapath: delivery</h1>
+<p>This is the central path of the engine. Everything else exists to
+support it or to set it up.</p>
+<p>It answers one question: a box function has just returned a value —
+what happens between that moment and the moment some other box runs
+because of it?</p>
+<h2>The path</h2>
+<p>A worker thread has just executed a task. It holds the return value in
+the task struct's output field, and the task struct records which
+station produced it.</p>
+<p><strong>1. Choose a port.</strong> The station's kind decides which of its output
+ports this value goes down. A plain box has one. A comparator compares
+the value against its threshold slot and picks one of three. An
+iterator uses the port its task was assigned when it was enqueued. This
+is the whole of <a href="doc-005-routing.html">005</a>.</p>
+<p><strong>2. Walk that port's destination list.</strong> For each <code>{station, slot}</code>
+pair on it, the value is delivered independently. A port wired to a
+hundred destinations means a hundred deliveries, done by this one
+worker, before it goes back for more work. That is acceptable: each
+delivery may unblock a station, so the worker is spending its time
+manufacturing parallelism for everyone else.</p>
+<p><strong>3. For each destination, take that station's mutex.</strong></p>
+<p><strong>4. Write the value into the slot.</strong> <code>memcpy</code> of <code>elem_size</code> bytes
+into the cell at the tail index, then advance the tail. If advancing
+the tail would land on the head, the buffer grows first — see
+<a href="doc-002-stations-and-slots.html">002</a>.</p>
+<p><strong>5. Run the readiness check, still holding the mutex.</strong> Walk every
+slot on this station and ask whether it holds a value. A ring buffer
+holds one if head and tail differ. A gatherer slot always does, because
+its value is produced on demand. A static slot always does, because its
+value is simply there.</p>
+<p>If any slot is empty, release the mutex and move to the next
+destination. Nothing more happens; the value sits in the buffer waiting
+for its siblings.</p>
+<p><strong>6. If every slot is occupied, claim one value from each.</strong> Ring
+buffer slots are popped — the value is copied out and the head advances,
+so the value is now spoken for and no other thread can claim it. If the
+station is an iterator, its cursor advances now and the port it landed
+on is recorded, so that two tasks assembled moments apart go to
+different ports.</p>
+<p><strong>7. Release the mutex.</strong> This is the end of the contended section, and
+it is deliberately short: a few <code>memcpy</code>s and some index arithmetic. As
+soon as it is released, other threads can deliver into this station
+again.</p>
+<p><strong>8. Build the task struct.</strong> Allocated fresh, sized exactly for this
+box — the generator knows it needs, say, two ints in and one int out.
+It receives the values claimed in step 6, the station's shim pointer,
+the station's index, and for an iterator the port chosen in step 6.</p>
+<p>Any gatherer slots are resolved here, outside the mutex, by running
+their upstream boxes inline. See <a href="doc-004-datapath-gather.html">004</a>.</p>
+<p><strong>9. Push the task onto the pool</strong> and continue to the next
+destination.</p>
+<p>When every destination has been handled, the worker frees its own task
+struct and goes back to the pool for another.</p>
+<h2>Why the values are claimed before the mutex is released</h2>
+<p>Steps 6 and 7 are the reason two invocations of the same station can
+run at once without interfering. By the time the mutex is released, the
+values belonging to this invocation have been copied out of the station
+entirely and into a task struct that nothing else can see. A second
+thread arriving immediately afterward finds different values, builds a
+different task, and the two never meet.</p>
+<p>This is also why a box may not remember anything. The station is
+guarded, but the box function runs long after the mutex was dropped,
+on whichever worker eventually picks the task up. Two of them can be
+inside the same box function at the same instant. The only state a
+station keeps across invocations is the iterator's cursor, and that is
+touched only in step 6, under the mutex, by the enqueuing thread — the
+box function never sees it.</p>
+<h2>Why nothing polls</h2>
+<p>Notice that no part of this path searches for work. The readiness check
+runs on exactly one station: the one just written to. A station whose
+inputs have not changed cannot have become ready, so there is nothing
+to look at.</p>
+<p>The consequence is that a station with no ring-buffer inputs can never
+be discovered this way, because nothing is ever written into it. Those
+stations are either seeded once at startup (<a href="doc-009-datapath-load.html">009</a>)
+or pulled on demand (<a href="doc-004-datapath-gather.html">004</a>).</p>
+<h2>Boxes that return nothing</h2>
+<p>A box whose function has no return value is a sink — a file write, a
+print, an effect. Delivery is simply skipped and the worker goes
+straight to freeing its task. Sinks need no special support; they fall
+out of a function declared <code>void</code>.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a></li>
+<li><a href="doc-005-routing.html">005 — Routing</a>, which port step 1 chooses</li>
+<li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a>, what step 9 pushes into</li>
+</ul>
+<div class="widget" id="readywidget">
+<h3>the readiness check, by click</h3>
+<div class="cells">
+<div class="cell slot" id="rd-0">slot 0</div>
+<div class="cell slot" id="rd-1">slot 1</div>
+<div class="cell slot" id="rd-2">slot 2</div>
+</div>
+<div class="note" id="rd-note">click slots to deliver values. the
+station runs when, and only when, every slot holds one — and the
+values are claimed on the spot.</div>
+<div id="rd-count" class="fired"></div>
+<script>
+(function(){
+var full=[false,false,false], fired=0;
+function draw(){
+  for(var i=0;i<3;i++){
+    var el=document.getElementById('rd-'+i);
+    el.className='cell slot'+(full[i]?' full':'');
+    el.textContent=full[i]?'value':'slot '+i;
+  }
+}
+function click(i){ return function(){
+  full[i]=true;
+  if(full[0]&&full[1]&&full[2]){
+    fired++; full=[false,false,false];
+    document.getElementById('rd-count').textContent=
+      'task fired: '+fired+' — the claim emptied every slot at once';
+  }
+  draw();
+};}
+for(var i=0;i<3;i++) document.getElementById('rd-'+i).onclick=click(i);
+draw();
+})();
+</script>
+</div>
+
+</main>
+</div></body></html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>403 — Gatherer slots and inline gathering</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html" class="here">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>403 — Gatherer slots and inline gathering</h1>
+<h2>Current behavior</h2>
+<p>Built, in its own gather module. A gatherer slot holds a source
+station index; at task construction — after the station's mutex is
+released, exactly as this issue placed it — the upstream box runs
+inline on the assembling thread's own stack, its arguments statics
+or themselves gathered, its value landing straight in the task. No
+pool, no mutex on the source. The consequences this issue demanded
+as comments are written where they bite: the named exception to
+"boxes only run from the pool", the concurrent-safety rule
+(open-read-close, never a kept handle), once-per-task cost, and
+cannot-decline. The read box is an ordinary function in the box
+sources — the vision's dedicated read type stayed dissolved — and a
+missing file stops the program saying which path. Proven by a
+gathered file read that follows the file while running, two thousand
+concurrent gathers all exact, and the freshness contrast the phase 4
+demo stages side by side.</p>
+<h2>Intended behavior</h2>
+<p>The third slot kind, and the one place the engine runs backwards. A
+slot with no buffer reaches upstream at the moment it is needed and
+pulls a value into existence.</p>
+<p><strong>A gatherer is a station with no ring-buffer slots.</strong> Every one of its
+slots is static or itself gathered, or it has none at all.</p>
+<p>This is not a rule imposed on the design; it falls out of it. A station
+with no ring buffer has nothing that can ever be written into it, so no
+delivery can ever discover it, so being pulled is the only way it could
+ever run.</p>
+<p>The same fact decides which end of a wire is which. A box whose output
+feeds a gatherer slot is pulled. A box whose output feeds a ring buffer
+is pushed. A box whose output fans out to both is neither coherently,
+and the loader rejects it — see issue 604.</p>
+<p><strong>Where gathering happens.</strong> Inside task-struct construction, after the
+station's mutex has been released. That placement is deliberate: the
+contended section stays short, the mutex is not held while user code
+runs, and everyone upstream is unblocked before any gathering begins.</p>
+<p><strong>The path:</strong> read the slot's source station index; assemble that
+station's arguments, which are static or recursively gathered; call its
+shim on the worker's own stack; copy the return value straight into the
+task struct being built. No task is pushed, no pool is involved, no
+mutex is taken on the upstream station — there is nothing on it to
+guard, because it has no buffers.</p>
+<h2>Consequences that must be written into the source as comments</h2>
+<p>**This is the one exception to "a box only runs when a worker picks it
+up from the pool."** A gathered box runs inline, on a thread in the
+middle of doing something else. Naming the exception is worth more than
+hiding it, because it is where the surprises will come from.</p>
+<p><strong>A gatherer must be safe to run from several threads at once.</strong>
+Ordinary boxes have their values handed to them, and the guarantee that
+two invocations do not collide comes from the values being claimed
+under a mutex. A gatherer reaches out to the world instead, and two
+workers can be inside it at the same instant. Opening a file, reading
+it, and closing it is fine. Keeping an open handle in a static and
+seeking in it is not.</p>
+<p><strong>A gatherer runs once per task assembled.</strong> A station enqueued a
+million times pulls a million times. That is exactly what "fresh at the
+moment it is used" asks for, and it means a gatherer touching a slow
+disk is a cost paid on the delivery path over and over.</p>
+<p><strong>A gatherer cannot decline.</strong> The task struct has a place waiting for
+bytes and no way to represent their absence. A read box pointed at a
+file that is not there stops the program and says so.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. Populate the gatherer row of the readiness dispatch tables: always
+   filled, and "give me a value" means run the upstream box.
+2. The gathering call, invoked during task construction, outside the
+   mutex.
+3. Extend the map construction calls from issue 207 to place a gatherer
+   slot.
+4. A read box written as an ordinary function taking a path and
+   returning contents, to prove no engine support is required — the
+   original design called for a dedicated read box type and it
+   dissolved.
+5. A test that a gatherer runs once per task and that its value differs
+   between two tasks when the underlying file changed in between.
+6. A test that runs one gatherer from many threads at once and asserts
+   every result is correct.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="doc-004-datapath-gather.html">004 — Gathering</a></li>
+<li>Issue 404 — chains and cycles</li>
+<li>Issue 604 — the load-time rules this creates</li>
+<li>Issue 605 — why the startup sweep must skip these</li>
+</ul>
+
+</main>
+</div></body></html>

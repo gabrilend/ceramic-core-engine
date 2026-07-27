@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>104 — Termination: the last worker to sleep looks again</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html" class="here">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>104 — Termination: the last worker to sleep looks again</h1>
+<h2>Current behavior</h2>
+<p>Built. The worker whose registration brings the sleeping count to the
+worker total looks at the queue one final time; finding nothing, it
+sets the stop flag and wakes everyone, and each worker sees the flag
+and returns on its own — shutdown is a broadcast, never a break-out.
+Finding something instead, it deregisters and takes the work.</p>
+<p>Two departures from the text below, both deliberate:</p>
+<p>The race this issue describes cannot occur in the implementation as
+built, because the check and the registration happen inside a single
+hold of the queue mutex and the condition wait releases that mutex
+atomically — there is no moment between "checked empty" and
+"registered asleep" for another thread to slip through. The re-scan
+therefore survives as the last sleeper's final look rather than as a
+race repair, and the test that was to reproduce the race by delaying a
+worker between the two steps is unwritable: the window does not
+exist. The termination test file documents this where the test would
+have been, and the first-pass report carries the design lesson.</p>
+<p>The rule "nothing outside the pool pushes after startup" gained the
+registration mechanism this issue only hinted at: an outside submitter
+registers a standing promise that more work may come, and termination
+waits until no such promise is held. The sleep test's trickle feeder
+uses it, and dropping the last registration nudges an all-asleep pool
+so termination becomes decidable.</p>
+<p>Proven by chains of wildly uneven lengths that must all run to their
+ends, an empty pool that terminates at once, and two hundred fresh
+pools each running a burst to completion.</p>
+<h2>Intended behavior</h2>
+<p>**The worker whose own registration brings the sleeping count up to the
+worker total re-scans the queue before anyone actually sleeps.**</p>
+<p>If it finds a task, it deregisters itself, wakes everyone, and goes to
+work. If it finds nothing, the program is finished: a stop flag is set,
+every worker is woken, each sees the flag and returns, and the main
+thread joins them.</p>
+<h2>Why the re-scan is not decoration</h2>
+<p>Without it there is a race whose outcome is a silent wrong answer
+rather than a hang, which is strictly worse:</p>
+<p>1. Worker A scans the queue, finds it empty, decides to sleep — and is
+   preempted right there, before registering itself.
+2. Worker B finishes a task, delivers, enqueues a new one, checks the
+   sleeping count to decide whom to wake, sees zero, and wakes nobody.
+3. Worker A resumes and registers itself asleep.</p>
+<p>Every worker is now asleep, the count reads "all of them," and there is
+a task sitting in the queue. A termination check that trusts the count
+alone declares the program finished and exits cleanly, having silently
+not done part of its work.</p>
+<p>With the re-scan, worker A is the one whose registration completed the
+count, so it looks again and finds B's task.</p>
+<h2>Why the negative result is trustworthy</h2>
+<p>When the re-scan does come up empty, the conclusion is sound. The count
+only reaches the worker total when every other worker has already
+finished its task and found nothing — a worker mid-task is not counted
+as sleeping. So there is nobody left who could enqueue anything, and
+the emptiness is permanent rather than momentary.</p>
+<p>The one thing this relies on: nothing outside the pool pushes tasks
+after startup. The seed sweep in phase 6 pushes before the workers are
+released, so it does not violate this. Anything added later that
+submits from outside must either register itself in the count or the
+rule stops holding.</p>
+<h2>Shut down by broadcast, never by breaking out</h2>
+<p>A worker left parked in a wait that no longer receives signals turns
+shutdown into a hang at the join. Set the flag, wake everyone, let each
+one see the flag and return on its own.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. Add a stop flag to the pool, guarded by the queue mutex.
+2. In the sleep path from issue 103, after incrementing the count and
+   before waiting: if the count now equals the worker total, re-scan
+   the queue.
+3. Queue non-empty: decrement, wake everyone, continue the run loop.
+   Queue empty: set the stop flag, wake everyone, return.
+4. Every waking worker checks the stop flag before checking the queue,
+   and returns if it is set.
+5. A test that reproduces the race in step 1's description
+   deliberately, by delaying a worker between its check and its
+   registration. This is the most important test in phase 1, because
+   the failure it guards against looks exactly like success.
+6. A test that a pool given a chain of tasks — each one enqueuing the
+   next — terminates only after the whole chain has run.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a></li>
+<li>Issue 103 — the sleeping count this reads</li>
+<li>Issue 605 — the seed sweep, the one thing that pushes from outside</li>
+</ul>
+
+</main>
+</div></body></html>

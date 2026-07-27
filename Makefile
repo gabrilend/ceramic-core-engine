@@ -47,12 +47,19 @@ ENGINE_SRC := $(wildcard $(DIR)/libs/*.c) $(wildcard $(DIR)/src/*.c) $(GENERATED
 describe:
 	luajit $(GENERATOR) --describe $(BOX_SRC)
 
+# The HTML documentation set (issue 705): generated from the markdown,
+# never maintained beside it. Regenerated on demand and as part of a
+# full build, so stale HTML cannot ship.
+.PHONY: html
+html:
+	luajit $(DIR)/scripts/054-docs-html.lua $(DIR)
+
 TEST_SRC  := $(wildcard $(DIR)/tests/*.c)
 TEST_BINS := $(patsubst $(DIR)/tests/%.c,$(BUILD)/%,$(TEST_SRC))
 
 .PHONY: all test clean
 
-all: $(TEST_BINS)
+all: $(TEST_BINS) html
 
 # The build tree lives in RAM (tmp/ -> /tmp/<project>). It must exist
 # before anything writes into it; a build that dies on a missing

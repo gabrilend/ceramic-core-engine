@@ -2,9 +2,27 @@
 
 ## Current behavior
 
-The documentation is a set of markdown files read in a terminal or an
-editor. The cross-references between them are text, and the
-descriptions of data structures are tables that cannot be poked at.
+IN PROGRESS — the generator and site stand; two of the five
+interactive pieces remain.
+
+Built so far: a Lua generator (`make html`, also run by a full
+build so stale HTML cannot ship) reading every markdown source —
+docs, notes, issues open and completed, every interface file, and
+the sealed vision rendered verbatim — and emitting seventy-odd
+cross-linked pages into `docs/HTML/` with one aesthetic, a table of
+contents down the left of every page (reachability is structural
+and checked), issue numbers linkified wherever they appear, code
+fences highlighted, and unresolved references reported rather than
+silently rendered. Three interactive pieces ride the pages they
+explain: the ring buffer with a capacity slider showing wrap and
+the growth unwrap, the readiness check firing on the click that
+fills the last slot, and the iterator dealing even counts in
+scrambled order under an adjustable slow consumer.
+
+Remaining for the second pass: the wirable three-port comparator
+piece and the steppable sleep-and-termination protocol (the race
+animation), plus deeper links that land mid-page rather than at
+page tops.
 
 ## Intended behavior
 

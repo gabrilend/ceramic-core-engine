@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>009 — Datapath: loading and starting</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html" class="here">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>009 — Datapath: loading and starting</h1>
+<p>The binary holds a registry of boxes and no map. The map file holds a
+map and no code. This is what happens in the moment between, and it is
+the only moment in the program's life when the station table is walked
+from end to end.</p>
+<h2>Two passes</h2>
+<p>Declaration order in a map file does not matter — an arrow may point at
+a station declared further down. That requires reading the file twice.</p>
+<p><strong>First pass: create every station.</strong> For each station line, look its
+box function up in the registry. That gives the shim pointer, the
+parameter count, and each parameter's type and size. Allocate the
+station's slot array with one ring-buffer slot per parameter — the
+default — each sized exactly <code>sizeof</code> its parameter, and record the
+station's name in a lookup table that is thrown away when loading ends.</p>
+<p>A comparator gets one extra slot on the end, typed to match the box's
+return value.</p>
+<p>Then apply the input lines, converting the named slots from ring
+buffers to statics or gatherers.</p>
+<p><strong>Second pass: resolve the arrows.</strong> By now every station exists and
+can be found by name. For each output line, look up the destination
+station and slot, and append a <code>{station, slot}</code> pair to that port's
+destination list.</p>
+<p>This is also where every wire is type-checked, because it is the first
+moment both ends are known. The registry knows the source box's return
+type and the destination box's parameter type, both derived from the C
+that will actually run, so the check needs nothing from the file.</p>
+<h2>Then the checks that need the whole map</h2>
+<p>Some errors are only visible once every station and arrow exists:</p>
+<ul>
+<li><strong>Gather cycles.</strong> Walk the gather links. A loop here is a function</li>
+<p>  call that never returns, and it surfaces at runtime as a stack
+  overflow — a segfault with no message and no hint that two boxes
+  point at each other. Cheap to find now, invisible later.</p>
+<li><strong>Mixed fan-out.</strong> A port whose destinations include both a gatherer</li>
+<p>  slot and a ring-buffer slot. Its box is neither pushed nor pulled
+  coherently.</p>
+<li><strong>Unreachable stations.</strong> Not fatal, but worth reporting: a station</li>
+<p>  with ring-buffer inputs that nothing ever writes to will never run.</p>
+</ul>
+<h2>The seed</h2>
+<p>Nothing in the engine searches for work. A station is discovered only
+by something writing into it, which means that at the instant the
+program starts, nothing can happen — every station is waiting for a
+delivery, and there is nobody to deliver.</p>
+<p>So the station table is swept exactly once, here, and never again.</p>
+<p>**Enqueue every station that has no ring-buffer inputs and whose output
+feeds a ring buffer.**</p>
+<p>Both halves of that sentence are load-bearing.</p>
+<p><em>No ring-buffer inputs</em> means the station has nothing that can ever be
+written into it, so it will never be discovered by delivery. If it is
+going to run at all, it must be started here.</p>
+<p><em>Whose output feeds a ring buffer</em> excludes gatherers. A gatherer's
+value goes into a task struct someone is assembling right now, not into
+a slot — that is the entire difference between the push path and the
+pull path. At startup nobody is assembling anything, so a gatherer
+enqueued as a task would run, produce a value, walk its destinations
+looking for a buffer to write into, and find a gatherer slot, which by
+definition has none. The value would have nowhere to go.</p>
+<p>After the sweep, the pool is running and the map propagates on its own.
+The sweep is also the last time anything iterates the station table;
+from here on, every station is reached by index, through a wire.</p>
+<h2>Termination, from the map's point of view</h2>
+<p>The program ends when the pool has nothing left to run and no worker is
+mid-task — see <a href="doc-006-datapath-scheduling.html">006</a>. For a map, that
+means every value that entered has finished travelling and no station
+is waiting on one that will never come.</p>
+<p>A map that should run indefinitely keeps itself alive by looping: a
+value that comes back around into a ring buffer is a new delivery, and
+a new delivery is new work. Such a map is expected to check a stop
+condition somewhere in the loop, because nothing else will stop it.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, the input</li>
+<li><a href="doc-007-datapath-build.html">007 — The build path</a>, the registry this is read against</li>
+<li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a>, what the seed pushes into</li>
+</ul>
+
+</main>
+</div></body></html>

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>First-pass report — lessons learned while building</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html" class="here">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>First-pass report — lessons learned while building</h1>
+<p>This document is the deliverable of the first pass over minimal-soramech.
+The build proceeded issue by issue, in order, and every pain point,
+contradiction between documents, and gap the design left unstated is
+recorded here as it was met. The second pass reads this before touching
+anything.</p>
+<p>Entries are append-only, grouped by the phase that surfaced them. Each
+entry says what was expected, what was found, and what the second pass
+should do differently.</p>
+<h2>Found before building anything</h2>
+<p>**The launcher's hard-coded root pointed at a machine that isn't this
+one.** The <code>run-demo</code> script carried a project root of
+<code>/home/ritz/programs/sora/minimal-soramech</code>; the project actually lives at
+<code>/mnt/mtwo/programming/ai-playground/minimal-soramech</code>. The script's
+override-by-argument saved it from being broken, but a hard-coded default
+that is wrong is a fallback in disguise. Lesson: the hard-coded <code>${DIR}</code>
+convention needs a stated rule for what happens when a project moves —
+probably a check that refuses loudly when the default does not exist,
+rather than quietly relying on the caller to pass the right thing.</p>
+<p>**The vision file asks for its own edit, and the table of contents seals
+it.** The vision's final paragraph says "please inform the user then
+delete this paragraph when we figure it out"; document 000 says the
+vision is sealed and never edited. Both instructions cannot be followed.
+First pass resolution: the paragraph's question (input-less boxes) was
+answered by the seed sweep and gatherers, the user is informed here, and
+the paragraph stays — the seal wins because history outranks tidiness.
+The second pass should decide the precedence rule explicitly instead of
+leaving two documents in quiet disagreement.</p>
+<p>**The docs and the global project conventions disagree about where
+indexes come from.** The docs are numbered 000–010 but no
+file-index-counter existed to record it. One was created holding 010
+before any source file was named. Lesson: the counter must be created
+the moment the first indexed file is, or two files will eventually claim
+one number.</p>
+<h2>Phase 1 — the pool</h2>
+<p><strong>Issues 102, 103, and 104 describe one function, not three.</strong> The run
+loop, the sleeping rule, and the termination rule are all the same
+dozen lines under the same mutex; the staging the issues prescribe — a
+busy-return placeholder, later replaced by sleeping, later extended
+with termination — would have meant building two throwaway
+intermediate states of a function whose final shape was already fully
+designed. The implementation landed as one unit and each issue closed
+by proving its aspect with its own test. Lesson for the second pass:
+when several issues each specify a facet of a single small mechanism,
+say so in the issues and stage the <em>tests</em>, not the code.</p>
+<p>**The documented termination race is an artifact of an assumed lock
+discipline.** The design docs walk through a lost-wakeup race (worker
+checks empty, is preempted, another worker wakes nobody, everyone
+sleeps over a full queue) and prescribe the last-sleeper re-scan as its
+repair. With one mutex guarding queue, sleeper count, and stop flag —
+and a condition wait that releases that mutex atomically — the race
+has no window at all: check-and-register is indivisible. The re-scan
+degenerates into the last sleeper's final look, which is still the
+termination <em>decision</em>, but the doc's dramatic justification is
+unreachable, and the test issue 104 demands (delay a worker between
+check and registration) cannot be written. Lesson: docs 006 specifies
+mechanism where it should specify invariant. Say "the count and the
+decision to sleep must be atomic with respect to push" and let the
+implementation prove it however it locks.</p>
+<p><strong>The design forbids what its own demos require.</strong> Termination assumes
+nothing outside the pool pushes after startup; the sleeping issue's own
+trickle test — and any interactive use, and phase 7's control surface —
+pushes from outside. Issue 104 waves at this ("must register itself in
+the count") without designing it. The first pass built the missing
+piece: outside-submitter registration, with the last deregistration
+nudging an all-asleep pool so termination becomes decidable. The second
+pass should promote this from a footnote to a designed part of the
+pool's interface, because rewiring (704) and any live control surface
+will stand on it.</p>
+<p><strong>Two naming conventions collide at the demos.</strong> The launcher
+discovers demos by the pattern <code>phase-*</code> with the executable bit set;
+the project convention wants every source file carrying a numeric
+index. A demo's shell script cannot satisfy both. First-pass
+resolution: the script keeps the launcher's name, the C source behind
+it carries the index. The second pass should either teach the launcher
+to read indexed names or exempt launcher-discovered entry points from
+indexing, in writing.</p>
+<p>**The pool needed a join/destroy ownership rule the design never
+states.** Who collects the worker threads — the join call, the destroy
+call, or both? First build had destroy join again after the caller
+already had, and the platform's error for joining a collected thread
+is noise. Resolved by making join idempotent. Small, but exactly the
+kind of edge a blueprint should own: state the lifecycle (create →
+release → join → destroy, join implied by destroy, both callable).</p>
+<h2>Phase 2 — stations and the push path</h2>
+<p><strong>The docs tell the wrong story about where a backlog lives.</strong> Docs
+002, issue 203, and issue 701 all say a growing ring buffer means "a
+consumer slower than its producer." Building the demo disproved the
+simple reading: a single-input station is ready on every write, so its
+values are claimed instantly and its slot depth never exceeds one —
+the backlog of a slow single-input consumer accumulates as tasks in
+the <em>pool's ring</em>, not in the slot. Slot growth is specifically the
+signature of a <em>multi-input</em> station fed unevenly, one side waiting
+for its siblings. Docs 002 now carries the correction. The second pass
+should design phase 7's reporting around both piles from the start —
+queue high-water and slot high-water are two different diagnoses and
+the original text conflates them.</p>
+<p>**Claiming statics and gathered values under the station mutex was
+quietly wrong, and the issues almost prescribe it.** Issue 204 says
+"claim one value from each" under the lock; issue 403 separately says
+gathering happens outside the lock. Following 204 literally for all
+three slot kinds would run user code (a gatherer) inside a station's
+contended section. The build resolved it by making the claim dispatch
+table honest about the split: ring slots claim under the mutex,
+gatherer and static rows are null meaning "resolved at task build,
+outside the lock." The second pass should state the rule once, in the
+delivery doc: no user code and no cross-structure locks inside a
+station's critical section, and the claim table's null rows are how
+that is enforced.</p>
+<p><strong>Nothing in phase 2 can stop a push loop, and nothing says so.</strong> The
+docs celebrate push cycles as the engine's only memory (the counter
+pattern), but until phase 5's comparator exists there is no way for a
+loop to ever terminate — a phase 2 cycle runs forever by construction.
+The roadmap never mentions that the counter pattern is unusable for
+three phases. Harmless here, but a reader building phases in order and
+trying the documented counter as their first map would produce an
+unstoppable program. A sentence in docs 004 or the roadmap would have
+prevented the surprise.</p>
+<p><strong>The demo had to invent an outside-feeder idiom the design lacks.</strong>
+Showing backpressure requires feeding a running map at a metered rate
+from the main thread — which is exactly the outside-submitter case
+issue 104 declared illegal-unless-registered. Every test and demo that
+trickles ended up using the registration API built in phase 1. It
+works, but it is load-bearing scaffolding the original design never
+drew; the second pass should give "feeding a live map from outside"
+a designed front door (and it is the same door phase 7's rewiring
+control surface will need).</p>
+<h2>Phase 3 — the build path</h2>
+<p><strong>The docs' own shim example contains an alignment bug.</strong> Docs 007 and
+issue 302 show shims loading arguments with pointer casts —
+<code>int a = *(int *)t-&gt;in[0]</code> — and the task layout packs values back to
+back with no padding, so a double following an int sits at a
+misaligned address and the cast is undefined behavior off x86. The
+generator emits memcpy loads instead. Second pass: either align the
+task's value area per member (wastes a few bytes, allows casts) or
+bless memcpy loads in the doc; either way the example code should not
+model the bug.</p>
+<p>**"Delete the hand shims" assumed shims lived in product code; they
+lived in tests.** Issue 302's instruction to delete issue 207's shims
+could not be followed literally — the hand shims were written inside
+phase 2's tests and demo, wrapping boxes that mutate test counters,
+which no generated box could reach (generated boxes cannot see a test
+binary's globals). They stayed as marked harness instrumentation.
+Second pass: decide where instrumented test boxes live — likely a
+designated test-box source directory with extern counters, so even
+harness shims are generated.</p>
+<p>**The registry includes box sources whole, which works and has
+sharp edges.** The generated file <code>#include</code>s each box .c so types
+are visible and boxes inline into shims. Consequences: box sources
+share one translation unit (name collisions across files are link
+errors moved to compile time; statics are shared-visible), and a box
+source cannot be compiled standalone. Fine at this scale; the second
+pass should either bless this ("box sources are one compilation
+unit, by design") or emit extern declarations and compile separately.</p>
+<p><strong>LuaJIT as the generator's language was frictionless.</strong> Pattern
+matching plus a hand brace-walker handled everything the ground rules
+allow; the whole generator is one readable file. The one real parsing
+bug of the pass (a function name preceded by <code>*</code> with no space) was a
+pattern subtlety, found by the shell tests in minutes. The
+fail-don't-guess posture — refuse plain structs, comma fields,
+unnamed parameters, string returns — turned every ambiguity into a
+one-line rule instead of a guess.</p>
+<h2>Phase 4 — the pull path and configuration</h2>
+<p>**The statics table is two designs wearing one name, and the docs
+never chose.** Docs 008 says entries are text "read into bytes at the
+moment a slot claims it" and that two slots of different types may
+read one entry each their own way; issue 405 says entries can be
+byte-written at runtime, size-checked. Text-at-claim and
+mutable-bytes cannot both be the table: per-claim parsing on the hot
+path is absurd, and byte-writes have no meaning against an entry that
+is authoritative text. First pass chose bytes-at-bind (first binder's
+type shapes the entry; same-size sharing only; mutation is
+byte-level), recorded the narrowing, and moved on. The second pass
+must pick one story in the docs — likely "text is the load-time
+serialization; bytes are the runtime truth" — and design two-type
+sharing away or in, explicitly.</p>
+<p>**A box cannot reach the engine, and issue 405 quietly requires it
+to.** Boxes receive values and return one; they hold no map pointer.
+"Make the statics write reachable from a box" therefore forced an
+ambient global — the active map — with a one-live-map-per-process
+assumption the design never states. Second pass: either bless the
+ambient map (and say one-per-process out loud), or give boxes an
+explicit capability argument, which touches the shim shape. This same
+door is where phase 7's control surface will want to enter.</p>
+<p>**Static binding needs the slot's type, so hand-built maps cannot
+bind statics.** Text becomes bytes only when the slot knows its type
+name, which only registry placement supplies. The scaffolding
+construction calls therefore cannot express phase 4 maps without a
+type-name backdoor (one test grants a name by hand). Harmless — the
+loader always places by name — but the issues present construction
+calls and statics as freely composable, and they are not.</p>
+<p>**Gather cost is paid wherever the task is assembled — including
+outside the pool.** The demo's first timing of the gather tax
+measured nothing, because seeded values assemble their tasks on the
+seeding thread before the workers ever release: the gather ran, at
+full cost, on the main thread, outside the timed window. Issue 702
+says "charge gather time to the pulling station"; the first pass adds:
+and note that the paying <em>thread</em> can be any deliverer, seeders
+included. Phase 7's attribution should follow the station, not the
+worker.</p>
+<p><strong>The engine-side type classifier duplicates the generator's.</strong> The
+statics reader must classify type names (int-like, unsigned-like,
+float, string, struct) and so must the Lua generator; two lists must
+now agree forever. Second pass: emit the classification into the
+registry (a kind byte per param/field, which field tables already
+half-carry) so the engine never parses a type name at all.</p>
+<p><strong>Optimizers eat demonstration code.</strong> Two demo scenes were silently
+hollowed out at -O2: a burn loop whose result folded to zero was
+deleted whole, and a deliberately endless recursion was tail-call
+optimized into a loop that overflows nothing. Both needed
+compiler-visible consumption to stay real. Lesson for any measured
+demo: prove the cost is still there (the numbers made it obvious).</p>
+<h2>Phase 5 — routing kinds</h2>
+<p>**The port-gap rule was a plain-only assumption wearing a principle's
+clothes.** Phase 2 decided ports must be wired in order with no gaps
+("a silently invented port is a wire the author did not draw") — and
+that was correct while every station had one port whose index meant
+nothing. A comparator's port index <em>means</em> an outcome, and wiring
+only "greater" is a legitimate map, so the rule became per-kind:
+plain wires port zero only, comparators up to three with empty
+intermediates created freely, iterators unlimited. Lesson: a rule
+justified by one kind's semantics should be stated as that kind's
+rule, or the next kind pays to renegotiate it.</p>
+<p>**"Fails at build time" appears three times in the design and is
+impossible each time.** Issues 305, 502, and 503 all want the
+comparator-without-compare refusal at build; the generator never sees
+a map, so there is nothing at build time to check against. Issue 503
+even notices this and re-lands the check at load. The second pass
+should stop promising build-time map checks anywhere, and say once:
+wire checks happen at the last moment the information exists, which
+is placement/load.</p>
+<p><strong>The byte-order lie needed care to demonstrate honestly.</strong> memcmp on
+a little-endian machine compares the <em>low</em> byte first, so the demo's
+first "what bytes would say" agreed with the correct answer by
+accident. The canonical wrong answer is reading the values as
+unsigned words (sign bit as top bit). A tiny thing, but exactly the
+kind of demo detail that quietly proves the wrong claim if unchecked
+— the demo now asserts that the lie lies.</p>
+<p>**Comparator threshold rides inside the task as a hidden extra
+input.** The shim reads in[0..n-1]; routing reads in[n]. It works
+cleanly, but the task's n_in now means "slots" not "box parameters",
+and any future code that iterates task inputs to feed a box must know
+the difference. Worth one sentence in docs 003; nothing needed it
+yet.</p>
+<h2>Phase 6 — the map file</h2>
+<p><strong>The format had no comment syntax, and the dump requires one.</strong>
+Issue 703 wants derived facts written "as comments" in a dump that
+reads back as a map; docs 008 defines no comments. Added <code>#</code> to end
+of line, with the doc updated. A format designed alongside its dump
+would have caught this on day one — the lesson is to design a
+serialization and its round-trip together.</p>
+<p><strong>Names were discarded exactly when they became necessary.</strong> The
+docs are proud that the name table dies when loading ends — and then
+issue 703 needs a dump that writes names, and any live view needs to
+speak them. The load now retains station names on the map (the
+resolving table still dies; keeping-for-speaking and
+keeping-for-resolving are different needs). Second pass: state name
+lifetime explicitly — resolved once, retained for diagnostics.</p>
+<p><strong>Issue 602's pass-split doesn't survive contact with gather lines.</strong>
+"Apply the input lines" in the first pass cannot apply a gather line:
+its source is a <em>name</em>, and names may point forward — the very
+problem two passes exist for. Statics bind in pass one, gathers in
+pass two. The doc should split input lines by kind, not by section.</p>
+<p><strong>Seeding rules needed one word changed.</strong> "No ring inputs and
+output feeds a ring buffer" excludes an input-less sink, which has no
+output at all yet plainly should run once. Landed as "no ring inputs
+and not gathered from". Also: an iterator fed by seeds alone
+receives exactly as many values as there are seeded sources — maps
+wanting an iterator to actually iterate need multiple value sources
+or a loop, which no doc mentions and the everything-map had to be
+designed around.</p>
+<p><strong>The whole-map validation runs O(stations²) walks.</strong> Every station
+scans every other station's ports and slots to learn who pushes and
+pulls it. Fine at map scale (hundreds), quadratic all the same;
+phase 7's rewiring wants these checks per-edge anyway. Second pass:
+build the reverse index (who feeds whom) once and let validation,
+seeding, and rewiring all read it.</p>
+<p>**Where phase boundaries bit: the demo wanted rewiring one phase
+early.** The capstone's edit-between-runs scene is a restart; true
+live rewiring is 704. The scene works, but the natural demo
+("change the wire <em>while</em> it runs") had to wait — a sign 704 might
+belong in phase 6, or the capstone demo in phase 7.</p>
+<h2>Phase 7 — seeing inside it</h2>
+<p>(appended as built)</p>
+<h2>Cross-cutting lessons</h2>
+<p>(appended at the end of the pass)</p>
+
+</main>
+</div></body></html>

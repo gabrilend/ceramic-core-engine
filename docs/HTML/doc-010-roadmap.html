@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>010 — Roadmap</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html" class="here">010 — Roadmap</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>010 — Roadmap</h1>
+<p>The phases are clusters of functionality, not a schedule. They are
+ordered by what has to exist before what — each one can be built and
+tested with only the phases beneath it present. It is entirely normal
+for the last issue completed in this project to belong to phase one.</p>
+<p>Each phase ends with a demo in <code>issues/completed/demos/</code>, runnable from
+the launcher script in the project root, showing what the engine can do
+with everything built so far.</p>
+<p>---</p>
+<h2>Phase 1 — The pool</h2>
+<p>A thread pool that knows nothing about boxes. It moves opaque task
+structs between a fixed set of worker threads.</p>
+<p>Built here: the task queue as a ring of pointers, doubling when full;
+workers that sleep rather than spin; the sleeper count; the re-scan by
+the last worker to fall asleep; clean termination by broadcast.</p>
+<p>Testable entirely on its own with synthetic tasks that do arithmetic
+and count themselves. The race that the re-scan exists to prevent is
+the thing worth writing a test around, because it is the one failure
+mode that looks like success.</p>
+<p>Nothing in this phase mentions a station.</p>
+<p>Described by <a href="doc-006-datapath-scheduling.html">006 — Scheduling</a>.</p>
+<p>---</p>
+<h2>Phase 2 — Stations and the push path</h2>
+<p>The first phase where a graph runs.</p>
+<p>Built here: the station table; ring-buffer input slots with exact cell
+sizing and growth; the delivery path — take the mutex, write, check
+readiness, claim values, release, build a task, push it; output ports
+with fan-out; the task struct.</p>
+<p>Maps are hand-built in C in this phase, and shims are hand-written.
+Both are replaced later, and both are worth having in their crude form
+first so that phase 3 and phase 6 have something already working to
+plug into.</p>
+<p>The property to test hardest is that two invocations of one station can
+run concurrently without interfering — the values are claimed under the
+mutex, so the second thread finds different ones.</p>
+<p>Described by <a href="doc-002-stations-and-slots.html">002 — Stations and slots</a> and
+<a href="doc-003-datapath-delivery.html">003 — Delivery</a>.</p>
+<p>---</p>
+<h2>Phase 3 — The build path</h2>
+<p>The generator, and the end of hand-written glue.</p>
+<p>Built here: a parser that reads designated box source files and pulls
+out function declarations, struct definitions, and compare functions;
+emission of one shim per box; emission of the registry that maps a name
+to a shim pointer and full type information; emission of a field table
+per struct; emission of compare functions for the primitives.</p>
+<p>The generator runs as part of the build. Adding a box becomes writing a
+function.</p>
+<p>Described by <a href="doc-007-datapath-build.html">007 — The build path</a>.</p>
+<p>---</p>
+<h2>Phase 4 — The pull path and configuration</h2>
+<p>The two slot kinds that are not buffers.</p>
+<p>Built here: static slots and the statics table, including reading a
+struct constant by walking the field table from phase 3; gatherer
+slots; inline gathering during task assembly; gather chains; the
+cycle check that runs when a connection is made.</p>
+<p>This is also where "a gatherer is a station with no ring-buffer slots"
+becomes a real distinction the engine acts on, and where the mutex on
+the statics table lands.</p>
+<p>Described by <a href="doc-004-datapath-gather.html">004 — Gathering</a>.</p>
+<p>---</p>
+<h2>Phase 5 — Routing kinds</h2>
+<p>Comparators and iterators, which are variations on one step of
+delivery and nothing else.</p>
+<p>Built here: the three-entry dispatch on the way out; the comparator's
+extra threshold slot and its three ports; three-way comparison through
+the generated compare functions; the iterator's cursor, advanced under
+the station mutex at enqueue time with the chosen port recorded in the
+task struct.</p>
+<p>Depends on phase 3 for compare functions and phase 4 for the static
+slots that thresholds almost always use.</p>
+<p>Described by <a href="doc-005-routing.html">005 — Routing</a>.</p>
+<p>---</p>
+<h2>Phase 6 — The map file</h2>
+<p>The capstone. The two halves of a program meet for the first time.</p>
+<p>Built here: the line-oriented parser; the two-pass loader; the
+name lookup table; type checking of every wire against the registry;
+every load-time validation rule; the seed sweep.</p>
+<p>At the end of this phase, a program is a directory of C functions and a
+text file, and changing the shape of the program does not require
+touching the C.</p>
+<p>Described by <a href="doc-008-map-file-format.html">008 — Map file format</a> and
+<a href="doc-009-datapath-load.html">009 — Loading</a>.</p>
+<p>---</p>
+<h2>Phase 7 — Seeing inside it</h2>
+<p>Everything that makes the engine legible while it runs. None of it is
+required for correctness, all of it is required for confidence.</p>
+<p>Candidates: reporting when a ring buffer grows, since that means a
+consumer is slower than its producer and memory is quietly absorbing
+the difference; per-station counts of runs and time spent; a dump of
+the loaded map that reads back as a map file; the worst-case gather
+chain depth recorded during the load-time walk; runtime rewiring, with
+the same cycle check applied at connection time.</p>
+<p>Also the HTML documentation set at <code>docs/HTML/</code>, cross-linked and
+navigable, which is deliberately deferred to here rather than built
+alongside each phase — it should be generated from the documents, not
+maintained in parallel with them.</p>
+<p>---</p>
+<h2>Where the numbers live</h2>
+<p>This document deliberately contains no counts, sizes, or thresholds.
+Worker counts, buffer capacities, and growth factors are decided in the
+code and reported by the diagnostics from phase 7, so that reading this
+file a year from now cannot mislead anyone about what the program
+actually does.</p>
+
+</main>
+</div></body></html>
