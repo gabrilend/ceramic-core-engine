@@ -2,9 +2,24 @@
 
 ## Current behavior
 
-A map loads, validates, and sits there. Nothing runs, because nothing
-can: a station is discovered only by something writing into it, and at
-the instant the program starts there is nobody to write.
+Built, as the last step of loading, before the workers are released
+— the pool exists so the seed has somewhere to push, the workers are
+parked so the termination rule's outside-pusher clause stays true.
+The sweep enqueues every station with no ring-buffer inputs that
+nobody gathers from, through the very task construction delivery
+uses — one way a task comes into existence, not two. Each seeded
+station is announced by name and the count is kept on the map;
+nothing seeded is fatal with the reason spelled out, because exiting
+successfully having done nothing is what the termination check would
+otherwise correctly and uselessly report. One reading of the rule
+sharpened during the build: "whose output feeds a ring buffer"
+became "not gathered from", so that an input-less sink — which has
+no output at all — still runs once for its effect; the first-pass
+report weighs the wording. The comment at the sweep says what a
+future reader will come looking for: the engine never scans for
+work, and this is the one exception. Proven by the linear map
+seeding exactly its head, the gathered source rightly unseeded, and
+the unstartable map refused with its message.
 
 ## Intended behavior
 

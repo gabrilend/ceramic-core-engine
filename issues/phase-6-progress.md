@@ -10,7 +10,7 @@ never touches the C.
 | 602 — loader first pass | complete | Stations from the registry; statics bound; gathers deferred to pass two. |
 | 603 — loader second pass | complete | Arrows resolved and type-checked by name; the message is the deliverable. |
 | 604 — load-time validation | complete | Whole-map rules collected and printed together; warnings loud, not fatal. |
-| 605 — seed sweep | in progress | |
+| 605 — seed sweep | complete | The one scan the engine ever makes; announced, counted, fatal when empty. |
 | 606 — phase 6 demo | not started | |
 
 Notes for the phase: parser and loader are separate files (read
