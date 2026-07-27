@@ -324,7 +324,7 @@ const Inspector = (() => {
 
   // {{{ Routing helpers (issue 233)
   // Every call box carries a `routing` field declaring how its
-  // single output reaches downstream wires. Six kinds ship:
+  // single output reaches downstream wires. Seven kinds ship:
   //
   //   plain       — single output, fan to every wire
   //   comparator  — lt/eq/gt by `comparand`, OR multi-band by
@@ -338,6 +338,10 @@ const Inspector = (() => {
   //                 weights array length = output count (issue 241)
   //   distributor — argmin over downstream slot fill, picks the
   //                 least-busy `out_<i>` (issue 242)
+  //   nonlinearity— single output; auto-calibrates against a ring
+  //                 of the last `memory` values, applies an
+  //                 S-curve (`range`: signed→tanh, unit→sigmoid,
+  //                 steepness `k`), emits input × score (issue 250)
   //
   // Plain is the default for a newly-created box. Switching kinds
   // severs every outgoing wire because the output port shape
@@ -1327,6 +1331,8 @@ const Inspector = (() => {
     //   weighted    → cumulative-band lookup over weights (issue 241)
     //   distributor → least-busy of out_<i> by downstream fill
     //                 (issue 242)
+    //   nonlinearity→ single output, auto-calibrated S-curve gate
+    //                 (issue 250)
     // Switching kinds changes the output-port shape on the
     // canvas; set_routing_kind severs every outgoing wire on the
     // transition for the same reason the variadic input toggle
