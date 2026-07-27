@@ -7,7 +7,7 @@ never touches the C.
 | Issue | State | In one line |
 |---|---|---|
 | 601 — map file parser | complete | Keyword dispatch, kind written not inferred, comments added to the format. |
-| 602 — loader first pass | in progress | |
+| 602 — loader first pass | complete | Stations from the registry; statics bound; gathers deferred to pass two. |
 | 603 — loader second pass | in progress | |
 | 604 — load-time validation | in progress | |
 | 605 — seed sweep | in progress | |

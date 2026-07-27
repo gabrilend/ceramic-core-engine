@@ -2,8 +2,23 @@
 
 ## Current behavior
 
-A map file can be read into a description (issue 601), but nothing
-turns that description into stations.
+Built. Every station line becomes a station through placement by
+name: the registry supplies shim, parameter count, sizes, and type
+names; slots default to ring buffers; a comparator grows its typed
+threshold slot; the statics table fills first so bindings can parse
+their entries. The misspelled-box message names the name and where
+box sources live, and every input line naming a slot beyond the box
+stops the load saying how many slots exist and why. The name table
+lives in file order and dies when loading ends.
+
+One refinement of this issue's split, recorded in the first-pass
+report: static input lines apply here, but gather input lines wait
+for the second pass — their source is a *name*, and a name may
+belong to a station declared further down, so the first pass cannot
+resolve them by construction. The construction calls did become what
+the loader calls rather than what a person calls, and issue 207's
+record was updated when that moment arrived. Proven by the
+forward-reference map and the slot-range and misspelling refusals.
 
 ## Intended behavior
 
