@@ -2,11 +2,21 @@
 
 ## Current behavior
 
-Every value in the engine is pushed: a box finishes and its result is
-carried forward to whoever was waiting. A value that should be current
-at the moment it is *used* — a file's contents, a clock, an environment
-variable — can only be current at the moment it was *produced*, which
-may be long before.
+Built, in its own gather module. A gatherer slot holds a source
+station index; at task construction — after the station's mutex is
+released, exactly as this issue placed it — the upstream box runs
+inline on the assembling thread's own stack, its arguments statics
+or themselves gathered, its value landing straight in the task. No
+pool, no mutex on the source. The consequences this issue demanded
+as comments are written where they bite: the named exception to
+"boxes only run from the pool", the concurrent-safety rule
+(open-read-close, never a kept handle), once-per-task cost, and
+cannot-decline. The read box is an ordinary function in the box
+sources — the vision's dedicated read type stayed dissolved — and a
+missing file stops the program saying which path. Proven by a
+gathered file read that follows the file while running, two thousand
+concurrent gathers all exact, and the freshness contrast the phase 4
+demo stages side by side.
 
 ## Intended behavior
 

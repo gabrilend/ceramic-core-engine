@@ -9,7 +9,7 @@ is used.
 |---|---|---|
 | 401 — static slots | complete | Always full, never consumed; bytes shaped by the first binder's type. |
 | 402 — struct constants | complete | One reader walks field tables and brace text; malformed is fatal at bind. |
-| 403 — gatherer slots | in progress | |
+| 403 — gatherer slots | complete | Inline pull at task build, outside every mutex; read box is just a function. |
 | 404 — chains and cycles | in progress | |
 | 405 — statics mutation | in progress | |
 | 406 — phase 4 demo | not started | |
