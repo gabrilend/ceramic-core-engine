@@ -2,9 +2,17 @@
 
 ## Current behavior
 
-A station can notice it is ready and claim its values. Nothing puts
-values into a station in the first place, because nothing carries a
-box's return value anywhere.
+Built, riding the pool's finish hook: after a worker runs a task, the
+walk chooses a port through the routing dispatch (plain filled,
+comparator and iterator rows failing loudly until phase 5), then
+delivers the output value to each destination on it — lock, write,
+readiness, claim, unlock, build, push, next. A void box's task skips
+the walk entirely; both dedicated read and write box types from the
+original vision stayed dissolved, with the write box falling out as a
+plain sink. A port wired to nothing discards, which a comparator
+outcome will later want. Proven by a three-station chain, a
+twenty-way fan-out, and structs crossing two hops byte-identical
+into a void sink.
 
 ## Intended behavior
 

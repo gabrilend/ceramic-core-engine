@@ -11,7 +11,7 @@ with maps hand-built and shims hand-written as deliberate scaffolding.
 | 202 — ring-buffer slots | complete | Tagged slots, exact-size cells, write/pop as pure memcpy. |
 | 203 — slot buffer growth | complete | Doubling under the mutex with unwrap; growth count and high water kept for phase 7. |
 | 204 — readiness check | complete | Dispatch-table walk at the tail of every write; claims popped under the mutex. |
-| 205 — delivery walk | in progress | |
+| 205 — delivery walk | complete | Port choice, destination walk, sinks free; the pool's finish hook. |
 | 206 — task struct | in progress | |
 | 207 — hand-built maps | in progress | |
 | 208 — phase 2 demo | not started | |
