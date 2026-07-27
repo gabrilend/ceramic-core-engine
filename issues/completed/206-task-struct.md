@@ -2,9 +2,19 @@
 
 ## Current behavior
 
-Phase 1's task carries a bare function pointer and an argument, which
-was enough to exercise the pool but says nothing about stations, slots,
-or where a result goes.
+Built, as the pool header's task struct grown to its real shape: the
+shim to call, the producing station, the iterator's port (inert until
+phase 5), and the claimed inputs and output landing place — all in
+one allocation laid out struct, pointer array, input bytes, output
+bytes, sized exactly for the box and freed with one call by the
+worker that ran it. Construction happens after the station's mutex is
+released, on the assembling thread's own time; the values inside are
+copies, so a task depends on nothing another thread can change.
+Phase 1's synthetic tests still embed the struct at the head of
+larger payloads, which the pool cannot tell apart — the "replace the
+bare task throughout the pool" step cost nothing because the pool
+reads only the call field. Copy fidelity is proven by the parcel
+tests riding issues 202 and 205.
 
 ## Intended behavior
 
