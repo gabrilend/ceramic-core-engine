@@ -2,8 +2,16 @@
 
 ## Current behavior
 
-Stations have a slot array, but a slot holds nothing and there is no
-way to put a value in one.
+Built, in the motion half of the station layer. A slot carries its
+one-byte kind tag from the start, with the ring buffer as the only
+populated row; cells are exactly the element size handed to placement,
+so every write is a memcpy into a fixed offset with no allocation on
+the hot path. Write advances the tail, pop advances the head, and
+occupancy is head-differs-from-tail — answerable under the station's
+mutex alone. Growth on collision went in alongside (issue 203) rather
+than the planned loud failure, since both were built in one sitting.
+Proven by a test pairing a padded 40-byte struct with an int through
+several hundred deliveries: every pair byte-identical, in order.
 
 ## Intended behavior
 

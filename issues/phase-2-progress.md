@@ -8,7 +8,7 @@ with maps hand-built and shims hand-written as deliberate scaffolding.
 | Issue | State | In one line |
 |---|---|---|
 | 201 — station table | complete | Flat array of fixed-size records; nothing moves, everything indexed. |
-| 202 — ring-buffer slots | in progress | |
+| 202 — ring-buffer slots | complete | Tagged slots, exact-size cells, write/pop as pure memcpy. |
 | 203 — slot buffer growth | in progress | |
 | 204 — readiness check | in progress | |
 | 205 — delivery walk | in progress | |
