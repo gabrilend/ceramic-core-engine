@@ -9,7 +9,7 @@ confidence.
 | 701 — buffer growth reporting | complete | Both piles named; periodic observer; loud shutdown word. |
 | 702 — station statistics | complete | Counts always on; timing compiles in and out; gather charged to the puller. |
 | 703 — map dump | complete | The live table as a map file; round trip byte-identical. |
-| 704 — runtime rewiring | in progress | |
+| 704 — runtime rewiring | complete | Check and change under one lock; refusals return, they do not kill. |
 | 705 — HTML documentation | in progress | |
 | 706 — phase 7 demo | not started | |
 

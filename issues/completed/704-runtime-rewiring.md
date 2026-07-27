@@ -2,8 +2,26 @@
 
 ## Current behavior
 
-A map is fixed once it loads. Changing a wire means editing the file
-and restarting, which discards everything sitting in the buffers.
+Built. Connect, disconnect, and gather-repoint operate on a running
+map, every load-time rule applied per edge — type compatibility by
+registry name, buffer-slot destinations, port limits by kind, the
+gather source purity rule, and the cycle walk — with the check and
+the change under one rewiring lock, proven by fifty rounds of two
+threads drawing individually-legal jointly-cyclic edges with exactly
+one refused every round. List surgery additionally happens under the
+owning station's mutex, and delivery grew a destination-list
+snapshot under that same mutex so a walker can never be left holding
+a freed wire — the one retrofit this issue's "quietly preparing"
+list did not include, recorded for the second pass. A removed wire's
+in-flight value delivers down it, indistinguishable from having been
+sent a moment earlier, exactly as designed. Refusal behaviour was
+decided rather than defaulted: refusals return minus one with the
+reason on stderr, because a loader that dies serves its author while
+a running engine that dies for one bad control instruction takes the
+plant down; the cost — an ignorable return — is weighed in the
+report. Adding a station remains out of scope, as this issue drew
+it. Proven further by a wire moved mid-run with nothing lost and
+behaviour bending at the seam.
 
 ## Intended behavior
 
