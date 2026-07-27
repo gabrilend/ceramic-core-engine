@@ -1,5 +1,12 @@
 # 007-runner-main.lua — Interpreter runner entry point
 
+> **Phase 2 path, superseded.** To run a map, use
+> `./soramech-pool <map-dir>` — the C pool runner, which is
+> multi-threaded, speaks the current schema, and writes the JSONL
+> transcript. This program still loads and executes a map
+> single-threaded through `003-loader.lua` and `004-executor.lua`.
+> Retiring it is an open item on the phase 3 progress page.
+
 Command-line program that loads one map and executes it
 synchronously, start to finish, in a single process. This is the
 **interpreter** path — the compiler (issue 219) generates

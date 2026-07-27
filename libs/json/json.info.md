@@ -1,10 +1,10 @@
 # libs/json/json.c — public surface
 
-Small DOM JSON parser written for SoraMech, not vendored. Single
-file plus header; arena-allocated tree, single-threaded parse, no
-mutation API on parsed trees. Two halves: a parser (implemented)
-and a streaming writer (declared; body deferred to when issue 311
-needs it).
+Small JSON parser and writer written for SoraMech, not vendored —
+so the runtime has no external dependency in its load path. Single
+file plus header. Two halves, both shipped: a DOM parser
+(arena-allocated tree, single-threaded parse, no mutation API on
+parsed trees) and a bounded streaming writer.
 
 ## Lifecycle
 
@@ -46,16 +46,28 @@ validate before reading.
 - Numbers are `double`; integer-shaped fields read via
   `(int)json_number_value(n)`.
 
-## Writer (declared; deferred)
+## Writer
 
-Signatures in `json.h`: `json_writer_init`, `json_writer_object`,
-`json_writer_array`, `json_writer_end`, `json_writer_key`,
-`json_writer_string`, `json_writer_int`, `json_writer_number`,
-`json_writer_bool`, `json_writer_null`, `json_writer_finish`.
+A bounded streaming writer — it emits into a caller-supplied
+buffer and never allocates. This is what serialises every JSONL
+transcript event and every sentinel.
 
-Current implementation: every entrypoint sets `w->err` and
-`json_writer_finish` returns -1 if the writer was touched. The
-real body lands alongside the JSONL run-log writer (issue 311).
+`json_writer_init`, `json_writer_object`, `json_writer_array`,
+`json_writer_end`, `json_writer_key`, `json_writer_string`,
+`json_writer_int`, `json_writer_number`, `json_writer_bool`,
+`json_writer_null`, `json_writer_finish`.
+
+Error handling is sticky rather than per-call: any violation sets
+an internal error flag and the call becomes a no-op, so a caller
+can write a whole document without checking each step and find out
+at the end. `json_writer_finish` returns -1 if anything went
+wrong. What trips it:
+
+- The output buffer would overflow. This is the common one and it
+  is why the writer is safe to point at a fixed event record.
+- Nesting deeper than 16 levels.
+- Structural misuse — a key outside an object, an `end` with
+  nothing open, or finishing with containers still open.
 
 ## Related
 

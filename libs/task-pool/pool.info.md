@@ -12,17 +12,29 @@ was the design reference; nothing was vendored.
   `sysconf(_SC_NPROCESSORS_ONLN)` capped at `POOL_MAX_WORKERS`
   (16). `SORAMECH_WORKERS=N` env var overrides. NULL on
   allocation / pthread failure.
-- `void pool_init_barrier(pool_t *p)` — blocks until every worker
+- `int pool_init_barrier(pool_t *p)` — blocks until every worker
   reaches the barrier, then releases them all simultaneously.
-  One-shot; the spec-registry plug-in point sits between
-  `pool_create` and `pool_init_barrier`.
+  One-shot. Returns nonzero if any worker's init callback failed.
 - `void pool_destroy(pool_t *p)` — flips shutdown, drains the
   queue, joins every worker, frees.
 
+## Per-worker init and teardown
+
+- `void pool_set_worker_init(pool_t *p, pool_init_cb_t cb, void *user)`
+- `void pool_set_worker_teardown(pool_t *p, pool_teardown_cb_t cb, void *user)`
+
+Register these between `pool_create` and `pool_init_barrier`. Each
+worker runs the init callback before the barrier releases, so
+nothing dispatches until every worker is fully set up. This is the
+hook the spec registry uses to give each worker its own
+interpreter state.
+
 ## Submission
 
-- `void pool_spawn(pool_t *p, pool_action_t fn, void *arg)` —
-  safe from any thread, including from inside another action.
+- `void pool_spawn(pool_t *p, pool_action_t fn, void *arg, int priority)`
+  — safe from any thread, including from inside another action.
+  The priority argument is accepted and ordered on; see the note
+  below about what that currently buys you.
 - `void pool_wait_quiescent(pool_t *p)` — blocks until the
   active-task counter reaches zero.
 - `int  pool_n_workers(const pool_t *p)` — count.
@@ -47,11 +59,14 @@ was the design reference; nothing was vendored.
 
 ## What's NOT here (deferred)
 
-- **Per-worker spec init** between `pool_create` and
-  `pool_init_barrier`. Lands with issue 303's spec registry.
-- **Priority queue** (issue 310): the current queue is a plain
-  singly-linked FIFO. The priority work is "wired in, no-op
-  behaviorally" until something distinguishes task priorities.
+- **Priority that changes anything.** The queue orders by the
+  `priority` argument and the API is fully wired, but every
+  caller passes the same value, so behaviour is FIFO. Issue 310
+  shipped the mechanism; nothing yet distinguishes task
+  priorities. Passing a distinct priority today will order tasks
+  — there is simply no policy that does so.
+- **Work stealing.** One shared FIFO, one mutex. Under many
+  workers this queue is the contention point, not the slots.
 - **Frame-ring scheduling / park-on-slot**: the 3d-rts pool's
   design has these; we don't need them for the dispatch model
   (issue 304), which always spawns tasks when inputs are ready

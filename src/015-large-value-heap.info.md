@@ -1,9 +1,26 @@
 # 015-large-value-heap.info.md
 
-Variable-size payload allocator. Used by the slot store
-(009-slot-store) for `SLOT_FLAG_LARGE_VALUE` slots — the cell
-holds a stable pointer into this heap; the actual bytes live here.
-Designed in issue 302; implemented 2026-05-19.
+> **This module has no callers. It is not part of the running
+> system.**
+>
+> It was written as the variable-size payload allocator for the
+> slot store's `SLOT_FLAG_LARGE_VALUE` slots. The unified
+> allocator (`016-unified-allocator.c`) then took that job — it
+> refcounts and reclaims, which this heap cannot do — and
+> `009-slot-store.c` was moved onto it. Nothing was left pointing
+> here: no production file includes `015-large-value-heap.h`.
+>
+> It still compiles into `soramech-pool`, because the Makefile
+> globs `src/*.c`, and its unit test still passes. That test is
+> the only thing exercising it. A green test on an unreachable
+> module is exactly how this stayed invisible.
+>
+> Removing it is unclaimed work. Anything below describes a
+> component that is built but not wired in — do not reach for it
+> when adding a feature; reach for `016-unified-allocator.c`.
+
+Variable-size payload allocator. Designed in issue 302;
+implemented 2026-05-19; superseded by the unified allocator.
 
 ## Mental model
 

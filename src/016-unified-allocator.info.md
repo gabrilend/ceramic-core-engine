@@ -59,20 +59,36 @@ reached zero), `ua_neighbor_merges`, `ua_sweep_merges`,
 `ua_grow_calls`, and `ua_class_free_count(h, size)` — how many
 free chunks currently sit on the exact-size class's list.
 
+## Who allocates here
+
+Everything on a hot path, which is why this is the one heap:
+
+- `009-slot-store.c` — slot cells, and the payload bytes of
+  `SLOT_FLAG_LARGE_VALUE` slots. A push acquires a chunk; a pop
+  copies the bytes out and drops the reference.
+- `012-dispatch.c` — the task structs themselves, and the input /
+  output buffers each fire reads and writes through.
+- `008-pool-runner.c` — calls `ua_sweep` at the run's quiescence
+  point.
+
+This replaced `015-large-value-heap.c`, which had no reclamation.
+That module is still in the tree but has no callers.
+
 ## What's NOT here (deferred)
 
-- **Slot-store / dispatch integration.** Later implementation
-  stages; the existing chained-block region for variable-size
-  payloads stays in use until then.
 - **Oversized-chunk slicing.** A small request that pops a large
   chunk keeps the whole chunk; the tail is not split off. The
   pre-warmed classes and eager merging cover the common case.
 - **Per-class locks.** One allocator-wide mutex for now — simple
-  and correct first.
-- **Quiescence-triggered sweeps.** The dispatch layer will call the
-  sweep at its own quiescence points; today the only automatic
-  sweep is the one inside a failing allocation.
+  and correct first. This is the documented next step and the
+  most likely contention point under many workers.
+- **Producer-declared output sizes into `ua_create`.** The graph
+  loader enumerates size classes, but they are not yet all piped
+  through to pre-warming, so some classes are learned by
+  accretion rather than declared up front.
 
 ## Related
 
 - Issue 302 — design (the 2026-05-19 rewrite).
+- `src/009-slot-store.info.md` — the largest consumer.
+- `docs/007-architecture.md` — where this sits in the stack.

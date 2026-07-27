@@ -1,7 +1,7 @@
 # ollama.lua
 
 > **DEPRECATED.** Scheduled for replacement by `libs/llamacpp.lua`
-> per issue 254 (issues/254-llamacpp-client-library-replacing-ollama.md).
+> per issue 254 (llama.cpp client library replacing ollama).
 > The replacement keeps both public signatures, so existing call
 > boxes keep their port layout — but **new maps should not adopt
 > this library**.

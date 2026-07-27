@@ -24,6 +24,10 @@ queued deliveries.
   readiness-gated spawn. Single-fire boxes pass through an atomic
   once-only guard; multi-fire boxes spawn once per arriving push;
   read boxes never spawn (they are pull-on-demand value sources).
+  **The single/multi split is being removed** — every box is
+  multi-spawn and the CAS guard comes out; issue 304 (task
+  dispatch layer) carries it. After that lands this function is
+  two gates: is the box ready, and is it a read box.
 - `void dispatch_spawn(ctx, box_id, priority)` — unconditional
   spawn, bypassing guard and readiness. Used by tests and the
   iterator re-spawn path.
