@@ -2,8 +2,17 @@
 
 ## Current behavior
 
-A worker that finds the queue empty returns immediately and tries
-again, which is a spin. Every idle worker burns a core.
+Built. A worker that finds the queue empty registers itself asleep and
+waits on a condition variable; a push wakes every sleeper and whoever
+arrives first takes the task. The sleeping count is exact because the
+check, the registration, and the wait all happen inside one hold of
+the queue's own mutex — the wait releases that mutex atomically, so
+the window this issue warned about (checked-empty but not yet
+registered) does not exist in this lock discipline. Wakes are treated
+as rumors: a woken worker deregisters and re-checks the queue before
+believing anything. Proven by a trickle test: four workers fed twenty
+tasks across four-fifths of a second consumed three milliseconds of
+processor time — sleeping, not spinning — and every task still ran.
 
 ## Intended behavior
 

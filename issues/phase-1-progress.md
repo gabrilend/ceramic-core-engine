@@ -9,7 +9,7 @@ above it in the project stands on this.
 |---|---|---|
 | 101 — task queue ring | complete | FIFO ring of pointers that doubles when full; order survives growth and many threads. |
 | 102 — workers and run loop | complete | Fixed threads behind a starting gate; run-deliver-free loop; per-worker identity. |
-| 103 — sleeping and waking | in progress | |
+| 103 — sleeping and waking | complete | Condition-variable sleep, wake-all on push, exact sleeper count under the one mutex. |
 | 104 — termination by last sleeper | in progress | |
 | 105 — phase 1 demo | not started | |
 
