@@ -242,7 +242,40 @@ demo: prove the cost is still there (the numbers made it obvious).
 
 ## Phase 5 — routing kinds
 
-(appended as built)
+**The port-gap rule was a plain-only assumption wearing a principle's
+clothes.** Phase 2 decided ports must be wired in order with no gaps
+("a silently invented port is a wire the author did not draw") — and
+that was correct while every station had one port whose index meant
+nothing. A comparator's port index *means* an outcome, and wiring
+only "greater" is a legitimate map, so the rule became per-kind:
+plain wires port zero only, comparators up to three with empty
+intermediates created freely, iterators unlimited. Lesson: a rule
+justified by one kind's semantics should be stated as that kind's
+rule, or the next kind pays to renegotiate it.
+
+**"Fails at build time" appears three times in the design and is
+impossible each time.** Issues 305, 502, and 503 all want the
+comparator-without-compare refusal at build; the generator never sees
+a map, so there is nothing at build time to check against. Issue 503
+even notices this and re-lands the check at load. The second pass
+should stop promising build-time map checks anywhere, and say once:
+wire checks happen at the last moment the information exists, which
+is placement/load.
+
+**The byte-order lie needed care to demonstrate honestly.** memcmp on
+a little-endian machine compares the *low* byte first, so the demo's
+first "what bytes would say" agreed with the correct answer by
+accident. The canonical wrong answer is reading the values as
+unsigned words (sign bit as top bit). A tiny thing, but exactly the
+kind of demo detail that quietly proves the wrong claim if unchecked
+— the demo now asserts that the lie lies.
+
+**Comparator threshold rides inside the task as a hidden extra
+input.** The shim reads in[0..n-1]; routing reads in[n]. It works
+cleanly, but the task's n_in now means "slots" not "box parameters",
+and any future code that iterates task inputs to feed a box must know
+the difference. Worth one sentence in docs 003; nothing needed it
+yet.
 
 ## Phase 6 — the map file
 

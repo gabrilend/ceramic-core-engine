@@ -2,9 +2,21 @@
 
 ## Current behavior
 
-Phase 4's demo shows values that are current rather than merely
-correct. Every map so far has been a pipeline — it can transform, but
-it cannot choose.
+Built and discoverable from the root launcher. The sorting network
+leads: three comparator stations and nine arrows split four hundred
+values into four buckets drawn live as they fill, landing exactly on
+the expected distribution with no bucket-choosing code anywhere. One
+comparator rewired six ways produces every comparison operator in
+numbers — twenty or forty arrivals per sixty values, exact — and
+then the seventh shape no operator can name: equals one way,
+greaters another, lessers discarded. The iterator deals ninety
+values across consumers burning ten, two hundred, and eight hundred
+units into exact thirty-thirty-thirty, with the arrival order
+printed to show the disorder fairness permits. The byte-lie scene
+routes minus two below one half and prints both doubles as unsigned
+words beside the verdict — the sign bit reading as magnitude — with
+a note that memcmp on little-endian lies differently, a nuance found
+while building it. Mirrored to the shared-memory tier.
 
 ## Intended behavior
 

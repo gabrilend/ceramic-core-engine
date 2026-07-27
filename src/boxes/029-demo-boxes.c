@@ -129,6 +129,15 @@ int double_it(int x)
 }
 /* }}} */
 
+/* {{{ keep() */
+/* Identity: the box a comparator places when the point is routing a
+ * value unchanged rather than transforming it. */
+int keep(int x)
+{
+    return x;
+}
+/* }}} */
+
 /* {{{ slow_seven() */
 /*
  * Seven, expensively: a gatherable box whose cost is measurable, so
