@@ -92,6 +92,19 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
                 "there is nothing to compare\n", box_name);
         abort();
     }
+    if (extra && b->compare == NULL) {
+        /* Routing on raw bytes would produce an answer, and it would
+         * be wrong (issue 503). The refusal names the type, because
+         * the fix is writing that type's __compare. Issue 503 wanted
+         * this at build time; the generator never sees the map, so
+         * placement is the earliest moment it can land — noted there
+         * and in issue 604. */
+        fprintf(stderr,
+                "map: '%s' cannot be a comparator — its return type '%s' has "
+                "no compare function; write %s__compare in a box source\n",
+                box_name, b->return_type, b->return_type);
+        abort();
+    }
 
     int n = b->n_params + extra;
     int sizes[n > 0 ? n : 1];
@@ -111,7 +124,11 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
     station_t *s = &m->stations[station];
     for (int i = 0; i < b->n_params; i++)
         s->slots[i].type_name = b->params[i].type_name;
-    if (extra)
+    if (extra) {
         s->slots[b->n_params].type_name = b->return_type;
+        /* Resolved once, here, so the delivery path compares with a
+         * call rather than a lookup (issue 503). */
+        s->compare = b->compare;
+    }
 }
 /* }}} */

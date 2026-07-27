@@ -314,8 +314,14 @@ void map_deliver_value(map_t *m, int station, int slot, const void *value)
     pthread_mutex_lock(&s->mutex);
     slot_write_locked(&s->slots[slot], value);
     int due = station_ready_and_claim_locked(s, claimed);
-    /* Phase 5: an iterator advances its cursor here, under the
-     * mutex, and the chosen port rides out in the task (issue 504). */
+    if (due && s->kind == STATION_ITERATOR && s->n_ports > 0) {
+        /* The one memory a station keeps, touched at the one moment
+         * only one thread can be looking (issue 504): this task
+         * takes the cursor's exit, the cursor moves on, and the
+         * choice rides out inside the task. The box never sees it. */
+        port = s->cursor;
+        s->cursor = (s->cursor + 1) % s->n_ports;
+    }
     pthread_mutex_unlock(&s->mutex);
 
     if (due)
@@ -340,19 +346,23 @@ static int route_plain(station_t *s, task_t *t)
 
 static int route_comparator(station_t *s, task_t *t)
 {
-    (void)s; (void)t;
-    /* Filled by issue 502. Failing loudly until then keeps a map
-     * that uses the kind early from silently routing one way. */
-    die("a comparator routed before phase 5 was built", t->station);
-    return -1;
+    /* The threshold rode along as the task's last input — claimed
+     * like any other slot, never handed to the box (issue 502). The
+     * comparison happens here, after the box returned, through the
+     * type's own three-way compare (issue 503): the sign maps
+     * straight onto the ports — less is 0, equal is 1, greater 2. */
+    int sign = s->compare(t->out, t->in[t->n_in - 1]);
+    return sign + 1;
 }
 
 static int route_iterator(station_t *s, task_t *t)
 {
-    (void)s; (void)t;
-    /* Filled by issue 504. */
-    die("an iterator routed before phase 5 was built", t->station);
-    return -1;
+    (void)s;
+    /* Chosen at enqueue time, under the station's mutex, and
+     * recorded in the task (issue 504) — so two tasks assembled a
+     * moment apart carry different exits no matter which finishes
+     * first. Reading it here is the whole row. */
+    return t->port;
 }
 
 static int (*const route_choose[STATION_KIND_COUNT])(station_t *, task_t *) = {

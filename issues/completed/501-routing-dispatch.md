@@ -2,8 +2,19 @@
 
 ## Current behavior
 
-Every station is plain. Port selection is a function call with one case
-in it, placed there by issue 205 so this change would be additive.
+Built. The three-entry dispatch table stands at step one of delivery
+and nowhere else — the plain row moved in unchanged, the comparator
+row compares and returns sign-plus-one, the iterator row reads the
+port its task was assigned at enqueue. Nothing else in the engine
+asks what kind a station is. Port creation became kind-aware in the
+same stroke: a plain box may wire only port zero, a comparator up to
+three, an iterator any number — and for the kinds where an index
+carries meaning, intermediate ports are created empty rather than
+refused, because wiring only some outcomes is legitimate and an
+empty port discards, which is what an unwired outcome should do.
+This replaced phase 2's no-gaps rule, which turned out to encode a
+plain-only assumption. The plain path's behavior is unchanged, its
+proof being the entire earlier suite still passing untouched.
 
 ## Intended behavior
 

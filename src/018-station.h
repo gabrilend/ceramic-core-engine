@@ -104,12 +104,20 @@ typedef struct port {
 } port_t;
 /* }}} */
 
+/*
+ * Three-way comparison over raw bytes of two values of one type —
+ * the sign of a minus b. Matches the registry's compare functions;
+ * declared here generically so this header stays registry-free.
+ */
+typedef int (*station_compare_t)(const void *a, const void *b);
+
 /* {{{ struct station */
 /*
  * Fixed-size on purpose (issue 201): the array of these must stay
  * indexable, and growing a buffer must never move a station. The
- * kind and cursor are placed now and stay inert until phase 5, so
- * routing arrives as a change to delivery rather than to this shape.
+ * kind and cursor were placed in phase 2 and came alive in phase 5,
+ * exactly as planned — routing arrived as a change to delivery, not
+ * to this shape.
  */
 typedef struct station {
     pthread_mutex_t mutex;      /* guards the slots during delivery and readiness */
@@ -121,6 +129,11 @@ typedef struct station {
     int             n_ports;
     int             cursor;     /* iterator's next port; the one memory a station keeps */
     int             out_size;   /* bytes of the box's return value; 0 means sink */
+
+    /* Comparator only: the three-way compare for the box's return
+     * type, resolved from the registry at placement so the delivery
+     * path does a call rather than a lookup (issue 503). */
+    station_compare_t compare;
 } station_t;
 /* }}} */
 

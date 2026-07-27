@@ -144,25 +144,35 @@ void map_connect(map_t *m, int from_station, int port,
     if (port < 0)
         fail("a port index cannot be negative");
 
-    /* Ports must be created in order — asking for port 2 on a
-     * station with no ports would mean inventing 0 and 1 silently,
-     * and a silently invented port is a wire the author did not
-     * draw. Two paths: the port exists (append a destination) or it
-     * is the next one in line (create it, then append). */
-    port_t *p = station_port(from, port);
-    if (!p) {
-        if (port != from->n_ports)
-            fail("ports must be wired in order, with no gaps");
-        p = calloc(1, sizeof *p);
-        if (!p) fail("out of memory for a port");
-        /* Append at the tail so port indices count up in the order
-         * the wires were declared. */
+    /* How many exits a station may have is its kind's business
+     * (issue 501): a plain box has exactly one; a comparator exactly
+     * three, indexed less/equal/greater; an iterator as many as the
+     * map draws. For the kinds where an index carries meaning,
+     * wiring only some outcomes is legitimate — sending everything
+     * below a threshold somewhere and discarding the rest — so
+     * intermediate ports are created empty rather than refused. An
+     * empty port discards, which is exactly what an unwired outcome
+     * should do. A dispatch-by-kind table, not a chain. */
+    static const int port_limit[STATION_KIND_COUNT] = {
+        [STATION_PLAIN]      = 1,
+        [STATION_COMPARATOR] = 3,
+        [STATION_ITERATOR]   = 0,   /* zero meaning: no limit */
+    };
+    int limit = port_limit[from->kind];
+    if (limit > 0 && port >= limit)
+        fail("a port index beyond what this station kind can mean — a plain "
+             "box has one exit, a comparator three");
+
+    while (from->n_ports <= port) {
+        port_t *fresh = calloc(1, sizeof *fresh);
+        if (!fresh) fail("out of memory for a port");
         port_t **link = &from->ports;
         while (*link)
             link = &(*link)->next;
-        *link = p;
+        *link = fresh;
         from->n_ports++;
     }
+    port_t *p = station_port(from, port);
 
     destination_t *d = calloc(1, sizeof *d);
     if (!d) fail("out of memory for a destination");
