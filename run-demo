@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+# run-demo — the front door to this project's finished phases.
+#
+# Every completed phase leaves behind a demo: a runnable program that
+# shows what the engine could do at that point, using the tools built
+# in that phase alongside everything from the phases beneath it. This
+# script finds them, lists them, and runs the one you pick.
+#
+# It discovers demos rather than knowing about them, so a new phase
+# becomes available here the moment its demo is dropped in place — no
+# edit to this file required.
+#
+# Usage:
+#   ./run-demo             list the demos and ask which to run
+#   ./run-demo 3           run phase 3's demo directly
+#   ./run-demo /some/dir   use a different project root
+#   ./run-demo /some/dir 3 both
+
+set -euo pipefail
+
+# The project root. Hard-coded so the script works from any directory,
+# overridable by a first argument that looks like a path.
+# Corrected during the first build pass: the previous value named a
+# directory on another machine, and a wrong default that only works
+# when overridden is a fallback in disguise.
+DIR="/mnt/mtwo/programming/ai-playground/minimal-soramech"
+
+CHOICE=""
+for arg in "$@"; do
+    if [[ -d "$arg" ]]; then
+        DIR="$arg"
+    else
+        CHOICE="$arg"
+    fi
+done
+
+DEMO_DIR="${DIR}/issues/completed/demos"
+
+# The demos write logs and scratch output into RAM. Make sure the two
+# tiers exist before anything tries to write into them, because a demo
+# that dies on a missing directory tells you nothing about the engine.
+mkdir -p "/tmp/$(basename "${DIR}")"
+mkdir -p "/dev/shm/$(basename "${DIR}")"
+
+if [[ ! -d "${DEMO_DIR}" ]]; then
+    echo "No demos directory at ${DEMO_DIR}"
+    echo "Nothing has been finished yet."
+    exit 1
+fi
+
+# Demos are named phase-N-something. Collect them in phase order.
+mapfile -t DEMOS < <(find "${DEMO_DIR}" -maxdepth 1 -type f -name 'phase-*' -perm -u+x | sort)
+
+if [[ ${#DEMOS[@]} -eq 0 ]]; then
+    echo "No demos found in ${DEMO_DIR}"
+    echo "Nothing has been finished yet."
+    exit 1
+fi
+
+if [[ -z "${CHOICE}" ]]; then
+    echo "Finished phases:"
+    echo
+    for i in "${!DEMOS[@]}"; do
+        printf "  %d) %s\n" "$((i + 1))" "$(basename "${DEMOS[$i]}")"
+    done
+    echo
+    read -r -p "Which one? [1-${#DEMOS[@]}] " CHOICE
+fi
+
+# Reject anything that isn't a number in range, rather than falling
+# back to a default. Running the wrong demo silently is worse than
+# not running one at all.
+if ! [[ "${CHOICE}" =~ ^[0-9]+$ ]] || [[ "${CHOICE}" -lt 1 ]] || [[ "${CHOICE}" -gt ${#DEMOS[@]} ]]; then
+    echo "Not a demo: ${CHOICE}"
+    exit 1
+fi
+
+SELECTED="${DEMOS[$((CHOICE - 1))]}"
+echo
+echo "Running $(basename "${SELECTED}")"
+echo
+exec "${SELECTED}" "${DIR}"

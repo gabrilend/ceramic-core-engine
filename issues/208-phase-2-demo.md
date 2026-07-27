@@ -1,0 +1,62 @@
+# 208 — Phase 2 demo: a graph that runs itself
+
+## Current behavior
+
+Phase 1's demo shows a thread pool moving opaque work between threads.
+Nothing shows a graph propagating.
+
+## Intended behavior
+
+The first demo where the shape of the program is visible. It should
+make one thing obvious to someone watching: **nobody scheduled any of
+this.** A map was described, values were dropped in, and the machine
+filled every core on its own.
+
+It reuses phase 1's pool wholesale — same queue, same workers, same
+termination — and adds stations on top, which is the point of a phase
+demo. Show the old tool doing new work.
+
+**What it should show, in order of how convincing it is:**
+
+**Occupancy across a wide map.** A graph wide enough to saturate the
+machine. Report how many workers were busy over time, sampled, against
+the theoretical maximum. The interesting number is how close a graph
+gets to full occupancy without anyone arranging for it.
+
+**Concurrent invocations of one station.** Feed a single station far
+more values than it can consume at once and report how many of its
+invocations overlapped in time. This is the property that most needs
+proving, because it is the one the design paid for by forbidding boxes
+to remember.
+
+**Buffer growth under mismatched rates.** A producer deliberately
+faster than its consumer. Report each slot's growth count and final
+capacity. This shows the growth path working and shows what it looks
+like when a map is unbalanced — which is the same reading phase 7 will
+later surface automatically.
+
+**Fan-out cost.** One station wired to increasing numbers of
+destinations. Report the time the delivering worker spends walking
+the list against the time it took to run the box. This is where the
+"one worker does a hundred lock-and-check cycles" decision either
+justifies itself or does not.
+
+**A visual, if it is cheap.** The map drawn as text — stations, arrows,
+and a live count of values sitting in each buffer — redrawn as it runs.
+Watching values pool up behind a slow station explains backpressure
+better than any number does.
+
+## Suggested implementation steps
+
+1. Build the demo map with the construction calls from issue 207.
+2. Instrument by measurement only. No number in the output should be a
+   constant written into the demo's source.
+3. Write results to `tmp/shared-memory/` as well as the screen so runs
+   can be compared.
+4. Confirm the root launcher finds it.
+
+## Related
+
+- [003 — Delivery](../docs/003-datapath-delivery.md)
+- Issues 201 through 207 — everything being demonstrated
+- Issue 105 — the phase 1 demo this builds on

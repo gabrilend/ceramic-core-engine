@@ -1,0 +1,58 @@
+this project is a distillation of the various design decisions for soramech.
+... that name could probably be improved.
+
+anyway it's intended to be as minimal an implementation of the structure as
+possible, or rather, a minimal default template that other use-cases can
+build upon. It strips out the cross-language compatibility concern (which,
+admittedly, was one of it's main benefits) and instead focuses on the
+multi-threaded by default architecture support. It essentially becomes an
+engine that other programs can be created with, rather than a swiss-army-tool
+knife that has the capability to act as an arbitrary bridge for various
+languages. If the user wants to call a specific function using soramech, they
+can more easily do it by creating a custom box for the specific language in
+question rather than depending on the architecture. An increase in focus
+requires a subtraction of concern, and we are focusing on the platform rather
+than the bridge.
+
+so, here's the design:
+
+C only for now. We have a thre
+
+I feel much better about my life now. Sometimes all it takes is a vision of a
+friendly face.
+
+... anyway C only for now. We have a thread pool architecture, and a concept of
+"boxes" which are a datastructure that stores a function pointer, some memory
+locations, ring buffers, etc. There is also a concept of a "map" which is a
+collection of these boxes connected together. That's the bulk of the design,
+and all the extra stuff we added for visualization and cross-language bridges is
+not part of the core design.
+
+there is also a concept of different box types, but we really only need a few
+of those. Mostly a comparator (put the result in this location if </>/= a value,
+often derived from within the box itself or given as input) which routes the
+result to a specified location. We also have an iterator, which sends the output
+first to one target, then on subsequent runs to another, then on the next run to
+a third, etc, until we get to the bottom and then it loops to the top for the
+next run. I think those are the only box types we need.
+
+Oh, we also need to be able to "read" and "write" to files. These should be
+special box types, and the "read" should "hang" until a value is present, and
+the "write" should hang until the target destination exists. I think this
+behavior exists and can be written as a custom, non built in box, but it's worth
+thinking about specifically.
+
+boxes should only run in one single situation - when they're picked up from the
+thread pool. Boxes should only be instantiated into the thread pool in one case:
+if an input value was filled, and all of the input values were checked and
+contained something. Then, the input-filler thread puts the task into the thread
+pool and it gets picked up by someone else.
+
+Boxes that don't have any inputs can be added to the thread pool and should run
+at least once. We should add a "hook" functionality to the "check all the input
+values" which points at an upstream box that doesn't have any input requisites
+and runs that in order to gather the hook. We can make this part of the gather
+input check. Do we have a system for this already mapped out? Please inform the
+user then delete this paragraph when we figure it out...
+
+

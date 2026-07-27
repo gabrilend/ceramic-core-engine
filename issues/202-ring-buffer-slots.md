@@ -1,0 +1,68 @@
+# 202 — Ring-buffer input slots
+
+## Current behavior
+
+Stations have a slot array, but a slot holds nothing and there is no
+way to put a value in one.
+
+## Intended behavior
+
+The ordinary kind of input slot: a ring buffer where values arrive by
+being written and wait their turn.
+
+Two other slot kinds exist in the design — gatherers and statics — and
+both arrive in phase 4. The slot carries a one-byte tag from the start
+so that adding them is a new case rather than a new field. The tag is
+**stored, never inferred**: asking "is the station upstream of me an
+input-less one?" on every readiness check would mean chasing an index
+into another station to answer a question that cannot change while the
+program runs.
+
+**Fields, of which only the first four matter in this phase:**
+
+| Field | Type | Meaning |
+|---|---|---|
+| kind | `unsigned char` | Ring buffer, gatherer, or static |
+| elem_size | `int` | Bytes per value |
+| storage | `void *` | The cells |
+| capacity | `int` | How many cells |
+| head | `int` | Where the oldest value sits |
+| tail | `int` | Where the next one goes |
+| source | `int` | Gatherer only — phase 4 |
+| static_id | `int` | Static only — phase 4 |
+
+**Cells are exactly `elem_size` bytes.** Not a maximum, not a union of
+every type in the program — the exact size of the parameter this slot
+feeds. In this phase the size is supplied by hand alongside the
+hand-written shims; from phase 3 it comes from the registry, derived
+from `sizeof` the real C type.
+
+The payoff is that a write is a `memcpy` into a fixed offset with no
+allocation anywhere on the delivery path, which is the hottest path in
+the engine.
+
+**A slot holds a value when head and tail differ.** That is the whole
+of the readiness test for this kind, and it must be answerable while
+holding only the station's mutex.
+
+## Suggested implementation steps
+
+1. Add the slot struct to `src/`, with the tag defaulting to ring
+   buffer.
+2. Slot initialization taking an element size and a starting capacity,
+   allocating the cells once.
+3. Write: `memcpy` into the cell at the tail, advance the tail. Growth
+   when the tail would collide with the head is issue 203; until then,
+   fail loudly rather than overwrite.
+4. Pop: copy out of the cell at the head, advance the head.
+5. Occupancy test.
+6. A test that writes and pops values of several different sizes,
+   including a struct larger than a machine word, and confirms the
+   bytes come back identical.
+
+## Related
+
+- [002 — Stations and slots](../docs/002-stations-and-slots.md)
+- Issue 203 — growth
+- Issue 401 — static slots, the second tag value
+- Issue 403 — gatherer slots, the third

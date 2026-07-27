@@ -1,0 +1,60 @@
+# 207 — Hand-built maps and hand-written shims
+
+## Current behavior
+
+A station table exists and delivery works, but constructing a map means
+writing out struct initializers by hand at every call site, with no
+checking of any kind.
+
+## Intended behavior
+
+Deliberate scaffolding. Phase 3 replaces the hand-written shims with
+generated ones, and phase 6 replaces hand-built maps with a text file.
+Both replacements go much more smoothly if there is something already
+working to plug into, so this issue builds the crude version on purpose
+and marks it as temporary in the source.
+
+**A small set of construction calls** that build a map in C: create a
+table of N stations, place a box at one, set a slot's element size,
+connect a port to a destination. Enough that a test or demo reads as a
+description of a graph rather than a pile of assignments.
+
+**Hand-written shims, following the shape the generator will emit.**
+A shim reads its inputs out of the task struct, calls the real box
+function with real types by value, and copies the return value into the
+task's output field. Writing several by hand first is what makes the
+generator's job obvious when phase 3 arrives — and it is worth writing
+them in exactly the form the generator will produce, so the diff when
+they are replaced is a deletion rather than a rewrite.
+
+**Every hand-written shim is a place where nothing is checked.** The
+cast inside it is a promise, and phase 3 exists to stop humans from
+making that promise. Each one should carry a comment saying so, naming
+the issue that will delete it.
+
+## What must not happen
+
+This issue must not grow into a permanent way to build maps. If it
+becomes comfortable, phase 6 will feel optional and the project will
+quietly become one where the graph is compiled in — which is a
+different project. The construction calls should stay minimal enough
+to be irritating.
+
+## Suggested implementation steps
+
+1. The construction calls in `src/`, all marked in comments as
+   scaffolding with the replacing issue named.
+2. Three or four hand-written shims for the boxes the phase 2 tests and
+   demo need — one taking two of the same type, one taking two
+   different types, one returning a struct, one returning nothing.
+3. A worked example map built with the calls, used by the phase 2 demo.
+4. When phase 3 lands, the shims here are deleted and this issue is
+   updated to say so. When phase 6 lands, the construction calls become
+   what the loader calls rather than what a person calls.
+
+## Related
+
+- [002 — Stations and slots](../docs/002-stations-and-slots.md)
+- [007 — The build path](../docs/007-datapath-build.md), the shape the shims should follow
+- Issue 302 — deletes the hand-written shims
+- Issue 602 — takes over map construction

@@ -1,0 +1,8 @@
+# Derived artifacts never belong in history — a derived file in the
+# repository is a file that can be stale (issue 306).
+src/generated/
+# The RAM tiers are machine-local by definition.
+tmp
+# Editor droppings.
+*.swp
+*~
