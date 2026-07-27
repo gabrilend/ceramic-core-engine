@@ -145,7 +145,43 @@ control surface will need).
 
 ## Phase 3 — the build path
 
-(appended as built)
+**The docs' own shim example contains an alignment bug.** Docs 007 and
+issue 302 show shims loading arguments with pointer casts —
+`int a = *(int *)t->in[0]` — and the task layout packs values back to
+back with no padding, so a double following an int sits at a
+misaligned address and the cast is undefined behavior off x86. The
+generator emits memcpy loads instead. Second pass: either align the
+task's value area per member (wastes a few bytes, allows casts) or
+bless memcpy loads in the doc; either way the example code should not
+model the bug.
+
+**"Delete the hand shims" assumed shims lived in product code; they
+lived in tests.** Issue 302's instruction to delete issue 207's shims
+could not be followed literally — the hand shims were written inside
+phase 2's tests and demo, wrapping boxes that mutate test counters,
+which no generated box could reach (generated boxes cannot see a test
+binary's globals). They stayed as marked harness instrumentation.
+Second pass: decide where instrumented test boxes live — likely a
+designated test-box source directory with extern counters, so even
+harness shims are generated.
+
+**The registry includes box sources whole, which works and has
+sharp edges.** The generated file `#include`s each box .c so types
+are visible and boxes inline into shims. Consequences: box sources
+share one translation unit (name collisions across files are link
+errors moved to compile time; statics are shared-visible), and a box
+source cannot be compiled standalone. Fine at this scale; the second
+pass should either bless this ("box sources are one compilation
+unit, by design") or emit extern declarations and compile separately.
+
+**LuaJIT as the generator's language was frictionless.** Pattern
+matching plus a hand brace-walker handled everything the ground rules
+allow; the whole generator is one readable file. The one real parsing
+bug of the pass (a function name preceded by `*` with no space) was a
+pattern subtlety, found by the shell tests in minutes. The
+fail-don't-guess posture — refuse plain structs, comma fields,
+unnamed parameters, string returns — turned every ambiguity into a
+one-line rule instead of a guess.
 
 ## Phase 4 — the pull path and configuration
 

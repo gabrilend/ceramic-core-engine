@@ -2,8 +2,25 @@
 
 ## Current behavior
 
-Shims are written by hand (issue 207). Each one contains casts that
-nothing checks, and each is a promise a human made about types.
+Built. One shim per box is emitted into the generated registry file,
+each carrying a comment naming the declaration and line it came from,
+all sharing the one signature so the engine keeps its single call
+site. Loads and stores inside a shim are memory copies rather than
+pointer casts — the task's value area packs values back to back, so
+a double following an int sits unaligned, and copying is what keeps
+that defined everywhere (a subtlety this issue's example code, with
+its direct pointer casts, would have gotten wrong; the first-pass
+report notes it). Exact per-box task sizes are emitted as sizeof
+expressions. Proven equivalent to direct calls for all four shapes:
+two of one type, two different types, returning a struct, returning
+nothing.
+
+One departure: the hand-written shims of issue 207 were not deleted,
+because they ended up living inside the phase 2 tests and demo as
+harness instrumentation — boxes that reach test counters no generated
+box could see. They remain marked as scaffolding, superseded rather
+than removed; every product-path shim is generated. The first-pass
+report carries the lesson about where shims actually came to live.
 
 ## Intended behavior
 

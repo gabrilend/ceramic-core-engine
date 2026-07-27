@@ -9,11 +9,14 @@ in the header as scaffolding with the replacing issues named, and
 kept minimal enough to be irritating: placement wants every size
 spelled out by hand, which is precisely the tedium phase 3 deletes.
 Hand-written shims in the exact shape the generator will emit sit in
-the phase 2 tests and demo, each carrying the deletion note naming
-issue 302; every cast inside them is an unchecked human promise. The
-worked example map is the phase 2 demo's. When phase 3 lands the
-shims go; when phase 6 lands the loader becomes the only caller of
-the construction calls.
+the phase 2 tests and demo, each carrying a note naming issue 302;
+every cast inside them is an unchecked human promise. The worked
+example map is the phase 2 demo's. Phase 3 has since landed: every
+product-path shim is generated, and the hand shims here were
+superseded rather than deleted — they wrap harness instrumentation
+(test counters) that no generated box can reach, so they stay as
+marked scaffolding inside tests only. When phase 6 lands the loader
+becomes the only caller of the construction calls.
 
 ## Intended behavior
 
