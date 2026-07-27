@@ -2,9 +2,16 @@
 
 ## Current behavior
 
-A ring-buffer slot whose tail would collide with its head fails loudly
-rather than overwriting. Correct, but it means a producer faster than
-its consumer stops the program.
+Built. When the tail would land on the head the storage doubles under
+the station's mutex, the wrapped portion is copied so the contents
+read contiguously from cell zero, and the indices are corrected. Only
+the storage the slot points at is reallocated — never the slot, never
+the station — which the station-table test proves by flooding one
+slot through seven doublings and finding every address unchanged and
+every neighbour untouched. The growth count and a high-water
+occupancy mark (added here, a small step past the plan, so phase 7's
+report is a read rather than a retrofit) live on the slot. The
+wrapped-before-growth case is exactly what the slots test seeds.
 
 ## Intended behavior
 
