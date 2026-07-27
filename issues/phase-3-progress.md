@@ -12,7 +12,11 @@ to call it by name is derived from the C itself.
 | 304 — struct field tables | complete | Offsets from offsetof, kinds per field, nested tables linked. |
 | 305 — compare functions | complete | Primitives generated, author orderings wrapped, availability in the registry. |
 | 306 — build integration | complete | Boxes discovered, registry regenerated on change, failure emits nothing. |
-| 307 — phase 3 demo | not started | |
+| 307 — phase 3 demo | complete | A box added live, the registry against sizeof, every shape through one call site. |
+
+Phase 3 is finished. Writing a box is writing a function; the
+generator derives the rest, and a stale registry is structurally
+impossible.
 
 Notes for the phase: parser and emitters are one script with distinct
 stages (parse → validate → emit), sharing the pattern of the earlier

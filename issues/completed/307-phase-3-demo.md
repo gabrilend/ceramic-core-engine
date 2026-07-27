@@ -2,8 +2,20 @@
 
 ## Current behavior
 
-Phase 2's demo shows a graph propagating across every core. Building
-that graph still means hand-written shims and hand-typed element sizes.
+Built, shell-driven so the rebuild steps are visible, working on a
+scratch copy of the box sources so the project is never touched. The
+scenes, in order: one ordinary function appended to a box source
+appears in the registry with real types and sizes and not a single
+other edit; the add function printed beside the call site the
+generator wrote for it; the registry printed whole and then laid
+beside the compiler's own sizeof answers, column for column
+identical; ints, floats, structs by value, a nested struct with a
+string, and a wide unsigned all flowing through the one call site
+byte-perfect, with each box's exact task size listed; the occupancy
+figure re-measured for the series; and a box whose return type
+changes out from under its registry, shown regenerating — with the
+no-partial-output guarantee meaning a shim casting to yesterday's
+type cannot exist. Mirrored to the shared-memory tier.
 
 ## Intended behavior
 

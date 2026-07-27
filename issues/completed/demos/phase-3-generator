@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+#
+# phase-3-generator — the phase 3 demonstration, driven from the shell
+# so the rebuild steps are visible as they happen.
+#
+# What this is: the demo of the seam between the two halves of a
+# program. The only thing an author writes is ordinary C; everything
+# the engine needs is derived from it. The scenes: a box added live
+# with no other edit anywhere, a generated shim beside the function
+# it wraps, the registry printed against the compiler's own numbers,
+# every value shape through one call site, and what happens when a
+# box changes out from under its registry.
+#
+# How it does it, in general terms: works on a scratch copy of the
+# box sources in the RAM tier, regenerating and recompiling there so
+# the real project is never touched, and mirrors its story to the
+# shared-memory tier.
+
+set -euo pipefail
+
+DIR="/mnt/mtwo/programming/ai-playground/minimal-soramech"
+if [[ $# -ge 1 && -d "$1" ]]; then
+    DIR="$1"
+fi
+
+BUILD="/tmp/$(basename "${DIR}")/build"
+SHARED="/dev/shm/$(basename "${DIR}")"
+SCRATCH="/tmp/$(basename "${DIR}")/phase-3-scratch"
+REPORT="${SHARED}/phase-3-registry-demo.txt"
+mkdir -p "${BUILD}" "${SHARED}"
+rm -rf "${SCRATCH}"
+mkdir -p "${SCRATCH}"
+: > "${REPORT}"
+
+GENERATOR="${DIR}/scripts/028-generate.lua"
+BOXES="${DIR}/src/boxes/029-demo-boxes.c"
+
+tell() {
+    echo "$1" | tee -a "${REPORT}"
+}
+
+tell "=== phase 3 demo: writing a box is writing a function ==="
+tell ""
+
+# --- scene: a box added live ---------------------------------------
+tell "scene: a box added live"
+cp "${BOXES}" "${SCRATCH}/boxes.c"
+luajit "${GENERATOR}" "${SCRATCH}/registry.c" "${SCRATCH}/boxes.c"
+BEFORE=$(grep -c '__call(task_t' "${SCRATCH}/registry.c")
+tell "  boxes in the registry before: ${BEFORE}"
+
+cat >> "${SCRATCH}/boxes.c" <<'EOF'
+
+/* Added live by the phase 3 demo: no registration, no list, no
+ * build-file edit — the function is the entire change. */
+double live_added(int x, double weight)
+{
+    return x * weight;
+}
+EOF
+tell "  ...one ordinary function appended to the box source..."
+luajit "${GENERATOR}" "${SCRATCH}/registry.c" "${SCRATCH}/boxes.c"
+AFTER=$(grep -c '__call(task_t' "${SCRATCH}/registry.c")
+tell "  boxes in the registry after:  ${AFTER}"
+grep -A1 '"live_added"' "${SCRATCH}/registry.c" | sed 's/^/    /' | tee -a "${REPORT}"
+tell "  real types, real sizes, not a single other edit anywhere"
+tell ""
+
+# --- scene: the shim beside its function ---------------------------
+tell "scene: what the generator wrote for you"
+tell "  the function an author wrote:"
+sed -n '/^int add(/,/^}/p' "${BOXES}" | sed 's/^/    /' | tee -a "${REPORT}"
+tell "  the call site the generator wrote:"
+sed -n '/generated from: int add/,/^}/p' "${DIR}/src/generated/registry.c" \
+    | sed 's/^/    /' | tee -a "${REPORT}"
+tell ""
+
+# --- scenes needing a running engine -------------------------------
+SOURCE="${DIR}/issues/completed/demos/032-phase-3-registry-demo.c"
+BINARY="${BUILD}/phase-3-registry-demo"
+
+# Regenerate the real registry first, exactly as make would.
+mkdir -p "${DIR}/src/generated"
+luajit "${GENERATOR}" "${DIR}/src/generated/registry.c" ${DIR}/src/boxes/*.c
+
+gcc -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread \
+    -I"${DIR}/libs" -I"${DIR}/src" \
+    -o "${BINARY}" "${SOURCE}" \
+    "${DIR}/libs/012-pool.c" "${DIR}/src/019-station.c" \
+    "${DIR}/src/020-delivery.c" "${DIR}/src/027-registry-support.c" \
+    "${DIR}/src/generated/registry.c"
+
+"${BINARY}" "${DIR}"
+
+# --- scene: a box changed out from under its registry --------------
+tell "scene: the registry cannot describe yesterday's code"
+OLD_LINE=$(grep '"live_added"' "${SCRATCH}/registry.c")
+tell "  registry row while live_added returned double:"
+tell "    ${OLD_LINE}"
+sed -i 's/^double live_added/float live_added/' "${SCRATCH}/boxes.c"
+sed -i 's/return x \* weight;/return (float)(x * weight);/' "${SCRATCH}/boxes.c"
+luajit "${GENERATOR}" "${SCRATCH}/registry.c" "${SCRATCH}/boxes.c"
+NEW_LINE=$(grep '"live_added"' "${SCRATCH}/registry.c")
+tell "  registry row after its return type changed:"
+tell "    ${NEW_LINE}"
+tell "  the build regenerates before it compiles, and a failing"
+tell "  generator moves nothing into place — a shim casting to a type"
+tell "  the function no longer returns cannot exist here"
+tell ""
+tell "=== the author wrote C; everything else was derived ==="
+echo
+echo "report mirrored at ${DIR}/tmp/shared-memory/phase-3-registry-demo.txt"
+
+rm -rf "${SCRATCH}"
