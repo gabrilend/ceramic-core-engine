@@ -2,9 +2,23 @@
 
 ## Current behavior
 
-Both passes check what they can see as they go — a missing box, a bad
-slot index, a type mismatch on a wire. Some errors are only visible
-once every station and every arrow exists.
+Built, as the final pass before the seed, each check its own routine,
+failures collected and printed together before one stop — someone
+fixing a new map wants the whole list. The rules as landed: an arrow
+onto a slot that is not a buffer (the value would have nowhere to
+go); a station both written into by arrows and gathered from
+(neither pushed nor pulled coherently); a gathered station with
+ring-buffer inputs (gathering runs inline and cannot wait); and the
+loud-but-not-fatal warning for a buffered station no arrow feeds,
+kept a warning because something outside may deliver into it. Two
+rules moved earlier than this issue placed them, recorded rather
+than hidden: gather cycles are refused edge by edge as wires are
+drawn (the same rule, applied at the moment both station numbers are
+in hand), and the comparator-without-compare refusal lives at
+placement, where the registry row is first consulted. The
+comparator slot count cannot disagree by construction, since
+placement derives it. Each rule proven by a wrong map dying with the
+right words.
 
 ## Intended behavior
 
