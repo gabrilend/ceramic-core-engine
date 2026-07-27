@@ -44,6 +44,37 @@ needs a value, the read box's bytes get pulled in.
 }
 ```
 
+A read box is an **inexhaustible source**, not a one-shot
+producer, and that has four consequences worth knowing before
+you wire one:
+
+- **It never runs as a task.** Read boxes are not queued, never
+  spawn, and never appear as a `task_start` in the transcript. A
+  two-box map of one read feeding one call reports one task, not
+  two. The wire declares where a value *may be pulled from*; the
+  consumer does the pulling when it fires.
+- **It can't be starved.** A consumer pulls the read box's value
+  every time it fires and needs one. Unlike a wire delivery, the
+  value is never spent — a recursing network can lean on the same
+  read box on every lap.
+- **It acts as a default when mixed with real producers.** A port
+  may have both call-box producers and read-box predecessors. The
+  consumer takes a queued value from the slot if one is waiting,
+  and falls back to the read box only when the slot is empty. So
+  a read box on a mixed port reads as "use this unless something
+  computed a better answer."
+- **Several read boxes on one port rotate.** Wire N read boxes to
+  the same input port and consecutive fires take from them in
+  round-robin, via a per-port atomic counter, so parallel fires
+  get distinct picks. This is the way to say "cycle through these
+  values" without building an iterator.
+
+For a `path`-backed read box, the file is read **once at graph
+load** and cached for the run. Editing the file while the map is
+running has no effect; the cached bytes are the source of truth
+until the next run. This is deliberate — it keeps a pull free of
+I/O and keeps the graph immutable during a run.
+
 ### `write` — writes to disk
 
 The sink for "land this value on the filesystem." Reads its
@@ -130,8 +161,10 @@ adjacent thresholds carve zero-width equality bands named
 
 No function attached — pure routing. Each fire rotates the
 output among `n_outputs` ports named `out_0` ... `out_<n-1>`.
-Multi-spawn: a single arrival to an iterator's input slot drains
-queued values one per fire.
+Like every box, an iterator re-fires while its consuming input
+ports still hold queued deliveries, draining one per fire. It is
+not a special spawn category — it is simply the routing kind
+whose branch choice advances on each of those fires.
 
 ```json
 "routing": { "kind": "iterator", "n_outputs": 3 }

@@ -157,7 +157,13 @@ soramech-pool: outputs:
   greet → Hello, world!
 ```
 
-The seed box pushed `"world"` along its wire to `greet.name`.
+Note the run reports **one** task for a two-box map. Read boxes
+are not tasks — nothing spawns for `seed`. When `greet` went to
+fire, it found its `name` port empty and pulled `seed`'s bytes
+in directly. The wire from a read box declares *where the value
+may be pulled from*, not a push that happens on its own. See the
+read box in [`docs/002-map-model.md`](002-map-model.md).
+
 The Lua function ran and returned `"Hello, world!"`, which is
 the output captured for `greet`. The full per-event run log
 sits at `/tmp/soramech-last-run.jsonl` — one JSON event per
