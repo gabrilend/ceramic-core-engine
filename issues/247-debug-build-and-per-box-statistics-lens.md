@@ -62,8 +62,9 @@ This issue adds two things that work together:
 
 Most of the data already exists in `tmp/last-run.jsonl`. The
 runner's event types include `task_end` with `duration_us` and
-`output_size` already (`docs/001-architecture.md:651`). What the
-debug build does is **enable the optional event toggles**:
+`output_size` already (`docs/004-runtime.md`, "The JSONL
+transcript"). What the debug build does is **enable the optional
+event toggles**:
 
 - `SORAMECH_LOG_VALUES=1` — input/output payloads per task (truncated
   at 4 KB). Useful for the consistency lens.
@@ -165,7 +166,10 @@ Boxes that didn't fire in the run get a "no data" styling
   `last-run.jsonl`, produces `last-run-stats.json`.
 - `Makefile` / `scripts/soramech-compile.sh` — debug build mode
   (sets the env vars; possibly compiles with `-O0 -g`).
-- `docs/001-architecture.md:638-666` — event format reference.
+- `docs/004-runtime.md` — event format reference, in "The JSONL
+  transcript" (was cited as `docs/001-architecture.md:638-666`, a
+  file that no longer exists; line-numbered citations into docs go
+  stale on the next edit, so this one names the section instead).
 
 ## Suggested implementation steps
 

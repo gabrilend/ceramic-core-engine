@@ -46,11 +46,11 @@ The repository contains:
 
 ## Implementation notes
 
-The map scaffold is created by `scripts/create-map.sh`, which writes the full directory tree (boxes/, data/, src/, tmp/ symlink) and seeds meta.json and drivers.json. The on-disk format — box files, data files, and driver config — is defined in `src/001-schema.lua` and documented in `docs/001-architecture.md`. The `maps/hello/` example map exercises a lua box and a data file end-to-end.
+The map scaffold is created by `scripts/create-map.sh`, which writes the full directory tree (boxes/, data/, src/, tmp/ symlink) and seeds meta.json and drivers.json. The on-disk format — box files, data files, and driver config — is defined in `src/001-schema.lua` and documented in `docs/007-architecture.md`. The `maps/hello/` example map exercises a lua box and a data file end-to-end.
 
 ## Related documents
 
-- docs/001-architecture.md — full map directory layout spec
+- docs/007-architecture.md — full map directory layout spec
 - docs/003-driver-system.md — driver contract referenced by validate-map
 
 ## Notes

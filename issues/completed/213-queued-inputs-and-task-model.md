@@ -125,4 +125,4 @@ synchronous executor described here is the reference implementation.
 - src/004-executor.lua — execute, inputs_satisfied, collect_inputs, fire_connections
 - src/001-schema.lua — port schema, optional field
 - assets/js/004-inspector.js — optional port checkbox
-- docs/001-architecture.md — store model, box.inputs schema
+- docs/007-architecture.md — store model, box.inputs schema

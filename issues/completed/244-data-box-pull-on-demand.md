@@ -177,7 +177,7 @@ pulls fresh from the read box (or its rotation).
 - `src/010-graph-loader.c` — per-port read-box-predecessor list
   computed at load.
 - `src/012-dispatch.c` — attempt-task input pull.
-- `docs/001-architecture.md` — the attempt loop (described in the
+- `docs/007-architecture.md` — the attempt loop (described in the
   "structural shell" section) is the place where the pull happens.
 
 ## Out of scope for this issue

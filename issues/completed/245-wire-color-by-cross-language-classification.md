@@ -121,4 +121,4 @@ connection at draw time — no separate index needed.
 
 - `issues/312-same-language-wire-fast-path.md` — runtime
   classification this mirrors visually
-- `docs/001-architecture.md` — wire format section
+- `docs/007-architecture.md` — wire format section

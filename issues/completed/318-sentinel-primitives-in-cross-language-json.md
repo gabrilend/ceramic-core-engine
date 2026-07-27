@@ -522,14 +522,14 @@ needing a JSON-side hack.
   sentinels ride inside its JSON ring.
 - `issues/246-custom-translation-specs-per-port.md` — user-side
   override layered on top of sentinel reconstruction.
-- `docs/001-architecture.md` — wire format section; gains a brief
+- `docs/007-architecture.md` — wire format section; gains a brief
   sentinel reference.
 
 ## Suggested implementation sequence
 
 1. **Define the canonical JSON shapes**. Three sentinel kinds,
    exact key names, value-object schemas. Document in
-   `docs/001-architecture.md`.
+   `docs/007-architecture.md`.
 2. **Lua emit**: replace the hard-errors in `encode_value` with
    sentinel emission per the producer protocol above. Start with
    `$function_pointer` for FFI callables and `$lang_opaque` for

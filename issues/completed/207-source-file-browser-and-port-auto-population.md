@@ -86,6 +86,6 @@ Other extensions: show file in list but display "no parser" when selected.
 
 ## Related documents
 
-- docs/001-architecture.md — box file format (ref, fn, inputs, outputs)
+- docs/007-architecture.md — box file format (ref, fn, inputs, outputs)
 - assets/js/004-inspector.js — inspector to modify
 - src/005-http-server.lua — server to extend

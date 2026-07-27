@@ -11,9 +11,15 @@ If you're new to SoraMech, read these in order:
 - [docs/005-writing-boxes.md](005-writing-boxes.md) — per-language quickstarts for Lua, C, and Bash box authors
 - [docs/006-test-coverage-map.md](006-test-coverage-map.md) — what's tested, what isn't, and what runs the tests
 
+## Working on the runtime itself
+
+- [docs/007-architecture.md](007-architecture.md) — the inside view: the three programs and why they share only a directory, the C runner's module stack bottom to top, the path one value takes from JSON file to downstream byte, the language-plugin boundary, and the known structural debt. This is the doc that older issue files cite as `docs/001-architecture.md`, a path that no longer exists.
+
 ## Notes
 
-- [notes/vision](../notes/vision) — the project's design intent and the apartment-building metaphor that frames why SoraMech is shaped the way it is
+- [notes/vision](../notes/vision) — the project's original design intent: why the map directory is the program, why the engine is language-agnostic, and the three-programs-one-format split. **Written in the pre-233 dialect** — it describes `branch` and `data` box kinds, `outputs[]` tuples, `from_output` wires, and a Lua runner, none of which the project still has. Read it for intent, not for schema; [docs/002-map-model.md](002-map-model.md) is the current format.
+
+The apartment-building metaphor — the runtime is the steel and concrete, box authors design the rooms — lives in [docs/001-overview.md](001-overview.md), not in the vision.
 
 ## Libraries shipped with the runtime
 

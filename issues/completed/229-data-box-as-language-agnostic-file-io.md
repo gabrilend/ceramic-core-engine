@@ -275,7 +275,7 @@ A `write` box's done boolean is the most visible case — a user
 who doesn't need a chain-after-write trigger leaves the output
 unwired and the runtime drops the value. The rule already holds
 informally for every box; documenting it here (and in
-`docs/001-architecture.md`) makes it explicit.
+`docs/007-architecture.md`) makes it explicit.
 
 ## Suggested implementation sequence
 
@@ -302,7 +302,7 @@ informally for every box; documenting it here (and in
    - Add `read`/`write` to the `KIND_HEADER` map from issue 236.
    - Honor `hide_port` flag (or equivalent) on the path input
      when the inline value is set on a `read` box.
-8. **Documentation**: update `docs/001-architecture.md` with the
+8. **Documentation**: update `docs/007-architecture.md` with the
    new kinds, the unwired-output rule, and the language-aware
    IO behavior. Update the dispatch-layer info.md.
 
@@ -338,7 +338,7 @@ informally for every box; documenting it here (and in
 - `assets/js/002-boxes.js` — color, header, port-hide on literal
 - `langs/{lua,c,bash}/spec.c` — `native_to_json` / `json_to_native`
   (issue 317 owns these)
-- `docs/001-architecture.md` — kinds section, unwired-output rule
+- `docs/007-architecture.md` — kinds section, unwired-output rule
 - `issues/317-spec-json-bridge-for-data-boxes.md` — hard dependency
 - `issues/235-...completed/` — literal-replaces-port-name idea
   extended to "literal hides port entirely" here

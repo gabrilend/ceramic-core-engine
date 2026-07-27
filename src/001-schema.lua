@@ -1,7 +1,9 @@
 -- Schema definitions and validators for SoraMech map files.
 -- Validates box files, meta.json, and drivers.json against the spec
--- in docs/001-architecture.md. Used by both the runner and the server
+-- in docs/002-map-model.md. Used by both the runner and the server
 -- before any file is written to disk.
+-- (This pointed at docs/001-architecture.md, a file that no longer
+-- exists; the map/box format now lives in 002-map-model.md.)
 
 local DIR = "/mnt/mtwo/programs/sora/soramech"
 

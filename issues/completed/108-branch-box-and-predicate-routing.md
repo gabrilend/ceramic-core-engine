@@ -93,7 +93,7 @@ The "retry_vary" field on a box:
 
 ## Related documents
 
-- docs/001-architecture.md — branch box file format
+- docs/007-architecture.md — branch box file format
 - issues/104 — executor (predicate evaluation added here)
 - issues/107 — wire UI (port color and label rendering)
 

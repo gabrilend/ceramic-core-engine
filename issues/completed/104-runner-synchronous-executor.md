@@ -66,7 +66,7 @@ fallback, no skip, no continue-on-error.
 
 ## Related documents
 
-- docs/001-architecture.md — execution model section
+- docs/007-architecture.md — execution model section
 - docs/003-driver-system.md — driver invocation contract
 - issues/103 — graph loader (graph argument comes from here)
 - issues/108 — branch box predicate evaluation expanded

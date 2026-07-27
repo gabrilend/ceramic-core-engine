@@ -40,7 +40,7 @@ A single return value is always unambiguous. This was decided in the design phas
 5. `maps/driver-test/src/strops.c` — change printf to output `"VALUE"` not `["VALUE"]`.
 6. `drivers/README` — update contract description.
 7. `docs/003-driver-system.md` — update contract description.
-8. `docs/001-architecture.md` — note `outputs` field in box JSON is display metadata only.
+8. `docs/007-architecture.md` — note `outputs` field in box JSON is display metadata only.
 
 ## Implementation notes
 
@@ -64,4 +64,4 @@ It is not read by the executor.
 - `maps/driver-test/src/strops.c` — outputs `["VALUE"]`
 - `drivers/README` — driver contract docs
 - `docs/003-driver-system.md` — driver system spec
-- `docs/001-architecture.md` — execution model description
+- `docs/007-architecture.md` — execution model description

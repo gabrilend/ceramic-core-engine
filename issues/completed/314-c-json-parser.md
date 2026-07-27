@@ -198,7 +198,7 @@ store and the dispatch layer.
   consumer (JSONL events).
 - `issues/309-build-system.md` — Makefile already discovers
   `libs/json/*.c` via wildcard.
-- `docs/001-architecture.md` — references the JSON parser in the
+- `docs/007-architecture.md` — references the JSON parser in the
   phase 3 runtime layout.
 
 ## Open questions

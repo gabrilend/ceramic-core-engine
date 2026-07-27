@@ -107,4 +107,4 @@ On function select: sets `current_box.ref`, `current_box.fn`, and
 - src/001-schema.lua — box and connection validation
 - src/003-loader.lua — connection loading
 - src/004-executor.lua — fire_connections, comparator evaluation
-- docs/001-architecture.md — box and connection file format
+- docs/007-architecture.md — box and connection file format

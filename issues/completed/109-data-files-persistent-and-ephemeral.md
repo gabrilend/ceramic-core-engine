@@ -78,7 +78,7 @@ backed up and are expected to disappear on reboot.
 
 ## Related documents
 
-- docs/001-architecture.md — data file format and tmp/ symlink
+- docs/007-architecture.md — data file format and tmp/ symlink
 - issues/101 — tmp/ symlink creation
 - issues/102 — lua driver (package path updated in step 5)
 - issues/104 — executor (data library available to boxes during execution)

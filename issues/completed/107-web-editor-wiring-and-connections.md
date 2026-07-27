@@ -61,7 +61,7 @@ Wire rendering:
 
 ## Related documents
 
-- docs/001-architecture.md — connection format (both-ends invariant)
+- docs/007-architecture.md — connection format (both-ends invariant)
 - issues/106 — canvas and port dot rendering
 - issues/108 — branch box port colors and predicate display on wires
 

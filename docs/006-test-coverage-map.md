@@ -174,7 +174,10 @@ JSON-Lines run-output writer also fold into the same suite via
 
 ## Related documents
 
-- `docs/001-architecture.md` — components and data flow.
+- [`docs/007-architecture.md`](007-architecture.md) — components
+  and data flow. (Cited here originally as
+  `docs/001-architecture.md`, a path that no longer exists; 007 is
+  the doc that replaced it.)
 - `docs/004-ipc-and-threading.md` — pool runner threading model.
 - `docs/005-language-specs.md` — language-spec contract.
 - `issues/phase-2-progress.md`, `issues/phase-3-progress.md` —

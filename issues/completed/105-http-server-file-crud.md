@@ -69,7 +69,7 @@ violations (delete of a referenced box), 500 for filesystem errors.
 
 ## Related documents
 
-- docs/001-architecture.md — endpoint list and error format
+- docs/007-architecture.md — endpoint list and error format
 - issues/101 — schema validator used in step 4
 - issues/106 — browser client that calls these endpoints
 

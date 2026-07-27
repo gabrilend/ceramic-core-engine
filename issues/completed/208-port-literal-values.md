@@ -101,6 +101,6 @@ harmless leftover data — the runner ignores them.
 
 - assets/js/004-inspector.js — mk_port_display, show
 - src/004-executor.lua — execute, inputs_satisfied
-- docs/001-architecture.md — store model, box.inputs schema
+- docs/007-architecture.md — store model, box.inputs schema
 - issues/210 — single output wire and comparator (replaces box.outputs)
 - issues/207 — file browser sets input names from function signature

@@ -78,7 +78,7 @@ fields on branch box ports are shown as a comparator dropdown + value input.
 
 ## Related documents
 
-- docs/001-architecture.md — box file format (ui.x, ui.y fields)
+- docs/007-architecture.md — box file format (ui.x, ui.y fields)
 - issues/105 — server endpoints used by api.js
 - issues/107 — wire drawing added on top of this canvas
 
