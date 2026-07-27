@@ -233,6 +233,11 @@ void map_destroy(map_t *m)
     if (sora_active_map == m)
         sora_active_map = NULL;
     map_statics_free(m);
+    if (m->station_names) {
+        for (int i = 0; i < m->n_stations; i++)
+            free(m->station_names[i]);
+        free(m->station_names);
+    }
 
     for (int i = 0; i < m->n_stations; i++) {
         station_t *s = &m->stations[i];

@@ -100,4 +100,22 @@ map_t *map_load_file(const char *path, int n_workers);
 int map_seed_count(map_t *m);
 /* }}} */
 
+/* {{{ map_load_last_timing — the load-time cost, staged */
+/*
+ * Where the loading time went, in seconds, for the most recent
+ * map_load_file. The number someone asks about when a map gets
+ * large; measured once here so nobody has to speculate later
+ * (issue 606's breakdown scene reads it).
+ */
+typedef struct map_load_timing {
+    double parse;
+    double first_pass;
+    double second_pass;
+    double validation;
+    double seed;
+} map_load_timing_t;
+
+extern map_load_timing_t map_load_last_timing;
+/* }}} */
+
 #endif

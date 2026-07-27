@@ -23,6 +23,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+/* Where the most recent load's time went (issue 606's breakdown). */
+map_load_timing_t map_load_last_timing;
+
+/* {{{ stamp() */
+static double stamp(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+/* }}} */
 
 /* {{{ die_load() */
 static void die_load(const char *path, int line, const char *station,
@@ -359,7 +372,9 @@ static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
 /* {{{ map_load_file() */
 map_t *map_load_file(const char *path, int n_workers)
 {
+    double t0 = stamp();
     map_description_t *d = mapfile_parse(path);
+    double t1 = stamp();
 
     map_t *m = map_create(d->n_stations);
     name_table_t names;
@@ -369,16 +384,32 @@ map_t *map_load_file(const char *path, int n_workers)
     names.count = 0;
 
     first_pass(m, d, &names);
+    double t2 = stamp();
     second_pass(m, d, &names);
+    double t3 = stamp();
     whole_map_validation(m, d, &names);
+    double t4 = stamp();
 
     /* The pool exists before the seed so the seed has somewhere to
      * push, but its workers stay parked until the caller releases —
      * the seeding window issue 102 built. */
     map_start(m, n_workers);
     seed_sweep(m, d, &names);
+    double t5 = stamp();
 
-    /* The names have served; the map speaks in indices from here. */
+    map_load_last_timing.parse = t1 - t0;
+    map_load_last_timing.first_pass = t2 - t1;
+    map_load_last_timing.second_pass = t3 - t2;
+    map_load_last_timing.validation = t4 - t3;
+    map_load_last_timing.seed = t5 - t4;
+
+    /* The loader's lookup table has served — but the names live on,
+     * on the map, for the dump and for anyone watching (issue 703). */
+    m->station_names = calloc((size_t)m->n_stations, sizeof *m->station_names);
+    if (m->station_names)
+        for (int i = 0; i < m->n_stations; i++)
+            m->station_names[i] = strdup(names.by_index[i]->name);
+
     free(names.by_index);
     mapfile_free(d);
     return m;

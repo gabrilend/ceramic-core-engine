@@ -177,6 +177,14 @@ typedef struct map {
     /* How many stations the seed sweep enqueued (issue 605). Zero
      * on hand-built maps that seed by delivering. */
     int seeded;
+
+    /* Station names, retained from the map file (null on hand-built
+     * maps). The engine itself never reads them — every wire is an
+     * index — but the dump (issue 703) must write a file that reads
+     * back, and a person watching a live view deserves names. The
+     * loader's throwaway lookup table and this are different things:
+     * that one resolved arrows and died; this one is for speaking. */
+    char **station_names;
 } map_t;
 /* }}} */
 

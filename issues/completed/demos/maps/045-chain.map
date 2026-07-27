@@ -1,0 +1,16 @@
+# Program one: a chain. Seven, doubled twice, written to disk.
+# The output path is patched in by the demo script before each run.
+statics
+  0 = "OUTPUT_PATH"
+
+head seven p
+  out 0 - once.0
+
+once double_it p
+  out 0 - twice.0
+
+twice double_it p
+  out 0 - sink.1
+
+sink write_int_file p
+  in 0 $0

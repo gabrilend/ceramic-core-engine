@@ -279,7 +279,48 @@ yet.
 
 ## Phase 6 — the map file
 
-(appended as built)
+**The format had no comment syntax, and the dump requires one.**
+Issue 703 wants derived facts written "as comments" in a dump that
+reads back as a map; docs 008 defines no comments. Added `#` to end
+of line, with the doc updated. A format designed alongside its dump
+would have caught this on day one — the lesson is to design a
+serialization and its round-trip together.
+
+**Names were discarded exactly when they became necessary.** The
+docs are proud that the name table dies when loading ends — and then
+issue 703 needs a dump that writes names, and any live view needs to
+speak them. The load now retains station names on the map (the
+resolving table still dies; keeping-for-speaking and
+keeping-for-resolving are different needs). Second pass: state name
+lifetime explicitly — resolved once, retained for diagnostics.
+
+**Issue 602's pass-split doesn't survive contact with gather lines.**
+"Apply the input lines" in the first pass cannot apply a gather line:
+its source is a *name*, and names may point forward — the very
+problem two passes exist for. Statics bind in pass one, gathers in
+pass two. The doc should split input lines by kind, not by section.
+
+**Seeding rules needed one word changed.** "No ring inputs and
+output feeds a ring buffer" excludes an input-less sink, which has no
+output at all yet plainly should run once. Landed as "no ring inputs
+and not gathered from". Also: an iterator fed by seeds alone
+receives exactly as many values as there are seeded sources — maps
+wanting an iterator to actually iterate need multiple value sources
+or a loop, which no doc mentions and the everything-map had to be
+designed around.
+
+**The whole-map validation runs O(stations²) walks.** Every station
+scans every other station's ports and slots to learn who pushes and
+pulls it. Fine at map scale (hundreds), quadratic all the same;
+phase 7's rewiring wants these checks per-edge anyway. Second pass:
+build the reverse index (who feeds whom) once and let validation,
+seeding, and rewiring all read it.
+
+**Where phase boundaries bit: the demo wanted rewiring one phase
+early.** The capstone's edit-between-runs scene is a restart; true
+live rewiring is 704. The scene works, but the natural demo
+("change the wire *while* it runs") had to wait — a sign 704 might
+belong in phase 6, or the capstone demo in phase 7.
 
 ## Phase 7 — seeing inside it
 

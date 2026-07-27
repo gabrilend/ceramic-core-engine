@@ -1,0 +1,38 @@
+# The everything-map: one program using every phase's machinery.
+#
+# Two input-less sources are seeded (phase 6). Their values pass a
+# comparator's judgment against a static threshold (phases 4 and 5),
+# the survivors gain a freshly gathered seven (phase 4), and an
+# iterator deals the results across two writers (phase 5) — all of
+# it running on the phase 1 pool through phase 2 stations, every box
+# derived by the phase 3 generator.
+statics
+  0 = 5
+  1 = "OUT_A"
+  2 = "OUT_B"
+
+first seven p
+  out 0 - judge.0
+
+second slow_seven p
+  out 0 - judge.0
+
+fresh seven p
+
+judge keep c
+  in 1 $0
+  out 2 - boost.0
+
+boost add p
+  in 1 fresh
+  out 0 - deal.0
+
+deal keep i
+  out 0 - writer_a.1
+  out 1 - writer_b.1
+
+writer_a write_int_file p
+  in 0 $1
+
+writer_b write_int_file p
+  in 0 $2

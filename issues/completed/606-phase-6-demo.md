@@ -2,9 +2,21 @@
 
 ## Current behavior
 
-Phase 5's demo shows a map that decides. Every map so far has been
-built in C, which means the shape of a program and the code of a
-program have been the same artifact.
+Built, shell-driven, one compile at the top and never again. The
+same binary runs three map files into three behaviours — a doubling
+chain leaving 28, a pushed-plus-gathered pair leaving 14, a gate
+routing seven high — then the chain loses a hop by one sed edit
+(28 becomes 14) and the gate's threshold turns from 5 to 100 (the
+seven lands low), the compiler untouched throughout. Six failure
+modes are triggered deliberately and shown verbatim, including the
+one that arrives as a warning before its fatal partner. The
+everything-map runs all six phases' machinery at once — two seeded
+sources, a comparator against a static, a gathered addend, an
+iterator dealing to two writers — drawn as built from the station
+table with names the loader now retains, the seed explained station
+by station with the vacuously-ready gatherer correctly skipped, and
+the load cost broken into parse, passes, validation, and seed.
+Mirrored to the shared-memory tier.
 
 ## Intended behavior
 

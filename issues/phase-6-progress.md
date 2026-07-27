@@ -11,7 +11,10 @@ never touches the C.
 | 603 — loader second pass | complete | Arrows resolved and type-checked by name; the message is the deliverable. |
 | 604 — load-time validation | complete | Whole-map rules collected and printed together; warnings loud, not fatal. |
 | 605 — seed sweep | complete | The one scan the engine ever makes; announced, counted, fatal when empty. |
-| 606 — phase 6 demo | not started | |
+| 606 — phase 6 demo | complete | One binary, three programs; edits followed; every refusal shown; everything at once. |
+
+Phase 6 is finished. A program is a directory of C functions and a
+text file, and changing the shape of the program does not touch the C.
 
 Notes for the phase: parser and loader are separate files (read
 versus build); the gather input line resolves in the second pass
