@@ -56,6 +56,8 @@ map_t *map_create(int n_stations)
     if (!m->stations) fail("out of memory for the station table");
     m->n_stations = n_stations;
 
+    pthread_mutex_init(&m->rewire_mutex, NULL);
+
     return m;
 }
 /* }}} */
@@ -226,10 +228,17 @@ int map_slot_depth(map_t *m, int station, int slot)
 /* }}} */
 
 /* {{{ map_destroy() */
+/* Phase 7 joints, implemented in the observe module; declared here
+ * narrowly so teardown can call them without the whole header. */
+void map_observe_stop(map_t *m);
+void map_report_shutdown(map_t *m);
+
 void map_destroy(map_t *m)
 {
+    map_observe_stop(m);
     if (m->pool)
         pool_destroy(m->pool);
+    map_report_shutdown(m);
     if (sora_active_map == m)
         sora_active_map = NULL;
     map_statics_free(m);
@@ -260,6 +269,7 @@ void map_destroy(map_t *m)
         }
         pthread_mutex_destroy(&s->mutex);
     }
+    pthread_mutex_destroy(&m->rewire_mutex);
     free(m->stations);
     free(m);
 }

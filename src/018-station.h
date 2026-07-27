@@ -21,6 +21,7 @@
 #define SORA_STATION_H
 
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 
 #include "011-pool.h"
@@ -134,6 +135,17 @@ typedef struct station {
      * type, resolved from the registry at placement so the delivery
      * path does a call rather than a lookup (issue 503). */
     station_compare_t compare;
+
+    /* Phase 7's counters (issue 702). The counts are atomics updated
+     * where the work already is, costing nearly nothing, and are
+     * always on. The times are only ever written when SORA_STATS is
+     * compiled in — the fields stay so the struct never changes
+     * shape, but every clock read compiles out. */
+    _Atomic long runs;           /* tasks of this station completed */
+    _Atomic long produced;       /* tasks its outputs made due elsewhere */
+    _Atomic long box_ns;         /* time inside the box function */
+    _Atomic long gather_ns;      /* gather time, charged to this puller */
+    _Atomic long mutex_wait_ns;  /* time deliverers waited on the mutex */
 } station_t;
 /* }}} */
 
@@ -185,6 +197,17 @@ typedef struct map {
      * loader's throwaway lookup table and this are different things:
      * that one resolved arrows and died; this one is for speaking. */
     char **station_names;
+
+    /* The rewiring lock (issue 704): edge validation and list
+     * mutation are one operation under it, never two. */
+    pthread_mutex_t rewire_mutex;
+
+    /* The observer (issue 701): a small reporting thread, not a
+     * worker, pushing nothing. */
+    pthread_t observer;
+    int       observer_running;
+    char     *observer_path;
+    int       observer_interval_ms;
 } map_t;
 /* }}} */
 
@@ -243,9 +266,10 @@ void map_destroy(map_t *m);
  * write, run the readiness check, claim if complete, release, then
  * build and push a task if one became due. This is both the interior
  * of the delivery walk and the way a test or a seed drops a value
- * into a map from outside.
+ * into a map from outside. Returns whether a task became due, which
+ * the statistics read as "the deliverer produced one".
  */
-void map_deliver_value(map_t *m, int station, int slot, const void *value);
+int map_deliver_value(map_t *m, int station, int slot, const void *value);
 /* }}} */
 
 /* {{{ map_deliver() — issue 205 */

@@ -25,6 +25,27 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * Timing exists only when SORA_STATS is compiled in (issue 702) —
+ * a clock read per box on short boxes is real overhead, and a
+ * measurement apparatus that cannot be removed is a tax. The macros
+ * vanish entirely without the define.
+ */
+#ifdef SORA_STATS
+#include <time.h>
+static long stats_now_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000000000L + ts.tv_nsec;
+}
+#define STATS_MARK(var) long var = stats_now_ns()
+#define STATS_CHARGE(counter, since) (counter) += stats_now_ns() - (since)
+#else
+#define STATS_MARK(var) do { } while (0)
+#define STATS_CHARGE(counter, since) do { } while (0)
+#endif
+
 /* {{{ die() */
 /* Dataflow errors are engine bugs or unbuilt phases; both stop the
  * program and say which station, because a wrong answer that keeps
@@ -272,12 +293,17 @@ task_t *task_build(map_t *m, int station_index,
              * table's own lock never nests inside a station's. */
             static_claim(m, sl, t->in[i]);
             break;
-        case SLOT_GATHER:
+        case SLOT_GATHER: {
             /* The upstream box runs inline, right now, on this
              * thread (issue 403) — after the station's mutex was
-             * released, so user code never runs under it. */
+             * released, so user code never runs under it. The time
+             * is charged to this station, the puller, because this
+             * is where it is actually paid (issue 702). */
+            STATS_MARK(gather_start);
             gather_claim(m, sl, t->in[i]);
+            STATS_CHARGE(s->gather_ns, gather_start);
             break;
+        }
         default:
             die("a slot of an unknown kind", station_index);
         }
@@ -294,7 +320,7 @@ task_t *task_build(map_t *m, int station_index,
 /* ------------------------------------------------------------------ */
 
 /* {{{ map_deliver_value() */
-void map_deliver_value(map_t *m, int station, int slot, const void *value)
+int map_deliver_value(map_t *m, int station, int slot, const void *value)
 {
     if (station < 0 || station >= m->n_stations)
         die("delivering to a station outside the table", station);
@@ -312,7 +338,9 @@ void map_deliver_value(map_t *m, int station, int slot, const void *value)
 
     int port = 0;
 
+    STATS_MARK(wait_start);
     pthread_mutex_lock(&s->mutex);
+    STATS_CHARGE(s->mutex_wait_ns, wait_start);
     slot_write_locked(&s->slots[slot], value);
     int due = station_ready_and_claim_locked(s, claimed);
     if (due && s->kind == STATION_ITERATOR && s->n_ports > 0) {
@@ -327,6 +355,7 @@ void map_deliver_value(map_t *m, int station, int slot, const void *value)
 
     if (due)
         pool_push(m->pool, task_build(m, station, claimed, port));
+    return due;
 }
 /* }}} */
 
@@ -380,25 +409,42 @@ static int (*const route_choose[STATION_KIND_COUNT])(station_t *, task_t *) = {
  * support at all), and everything else chooses one port and delivers
  * its output to every destination on it. A port wired nowhere
  * discards, which is what an unwired comparator outcome wants.
+ *
+ * The destination list is snapshotted under the station's own mutex
+ * before any delivering happens, because since phase 7 the list can
+ * change while the program runs (issue 704) — a walker holding a
+ * node another thread just freed is the alternative. The snapshot
+ * costs a short copy; delivering happens outside the lock.
  */
 void map_deliver(void *ctx, task_t *t)
 {
     map_t *m = ctx;
     station_t *s = &m->stations[t->station];
 
+    s->runs++;
+
     if (s->out_size == 0)
         return;
 
     int port_index = route_choose[s->kind](s, t);
+
+    pthread_mutex_lock(&s->mutex);
     port_t *port = station_port(s, port_index);
-    if (!port)
-        return;
+    int count = 0;
+    for (destination_t *d = port ? port->destinations : NULL; d; d = d->next)
+        count++;
+    destination_t snapshot[count > 0 ? count : 1];
+    int i = 0;
+    for (destination_t *d = port ? port->destinations : NULL; d; d = d->next)
+        snapshot[i++] = *d;
+    pthread_mutex_unlock(&s->mutex);
 
     /* A hundred destinations is a hundred lock-write-check cycles by
      * this one worker before it takes more work — acceptable, because
      * each delivery may unblock a station, so this worker is busy
      * manufacturing parallelism for everyone else. */
-    for (destination_t *d = port->destinations; d; d = d->next)
-        map_deliver_value(m, d->station, d->slot, t->out);
+    for (i = 0; i < count; i++)
+        s->produced += map_deliver_value(m, snapshot[i].station,
+                                         snapshot[i].slot, t->out);
 }
 /* }}} */

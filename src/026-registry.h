@@ -109,6 +109,13 @@ const struct_info_t *struct_find(const char *type_name);
 void registry_print(FILE *out);
 /* }}} */
 
+/* {{{ registry_box_name_for_shim() */
+/* The registry read backwards: which box owns this shim pointer.
+ * The dump (issue 703) needs it, because a station stores the
+ * pointer and the file format speaks the name. */
+const char *registry_box_name_for_shim(task_call_t shim);
+/* }}} */
+
 /* {{{ map_place_box() */
 /*
  * Place a box at a station by name, sizes drawn from the registry

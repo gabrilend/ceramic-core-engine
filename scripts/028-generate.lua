@@ -455,7 +455,9 @@ local function emit(description, sources, out_path)
     line(" * offset is a sizeof/offsetof expression the compiler computes. */")
     line("#include <stddef.h>")
     line("#include <string.h>")
+    line("#include <time.h>")
     line('#include "026-registry.h"')
+    line('#include "049-observe.h"')
     line("")
     line("/* The box sources, included whole: their types become visible, and")
     line(" * the compiler can inline each box into its shim. */")
@@ -522,10 +524,25 @@ local function emit(description, sources, out_path)
             line(("    memcpy(&a%d, t->in[%d], sizeof a%d);"):format(i - 1, i - 1, i - 1))
             args[#args + 1] = ("a%d"):format(i - 1)
         end
+        -- Timing exists only under SORA_STATS (issue 702): the clock
+        -- reads compile out entirely otherwise, so measurement is a
+        -- choice made at build time, never a standing tax.
+        line("#ifdef SORA_STATS")
+        line("    struct timespec sora_t0, sora_t1;")
+        line("    clock_gettime(CLOCK_MONOTONIC, &sora_t0);")
+        line("#endif")
         if b.ret == "void" then
             line(("    %s(%s);"):format(b.name, table.concat(args, ", ")))
         else
             line(("    %s r = %s(%s);"):format(b.ret, b.name, table.concat(args, ", ")))
+        end
+        line("#ifdef SORA_STATS")
+        line("    clock_gettime(CLOCK_MONOTONIC, &sora_t1);")
+        line("    sora_stats_box_time(t->station,")
+        line("        (sora_t1.tv_sec - sora_t0.tv_sec) * 1000000000L")
+        line("        + (sora_t1.tv_nsec - sora_t0.tv_nsec));")
+        line("#endif")
+        if b.ret ~= "void" then
             line("    memcpy(t->out, &r, sizeof r);")
         end
         line("}")

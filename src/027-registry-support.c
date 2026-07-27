@@ -37,6 +37,16 @@ const struct_info_t *struct_find(const char *type_name)
 }
 /* }}} */
 
+/* {{{ registry_box_name_for_shim() */
+const char *registry_box_name_for_shim(task_call_t shim)
+{
+    for (int i = 0; i < registry_n_boxes; i++)
+        if (registry_boxes[i].shim == shim)
+            return registry_boxes[i].name;
+    return "?unknown-box?";
+}
+/* }}} */
+
 /* {{{ registry_print() */
 void registry_print(FILE *out)
 {

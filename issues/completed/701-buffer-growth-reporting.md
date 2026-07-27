@@ -2,9 +2,20 @@
 
 ## Current behavior
 
-Every ring buffer carries a growth count (issue 203) and nothing ever
-reads it. A slot that has doubled twenty times looks exactly like one
-that has never grown.
+Built. The buffer report walks every slot naming station and slot
+with doublings, current capacity, and high-water occupancy — high
+water leading, since capacity is what was allocated and occupancy is
+how deep the trouble actually got. The task ring reports beside the
+slots, with the phase 2 lesson written into the output: slot piles
+mean uneven inputs, ring piles mean slow consumers, two different
+diagnoses. Periodic emission runs from a small non-worker thread
+that pushes nothing (termination stays sound), appending to a file
+in the shared-memory tier; a non-positive interval is refused rather
+than defaulted, since unwanted diagnostics are a background thread
+doing nothing useful. At teardown any slot grown past the shout
+threshold is named on stderr, loud, per the standing rule that a
+warning is an error nobody has decided about. Proven by a starved
+pairing slot the report names exactly.
 
 ## Intended behavior
 
