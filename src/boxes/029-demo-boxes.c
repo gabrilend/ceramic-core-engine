@@ -138,6 +138,24 @@ int keep(int x)
 }
 /* }}} */
 
+/* {{{ slow_double() */
+/* Doubling, expensively: a deliberate bottleneck with an input, so
+ * the phase 7 demo has something to find with the statistics and
+ * relieve by rewiring. Burns rather than sleeps, as always. */
+int slow_double(int x)
+{
+    unsigned long v = 88172645463325252UL;
+    for (int i = 0; i < 60000; i++) {
+        v ^= v << 13;
+        v ^= v >> 7;
+        v ^= v << 17;
+    }
+    if (v == 0)
+        abort();
+    return x * 2;
+}
+/* }}} */
+
 /* {{{ slow_seven() */
 /*
  * Seven, expensively: a gatherable box whose cost is measurable, so

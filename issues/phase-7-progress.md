@@ -11,7 +11,11 @@ confidence.
 | 703 — map dump | complete | The live table as a map file; round trip byte-identical. |
 | 704 — runtime rewiring | complete | Check and change under one lock; refusals return, they do not kill. |
 | 705 — HTML documentation | in progress | Generator and 78-page site stand; two widgets and deep links remain. |
-| 706 — phase 7 demo | not started | |
+| 706 — phase 7 demo | complete | Live view, bottleneck relieved mid-run, dump truth, measured measurement. |
+
+Phase 7 stands with one issue honestly open (the HTML set's last two
+widgets). The engine is legible: nothing hidden, most things
+alterable, every claim measured.
 
 Notes for the phase: reporting, dumping, and rewiring landed as
 three modules behind one header. Rewiring required delivery to

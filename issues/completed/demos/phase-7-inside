@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# phase-7-inside — the final demonstration: watching it think.
+#
+# What this is: the engine made legible while it runs. A live map
+# under load, a bottleneck found with the engine's own reports and
+# relieved by moving a wire mid-run, the dump proving the picture
+# and the machine agree, and a refused rewire that kills nothing.
+# Then the measurement apparatus itself is measured: the same
+# workload compiled with statistics in and out.
+#
+# How it does it, in general terms: builds the demo binary twice —
+# once plain, once with -DSORA_STATS — runs the staged scenes from
+# the instrumented build, then runs the bare throughput mode from
+# both so the cost of measuring is a number, not a rumour.
+
+set -euo pipefail
+
+DIR="/mnt/mtwo/programming/ai-playground/minimal-soramech"
+if [[ $# -ge 1 && -d "$1" ]]; then
+    DIR="$1"
+fi
+
+BUILD="/tmp/$(basename "${DIR}")/build"
+SHARED="/dev/shm/$(basename "${DIR}")"
+mkdir -p "${BUILD}" "${SHARED}"
+
+mkdir -p "${DIR}/src/generated"
+luajit "${DIR}/scripts/028-generate.lua" \
+    "${DIR}/src/generated/registry.c" ${DIR}/src/boxes/*.c
+
+SOURCES="${DIR}/issues/completed/demos/055-phase-7-inside-demo.c
+${DIR}/libs/012-pool.c ${DIR}/src/019-station.c ${DIR}/src/020-delivery.c
+${DIR}/src/027-registry-support.c ${DIR}/src/033-statics.c
+${DIR}/src/034-gather.c ${DIR}/src/041-mapfile.c ${DIR}/src/042-loader.c
+${DIR}/src/050-observe.c ${DIR}/src/051-dump.c ${DIR}/src/052-rewire.c
+${DIR}/src/generated/registry.c"
+
+gcc -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread -DSORA_STATS \
+    -I"${DIR}/libs" -I"${DIR}/src" \
+    -o "${BUILD}/phase-7-inside-stats" ${SOURCES}
+
+gcc -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread \
+    -I"${DIR}/libs" -I"${DIR}/src" \
+    -o "${BUILD}/phase-7-inside-plain" ${SOURCES}
+
+"${BUILD}/phase-7-inside-stats" "${DIR}"
+
+echo
+echo "scene 6 — the instrumentation's own cost, measured"
+"${BUILD}/phase-7-inside-plain" "${DIR}" --overhead
+"${BUILD}/phase-7-inside-stats" "${DIR}" --overhead
+echo "a measurement apparatus whose cost is unmeasured is a rumour"
+echo
+echo "report mirrored at ${DIR}/tmp/shared-memory/phase-7-inside-report.txt"

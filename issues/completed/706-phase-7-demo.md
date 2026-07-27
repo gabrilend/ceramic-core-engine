@@ -2,9 +2,21 @@
 
 ## Current behavior
 
-Phase 6's demo shows one binary running three different programs from
-three text files. What happens inside a running map is still only
-visible in numbers printed after the fact.
+Built. The live view draws runs and buffer depths from the station
+table while values flood in. The bottleneck scene finds the hot
+station using only the engine's contention report — box time
+attributed to the cruncher, the spare provably idle — and relieves
+it by moving an iterator port mid-run, load visibly split with
+nothing restarted; it also caught a finding the report keeps: a slow
+box alone is not a bottleneck here, because the pool already runs
+one station's invocations on every core, so the reports exist to
+show who pays rather than to promise speedups. The dump then
+disagrees with the file on disk and is right; the round trip closes
+byte-identically; a refused gather cycle names both stations and the
+next delivery still flows. The driving script builds the demo twice
+and measures the measurement: the same workload with statistics
+compiled out and in, the difference a number rather than a rumour.
+Mirrored to the shared-memory tier.
 
 ## Intended behavior
 

@@ -324,7 +324,55 @@ belong in phase 6, or the capstone demo in phase 7.
 
 ## Phase 7 — seeing inside it
 
-(appended as built)
+**Rewiring needed a delivery-path retrofit the "quietly preparing"
+list missed.** Issue 704 celebrates the design decisions that made
+rewiring cheap (indices, immovable stations, connection-time cycle
+checks) — but delivery walked live destination lists with no lock,
+and a removed wire would have left a walker holding a freed node.
+Delivery now snapshots the chosen port's destinations under the
+station's mutex before delivering. Second pass: design the snapshot
+in from phase 2, or state that destination lists are immutable until
+phase 7 makes them otherwise.
+
+**A slow box is not a bottleneck; the demo had to learn it live.**
+The bottleneck scene split a slow station's load across two stations
+and throughput barely moved — because the pool was already running
+the "bottlenecked" station's invocations on every core. In this
+engine, per-station concurrency means hot *boxes* parallelize away;
+what actually bottlenecks is contention (one mutex everyone must
+pass) and serial chains. Docs 002/702 talk about "the station too
+many things point at" — right instinct, but the second pass should
+say plainly: run counts and box time locate cost, mutex wait locates
+bottlenecks, and a slow box alone is neither.
+
+**"Fatal on nothing-to-seed" and "outside delivery is legitimate"
+contradict.** Validation warns that an unfed buffered station may be
+fed from outside — and then the seed sweep aborts any map with no
+seedable stations, which is exactly what a fully outside-driven map
+looks like. The rewiring test hit it immediately. Second pass:
+either an explicit map-level marker ("this map is driven from
+outside"), or downgrade empty-seed to the same loud warning.
+
+**Refusal-versus-death is now split across two regimes, on purpose.**
+Load-time errors abort; runtime rewiring refusals return -1 with a
+message. Deliberate (a control surface must not kill the plant), but
+the -1 is ignorable, and an ignored refusal is a silent divergence
+between intended and actual shape. Second pass: consider a refusal
+log the dump includes, so ignored refusals leave a trace.
+
+**Statistics attribution wants a design pass.** Box time is recorded
+by the shims into the active map via a process global; gather time is
+charged to the puller at the call site; produced-counts ride the
+walk. It works and measures true, but three mechanisms feed one
+table, and the active-map global quietly forbids two maps in one
+process — the same restriction the statics back-channel already
+imposed. One engine-context pointer through the task would fix both.
+
+**The dump cannot re-serialize mutated statics.** Bytes cannot be
+turned back into text without the per-entry type the table refuses
+to store — the text-versus-bytes decision again, now costing dump
+fidelity. The dump says so in a comment, which is honest but is
+still a hole in "the only accurate description of the program".
 
 ## Cross-cutting lessons
 

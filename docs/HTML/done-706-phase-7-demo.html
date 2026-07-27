@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>306 — Build integration</title>
+<title>706 — Phase 7 demo: watching it think</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -49,7 +49,7 @@
 <a href="done-303-registry-emission.html">303 — The registry</a>
 <a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
-<a href="done-306-build-integration.html" class="here">306 — Build integration</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
 <a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
@@ -72,7 +72,7 @@
 <a href="done-702-station-statistics.html">702 — Per-station statistics</a>
 <a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
 <a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
-<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="done-706-phase-7-demo.html" class="here">706 — Phase 7 demo: watching it think</a>
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
@@ -91,54 +91,65 @@
 <a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
 </nav>
 <main>
-<h1>306 — Build integration</h1>
+<h1>706 — Phase 7 demo: watching it think</h1>
 <h2>Current behavior</h2>
-<p>Built. Adding a box is writing a function: box sources are whatever
-sits under <code>src/boxes/</code>, discovered by wildcard, so a box cannot
-exist that the generator silently does not see. The make rule
-regenerates whenever any box source or the generator itself is newer
-than the emission; the emission lands in <code>src/generated/</code>, which is
-ignored by history because a derived file in the repository is a file
-that can be stale. A failing generator writes to a temporary name and
-never moves it into place, so the build can never compile against
-yesterday's registry — the no-partial-output guarantee is proven by a
-shell test alongside the regeneration-follows-an-edit test. The
-<code>describe</code> target prints what the parser saw.</p>
+<p>Built. The live view draws runs and buffer depths from the station
+table while values flood in. The bottleneck scene finds the hot
+station using only the engine's contention report — box time
+attributed to the cruncher, the spare provably idle — and relieves
+it by moving an iterator port mid-run, load visibly split with
+nothing restarted; it also caught a finding the report keeps: a slow
+box alone is not a bottleneck here, because the pool already runs
+one station's invocations on every core, so the reports exist to
+show who pays rather than to promise speedups. The dump then
+disagrees with the file on disk and is right; the round trip closes
+byte-identically; a refused gather cycle names both stations and the
+next delivery still flows. The driving script builds the demo twice
+and measures the measurement: the same workload with statistics
+compiled out and in, the difference a number rather than a rumour.
+Mirrored to the shared-memory tier.</p>
 <h2>Intended behavior</h2>
-<p><strong>Adding a box is writing a function.</strong> Nothing else. No registration,
-no list to update, no build file to edit.</p>
-<p>The generator runs before compilation, reads the box sources, and emits
-into a build directory that is not tracked in history — the emissions
-are derived, and a derived file in the repository is a file that can be
-stale.</p>
-<p><strong>Regeneration is triggered by the box sources changing</strong>, so a build
-after an edit cannot compile against a registry describing the previous
-version of the code. Getting this wrong produces the worst class of
-bug in the whole project: a shim that casts to a type the function no
-longer returns, which the compiler accepts because the shim was
-generated from something that was true once.</p>
-<p><strong>The generator failing stops the build.</strong> Its errors name the file and
-line. It never emits a partial result — a registry with a hole in it
-surfaces much later as a box that cannot be found by name, pointing the
-reader at the map rather than at the real cause.</p>
+<p>The demo about legibility. Every earlier phase demo reported what
+happened; this one shows it happening, and then changes it without
+stopping.</p>
+<p>It should make one thing obvious: <strong>the engine has no hidden state.</strong>
+Everything it is doing can be seen, and most of it can be altered.</p>
+<p><strong>What it should show, in order of how convincing it is:</strong></p>
+<p><strong>A live map.</strong> The loaded graph drawn from the station table — not the
+file — with buffer depths, per-station run counts, and which stations
+are executing right now, redrawn continuously. Feed it enough work to
+saturate the machine and watch where the values pool up.</p>
+<p><strong>Rewiring under load.</strong> With values flowing, change a wire. The
+picture changes, the behaviour changes, nothing is lost, nothing
+restarts. Then dump the map and show the dump reflects the new shape
+rather than the file on disk.</p>
+<p><strong>A bottleneck found rather than guessed.</strong> Build a map with a
+deliberate contention problem, then find it using only the reports:
+mutex wait time pointing at the station, buffer growth pointing at the
+slot behind it. Fix it by rewiring live and show both numbers fall.</p>
+<p><strong>The round trip.</strong> Load a map, dump it, load the dump, dump again,
+show the two dumps identical. Quiet, and it is the proof that the
+picture and the engine agree.</p>
+<p><strong>A refused rewire.</strong> Attempt an edit that would create a gather cycle
+and show it refused with both stations named — the same check from
+issue 404, now protecting a running program instead of a loading one.</p>
+<p><strong>The instrumentation's own cost.</strong> The same map run with statistics
+compiled in and compiled out. Report both throughputs. A measurement
+apparatus whose cost is unmeasured is a rumour.</p>
+<p><strong>Everything, together, one last time.</strong> Every phase's machinery in one
+running map, with the occupancy figure reported alongside the six
+earlier demos' numbers, so the whole sequence can be read as one line.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. A makefile rule that runs the generator whenever any box source is
-   newer than the emitted files, and a clean target that removes them.
-2. Make the box source set discoverable rather than listed, so a new
-   file is picked up without an edit. Whatever the rule is, it must be
-   impossible to write a box the generator silently does not see.
-3. Ensure a failing generator fails the build rather than leaving
-   yesterday's output in place.
-4. Add the emitted directory to <code>.gitignore</code>.
-5. A test that touches a box source, rebuilds, and asserts the registry
-   reflects the change — the one guarding against a stale registry,
-   which is the failure mode this issue exists to prevent.
-6. A test that adding a new box source file makes it available with no
-   other edit.</p>
+<p>1. Drive the live view from the station table, continuously redrawn.
+2. Make the rewiring interactive if the terminal allows it; scripted
+   with visible pauses if not.
+3. Report every number by measuring it.
+4. Write results to <code>tmp/shared-memory/</code> alongside the screen.
+5. Confirm the root launcher finds it.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-007-datapath-build.html">007 — The build path</a></li>
-<li>Issues 301 through 305 — what this runs</li>
+<li>Issues 701 through 705 — everything being demonstrated</li>
+<li>Issue 606 — the phase 6 demo this builds on</li>
 </ul>
 
 </main>

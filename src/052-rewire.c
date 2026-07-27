@@ -230,9 +230,19 @@ int map_rewire_gather(map_t *m, int station, int slot, int source_station)
         }
     }
     if (walk_reaches_gather(m, source_station, station)) {
+        char message[192];
+        const char *a = m->station_names ? m->station_names[station] : NULL;
+        const char *b = m->station_names ? m->station_names[source_station] : NULL;
+        if (a && b)
+            snprintf(message, sizeof message,
+                     "'%s' pulling from '%s' would close a gather cycle — a "
+                     "call that never returns", a, b);
+        else
+            snprintf(message, sizeof message,
+                     "station %d pulling from station %d would close a gather "
+                     "cycle — a call that never returns", station, source_station);
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("the edge would close a gather cycle — a call that "
-                      "never returns");
+        return refuse(message);
     }
 
     /* The conversion, under the station's own mutex so no readiness
