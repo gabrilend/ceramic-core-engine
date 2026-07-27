@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# phase-1-pool — build and run the phase 1 demonstration.
+#
+# What this is: the front door to seeing the thread pool work. It
+# compiles the demo program against the pool library and runs it; the
+# program does all the measuring and talking.
+#
+# How it does it, in general terms: everything compiled lands in the
+# RAM-backed build tier, the report lands in the shared-memory tier,
+# and the project root is hard-coded but overridable by argument —
+# the launcher passes it explicitly.
+#
+# This file keeps the launcher's phase-* naming rather than a numbered
+# index, because the launcher discovers demos by that pattern. The
+# demo's C source carries the index instead.
+
+set -euo pipefail
+
+DIR="/mnt/mtwo/programming/ai-playground/minimal-soramech"
+if [[ $# -ge 1 && -d "$1" ]]; then
+    DIR="$1"
+fi
+
+BUILD="/tmp/$(basename "${DIR}")/build"
+SHARED="/dev/shm/$(basename "${DIR}")"
+mkdir -p "${BUILD}"
+mkdir -p "${SHARED}"
+
+SOURCE="${DIR}/issues/completed/demos/017-phase-1-pool-demo.c"
+POOL="${DIR}/libs/012-pool.c"
+BINARY="${BUILD}/phase-1-pool-demo"
+
+gcc -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread \
+    -I"${DIR}/libs" \
+    -o "${BINARY}" "${SOURCE}" "${POOL}"
+
+"${BINARY}" "${DIR}"
+
+echo
+echo "report mirrored at ${DIR}/tmp/shared-memory/phase-1-pool-report.txt"

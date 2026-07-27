@@ -11,7 +11,11 @@ above it in the project stands on this.
 | 102 — workers and run loop | complete | Fixed threads behind a starting gate; run-deliver-free loop; per-worker identity. |
 | 103 — sleeping and waking | complete | Condition-variable sleep, wake-all on push, exact sleeper count under the one mutex. |
 | 104 — termination by last sleeper | complete | Last sleeper's final look decides; broadcast shutdown; outside submitters registered. |
-| 105 — phase 1 demo | not started | |
+| 105 — phase 1 demo | complete | Four measured scenes: growth, termination tail, idle cost, throughput ceiling. |
+
+Phase 1 is finished. The pool moves opaque work across every core,
+sleeps for free, and knows when it is done. Nothing in it mentions a
+station, which is what phase 2 is for.
 
 Notes for the phase: the machinery for 101–104 proved to be one
 function with four aspects rather than four functions, and landed as a

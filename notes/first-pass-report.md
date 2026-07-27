@@ -78,6 +78,15 @@ pass should promote this from a footnote to a designed part of the
 pool's interface, because rewiring (704) and any live control surface
 will stand on it.
 
+**Two naming conventions collide at the demos.** The launcher
+discovers demos by the pattern `phase-*` with the executable bit set;
+the project convention wants every source file carrying a numeric
+index. A demo's shell script cannot satisfy both. First-pass
+resolution: the script keeps the launcher's name, the C source behind
+it carries the index. The second pass should either teach the launcher
+to read indexed names or exempt launcher-discovered entry points from
+indexing, in writing.
+
 **The pool needed a join/destroy ownership rule the design never
 states.** Who collects the worker threads — the join call, the destroy
 call, or both? First build had destroy join again after the caller

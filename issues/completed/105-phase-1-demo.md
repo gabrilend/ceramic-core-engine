@@ -2,8 +2,19 @@
 
 ## Current behavior
 
-The pool works and is covered by unit tests, but there is nothing that
-shows it working to someone who is not reading test output.
+Built and discoverable from the root launcher. Four scenes, every
+number measured on the run: a fan-out burst that doubles the queue six
+times from its starting eight cells without ever overflowing; four
+wildly uneven chains whose termination decision costs a twentieth of a
+millisecond after the last task ends; a trickle across a second of
+near-total idleness costing three milliseconds of processor time —
+three orders under what spinning would burn; and the same two hundred
+thousand tasks run at every power-of-two worker count, where the
+single queue mutex's ceiling becomes visible as the line flattens.
+Results mirror to the shared-memory tier for comparison across runs.
+The demo's C source carries the file index; the launcher script keeps
+the phase-* name the launcher discovers by, a naming collision the
+first-pass report records.
 
 ## Intended behavior
 
