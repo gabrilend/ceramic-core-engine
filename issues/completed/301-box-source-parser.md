@@ -2,8 +2,22 @@
 
 ## Current behavior
 
-Every shim is hand-written, every element size is typed in by hand, and
-nothing checks either against the C it claims to describe.
+Built, as a LuaJIT script in `scripts/` (Lua being the house language
+for build tooling). Box sources are designated by location — anything
+under `src/boxes/` — so a box cannot exist that the generator does not
+see. The parser blanks comments, string contents, and preprocessor
+lines while preserving newlines, then stops at every top-level brace
+and classifies what led to it: a typedef struct (one field per
+declaration, nested bodies refused by name), a function (non-static
+becomes a box, static is a private helper, a `__compare` suffix is an
+ordering and never a box), or an error naming file and line. Parse
+and emit stayed separate: a describe mode prints the parser's
+findings without emitting, and the make target `describe` exposes it.
+Ground rules the issue left open are now written down in the script's
+header: value types must be typedef structs, string returns are
+refused (borrowed memory has no owner), parameters must be named.
+Proven by shell tests covering braces inside strings, multi-line
+declarations, helper exclusion, and errors that name their line.
 
 ## Intended behavior
 

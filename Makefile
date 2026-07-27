@@ -21,10 +21,31 @@ CC     ?= gcc
 CFLAGS := -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread
 CFLAGS += -I$(DIR)/libs -I$(DIR)/src
 
+# The generator (phase 3): box sources are whatever sits in
+# src/boxes/ — discovered, never listed, so a box cannot exist that
+# the generator silently does not see. The registry is derived from
+# them at build time, lands outside history, and is rebuilt whenever
+# any box source or the generator itself is newer. A failing
+# generator writes nothing into place, so a build can never compile
+# against yesterday's registry.
+BOX_SRC   := $(wildcard $(DIR)/src/boxes/*.c)
+GENERATOR := $(DIR)/scripts/028-generate.lua
+GENERATED := $(DIR)/src/generated/registry.c
+
+$(GENERATED): $(BOX_SRC) $(GENERATOR)
+	mkdir -p $(DIR)/src/generated
+	luajit $(GENERATOR) $(GENERATED) $(BOX_SRC)
+
 # Everything the engine is made of: the pool from libs/, the station
-# layer and what follows from src/. Discovered by wildcard so a new
-# engine file enrolls itself.
-ENGINE_SRC := $(wildcard $(DIR)/libs/*.c) $(wildcard $(DIR)/src/*.c)
+# layer and what follows from src/, and the generated registry.
+# Discovered by wildcard so a new engine file enrolls itself.
+ENGINE_SRC := $(wildcard $(DIR)/libs/*.c) $(wildcard $(DIR)/src/*.c) $(GENERATED)
+
+# What the parser saw, for diagnosing a build problem by looking at
+# the description rather than the emission.
+.PHONY: describe
+describe:
+	luajit $(GENERATOR) --describe $(BOX_SRC)
 
 TEST_SRC  := $(wildcard $(DIR)/tests/*.c)
 TEST_BINS := $(patsubst $(DIR)/tests/%.c,$(BUILD)/%,$(TEST_SRC))
@@ -42,6 +63,10 @@ $(BUILD):
 $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC)
 
+# Shell-driven tests sit beside the compiled ones — the generator's
+# command-line conduct is proven from the shell.
+TEST_SCRIPTS := $(wildcard $(DIR)/tests/*.sh)
+
 # Each test is run in order; the first failure stops the run, because
 # later tests build on machinery the earlier ones just proved broken.
 test: $(TEST_BINS)
@@ -49,7 +74,12 @@ test: $(TEST_BINS)
 		echo "== $$(basename $$t)"; \
 		$$t || exit 1; \
 	done
+	@for s in $(TEST_SCRIPTS); do \
+		echo "== $$(basename $$s)"; \
+		bash $$s $(DIR) || exit 1; \
+	done
 	@echo "all tests passed"
 
 clean:
 	rm -rf $(BUILD)
+	rm -rf $(DIR)/src/generated
