@@ -19,8 +19,13 @@ minimal-soramech/
 │   ├── 007-datapath-build.md       C source to shims and registry
 │   ├── 008-map-file-format.md      what a map file says
 │   ├── 009-datapath-load.md        map file to running program
-│   └── 010-roadmap.md              the phases
+│   ├── 010-roadmap.md              the phases
+│   └── HTML/                       the generated site: every document,
+│                                   issue, and interface, cross-linked
+│                                   (make html; start at index.html)
 ├── notes/                          thinking that predates the docs
+│   └── first-pass-report.md        lessons, contradictions, and gaps
+│                                   from building it all once
 ├── src/                            the engine
 ├── libs/                           the pool, and anything reusable
 ├── issues/                         one file per unit of work

@@ -376,4 +376,83 @@ still a hole in "the only accurate description of the program".
 
 ## Cross-cutting lessons
 
-(appended at the end of the pass)
+**The recurring thread: the engine has no "context", and three
+features hit the wall.** A box receives values and nothing else. So
+the statics write needed an ambient active-map global (phase 4), the
+statistics needed the same global (phase 7), and both quietly impose
+one-live-map-per-process — a restriction no document states. The
+single highest-leverage second-pass change is an engine-context
+pointer riding the task (the task already carries the station index;
+it could carry the map), which dissolves the global, permits several
+maps in one process, and gives phase 7's control surface a front
+door.
+
+**The second thread: the outside world is undesigned.** Termination
+assumes nothing pushes from outside; every trickle test, every demo
+visual, and any control surface pushes from outside. The
+submitter-registration API was invented in phase 1 and leaned on by
+every later phase; the nothing-to-seed rule then refused fully
+outside-driven maps outright in phase 7. Feeding, observing, and
+steering a running map from outside is a real design surface the
+docs treat as a footnote. Design it once: registration, an
+outside-driven map marker, the refusal log.
+
+**The third thread: the statics table never decided what it is.**
+Text-at-claim versus bytes-at-bind surfaced in phase 4 (mutation),
+phase 6 (loading), and phase 7 (the dump cannot re-serialize mutated
+entries). One decision, three phases of interest. Decide it first in
+the second pass; everything else in the table follows.
+
+**Docs that specify mechanism where they should specify invariants
+aged worst.** The termination re-scan defends a lock discipline the
+implementation doesn't have; "claim one value from each" under the
+mutex almost prescribed running user code under a station lock; the
+first-pass split of loader input lines didn't survive gather's
+forward references. The docs that specified *invariants* — a station
+runs when and only when its slots are full; nothing polls; values in
+flight are copies — survived contact with every phase untouched.
+
+**What worked, and should be kept exactly as it is.** Fail-don't-
+guess turned every ambiguity into a one-line rule instead of a
+guess, and made the refusal messages testable word for word — the
+error gallery is arguably the product's best surface. The registry
+as single source of truth held perfectly: not one type bug crossed a
+wire all pass. Dispatch tables over conditionals kept every "add a
+kind" change to a row. And the demos-as-measurement-instruments rule
+caught four genuine design insights that tests alone missed: the two
+kinds of backlog, gather cost paid at assembly, the slow-box-is-not-
+a-bottleneck property, and the endianness subtlety in the byte-lie
+scene. Demos that only display would have caught none of them.
+
+**Convention frictions, small but real.** The launcher's `phase-*`
+discovery pattern and the file-index naming rule collide at every
+demo script; `.info.md` per source file doubles up on header/impl
+pairs (interface + internals worked better); and building staged
+intermediate code states (busy-return before sleeping) would have
+been theater — staging tests, not code, is the honest unit.
+
+For live numbers — test counts, line counts, commit history — run
+`make test` and read `git log --oneline`; this report deliberately
+stores none, so it cannot go stale.
+
+## Second-pass priorities, most valuable first
+
+1. Decide the statics model (text vs bytes) — unblocks mutation,
+   loading, and dump fidelity at once.
+2. Thread an engine-context pointer through the task — kills the
+   active-map global, allows multiple maps, opens the control door.
+3. Design the outside-world surface: submitter registration as a
+   first-class concept, outside-driven maps, a refusal log the dump
+   includes.
+4. Build the reverse index (who feeds whom, who pulls whom) once —
+   validation, seeding, and rewiring all currently re-derive it
+   quadratically.
+5. Emit type classification from the generator instead of keeping a
+   twin classifier in the engine.
+6. Decide task value-area alignment (memcpy loads versus aligned
+   casts) and make the docs' example code match.
+7. Rewrite mechanism-docs as invariant-docs where the pass found
+   them over-specified; add the push-loop termination note.
+8. Finish the documentation set's last two widgets and deep links.
+9. Restructure issues so one mechanism is one issue with staged
+   tests, and design formats beside their round-trips.
