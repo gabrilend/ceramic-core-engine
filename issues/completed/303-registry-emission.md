@@ -2,9 +2,18 @@
 
 ## Current behavior
 
-Shims are generated and callable, but nothing connects a box's *name*
-to its shim. A map file cannot exist yet because there is no way to
-turn the text `"add"` into something runnable.
+Built. The generated file defines a table of every box — name, shim
+pointer, each parameter's type name and size, return type and size,
+exact task size, and the compare function for its return type where
+one exists — with every size a sizeof expression the compiler
+computes. Type names ride along as text precisely for error
+messages, since four bytes versus four bytes is not a message. The
+hand-written support file provides lookup by name, a printout of the
+whole table, and placement-by-name, which is the moment phase 2's
+hand-supplied element sizes became registry lookups: a station placed
+by the text "add" runs the generated shim with sizes correct by
+construction, proven by a live map in the generator test. The
+misspelled-name message names the name and where box sources live.
 
 ## Intended behavior
 
