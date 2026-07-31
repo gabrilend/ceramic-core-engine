@@ -36,3 +36,4 @@ Per-issue files live under `issues/` (open) and `issues/completed/` (done). The 
 - [issues/phase-2-progress.md](../issues/phase-2-progress.md) — phase 2 (editor + graph model)
 - [issues/phase-3-progress.md](../issues/phase-3-progress.md) — phase 3 (C pool runner)
 - [issues/phase-4-progress.md](../issues/phase-4-progress.md) — phase 4 (runtime graph mutation): in design
+- [issues/phase-5-progress.md](../issues/phase-5-progress.md) — phase 5 (the hardware target: C boxes compiled to HDL, maps placed onto FPGAs): in design
