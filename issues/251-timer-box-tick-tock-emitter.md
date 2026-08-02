@@ -3,7 +3,11 @@
 ## Status
 open · design draft; the load-bearing open question is how to
 schedule the inter-tick wait without spinning, without locking
-a worker in a sleep, and without a dedicated timer thread
+a worker in a sleep, and without a dedicated timer thread.
+Now also the parent of a timing family — sub-issues 251a, 251b,
+and 251c — added 2026-08-02. The deadline queue this issue
+builds is what 251b and 251c both sit on, so this issue's Q1
+gates them.
 
 ## Current behavior
 
@@ -31,6 +35,31 @@ worker in a sleep, and must not add a dedicated timer thread — the
 recommended shape gives the pool's existing idle wait a deadline
 (a timed condition wait) fed by a small priority queue of pending
 timer respawns.
+
+## Sub-issues
+
+This box is the *event source* — the thing that makes a map
+turn on the wall clock. Three sub-issues build the rest of the
+timing family on top of it, and the division between them is
+worth stating because it is easy to conflate:
+
+- **251a — counter box: fixed timestep, count, and elapsed.**
+  A *value* source rather than an event source. Holds an origin
+  and a step and answers "what time is it" as a closed form,
+  pulled on demand like a read box. Never queued, never a task,
+  costs no scheduling. Does not depend on this issue at all.
+- **251b — alarms and expectations.** A deadline that fires,
+  and a deadline racing an event: value arrives in time →
+  `met`, deadline passes first → `missed`. Sits on this
+  issue's deadline queue.
+- **251c — schedule functions and number waves.** A schedule
+  becomes a function from index to time rather than a single
+  period, so the deadline queue holds a formula and an index
+  instead of a list. Also sits on this issue's queue.
+
+The distinction that organises the family: this box *fires*, a
+counter *answers*, an expectation *waits*, and a schedule
+*decides when*. Each is a different question and they compose.
 
 ## Concept
 
