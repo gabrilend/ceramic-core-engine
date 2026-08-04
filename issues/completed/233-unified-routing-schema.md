@@ -11,6 +11,30 @@ rejected outright. Follow-on issues 240–243 carry the
 randomizer / weighted / distributor / multi-band-comparator
 designs forward as separate units of work.
 
+**Two readers of the format were missed** (found 2026-07-25, two
+months later). The list above is the conversion's own record of
+scope, and the omissions are visible in it by absence:
+
+- The standalone map validator, `src/002-validate-map.lua`. Never
+  converted; it is now the only file in the project still matching
+  wires on `from_output` and still branching on a `kind` of
+  `"branch"`. It is not invoked by the build, so nothing went red.
+  Reopened as issue 103, which owns the fix.
+- The four maps under `maps/` — user content, gitignored, therefore
+  outside any test sweep. Tracked by issue 113 (restore the
+  phase-1 demo maps), which was numbered 111 until 2026-08-03.
+
+Both omissions share one cause: the conversion reached every reader
+that would visibly break, and stopped there. The six converted
+places were all load-bearing; the two missed places were not
+exercised by anything. Nothing was wrong with the redesign — what
+was missing was an inventory of *readers of the format*, taken
+before the change rather than discovered after it. A future surface
+change should start by listing every file that spells a field name,
+and treat that list as the checklist. `grep -rl from_branch src
+assets libs langs` is that inventory, and it is a one-line
+command.
+
 ## Concept
 
 A "branching box" is a regular call box whose output, after the
