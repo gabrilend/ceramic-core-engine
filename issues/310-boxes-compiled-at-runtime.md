@@ -1,0 +1,124 @@
+# 310 — Boxes compiled while the program runs
+
+## Current behavior
+
+Every box a program can ever place is decided before it starts.
+
+The generator reads whatever sits under the box source directory,
+parses the function declarations, and emits one file: a shim per box,
+a record per box holding its name and its parameter and return types
+and sizes, a field table per struct, and a comparison per orderable
+type. That file is compiled in. The registry is a fixed array, and
+looking a box up by name is a walk over it.
+
+So placing a station by the text `"add"` reaches a compiled C function
+— which is the whole trick that lets a text file describe a program.
+And the set of names that trick works for is frozen at build time.
+
+Runtime construction ([212](212-one-way-to-build-a-program.md)) makes
+that limit visible. A program can now grow stations, ports, and wires
+while it runs, and every one of those stations must place a box the
+program was compiled with. You can rearrange the furniture but not
+bring in new furniture.
+
+## Intended behavior
+
+**A box's C source can be handed to a running program, and a station
+can place it.**
+
+The path is not exotic and each step already exists somewhere:
+
+1. Take the C source for one or more boxes.
+2. Run the generator over it, producing the shim, the box record, any
+   field tables, and any comparisons — exactly what the build does.
+3. Compile that to a shared library, by invoking a compiler.
+4. Load it and look up the shim.
+5. Add the row to the registry.
+
+**A function signature is not enough on its own, and it is worth being
+precise about why.** A signature gives you names: the box's name, its
+parameter type names, its return type name. What it cannot give you is
+**sizes and offsets** — how many bytes a cell holds, how far into a
+struct a field sits, how large a task must be. Those are what the
+engine actually runs on, and the standing rule is that the compiler
+computes every one of them and the generator never guesses. So the
+signature supplies the paperwork and a compiler supplies the numbers.
+There is no version of this that skips the compiler.
+
+**The registry becomes a growable table.** It is indexed by name when a
+station is placed and by row afterward, so it takes the same paging
+shape as everything else that grows: add a block, never move what is
+already there, and readers resolving a row are never disturbed. That is
+the fourth or fifth use of the same pattern in this engine, and by now
+it should be a shared piece rather than a fifth hand-rolled one.
+
+**This is unsafe without shape-based type comparison, and safe with
+it.** Types are currently compared by name. A box compiled after the
+program started brings its own idea of every struct it touches, and two
+structs both called `vec3` with different layouts compare equal by name
+and then corrupt each other silently. [309](309-types-by-shape.md)
+compares the field tables instead, which catches the mismatch at the
+moment a wire is drawn — the only moment anybody can still act on it.
+That issue is a hard prerequisite, not a nice companion.
+
+**The generator has to be reachable at runtime**, which is what
+[308](308-generator-in-c.md) delivers by making it a standalone C
+program with no dependency on the engine. As a Lua script it is a build
+tool; as a C program it is something the engine can call, and it is the
+same parser either way — which is the point, because a second parser
+would eventually disagree with the first about what a box is.
+
+## Suggested implementation steps
+
+1. The registry as a growable table, paged, with lookup and placement
+   reading it safely while it grows.
+2. Compile-and-load as a deliberate call: take source, produce a shared
+   library in the RAM-backed build tier, load it, resolve the shim.
+   Failures name the compiler's own output rather than summarising it.
+3. Adding a registry row, with the shape comparison from
+   [309](309-types-by-shape.md) applied to every type the new box
+   brings against every type already known by the same name — so a
+   collision is caught at load rather than at first delivery.
+4. A test that a box written after the program started is placed,
+   wired, and delivers values byte-identically.
+5. A test that a box whose struct disagrees in layout with one already
+   loaded is refused, naming both and the first field where they
+   diverge.
+
+## Open questions
+
+- Where does the compiler come from? Requiring one at runtime is a
+  dependency on the deployment environment, which is exactly what
+  [057](../docs/implementation-notes/057-packaging.md) spends its
+  length trying to reduce. It may be that this is a capability a
+  consumer opts into rather than something the engine assumes.
+- Can a loaded box ever be unloaded? Unloading a shared library while
+  any task might still call into it is the same lifetime problem as
+  freeing a destination array, and probably wants the same answer —
+  retire, sweep, free — but stations placed from it would have to be
+  removable first, and station removal is deliberately out of scope
+  everywhere else.
+- Does a runtime-added box need to survive a dump and reload? The dump
+  writes a program back out as text naming its boxes; reloading that
+  text needs those boxes to exist again, which means the source has to
+  live somewhere. Either the dump records where it came from, or a
+  dumped program is only reloadable into a process that already has
+  them.
+
+## Related
+
+- [308 — The generator, in C](308-generator-in-c.md), which is what
+  makes the parser callable at runtime rather than only at build time
+- [309 — Types compared by shape](309-types-by-shape.md), a hard
+  prerequisite — by-name comparison makes this corrupt silently
+- [303 — The registry](completed/303-registry-emission.md), the table
+  this makes growable
+- [306 — Build integration](completed/306-build-integration.md), whose
+  no-partial-output guarantee applies here too: a failed generation
+  must leave nothing loadable
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+  which made the frozen registry a visible limit
+- [801 — The workbench in the browser](801-browser-workbench.md), which
+  reads C files the running program never compiled
+- [057 — Packaging](../docs/implementation-notes/057-packaging.md),
+  where a runtime dependency on a compiler has to be weighed

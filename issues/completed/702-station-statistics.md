@@ -2,6 +2,34 @@
 
 ## Current behavior
 
+**Built, losing one column and gaining one warning.**
+
+The gather column goes with the pull path
+([056](../../docs/implementation-notes/056-no-pull-path.md)) — there is
+nothing to charge and nobody to charge it to. What replaces it is
+smaller and louder: an **output buffer growing** is reported from the
+first doubling, because unlike the two piles this phase already
+distinguishes, it does not mean a rate mismatch. It means nobody is
+collecting the program's results at all
+([209](../209-map-output-collection.md)).
+
+The reasoning that produced the gather column outlives it, and it is
+the best sentence in this issue: **charge a cost where it is actually
+paid, not where it is nominally incurred.** That is why gather time
+went to the pulling station rather than the gatherer, and it is what
+made the phase 4 demo's first measurement visibly wrong. It applies
+unchanged to whatever gets measured next.
+
+Two decisions here are untouched and worth restating because
+everything since has leaned on them: **counts are atomics updated where
+the work already is, always on, costing a fetch-add**, and **timing
+compiles out entirely** when it is not asked for, so the apparatus can
+be removed rather than merely disabled. And the report offers its
+orderings as a dispatch table — by time, by contention, by count —
+because the interesting station is a different one under each.
+
+The remainder describes it as built.
+
 Built. Run counts and produced-for-others ride the delivery path as
 atomics where the work already is, always on, costing a fetch-add.
 Timing — box time from inside the generated shims, mutex wait around

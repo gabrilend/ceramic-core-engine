@@ -2,6 +2,31 @@
 
 ## Current behavior
 
+**Built, and becoming a caller rather than a mechanism.**
+
+Under [212](../212-one-way-to-build-a-program.md) there is one surface
+for creating a station, configuring a port, and drawing a wire, legal
+at any moment — and loading a file is its first caller rather than a
+construction path of its own. So this pass survives as *turn each
+station line into one call*, and the concept it was built around
+disappears: there is no "still loading" state, because the table is no
+longer sized before the stations exist.
+
+Two of its details go with that. Ports no longer convert to
+**gatherers** — that kind is gone
+([056](../../docs/implementation-notes/056-no-pull-path.md)) — and the
+name table no longer dies when loading ends, because there is no end;
+names live on the program, which the dump already forced.
+
+What this issue got right and keeps: **the registry supplies everything
+about a station and the file supplies nothing about it but a name.**
+Shim, parameter count, sizes, type names — all from the box record, so
+the file cannot disagree with the C. That is why placement by name is
+the only placement worth having, and why hand placement is being
+retired rather than fixed.
+
+The remainder describes it as built.
+
 Built. Every station line becomes a station through placement by
 name: the registry supplies shim, parameter count, sizes, and type
 names; slots default to ring buffers; a comparator grows its typed

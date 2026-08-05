@@ -4,6 +4,14 @@ A map is a text file. It names stations, says which box function each
 one places, and draws the arrows between them. It carries no types and
 no code — only names, numbers, and connections.
 
+**It is a schematic, not a save file.** The file describes how to build
+a structure in memory when the program starts; it is a map to a map. It
+does not hold data that persists between runs, and nothing in the engine
+writes back to it. A running map can be dumped to a new file on demand —
+that is a deliberate act with a name, the program's equivalent of a
+save-as — and the result is another schematic, describing whatever shape
+the map had grown into by then.
+
 ## A complete example
 
 ```
@@ -30,9 +38,10 @@ split spread i
 
 reader read_config p
   in 0 $2
+  out 0 - config.0
 
 config load p
-  in 0 reader
+  in 0 $3
 ```
 
 ## Comments
@@ -68,26 +77,48 @@ letter of redundancy buys an error instead of a wrong answer.
 
 ## Input lines
 
-**A slot is a ring buffer unless a line says otherwise.** Only the
-exceptions are written, and those carry the slot index:
+**A port is a ring buffer unless a line says otherwise.** There is
+exactly one exception, and it carries the port index:
 
 ```
-in 1 $0        slot 1 is static, entry 0 in the statics table
-in 0 reader    slot 0 is gathered from the station named reader
+in 1 $0        port 1 is static, holding the value of entry 0
 ```
 
-So `split` above has no input lines at all — every slot is an ordinary
+So `split` above has no input lines at all — every port is an ordinary
 ring buffer and there is nothing to say about them.
 
-Slot indices match the box function's parameter order, so the loader
-can check that no line names a slot the function does not have.
+Port indices match the box function's parameter order, so the loader
+can check that no line names a port the function does not have.
 
-The `$` is technically unnecessary — a static reference is a number and
-a gatherer source is a name, so they are already distinguishable. It is
-there because `in 1 0` reading as "static entry zero" is not something
-anyone will guess a year from now.
+The `$` is there because `in 1 0` reading as "static entry zero" is not
+something anyone will guess a year from now.
+
+**A second exception is coming: a port with no source at all.** A
+station can be created before it is wired, so a port may be
+unconfigured — a state, not a value, in which the station simply never
+becomes ready. The dump writes those out rather than omitting them,
+because the dump's value is that it says what is actually there, and a
+half-built program should dump to a faithful record of a half-built
+program. So the format needs a form for it. Issue 210.
+
+**There used to be a second form** — `in 0 reader`, meaning this port
+pulls its value from the station named `reader` when it is needed. The
+pull path is gone, and with it that line. A station whose value another
+station reads now simply has an arrow drawn to it, and if the
+destination port is a static, the arrow overwrites it rather than
+queueing.
+[056](implementation-notes/056-no-pull-path.md) is why.
 
 Ring buffers carry no capacity, because they grow on their own.
+
+That is becoming *no capacity is required*. Issue 210 gives every port
+a buffer of ten values at instantiation and lets a port be told a
+different starting depth — in this file or as an argument to the call
+that creates the station — with growth still covering any figure that
+turns out wrong. What the rule above was keeping out of the file was a
+*required* tuning number that an author had to get right; an optional
+hint that costs nothing to omit is a different thing, and this section
+will say so once it lands.
 
 ## Output lines
 
@@ -98,6 +129,15 @@ out 0 - printer.0
 Port zero of this station delivers to slot zero of the station named
 `printer`. Repeat the line to fan out; one port may carry any number of
 destinations.
+
+An arrow whose destination port holds a static will, once issue 405
+lands, **overwrite that static** rather than queue into a ring buffer —
+so a value can become a constant the destination reads on every later
+invocation. It does not make the destination run, because a static
+never gates readiness. This is how a constant gets computed at startup
+instead of written here by hand, and it is deliberately a property of
+the arrow rather than of the box, so that it shows up in this file
+instead of happening invisibly inside C.
 
 Port numbers stay explicit because they mean something: a comparator's
 ports are less, equal, and greater in that order, and an iterator's are
@@ -124,20 +164,20 @@ This is the same reason the wiring carries no types: if the table said
 `int` where the box wanted `float`, there would be two sources of truth
 and the file would be the one that was wrong.
 
-A side effect worth knowing: two slots of different types may reference
-the same entry and each read it their own way.
+The section is notation: a way to write a value once while describing
+the map, and point ports at it by number.
 
-The table is in RAM once the program is running and may be altered
-while it runs. Doing so requires holding its mutex, because a struct
-half-overwritten while a slot is copying it yields fields from two
-different worlds. Reads are constant and writes are rare, so the
-contention is nothing.
+The engine currently keeps that table alive for the whole run, shared
+across every port that bound an entry and guarded by its own mutex. Two
+consequences follow from the table's shape, and neither is a feature to
+build on: two ports of different types may reference one entry and read
+it each their own way, and a box may write to the table — a back channel
+around "a box cannot remember," invisible in the wiring, and the reason
+a process can hold only one running map.
 
-A box may write to the table. This is a back channel around "a box
-cannot remember" — a box can stash a value in an entry and read it back
-on its next run, and none of it appears in the wiring. It works, and it
-should be treated with exactly the suspicion a global variable
-deserves.
+Both are being retired, along with the table itself. Issues 401 and 405
+carry that work; a static value belongs to the input port that reads it,
+and this document will say so plainly once it does.
 
 ## What the loader checks
 
@@ -151,9 +191,12 @@ station:
 - More input lines than the box has parameters, or a slot index out of
   range.
 - A comparator whose box returns a type with no compare function.
-- A box whose output fans out to both a gatherer slot and a ring-buffer
-  slot — neither pushed nor pulled coherently.
-- A cycle among gather wires.
+
+Two rules used to sit here and no longer can be stated: a box fanning
+out to both a gatherer and a ring buffer, and a cycle among gather
+wires. With nothing pulled, neither situation is describable. A cycle
+in the push direction stays perfectly legal — it is how anything
+repeats — and needs a finite companion input to ever stop.
 
 ## Related
 

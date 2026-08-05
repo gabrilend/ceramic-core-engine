@@ -24,6 +24,14 @@ piece and the steppable sleep-and-termination protocol (the race
 animation), plus deeper links that land mid-page rather than at
 page tops.
 
+Also remaining: document discovery is a fixed list of directories,
+each listed one level deep. A subdirectory of `docs/` is invisible
+to the generator, and invisible *silently* — the pages simply do
+not appear, and nothing says so. `docs/implementation-notes/`
+currently reaches the site only because a hand-written pass was
+added for it, which is the wrong shape: the next subdirectory will
+be missed the same way.
+
 ## Intended behavior
 
 A generated, cross-linked HTML documentation set at `docs/HTML/`, with
@@ -43,6 +51,20 @@ reference goes to the document. As many links as the text will carry,
 each landing on the specific part rather than the top of a page.
 
 **Syntax highlighting** for embedded code.
+
+**No document can be silently absent.** Every markdown file under the
+documentation roots reaches the site, however deeply nested, and a
+directory that yields no pages is reported rather than passed over. The
+generator's promise is that the site is the documentation — a file that
+exists but does not appear breaks that promise in the one way nobody
+notices, because the missing page leaves no gap to see.
+
+Nesting is meaningful, though, and flattening it would lose the reading
+order: the numbered documents at the top level are a sequence, and a
+subdirectory is a group with its own character. So discovery walks
+downward, and each directory becomes its own heading in the table of
+contents rather than being folded into its parent's list. A directory
+supplies its own name and description by carrying a `README.md`.
 
 **Things to play with, not only read.** The documentation describes a
 machine with moving parts, and several of them are far clearer
@@ -64,9 +86,22 @@ manipulated than described:
 engine is about data moving through a fixed shape, and the pages should
 look like they know that.
 
+The colour scheme the first pass arrived at is settled and stays —
+described as seraphic, then corrected to ceramic, which is a better
+word for it. What the second pass owes is everything else: the pages
+should be more artistic than a stylesheet applied to markdown. This
+is a deliberate re-opening of a part that was called done, and it is
+the same request the workbench in [801](801-browser-workbench.md)
+opens with, because the two will sit beside each other and must not
+look like they came from different projects.
+
 ## Suggested implementation steps
 
 1. The generator: markdown and `.info.md` in, linked HTML out.
+   Discovery walks each documentation root downward instead of listing
+   it one level deep, so nesting costs the generator nothing and a new
+   subdirectory needs no edit here. A directory's `README.md` names it
+   in the sidebar; a directory that produced no pages is reported.
 2. Link resolution — issue numbers, document numbers, structure and
    function names — with an unresolved reference reported rather than
    silently rendered as text.

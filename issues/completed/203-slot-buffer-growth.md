@@ -2,6 +2,39 @@
 
 ## Current behavior
 
+**Built, and the copy at the centre of it is going.**
+
+Doubling exists as it does because head and tail are *positions taken
+modulo the capacity* — change the capacity and every value is suddenly
+at a different index, so the wrapped portion has to be physically moved
+back into order. That copy is the reason growth needs the mutex, the
+reason it has an ordering hazard, and the reason a ring buffer was the
+one thing in the engine that could not grow by simply adding room.
+
+[210](../210-input-port-record.md) removes the premise rather than the
+symptom: cells carry their own state, a reader scans from a bookmark
+that is allowed to be wrong, and nothing computes a location from the
+capacity. Then a buffer grows by **adding a page**, nothing is copied,
+no cell moves, and the hazard stops existing — publish before copying
+and readers see an empty buffer, copy before publishing and a value
+taken during the copy is delivered twice, and neither can happen when
+there is no copy.
+
+**The invariant this issue proved is what makes all of it safe and it
+is unchanged**: only the storage the port points at is ever
+reallocated, never the port and never the station. Seven doublings with
+every station address unchanged and every neighbour untouched.
+
+Two things also survive: the **growth count and high-water mark** put
+here a phase early so the phase 7 report would be a read rather than a
+retrofit — still the right instinct, and now feeding a third kind of
+warning, since an output buffer growing means nobody is collecting a
+program's results. And the rule that **an input buffer is never full
+when a value arrives**, which is what lets memory absorb any imbalance
+between input sides instead of the engine having to decide what to drop.
+
+The remainder describes it as built.
+
 Built. When the tail would land on the head the storage doubles under
 the station's mutex, the wrapped portion is copied so the contents
 read contiguously from cell zero, and the indices are corrected. Only

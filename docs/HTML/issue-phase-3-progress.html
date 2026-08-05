@@ -10,23 +10,46 @@
 <a href="doc-001-overview.html">001 — Overview</a>
 <a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
-<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
 <a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
 <a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
 <a href="doc-008-map-file-format.html">008 — Map file format</a>
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html" class="here">Phase 3 progress — the build path</a>
-<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
@@ -51,11 +74,9 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
-<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
-<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
 <a href="done-502-comparator.html">502 — The comparator</a>
@@ -95,22 +116,56 @@
 <p>Phase 3's goal: the generator, and the end of hand-written glue.
 Writing a box becomes writing a function; everything the engine needs
 to call it by name is derived from the C itself.</p>
+<p><strong>What is being added is a change of when, not of what.</strong> The generator
+runs at build time and produces a fixed table, so the set of boxes a
+program can place is frozen before it starts. Three open issues loosen
+that in order: the generator becomes a C program rather than a Lua
+script, so it can be called by something other than a build; types stop
+being compared by name and start being compared by shape, so a box
+compiled later cannot silently disagree about a struct; and then a
+box's source can be handed to a running program.</p>
 <table>
 <tr><td>Issue</td><td>State</td><td>In one line</td></tr>
 <tr><td>301 — box-source parser</td><td>complete</td><td>Lua script; three shapes recognized, everything else stops the build with file:line.</td></tr>
 <tr><td>302 — shim emission</td><td>complete</td><td>One generated call site per box, memcpy loads, exact task sizes.</td></tr>
-<tr><td>303 — registry emission</td><td>complete</td><td>Name to shim to full type story; hand sizes became registry lookups.</td></tr>
-<tr><td>304 — struct field tables</td><td>complete</td><td>Offsets from offsetof, kinds per field, nested tables linked.</td></tr>
+<tr><td>303 — registry emission</td><td><strong>extended</strong></td><td>Name to shim to full type story; the table becomes growable.</td></tr>
+<tr><td>304 — struct field tables</td><td><strong>finally consulted</strong></td><td>Offsets from offsetof, kinds per field — everything shape comparison needs, never asked until now.</td></tr>
 <tr><td>305 — compare functions</td><td>complete</td><td>Primitives generated, author orderings wrapped, availability in the registry.</td></tr>
 <tr><td>306 — build integration</td><td>complete</td><td>Boxes discovered, registry regenerated on change, failure emits nothing.</td></tr>
 <tr><td>307 — phase 3 demo</td><td>complete</td><td>A box added live, the registry against sizeof, every shape through one call site.</td></tr>
+<tr><td>308 — the generator, in C</td><td>open</td><td>Removes LuaJIT from the build path, and makes the parser callable at runtime.</td></tr>
+<tr><td>309 — types compared by shape</td><td>open</td><td>Four ints are four ints; identical layouts wire together, identical names do not.</td></tr>
+<tr><td>310 — boxes compiled at runtime</td><td>open</td><td>Source in, shim out, registry row added — needs both of the above.</td></tr>
 </table>
-<p>Phase 3 is finished. Writing a box is writing a function; the
-generator derives the rest, and a stale registry is structurally
-impossible.</p>
+<h2>What the phase established</h2>
+<p>**Every size and offset is a <code>sizeof</code> or <code>offsetof</code> expression the
+compiler computes.** The generator never guesses a number. That is the
+rule the whole engine rests on, and it is why a box compiled at runtime
+still needs a compiler rather than just a signature: a signature gives
+names, and names are not what the engine runs on.</p>
+<p><strong>Type names ride along for the error message, not for the engine.</strong>
+"Four bytes versus four bytes" is not a sentence anybody can act on.
+That reasoning holds even as names stop being what a wire is <em>checked</em>
+against — under shape comparison the name is still reported, it is just
+no longer the thing decided upon.</p>
+<p>**Loads and stores inside a shim are memory copies rather than pointer
+casts**, because the task's value area packs values back to back and a
+double following an int sits unaligned. The issue's own example code
+used casts and would have been wrong.</p>
+<p><strong>Box sources are designated by location</strong>, so a box cannot exist that
+the generator does not see. And <strong>a failing generator writes nothing</strong>,
+so the build can never compile against yesterday's registry — a
+guarantee that has to survive into runtime compilation, where a failed
+generation must likewise leave nothing loadable.</p>
+<p><strong>The field tables were built and then not used for anything.</strong> Four
+phases later they turn out to be the answer to two separate problems:
+comparing types by shape, and turning bytes back into text. Emitting
+more than the moment required was the right call.</p>
 <p>Notes for the phase: parser and emitters are one script with distinct
 stages (parse → validate → emit), sharing the pattern of the earlier
-phases — one mechanism, proven aspect by aspect.</p>
+phases — one mechanism, proven aspect by aspect. That separation is
+what makes the translation to C tractable, since the stages can be
+moved one at a time.</p>
 
 </main>
 </div></body></html>

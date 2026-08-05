@@ -20,8 +20,8 @@ station's name in a lookup table that is thrown away when loading ends.
 A comparator gets one extra slot on the end, typed to match the box's
 return value.
 
-Then apply the input lines, converting the named slots from ring
-buffers to statics or gatherers.
+Then apply the input lines, converting the named ports from ring
+buffers to statics and copying each one's value in.
 
 **Second pass: resolve the arrows.** By now every station exists and
 can be found by name. For each output line, look up the destination
@@ -37,13 +37,12 @@ that will actually run, so the check needs nothing from the file.
 
 Some errors are only visible once every station and arrow exists:
 
-- **Gather cycles.** Walk the gather links. A loop here is a function
-  call that never returns, and it surfaces at runtime as a stack
-  overflow — a segfault with no message and no hint that two boxes
-  point at each other. Cheap to find now, invisible later.
-- **Mixed fan-out.** A port whose destinations include both a gatherer
-  slot and a ring-buffer slot. Its box is neither pushed nor pulled
-  coherently.
+Two checks used to live here and can no longer be stated, because
+nothing is pulled: a cycle among gather links, and a port fanning out
+to both a gatherer and a ring buffer. See
+[056](implementation-notes/056-no-pull-path.md). A cycle in the push
+direction remains legal — it is how anything repeats — and needs a
+finite companion input to ever stop.
 - **Unreachable stations.** Not fatal, but worth reporting: a station
   with ring-buffer inputs that nothing ever writes to will never run.
 
@@ -65,13 +64,13 @@ Both halves of that sentence are load-bearing.
 written into it, so it will never be discovered by delivery. If it is
 going to run at all, it must be started here.
 
-*Whose output feeds a ring buffer* excludes gatherers. A gatherer's
-value goes into a task struct someone is assembling right now, not into
-a slot — that is the entire difference between the push path and the
-pull path. At startup nobody is assembling anything, so a gatherer
-enqueued as a task would run, produce a value, walk its destinations
-looking for a buffer to write into, and find a gatherer slot, which by
-definition has none. The value would have nowhere to go.
+**And the sweep is really the writes finishing.** Binding a static from
+the file is a write, and a write runs the readiness check on the
+station holding it ([004](004-datapath-statics.md)). A station with only
+statics is ready the moment its last one is bound, so what looks like a
+separate startup step is the ordinary mechanism arriving at the end of
+construction. Nothing here is special-cased; the same thing happens
+when a station is added to a program that is already running.
 
 After the sweep, the pool is running and the map propagates on its own.
 The sweep is also the last time anything iterates the station table;

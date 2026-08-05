@@ -2,6 +2,42 @@
 
 ## Current behavior
 
+**Built, and about to need something it has been getting for free.**
+
+The dump prints a static's value by repeating the **original string**
+the file gave it, because a statics entry keeps both the text and the
+parsed bytes. Once a static's value lives on the port that reads it
+([401](../401-static-slots.md)) there is no entry and no retained
+string — only bytes and a field table describing their shape. So the
+dump needs a formatter that walks a field table and produces text, the
+exact mirror of the reader that walks one and produces bytes
+([408](../408-values-back-into-text.md)).
+
+Three smaller changes: the gather in-lines and the gather-depth comment
+go with the pull path
+([056](../../docs/implementation-notes/056-no-pull-path.md)); a port
+with **no source at all** has to be writable, since a station can exist
+before it is wired and the dump's whole value is that it says what is
+actually there; and destination order now comes from an array rather
+than a list's append order
+([214](../214-destinations-without-a-lock.md)), which the round trip
+depends on and which that change has to preserve deliberately.
+
+**What this issue proved is the property everything else is checked
+against.** A program using every feature loads, dumps, loads its dump,
+and dumps again byte-identically. That is the cheapest possible proof
+that a program built by any route is a real program — which is exactly
+what one construction surface will need, since the test that a file and
+a sequence of calls produce the same thing is this round trip wearing a
+different hat.
+
+And the finding it forced is still the one that stings: **the design
+had proudly discarded station names at load**, and the dump could not
+be written until they were kept. A thing that seems like pure overhead
+until the moment something needs to describe itself.
+
+The remainder describes it as built.
+
 Built. The dump walks the live station table — never any remembered
 file text — and writes the map format back out: statics with their
 entries, station lines with kinds, in-lines for statics and gathers,

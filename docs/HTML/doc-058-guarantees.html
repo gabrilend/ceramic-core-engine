@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>058 — Guarantees</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html" class="here">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>058 — Guarantees</h1>
+<p>Things that are always true about a running map, collected from the
+documents, the source comments, and the tests that hold them up.</p>
+<p>A guarantee is worth more than a measurement. A measurement tells you
+what happened once on one machine; a guarantee tells you what you may
+build on without measuring anything. This page exists so that the list
+is a list — visible, countable, and arguable — rather than a dozen
+sentences scattered across nine documents where nobody can see them at
+the same time.</p>
+<p><strong>How each one is held</strong> is the column that matters most, because it
+says how much the guarantee is worth:</p>
+<table>
+<tr><td>held by</td><td>meaning</td></tr>
+<tr><td><strong>structure</strong></td><td>it cannot be otherwise without changing the shape of the data. The strongest kind.</td></tr>
+<tr><td><strong>build</strong></td><td>the generator or the C compiler refuses the alternative.</td></tr>
+<tr><td><strong>load</strong></td><td>validation rejects a map that would break it, before anything runs.</td></tr>
+<tr><td><strong>runtime</strong></td><td>checked at the moment of the action, and the program stops if it fails.</td></tr>
+<tr><td><strong>discipline</strong></td><td>nothing enforces it. A box author can break it and find out later. The weakest kind, and the ones worth staring at.</td></tr>
+</table>
+<p>---</p>
+<h2>Values</h2>
+<table>
+<tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
+<tr><td>V1</td><td>A value on a wire is atomic and independent. It carries no relationship to any other value, and none to whatever run produced it.</td><td>Anything that belongs together must <strong>be</strong> one value — a struct on one wire — rather than two values that happen to arrive near each other.</td><td>structure</td></tr>
+<tr><td>V2</td><td>A station pairs whatever is at the head of each of its ports.</td><td>There is no notion of a round, a batch, or a matching set, and nothing could implement one without a tag riding on every value.</td><td>structure</td></tr>
+</table>
+<p>These are the same fact stated twice, and the place it becomes visible
+is a graph that splits and rejoins — one station fanning to two paths
+that later meet at a third. Send two values through. The tasks on the
+two paths run on different threads at different speeds and can finish
+out of order, so the rejoining station may pair the first value's result
+from one path with the second value's result from the other.</p>
+<p>That is not a defect to be mitigated. It is what independence means. A
+station that fans to two paths has produced two unrelated values, and
+the station where they meet takes the oldest available of each, which is
+the only thing it could do without being told about a relationship that
+was never expressed. **If two things were meant to stay together, they
+were meant to be one value.**</p>
+<p>The consequence for a map author is a design rule rather than a hazard:
+correlation is something you build, by putting the related parts in a
+struct and sending it down one wire. The alternative — tagging every
+value and matching tags at every port — is a different engine, and
+knowing it exists is mostly useful so that nobody reinvents it badly.</p>
+<h2>Boxes</h2>
+<table>
+<tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
+<tr><td>B1</td><td>A box cannot remember anything between calls.</td><td>State has to live on the wires: to count, you route a box's output back into its own input.</td><td><strong>discipline</strong></td></tr>
+<tr><td>B2</td><td>A box receives private copies of its arguments, never shared pointers.</td><td>Every value is copied at least once per invocation.</td><td>structure</td></tr>
+<tr><td>B3</td><td>Two invocations of the same station may run simultaneously on different threads.</td><td>Follows from B1 — anything a box stored would be shared between them.</td><td>structure</td></tr>
+<tr><td>B4</td><td>A box never blocks.</td><td>Nothing may wait on a value, a lock, or a device. A worker that cannot progress is a worker not running the ten things that are ready.</td><td><strong>discipline</strong></td></tr>
+<tr><td>B5</td><td>A box that returns void is a sink; the engine needs no support for it.</td><td>A sink's output is simply not delivered anywhere.</td><td>structure</td></tr>
+</table>
+<p>B1 and B4 are the two load-bearing guarantees held by nothing but
+discipline, and almost everything else rests on them. B1 is what makes
+B3 safe, and B3 is what makes the whole engine parallel. B4 is what
+makes deadlock impossible (see P6). A single box with a <code>static</code> counter
+or a blocking socket read quietly withdraws both, and no part of the
+system will say so.</p>
+<p>---</p>
+<h2>Stations and wiring</h2>
+<table>
+<tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
+<tr><td>S1</td><td>A station never moves once placed.</td><td>Today the table is one flat allocation fixed at creation, so the number of stations cannot grow. Issue 211 lets it grow by adding a <strong>shelf</strong> — another allocation, with a short list of where they are — which keeps this guarantee rather than trading it away, because nothing already placed is copied. It has to be kept: a station holds its own mutex, and a mutex is identified by where it lives, so moving one would leave every thread parked on it waiting at an address nobody unlocks.</td><td>structure</td></tr>
+<tr><td>S2</td><td>A wire is an index, never a pointer. A wire written down today is valid forever.</td><td>Stations can never be removed or reordered, only added to a table that has room.</td><td>structure</td></tr>
+<tr><td>S3</td><td>Growing an input buffer invalidates nothing.</td><td>Only the storage the port points at is reallocated — never the port, never the station — so every wire and every in-flight value survives.</td><td>structure</td></tr>
+<tr><td>S4</td><td>An input buffer is never full when a value arrives.</td><td>It doubles before the write index can reach the read index. Memory absorbs any imbalance between input sides.</td><td>runtime</td></tr>
+<tr><td>S5</td><td>A station's ports are read and written only under that station's mutex.</td><td>Every delivery takes exactly one lock.</td><td>discipline</td></tr>
+<tr><td>S6</td><td>The station kind is consulted at exactly one moment — choosing an exit on the way out — and nowhere else.</td><td>A new kind is a row in one table, never a branch in several functions.</td><td>structure</td></tr>
+</table>
+<p>---</p>
+<h2>Tasks</h2>
+<table>
+<tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
+<tr><td>T1</td><td>A task is self-contained once built. Nothing another thread can change affects it.</td><td>Every value in it is a copy, taken before it existed. This was nearly given up to buy fresher pulled values; removing the pull path keeps it outright.</td><td>structure</td></tr>
+<tr><td>T2</td><td>A task's run time is its box's run time. Nothing hidden rides along.</td><td>Same as T1 — nothing runs inside a task but the box it names, so per-box timings measure what their name says and throughput is runs times per-box cost.</td><td>structure</td></tr>
+<tr><td>T3</td><td>One invocation's ring values are claimed atomically with respect to each other — all under a single hold of the station's mutex.</td><td>No other thread can interleave between them, so the buffered half of an input set is always mutually consistent. Statics are <strong>not</strong> covered: each was written at its own earlier moment, so two of them may never have been correct together.</td><td>structure</td></tr>
+<tr><td>T4</td><td>One allocation per task, sized exactly for its box; one free.</td><td>The size comes from the registry, so it is known before the task exists.</td><td>build</td></tr>
+<tr><td>T5</td><td>A task comes into existence by exactly one path.</td><td>Everything that starts a station — a delivery arriving, a static being written, the statics bound while a program is built — reaches the same readiness check and the same task build. One door, not several.</td><td>structure</td></tr>
+<tr><td>T6</td><td>A ring value claimed by one task cannot be claimed by another.</td><td>Claiming happens under the station's mutex, and the read index advances there.</td><td>structure</td></tr>
+<tr><td>T7</td><td>An iterator's exit is decided under the mutex and rides inside the task.</td><td>Two tasks assembled a moment apart carry different exits no matter which finishes first.</td><td>structure</td></tr>
+</table>
+<p>---</p>
+<h2>The pool</h2>
+<table>
+<tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
+<tr><td>P1</td><td>Enqueuing never blocks on user code.</td><td>A full ring doubles — a bounded memory copy — rather than making the pusher run a task.</td><td>structure</td></tr>
+<tr><td>P2</td><td>The ring's storage can move with nothing dangling.</td><td>Nothing holds a pointer <em>into</em> the ring; the ring holds pointers <em>out</em> to tasks, and a worker carries its pointer away.</td><td>structure</td></tr>
+<tr><td>P3</td><td>First in, first out. A waiting task cannot be starved by newer arrivals.</td><td>No prioritization is possible.</td><td>structure</td></tr>
+<tr><td>P4</td><td>Every task is run exactly once, handed to the finish hook, and freed — three unconditional steps.</td><td>A task cannot have phases. A two-trip task must be two tasks. The pull path spent a long time looking for a way around this and never needed one: the pool has not changed for any of it.</td><td>structure</td></tr>
+<tr><td>P5</td><td>When the pool declares completion, no task remains and nobody could enqueue one.</td><td>The last worker to fall asleep re-scans before anyone sleeps. Without that re-scan the program can exit silently having not done part of its work.</td><td>runtime</td></tr>
+<tr><td>P6</td><td>Deadlock is impossible.</td><td>Bought entirely by B4. Nothing waits, so a worker is always running, delivering, or asleep with nothing to do — and the last is completion, not a stall.</td><td>discipline (via B4)</td></tr>
+<tr><td>P7</td><td>The pool knows nothing about boxes, stations, or maps.</td><td>It reads one field of a task. Nothing about a map can influence scheduling.</td><td>structure</td></tr>
+</table>
+<p>---</p>
+<h2>Statics</h2>
+<p><strong>Four guarantees left this section rather than being weakened.</strong> The
+gather graph being acyclic, gather chain depth being a static property,
+a gatherer's port always holding a value, and a gatherable station
+having no ring-buffer ports were all about a pull path that no longer
+exists — nothing is pulled, so none of them can be stated.
+<a href="impl-056-no-pull-path.html">056</a> records what they were
+for and what removing them cost.</p>
+<table>
+<tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
+<tr><td>G5</td><td>A static is always present and never consumed.</td><td>It cannot participate in readiness, so a station with only statics is always ready — which is what makes writing one enough to run it.</td><td>structure</td></tr>
+<tr><td>G8</td><td>Writing a static runs the ordinary readiness check on its station.</td><td>Nothing extra is needed to make recalculation propagate, and nothing can be made to run that could not run anyway: an empty ring port still answers no, because the engine will not invent a value for it.</td><td>structure</td></tr>
+<tr><td>G9</td><td>Every box runs on a worker that picked up a task for it.</td><td>There is no longer any path that executes a box anywhere else. This was the one exception in the engine, and it is gone.</td><td>structure</td></tr>
+<tr><td>G6</td><td>A statics write never tears.</td><td>One mutex, one copy — a struct half-overwritten while a claim reads it would yield fields from two different worlds.</td><td>runtime</td></tr>
+<tr><td>G7</td><td>Push cycles are legal.</td><td>They must be: since a box cannot remember (B1), a loop through a ring buffer is the only way to carry state. A blanket cycle check would forbid the engine's sole mechanism for state.</td><td>structure</td></tr>
+</table>
+<p>---</p>
+<h2>The build path</h2>
+<table>
+<tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
+<tr><td>C1</td><td>Every size and offset in the registry is computed by the C compiler, never by the generator.</td><td>They are emitted as <code>sizeof</code> and <code>offsetof</code> expressions. The generator cannot guess wrong because it does not guess.</td><td>build</td></tr>
+<tr><td>C2</td><td>A box that exists is a box the generator saw.</td><td>Box sources are discovered, never listed, so a box cannot exist that the build silently ignores.</td><td>build</td></tr>
+<tr><td>C3</td><td>You can never compile against a stale registry.</td><td>A failing generator writes nothing into place.</td><td>build</td></tr>
+<tr><td>C4</td><td>A map that loads is a map that can run.</td><td>Validation happens at load, so a mistyped wire is a startup error rather than a surprise at the first delivery.</td><td>load</td></tr>
+<tr><td>C5</td><td>The dump round-trips: dumping a dump yields the dump.</td><td>The live map can always be written back out as a map file that reads back in. Held by a test.</td><td>runtime</td></tr>
+</table>
+<p>---</p>
+<h2>Errors</h2>
+<table>
+<tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
+<tr><td>E1</td><td>There are no fallbacks. Every error stops the program and names what failed and where.</td><td>The engine owns its process. This is what makes it hostile to embed in someone else's — see <a href="impl-057-packaging.html">057</a>.</td><td>discipline</td></tr>
+<tr><td>E2</td><td>A wrong answer never keeps flowing.</td><td>Follows from E1.</td><td>discipline</td></tr>
+</table>
+<p>---</p>
+<h2>Not guaranteed — and worth knowing</h2>
+<p>These are the places where somebody could reasonably expect a guarantee
+and not get one. Naming them is the same work as naming the guarantees.</p>
+<p><strong>Only one map exists per process.</strong> Not a guarantee — a restriction,
+and an unannounced one. Two process-wide variables hold the active map
+and the last load's timings. A second map silently takes the first's
+place as the target of any box-initiated statics write and of every
+box-timing sample.</p>
+<p>**No value is ever fresh at the moment it is used, and this engine is
+not for timing-critical work.** Nothing produces a value at the instant
+it is consumed. A static holds whatever was last written into it, and
+every invocation between two writes reads the same thing.</p>
+<p>This is a deliberate narrowing rather than a gap. There was a pull path
+that existed to make the opposite promise, and it was removed —
+<a href="impl-056-no-pull-path.html">056</a> says what it was for
+and what ending it cost. A box that needs the current time asks for the
+current time <em>inside the box</em>. Anything that must match the instant it
+is used should not be reaching through a dataflow graph to get it.</p>
+<p>**A value recomputes only when something upstream changes, never
+because somebody read it.** For a recalculation graph that is right.
+For something that genuinely should be re-read per use, the drawing has
+to say what makes it re-read, which means a wire back from whatever
+consumes it — and that will look like a loop, because it is one.</p>
+<p><strong>An invocation's inputs are not all read at one instant.</strong> Ring values
+are claimed together under the station's mutex (T3). A static is read
+in the same window but was written at some earlier, unrelated moment,
+so a box reading two statics gets values that were correct at two
+different times and may never have been correct together.</p>
+<p><strong>A ring port with a backlog is drained by static writes.</strong> Each write
+runs the readiness check, and a waiting ring value completes the input
+set, so it is consumed. That is real work on real values rather than an
+error — but a fast writer against a deep queue empties it faster than
+the producer alone would have.</p>
+<p><strong>Nothing about the order values leave a port.</strong> A value delivered
+first is not necessarily claimed first. A reader scans for a usable
+cell rather than computing where the oldest one must be, and a claim
+that rolls back releases cells wherever they sit, so gaps open and
+"oldest" stops being cheap to find.</p>
+<p>This was true and tested before it was given up — there is a retired
+test that checked several hundred deliveries arriving in order. Two
+things made it worth losing. Values reaching one port from two upstream
+stations were already in whatever order the threads happened to produce
+them, so the order being preserved was arbitrary to begin with. And
+keeping it would have meant a slow write blocking every finished value
+behind it, which is a real cost paid on every delivery to buy an order
+nobody could rely on anyway.</p>
+<p><strong>What this costs is positional pairing.</strong> A station with two ring
+ports takes one value from each, and it can no longer be assumed that
+the fifth from the left meets the fifth from the right. A program that
+needs two streams matched has to carry the matching in the values —
+which is what it should have done regardless, since ordering across
+stations was never promised either.</p>
+<p><strong>Nothing about ordering across stations.</strong> Tasks run in creation order
+within the queue (P3), but which station's task is created first, when
+two become ready at once, is whatever the threads did. Two runs of the
+same map on the same input may deliver in different orders.</p>
+<p>**Nothing about how many times a station runs relative to its
+readers.** A value computed once into a static port is read by every
+invocation that follows, however many that is — so a station a million
+invocations depend on runs once, not a million times. Under the pull
+path this was the other way round, and the change is a saving rather
+than a loss: a shared computation is computed once and read by
+everyone.</p>
+<p><strong>B1 and B4 are unenforced.</strong> The two guarantees the most is built on
+are the two that nothing checks. A linter that refused <code>static</code> storage
+and blocking calls inside box sources would move both from discipline to
+build, and the generator already parses those files.</p>
+<p>---</p>
+<h2>Retiring a guarantee</h2>
+<p>Since some of these should probably go, here is what taking one out
+involves — the point being that a guarantee is load-bearing whether or
+not anyone remembers leaning on it.</p>
+<p>1. <strong>Find what rests on it.</strong> Follow the "bought with" and "follows
+   from" notes above. P6 rests on B4; B3 rests on B1; T2 and T3 rest on
+   T1. Removing one of those is removing several.
+2. <strong>Find what it paid for.</strong> Every guarantee has a cost column, and
+   dropping the guarantee should refund that cost. If it does not, the
+   guarantee was free and there was no reason to drop it.
+3. <strong>Find the tests that hold it.</strong> A guarantee held by a test that
+   still passes after it is retired was never really the thing under
+   test.
+4. <strong>Say what replaces it.</strong> "No longer guaranteed" is a worse state
+   than either "guaranteed" or "explicitly not guaranteed" — the third
+   is a fact, the first two are facts, and the space between them is
+   where somebody builds on an assumption nobody wrote down.
+5. <strong>Move it to the section above</strong>, rather than deleting the line. A
+   retired guarantee is more useful as a stated non-guarantee than as an
+   absence.</p>
+<p>---</p>
+<h2>Related</h2>
+<ul>
+<li><a href="doc-001-overview.html">001 — Overview</a>, the one rule everything else falls</li>
+<p>  out of</p>
+<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>, where the</li>
+<p>  structural ones live</p>
+<li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a>, the termination</li>
+<p>  argument in full</p>
+<li><a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>,</li>
+<p>  which nearly cost T1 and T2 and ended up keeping both</p>
+<li><a href="impl-057-packaging.html">057 — Packaging</a>, where E1 and</li>
+<p>  the one-map restriction become somebody else's problem</p>
+</ul>
+
+</main>
+</div></body></html>

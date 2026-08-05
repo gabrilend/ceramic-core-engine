@@ -2,6 +2,41 @@
 
 ## Current behavior
 
+**Built, and turning out to have been the foundation rather than a late
+feature.**
+
+Three things change and none of them is a retreat. **Gather-repoint
+goes**, along with the gather cycle walk and the gather source purity
+rule, because nothing is pulled
+([056](../../docs/implementation-notes/056-no-pull-path.md)). **The
+destination-list snapshot goes** — this issue's one acknowledged
+retrofit — replaced by an immutable array published in a single atomic
+write, so the delivery walk takes no lock at all
+([214](../214-destinations-without-a-lock.md)). And **adding a station,
+which this issue deliberately left out of scope, is now the mechanism
+underneath every program's first moment**
+([211](../211-growing-the-station-table.md),
+[212](../212-one-way-to-build-a-program.md)): the table starts empty and
+grows as a program is read, so loading is this capability's first
+caller rather than a separate construction path.
+
+That last one is worth sitting with. This issue described itself as
+*the feature the whole design had been quietly preparing for* — wires
+holding indices, stations never moving, cycles checked when drawn — and
+it turned out to be preparing for something larger still. Editing a
+running program and building one stopped being two things.
+
+**Two decisions here are now load-bearing everywhere.** That the check
+and the change happen under one lock, because two individually legal
+edits can be jointly illegal — proven by fifty rounds of exactly that.
+And that a refusal returns and names its reason rather than killing the
+process, because a loader that dies serves its author while a running
+plant that dies for one bad instruction takes the plant down. Under one
+construction surface those are the same call, so the reasoning had to
+be right the first time.
+
+The remainder describes it as built.
+
 Built. Connect, disconnect, and gather-repoint operate on a running
 map, every load-time rule applied per edge — type compatibility by
 registry name, buffer-slot destinations, port limits by kind, the

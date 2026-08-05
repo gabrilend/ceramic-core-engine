@@ -10,23 +10,46 @@
 <a href="doc-001-overview.html">001 — Overview</a>
 <a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
-<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
 <a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
 <a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
 <a href="doc-008-map-file-format.html">008 — Map file format</a>
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html" class="here">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
-<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
@@ -51,11 +74,9 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
-<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
-<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
 <a href="done-502-comparator.html">502 — The comparator</a>
@@ -119,6 +140,14 @@ mode that looks like success.</p>
 sizing and growth; the delivery path — take the mutex, write, check
 readiness, claim values, release, build a task, push it; output ports
 with fan-out; the task struct.</p>
+<p>Also here: the input port record, which holds all three sources at once
+so changing where an argument comes from is a field write; a station
+table that starts empty and grows a shelf at a time, so no station ever
+moves and no mutex is ever relocated; and the phase's capstone — one
+surface for creating a station, configuring a port, and drawing a wire,
+legal at any moment. Reading a program from a file becomes the first
+caller of that surface rather than a mechanism of its own, which is
+what makes a program usable as a box inside another program.</p>
 <p>Maps are hand-built in C in this phase, and shims are hand-written.
 Both are replaced later, and both are worth having in their crude form
 first so that phase 3 and phase 6 have something already working to
@@ -140,16 +169,25 @@ per struct; emission of compare functions for the primitives.</p>
 function.</p>
 <p>Described by <a href="doc-007-datapath-build.html">007 — The build path</a>.</p>
 <p>---</p>
-<h2>Phase 4 — The pull path and configuration</h2>
-<p>The two slot kinds that are not buffers.</p>
-<p>Built here: static slots and the statics table, including reading a
-struct constant by walking the field table from phase 3; gatherer
-slots; inline gathering during task assembly; gather chains; the
-cycle check that runs when a connection is made.</p>
-<p>This is also where "a gatherer is a station with no ring-buffer slots"
-becomes a real distinction the engine acts on, and where the mutex on
-the statics table lands.</p>
-<p>Described by <a href="doc-004-datapath-gather.html">004 — Gathering</a>.</p>
+<h2>Phase 4 — Configuration</h2>
+<p>The input that is not a buffer.</p>
+<p>Built here: static values, held by the port that reads them, including
+reading a struct constant by walking the field table from phase 3;
+peeking rather than consuming, so a static is always full and never
+gates readiness; and writing one — from the file at construction, from
+outside the graph while it runs, or down a wire whose destination
+happens to be a static port.</p>
+<p>The addition that carries the most weight is the smallest: **a write is
+an event.** Writing a static runs the ordinary readiness check on the
+station holding it, which is what lets a chain of stations wired
+through statics behave like a recalculation graph, and what makes
+construction itself the thing that starts a program.</p>
+<p>This phase originally built a pull path as well — gatherer slots,
+inline gathering, chains, and a cycle check. All of it is being
+removed; <a href="impl-056-no-pull-path.html">056</a> records what
+it was for, the three timings considered for it, and the accounting
+problem that ended it.</p>
+<p>Described by <a href="doc-004-datapath-statics.html">004 — Statics and recalculation</a>.</p>
 <p>---</p>
 <h2>Phase 5 — Routing kinds</h2>
 <p>Comparators and iterators, which are variations on one step of
@@ -186,7 +224,29 @@ the same cycle check applied at connection time.</p>
 <p>Also the HTML documentation set at <code>docs/HTML/</code>, cross-linked and
 navigable, which is deliberately deferred to here rather than built
 alongside each phase — it should be generated from the documents, not
-maintained in parallel with them.</p>
+maintained in parallel with them. The set grows an introduction and a
+readable record: a slideshow that shows the datapath moving rather than
+describing it, and the conversation logs rendered as a book.</p>
+<p>---</p>
+<h2>Phase 8 — The workbench</h2>
+<p>Tools that stand outside the engine and help somebody write a program
+for it. Everything up to here makes maps run; nothing yet helps anyone
+compose one except a text editor.</p>
+<p>Built here: a canvas in the browser where stations are placed, named,
+given a kind and a box function, and wired; static values filled in;
+every load-time rule applied as a wire is drawn rather than at startup;
+and a download of the map file together with the C source for the
+functions it used. Boxes come from a bundled drawer or from a C file
+the page reads locally, parsed by the build's own generator compiled to
+WebAssembly so the page and the build cannot disagree about what a box
+is. Nothing is stored on a server.</p>
+<p>Depends on phase 6 for the format it emits, phase 3 for the parser it
+borrows, and specifically on the generator being a standalone C program
+rather than a Lua script.</p>
+<p>The constraint the whole phase is held to: you can also write a map in
+a text editor. The canvas is an alternative to writing the file by
+hand, never a prerequisite for it. If the canvas can ever express
+something the format cannot, the format is what needs fixing.</p>
 <p>---</p>
 <h2>Where the numbers live</h2>
 <p>This document deliberately contains no counts, sizes, or thresholds.

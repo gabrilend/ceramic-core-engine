@@ -40,6 +40,15 @@ sizing and growth; the delivery path — take the mutex, write, check
 readiness, claim values, release, build a task, push it; output ports
 with fan-out; the task struct.
 
+Also here: the input port record, which holds all three sources at once
+so changing where an argument comes from is a field write; a station
+table that starts empty and grows a shelf at a time, so no station ever
+moves and no mutex is ever relocated; and the phase's capstone — one
+surface for creating a station, configuring a port, and drawing a wire,
+legal at any moment. Reading a program from a file becomes the first
+caller of that surface rather than a mechanism of its own, which is
+what makes a program usable as a box inside another program.
+
 Maps are hand-built in C in this phase, and shims are hand-written.
 Both are replaced later, and both are worth having in their crude form
 first so that phase 3 and phase 6 have something already working to
@@ -71,20 +80,30 @@ Described by [007 — The build path](007-datapath-build.md).
 
 ---
 
-## Phase 4 — The pull path and configuration
+## Phase 4 — Configuration
 
-The two slot kinds that are not buffers.
+The input that is not a buffer.
 
-Built here: static slots and the statics table, including reading a
-struct constant by walking the field table from phase 3; gatherer
-slots; inline gathering during task assembly; gather chains; the
-cycle check that runs when a connection is made.
+Built here: static values, held by the port that reads them, including
+reading a struct constant by walking the field table from phase 3;
+peeking rather than consuming, so a static is always full and never
+gates readiness; and writing one — from the file at construction, from
+outside the graph while it runs, or down a wire whose destination
+happens to be a static port.
 
-This is also where "a gatherer is a station with no ring-buffer slots"
-becomes a real distinction the engine acts on, and where the mutex on
-the statics table lands.
+The addition that carries the most weight is the smallest: **a write is
+an event.** Writing a static runs the ordinary readiness check on the
+station holding it, which is what lets a chain of stations wired
+through statics behave like a recalculation graph, and what makes
+construction itself the thing that starts a program.
 
-Described by [004 — Gathering](004-datapath-gather.md).
+This phase originally built a pull path as well — gatherer slots,
+inline gathering, chains, and a cycle check. All of it is being
+removed; [056](implementation-notes/056-no-pull-path.md) records what
+it was for, the three timings considered for it, and the accounting
+problem that ended it.
+
+Described by [004 — Statics and recalculation](004-datapath-statics.md).
 
 ---
 
@@ -138,7 +157,35 @@ the same cycle check applied at connection time.
 Also the HTML documentation set at `docs/HTML/`, cross-linked and
 navigable, which is deliberately deferred to here rather than built
 alongside each phase — it should be generated from the documents, not
-maintained in parallel with them.
+maintained in parallel with them. The set grows an introduction and a
+readable record: a slideshow that shows the datapath moving rather than
+describing it, and the conversation logs rendered as a book.
+
+---
+
+## Phase 8 — The workbench
+
+Tools that stand outside the engine and help somebody write a program
+for it. Everything up to here makes maps run; nothing yet helps anyone
+compose one except a text editor.
+
+Built here: a canvas in the browser where stations are placed, named,
+given a kind and a box function, and wired; static values filled in;
+every load-time rule applied as a wire is drawn rather than at startup;
+and a download of the map file together with the C source for the
+functions it used. Boxes come from a bundled drawer or from a C file
+the page reads locally, parsed by the build's own generator compiled to
+WebAssembly so the page and the build cannot disagree about what a box
+is. Nothing is stored on a server.
+
+Depends on phase 6 for the format it emits, phase 3 for the parser it
+borrows, and specifically on the generator being a standalone C program
+rather than a Lua script.
+
+The constraint the whole phase is held to: you can also write a map in
+a text editor. The canvas is an alternative to writing the file by
+hand, never a prerequisite for it. If the canvas can ever express
+something the format cannot, the format is what needs fixing.
 
 ---
 

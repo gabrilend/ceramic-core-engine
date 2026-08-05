@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>209 — The output station</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html" class="here">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>209 — The output station</h1>
+<h2>Current behavior</h2>
+<p>A program has no output, and no way to say where its results come from.</p>
+<p>Values move between stations and stop there. A station whose box
+returns void is a sink and produces nothing further. A station whose
+output port is wired nowhere discards, which is deliberate and correct
+for an unwired comparator branch. When the pool drains and the program
+ends, whatever it computed exists only in whatever side effects its
+boxes had.</p>
+<p>Nothing is missing mechanically — a box can already print, append to a
+file, or write a socket. What is missing is a <em>name</em>: no station is
+designated as the place a program's results come from, so a program
+that will be composed inside another has nowhere for the parent to wire
+from, and a person reading a box file cannot tell which station is the
+point of the whole thing.</p>
+<p>The diagnostic reports are not this. They describe how the machine ran
+— run counts, buffer depths, elapsed times — not what it computed.</p>
+<h2>Intended behavior</h2>
+<p>**A program's output is a station, and it transmits rather than
+computes.**</p>
+<p>This is a correction to an earlier draft of this issue, which had the
+output station be an ordinary station running an ordinary box. That
+conflated two different things, and separating them is most of the
+work here.</p>
+<h3>The two things that were tangled</h3>
+<p><strong>Doing something with a result</strong> — appending a line to a file, sending
+a datagram, printing a record — is an ordinary box on an ordinary
+station, wired into the flow like anything else. It needs no
+designation and no new concept, and it was never the missing piece. A
+program that writes to disk simply has a station that writes to disk.</p>
+<p><strong>Saying what a program produces</strong> is the missing piece, and it is not
+a computation. It is a name for a set of ports.</p>
+<h3>So: the output station is a pass-through</h3>
+<p>It runs no box. Its <strong>input ports are the program's output ports</strong> —
+values arriving at them have arrived at the boundary, and a parent
+wiring into a sub-program's output port reads whatever landed on the
+matching input. Nothing is computed at the crossing; the values simply
+change whose program they are in.</p>
+<p>Three things follow, and all three are simplifications:</p>
+<p><strong>The output type needs no declaring.</strong> A program's output port carries
+whatever type the station wired into it produces, checked by the same
+wire check as everything else.</p>
+<p><strong>Composition needs no mechanism.</strong> A parent wires from a sub-program's
+output port exactly as it would wire from any station. There is no
+"finished" to detect, no per-program task counting, and one thread pool
+serves every program, because nothing about finishing requires knowing
+which program a task came from.</p>
+<p><strong>The concurrency rule disappears.</strong> The earlier draft had to warn that
+an output box runs concurrently with itself, that it must be safe on
+several threads at once, that it may only issue one write per
+invocation, and that a file handle held as a static would never be
+closed by the engine. None of that applies to something that runs no
+code. It all still applies to a station whose box writes to disk —
+which is the ordinary rule for any box that reaches out to the world,
+stated where it belongs rather than as a special property of being an
+output.</p>
+<h3>The symmetric half</h3>
+<p>If a program has named output ports, it needs named input ports for the
+same reason: a parent wiring <em>into</em> a sub-program otherwise has to
+reach inside and name a station by its internal name, which is not
+composition. That is the input station, and it is
+<a href="issue-213-the-input-station.html">213</a> — the same design, pointed the other
+way.</p>
+<h3>Several outputs means several stations</h3>
+<p>A program that produces more than one thing has more than one output
+station, each with its own inputs and its own single output port.</p>
+<p>The alternative was one station whose output ports each owned a subset
+of its input ports — fill inputs one through three and the first output
+fires, fill four and five and the second does. It is expressible and it
+was nearly taken, and the reason it was not is worth keeping: **it
+would be the only thing in the engine with several readiness checks
+over subsets of its ports.** Every other station has one check over all
+of them. Several stations gets identical behaviour out of the check
+that already exists, with no grouping syntax and no new shape.</p>
+<p>What it costs is that a program has several doors out rather than one.
+That turned out to be fine, and it settles something else: since a
+program's several outputs are several stations, a program used as a box
+never needs a box with several output ports — which retires
+<a href="issue-506-multi-output-boxes.html">506</a>, whose whole argument was that boxes
+had to catch up to what programs could do.</p>
+<h3>An unwired output port holds its values</h3>
+<p>Not discards, and not writes.</p>
+<p><strong>Discarding is right for every other port and wrong for this one.</strong> An
+unwired comparator branch is the normal case, so a port wired to
+nothing throws its value away, and that is deliberate. But discarding a
+program's <em>results</em> means the program did nothing. So this is the one
+port kind where nothing-wired means hold on to it, and the rule and its
+exception can both be true because they are about different things.</p>
+<p><strong>Writing them to a file was considered at length and dropped.</strong> The
+engine would have needed a file handle, a way to append safely from
+several threads, a decision about what a failed write means, a
+platform-dependent default path, and a format — and it would have been
+the first time the engine touched the filesystem for program data
+rather than for diagnostics. All of that disappears if the values
+simply stay where they are.</p>
+<p><strong>Growth is warned about, every single time.</strong> An ordinary buffer
+growing means a consumer is slower than its producer, which is a
+performance signal and is reported at teardown past a threshold. An
+<em>output</em> buffer growing means **nobody is collecting the program's
+results at all**, which is a different diagnosis and deserves to be
+loud immediately rather than summarised later. It joins the two the
+phase 7 report already distinguishes — a slot piling up means uneven
+inputs, the task ring piling up means slow consumers — as a third.</p>
+<p><strong>Reading them is the caller's business.</strong> The engine's contract ends
+at the buffer: results accumulate at the output station's port, and
+whoever embedded the engine takes them out. That is the exact mirror of
+writing a static from outside the graph, and together the two are a
+program's whole surface to the world — everything else, including what
+a file would have been for, is ordinary C written by whoever is running
+the thing.</p>
+<p>A program nobody reads from buffers until it runs out of memory. The
+warning is the notice, and it fires from the first doubling.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. Box file syntax for declaring that a station is an output, and
+   reader support for it. Several stations may be, and each has one
+   output port.
+2. The station kind that runs no box: placement, and a delivery walk
+   that recognises arrival at the boundary rather than calling a shim.
+3. The unwired case — hold the values rather than discarding — and the
+   growth warning, which fires from the first doubling and says which
+   station, unlike the ordinary growth report which waits and
+   summarises.
+4. The call that takes values out, from outside the graph, mirroring
+   the call that writes a static in.
+5. Carrying the declaration through the dump, so a dumped program still
+   names its outputs and round-trips.
+6. The load-time check that a declared output station exists and that
+   what is wired into it type-checks — the ordinary wire check applied
+   at one more place.
+7. A demonstration program used as a box inside another, wired from its
+   output ports, with the parent unable to tell whether the thing
+   behind the port is a graph or a C function — and the same program
+   run alone, buffering, warning, and drained by its caller.</p>
+<h2>Open questions</h2>
+<ul>
+<li>Does a program with no output station get refused? Yes, per an</li>
+<p>  earlier decision — it has not said what it is for. But that
+  interacted with a seeding rule that no longer exists, so the reason
+  needs restating on its own terms.</p>
+<li>An output buffer that nobody drains grows until memory runs out. The</li>
+<p>  warning names it from the first doubling, which is the honest signal
+  — but whether there should also be a ceiling, and what reaching one
+  would do, is unanswered. Refusing to accept more results is not
+  obviously better than running out of memory, and blocking the
+  producer is worse than both.</p>
+</ul>
+<h2>Related</h2>
+<ul>
+<li><a href="issue-213-the-input-station.html">213 — The input station</a>, the same design</li>
+<p>  pointed the other way</p>
+<li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
+<p>  where a program becoming usable as a box is the point</p>
+<li><a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>,</li>
+<p>  the box side of the same question</p>
+<li><a href="done-205-delivery-walk.html">205 — The delivery walk</a>, which</li>
+<p>  gains one case: a destination that is a boundary rather than a slot</p>
+<li><a href="done-104-termination-by-last-sleeper.html">104 — Termination by last sleeper</a>,</li>
+<p>  untouched — an earlier draft of this issue would have added a final
+  act to it, and the reason it does not is worth keeping visible</p>
+<li><a href="doc-003-datapath-delivery.html">003 — Delivery</a> and</li>
+<p>  <a href="doc-008-map-file-format.html">008 — Map file format</a>, each of
+  which needs a section</p>
+</ul>
+
+</main>
+</div></body></html>

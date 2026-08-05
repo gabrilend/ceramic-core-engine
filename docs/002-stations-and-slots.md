@@ -11,6 +11,15 @@ when the map loads and never resized while the program runs. A station
 is addressed by its position in that array — a 32-bit index, not a
 pointer.
 
+**The "never resized" half is going.** Under one construction surface,
+adding a station is the only way one ever comes into existence, so the
+table starts empty and grows as a program is read. It grows by adding a
+**shelf** — another allocation holding a fixed number of stations, with
+a short list of where the shelves are — rather than by reallocating,
+because a station holds its own mutex and a mutex is identified by
+where it lives. Move one and every thread parked on it waits forever at
+an address nobody will unlock. Issue 211.
+
 Indices are used rather than addresses for three reasons. They are half
 the size. They survive being written to a log or dumped to the screen,
 where a pointer is noise. And they leave the door open for the array to
@@ -39,25 +48,46 @@ reallocating the buffer storage the slot points at, not by reallocating
 the station. This is why a wire can hold a station index forever and
 never need fixing up.
 
-## The three kinds of slot
+## The kinds of input port
 
-An input slot is a place a value arrives from. There are three ways
-that can happen, and the slot carries a one-byte tag saying which. The
-tag is stored, never inferred — asking "is the box upstream of me an
-input-less box?" on every readiness check would mean chasing an index
-into another station to answer a question that cannot change.
+An input port is where one of a box's arguments comes from. There are
+two ways a value can be there, plus the state of not having been
+configured at all, and the port carries a one-byte tag saying which.
+The tag is stored, never inferred — deciding it by walking upstream on
+every readiness check would mean chasing indices into other stations to
+answer a question that cannot change.
+
+| tag | how it is read | how it is written | gates readiness |
+|---|---|---|---|
+| **ring** | **consumed** — one value taken per invocation | queued behind whatever is waiting | **yes** |
+| **static** | **peeked** — every invocation reads the same value | replaces what was there | no, always full |
+| **none** | never — a station holding one cannot run | by being given a source | **yes**, permanently negative |
+
+A ring port is a **stream**; a static port is a **cell**. That is the
+whole distinction, and [004](004-datapath-statics.md) is what follows
+from it.
 
 **A slot is made of:**
 
 | Field | Type | What it is |
 |---|---|---|
-| kind | `unsigned char` | Ring buffer, gatherer, or static. |
+| kind | `unsigned char` | Ring buffer or static. There was a third, a gatherer, and [056](implementation-notes/056-no-pull-path.md) is where it went. |
 | elem_size | `int` | Bytes per value. Copied from the registry at load; equals `sizeof` the box function's parameter type. |
 | storage | `void *` | For a ring buffer, the cells. For a static, unused. |
 | capacity | `int` | Ring buffer only — how many cells. |
 | head, tail | `int` | Ring buffer only — where the oldest value sits and where the next one goes. |
-| source | `int` | Gatherer only — which station supplies this slot on demand. |
+| source | `int` | Unused. It named the station a gatherer pulled from, and nothing pulls now. |
 | static_id | `int` | Static only — which entry in the statics table. |
+
+Two things about that table are changing and are worth reading beside
+it. **A static's value is moving onto the port itself**, so `static_id`
+becomes the bytes rather than an index into a shared table — which is
+what lets a process hold more than one program at a time, and what
+makes claiming a static happen under the same lock as the ring pop
+instead of a second one. And **head and tail are going**, because each
+cell will carry its own state and a reader will scan for a usable one
+rather than compute where it must be; that is what lets a buffer grow
+by adding a page instead of copying. Issue 210 carries both.
 
 **Ring buffer.** The ordinary case. Values arrive by being written into
 it and wait their turn. It is a real ring: two indices, wrapping at the
@@ -65,15 +95,32 @@ end. The cells are exactly `elem_size` bytes each, allocated once when
 the map loads, so a write is a `memcpy` into a fixed offset with no
 allocation anywhere on the path.
 
-**Gatherer.** The slot holds no buffer at all. It holds the index of an
-upstream station, and the value is produced on demand by running that
-station's box inline at the moment a task is being assembled. See
-[004](004-datapath-gather.md).
+**Gatherer — removed.** A third kind used to hold the index of an
+upstream station and produce its value on demand, by running that
+station's box inline while a task was being assembled. Nothing is
+pulled any more; a value that used to be gathered is written into a
+static port by an ordinary push, and writing a static runs the
+readiness check on the station holding it. See
+[056](implementation-notes/056-no-pull-path.md) for what that was for
+and what ending it cost.
 
-**Static.** The slot holds an index into the statics table. Its value
-never arrives — it is simply always there, which means a static slot is
+**Static.** The port holds an index into the statics table. Its value
+never arrives — it is simply always there, which means a static port is
 always full and never affects whether a station is ready. Thresholds,
 file paths, and configuration live here.
+
+Reading one is a **peek**: the value is not consumed, so a station
+driven by its ring side reads the same static on every one of its runs.
+That is what makes a threshold a threshold. And **writing one is an
+event** — it runs the ordinary readiness check on the station holding
+it, which is how a chain of stations wired through statics recalculates
+and how a program starts at all. [004](004-datapath-statics.md).
+
+**None.** The port has been given no source yet. It can never hold a
+value, so a station with one can never become ready — which is what
+lets a program be assembled a piece at a time, with stations existing
+before they are wired. It is a state, not a value: nothing is ever
+handed to a box.
 
 ## Ring buffer growth
 
@@ -82,6 +129,18 @@ the reading index, the buffer grows: still holding the station's mutex,
 the storage is reallocated to twice the size, the wrapped-around
 portion is copied up so the contents read contiguously again, and the
 two indices are corrected.
+
+**The copy is the part that is going.** It exists because the two
+indices are positions taken modulo the capacity — change the capacity
+and every existing value is suddenly at a different index, so they have
+to be physically moved back into order. Once cells carry their own
+state and a reader scans instead of computing, nothing derives a
+location from the capacity, and a buffer can grow by **adding a page**
+of cells to a short list. No copy, no existing cell moves, and the
+ordering hazard the copy has to be careful about — publish before
+copying and readers see an empty buffer; copy before publishing and a
+value taken during the copy is delivered twice — stops existing rather
+than being handled.
 
 This is safe without any further care because the growth reallocates
 the *storage* the slot points at, not the station. Every wire in the
@@ -121,6 +180,6 @@ as the map gives it. What the ports mean and how one is chosen is
 ## Related
 
 - [003 — Delivery](003-datapath-delivery.md), the path that writes into these slots.
-- [004 — Gathering](004-datapath-gather.md), the pull path.
+- [004 — Statics and recalculation](004-datapath-statics.md), the input that is not a queue.
 - [007 — The build path](007-datapath-build.md), where `elem_size` and the shim pointer come from.
 - [009 — Loading](009-datapath-load.md), where the table is built.

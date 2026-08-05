@@ -2,6 +2,33 @@
 
 ## Current behavior
 
+**Built, and three of its pieces demonstrate things that are going.**
+
+The pushed-plus-gathered pair, the gathered addend in the
+everything-map, and the refused gather cycle among the failure modes
+all belong to the pull path
+([056](../../docs/implementation-notes/056-no-pull-path.md)). So does
+the seed being explained station by station "with the vacuously-ready
+gatherer correctly skipped" — there is no seed sweep now, and what
+starts a program is that construction's static writes run the ordinary
+readiness check.
+
+**The demo's spine is untouched and it is the important part.** One
+binary running three programs; a chain losing a hop by one text edit
+and leaving 14 instead of 28; a threshold changed from 5 to 100 and the
+value landing on the other branch — with the compiler never invoked
+after the first line. That is the phase's whole claim and none of it
+depended on gathering.
+
+What should replace the removed scenes is close at hand: a **static
+written mid-run**, recalculating everything downstream of it without
+the program restarting. It demonstrates the mechanism that replaced the
+pull path, it is a text edit like the others, and it makes the same
+point more strongly — the shape of a program can change while it runs,
+not only between runs.
+
+The remainder describes it as built.
+
 Built, shell-driven, one compile at the top and never again. The
 same binary runs three map files into three behaviours — a doubling
 chain leaving 28, a pushed-plus-gathered pair leaving 14, a gate

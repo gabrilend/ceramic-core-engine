@@ -2,6 +2,35 @@
 
 ## Current behavior
 
+**Built, and needing rewriting — four of its five scenes demonstrate a
+capability that is being removed.**
+
+Frozen versus fresh, the gather tax, the chain three deep, and the
+refused cycle are all about the pull path, which is gone
+([056](../../docs/implementation-notes/056-no-pull-path.md)). The knob
+turned mid-run survives, and it survives as the *most* interesting
+scene rather than the least, because writing a static is no longer only
+configuration — it runs the readiness check on the station holding it,
+which is what starts a program and what makes a chain of statics
+recalculate.
+
+**What the phase needs to demonstrate instead** is that: a value
+written into a static port propagating down a chain, computed once and
+read by every consumer, with the recalculation visible. And its honest
+counterpart — the same program before and after, showing that a value
+is now as fresh as the last write rather than as fresh as the moment it
+is used, which is the thing given up.
+
+**One finding here outlives its scene and should be kept in whatever
+replaces it.** The gather tax measurement was wrong the first time, and
+the reason was instructive: gathering happened at task assembly, so
+seeded values paid on the seeding thread, and the timing wrapped only
+the running and measured nothing. *Where a cost lands is not where you
+expect to find it* is a lesson about measuring, not about gathering,
+and it cost a real mistake to learn.
+
+The remainder describes it as built.
+
 Built and discoverable from the root launcher. The file read both
 ways sits first: the frozen side keeps reporting 111 after the file
 turns to 999 mid-run while the gathered side follows — the whole
@@ -78,6 +107,7 @@ read against each other.
 
 ## Related
 
-- [004 — Gathering](../docs/004-datapath-gather.md)
+- [004 — Statics and recalculation](../docs/004-datapath-statics.md),
+  which describes what this demo now has to show instead
 - Issues 401 through 405 — everything being demonstrated
 - Issue 307 — the phase 3 demo this builds on

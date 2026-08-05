@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>407 — Gathering at pickup</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html" class="here">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>407 — Gathering at pickup</h1>
+<h2>Current behavior</h2>
+<p>**SUPERSEDED. This will not be built, and the reason is worth more than
+the design was.**</p>
+<p>This issue moved <em>when</em> a pulled value gets pulled. What happened
+instead is that pulling was removed altogether: a value that used to be
+gathered is now written into a static port by an ordinary push, and
+writing a static runs the readiness check on the station holding it. So
+there is no pull to time.</p>
+<p><a href="impl-056-no-pull-path.html">056</a> carries the
+full reasoning — what pulling was for, the three timings weighed for
+it, and the accounting problem that ended the search. The short version
+is that a pulled value arriving by delivery lands in a queue whose
+depth nothing keeps in step with the station's other ports, and a
+pulled value produced inside the invocation has to run user code
+somewhere it does not belong. Neither was worth the one sentence the
+pull path existed to make true.</p>
+<p>Three things this issue argued for survive it, having turned out not to
+be about gathering at all: the claim dispatch table's null rows
+becoming explicit cases; the snapshot of a port's wiring taken under
+the mutex that is already held; and the observation that the pool never
+needed to change for any of it.</p>
+<p>The rest of this file is kept as the design that was not built.</p>
+<h3>What it was written against</h3>
+<p>A pulled value is gathered by the thread that scheduled the task, not
+by the thread that runs it.</p>
+<p>The sequence today: a delivery fills the last empty ring port of a
+station, readiness fires, and that same delivering thread takes one
+value from each ring port under the station's mutex, releases the
+mutex, and then — still on the delivering thread — walks every gatherer
+port and runs the upstream station to produce a value for it. Only once
+every slot in the task is full does the task reach the queue.</p>
+<p>Three things are wrong with that, and they are the same wrong thing
+seen from three sides.</p>
+<p><strong>The value is not fresh at the moment it is used.</strong> It is fresh at the
+moment it was scheduled, and between those two instants sits the entire
+queue — which is the one quantity in the engine that nobody controls.
+That is the promise the pull path exists to make, and it is the whole
+reason a gatherer costs more than a ring buffer. Under a shallow queue
+the difference is microseconds; under a backlog the difference is the
+backlog.</p>
+<p><strong>The deliverer pays for work it has no interest in.</strong> A thread passing
+through with one value ends up executing an arbitrary amount of
+somebody else's map, because a gather chain can be several stations
+deep and every one of them runs inline before that thread pushes a
+single task. A station fanning out to a hundred destinations pays this
+a hundred times in a row.</p>
+<p><strong>Readiness stops propagating while it happens.</strong> The delivering thread
+is not in the queue and not looking at other stations; it is down a
+gather chain reading a file. Everything else that had just become ready
+waits on a disk it has nothing to do with. That is not a throughput cost
+but a discovery cost, and discovering ready work is the only mechanism
+this engine has for creating concurrency at all.</p>
+<p>Two supporting pieces are also missing:</p>
+<ul>
+<li>The claim dispatch table has literal null rows for gathered and</li>
+<p>  static ports, and the caller guards them with a null check. An absence
+  is standing in for a decision, and the reader has to know which
+  absence means what.</p>
+<li>The gather wiring is read without a lock. Today that window is a few</li>
+<p>  instructions wide, because the read happens on the same thread
+  immediately after the mutex is dropped. It is a real window all the
+  same, now that runtime rewiring can repoint a gatherer mid-run.</p>
+</ul>
+<h2>Intended behavior</h2>
+<p>**A pulled value is gathered by the worker that is about to run the
+box, on that worker's own stack, immediately before the call.**</p>
+<p>The claim is unchanged: inputs all present, one value taken from each
+ring port under the station's mutex, static values copied in the same
+window because they are bytes on the port and cost nothing to take. An
+invocation becomes real and a task is built. What changes is that the
+task reaches the queue with its gathered slots holding *a way to produce
+a value* rather than a value, and the worker that pops it resolves them
+and then calls the box without going back to the queue in between.</p>
+<p><strong>Each slot in a task says which of two things it holds</strong> — a value, or
+a way to produce one — as an explicit tag with a case for each, never as
+a null pointer meaning "nothing to do here". That tag arrives with the
+input-port record (<a href="issue-210-input-port-record.html">210</a>) rather than being
+invented here; this issue is what first reads it on the worker's side.
+The task becomes self-describing: a worker walks its slots, resolves the
+ones that say they need resolving, and calls the box, without consulting
+the station to find out which is which.</p>
+<p><strong>The pool must not learn that tasks have phases.</strong> The obvious
+implementation gives the task a second function pointer for a prepare
+step and teaches the worker loop to call it, which would make the pool
+aware of stations — and the pool's entire value is that it is not.</p>
+<p>The way around it is a trick phase 1's tests already use and the pool's
+header already documents as undetectable from inside the pool: allocate
+a gathering station's task as a larger struct whose <em>first</em> member is
+the task struct, with the map pointer and the snapshotted gather list
+behind it, and aim the task's function pointer at one generic gathering
+shim. That shim recovers the outer struct — the task pointer is the base
+pointer — fills the slots, and calls the station's real shim. The pool
+pops it, calls one function pointer, hands it to the delivery walk, and
+frees the base pointer: its three unconditional steps, untouched. The
+delivery walk sees a genuine box task with a real station index and a
+real staging buffer: untouched.</p>
+<p><strong>The wiring is snapshotted; only the values are late.</strong> Deferring the
+gather widens the unlocked read of a port's upstream index from a few
+instructions to the full queue latency. The fix belongs in the claim:
+copy the gather list into the task under the station's mutex, which is
+already held. Then the semantics are one sentence — *wiring and buffered
+values as of scheduling, pulled values as of use* — and a repoint can
+never disturb an invocation already in flight.</p>
+<p><strong>The rule that makes gathering safe survives untouched.</strong> A station
+that is gathered from has no ring-buffer ports, so every path upstream
+through gather wires ends at a station with nothing to wait for. That
+is not a restriction this issue relaxes: what forces it is that a gather
+is a call which cannot wait and cannot decline, and moving <em>when</em> it
+happens changes which thread pays, not whether it can park halfway.</p>
+<p><strong>One exception in the engine dissolves.</strong> Today a gathered box runs on
+a thread that is in the middle of delivering someone else's value —
+the single place where a box runs without a worker having picked up a
+task, and the place surprises come from. Afterward, every box in the
+engine runs on a worker that picked up a task. The concurrent-safety
+rule for gathered boxes stays exactly as it is, because several workers
+can still be pulling from one upstream station at the same moment.</p>
+<p><strong>What this costs, said out loud.</strong> A task sitting in the queue is no
+longer a complete description of an invocation, which is the same
+property as the freshness seen from the other end. A task's run time
+becomes its box's run time plus its gathers, so a slow gather shows up
+as a slow task rather than as slow delivery somewhere else — the honest
+place for it, since the cost belongs to the invocation that demanded the
+value, but it means throughput is no longer runs multiplied by per-box
+cost. And a worker inside a gather chain is neither asleep nor taking
+work, for an unbounded time, which the termination protocol cannot
+currently distinguish from a worker inside a box.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. Snapshot the gather list into the task during the claim, under the
+   station's mutex. Worth doing first and on its own, because it is
+   correct under the behaviour that exists today.
+2. Replace the null rows in the claim dispatch table with explicit
+   cases, so every port kind has an answer and no caller checks for an
+   absence. Land this with no behaviour change.
+3. The outer task struct and the generic gathering shim, proven first
+   on a hand-built map so the mechanism stands before the loader can
+   reach it.
+4. Move static resolution into the claim, under the mutex, alongside
+   the ring pop — which follows the statics-onto-ports work rather than
+   this issue, and is noted here because it is what leaves gathering as
+   the only thing deferred.
+5. Measure, on one map, before and after: deliverer time per delivery,
+   queue depth across a run, per-task time split into gather and box,
+   and the age of a pulled value at the moment the box reads it. The
+   last of those is the whole point and is the one nobody has measured.
+6. Retire the inline gather on the delivering thread, along with the
+   named exception to "boxes only run from the pool" that it created.
+7. Correct <a href="doc-004-datapath-statics.html">004 — Gathering</a> and
+   <a href="doc-058-guarantees.html">058 — Guarantees</a>, both of which
+   currently describe the value as fresh as of scheduling.</p>
+<h2>Open questions</h2>
+<p>**All three are moot — nothing gathers — but two got answers worth
+keeping, because they were about the engine rather than about
+gathering.**</p>
+<ul>
+<li><em>What happens to a task whose gather fails halfway?</em> It could only</li>
+<p>  ever have been fatal. By the time a worker holds the task, the ring
+  values have already been taken out of their buffers and cannot be put
+  back — other values were claimed after them, so the order would break
+  — which means abandoning the task loses real data silently. Retrying
+  is worse, because a box that reaches out to the world is not
+  necessarily idempotent and may already have consumed what it read.
+  Can't retry, can't abandon: stop and name what failed.</p>
+<li>*Does the sleeper count need to tell a worker inside a gather chain</li>
+<p>  from one inside a box?* No, and the framing was wrong. A gathered box
+  is a box; there is no engine-versus-your-code distinction to draw. A
+  worker running one is busy either way, so termination was never at
+  risk — the only thing at stake was whether a report could say which
+  box a stalled worker is inside, which it should, without needing to
+  classify how the box was reached.</p>
+<li><em>What is in the queue when the starting gate opens?</em> Whatever</li>
+<p>  construction's writes produced. There is no seed sweep any more.</p>
+</ul>
+<h2>The note that started this</h2>
+<p>Kept verbatim, because the reasoning in it is the specification:</p>
+<blockquote>we should add an option to, when checking the input values to see if</blockquote>
+<blockquote>there's a value present for every slot on a box station so that the</blockquote>
+<blockquote>box function can be enqueued as a task struct, we should be able to</blockquote>
+<blockquote>instead of gathering it there, to instead when the box function is</blockquote>
+<blockquote>called, to instead call the gather from within that call, meaning the</blockquote>
+<blockquote>worker thread does the gathering, rather than the enqueue'ing thread.</blockquote>
+<blockquote>This allows us to initiate a bunch of tasks quickly, rather than</blockquote>
+<blockquote>processing on the "enqueue 100 tasks" hot path.</blockquote>
+<blockquote></blockquote>
+<blockquote>So essentially, when a task struct is picked up from the thread pool</blockquote>
+<blockquote>by a worker thread to run a box function, it will first pull data</blockquote>
+<blockquote>from each of the gather slots it has. This can't be known at compile</blockquote>
+<blockquote>time, because we will need to be able to wire up new slots. Meaning,</blockquote>
+<blockquote>we can't just macro it into the box function's definition. Two box</blockquote>
+<blockquote>stations could have different wiring - the same box function might</blockquote>
+<blockquote>have one input, and on one box station it could be a static value and</blockquote>
+<blockquote>on the other it could have an input-only box meaning it should be</blockquote>
+<blockquote>gathered. On a third box station it might be a ring buffer, all with</blockquote>
+<blockquote>the same box function signature.</blockquote>
+<blockquote></blockquote>
+<blockquote>So, to address this problem, we should add a small layer of</blockquote>
+<blockquote>indirection - the task struct should contain a function pointer, this</blockquote>
+<blockquote>is known, and the function should point to a spot in memory with a</blockquote>
+<blockquote>void pointer and each function should know how to deconstruct the</blockquote>
+<blockquote>values in the void pointer, and assemble them into the variables that</blockquote>
+<blockquote>the function needs. Or maybe we're doing that automatically? I</blockquote>
+<blockquote>forget. Anyway, during that stage, if we do that OUTSIDE of the box</blockquote>
+<blockquote>function in the task_run() or whatever function, then we have a</blockquote>
+<blockquote>perfect opportunity to gather the gather input slot's values. If not,</blockquote>
+<blockquote>then we need to have a second pointer in each of the task structs</blockquote>
+<blockquote>that is set to a value of 0 or NULL if the box only has ring buffers</blockquote>
+<blockquote>or is without input slots at all. This pointer will point to a</blockquote>
+<blockquote>generator function that gathers all the input values with gather</blockquote>
+<blockquote>style inputs.</blockquote>
+<p>The note's own uncertainty — *"Or maybe we're doing that automatically?
+I forget"* — has an answer: the generated shim already does exactly
+that deconstruction, reading the task's slot bytes into typed
+arguments. That is what makes the outer-struct approach available
+instead of the second task-struct pointer the note falls back to. The
+indirection the note asks for is already there; this issue moves one
+step inside it.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="impl-056-no-pull-path.html">056 — Gather timing</a>,</li>
+<p>  which states this timing as the design and gives the reasoning, the
+  guarantees, and the costs in full</p>
+<li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, which</li>
+<p>  supplies the per-slot tag this reads and the port record it reads it
+  from</p>
+<li><a href="done-403-gatherer-slots.html">403 — Gatherer slots</a> and</li>
+<p>  <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and cycles</a>,
+  the mechanism whose timing this moves</p>
+<li><a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>,</li>
+<p>  which makes the unlocked read of a port's upstream index a real
+  window rather than a theoretical one</p>
+<li><a href="doc-004-datapath-statics.html">004 — Gathering</a> and</li>
+<p>  <a href="doc-058-guarantees.html">058 — Guarantees</a>, both of which state the
+  freshness promise this makes literally true</p>
+</ul>
+
+</main>
+</div></body></html>

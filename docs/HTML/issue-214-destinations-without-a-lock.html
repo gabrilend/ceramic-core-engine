@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>214 — Destinations without a lock</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html" class="here">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>214 — Destinations without a lock</h1>
+<p>The other half of getting the station's mutex off the hot path.
+<a href="issue-210-input-port-record.html">210</a> does the input side, where a claim
+stops taking a lock. This does the output side, where a delivery stops
+taking one to find out where it is going.</p>
+<h2>Current behavior</h2>
+<p>An output port holds its destinations as a <strong>linked list</strong>, and every
+delivery reads that list under the owning station's mutex.</p>
+<p>It does not merely read it — it <strong>copies it out</strong>. The walk takes the
+lock, counts the destinations, copies each <code>{station, port}</code> pair into
+an array on its own stack, releases the lock, and then visits them. The
+copy exists because runtime rewiring can unlink and free a node, and a
+walker holding a pointer into the list would follow a freed one. Taking
+the values out means that after the unlock, nothing points at anything
+that can be freed.</p>
+<p>That is correct, and it was the one retrofit the rewiring work
+discovered late rather than planning for. It costs a lock acquisition
+and a copy proportional to fan-out <strong>on every value the engine moves</strong>,
+and it is now the last thing holding the station's mutex on the hot
+path.</p>
+<h2>Intended behavior</h2>
+<p>**A port's destinations are one immutable array, and the port holds a
+pointer to it.**</p>
+<p>Rewiring never edits that array. It builds a whole new one and swaps
+the pointer in a single atomic write. A walker reads the pointer once
+and walks whatever it got, which nobody will ever modify — so there is
+no lock, no copy, and no possibility of seeing a half-edited set.</p>
+<p>Three things fall out. The walk gets faster by exactly the copy it no
+longer makes. Old and new readers each see a coherent set rather than a
+mixture. And it fits the decision that wires are attached in batches
+(<a href="issue-212-one-way-to-build-a-program.html">212</a>) — a batch was going to
+rebuild the list anyway, so building an array instead is no extra work.</p>
+<p>An array is also better on its own terms than a linked list here: the
+destinations are visited in order, immediately, one after another, and
+a contiguous run of pairs is what a processor wants for that.</p>
+<h3>Reclaiming the old array is the real question</h3>
+<p>A walker may still be inside the old array when rewiring swaps the
+pointer. Freeing it then is a use-after-free; never freeing it leaks
+one array per rewire.</p>
+<p><strong>Do the simple thing first: retire, don't free.</strong> The old array goes
+on a list and stays there until the program is torn down. A program
+that rewires a few dozen times leaks a few kilobytes and nobody
+notices. This is correct, it is three lines, and it is enough for
+everything that exists today.</p>
+<p><strong>Then, for a program that rewires continuously</strong> — a control loop
+turning knobs forever — the retired arrays have to come back. The
+mechanism:</p>
+<p>Each worker keeps a <strong>private counter</strong> of delivery walks, on its own
+cache line, written by nobody else. It is incremented when a walk
+begins and again when it ends, so the number is **odd while walking and
+even while not**. That costs one uncontended write per delivery and no
+coordination at all.</p>
+<p>When rewiring retires an array, it files it together with a snapshot of
+every worker's counter. Any later rewiring sweeps the retire list
+first: for each filed array, check each worker, and if that worker's
+counter is now <strong>even</strong> — it is not walking — **or differs from the
+snapshot** — it has finished the walk it was in — that worker cannot be
+holding it. When every worker passes, free it. When they do not, leave
+it filed and check again next time.</p>
+<p>Nothing waits and nothing spins. A worker with no work is asleep and
+therefore even, so it passes without ever having to move, which is what
+would otherwise deadlock the sweep against an idle pool. Counters are
+64 bits, so a counter cannot wrap all the way back to its snapshot in a
+long run and read as unchanged when it is not.</p>
+<p>It is a scrapyard rather than a leak: everything in it is accounted
+for, and anything still filed at teardown is freed then.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. Change the destination representation from a linked list to an
+   array behind a pointer, with rewiring rebuilding rather than
+   editing, still under the existing rewiring lock. Delivery keeps
+   taking the station's mutex for now.
+2. Take the mutex out of the walk: read the pointer, walk the array.
+   Measure a wide fan-out before and after — a hundred-destination
+   station is where the copy cost lives.
+3. Retire-don't-free, and a test that a wire removed mid-run leaves
+   in-flight walkers unharmed and delivers a value down the removed
+   wire exactly as it would have a moment earlier.
+4. The per-worker counters, odd while walking, and the sweep. Its own
+   change with its own test: many rewires against a saturated pool,
+   with the retire list observed emptying.
+5. Confirm the dump still round-trips after a batch rewire, since the
+   destination order it relies on is now an array's order rather than a
+   list's append order.</p>
+<h2>Open questions</h2>
+<ul>
+<li>Destinations were appended at the list's tail so wiring order was</li>
+<p>  preserved, and the dump's round-trip test leans on that. An array
+  built fresh per rewire has to preserve the same order, which is easy
+  — but it is an invariant that used to be structural and is now
+  something the rebuild has to remember.</p>
+<li>Does the retire list need its own lock? Only rewiring touches it, and</li>
+<p>  rewiring is already serialized by the rewiring lock, so probably not
+  — but that is an argument from a lock existing elsewhere, which is
+  the kind of reasoning that stops being true quietly.</p>
+</ul>
+<h2>Related</h2>
+<ul>
+<li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the input</li>
+<p>  side of the same removal</p>
+<li><a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>,</li>
+<p>  which added the snapshot this replaces, and recorded it as the
+  retrofit its own plan had missed</p>
+<li><a href="done-205-delivery-walk.html">205 — The delivery walk</a>, the walk</li>
+<p>  this changes</p>
+<li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
+<p>  where wires are attached in batches, which is what makes rebuilding
+  an array per change reasonable</p>
+<li><a href="done-703-map-dump.html">703 — The map dump</a>, whose round trip</li>
+<p>  depends on destination order</p>
+</ul>
+
+</main>
+</div></body></html>

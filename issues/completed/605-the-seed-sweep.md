@@ -2,6 +2,35 @@
 
 ## Current behavior
 
+**Built, and being removed entirely — not replaced, removed.**
+
+The sweep exists because some stations would otherwise never run:
+nothing can push to a station with no ring-buffer inputs, so if nothing
+pulls it either, it needs a first task or it sits forever. That whole
+condition stopped being expressible when the pull path went
+([056](../../docs/implementation-notes/056-no-pull-path.md)). What
+starts a program now is that **binding a static is a write, and a write
+runs the ordinary readiness check on the station holding it** — so the
+writes that build a program are the writes that start it, and there is
+no sweep, no rule about who deserves a first task, and nothing to
+report a count of.
+
+Two findings outlive it and are worth more than the mechanism was.
+
+**A task must come into existence by exactly one path.** This issue
+enqueued through the very construction the delivery walk uses rather
+than building tasks its own way, and that instinct is now the whole
+design: a delivery arriving, a static being written, and a program
+being built all reach the same readiness check and the same task build.
+One door.
+
+**The pool must exist before anything can start, and the workers must
+be parked while it does.** The gate that phase 1 built for this reason
+is still exactly right — construction's writes land while nothing is
+running, and releasing the gate is what sets the program going.
+
+The remainder describes it as built.
+
 Built, as the last step of loading, before the workers are released
 — the pool exists so the seed has somewhere to push, the workers are
 parked so the termination rule's outside-pusher clause stays true.

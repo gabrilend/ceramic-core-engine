@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>506 — Boxes with several output ports</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html" class="here">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>506 — Boxes with several output ports</h1>
+<h2>Current behavior</h2>
+<p><strong>RETIRED. The reason this became urgent stopped being true.</strong></p>
+<p>The argument was parity: a program with several output stations, used
+as a box, <em>is</em> a box with several outputs — so if programs and boxes
+are to be the same kind of thing, boxes need what programs already
+have. That was the whole case for the mechanism.</p>
+<p>A program's several outputs are now several <strong>stations</strong>
+(<a href="issue-209-map-output-collection.html">209</a>), each with one output port. So a
+program used as a box presents several separate output points, not one
+box with several ports, and there is nothing for a box to catch up to.
+A box returns one value because a C function returns one value, and
+that is now simply true rather than a limitation.</p>
+<p><strong>What survives is only the efficiency case</strong>, and it is not worth a
+mechanism. A box computing two related results from shared work has to
+be two boxes computing the shared part twice. That is a real cost in a
+real program, and if it ever shows up in a measurement rather than in
+an argument, this file is where the design already exists — the return
+struct, the per-port offset and size as compiler-computed expressions,
+delivery copying from an offset it is told rather than from the start
+of the value. The machinery it would need is still all there in the
+field tables, and still unasked for.</p>
+<p><strong>One thing here outlived the issue</strong> and belongs wherever ports are
+described: a comparator's three ports and an iterator's many carry the
+<em>same</em> value routed to one place. Ports are a choice of destination,
+not a set of results. That distinction is what makes "a box produces
+one value" and "a station has several ports" both true at once, and it
+is the sentence this issue was written to break.</p>
+<p>The rest is kept as the design that was not built.</p>
+<h3>What it was written against</h3>
+<p>A station already has several output ports — one for a plain box, three
+for a comparator, as many as the map declares for an iterator. But every
+one of those ports carries <strong>the same single value</strong>, and the station's
+kind decides which port that value goes down. Ports are a choice of
+destination, not a set of results.</p>
+<p>That is because a box returns one value, because a C function returns
+one value.</p>
+<p>So there is no way for one run of one box to produce two different
+results and send them to two different places. The map author's
+workaround is to run two boxes over the same input, which computes the
+shared part twice and states nothing about the two results belonging
+together.</p>
+<h2>Intended behavior</h2>
+<p>**A box may have several output ports, each carrying a different value,
+all produced by one run.**</p>
+<p>The reason this became urgent: a map with several output stations, used
+as a box, <em>is</em> a box with several outputs. If maps and boxes are to be
+the same kind of thing, boxes need what maps already have. This is the
+box side catching up to the map side.</p>
+<p><strong>For a compiled box, the mechanism is the return struct.</strong> A box returns
+one value, and that value may be a struct. A tag on the box declares
+which of its fields leaves by which port. The generator already emits a
+field table for every struct it sees, with every offset written as an
+<code>offsetof</code> expression the compiler computes — so the machinery to find
+field three of a returned struct exists and is already correct. Delivery
+copies from an offset it is told rather than from the start of the
+value.</p>
+<p>This works for a compiled box for one specific reason: **a C function
+returns once, so all of its outputs are produced at the same instant.**
+There is no such thing as a box that fills port one now and port two
+later. The struct is not a container of unrelated results; it is one
+result with several parts, and fanning its fields to ports states
+exactly that.</p>
+<p><strong>For a map, the struct is the wrong mechanism, and would be wasteful.</strong>
+A map's output stations fire independently, on their own schedules. A
+map whose first output station completes during the early part of a run
+and whose second completes later would, under a struct return, emit a
+half-filled struct on every delivery — the first half populated and the
+second half meaningless, then the reverse. It would also impose a
+synchronization that does not exist: nothing says the two outputs belong
+to the same moment, because they do not.</p>
+<p><strong>A map's output ports are simply wires.</strong> Each output station delivers
+into the parent whenever it becomes ready, independently of the others.
+This needs no new mechanism at all — it is composition, already
+designed in issue 209.</p>
+<p><strong>Both present the same interface, which is the point.</strong> From outside,
+a station with several output ports is a station that values come out
+of, on numbered wires. Whether two values on two ports came from one run
+of a compiled function or from two internal stations that finished
+minutes apart is the producer's business, and no downstream station can
+tell or needs to. That is what encapsulation buys, and it is why a map
+can be used exactly like a box without being implemented like one.</p>
+<p><strong>One run can make several stations ready at once.</strong> Each port delivers
+its own value to its own destinations, so a single invocation can
+complete several downstream input sets and produce several tasks. That
+is a widening of the engine's central move, not a change to it.</p>
+<p>**This is orthogonal to the routing kinds, and the combination needs a
+decision.** A comparator or an iterator chooses <em>which one</em> port a
+single value goes down; a multi-output box sends <em>different</em> values down
+<em>all</em> of its ports. Both are meaningful and they compose confusingly —
+a comparator whose value is a struct, routed by a comparison on one
+field, fanning other fields elsewhere, is possible to describe and hard
+to read. The first cut should refuse the combination and say so by name,
+leaving the question open rather than answering it by accident.</p>
+<p><strong>What a port means becomes uniform.</strong> After this, an output port is
+"one of the things this station produces", and the routing kinds become
+what they always were underneath: a rule about which port is <em>used</em> on a
+given run. A plain box uses port zero. A comparator uses one of three. A
+multi-output box uses all of them. Same noun, three rules.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. The declaration: how a box source marks that its return struct's
+   fields are separate outputs, and which field goes to which port.
+   Whatever the syntax, the generator must be able to see it while
+   parsing declarations it already parses.
+2. Registry support: a box record carries, per port, the offset and size
+   of the field that leaves by it — both as compiler-computed
+   expressions, never as numbers the generator worked out.
+3. Delivery: the walk copies from the port's declared offset within the
+   return value rather than from its start. A single-output box is the
+   same walk with offset zero and the whole size, so there is one path,
+   not two.
+4. Load-time refusal of a multi-output box placed as a comparator or an
+   iterator, naming the station and both kinds.
+5. Map file syntax for wiring several output ports of one station to
+   different destinations — largely already expressible, since ports are
+   already numbered in the file.
+6. A test that one run of one box completes two downstream stations that
+   share no other input, which is the behavior that cannot be produced
+   any other way today.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>, whose</li>
+<p>  meaning of "port" this widens</p>
+<li><a href="done-502-comparator.html">502 — Comparator</a> and</li>
+<p>  <a href="done-504-iterator.html">504 — Iterator</a>, the two kinds this must
+  refuse to combine with, at first</p>
+<li><a href="done-304-struct-field-tables.html">304 — Struct field tables</a>,</li>
+<p>  which already provides the offsets this needs</p>
+<li><a href="issue-209-map-output-collection.html">209 — The output station</a>, where a map</li>
+<p>  with several outputs makes this necessary</p>
+<li><a href="doc-005-routing.html">005 — Routing</a>, which needs rewriting around</li>
+<p>  the wider meaning of a port</p>
+</ul>
+
+</main>
+</div></body></html>

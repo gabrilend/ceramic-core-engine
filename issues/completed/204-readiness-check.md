@@ -2,6 +2,36 @@
 
 ## Current behavior
 
+**Built, and being reached from a second direction while losing its
+lock.**
+
+Three changes, none of which touch what the check *means*.
+
+**It is no longer only the tail end of a write.** Writing a **static**
+now runs it too ([004](../../docs/004-datapath-statics.md)), which is
+what replaced the pull path and what starts a program at all. The check
+answers identically either way — an empty ring port still says no,
+because the engine will not invent a value — so nothing here is
+special-cased. It simply has two callers.
+
+**The dispatch tables lose a row and stop answering with absences.**
+The gatherer row goes with the pull path. The null entries in the claim
+table, which meant "resolved later, outside the mutex," become explicit
+cases, because a decision written as a hole is one a reader has to
+already know how to interpret ([210](../210-input-port-record.md)).
+
+**And the mutex goes.** The claim becomes a walk of the ports in
+ascending index order, flipping a ready cell to claimed at each and
+rolling back if any port has nothing — with the fixed order being what
+stops two threads grabbing crosswise and livelocking.
+
+What this issue decided and what everything above still obeys: **user
+code must never run under a station's mutex**, because one slow box
+would freeze every thread delivering into that station. That is why the
+claim table had null rows at all, and the reasoning outlived the rows.
+
+The remainder describes it as built.
+
 Built, as the tail end of every write. The check walks the slots
 through a dispatch table keyed on the slot's kind — ring buffers
 answer by head-differs-from-tail, gatherer and static rows answer

@@ -2,6 +2,31 @@
 
 ## Current behavior
 
+**Built, and surviving as an ordering rather than as a pass.**
+
+The two passes existed for one reason: a station may be wired to one
+declared later in the file, so arrows cannot resolve until every
+station exists. That reason is permanent and the machinery around it is
+not. Under [212](../212-one-way-to-build-a-program.md) the whole
+procedure is *create every station, then draw every wire, then let the
+construction writes land* — so "resolve names after every station
+exists" is all that is left of this, and it is a step in a sequence
+rather than a different kind of pass.
+
+Gather input lines resolved here and no longer exist
+([056](../../docs/implementation-notes/056-no-pull-path.md)), taking
+the cycle check that ran as each one was bound.
+
+Two things outlive it. **Type-check a wire at the first moment both
+ends are known** — which is per edge, not per program, and is what let
+runtime rewiring reuse the same check when a wire is drawn on a running
+program. And the message: naming both stations, the port, and both
+type names is why *"head → wrong.1: box returns int, slot takes
+double"* is actionable, and it is the standard the shape-based
+comparison in [309](../309-types-by-shape.md) has to meet or beat.
+
+The remainder describes it as built.
+
 Built. Every output line resolves its destination by name — forward
 references included, the reason the passes exist — checks the slot
 exists, and type-checks the wire by name at the first moment both

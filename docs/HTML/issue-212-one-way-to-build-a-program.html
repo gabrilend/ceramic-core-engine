@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>212 — One way to build a program</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html" class="here">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>212 — One way to build a program</h1>
+<p>The capstone of phase 2. Everything below it says how a station works;
+this says how one comes to exist, and makes that the same act whether
+it happens at startup, halfway through a run, or inside another
+program.</p>
+<h2>Current behavior</h2>
+<p>The shape of a program is three facts: which stations exist, where each
+station's input ports get their values, and which arrows connect which
+output port to which input port. Those facts come into existence
+through three unrelated paths that share their rules but not their
+construction, and each one can do something the other two cannot.</p>
+<p><strong>Hand placement</strong>, phase 2 scaffolding. The caller says how many
+stations exist, then places each one by handing over a shim pointer, a
+kind, an input count, an array of <code>int</code> element sizes, and the size of
+the return value, then connects ports to destinations. It is marked in
+the header as scaffolding and was deliberately kept irritating. It
+cannot bind a static value to a port, because it is never given any
+type names, and turning the text of a static into bytes requires
+knowing the field layout. It survives only inside tests, wrapping
+counters no generated box can reach.</p>
+<p><strong>The loader.</strong> It counts the station lines in a text file, allocates
+the station table once at exactly that size, and places every station
+by name — the moment the registry supplies the shim, the input count,
+the element sizes, and the type names hand placement lacks. A second
+pass resolves arrows by name, because a station may be wired to one
+declared later in the file. Then whole-map validation, then the seed
+sweep, then the workers are released. It can do everything, once, at
+startup, from a file.</p>
+<p><strong>Runtime rewiring.</strong> Connect, disconnect, and gather-repoint on a live
+map, with every per-edge rule the loader applies applied here too — the
+rules were deliberately made callable per edge rather than only per map
+— and with the check and the change under one rewiring lock. It works
+on a running program, and it cannot add a station, because the table
+was sized once and never grows.</p>
+<p>So the loader can bind statics and nothing else can; rewiring works on
+a running program and nothing else does; and nothing at all can add a
+station after startup. Three routes produce identical structures — the
+same station records, the same ports, the same two-integer destinations
+— and are kept in agreement by hand.</p>
+<p>There is also a concept inside the loader that exists nowhere else:
+<strong>still loading</strong>. The table is sized before any station exists,
+forward references are legal because a second pass will resolve them,
+and the workers are parked until the sequence finishes. Nothing outside
+the loader can be in that state, which is why nothing outside the
+loader can build a program.</p>
+<h2>Intended behavior</h2>
+<p>**There is one surface, and it has four operations: create an empty
+program, add a station, configure an input port, and connect or
+disconnect a wire.**</p>
+<p>Every one of them is legal at any moment — while a program is being
+read from a file, or on a running one with workers in flight — because
+there is no longer any such thing as <em>still loading</em>. Every one applies
+the same rules, refuses the same illegal things by name, and leaves the
+program either complete or visibly incomplete, never half-built.</p>
+<p>A station comes into existence with every port unconfigured, which is a
+state it may hold indefinitely: it cannot become ready, so it cannot
+run, and it becomes runnable as its ports are given sources one at a
+time. That is what makes "add a station now, wire it in a moment" an
+ordinary sequence rather than a window of invalidity, and it is why the
+<em>none</em> tag on the port record (<a href="issue-210-input-port-record.html">210</a>) is
+load-bearing here rather than a curiosity.</p>
+<p><strong>A map is a box.</strong> Once a program declares where its results come from
+and construction is uniform, a program placed inside another program is
+a station like any other — the parent wires into its inputs and out of
+its output ports, and has no way to tell, and no reason to care, that
+the thing behind the port is a graph rather than a C function. The text
+file stops being a special format only one mechanism can read and
+becomes one way among several to drive the surface. Reading a file,
+editing a running program, and composing a sub-program become the same
+calls arriving from different places.</p>
+<p>**Adding anything to a program is one procedure with three steps, and
+it is the same procedure whether the program is starting or already
+running.**</p>
+<p>1. <strong>Create every station.</strong> All of them, before any wiring.
+2. <strong>Draw every wire, as one step.</strong> Names always resolve, because
+   every station already exists — which is what the loader's two passes
+   were for, and all that survives of them.</p>
+<p>   Wires are attached together rather than one at a time, and the
+   reason is fan-out fairness on a program that is already running.
+   Attach one wire out of a producing station and values start going
+   down it immediately; attach the second a moment later and it has
+   already missed everything the first one received. Attaching a batch
+   means every destination on a port starts from the same moment.</p>
+<p>   This also closes the only window that would have needed output
+   buffering. A station created in step 1 and fed during step 2 could
+   otherwise start running before its own outgoing wires existed, and
+   its results would be discarded. With the wiring done as one step
+   there is no such interval, so a port wired to nothing can keep
+   discarding — which it must, because an unwired comparator branch is
+   the normal case and buffering it would grow without bound forever.
+3. <strong>Let the construction writes take effect.</strong> Binding a static is a
+   write, and a write runs the readiness check on its station — so this
+   step is not a decision about who deserves a first task, it is the
+   moment the writes made during step 1 are allowed to land.</p>
+<p>On a program that is already running, step 2 has a side effect worth
+naming rather than guarding against: a wire drawn from a station that
+is currently producing values means those values start arriving
+immediately, so stations may become ready and enter the pool during the
+wiring step rather than waiting for step 3. That is correct and it is
+not a race — a value arriving down a wire that exists is what a wire is
+for.</p>
+<p>Starting a program from a file is this procedure with a reader in front
+of it: read the file, create every station it names, draw every wire it
+draws, let the writes land, release the gate.</p>
+<p><strong>A program with no output station is refused.</strong> It has not said where
+its results come from, which means it has not said what it is for — and
+the rule that starts a program starts at the output. The error names
+that rather than reporting some downstream symptom like "nothing to
+enqueue," because "this program never says where its results come from"
+is a sentence its author can act on.</p>
+<p><strong>A cycle that nothing feeds is not an error.</strong> It sits there, waiting
+for a first value nobody has sent yet, and that costs nothing — no
+worker ever picks it up, so nothing spins and nothing is consumed but
+the memory it occupies. Somebody may well wire it up later, which is
+the whole point of being able to build a program while it runs. It is
+the same decision as an unwired station being ordinary, applied to a
+larger shape.</p>
+<p>**Step 3 is not a rule about which stations deserve a first task. It is
+the construction writes taking effect.**</p>
+<p>There used to be a seed sweep here — a pass at the end of loading that
+walked the program deciding who would never run otherwise and enqueued
+them. It is gone, and nothing replaced it. Binding a static is a
+<strong>write</strong>, and a write runs the ordinary readiness check on the station
+holding it (<a href="doc-004-datapath-statics.html">004</a>). A station whose
+inputs are all statics is ready as soon as they are bound. So the
+writes that build a program are the writes that start it, and step 3 is
+where they are allowed to land.</p>
+<p><strong>Why they land at the end rather than as they happen.</strong> A static bound
+during step 1 would make its station ready before step 2 had drawn any
+wires, so it would run and deliver its result into a program that was
+not connected yet. Holding the effects until the wiring is done is the
+same reason the wiring is a batch: nothing should start while the
+picture is half-drawn.</p>
+<p>Two things fall out that used to need machinery. There is no mark to
+keep, because nothing re-evaluates a condition — a write happens once
+and has its effect once, so running the procedure again on a grown
+program cannot re-start anything it started before. And there is no
+"nothing was seeded" case to refuse: a program whose construction wrote
+no statics and wired nothing simply has nothing to do, which the
+termination check will report on its own without a special sentence
+here.</p>
+<p><strong>The whole-program checks stay, as a deliberate act.</strong> Some rules
+genuinely need everything present: the reachability the seed depends
+on, and the loud warning for a buffered station no arrow feeds. Those
+cannot run per operation, because a half-built program legitimately
+violates them. They become a pass a caller invokes when it believes the
+thing is complete, rather than a fixed step in a startup sequence — and
+a caller that never invokes it gets a program that runs, which is
+correct, because a program assembled at runtime may never have a moment
+it considers finished.</p>
+<p><strong>An unwired station is therefore ordinary, not an error.</strong> It never
+becomes ready, so it never runs, and that costs nothing while the
+program is running — the readiness check fires only when a delivery
+arrives, and no delivery ever arrives at a station nothing feeds. An
+author may deliberately place boxes before wiring them, intending to
+wire them later or from somewhere else entirely. The check that used to
+shout about this at the end of loading survives as something the
+whole-program pass reports when asked, which is where advice belongs.</p>
+<p><strong>Whether the word "map" survives is a separate, deliberate decision.</strong>
+If a program is a box, the file describes a box, and the format is a
+box file. That rename reaches the parser, the dump, six documents, and
+the name of a phase, so it is worth doing on purpose and in one pass
+rather than drifting into place.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. The four operations, defined as the only way structure is created,
+   with the per-edge rules from
+   <a href="done-704-runtime-rewiring.html">704</a> applied by all of them.
+   Build them over the table as it stands, before it can grow, so the
+   surface is proven while the old sizing still works.
+2. The station table starts empty and grows a run at a time
+   (<a href="issue-211-growing-the-station-table.html">211</a>), so adding a station is
+   the ordinary path taken once per station at startup rather than a
+   rare event with its own machinery.
+3. Port configuration through the surface, using the record from
+   <a href="issue-210-input-port-record.html">210</a>, including binding a static — which
+   is the operation hand placement could never perform, and the reason
+   there were two paths.
+4. Split the whole-program checks and the seed out of the loader into
+   one pass a caller invokes, repeatable, seeding only what it has not
+   already seeded.
+5. Reduce the loader to a reader: each line of text becomes one call on
+   the surface, stopping at the first refusal and naming the file and
+   the line. The two-pass structure survives only as "resolve names
+   after every station exists," not as two kinds of pass.
+6. Retire hand placement, either by giving it the registry type names
+   it lacks or by deleting it and giving the test harness another way
+   to reach its counters.
+7. A test that a program read from a file and a program built by
+   calling the surface directly produce identical dumps. This is the
+   proof that there is one construction path rather than two that agree
+   by coincidence, and it is the cheapest such proof available because
+   <a href="done-703-map-dump.html">703</a> already writes a program back out
+   by walking the live table.
+8. A test that a station added to a running program, then configured,
+   then wired, receives values and produces them — and that everything
+   already running is undisturbed across all three steps.</p>
+<h2>Open questions</h2>
+<ul>
+<li>What refuses what, when? Rewiring chose to return a failure and name</li>
+<p>  the reason rather than die, because a running engine that dies for
+  one bad control instruction takes the plant down, while a loader that
+  dies serves its author. Under one surface those are the same call.
+  Does the caller declare which it wants, or does the reader turn a
+  refusal into a fatal error on its own?
+<strong>Answered, kept because the reasoning is the design:</strong></p>
+</ul>
+<ul>
+<li>*Should the reader run the whole-program checks when it reaches the</li>
+<p>  end of a file?* No. Those checks became a <strong>report</strong> — a program with
+  unreachable stations is ordinary, not wrong — and a report is
+  something a caller asks for. Reading a file stays only a sequence of
+  operations, so several files can be read into one program.</p>
+<li><em>Must step 3 avoid re-enqueueing what it already enqueued?</em> The</li>
+<p>  question dissolved with the seed sweep. Nothing re-evaluates a
+  condition: a write happens once and has its effect once.</p>
+<li><em>Where does "nothing was seeded" refuse?</em> Nowhere. There is no seed</li>
+<p>  sweep to refuse, and a program with nothing to do reports that
+  through the ordinary termination check.</p>
+<li>*Should a refusal for out-of-memory read differently from one for a</li>
+<p>  misspelled box name?* Yes, and not only in its wording — a misspelled
+  name is something a caller can fix and retry, and out-of-memory is
+  not, so anything that retries on failure must be able to tell them
+  apart in code rather than in prose.</p>
+</ul>
+<h2>Related</h2>
+<ul>
+<li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the record</li>
+<p>  the configure operation writes, and where the <em>none</em> state comes from</p>
+<li><a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>,</li>
+<p>  which makes "add a station" possible at all</p>
+<li><a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>,</li>
+<p>  whose per-edge rules and rewiring lock every operation here inherits</p>
+<li><a href="done-602-loader-first-pass.html">602 — The loader, first pass</a></li>
+<p>  and <a href="done-603-loader-second-pass.html">603 — The loader, second pass</a>,
+  which become a reader</p>
+<li><a href="done-604-load-time-validation.html">604 — Load-time validation</a>,</li>
+<p>  split into per-edge rules already reused and a whole-program pass</p>
+<li><a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>, which stops</li>
+<p>  being a phase</p>
+<li><a href="done-703-map-dump.html">703 — The map dump</a>, which becomes the</li>
+<p>  exact inverse of the reader</p>
+<li><a href="issue-209-map-output-collection.html">209 — The output station</a> and</li>
+<p>  <a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>,
+  the two halves of a program being usable as a box</p>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a> and</li>
+<p>  <a href="doc-009-datapath-load.html">009 — Loading</a>, both of which this
+  rewrites</p>
+</ul>
+
+</main>
+</div></body></html>

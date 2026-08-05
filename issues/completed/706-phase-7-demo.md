@@ -2,6 +2,28 @@
 
 ## Current behavior
 
+**Built, with one scene to replace.**
+
+The refused rewire attempts an edit that would create a **gather
+cycle**, and gather cycles no longer exist
+([056](../../docs/implementation-notes/056-no-pull-path.md)). The scene
+itself is worth keeping — an edit refused on a running program, with
+the next delivery still flowing, is exactly the thing worth showing —
+so it needs a different illegal edit. A wire whose types do not match
+is the obvious candidate, and under
+[309](../309-types-by-shape.md) it gets better rather than worse: the
+message can name the first field where two layouts diverge instead of
+only that two names differ.
+
+**Everything else stands**, including the finding this demo produced
+by accident, which is the most useful thing in it: **a slow box alone
+is not a bottleneck here**, because the pool already runs one station's
+invocations on every core. The reports exist to show who pays, not to
+promise speedups. That is a sentence about what measurement is *for*,
+and it survives every change to what is being measured.
+
+The remainder describes it as built.
+
 Built. The live view draws runs and buffer depths from the station
 table while values flood in. The bottleneck scene finds the hot
 station using only the engine's contention report — box time

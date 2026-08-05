@@ -10,23 +10,46 @@
 <a href="doc-001-overview.html">001 — Overview</a>
 <a href="doc-002-stations-and-slots.html" class="here">002 — Stations and slots</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
-<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
 <a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
 <a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
 <a href="doc-008-map-file-format.html">008 — Map file format</a>
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
-<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
@@ -51,11 +74,9 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
-<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
-<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
 <a href="done-502-comparator.html">502 — The comparator</a>
@@ -100,6 +121,14 @@ its shape is worth knowing exactly.</p>
 when the map loads and never resized while the program runs. A station
 is addressed by its position in that array — a 32-bit index, not a
 pointer.</p>
+<p><strong>The "never resized" half is going.</strong> Under one construction surface,
+adding a station is the only way one ever comes into existence, so the
+table starts empty and grows as a program is read. It grows by adding a
+<strong>shelf</strong> — another allocation holding a fixed number of stations, with
+a short list of where the shelves are — rather than by reallocating,
+because a station holds its own mutex and a mutex is identified by
+where it lives. Move one and every thread parked on it waits forever at
+an address nobody will unlock. Issue 211.</p>
 <p>Indices are used rather than addresses for three reasons. They are half
 the size. They survive being written to a log or dumped to the screen,
 where a pointer is noise. And they leave the door open for the array to
@@ -124,42 +153,87 @@ uniform and the array stays indexable.</p>
 reallocating the buffer storage the slot points at, not by reallocating
 the station. This is why a wire can hold a station index forever and
 never need fixing up.</p>
-<h2>The three kinds of slot</h2>
-<p>An input slot is a place a value arrives from. There are three ways
-that can happen, and the slot carries a one-byte tag saying which. The
-tag is stored, never inferred — asking "is the box upstream of me an
-input-less box?" on every readiness check would mean chasing an index
-into another station to answer a question that cannot change.</p>
+<h2>The kinds of input port</h2>
+<p>An input port is where one of a box's arguments comes from. There are
+two ways a value can be there, plus the state of not having been
+configured at all, and the port carries a one-byte tag saying which.
+The tag is stored, never inferred — deciding it by walking upstream on
+every readiness check would mean chasing indices into other stations to
+answer a question that cannot change.</p>
+<table>
+<tr><td>tag</td><td>how it is read</td><td>how it is written</td><td>gates readiness</td></tr>
+<tr><td><strong>ring</strong></td><td><strong>consumed</strong> — one value taken per invocation</td><td>queued behind whatever is waiting</td><td><strong>yes</strong></td></tr>
+<tr><td><strong>static</strong></td><td><strong>peeked</strong> — every invocation reads the same value</td><td>replaces what was there</td><td>no, always full</td></tr>
+<tr><td><strong>none</strong></td><td>never — a station holding one cannot run</td><td>by being given a source</td><td><strong>yes</strong>, permanently negative</td></tr>
+</table>
+<p>A ring port is a <strong>stream</strong>; a static port is a <strong>cell</strong>. That is the
+whole distinction, and <a href="doc-004-datapath-statics.html">004</a> is what follows
+from it.</p>
 <p><strong>A slot is made of:</strong></p>
 <table>
 <tr><td>Field</td><td>Type</td><td>What it is</td></tr>
-<tr><td>kind</td><td><code>unsigned char</code></td><td>Ring buffer, gatherer, or static.</td></tr>
+<tr><td>kind</td><td><code>unsigned char</code></td><td>Ring buffer or static. There was a third, a gatherer, and <a href="impl-056-no-pull-path.html">056</a> is where it went.</td></tr>
 <tr><td>elem_size</td><td><code>int</code></td><td>Bytes per value. Copied from the registry at load; equals <code>sizeof</code> the box function's parameter type.</td></tr>
 <tr><td>storage</td><td><code>void *</code></td><td>For a ring buffer, the cells. For a static, unused.</td></tr>
 <tr><td>capacity</td><td><code>int</code></td><td>Ring buffer only — how many cells.</td></tr>
 <tr><td>head, tail</td><td><code>int</code></td><td>Ring buffer only — where the oldest value sits and where the next one goes.</td></tr>
-<tr><td>source</td><td><code>int</code></td><td>Gatherer only — which station supplies this slot on demand.</td></tr>
+<tr><td>source</td><td><code>int</code></td><td>Unused. It named the station a gatherer pulled from, and nothing pulls now.</td></tr>
 <tr><td>static_id</td><td><code>int</code></td><td>Static only — which entry in the statics table.</td></tr>
 </table>
+<p>Two things about that table are changing and are worth reading beside
+it. <strong>A static's value is moving onto the port itself</strong>, so <code>static_id</code>
+becomes the bytes rather than an index into a shared table — which is
+what lets a process hold more than one program at a time, and what
+makes claiming a static happen under the same lock as the ring pop
+instead of a second one. And <strong>head and tail are going</strong>, because each
+cell will carry its own state and a reader will scan for a usable one
+rather than compute where it must be; that is what lets a buffer grow
+by adding a page instead of copying. Issue 210 carries both.</p>
 <p><strong>Ring buffer.</strong> The ordinary case. Values arrive by being written into
 it and wait their turn. It is a real ring: two indices, wrapping at the
 end. The cells are exactly <code>elem_size</code> bytes each, allocated once when
 the map loads, so a write is a <code>memcpy</code> into a fixed offset with no
 allocation anywhere on the path.</p>
-<p><strong>Gatherer.</strong> The slot holds no buffer at all. It holds the index of an
-upstream station, and the value is produced on demand by running that
-station's box inline at the moment a task is being assembled. See
-<a href="doc-004-datapath-gather.html">004</a>.</p>
-<p><strong>Static.</strong> The slot holds an index into the statics table. Its value
-never arrives — it is simply always there, which means a static slot is
+<p><strong>Gatherer — removed.</strong> A third kind used to hold the index of an
+upstream station and produce its value on demand, by running that
+station's box inline while a task was being assembled. Nothing is
+pulled any more; a value that used to be gathered is written into a
+static port by an ordinary push, and writing a static runs the
+readiness check on the station holding it. See
+<a href="impl-056-no-pull-path.html">056</a> for what that was for
+and what ending it cost.</p>
+<p><strong>Static.</strong> The port holds an index into the statics table. Its value
+never arrives — it is simply always there, which means a static port is
 always full and never affects whether a station is ready. Thresholds,
 file paths, and configuration live here.</p>
+<p>Reading one is a <strong>peek</strong>: the value is not consumed, so a station
+driven by its ring side reads the same static on every one of its runs.
+That is what makes a threshold a threshold. And **writing one is an
+event** — it runs the ordinary readiness check on the station holding
+it, which is how a chain of stations wired through statics recalculates
+and how a program starts at all. <a href="doc-004-datapath-statics.html">004</a>.</p>
+<p><strong>None.</strong> The port has been given no source yet. It can never hold a
+value, so a station with one can never become ready — which is what
+lets a program be assembled a piece at a time, with stations existing
+before they are wired. It is a state, not a value: nothing is ever
+handed to a box.</p>
 <h2>Ring buffer growth</h2>
 <p>A ring buffer should never be full. If the writing index would land on
 the reading index, the buffer grows: still holding the station's mutex,
 the storage is reallocated to twice the size, the wrapped-around
 portion is copied up so the contents read contiguously again, and the
 two indices are corrected.</p>
+<p><strong>The copy is the part that is going.</strong> It exists because the two
+indices are positions taken modulo the capacity — change the capacity
+and every existing value is suddenly at a different index, so they have
+to be physically moved back into order. Once cells carry their own
+state and a reader scans instead of computing, nothing derives a
+location from the capacity, and a buffer can grow by <strong>adding a page</strong>
+of cells to a short list. No copy, no existing cell moves, and the
+ordering hazard the copy has to be careful about — publish before
+copying and readers see an empty buffer; copy before publishing and a
+value taken during the copy is delivered twice — stops existing rather
+than being handled.</p>
 <p>This is safe without any further care because the growth reallocates
 the <em>storage</em> the slot points at, not the station. Every wire in the
 program refers to the station by index, and every value in flight is a
@@ -191,7 +265,7 @@ as the map gives it. What the ports mean and how one is chosen is
 <h2>Related</h2>
 <ul>
 <li><a href="doc-003-datapath-delivery.html">003 — Delivery</a>, the path that writes into these slots.</li>
-<li><a href="doc-004-datapath-gather.html">004 — Gathering</a>, the pull path.</li>
+<li><a href="doc-004-datapath-statics.html">004 — Statics and recalculation</a>, the input that is not a queue.</li>
 <li><a href="doc-007-datapath-build.html">007 — The build path</a>, where <code>elem_size</code> and the shim pointer come from.</li>
 <li><a href="doc-009-datapath-load.html">009 — Loading</a>, where the table is built.</li>
 </ul>

@@ -2,6 +2,33 @@
 
 ## Current behavior
 
+**Built, and the two indices are going.**
+
+Head and tail are *positions*, taken modulo the capacity — which is
+what forces growth to physically move every value back into order when
+the capacity changes, and what makes a ring buffer the one thing in the
+engine that cannot grow by simply adding more room.
+[210](../210-input-port-record.md) replaces them: each cell carries its
+own state, a reader scans from a bookmark that is allowed to be wrong,
+and nothing anywhere computes a location from the capacity. Then a
+buffer grows by adding a page, nothing is copied, and the ordering
+hazard around the copy stops existing rather than being handled.
+
+What that costs is this issue's proven property: **values no longer
+leave a port in the order they arrived.** The test here — several
+hundred deliveries of a struct-and-int pair, every pair byte-identical
+and in order — is correct about the engine as it exists and stops being
+right the moment the new claim lands. Retiring it is a step inside that
+change, not a bug being tolerated.
+
+What survives is the thing that made this fast in the first place:
+**cells are exactly the size of the parameter the port feeds**, so a
+write is a memory copy into a fixed offset with no allocation anywhere
+on the path. That is untouched, and everything above is arranged so it
+stays true.
+
+The remainder describes it as built.
+
 Built, in the motion half of the station layer. A slot carries its
 one-byte kind tag from the start, with the ring buffer as the only
 populated row; cells are exactly the element size handed to placement,

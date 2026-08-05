@@ -10,23 +10,46 @@
 <a href="doc-001-overview.html">001 — Overview</a>
 <a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
-<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
 <a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
 <a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
 <a href="doc-008-map-file-format.html">008 — Map file format</a>
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
-<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
@@ -51,11 +74,9 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
-<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html" class="here">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
-<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
 <a href="done-502-comparator.html">502 — The comparator</a>
@@ -93,6 +114,22 @@
 <main>
 <h1>403 — Gatherer slots and inline gathering</h1>
 <h2>Current behavior</h2>
+<p><strong>Built, and being removed.</strong> The capability described below works and
+is proven; the whole pull path is nevertheless coming out, and
+<a href="impl-056-no-pull-path.html">056</a> records
+why. In short: a value that used to be gathered is now written into a
+static port by an ordinary push, and writing a static runs the
+readiness check on the station holding it — so nothing needs to reach
+upstream and nothing needs to run outside the pool.</p>
+<p>What this issue found still holds and outlives the mechanism. Running
+user code under a station's mutex would let one slow box freeze every
+thread delivering into that station, which is why the claim dispatch
+table left its non-buffer rows to be resolved outside the lock. And a
+box that reaches out to the world — open, read, close, never a kept
+handle — is the right discipline regardless, because two invocations of
+one station can run at the same moment whether or not anybody pulls
+them.</p>
+<p>The remainder describes it as built.</p>
 <p>Built, in its own gather module. A gatherer slot holds a source
 station index; at task construction — after the station's mutex is
 released, exactly as this issue placed it — the upstream box runs
@@ -168,7 +205,7 @@ file that is not there stops the program and says so.</p>
    every result is correct.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-004-datapath-gather.html">004 — Gathering</a></li>
+<li><a href="doc-004-datapath-statics.html">004 — Gathering</a></li>
 <li>Issue 404 — chains and cycles</li>
 <li>Issue 604 — the load-time rules this creates</li>
 <li>Issue 605 — why the startup sweep must skip these</li>

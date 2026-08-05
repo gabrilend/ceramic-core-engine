@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>309 — Types compared by shape, not by name</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html" class="here">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>309 — Types compared by shape, not by name</h1>
+<h2>Current behavior</h2>
+<p>Every type check in the engine is a string comparison.</p>
+<p>The generator emits, for each box, the text of each parameter's type and
+the text of its return type, and the registry carries them. When the
+loader checks a wire it compares those two strings; when they differ it
+refuses, and the message reads *"head → wrong.1: box returns int, slot
+takes double"*. The names ride along <strong>for the error message</strong> — the
+sizes are what the engine actually runs on, and four bytes against four
+bytes is not a sentence anybody can act on.</p>
+<p>Underneath that, the generator already emits something far better and
+nothing consults it. Every struct in the box sources gets a field table:
+per field a name, an offset, a size, and a kind — signed, unsigned,
+floating, fixed string, or a nested struct pointing into the same table
+— with every offset an <code>offsetof</code> expression and every size a <code>sizeof</code>,
+so the compiler computes all of it and the deliberately padded case with
+its seven-byte hole reads correctly. **The engine knows the exact shape
+of every value it moves and decides compatibility by comparing labels.**</p>
+<p>Two consequences, one already biting and one about to.</p>
+<p><strong>Identical shapes with different names cannot be wired.</strong> A box
+producing a struct of four integers called <code>vec4</code> cannot feed a box
+taking a struct of four integers called <code>stats</code>, even though the bytes
+are indistinguishable and the delivery path would copy them correctly.
+The author's options are to rename one, or to write a box that takes
+one and returns the other and does nothing.</p>
+<p><strong>Different shapes with the same name pass the check and corrupt.</strong> Two
+structs both called <code>vec3</code>, compiled separately with different field
+layouts, compare equal by name. Today that requires one build to
+disagree with itself, so it is theoretical. It stops being theoretical
+the moment a box can be compiled at runtime and loaded into a running
+program — which is the direction the workbench and the runtime
+construction surface both point.</p>
+<h2>Intended behavior</h2>
+<p>**Two types are compatible when their shapes match, and nothing else is
+consulted.**</p>
+<p>A shape is what the field table already records: for a primitive, its
+kind and its size; for a struct, the ordered list of its fields' kinds,
+sizes, and offsets, recursed into nested structs. Field <em>names</em> are not
+part of a shape and neither is the struct's own name. A four-integer
+struct is a four-integer struct — whether its fields are called x, y, z
+and g or strength, agility, wisdom and fondness, the pattern of the data
+is the same and that pattern is what a wire carries.</p>
+<p><strong>Names stay, for people.</strong> Every message that names a type keeps naming
+it, because *"box returns vec4, slot takes stats — four signed 4-byte
+fields against three"* is the sentence somebody needs. What changes is
+that the name is reported rather than decided upon.</p>
+<p><strong>Padding is part of the shape and this is not negotiable.</strong> Offsets
+come from the compiler through the generated tables, so two structs with
+the same fields in a different order, or the same fields with different
+alignment, have different shapes and do not match. This is not
+pedantry — the delivery path is a memory copy, so anything that
+disagrees about where a field sits produces silently wrong values rather
+than an error.</p>
+<p><strong>What this costs, and it should be stated rather than discovered.</strong>
+Two types with identical layout and unrelated meaning become
+interchangeable, silently. A four-float position wires into a four-float
+colour without complaint. That is the price of caring about the pattern
+of the data rather than the label on it, and it is chosen rather than
+overlooked: names are what one author called something, and a wire is
+about what the bytes are. Anyone who wants the label enforced can make
+the shapes differ.</p>
+<p><strong>This is what makes a box loadable at runtime safely.</strong> A box compiled
+after the program started brings its own idea of every struct it
+touches. Comparing names would accept a mismatched layout and corrupt;
+comparing shapes catches it at the moment the wire is drawn, which is
+the only moment anybody can still do something about it.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. A shape comparison over two field-table entries: kinds, sizes, and
+   offsets, recursing into nested structs, ignoring every name. Its own
+   tests first, including the padded case, the nested case, the
+   same-fields-different-order case, and the fixed-string case, because
+   everything above it trusts the answer.
+2. Primitives compared the same way — kind and size — so one routine
+   answers for every type rather than one for structs and one for the
+   rest.
+3. The wire check calls it instead of comparing strings, at every place
+   a wire is checked: the loader, the runtime construction surface, and
+   the comparator's return-type check.
+4. Error messages rewritten to report both names <em>and</em> the first place
+   the shapes diverge, since "these do not match" is much less useful
+   than "field two is four bytes here and eight bytes there".
+5. A test that two identically-shaped, differently-named structs wire
+   together and deliver byte-identical values, which is the capability
+   this adds.
+6. A test that two identically-named, differently-shaped structs are
+   refused, which is the corruption this prevents.
+7. Record the interchangeability in <a href="doc-058-guarantees.html">058</a> as
+   a stated non-guarantee.</p>
+<h2>Open questions</h2>
+<ul>
+<li>A fixed string field carries its length. Are a 16-byte string field</li>
+<p>  and a 16-byte array of signed bytes the same shape? They occupy the
+  same bytes and mean different things, and the field table can tell
+  them apart — so this is a choice about how far the principle goes.</p>
+<li>Does the comparison belong to the generator, emitted once per pair it</li>
+<p>  can see, or to the engine, computed when a wire is drawn? The
+  generator cannot see every pair, since a runtime-loaded box brings new
+  types — which argues for the engine.</p>
+<li>The registry currently stores type names as text for messages. Does it</li>
+<p>  also need to store a shape, or is a pointer into the struct table
+  enough for everything except primitives?</p>
+</ul>
+<h2>Related</h2>
+<ul>
+<li><a href="done-304-struct-field-tables.html">304 — Struct field tables</a>,</li>
+<p>  which already emits everything this needs and has never been asked</p>
+<li><a href="done-303-registry-emission.html">303 — The registry</a>, where the</li>
+<p>  type names live and where a shape would sit beside them</p>
+<li><a href="done-603-loader-second-pass.html">603 — The loader, second pass</a>,</li>
+<p>  whose wire check this replaces and whose error message this improves</p>
+<li><a href="done-502-comparator.html">502 — The comparator</a>, whose</li>
+<p>  return-type check is the other caller</p>
+<li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
+<p>  where a wire drawn at runtime meets the same check</p>
+<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which</li>
+<p>  loads box sources the running program never compiled</p>
+<li><a href="doc-058-guarantees.html">058 — Guarantees</a>, where the</li>
+<p>  interchangeability belongs as a non-guarantee</p>
+</ul>
+
+</main>
+</div></body></html>

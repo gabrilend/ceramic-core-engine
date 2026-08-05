@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>004 — Datapath: statics and recalculation</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html" class="here">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>004 — Datapath: statics and recalculation</h1>
+<p>Delivery (<a href="doc-003-datapath-delivery.html">003</a>) is a push: a box finishes and
+its value is carried forward into whoever was waiting for it. This
+document is about the other kind of input — the one that is <strong>not</strong>
+waiting, because it already has a value and always did.</p>
+<p>Everything in this engine is pushed. There is no path that runs
+backwards, nothing that reaches upstream at the moment a value is
+wanted, and no box that runs anywhere but on a worker that picked up a
+task for it. There used to be. What that was for and why it went is
+<a href="impl-056-no-pull-path.html">056</a>; this page is what
+replaced it.</p>
+<h2>Two kinds of input port</h2>
+<table>
+<tr><td></td><td>how it is read</td><td>how it is written</td><td>gates readiness</td></tr>
+<tr><td><strong>ring</strong></td><td><strong>consumed</strong> — one value taken per invocation, and it is gone</td><td>queued behind whatever is already waiting</td><td><strong>yes</strong> — an empty one stops the station running</td></tr>
+<tr><td><strong>static</strong></td><td><strong>peeked</strong> — every invocation reads the same value</td><td><strong>replaces</strong> what was there</td><td>no — always full</td></tr>
+</table>
+<p>That is the whole distinction, and everything below follows from it.</p>
+<p>A ring port is a <strong>stream</strong>. Values pile up in arrival order and get
+taken one at a time, so a station with two ring ports pairs them off:
+first with first, second with second.</p>
+<p>A static port is a <strong>cell</strong>. One value sits in it. Reading does not
+disturb it, so a station driven by its ring side reads the same static
+on every one of its runs — which is what makes a comparator's threshold
+a threshold, and a read box's file path a file path.</p>
+<h2>Where a static's value comes from</h2>
+<p>Three places, and they are the same operation arriving from different
+directions.</p>
+<p><strong>From the box file, at construction.</strong> The <code>statics</code> section names
+values, and binding one copies it into the port that reads it. The text
+becomes bytes by walking the field table the generator emitted for that
+type, so the compiler decides every offset and nothing is guessed.</p>
+<p><strong>From outside the graph, while it runs.</strong> A debugger, a control
+socket, a person turning a knob, or a parent program configuring a
+child. The write names a station and a port, is size-checked against
+what that port holds, and takes the station's own mutex — the same lock
+the claim takes, so no invocation can see a half-written value.</p>
+<p><strong>From a wire.</strong> An arrow whose destination port holds a static
+overwrites that static rather than queueing into a ring buffer. The box
+producing the value is untouched by this: it takes its arguments,
+returns one value, and has no idea what happens next. The <em>wire</em> is
+what says the value lands in a cell. This matters because it keeps the
+capability visible — it is in the file, in the dump, and drawable —
+rather than being a box reaching sideways into something no arrow
+connects it to.</p>
+<h2>A write is an event</h2>
+<p>**Writing a static runs the readiness check on the station that holds
+it.** That is the mechanism that replaces the pull path, and it is one
+addition rather than a subsystem.</p>
+<p>A value delivered into a ring port has always triggered that check. Now
+a value written into a static port does too. So a chain of stations
+wired through static ports behaves like a recalculation graph: change
+the value at the top, and it propagates down through every station that
+reads it, once, with every consumer seeing the same result.</p>
+<p><strong>A write cannot make something run that could not run anyway.</strong> The
+check it triggers is the ordinary one. If the station has a ring port
+and that port is empty, the answer is no — there is no value there and
+the engine will not invent one. A station with <strong>no</strong> ring ports is
+always ready, so writing any of its statics runs it. No special case is
+needed; it is the same check reached from a new direction.</p>
+<p>One consequence to know: if a ring port has a <strong>backlog</strong>, each static
+write consumes one of the waiting values, because each write completes
+an input set. That is real work on real values rather than a mistake,
+but a fast writer against a deep queue will drain it faster than the
+producer alone would have.</p>
+<h2>What starts a program</h2>
+<p><strong>The writes that build it.</strong> Binding a static from the file is a write
+performed during construction, and its effect lands when construction
+finishes: every station whose inputs are then satisfied has a task.</p>
+<p>A station with only statics is satisfied immediately, so it runs. Its
+output goes wherever its arrows point, and the program unfolds from
+there. There is no separate sweep, no rule about which stations deserve
+a first task, and nothing to remember between runs.</p>
+<h2>What this costs</h2>
+<p><strong>A value is fresh as of the last write, not as of use.</strong> Nothing in
+the engine produces a value at the instant it is consumed. A box that
+needs the current time asks for the current time <em>inside the box</em>.</p>
+<p>This is a deliberate narrowing rather than an oversight, and it rests
+on something the rest of the engine already assumes: values move
+through queues, workers take them up as they become free, and ordering
+across stations was never promised. **This engine is not for
+timing-critical work.** Something that must match the instant it is
+used should not be reaching through a dataflow graph to get it.</p>
+<p><strong>A value recomputes only when something upstream changes</strong>, never
+because somebody read it. For a recalculation graph that is exactly
+right. For something that genuinely should be re-read per use, the
+drawing has to say what makes it re-read — which means a wire back from
+whatever consumes it, and it will look like a loop, because it is one.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>, the record a</li>
+<p>  port is</p>
+<li><a href="doc-003-datapath-delivery.html">003 — Delivery</a>, which now has one more</li>
+<p>  way to arrive</p>
+<li><a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>,</li>
+<p>  the reasoning, the three timings that were considered, and the
+  counting problem that settled it</p>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, where statics are</li>
+<p>  written and where arrows are drawn</p>
+<li><a href="doc-058-guarantees.html">058 — Guarantees</a>, where fresh-at-use is recorded</li>
+<p>  as a non-goal</p>
+</ul>
+
+</main>
+</div></body></html>

@@ -34,10 +34,15 @@ the tail would land on the head, the buffer grows first — see
 [002](002-stations-and-slots.md).
 
 **5. Run the readiness check, still holding the mutex.** Walk every
-slot on this station and ask whether it holds a value. A ring buffer
-holds one if head and tail differ. A gatherer slot always does, because
-its value is produced on demand. A static slot always does, because its
-value is simply there.
+port on this station and ask whether it holds a value. A ring buffer
+holds one if head and tail differ. A static always does, because its
+value is simply there and reading it does not consume it.
+
+This same check is what a **write to a static** triggers — see
+[004](004-datapath-statics.md). It reaches this step from a different
+direction and answers the same way, which is why nothing extra is
+needed to make a static write run a station, and why a write can never
+run one whose ring port is empty.
 
 If any slot is empty, release the mutex and move to the next
 destination. Nothing more happens; the value sits in the buffer waiting
@@ -60,8 +65,10 @@ box — the generator knows it needs, say, two ints in and one int out.
 It receives the values claimed in step 6, the station's shim pointer,
 the station's index, and for an iterator the port chosen in step 6.
 
-Any gatherer slots are resolved here, outside the mutex, by running
-their upstream boxes inline. See [004](004-datapath-gather.md).
+Nothing else happens here. There was once a step that resolved pulled
+values by running upstream boxes inline on this thread; there is no
+pull path any more, so the task is complete the moment its values are
+copied in. [056](implementation-notes/056-no-pull-path.md) is why.
 
 **9. Push the task onto the pool** and continue to the next
 destination.
@@ -94,9 +101,13 @@ inputs have not changed cannot have become ready, so there is nothing
 to look at.
 
 The consequence is that a station with no ring-buffer inputs can never
-be discovered this way, because nothing is ever written into it. Those
-stations are either seeded once at startup ([009](009-datapath-load.md))
-or pulled on demand ([004](004-datapath-gather.md)).
+be discovered this way, because no delivery ever arrives at it. Such a
+station runs when one of its statics is **written** — which happens
+when the program is built, and again any time a wire delivers into a
+static port or somebody outside the graph turns a knob
+([004](004-datapath-statics.md)). That is also what starts a program:
+binding the statics is a write, and the writes that build it are the
+writes that set it going.
 
 ## Boxes that return nothing
 

@@ -2,6 +2,33 @@
 
 ## Current behavior
 
+**Built, and the one flat allocation is becoming shelves.**
+
+Under [212](../212-one-way-to-build-a-program.md), adding a station is
+the only way one ever comes into existence, so the table starts empty
+and grows while a program is read. It grows by adding another
+allocation and a pointer to it, never by reallocating
+([211](../211-growing-the-station-table.md)) — because this issue put
+the station's mutex inside the station record, and a mutex is
+identified by where it lives. Move one and every thread parked on it
+waits at an address nobody will unlock.
+
+**Which is to say the invariant this issue wrote down is not being
+traded away — it is the reason for the shape.** *Growing a buffer must
+never move a station* was proved here by flooding one slot through
+seven doublings and finding every address unchanged. It now has to hold
+for growing the *table* as well, and shelves are what make that
+possible.
+
+Two other decisions here are load-bearing and unchanged: every
+cross-reference is an **index rather than a pointer**, which is what
+lets the table grow at all, and ports and destinations **append at
+their tails so wiring order is preserved**, which the dump's round trip
+depends on and which [214](../214-destinations-without-a-lock.md) has
+to keep when it replaces the destination list with an array.
+
+The remainder describes it as built.
+
 Built, in the station layer under `src/`, split into a structural
 file (allocation, placement, wiring, teardown) and a motion file
 (everything that moves a value), so an error in one is findable

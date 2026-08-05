@@ -2,6 +2,22 @@
 
 ## Current behavior
 
+**Built, and being removed with the pull path it belongs to** — see
+[056](../../docs/implementation-notes/056-no-pull-path.md). With
+nothing pulled, a gather chain is an ordinary chain of pushes and a
+gather cycle cannot be described, so the forward walk that refused one
+has nothing left to refuse.
+
+Two findings survive the mechanism. The first is the one this issue
+made almost in passing and which turned out to matter most: **a push
+loop needs a finite companion input to ever stop.** A cycle in the push
+direction stays legal and is still how anything repeats. The second is
+that a cycle is cheapest to refuse when a wire is drawn rather than
+when it is traversed, which is the shape runtime rewiring later reused
+for every rule it applies.
+
+The remainder describes it as built.
+
 Built. Chains recurse inline exactly as designed — a three-deep
 chain (a constant source doubled twice into an adder) walks per task
 and its depth is recorded on the map at wiring time, where the cycle
@@ -81,6 +97,6 @@ call ends. A gather cycle is a call that never returns.
 
 ## Related
 
-- [004 — Gathering](../docs/004-datapath-gather.md)
+- [004 — Gathering](../docs/004-datapath-statics.md)
 - Issue 403 — the gathering this bounds
 - Issue 704 — runtime rewiring, which reuses this check

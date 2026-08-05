@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>801 — The workbench in the browser</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html" class="here">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>801 — The workbench in the browser</h1>
+<p>First issue of phase 8. Everything before it makes programs run; this
+is the first thing that helps somebody <em>write</em> one.</p>
+<h2>Current behavior</h2>
+<p>Writing a map means writing a text file by hand.</p>
+<p>The format is deliberately friendly to that — names rather than
+numbers, only the exceptional input lines written, no capacities, no
+types (<a href="doc-008-map-file-format.html">008</a>). A person can and does
+author one in an editor. But everything that tells you whether the map
+is any good happens later, somewhere else:</p>
+<ul>
+<li><strong>Whether a wire is legal</strong> is decided by the loader, at startup, by</li>
+<p>  comparing the source's return type against the destination
+  parameter's type through the registry. The author finds out after
+  writing the whole file and running it.</p>
+<li><strong>What boxes exist at all</strong> is decided by whichever C files the build</li>
+<p>  designated as box sources. There is no list to consult while writing
+  except the C.</p>
+<li><strong>What shape the map is</strong> exists only in the author's head. A map</li>
+<p>  file is a list of lines; the graph it describes is not visible in it.
+  The dump (<a href="done-703-map-dump.html">703</a>) writes a running map back
+  out as another list of lines, which is the same problem in the other
+  direction.</p>
+</ul>
+<p>And using the engine at all means having its source, its build, and —
+until <a href="issue-308-generator-in-c.html">308</a> lands — LuaJIT.
+<a href="impl-057-packaging.html">057</a> is about that
+distance: every inherited dependency is a reason somebody else's build
+fails on a machine we never saw.</p>
+<p>So the engine is approachable in principle and has no front door in
+practice.</p>
+<h2>Intended behavior</h2>
+<p>**A page you open in a browser, where you draw a map and leave with the
+files needed to run it.**</p>
+<p>Boxes are placed on a canvas. Each one is given a name, a kind — plain,
+comparator, or iterator — and the box function it places. Wires are
+drawn from an output port to an input slot. Static values are typed
+into the slots that take them. When it looks right, one button hands
+back the map file and the C source for every box function the map used.</p>
+<p><strong>The canvas does not run maps.</strong> It composes them. What it produces is
+a schematic and the code that schematic refers to, which is exactly the
+two halves a program has already been split into since phase 6 — a
+directory of C functions and a text file. The workbench is a better way
+to write the text file, not a second implementation of the engine.</p>
+<p>This matters for scope. A canvas that ran maps would need the pool, the
+delivery walk, and the loader in the browser, and would then be a
+second engine that could disagree with the first. A canvas that only
+composes has one job and one failure mode.</p>
+<h3>Bringing your own boxes</h3>
+<p>A plus button reads a C file into the page. Its function declarations
+become boxes available to place, exactly as if they had been designated
+box sources in a build. Nothing is uploaded anywhere — the file is read
+by the page, in the browser, and the page has no server to send it to.</p>
+<p>Beside that, a drawer of functions the project bundles: common
+operations, and interfaces to software and hardware worth having ready
+to hand. They are there to be read as much as used — someone who wants
+their own version can open one and see what a box looks like.</p>
+<p>**The parser that reads those files must be the build's parser, not a
+second one.** This is the strongest argument in the issue and it
+depends on <a href="issue-308-generator-in-c.html">308</a>. Once the generator is a
+standalone C program that reads C source as text and writes C source as
+text, with no dependency on the engine, it compiles to WebAssembly
+without ceremony. The page then gets exactly the parse the build gets,
+including the describe mode's account of what it found and the same
+refusal on a malformed source. A hand-written JavaScript parser would
+be a second opinion about what a box is, and the two would eventually
+disagree — at which point the workbench would be handing people maps
+that do not load.</p>
+<h3>Checking while drawing</h3>
+<p>The value of a canvas over an editor is that the rules can be applied
+at the moment the mistake is made rather than at startup. Every rule
+the loader enforces (<a href="done-604-load-time-validation.html">604</a>) is a
+rule the canvas can apply as a wire is dragged:</p>
+<ul>
+<li>a wire whose source return type and destination parameter type differ</li>
+<li>an arrow to a slot the function does not have</li>
+<li>a comparator whose box returns a type with no compare function</li>
+<li>a box fanning out to both a gatherer slot and a ring-buffer slot</li>
+<li>a cycle among gather wires</li>
+<li>port limits by station kind</li>
+</ul>
+<p>The cycle walk in particular is the one that repays being visible: it
+is a property of the whole graph, invisible in any single line of the
+file, and trivially shown on a canvas by refusing to complete the
+drag.</p>
+<p><strong>These are the same rules, not a similar list.</strong> However they are
+implemented, the canvas and the loader agreeing is a thing to be
+arranged deliberately, and the honest ways to arrange it are to compile
+the loader's rule checks to WebAssembly alongside the generator, or to
+have one written description that both are generated from. Two
+hand-maintained copies is the option that quietly stops being true.</p>
+<h3>Nothing on the server</h3>
+<p>No account, no storage, no upload. The page is static; the work happens
+in the browser; the only things that leave are the files the author
+downloads. A map is theirs, and the honest way to mean that is to have
+nowhere to keep it.</p>
+<p>The bundled functions ship with the page and are readable.</p>
+<h3>On compiling C in the browser</h3>
+<p>The note asks whether a C compiler can be run in JavaScript, and
+whether the page could therefore hand back a compiled binary rather
+than source. The answer is worth writing down properly because it
+shapes what phase 8 can promise.</p>
+<p><strong>A C compiler in the browser is real.</strong> Clang and its libraries have
+been compiled to WebAssembly, and a page can host one. It is not small
+— a usable toolchain is tens of megabytes of wasm — but it works, and
+it is a download rather than an install.</p>
+<p>**Producing a binary that runs on the author's machine is a different
+problem.** A compiler needs to know what it is compiling <em>for</em>: the
+target's instruction set, its calling convention, its C library
+headers, and something to link against. Handing someone a native
+executable means shipping a full sysroot per platform and picking the
+right one, and this engine links against pthreads, so the threading
+library for their platform too. That is a distribution problem wearing
+a compiler's clothes.</p>
+<p><strong>Producing WebAssembly that runs in the same page is tractable.</strong> The
+target is one the compiler already has, and no sysroot has to be
+guessed at. The catch is that the engine is a thread pool: real threads
+in WebAssembly need shared memory, which browsers only grant a page
+that is cross-origin isolated, which is two response headers — a static
+hosting concern rather than a server, but not nothing. A single-worker
+build of the engine would run without any of that, and would be a
+demonstration rather than the engine.</p>
+<p>So: source download is the deliverable, a wasm build in the page is the
+interesting stretch, and native binaries in the browser is a promise
+worth not making.</p>
+<h3>Why this is a phase rather than a feature</h3>
+<p>The canvas is an authoring surface, and authoring surfaces accumulate:
+a validator that reports on a map without running it, a shareable
+encoding of a map that fits in a link, a diff between two maps, the
+dump read <em>back</em> into the canvas so a running map can be looked at as a
+picture. Each is small beside the engine and none of them belongs in
+the phase about seeing inside a running program. Phase 8 is where tools
+that stand outside the engine live.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. The canvas alone: place, name, choose kind, wire, with a fixed
+   hard-coded set of boxes and no validation. The interaction has to
+   feel right before anything is built on it, and it is the part with
+   no prior art in this project.
+2. Emission: canvas to map file, matching
+   <a href="doc-008-map-file-format.html">008</a> exactly, checked by loading
+   the result with the real loader.
+3. The generator compiled to WebAssembly (needs
+   <a href="issue-308-generator-in-c.html">308</a>), so uploaded C files are parsed by the
+   build's own parser and the drawer's functions are described the same
+   way.
+4. Validation as wires are drawn, from the rule list in
+   <a href="done-604-load-time-validation.html">604</a>, with the
+   arrangement that keeps the two copies from diverging decided before
+   the first rule is written rather than after the fifth.
+5. Statics: typed into slots, written into the statics section — noting
+   that <a href="issue-401-static-slots.html">401</a> and <a href="issue-405-statics-mutation.html">405</a>
+   are retiring the shared table in favour of a value owned by the port
+   that reads it, so this should be built against where the format is
+   going rather than where it is.
+6. Upload, and the bundled drawer.
+7. Download: the map file plus the C for every function the map used.
+8. Read a map file back into the canvas, which makes the dump viewable
+   as a picture and makes the round trip testable.</p>
+<h2>Open questions</h2>
+<ul>
+<li>Does the workbench live inside the documentation site — same</li>
+<p>  aesthetic, same sidebar, one more page — or is it its own thing that
+  the site links to? They want to look alike either way; the question
+  is whether it is documentation.</p>
+<li>Reading a map file back gives a graph with no positions. Does the</li>
+<p>  canvas lay it out automatically, and if so does saving a map from the
+  canvas write positions into the file as comments — which the format
+  can carry, since the dump already uses comments for derived facts —
+  or is layout deliberately not the map's business?</p>
+<li>What is in the bundled drawer? The note says functions that interface</li>
+<p>  with software and hardware the author has worked with. That is a list
+  only you can write, and its size decides whether phase 8 is one issue
+  or several.</p>
+<li>Is the wasm build of the engine in scope for phase 8 at all, or is it</li>
+<p>  its own thing? It is the difference between a page that writes
+  programs and a page that also runs them.</p>
+<li>Nothing is stored on the server, so a map in progress dies with the</li>
+<p>  tab unless the page keeps it in browser storage. Storing it locally
+  is still "nothing on the server" — is that within the spirit of the
+  note, or does the author keep their work by downloading it?</p>
+</ul>
+<h2>The note that started this</h2>
+<p>Kept verbatim, because the reasoning in it is the specification:</p>
+<blockquote>Hi, okay, so for the HTML documentation we need to update it a bit.</blockquote>
+<blockquote>Can you load the design tool and work on it again? It should be more</blockquote>
+<blockquote>artistic!</blockquote>
+<blockquote></blockquote>
+<blockquote>I like the color scheme though. Very seraphic. Did I say angelic? I</blockquote>
+<blockquote>meant ceramic.</blockquote>
+<blockquote></blockquote>
+<blockquote>anyway here's the update to the HTML. We should be able to run the</blockquote>
+<blockquote>tools and utilities in the browser. You'll be presented with a canvas</blockquote>
+<blockquote>that you can place and modify box stations on, and draw their wiring</blockquote>
+<blockquote>to connect. You should be able to fill in static values. If you click</blockquote>
+<blockquote>a button, it downloads the map as a file and also the source-code</blockquote>
+<blockquote>required to compile the functions that you used in the map. Oh by the</blockquote>
+<blockquote>way, you can push a + button to upload a file to your browser memory</blockquote>
+<blockquote>meaning you can use it in the map. The canvas we're creating doesn't</blockquote>
+<blockquote>run the map files, it simply helps generate them and the source-code</blockquote>
+<blockquote>that can be compiled to run the things that you need it to. By the</blockquote>
+<blockquote>way, we'll also have some of our own functions in a drawer to the</blockquote>
+<blockquote>side that you can make box stations out of. These functions are</blockquote>
+<blockquote>pretty common ones that interface with some of the software that I've</blockquote>
+<blockquote>made / hardware that I've worked with. Just, things that I think are</blockquote>
+<blockquote>especially common or important in concern. Anyway when you click</blockquote>
+<blockquote>download the javascript will compile and generate a file for you. Can</blockquote>
+<blockquote>we run a C compiler in javascript? If so, then yay! we can just</blockquote>
+<blockquote>provide the compiled binary and it's map file, which could be pretty</blockquote>
+<blockquote>cool.</blockquote>
+<blockquote></blockquote>
+<blockquote>anyway you could download it and if you have a C runtime which</blockquote>
+<blockquote>everyone does then you can run the program. Yay!</blockquote>
+<blockquote></blockquote>
+<blockquote>so, we can make boxes, choose their type and name, their wiring</blockquote>
+<blockquote>connections, which box function they call, and... anything else?</blockquote>
+<blockquote></blockquote>
+<blockquote>We should not store anything on the server. We should not require</blockquote>
+<blockquote>users to download anything except the files they create. We will</blockquote>
+<blockquote>bundle some of our own stuff that they can see and read if they</blockquote>
+<blockquote>choose to use it - they can just use their own.</blockquote>
+<blockquote></blockquote>
+<blockquote>I think this should be able to fully democratize computer</blockquote>
+<blockquote>programming, at least as much as any other system like this could.</blockquote>
+<blockquote>Like, a text editor and a compiler.</blockquote>
+<blockquote></blockquote>
+<blockquote>new paradigm, new possibilities. Some people prefer it, some people</blockquote>
+<blockquote>don't.</blockquote>
+<blockquote></blockquote>
+<blockquote>you can also write soramech in a text editor.</blockquote>
+<p>The note's first three lines are a different request from the rest of
+it — the documentation set should be more artistic, keeping its colour
+scheme. That belongs to <a href="issue-705-html-documentation.html">705</a>'s second pass
+and is recorded there rather than here.</p>
+<p>The last line is the constraint the whole phase is held to: *you can
+also write soramech in a text editor.* The canvas is an alternative to
+writing the file by hand, never a prerequisite for it, and a map
+authored in a text editor must remain a first-class map. The moment the
+canvas can express something the format cannot, the format is what
+needs fixing.</p>
+<p>The question in the middle — <em>anything else?</em> — is answered by the
+station line and what may follow it: name, box function, and kind on
+the line itself; per-slot exceptions saying a slot is static or
+gathered; per-port destinations. Everything else about a station is
+derived from the registry rather than authored, which is why the canvas
+can validate without asking the author to declare types.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, what the</li>
+<p>  canvas emits, exactly</p>
+<li><a href="issue-308-generator-in-c.html">308 — The generator, in C</a>, which is what</li>
+<p>  makes one parser servable to both the build and the browser</p>
+<li><a href="done-604-load-time-validation.html">604 — Load-time validation</a>,</li>
+<p>  the rules the canvas applies while drawing instead of at startup</p>
+<li><a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and cycles</a>,</li>
+<p>  the check that most repays being shown rather than reported</p>
+<li><a href="done-703-map-dump.html">703 — The map dump</a>, the other direction</li>
+<p>  of the same round trip</p>
+<li><a href="issue-705-html-documentation.html">705 — The HTML documentation set</a> and</li>
+<p>  <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>,
+  the other two things that live on a page and share the aesthetic</p>
+<li><a href="impl-057-packaging.html">057 — Packaging</a>,</li>
+<p>  where the distance between the engine and someone else's machine was
+  first measured</p>
+</ul>
+
+</main>
+</div></body></html>

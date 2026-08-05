@@ -2,6 +2,25 @@
 
 ## Current behavior
 
+**Built, and being removed.** The capability described below works and
+is proven; the whole pull path is nevertheless coming out, and
+[056](../../docs/implementation-notes/056-no-pull-path.md) records
+why. In short: a value that used to be gathered is now written into a
+static port by an ordinary push, and writing a static runs the
+readiness check on the station holding it — so nothing needs to reach
+upstream and nothing needs to run outside the pool.
+
+What this issue found still holds and outlives the mechanism. Running
+user code under a station's mutex would let one slow box freeze every
+thread delivering into that station, which is why the claim dispatch
+table left its non-buffer rows to be resolved outside the lock. And a
+box that reaches out to the world — open, read, close, never a kept
+handle — is the right discipline regardless, because two invocations of
+one station can run at the same moment whether or not anybody pulls
+them.
+
+The remainder describes it as built.
+
 Built, in its own gather module. A gatherer slot holds a source
 station index; at task construction — after the station's mutex is
 released, exactly as this issue placed it — the upstream box runs
@@ -92,7 +111,7 @@ file that is not there stops the program and says so.
 
 ## Related
 
-- [004 — Gathering](../docs/004-datapath-gather.md)
+- [004 — Gathering](../docs/004-datapath-statics.md)
 - Issue 404 — chains and cycles
 - Issue 604 — the load-time rules this creates
 - Issue 605 — why the startup sweep must skip these

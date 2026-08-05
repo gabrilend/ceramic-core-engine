@@ -2,6 +2,33 @@
 
 ## Current behavior
 
+**Built, and gaining a third diagnosis that is louder than the other
+two.**
+
+This issue's best decision was refusing to report "a buffer grew" as
+one fact. A **slot** piling up means uneven inputs — one side of a
+station outpacing its siblings. The **task ring** piling up means slow
+consumers. Two different diagnoses, written into the output so nobody
+has to work out which they are looking at.
+
+There is now a third: an **output buffer** piling up
+([209](../209-map-output-collection.md)). It is not a rate mismatch at
+all. It means the program's results are accumulating with nobody
+collecting them — computing into somewhere nobody is looking. So unlike
+the other two, which are performance signals summarised at teardown, it
+fires **from the first doubling**, because by the time it is
+summarised it is too late to be useful.
+
+Everything else here stands, including the two decisions that read
+best in hindsight. **High water leads and capacity follows**, because
+capacity is what was allocated and occupancy is how deep the trouble
+actually got. And **a non-positive interval is refused rather than
+defaulted**, because unwanted diagnostics are a background thread doing
+nothing useful — which is the same instinct that keeps every clock read
+compiling out of the statistics when nobody asked for them.
+
+The remainder describes it as built.
+
 Built. The buffer report walks every slot naming station and slot
 with doublings, current capacity, and high-water occupancy — high
 water leading, since capacity is what was allocated and occupancy is

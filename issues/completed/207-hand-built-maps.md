@@ -2,6 +2,40 @@
 
 ## Current behavior
 
+**Built as scaffolding, and the scaffolding is finally coming down —
+by being absorbed rather than deleted.**
+
+The construction calls were kept deliberately irritating: placement
+wants every element size spelled out by hand, which is precisely the
+tedium phase 3 removed for the product path. What was never fixed is
+that hand placement is told sizes and **never type names**, so a
+hand-placed station cannot bind a static — turning `{ 5, 2.0, ... }`
+into bytes needs the field layout. That was read for a long time as a
+limitation of hand placement; it is really just an argument nobody ever
+passed.
+
+Under [212](../212-one-way-to-build-a-program.md) there is one surface
+for creating a station, configuring a port, and drawing a wire, used by
+a file reader and a control socket alike. Hand placement either takes
+the type names the registry already holds and *becomes* that surface,
+or it stops existing. Either way there stops being a second class of
+station that can bind fewer things than the first.
+
+**The instinct this issue had was right and is worth naming**: build
+the crude version first so the phases that replace it have something
+working to plug into, and mark it in the header with the issues that
+will replace it so nobody mistakes it for a design. Phase 3 replaced
+the shims, phase 6 replaced the maps, and phase 2's own capstone is
+replacing what is left. Scaffolding that names its own demolition is
+the only kind that reliably comes down.
+
+The hand-written shims here survive for a different reason and it is
+not scaffolding: they wrap harness instrumentation that no generated
+box can reach. Whether the test harness keeps them or finds another way
+to reach its counters is a decision about tests, not about the engine.
+
+The remainder describes it as built.
+
 Built as intended scaffolding. The construction calls — create a
 table, place a box with hand-supplied element sizes, connect a port
 to a destination, start the pool — live in the station layer, marked

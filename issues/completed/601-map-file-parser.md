@@ -2,6 +2,27 @@
 
 ## Current behavior
 
+**Built, and losing one input-line form while gaining another.**
+
+`in 0 reader` — this port pulls from the station named `reader` — goes
+with the pull path
+([056](../../docs/implementation-notes/056-no-pull-path.md)). A port is
+now a ring buffer or a static, and a station whose value another
+station reads simply has an arrow drawn to it. In its place comes a
+form for a port with **no source at all**, since a station can be
+created before it is wired and the dump writes what is actually there
+rather than a tidied version of it ([210](../210-input-port-record.md)).
+
+The design decision this issue made is untouched by any of that and is
+the reason it reads well now: **the parser reads and never
+constructs.** It produces a description; something else builds from it.
+That is what lets the loader become a thin reader under
+[212](../212-one-way-to-build-a-program.md) — turning each line into
+one call on a construction surface — rather than having to be
+disentangled from the thing it feeds.
+
+The remainder describes it as built.
+
 Built, in its own parser file that reads and never constructs. Line
 oriented, first word dispatching exactly as designed: `in`, `out`,
 the `statics` section header, station lines as the remainder, the

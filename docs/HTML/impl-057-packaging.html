@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>057 — Packaging the engine as a library</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html" class="here">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>057 — Packaging the engine as a library</h1>
+<p>What it would take to hand this to another project. Nothing here is
+built; this is a survey of the distance between where the code is and
+where it would have to be, with the decisions that have to be made
+before any of it can start.</p>
+<p>The short answer: **the engine is close, and the obstacles are almost
+entirely about names and about who owns the process.** No architecture
+has to change. What has to change is that roughly forty symbols with
+common English names currently escape into whatever links them, that
+every error takes the host process down with it, and that two global
+variables mean there can only ever be one map.</p>
+<p>---</p>
+<h2>First, what kind of library this is</h2>
+<p>This is the thing that decides everything else, so it goes first.</p>
+<p>A normal C library is a runtime artifact: you link it, you call it. This
+one has <strong>two halves that live in different times</strong>.</p>
+<p><strong>The build-time half.</strong> A consumer writes their own box functions in C.
+The generator reads those sources and emits a registry — a shim per box,
+a record per box carrying its name, parameter types and sizes, return
+type, exact task size, and a comparison function per comparable type,
+every size written as a <code>sizeof</code> expression so the compiler computes it
+and the generator never guesses. <strong>That output cannot be shipped</strong>,
+because it is derived from source the library author has never seen. The
+consumer must run the generator over their own code, every build.</p>
+<p><strong>The runtime half.</strong> The pool, the station table, delivery, gathering,
+statics, routing, the map file parser and loader, the observer. About
+4,300 lines including headers today — run `wc -l libs/*.c libs/*.h
+src/*.c src/*.h` for the current figure. This half is ordinary compiled
+code and could be a static archive tomorrow.</p>
+<p>So the deliverable is not "a library". It is **a library, a code
+generator, and a build rule that ties them together** — closer in shape
+to a parser generator than to a math library. Any packaging that ships
+only the compiled half ships something nobody can use.</p>
+<p>A consequence worth stating plainly: **the consumer's build depends on
+LuaJIT**, because the generator is a Lua script. That is not removable
+without rewriting the generator in the language of the host build, and
+it should be declared loudly rather than discovered.</p>
+<p>---</p>
+<h2>What a consumer's build has to do</h2>
+<p>Three steps, in this order, every build:</p>
+<p>1. <strong>Generate.</strong> Run the generator over the consumer's box sources,
+   emitting one C file. It must rerun whenever any box source or the
+   generator itself changes, and it must write nothing on failure — a
+   build that compiles against yesterday's registry is worse than a
+   build that stops.
+2. <strong>Compile.</strong> The emitted registry, the consumer's own program, and
+   the engine.
+3. <strong>Link and run.</strong> The program loads a map file, starts the pool, and
+   the map runs until the work is done.</p>
+<p>Step 1 is where the packaging work actually is. Steps 2 and 3 are
+ordinary.</p>
+<p>---</p>
+<h2>What stands in the way</h2>
+<p>Everything below is real and was found by reading the built code and the
+symbol table of a linked test binary, not by guessing.</p>
+<table>
+<tr><td>in the way</td><td>what it does to a consumer</td><td>size of the fix</td></tr>
+<tr><td><strong>Engine symbols are common words.</strong> <code>map_create</code>, <code>map_connect</code>, <code>map_start</code>, <code>map_destroy</code>, <code>pool_create</code>, <code>pool_push</code>, <code>pool_join</code> and about thirty more are exported unprefixed.</td><td>Any host program with its own notion of a map or a pool fails to link, with a duplicate-symbol error naming a function they never wrote.</td><td>Mechanical rename, ~40 symbols, touches source, interface files, docs, and issue text. Half a day, done carefully.</td></tr>
+<tr><td><strong>Internals are exported too.</strong> <code>task_build</code>, <code>station_port</code>, <code>static_claim</code>, <code>gather_claim</code>, <code>map_statics_free</code>, <code>sora_stats_box_time</code> are joints between engine files, not API.</td><td>They collide like anything else, and they invite a consumer to call them.</td><td>Free, if the amalgamation shape below is taken.</td></tr>
+<tr><td><strong>The demo boxes export <code>add</code>, <code>mix</code>, <code>keep</code>, <code>nudge</code>, <code>seven</code>, <code>swallow</code>, <code>magnitude_squared</code>.</strong></td><td>These are example code, and <code>add</code> is the single most collidable symbol in C.</td><td>Exclude <code>src/boxes/</code> from the packaged library. Trivial, but it must be deliberate — the build currently wildcards it in.</td></tr>
+<tr><td><strong>Two process-wide globals.</strong> The active map (so a box can reach the statics table) and the last load's timing.</td><td>One map per process, forever, silently. A host that wants two engines gets one, and the second quietly writes into the first.</td><td>Medium. Already the first-pass report's second priority: thread the map through the task instead of parking it in a global.</td></tr>
+<tr><td><strong>Every error calls <code>abort()</code>.</strong></td><td>A malformed map file, a missing gather source, or an out-of-memory task kills the host application. A library that can end someone else's process on bad input is not embeddable.</td><td>Small in code, large in decision. See below.</td></tr>
+<tr><td><strong>Five headers that include each other by numbered filename.</strong></td><td>The consumer needs two include paths and has to know that the entry point is <code>018-station.h</code>.</td><td>Small — one public header.</td></tr>
+<tr><td><strong>The generator writes absolute paths</strong> into the emitted registry, which <code>#include</code>s each box source whole.</td><td><em>Settled, and not a blocker.</em> A consumer states the directories they build from and recompiles if they move; anyone who wants relocation builds their own configuration around it. The emitted registry is already marked do-not-commit, so nothing durable carries a machine's paths.</td><td>none — declare it</td></tr>
+<tr><td><strong>The pool ends itself when work runs out.</strong></td><td>An embedded engine that quietly shuts down when its queue drains is a surprise. The mechanism to prevent it exists — an outside submitter registration — but it is opt-in and undocumented as a lifecycle concern.</td><td>Documentation, plus possibly a named "stay resident" mode.</td></tr>
+<tr><td><strong>No version anywhere.</strong></td><td>Nothing detects an engine and a map file that disagree about the format.</td><td>Small: two macros and a check at load.</td></tr>
+</table>
+<p>---</p>
+<h2>What the public surface should be</h2>
+<p>The symbol table of a linked binary shows what escapes today. Sorting it
+into what a consumer should be able to call, versus what is internal
+machinery, gives this:</p>
+<p><strong>Build a map by hand</strong> — create it, place a box by name, wire an output
+port to an input port, convert an input port to a static and give it a
+value. (The gatherer conversion this listed is gone with the pull path;
+see <a href="impl-056-no-pull-path.html">056</a>.)</p>
+<p><strong>Load a map from a file</strong> — the one call most consumers will use, plus
+the parser and its cleanup for anyone who wants the parse without the
+loading.</p>
+<p><strong>Run it</strong> — start (which creates the pool and releases it), wait,
+destroy. Inject a value from outside. Count what the seed sweep enqueued.</p>
+<p><strong>Watch it</strong> — start and stop the observer thread, print the station
+report, the buffer report, the shutdown summary, ask a slot's current
+depth, dump the live map back out as a map file.</p>
+<p><strong>Edit it while it runs</strong> — connect, disconnect, write a static value.
+Writing one is not merely configuration: it runs the readiness check on
+the station holding it, so a control socket turning a knob is the same
+act as a wire delivering into that port.</p>
+<p><strong>Ask about boxes</strong> — find a box record by name, find a struct's field
+table, print the registry, name the box that owns a shim.</p>
+<p><strong>The pool on its own</strong> — create, push, pop, release, join, destroy,
+register an outside submitter, ask the worker index and count, read the
+queue statistics.</p>
+<p><strong>Internal, and should stop being visible:</strong> task construction, port
+lookup, the static and gather claim helpers, statics teardown, the
+box-timing hook the generated code calls, and both globals.</p>
+<p>One observation from sorting that list: **the pool has no dependency on
+stations at all.** It moves opaque structs and calls one function
+pointer per struct. It already lives in <code>libs/</code>, which the table of
+contents describes as "the pool, and anything reusable". It could ship
+as its own artifact, usable by someone who wants a work queue and none
+of the rest — and doing so would prove the separation is real rather
+than merely intended.</p>
+<p>---</p>
+<h2>Three shapes it could take</h2>
+<h3>A. Amalgamation — one <code>.c</code> and one <code>.h</code></h3>
+<p>The whole engine concatenated into a single translation unit, plus a
+single public header. The consumer drops two files into their tree.</p>
+<p>This is the shape I would take, for four reasons, one of which is
+decisive:</p>
+<p><strong>It solves the symbol problem almost for free.</strong> One translation unit
+means every function not named in the public header can be marked
+<code>static</code>. The internals stop existing as linker symbols entirely — no
+renaming, no discipline required, no way to regress. The renaming job
+shrinks from every symbol to only the genuinely public ones.</p>
+<p><strong>No include paths, no header set.</strong> The awkwardness of installing
+headers named <code>018-station.h</code> disappears, because they stop being files.</p>
+<p><strong>It preserves the reading order.</strong> The numbered files are a story meant
+to be read in sequence. An amalgamation is that story in one file, with
+a banner at each seam naming the original. Emitting <code>#line</code> directives at
+each seam keeps compiler errors and debugger backtraces pointing at the
+real numbered sources, so nothing is lost by reading the pieces instead.</p>
+<p><strong>One file is one thing to vendor.</strong> No install step, no package
+manager, no version skew between a header and an archive.</p>
+<p>The cost is that any change recompiles the whole engine. At this size
+that is a fraction of a second, and it is a cost paid by the consumer's
+build rather than by ours.</p>
+<h3>B. Headers plus a static archive</h3>
+<p>The conventional shape: an <code>include/</code> directory and a <code>libsoramech.a</code>.
+Familiar to every C programmer, works with every build system, and
+allows partial recompilation.</p>
+<p>But it does nothing about symbols — every internal stays exported unless
+each one is individually marked, which is discipline that decays. And it
+needs an install step, an include path, and a story about which header
+is the entry point.</p>
+<h3>C. Source drop-in — a submodule or a vendored subtree</h3>
+<p>Copy the repository in, add its sources to your build. Zero packaging
+work, and the consumer can read and step through everything.</p>
+<p>It is the worst of the three for the actual problem: every symbol
+collides, the demo boxes come along, and the consumer inherits the
+project's directory layout and numbering scheme inside their own tree.
+Worth supporting as a fallback, never as the recommendation.</p>
+<table>
+<tr><td></td><td><strong>A. amalgamation</strong></td><td><strong>B. headers + archive</strong></td><td><strong>C. source drop-in</strong></td></tr>
+<tr><td>files the consumer takes</td><td>2</td><td>a directory + an archive</td><td>the repository</td></tr>
+<tr><td>internal symbols hidden</td><td><strong>free — one TU</strong></td><td>one by one, by hand</td><td>not at all</td></tr>
+<tr><td>include paths to configure</td><td>none</td><td>one or two</td><td>two</td></tr>
+<tr><td>install step</td><td>none</td><td>yes</td><td>none</td></tr>
+<tr><td>partial rebuilds</td><td>no</td><td>yes</td><td>yes</td></tr>
+<tr><td>reading order preserved</td><td><strong>yes, with banners</strong></td><td>yes</td><td>yes</td></tr>
+<tr><td>debugger points at real files</td><td>with <code>#line</code></td><td>yes</td><td>yes</td></tr>
+<tr><td>demo boxes excluded</td><td>by the script</td><td>by the script</td><td>by the consumer, if they notice</td></tr>
+</table>
+<p>---</p>
+<h2>What the packaging script would do</h2>
+<p>A sibling of the generator, in Lua, taking the project root and an
+output directory — same argument conventions as everything else here.</p>
+<p><strong>1. Emit the public header.</strong> Concatenate the public declarations in
+numbered order under one include guard, dropping the sections the
+headers themselves mark as internal joints between engine files. This is
+not a copy: the header is derived, so it cannot drift from the sources
+it describes.</p>
+<p><strong>2. Emit the amalgamated source.</strong> Concatenate the engine's C files in
+numbered order — <code>libs/</code>, then <code>src/</code>, excluding <code>src/boxes/</code> and
+<code>src/generated/</code>. At each seam, a banner naming the original file and a
+<code>#line</code> directive so diagnostics point home. Strip the inter-file
+<code>#include</code> lines, since the headers are now above in the same file.</p>
+<p><strong>3. Hide the internals.</strong> Read the public header for the names it
+declares; mark every other file-scope definition <code>static</code>. The list is
+<em>derived from the header</em>, not maintained by hand, so a function added
+to the engine is private by default and becomes public only by being
+declared in the header — which is the correct default and the one that
+cannot rot. The generator already parses C declarations for exactly this
+kind of work, so the machinery has precedent in the project.</p>
+<p><strong>4. Copy the generator</strong> and the map file format document, because the
+consumer needs both at build time.</p>
+<p><strong>5. Emit a worked example</strong> — one box, one map file, one program that
+loads and runs it, and a Makefile fragment showing the three-step build.
+The example is the real documentation of how the two halves fit
+together.</p>
+<p><strong>6. Prove it.</strong> Build the packaged library outside the repository,
+against the example, and run it. Packaging that has not been compiled
+somewhere else is a guess. This wants to be a test script beside the
+others, so a change that breaks the packaged shape fails the ordinary
+test run rather than being discovered by whoever tries to use it.</p>
+<p>---</p>
+<h2>Decisions that have to be made first</h2>
+<p><strong>1. What happens on an error — settled.</strong> An installable handler,
+called with the message immediately before the engine dies. The host
+gets to log it, flush its own state, and know what happened. **The
+engine still stops.** A consumer who wants to handle their own errors
+restarts the engine; that is the entire recovery story, and it is
+deliberate rather than a gap.</p>
+<p>What this must never become is an error code returned up a call chain
+that a consumer can ignore — that is a fallback wearing a return type.
+A wrong answer which keeps flowing is worse than no answer, and that
+does not soften because the caller would find it convenient. Breaking
+loudly is the feature: a map that is wrong should stop being a running
+program.</p>
+<p>What the handler actually adds is <em>legibility</em>. Today the message goes
+to standard error and the process dies, so a host with its own log has
+no way to capture what happened or why. The handler closes that gap and
+opens no other one.</p>
+<p><strong>2. Can there be two maps in one process?</strong> Today, no, because of two
+globals, and nothing says so. Either fix it — thread the map through the
+task, which the first-pass report already wants for other reasons — or
+state the restriction in the header where someone will read it before
+they build on the assumption. Fixing is better; the packaging is a good
+excuse, since a library with a hidden singleton is a defect that only
+shows up in someone else's program.</p>
+<p><strong>3. Does the engine own the process's threads?</strong> Starting a map spawns
+one worker per core by default and the pool ends itself when the queue
+drains. A host application with its own thread budget needs to know
+both. The mechanism for keeping an engine resident already exists in the
+outside-submitter registration; what is missing is naming it as the
+lifecycle question it is.</p>
+<p><strong>4. What is the prefix?</strong> <code>sora_</code> is already used by a few symbols and
+by every include guard. Applying it to everything public is the obvious
+choice; it just has to be done once, everywhere, and grepped for
+stragglers — including in the documents and issue files, which name
+these functions in prose.</p>
+<p><strong>5. Does the pool ship separately?</strong> It has no dependency on anything
+above it. Shipping it alone is nearly free and would prove the layering.</p>
+<p>---</p>
+<h2>Rough order of work</h2>
+<p>Ordered so that each step is useful even if the next never happens.</p>
+<p>1. <strong>Exclude the demo boxes and the generated registry</strong> from whatever
+   gets packaged. One line of intent, and it stops the worst collisions.
+2. <strong>The single public header</strong>, derived rather than written. Immediately
+   useful inside the project too, since it settles what is API and what
+   is machinery.
+3. <strong>The amalgamation script</strong>, using that header to decide what stays
+   visible. This is where the symbol problem mostly dies.
+4. <strong>The prefix</strong>, applied to what is left visible.
+5. <strong>The error handler hook.</strong>
+6. <strong>The worked example and the out-of-tree build test</strong>, which is what
+   turns all of the above from plausible into demonstrated.
+7. <strong>The one-map-per-process fix</strong>, which is worth doing on its own
+   merits and is not on the critical path for a first package.</p>
+<p>Steps 1 through 3 are the ones that change the shape of the thing. The
+rest is finishing.</p>
+<p>---</p>
+<h2>Related</h2>
+<ul>
+<li><a href="doc-007-datapath-build.html">007 — The build path</a>, the generator and</li>
+<p>  what it emits</p>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, which a consumer</li>
+<p>  needs at runtime</p>
+<li><a href="doc-009-datapath-load.html">009 — Loading</a>, the entry point most</li>
+<p>  consumers will use</p>
+<li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a>, for the thread</li>
+<p>  lifecycle question</p>
+<li><code>../../notes/first-pass-report.md</code>, where the process-global map is</li>
+<p>  already named as a debt</p>
+</ul>
+
+</main>
+</div></body></html>

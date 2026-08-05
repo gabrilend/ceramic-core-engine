@@ -2,6 +2,38 @@
 
 ## Current behavior
 
+**Built, and losing the two things it does that are not delivering.**
+
+**The gather step goes.** Task construction used to resolve pulled
+values by running upstream boxes inline on the delivering thread; there
+is no pull path
+([056](../../docs/implementation-notes/056-no-pull-path.md)), so a task
+is complete the moment its values are copied in. With it goes the one
+exception in the engine to *a box only runs when a worker picks it up*.
+
+**The destination snapshot goes.** The walk takes the station's mutex,
+copies the destination list into a stack array, and releases — a lock
+and a copy proportional to fan-out on every value the engine moves,
+there because a rewire can free a list node under a walker.
+[214](../214-destinations-without-a-lock.md) makes the list an
+immutable array published by a single atomic write, so the walk reads
+one pointer and takes no lock at all.
+
+**And it gains one case**: a destination that is a *boundary* rather
+than a slot. An output station runs no box
+([209](../209-map-output-collection.md)), so arriving at one means the
+value has left the program — or, if nothing is wired beyond it, is held
+where it landed.
+
+Everything else here is untouched, including the decision that reads
+best in hindsight: **a port wired to nothing discards.** That is right
+for an unwired comparator branch, which is the normal case, and it
+stays right — the output station's held values are the one exception,
+and they are an exception because discarding a program's results means
+the program did nothing.
+
+The remainder describes it as built.
+
 Built, riding the pool's finish hook: after a worker runs a task, the
 walk chooses a port through the routing dispatch (plain filled,
 comparator and iterator rows failing loudly until phase 5), then

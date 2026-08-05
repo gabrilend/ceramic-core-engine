@@ -2,6 +2,32 @@
 
 ## Current behavior
 
+**Built, and losing two of its four rules — because they stopped being
+sayable, not because they stopped being right.**
+
+*A station both written into by arrows and gathered from* and *a
+gathered station with ring-buffer inputs* were both about a pull path
+that no longer exists
+([056](../../docs/implementation-notes/056-no-pull-path.md)). Neither
+situation can be described now, so neither needs checking.
+
+What survives is the shape rather than the list. This issue's best
+decision was **collecting failures and printing them together before
+one stop**, because somebody fixing a new program wants the whole list
+rather than one error per run — and that outlives any particular rule.
+Its second was noticing that two rules belonged *earlier*, applied per
+edge as a wire is drawn rather than per program at the end; runtime
+rewiring later reused exactly that shape for every rule it applies, and
+[212](../212-one-way-to-build-a-program.md) makes it the norm.
+
+What is left of the whole-program pass is smaller and different in
+kind: the checks that genuinely need everything present are now a
+**report a caller asks for**, not a refusal that stops them. An
+unreachable station is ordinary — a program can be built a piece at a
+time, so *not reachable yet* is a different statement from *wrong*.
+
+The remainder describes it as built.
+
 Built, as the final pass before the seed, each check its own routine,
 failures collected and printed together before one stop — someone
 fixing a new map wants the whole list. The rules as landed: an arrow

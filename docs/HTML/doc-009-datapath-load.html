@@ -10,23 +10,46 @@
 <a href="doc-001-overview.html">001 — Overview</a>
 <a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
-<a href="doc-004-datapath-gather.html">004 — Datapath: gathering</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
 <a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
 <a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
 <a href="doc-008-map-file-format.html">008 — Map file format</a>
 <a href="doc-009-datapath-load.html" class="here">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
-<a href="issue-phase-4-progress.html">Phase 4 progress — the pull path and configuration</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
@@ -51,11 +74,9 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
-<a href="done-401-static-slots.html">401 — Static slots and the statics table</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
-<a href="done-405-statics-mutation.html">405 — Altering the statics table while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
 <a href="done-502-comparator.html">502 — The comparator</a>
@@ -107,8 +128,8 @@ default — each sized exactly <code>sizeof</code> its parameter, and record the
 station's name in a lookup table that is thrown away when loading ends.</p>
 <p>A comparator gets one extra slot on the end, typed to match the box's
 return value.</p>
-<p>Then apply the input lines, converting the named slots from ring
-buffers to statics or gatherers.</p>
+<p>Then apply the input lines, converting the named ports from ring
+buffers to statics and copying each one's value in.</p>
 <p><strong>Second pass: resolve the arrows.</strong> By now every station exists and
 can be found by name. For each output line, look up the destination
 station and slot, and append a <code>{station, slot}</code> pair to that port's
@@ -119,14 +140,13 @@ type and the destination box's parameter type, both derived from the C
 that will actually run, so the check needs nothing from the file.</p>
 <h2>Then the checks that need the whole map</h2>
 <p>Some errors are only visible once every station and arrow exists:</p>
+<p>Two checks used to live here and can no longer be stated, because
+nothing is pulled: a cycle among gather links, and a port fanning out
+to both a gatherer and a ring buffer. See
+<a href="impl-056-no-pull-path.html">056</a>. A cycle in the push
+direction remains legal — it is how anything repeats — and needs a
+finite companion input to ever stop.</p>
 <ul>
-<li><strong>Gather cycles.</strong> Walk the gather links. A loop here is a function</li>
-<p>  call that never returns, and it surfaces at runtime as a stack
-  overflow — a segfault with no message and no hint that two boxes
-  point at each other. Cheap to find now, invisible later.</p>
-<li><strong>Mixed fan-out.</strong> A port whose destinations include both a gatherer</li>
-<p>  slot and a ring-buffer slot. Its box is neither pushed nor pulled
-  coherently.</p>
 <li><strong>Unreachable stations.</strong> Not fatal, but worth reporting: a station</li>
 <p>  with ring-buffer inputs that nothing ever writes to will never run.</p>
 </ul>
@@ -142,13 +162,13 @@ feeds a ring buffer.**</p>
 <p><em>No ring-buffer inputs</em> means the station has nothing that can ever be
 written into it, so it will never be discovered by delivery. If it is
 going to run at all, it must be started here.</p>
-<p><em>Whose output feeds a ring buffer</em> excludes gatherers. A gatherer's
-value goes into a task struct someone is assembling right now, not into
-a slot — that is the entire difference between the push path and the
-pull path. At startup nobody is assembling anything, so a gatherer
-enqueued as a task would run, produce a value, walk its destinations
-looking for a buffer to write into, and find a gatherer slot, which by
-definition has none. The value would have nowhere to go.</p>
+<p><strong>And the sweep is really the writes finishing.</strong> Binding a static from
+the file is a write, and a write runs the readiness check on the
+station holding it (<a href="doc-004-datapath-statics.html">004</a>). A station with only
+statics is ready the moment its last one is bound, so what looks like a
+separate startup step is the ordinary mechanism arriving at the end of
+construction. Nothing here is special-cased; the same thing happens
+when a station is added to a program that is already running.</p>
 <p>After the sweep, the pool is running and the map propagates on its own.
 The sweep is also the last time anything iterates the station table;
 from here on, every station is reached by index, through a wire.</p>
