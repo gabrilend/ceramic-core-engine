@@ -21,24 +21,14 @@ if [[ $# -ge 1 && -d "$1" ]]; then
     DIR="$1"
 fi
 
-BUILD="/tmp/$(basename "${DIR}")/build"
-SHARED="/dev/shm/$(basename "${DIR}")"
-mkdir -p "${BUILD}" "${SHARED}"
-
-mkdir -p "${DIR}/src/generated"
-luajit "${DIR}/scripts/028-generate.lua" \
-    "${DIR}/src/generated/registry.c" ${DIR}/src/boxes/*.c
+source "${DIR}/issues/completed/demos/059-demo-engine.sh"
+sora_demo_paths "${DIR}"
 
 SOURCE="${DIR}/issues/completed/demos/039-phase-5-decide-demo.c"
 BINARY="${BUILD}/phase-5-decide-demo"
 
-gcc -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread \
-    -I"${DIR}/libs" -I"${DIR}/src" \
-    -o "${BINARY}" "${SOURCE}" \
-    "${DIR}/libs/012-pool.c" "${DIR}/src/019-station.c" \
-    "${DIR}/src/020-delivery.c" "${DIR}/src/027-registry-support.c" \
-    "${DIR}/src/033-statics.c" "${DIR}/src/034-gather.c" \
-    "${DIR}/src/generated/registry.c"
+sora_demo_registry "${DIR}"
+sora_demo_compile "${DIR}" "${BINARY}" "${SOURCE}"
 
 "${BINARY}" "${DIR}"
 

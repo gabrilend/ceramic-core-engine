@@ -16,6 +16,27 @@ The demo's C source carries the file index; the launcher script keeps
 the phase-* name the launcher discovers by, a naming collision the
 first-pass report records.
 
+Every phase's launcher shares one build front, which prepares the two
+RAM tiers, regenerates the box registry, and compiles a demo against
+the engine — the engine's sources discovered by pattern, never listed.
+Each launcher used to carry its own list of the files that existed
+when its phase finished, which reads like layering but is not: the
+station layer calls into the statics table, the gatherer, and the
+observer, so the moment the observer put a shutdown report inside map
+teardown, phases 2 through 6 all stopped linking. Phase 1 is the one
+launcher that still names its sources, linking the pool alone, because
+the pool's independence from everything above it is exactly what this
+demo claims.
+
+Each scene opens with a story and reports its figures in that story's
+units beside the engine's own, under the standard issue 707 sets: a
+parcel depot rebuilding its wall without shutting its doors, a relay
+race where the question is how long the floodlights stay on after the
+last baton, four toll attendants who doze rather than idle their
+engines, and a shop whose cashiers all reach into one wire basket.
+Every scene is two functions, one measuring and one telling, and the
+counts vary per run from a seed printed in the banner.
+
 ## Intended behavior
 
 A runnable program in `issues/completed/demos/` that puts the pool

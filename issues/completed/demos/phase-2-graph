@@ -7,9 +7,11 @@
 # without a scheduler; the program measures it happening.
 #
 # How it does it, in general terms: compiles the demo against the
-# pool and station layers into the RAM-backed build tier and runs it
-# with the project root as argument, so its report lands in the
-# shared-memory tier.
+# whole engine into the RAM-backed build tier and runs it with the
+# project root as argument, so its report lands in the shared-memory
+# tier. The scenes exercise only the phase 2 machinery; what the later
+# phases added is present because the station layer now calls into it,
+# not because this demo asks for it.
 #
 # Keeps the launcher's phase-* name; the C source carries the index.
 
@@ -20,18 +22,20 @@ if [[ $# -ge 1 && -d "$1" ]]; then
     DIR="$1"
 fi
 
-BUILD="/tmp/$(basename "${DIR}")/build"
-SHARED="/dev/shm/$(basename "${DIR}")"
-mkdir -p "${BUILD}"
-mkdir -p "${SHARED}"
+source "${DIR}/issues/completed/demos/059-demo-engine.sh"
+sora_demo_paths "${DIR}"
 
 SOURCE="${DIR}/issues/completed/demos/025-phase-2-graph-demo.c"
 BINARY="${BUILD}/phase-2-graph-demo"
 
-gcc -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread \
-    -I"${DIR}/libs" -I"${DIR}/src" \
-    -o "${BINARY}" "${SOURCE}" \
-    "${DIR}/libs/012-pool.c" "${DIR}/src/019-station.c" "${DIR}/src/020-delivery.c"
+# This demo builds its maps by hand and carries its own shims, so it
+# needs no box registry of its own — but the station layer it links
+# against reaches into the statics table and the observer, which the
+# registry-bearing engine expects to be whole. Regenerate, then link
+# the engine entire; see the shared build front for why the old
+# per-phase source list could not survive phase 7.
+sora_demo_registry "${DIR}"
+sora_demo_compile "${DIR}" "${BINARY}" "${SOURCE}"
 
 "${BINARY}" "${DIR}"
 

@@ -17,6 +17,17 @@ changes out from under its registry, shown regenerating — with the
 no-partial-output guarantee meaning a shim casting to yesterday's
 type cannot exist. Mirrored to the shared-memory tier.
 
+Seven scenes now, each opening with a story and reporting in that
+story's units, under the standard issue 707 sets: a library whose
+catalogue is printed by walking the shelves, a translator nobody
+briefed, a parts book written by reading the machine, two surveyors
+measuring one field by different methods, a loading door that never
+inspects its freight, the same track with a new engine under the
+bonnet, and a passport photograph that no longer matches the face. The
+shell half and the compiled half speak through matching presenters and
+share one report — the compiled half joins the document rather than
+starting its own — so the seams do not show.
+
 ## Intended behavior
 
 A demo about the seam between the two halves of a program. It should

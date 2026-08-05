@@ -18,6 +18,15 @@ by station with the vacuously-ready gatherer correctly skipped, and
 the load cost broken into parse, passes, validation, and seed.
 Mirrored to the shared-memory tier.
 
+Each scene opens with a story and reports in that story's units beside
+the engine's own, under the standard issue 707 sets: a player piano
+whose rolls are the music, a railway signal box where one lever
+redirects every later train, a customs desk that names which line of
+the form is wrong, and an orchestra's first full rehearsal. The six
+deliberate failures are quoted verbatim rather than paraphrased, one
+blank line apart, because a demo that retypes an error message can be
+wrong about it.
+
 ## Intended behavior
 
 The demo the whole project has been building toward. It should make one

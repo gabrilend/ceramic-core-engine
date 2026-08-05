@@ -18,6 +18,15 @@ words beside the verdict — the sign bit reading as magnitude — with
 a note that memcmp on little-endian lies differently, a nuance found
 while building it. Mirrored to the shared-memory tier.
 
+Each scene opens with a story and reports in that story's units beside
+the engine's own, under the standard issue 707 sets: a coin sorter
+that holds no opinions, a doorman with one height stick and three
+doors of which only some are unlocked, a dealer who is scrupulously
+fair at a table that never looks it, and a ledger where debts are
+written in red. The byte-comparison scene keeps its fixed pair rather
+than drawing one, because a drawn pair could fail to demonstrate the
+lie at all; the demo says so where it does it.
+
 ## Intended behavior
 
 The first demo where the map has behaviour rather than only shape. It

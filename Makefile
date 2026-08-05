@@ -17,6 +17,18 @@
 DIR   := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILD := $(DIR)/tmp/build
 
+# The two RAM tiers, derived from the project directory's own name so
+# nothing here is typed twice: tmp/ is a symlink into /tmp for things
+# that get executed, and tmp/shared-memory a symlink into /dev/shm for
+# things that get read. Both targets vanish on reboot while the
+# symlinks in the repository survive, so a first build after a restart
+# used to die on `mkdir: File exists` — a dangling symlink, reported as
+# if the source were at fault. Recreating them is idempotent and costs
+# nothing, so it happens before anything wants to write.
+PROJECT    := $(notdir $(DIR))
+RAM_EXEC   := /tmp/$(PROJECT)
+RAM_SHARED := /dev/shm/$(PROJECT)
+
 CC     ?= gcc
 CFLAGS := -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread
 CFLAGS += -I$(DIR)/libs -I$(DIR)/src
@@ -64,7 +76,15 @@ all: $(TEST_BINS) html
 # The build tree lives in RAM (tmp/ -> /tmp/<project>). It must exist
 # before anything writes into it; a build that dies on a missing
 # directory says nothing about the code.
-$(BUILD):
+# Order-only, so a phony prerequisite cannot make the build directory
+# look perpetually out of date.
+.PHONY: ramdirs
+ramdirs:
+	@mkdir -p $(RAM_EXEC)
+	@mkdir -p $(RAM_SHARED)
+	@ln -sfn $(RAM_SHARED) $(RAM_EXEC)/shared-memory
+
+$(BUILD): | ramdirs
 	mkdir -p $(BUILD)
 
 $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) | $(BUILD)

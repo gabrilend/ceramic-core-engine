@@ -48,6 +48,24 @@ what discovers the next thing to run. There is no central authority
 looking for work to do, because the act of finishing is the act of
 scheduling.
 
+## What travels on a wire
+
+**A value is atomic and independent.** It carries no relationship to any
+other value, and none to whatever produced it. A station takes whatever
+is at the head of each of its input buffers and runs; it has no notion
+of a round, a batch, or a set of values that belong to each other.
+
+This is easiest to see where a graph splits and rejoins. One station
+feeds two paths, and those paths meet again at a third. Send two values
+through and the two paths run on different threads at different speeds,
+so the station where they meet may pair the first value's result from
+one path with the second value's result from the other.
+
+That is the design, not a gap in it. If two things must stay together,
+they must **be** one thing — a struct, travelling one wire. Correlation
+is something the map author builds out of the values, exactly as state
+is something the map author builds out of the wiring.
+
 ## What that buys
 
 Parallelism is not something the programmer arranges. Two stations

@@ -18,6 +18,28 @@ and measures the measurement: the same workload with statistics
 compiled out and in, the difference a number rather than a rumour.
 Mirrored to the shared-memory tier.
 
+Each scene opens with a story and reports in that story's units beside
+the engine's own, under the standard issue 707 sets: a control room
+whose gauges are wired to the machines rather than to the drawings, a
+lane closed by cones, a set of as-built drawings against the
+architect's plan, a translation checked by translating it back, and a
+safety interlock that refuses without stopping the line. Scene six —
+the thermometer that warms the room it measures — belongs to the
+driving script, because neither build can measure the other. The
+demo now says in advance that the loader will warn about the idle
+spare station, so an expected warning does not teach a reader to
+ignore warnings.
+
+Measuring the instrumentation honestly took three attempts and the two
+failures are recorded in the script. One run of each build reported the
+instrumented one as faster; best-of-five run as two blocks reported the
+same thing more confidently, because whichever build ran second
+inherited a warm cache and a scaled-up processor. Repeating a
+measurement carefully is not the same as taking it fairly. The runs now
+alternate after a discarded warm-up, and the cost lands at a small
+positive figure — with the script still prepared to say plainly that a
+negative result means noise rather than rounding it to zero.
+
 ## Intended behavior
 
 The demo about legibility. Every earlier phase demo reported what

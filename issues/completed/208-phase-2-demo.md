@@ -15,6 +15,16 @@ and a hundred; and a live text view of six hundred values pooling
 behind a ticket gate and draining as tickets trickle in. Results
 mirror to the shared-memory tier.
 
+Each scene opens with a story and reports in that story's units beside
+the engine's own, under the standard issue 707 sets: a print shop with
+no foreman, one recipe card and many cooks, a restaurant pass where a
+backlog on the ticket rail and a backlog on the warming shelf mean
+opposite things, a dispatcher who dials every depot herself, and a
+queue on a pavement outside a ticketed door. The backlog scene quotes
+phase 7's buffer report rather than paraphrasing it, and the demo says
+up front that lines beginning "observe:" are the engine's own alarm on
+the error stream rather than something going wrong.
+
 ## Intended behavior
 
 The first demo where the shape of the program is visible. It should

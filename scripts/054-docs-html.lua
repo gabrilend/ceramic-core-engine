@@ -108,6 +108,17 @@ for _, name in ipairs(list_dir(DIR .. "/docs", "%.md$")) do
     add_page(DIR .. "/docs/" .. name, "doc-" .. name:gsub("%.md$", ".html"),
              title_of(DIR .. "/docs/" .. name, name), "The documents")
 end
+-- Implementation notes. A separate pass because the docs listing above
+-- is deliberately not recursive: the numbered documents are a reading
+-- order, and a subdirectory folded into it would break the sequence.
+-- These are decisions rather than descriptions, so they get their own
+-- heading in the sidebar.
+for _, name in ipairs(list_dir(DIR .. "/docs/implementation-notes", "%.md$")) do
+    add_page(DIR .. "/docs/implementation-notes/" .. name,
+             "impl-" .. name:gsub("%.md$", ".html"),
+             title_of(DIR .. "/docs/implementation-notes/" .. name, name),
+             "Implementation notes")
+end
 -- The sealed vision.
 add_page(DIR .. "/vision", "vision.html", "vision (sealed)", "The beginning")
 -- Notes.

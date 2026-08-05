@@ -18,6 +18,15 @@ eleven saying nothing at all. The knob scene bends the output stream
 from 1000 to 5000 at the moment of a mid-run write. Mirrored to the
 shared-memory tier.
 
+Each scene opens with a story and reports in that story's units beside
+the engine's own, under the standard issue 707 sets: a printed
+timetable beside a departures board, a rate card beside a telephone to
+head office, a question passed along a line of people whose length is
+drawn on a chart, two dictionaries that define each other, and a dial
+on the wall of a working factory. Values are drawn per run from a
+printed seed, except in the byte-comparison scene, where the mechanic
+depends on the exact pair and the demo says so.
+
 ## Intended behavior
 
 A demo about the direction of flow. It should make one distinction

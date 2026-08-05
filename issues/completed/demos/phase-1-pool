@@ -22,18 +22,29 @@ if [[ $# -ge 1 && -d "$1" ]]; then
     DIR="$1"
 fi
 
-BUILD="/tmp/$(basename "${DIR}")/build"
-SHARED="/dev/shm/$(basename "${DIR}")"
-mkdir -p "${BUILD}"
-mkdir -p "${SHARED}"
+source "${DIR}/issues/completed/demos/059-demo-engine.sh"
+sora_demo_paths "${DIR}"
 
 SOURCE="${DIR}/issues/completed/demos/017-phase-1-pool-demo.c"
 POOL="${DIR}/libs/012-pool.c"
 BINARY="${BUILD}/phase-1-pool-demo"
 
+# The one demo that does not link the engine, and deliberately so. The
+# pool depends on nothing above it — it moves opaque structs and calls
+# one function pointer per struct — and this demo proving it runs with
+# nothing else present is worth more than the consistency of using the
+# shared compile step. If this line ever needs another *engine* source
+# file, something the pool should not know about has reached into it.
+#
+# The presenter beside it is not engine: it prints paragraphs and
+# columns and has never heard of a station. It is here for the same
+# reason it is in all six other demos — so the demos cannot drift into
+# seven different layouts.
+PRESENTER="${DIR}/issues/completed/demos/061-demo-scene.c"
+
 gcc -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread \
     -I"${DIR}/libs" \
-    -o "${BINARY}" "${SOURCE}" "${POOL}"
+    -o "${BINARY}" "${SOURCE}" "${POOL}" "${PRESENTER}"
 
 "${BINARY}" "${DIR}"
 
