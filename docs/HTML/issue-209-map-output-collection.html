@@ -262,7 +262,9 @@ warning is the notice, and it fires from the first doubling.</p>
    station, unlike the ordinary growth report which waits and
    summarises.
 4. The call that takes values out, from outside the graph, mirroring
-   the call that writes a static in.
+   the call that writes a static in — **and beside it, a call that says
+   how many are waiting**, without which a caller cannot write the
+   drainer they are being asked to write.
 5. Carrying the declaration through the dump, so a dumped program still
    names its outputs and round-trips.
 6. The load-time check that a declared output station exists and that
@@ -305,15 +307,38 @@ warning is the notice, and it fires from the first doubling.</p>
 <p>  So the promise above stands unqualified: composition needs no
   finishing to detect, because everything anyone would detect it <em>for</em>
   is already an edge.</p>
-<p><strong>Still open:</strong></p>
 <ul>
-<li>An output buffer that nobody drains grows until memory runs out. The</li>
-<p>  warning names it from the first doubling, which is the honest signal
-  — but whether there should also be a ceiling, and what reaching one
-  would do, is unanswered. Refusing to accept more results is not
-  obviously better than running out of memory, and blocking the
-  producer is worse than both.</p>
+<li><em>Should an output buffer have a ceiling?</em> <strong>No.</strong> The warning is the</li>
+<p>  contract and running out of memory is the enforcement. Both
+  alternatives cost complexity to buy something worse: refusing new
+  results keeps the program running while silently discarding what it
+  computed, which is the exact harm this port kind exists to prevent
+  arriving late instead of at once; and blocking the producer stalls
+  upstream on a consumer that may never come, which is
+  indistinguishable from a wedge — a condition
+  <a href="issue-106-stopping-on-purpose.html">106</a> establishes the engine cannot
+  detect from inside.</p>
 </ul>
+<p>  A ceiling would also need a number, and any number is wrong on a
+  machine with more memory and wrong differently on one with less. The
+  same reasoning that keeps a clock out of the shutdown path keeps a
+  depth limit out of this one.</p>
+<p>  Exhaustion is no longer a vague bad ending, either. It is an invalid
+  operation, so it stops the program with the full report written on
+  the way out and the exit code meaning a resource no edit can fix —
+  naming every station, every buffer depth, and which one was
+  swallowing everything.</p>
+<p>  **A program deliberately drained only at the end is the caller's to
+  arrange.** The engine's contract already ends at the buffer, and
+  somebody who wants to run without a collector attached writes the
+  watcher that drains before memory fills. That is one more piece of
+  ordinary C in the place where all the other ordinary C lives, and it
+  is preferable to a mechanism every program pays for so that one
+  program need not be written carefully.</p>
+<p>  <strong>This puts a requirement on step 4.</strong> The call that takes values out
+  needs a companion that says how many are waiting, because a caller
+  told to write their own drainer cannot write one that never asks how
+  full the thing is.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-213-the-input-station.html">213 — The input station</a>, the same design</li>
