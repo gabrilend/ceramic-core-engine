@@ -1,6 +1,6 @@
 # Conversation Summary: ebd500b5-7b20-437d-a9c4-fd93380f69b0
 
-Generated on: 2026-08-04 20:52:24
+Generated on: 2026-08-08 08:36:48
 
 --------------------------------------------------------------------------------
 
@@ -9191,6 +9191,103 @@ of work and why they arrived together.
 
 
 Which?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 46
+
+well, we probably don't have to commit build artifacts, right? or are they HTML
+builds? if so, then that's fine we can just commit the latest HTML. Otherwise,
+just do your best. We probably don't have to hand reconstruct things.
+
+
+  Or, if that reads as more ceremony than it's worth for work that was never
+  committed anyway: one commit, message saying plainly that it covers two pieces
+  of work and why they arrived together.
+
+
+... yeah it's just ceremony really. It's helpful to stay organized.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 46
+
+Right on both counts — the HTML is a build artifact, so committing its latest
+state is the whole point, and hand-reconstruction isn't worth it.
+
+
+Here's the rule I'll use, stated so you can check it: **commit one gets every
+file this session didn't touch at all, plus the cleanly separable hunks in the
+three demo issues. Commit two gets everything else.** No reconstruction, nothing
+invented.
+
+
+Exactly right — `MM` means their hunk is staged and mine is still in the
+working tree. Now the whole files.
+
+
+That last transcript is this session's — it doesn't belong in the prior
+session's commit.
+
+
+Both committed, tree clean.
+
+
+## What landed
+
+
+**`Every scene opens with something you can hold`** — the previous session's
+demo work, which was complete and waiting on exactly the regeneration I ran.
+Thirty-five scenes, the two presenters, the four new files, and the four demo
+issues only that session touched. Plus its own three findings, including the one
+worth repeating: the overhead scene had been reporting the instrumented build as
+*faster* than the plain one, because the two were timed as blocks and whichever
+ran second inherited a warm machine. Best-of-five made the claim more confident
+rather than less wrong.
+
+
+**`Nothing is pulled any more`** — this session. The removal, what killed it
+(accounting, not cost), what replaced it, the nine concepts that stopped
+existing, and the second pass over everything the removal touched.
+
+
+## How the split actually went
+
+
+The rule held: commit one got only files this session never touched, plus one
+cleanly separated hunk each in the three demo issues — their scene
+descriptions staged, my marks left in the working tree for the second commit. A
+small script filtered the diff by hunk index rather than me hand-editing
+patches, so nothing was reconstructed and nothing invented.
+
+
+Four files were genuinely interleaved line-by-line and went whole into the
+second commit: the table of contents, the map file format, the documentation
+issue, and the phase 7 record. Along with the packaging note and the
+implementation-notes README, which the previous session wrote and I edited —
+their work is in my commit, and that's the part of the split that isn't clean.
+It's named here so the record isn't misleading even where the attribution is.
+
+
+## One thing that's gone
+
+
+The original gather-timing note — four hundred lines laying out three timings
+with their costs — was never committed and I overwrote it. It exists only in
+the transcripts now. That's the price of several sessions of work without a
+commit, and it's the argument for committing earlier next time rather than for
+anything else.
+
+
+## Where things stand
+
+
+Every task closed. The engine is documented as it will be, not as it is —
+which is the right order, since none of it is built yet. The nearest work is the
+port record and the statics move; the demos can't be rewritten until those land,
+which their issue says explicitly.
 
 
 --------------------------------------------------------------------------------
