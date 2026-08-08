@@ -65,6 +65,37 @@ single output port may feed as many interior stations as you wire it
 to, because every output port has always had a list of destinations.
 One argument reaching six places needs no mechanism at all.
 
+### Values that must stay together must travel together
+
+**Two values delivered to two ports of the same station are not a
+pair**, and this is the trap the door opens onto. A station with an
+object port and a colour port, fed by two callers who each want their
+own object painted their own colour, will pair them **arbitrarily** —
+the first caller's object with the second caller's colour is a
+perfectly legal outcome.
+
+The reason is already written down and is deliberate:
+[210](210-input-port-record.md) states that values may leave a port in
+a different order than they arrived, because with positions gone a
+reader takes the first ready cell its scan finds, and rollback opens
+gaps wherever it happens. If order within one port is not promised,
+correspondence across two ports certainly is not.
+
+**So anything that must arrive as a unit is one struct on one port.**
+The engine already supports this all the way down: the generator emits
+a field table per struct, the reader turns brace text into correctly
+laid-out bytes using compiler-computed offsets, and command-line
+arguments in brace syntax come along free. The object and its colour
+are one value, indivisible by anything the scheduler does.
+
+The alternative — one input station per caller — also works and needs
+no argument, but it scales with callers rather than with the interface,
+which is the wrong axis.
+
+This belongs in [058](../docs/058-guarantees.md) as a stated
+non-guarantee beside the ordering one, because it is the form in which
+that non-guarantee will actually bite somebody.
+
 **Where "outside" is depends on who is running it, and the mechanism is
 the same either way.** For a sub-program, the outside is the parent map,
 delivering typed values down an ordinary wire. For a program started
@@ -146,12 +177,29 @@ want to.
   stations is one output port with many destinations, which has always
   worked.
 
-**Still open:**
+- *Does an input port accept several arrows, like any other port?*
+  Yes, and nothing about it is special: several callers delivering to
+  one program input is several arrows into one port, which every port
+  in the engine has always allowed. They interleave, exactly as two
+  upstream stations feeding one port already interleave.
 
-- Does an input port accept several arrows, like any other port? If a
-  parent and a control socket both deliver to the same program input,
-  they interleave — which is ordinary for a ring port and probably
-  fine, but it is worth saying rather than discovering.
+  **The engine does not remember who called, and does not need to.**
+  Where a result should go travels *in the values*, not in the identity
+  of the sender. A shared factory taking an object and a colour returns
+  the blue one down the blue wire because a routing station read the
+  colour, not because the engine tracked which caller sent it. This is
+  the same principle as ordering being wiring: everything the engine
+  might have been asked to remember is instead something the graph can
+  be asked to carry.
+
+- *Does a program dump that cannot mention its outside callers still
+  round-trip?* Yes. A program's file records the program's shape, and
+  who is entitled to deliver into it is not part of that shape any more
+  than a C function's callers are part of its signature. The dump
+  round-trips the program; it was never claiming to round-trip the
+  world around it.
+
+**Still open:**
 - A program run from a shell whose input station has ports that the
   command line does not fill: those ports never receive a value, so the
   stations behind them never become ready and the program sits. Is that
