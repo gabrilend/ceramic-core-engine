@@ -27,6 +27,7 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
+<a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
@@ -124,10 +125,17 @@ above it in the project stands on this.</p>
 <tr><td>103 — sleeping and waking</td><td>complete</td><td>Condition-variable sleep, wake-all on push, exact sleeper count under the one mutex.</td></tr>
 <tr><td>104 — termination by last sleeper</td><td>complete</td><td>Last sleeper's final look decides; broadcast shutdown; outside submitters registered.</td></tr>
 <tr><td>105 — phase 1 demo</td><td>complete</td><td>Four measured scenes: growth, termination tail, idle cost, throughput ceiling.</td></tr>
+<tr><td>106 — stopping on purpose</td><td>open</td><td>The other ways a program ends: three signals, and a refusal that is fatal rather than ignorable.</td></tr>
 </table>
-<p>Phase 1 is finished. The pool moves opaque work across every core,
-sleeps for free, and knows when it is done. Nothing in it mentions a
-station, which is what phase 2 is for.</p>
+<p><strong>Phase 1 reopened, at the far end.</strong> Everything built here still
+stands untouched — the new issue adds no mechanism to the run loop and
+changes no lock. It only says what happens when a program is told to
+stop, or finds an instruction it refuses to continue past, neither of
+which the pool had an answer for. The happy ending stays exactly as
+104 built it; the polite shutdown reuses it unmodified.</p>
+<p>The pool moves opaque work across every core, sleeps for free, and
+knows when it is done. Nothing in it mentions a station, which is what
+phase 2 is for.</p>
 <p>Notes for the phase: the machinery for 101–104 proved to be one
 function with four aspects rather than four functions, and landed as a
 unit in the 101 commit; the issues were then proven and closed one at

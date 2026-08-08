@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>106 — Stopping on purpose</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-106-stopping-on-purpose.html" class="here">106 — Stopping on purpose</a>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>106 — Stopping on purpose</h1>
+<p>The sibling of <a href="done-104-termination-by-last-sleeper.html">104</a>.
+That issue built the one way a program ends by itself: work runs out,
+the last worker to fall asleep looks once more, finds nothing, and
+stops everyone by broadcast. This is every other way a program ends —
+because it was told to, or because it found something it refuses to
+continue past.</p>
+<h2>Current behavior</h2>
+<p><strong>A program has exactly one way to stop, and it is the happy one.</strong></p>
+<p>Running out of work is handled and proven. Nothing else is. There is no
+signal handling anywhere in the engine: a person pressing ctrl+C gets
+the kernel's default action, which terminates the process immediately
+with nothing written, no report, and no indication of which part of the
+program was doing what. A service manager sending the polite shutdown
+signal gets the same abrupt nothing. The counters, the buffer
+high-water marks, the growth counts, and the live map — all of which
+exist and are readable — go with it.</p>
+<p>**Failure is handled two different ways, and the disagreement is
+recorded as deliberate.** The loader dies on a bad map file, collecting
+every failure in the file first so its author gets the whole list at
+once (<a href="done-604-load-time-validation.html">604</a>). Runtime rewiring
+does the opposite: it returns minus one, names the reason on the error
+stream, changes nothing, and leaves the program running
+(<a href="done-704-runtime-rewiring.html">704</a>). The reasoning was that a
+loader that dies serves its author while a running engine that dies for
+one bad control instruction takes the plant down with it. The
+first-pass report books the cost of that choice as a debt in plain
+words: <strong>a caller can ignore a return value.</strong></p>
+<p><strong>Under one construction surface those became the same call.</strong> Issue
+<a href="issue-212-one-way-to-build-a-program.html">212</a> collapses loading and editing
+into one act, so the two policies can no longer coexist. It resolves
+in favour of dying, and this issue is where that resolution is built.</p>
+<h2>Intended behavior</h2>
+<p>**An invalid operation ends the program, having first said everything
+it can about what went wrong.**</p>
+<p>Not a return value a caller may discard. The debt the first-pass report
+identified is paid off rather than serviced: there is no surviving path
+in which a refused instruction leaves a program running that somebody
+believes they just edited successfully. This is also what makes
+"complete or visibly incomplete, never half-built" true without the
+construction surface having to enforce it — a program cannot be left
+partly built by ignored refusals when a refusal ends the process.</p>
+<p>**The surface still returns a refusal rather than dying where the
+failure happens.** The loader's rule of collecting every failure in a
+file and presenting them together survives, and it needs a refusal to
+travel upward rather than terminate on the spot. So a refusal is
+reported, accumulated, and the stop happens once with the whole list. A
+single instruction arriving alone produces a list of one.</p>
+<p><strong>And the program answers three signals, differently.</strong></p>
+<p>They form a progression, and the ordering is the design: each needs
+less cooperation from the program than the one before it, and each is
+the right answer for a program in worse condition than the last.</p>
+<table>
+<tr><td></td><td>polite shutdown</td><td>interrupt</td><td>quit</td></tr>
+<tr><td>who sends it</td><td>a service manager</td><td>a person at a terminal</td><td>a person who wants evidence</td></tr>
+<tr><td>what it means</td><td>wind down, there is time</td><td>stop, and tell me why</td><td>stop now, leave the body</td></tr>
+<tr><td>diagnostics</td><td>none</td><td>everything</td><td>only what needs no lock</td></tr>
+<tr><td>drains the queue</td><td>yes</td><td>yes, around one task</td><td>no</td></tr>
+<tr><td>waits for running boxes</td><td>yes</td><td>no</td><td>no</td></tr>
+<tr><td>needs a free worker</td><td>needs healthy ones</td><td>needs exactly one</td><td>needs none</td></tr>
+<tr><td>how it exits</td><td>zero, by the existing rule</td><td>non-zero, explicitly</td><td>aborts, leaving a core</td></tr>
+</table>
+<h3>The polite shutdown writes nothing</h3>
+<p>Stop accepting new work and let the program end the way it would have
+ended on its own. Boxes already running finish, delivery does its
+ordinary work, the queue empties, workers park themselves, and
+<strong>the last-sleeper rule from 104 fires unmodified.</strong> Exit zero.</p>
+<p>No diagnostics, because nobody asked for any and a supervisor stopping
+a healthy program does not want a report it did not request.</p>
+<p>This path adds no mechanism at all. It is the ordinary ending,
+triggered early, and that is the argument for it.</p>
+<p><strong>It borrows a clock rather than inventing one.</strong> If the program is
+wedged this path never completes — which is correct, because whatever
+sent the signal already has a timer and will escalate to the
+uncatchable kill signal when it expires. The supervisor's clock is the
+only clock in the system that knows how long is too long for this
+particular deployment. The engine must not guess at one; a guess is
+wrong on a slow machine and wrong differently on a fast one.</p>
+<h3>The interrupt gathers everything</h3>
+<p>Somebody is standing there and wants to know what happened. Empty the
+task queue, put one diagnostics task into it, and keep emptying around
+that task so no new work starts. Let it write the full picture: per
+station the completed-run and produced counts, per buffer the
+high-water mark and growth count, per worker the station it is
+currently inside, and the live map rendered as a map file. Then exit
+non-zero.</p>
+<p>**The drain needs no new flag, because an empty queue is already the
+brake.** Workers that find nothing go to sleep by the mechanism 104
+already built. Nothing about the run loop changes.</p>
+<p><strong>A second interrupt skips all of it and exits immediately.</strong> Ctrl+C
+twice has to always work. A diagnostic path that can itself get stuck
+would otherwise trap the person it was written for, which is the exact
+failure it exists to prevent.</p>
+<h3>The quit takes no locks at all</h3>
+<p>Maximum evidence, no cooperation. Do not drain, do not enqueue, do not
+wait for any thread, and above all <strong>do not take a single lock</strong> —
+because the reason this signal arrived may be that a lock is held by
+something that will never release it.</p>
+<p>Write only what is readable without cooperation: the per-station
+completed-run and produced counts, which are atomic and readable from
+any thread, and each worker's current station index. Then abort, which
+leaves a core dump, so a debugger attached to the core shows every
+thread's stack including the box that is not returning.</p>
+<p><strong>This is the path that works when the other two cannot.</strong> A program
+with every worker wedged has no thread free to run a diagnostics task
+and no queue that will ever drain. It can only be examined from
+outside, and this hands the outside a copy of the inside on the way
+past.</p>
+<h2>What cannot be done, and why it keeps being attempted</h2>
+<p><strong>A running box cannot be stopped.</strong> There is no safe way to interrupt
+executing C. The cancellation facility only acts at cancellation
+points, so a tight loop containing no system call never reaches one;
+even when it does fire it does not unwind C code, and any mutex the
+thread was holding stays locked forever — which would freeze every
+thread delivering into that station, a worse outcome than the wedge.
+So "halt everything" honestly means <strong>stop starting new things</strong>, and
+that is achievable, and stopping the ones already running is not.</p>
+<p>**Destroying the pool does not reach the box either, and makes things
+worse.** Two versions of this idea have been considered and both are
+recorded here because both are tempting:</p>
+<p>Freeing the pool does not take anything away from the threads using
+it. Every worker holds the pool's address in its own record and on its
+stack, and freeing only tells the allocator those bytes may be reused.
+The workers keep reading the same addresses while some unrelated
+allocation begins rewriting them — including the bytes that are the
+mutex. The pool does not stop; it starts behaving unpredictably, which
+turns a clean crash into an unreproducible one.</p>
+<p>Overwriting the pool with zeroes is worse in a more interesting way,
+because it looks like it worked. The stop flag becomes false, which
+tells every worker <em>not</em> to stop. The ring capacity becomes zero, and
+the ring arithmetic divides by it, so some workers die of a hardware
+exception at an arbitrary instruction. The storage pointer becomes
+null, so others die dereferencing it. And a zeroed mutex is, on this
+platform, a valid <em>unlocked</em> mutex — so the lock is silently released
+while a thread is inside the critical section, and two threads can then
+hold it at once, each believing it is alone. It also erases the
+counters and the ring, which are the things worth gathering.</p>
+<p>**The unifying reason all three fail: a wedged thread is inside user
+code that never looks at the pool.** A box spinning on its own
+arithmetic reads no flag, no capacity, no pointer. Nothing done to that
+structure reaches it.</p>
+<h2>Why there is no watchdog</h2>
+<p>Detecting a wedge from inside cannot be done, and the reason is worth
+keeping.</p>
+<p>The last-sleeper rule is structurally incapable of it: it fires when
+workers go to <em>sleep</em>, and a worker in an infinite loop never sleeps,
+so the count never completes and the rule never runs. It answers "does
+everybody have nothing to do," while a wedge is the opposite condition.</p>
+<p>A progress counter comes closer. Every station already carries an
+atomic completed-run count that is always on and readable without a
+lock, so summing them gives one number meaning "how much this program
+has ever finished," and a wedge shows up as that number not moving
+while every worker is busy and work waits behind them. But **the
+threshold is unavoidably a guess.** Sixteen workers each legitimately
+running a very long box look identical to sixteen wedged workers, and
+no amount of cleverness distinguishes them — this is the halting
+problem wearing work clothes.</p>
+<p>And under the rule that everything runs as a task inside the engine,
+the detector would itself be a task, so when every worker is wedged
+there is no thread left to run it. **The system goes silent exactly
+when the observation would matter**, which is not a flaw in that rule
+so much as what that rule means.</p>
+<p>So the engine does not guess. The signal comes from outside, where
+somebody who actually knows how long is too long is the one deciding.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. A signal disposition installed during startup for the three
+   signals, blocked in every worker at creation so delivery always
+   lands on the initial thread. This is the one piece that must exist
+   before the engine is running, and it is small.
+2. A handler that does exactly one thing: record which signal arrived
+   in a flag of the type the standard permits a handler to write, and
+   return. It may not take the pool mutex — a handler interrupts an
+   arbitrary thread at an arbitrary instruction, possibly one already
+   holding that mutex, and locking there deadlocks against itself
+   immediately, producing neither diagnostics nor an exit.
+3. The polite path: reuse termination unchanged. Prove it by a program
+   stopped mid-run whose in-flight work all completes and whose exit is
+   indistinguishable from having run out of work.
+4. The interrupt path: drain, enqueue one diagnostics task, drain
+   around it, exit non-zero when it finishes. Prove it by a program
+   with deliberate backlog whose report names every station.
+5. The second-interrupt escape, proven by an interrupt arriving while
+   the diagnostics task is deliberately blocked.
+6. The quit path, taking no locks, proven by a program with a station
+   mutex deliberately held — the report must still appear.
+7. The construction surface's refusals become fatal, with the
+   accumulate-then-stop behaviour the loader already has, and the
+   rewiring path loses its ignorable return.
+8. A test that an ignored refusal cannot leave a half-built program,
+   which is the property this buys and the reason for the change.</p>
+<h2>What this change reaches</h2>
+<p>The refusal policy is stated in eight places that were deliberately
+kept in agreement, and all of them move together:</p>
+<ul>
+<li><a href="done-704-runtime-rewiring.html">704</a>, which decided it</li>
+<li><a href="issue-211-growing-the-station-table.html">211</a>, which inherits it explicitly</li>
+<li><a href="issue-212-one-way-to-build-a-program.html">212</a>, which now answers it</li>
+<li>the first-pass report, which books it as a debt</li>
+<li>the observe interface file and the observe header</li>
+<li>the rewire source, in a comment explaining the return value</li>
+<li><strong>scene five of the phase 7 demo</strong>, which argues the old position at</li>
+<p>  length and measures it — its image is a lever with a mechanical
+  interlock, and one of its correspondences pairs a refusal that
+  returns with a light saying why, on the grounds that both inform
+  without punishing. That scene cannot survive this change. It was
+  already scheduled for rewriting in
+  <a href="issue-710-demos-after-the-pull-path.html">710</a> because the illegal operation
+  it uses is a gather cycle and gathering is being removed, so it now
+  needs rewriting for two independent reasons.</p>
+</ul>
+<h2>Open questions</h2>
+<ul>
+<li>Where does the diagnostic report go — the error stream, or a file</li>
+<p>  named at startup? A person at a terminal wants it on screen; a
+  program being stopped by a supervisor has nowhere useful to put
+  screen output, and that is also the case where nothing is written.</p>
+<li>What exit code does the interrupt path use? The convention of</li>
+<p>  reporting the signal number added to a fixed offset exists and is
+  understood by shells, but it collides with the engine wanting to
+  distinguish "stopped by a person" from "refused an instruction."</p>
+<li>Does the fatal policy hold everywhere the engine is embedded? A</li>
+<p>  program compiled into the browser workbench
+  (<a href="issue-801-browser-workbench.html">801</a>) that takes its whole host down on a
+  bad edit is a much worse experience than one that reports, and the
+  workbench's whole purpose is people making bad edits and seeing what
+  happens.</p>
+<li>Should the interrupt path's diagnostics task be an ordinary task at</li>
+<p>  all? It is the one task in the system that must be guaranteed to run,
+  and the queue makes no such guarantee to anybody.</p>
+</ul>
+<h2>Related</h2>
+<ul>
+<li><a href="done-104-termination-by-last-sleeper.html">104 — Termination by last sleeper</a>,</li>
+<p>  the other way a program ends, unchanged by this</p>
+<li><a href="done-102-workers-and-run-loop.html">102 — Workers and the run loop</a>,</li>
+<p>  whose stop flag is already the brake and needs no addition</p>
+<li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
+<p>  which decided the refusal policy this builds</p>
+<li><a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>,</li>
+<p>  whose ignorable return is what changes</p>
+<li><a href="done-702-station-statistics.html">702 — Station statistics</a> and</li>
+<p>  <a href="done-701-buffer-growth-reporting.html">701 — Buffer growth reporting</a>,
+  which already gather everything the report needs</p>
+<li><a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>,</li>
+<p>  which now inherits a second reason to rewrite the same scene</p>
+<li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a>, which needs a</li>
+<p>  section on the ways a program ends</p>
+</ul>
+
+</main>
+</div></body></html>

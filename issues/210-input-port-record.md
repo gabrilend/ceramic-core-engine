@@ -179,6 +179,30 @@ distinction that makes everything below work: **a position must be
 exact and is therefore computed from the capacity; a hint may be wrong
 and therefore is not.**
 
+**The bookmark is one shared number per port, and it is an index.**
+Not a pointer, and not a copy per worker. An index because the port's
+storage is the one thing in this design that gets reallocated: growth
+adds a page, and a pointer saved into a page is a pointer that means
+something else afterwards, while an ordinal position into the port's
+cells keeps meaning what it meant. This is the same reason a wire is a
+pair of integers rather than an address, and the reason has now been
+paid for twice.
+
+**The scan reads the bookmark once, sweeps forward, wraps, and stops
+where it started.** Reading it once is what bounds the work: the sweep
+visits at most every cell the port has, exactly one time each, and then
+gives up. Re-reading a bookmark that other workers keep pushing forward
+would let a reader chase it, and a scan that can be outrun is a scan
+with no bound.
+
+**Other workers move the bookmark while a sweep is in progress, and
+that is fine.** It is a hint, so a reader that started from a value now
+stale is not wrong, only slightly less lucky — it pays a few extra
+cells of walking. Nothing about correctness rests on the number being
+current; what rests on it is only how quickly a reader finds work. The
+shared write remains a shared write, and its cost is the subject of the
+answered question at the bottom of this issue.
+
 **Values may leave a port in a different order than they arrived.**
 This is a real loss and it is chosen deliberately. Values reaching one
 port from two upstream stations were already in whatever order the
@@ -297,15 +321,49 @@ error made much earlier.
 
 ## Open questions
 
-- The bookmark is per port and touched by every reader. That is a
-  shared write on the hot path — the thing the per-cell states were
-  arranged to avoid — so it may want to be per worker, or to be updated
-  only occasionally rather than on every claim.
-- A writer that dies mid-copy leaves a cell reserved forever, and the
-  port stalls behind it. That is the same class of failure as any lost
-  value, but the state machine makes it a visible, nameable condition
-  for the first time, so it could be reported rather than merely
-  suffered.
+**Answered:**
+
+- *The bookmark is touched by every reader, which is a shared write on
+  the hot path — should it be per worker, or written back only
+  occasionally?* Neither. It stays one shared number per port. A
+  per-worker copy trades a contended hint for a cold one, and a hint
+  that is always cold has stopped shortening the scan it exists to
+  shorten — which is the whole of its job. The contention is real and
+  is accepted with its eyes open: the per-cell states were arranged so
+  that workers claiming *different* cells never write the same line,
+  and that is the property worth protecting, because it scales with how
+  much work is in flight. The bookmark does not — it is one line, its
+  cost is fixed no matter how large the port grows, and it is only
+  touched on the transitions of a claim rather than throughout one. If
+  a measurement ever shows that fixed cost mattering, the cheap move is
+  the second option, publishing progress every so often rather than
+  every time, and nothing above has to change for it.
+
+- *A writer that dies mid-copy leaves a cell reserved forever — should
+  that be detected, reclaimed, or reported?* None of the three, because
+  nothing that can die is able to get into that window. A cell is
+  reserved for the length of one copy whose size is the port's element
+  size — a `sizeof` the compiler computed, carried on the box record —
+  from one allocation the engine owns into another. No pointer is
+  followed, nothing is allocated, and nothing is called. The claim in
+  the other direction is the same shape: a reader copies the cell into
+  the task's own value area and is finished with the cell there, and
+  the box does not run until a worker picks that task up later, reading
+  from the task and holding no cell at all. What remains is failing
+  hardware, and software that stops when the memory under it stops is
+  behaving correctly rather than lacking a feature.
+
+  **This becomes true rather than being true.** There is one place
+  today where user code runs inside the claim walk: a gather slot
+  invokes its upstream box inline, on the claiming thread, while cells
+  are held. A box that crashes there really does strand them. That is
+  the pull path, and removing it is what closes the window — so the
+  concern is real, and it belongs to gathering, which is going, rather
+  than to the port record, which is staying.
+
+  A box that crashes while it *runs* is still an event worth having an
+  answer for, but it cannot strand a cell, because by then it holds
+  none. It loses a task, which is a different problem.
 
 ## Related
 

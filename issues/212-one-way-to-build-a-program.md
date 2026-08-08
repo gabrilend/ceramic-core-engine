@@ -227,13 +227,36 @@ rather than drifting into place.
 
 ## Open questions
 
-- What refuses what, when? Rewiring chose to return a failure and name
-  the reason rather than die, because a running engine that dies for
-  one bad control instruction takes the plant down, while a loader that
-  dies serves its author. Under one surface those are the same call.
-  Does the caller declare which it wants, or does the reader turn a
-  refusal into a fatal error on its own?
 **Answered, kept because the reasoning is the design:**
+
+- *What refuses what, when — does the caller declare whether a bad
+  instruction is fatal, or does the reader decide on its own?* Neither.
+  There is one policy and it is fatal. An invalid operation ends the
+  program, having first gathered everything it can say about what went
+  wrong: stop handing out new work, quiet what can be quieted, collect
+  the reasons, say them, and only then die.
+
+  This overturns the choice rewiring made and reasoned in
+  [704](completed/704-runtime-rewiring.md), where a refusal returned
+  minus one and named itself rather than killing a running engine. The
+  cost of that choice was already written down as a debt in the
+  first-pass report: **a caller can ignore a return value**, and an
+  ignored refusal leaves a program running that somebody believes they
+  just edited. Dying removes the debt instead of managing it.
+
+  The surface still *returns* a refusal rather than dying where the
+  failure happens, because the loader's rule from
+  [604](completed/604-load-time-validation.md) is to collect every
+  failure in a file and present them together rather than stopping on
+  the first. A refusal travels upward, accumulates, and the crash
+  happens once with the whole list. A single instruction arriving alone
+  simply produces a list of one.
+
+  **And "never half-built" stops needing enforcement.** A program
+  cannot be left partly constructed by ignored refusals, because a
+  refusal ends the process. The property that the surface could not
+  guarantee on its own is now guaranteed by there being no surviving
+  path in which it is violated.
 
 - *Should the reader run the whole-program checks when it reaches the
   end of a file?* No. Those checks became a **report** — a program with
