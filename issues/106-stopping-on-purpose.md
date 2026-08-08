@@ -68,9 +68,9 @@ the right answer for a program in worse condition than the last.
 | who sends it | a service manager | a person at a terminal | a person who wants evidence |
 | what it means | wind down, there is time | stop, and tell me why | stop now, leave the body |
 | diagnostics | none | everything | only what needs no lock |
-| drains the queue | yes | yes, around one task | no |
+| drains the queue | yes | yes | no |
 | waits for running boxes | yes | no | no |
-| needs a free worker | needs healthy ones | needs exactly one | needs none |
+| needs a free worker | needs healthy ones | none | none |
 | how it exits | zero, by the existing rule | non-zero, explicitly | aborts, leaving a core |
 
 ### The polite shutdown writes nothing
@@ -97,12 +97,17 @@ wrong on a slow machine and wrong differently on a fast one.
 ### The interrupt gathers everything
 
 Somebody is standing there and wants to know what happened. Empty the
-task queue, put one diagnostics task into it, and keep emptying around
-that task so no new work starts. Let it write the full picture: per
-station the completed-run and produced counts, per buffer the
-high-water mark and growth count, per worker the station it is
-currently inside, and the live map rendered as a map file. Then exit
-non-zero.
+task queue so no new work starts, then **write the report from the
+waiting thread itself** — the full picture: per station the
+completed-run and produced counts, per buffer the high-water mark and
+growth count, per worker the station it is currently inside, and the
+live map rendered as a map file. Then exit non-zero.
+
+Gathering on the thread that received the signal, rather than as a task
+somebody has to hope gets scheduled, is what lets this path work on a
+program whose every worker is wedged. The queue guarantees nothing to
+anybody, and the one piece of work that must happen cannot be the one
+piece of work that is waiting in line.
 
 **The drain needs no new flag, because an empty queue is already the
 brake.** Workers that find nothing go to sleep by the mechanism 104
@@ -202,22 +207,25 @@ somebody who actually knows how long is too long is the one deciding.
 
 ## Suggested implementation steps
 
-1. A signal disposition installed during startup for the three
-   signals, blocked in every worker at creation so delivery always
-   lands on the initial thread. This is the one piece that must exist
-   before the engine is running, and it is small.
-2. A handler that does exactly one thing: record which signal arrived
-   in a flag of the type the standard permits a handler to write, and
-   return. It may not take the pool mutex — a handler interrupts an
-   arbitrary thread at an arbitrary instruction, possibly one already
-   holding that mutex, and locking there deadlocks against itself
-   immediately, producing neither diagnostics nor an exit.
+1. During startup: the three signals blocked in every thread, and the
+   report's destination opened, so that every failure path afterwards
+   holds a descriptor rather than a path it would have to resolve while
+   dying. This is the one piece that must exist before the engine runs,
+   and it is small.
+2. The initial thread **waits for a signal rather than handling one**,
+   and the last sleeper sends it one after broadcasting shutdown — so
+   there is a single waiting point woken for two different reasons,
+   told apart by which number arrives. No handler is installed
+   anywhere, which is why nothing in this issue is constrained by what
+   a handler is permitted to call.
 3. The polite path: reuse termination unchanged. Prove it by a program
    stopped mid-run whose in-flight work all completes and whose exit is
    indistinguishable from having run out of work.
-4. The interrupt path: drain, enqueue one diagnostics task, drain
-   around it, exit non-zero when it finishes. Prove it by a program
-   with deliberate backlog whose report names every station.
+4. The interrupt path: drain, gather on the waiting thread, exit
+   non-zero. Prove it by a program with deliberate backlog whose report
+   names every station, **and by one whose every worker is deliberately
+   wedged** — which must still produce a full report, since nothing is
+   enqueued and no worker is asked for.
 5. The second-interrupt escape, proven by an interrupt arriving while
    the diagnostics task is deliberately blocked.
 6. The quit path, taking no locks, proven by a program with a station
@@ -251,23 +259,79 @@ kept in agreement, and all of them move together:
 
 ## Open questions
 
-- Where does the diagnostic report go — the error stream, or a file
-  named at startup? A person at a terminal wants it on screen; a
-  program being stopped by a supervisor has nowhere useful to put
-  screen output, and that is also the case where nothing is written.
-- What exit code does the interrupt path use? The convention of
-  reporting the signal number added to a fixed offset exists and is
-  understood by shells, but it collides with the engine wanting to
-  distinguish "stopped by a person" from "refused an instruction."
-- Does the fatal policy hold everywhere the engine is embedded? A
-  program compiled into the browser workbench
-  ([801](801-browser-workbench.md)) that takes its whole host down on a
-  bad edit is a much worse experience than one that reports, and the
-  workbench's whole purpose is people making bad edits and seeing what
-  happens.
-- Should the interrupt path's diagnostics task be an ordinary task at
-  all? It is the one task in the system that must be guaranteed to run,
-  and the queue makes no such guarantee to anybody.
+**Answered:**
+
+- *Where does the diagnostic report go?* To the RAM-backed ephemeral
+  directory, the same place every other log in this project goes — the
+  shared-memory link the build already creates and the demo runner
+  already ensures exists. Two consequences follow and are accepted.
+  The report does not survive a reboot, which is right for something
+  read while debugging and useless as a post-mortem after the machine
+  came back; that is what a core dump is for. And **the path must be
+  opened during startup rather than while dying.** The directory lives
+  on a filesystem a reboot empties, so it may be absent, and creating
+  it in a failure path means a system call that can fail for reasons a
+  dying program cannot do anything about. Open it at initialization and
+  keep the descriptor. A descriptor is an integer, and writing to an
+  integer is the one file operation available on every path here,
+  including the one that takes no locks.
+
+- *What exit code does each path use?* Everything below the signal
+  offset belongs to the program; the offset and above belongs to
+  signals by convention, so engine meanings never reach up there.
+
+  | code | meaning |
+  |---|---|
+  | 0 | ran out of work, or was politely asked to stop |
+  | 65 | a map file the engine refused — the input was malformed |
+  | 70 | an invalid operation from a program's own construction calls — the calling code was wrong |
+  | 71 | out of memory, or another resource no edit can fix |
+  | 130 | interrupted by a person |
+  | 134 | not chosen — the quit path aborts, and the shell computes this from the abort signal |
+
+  The three middle codes are the ones worth having: they make the
+  distinction this project already draws — a fault the caller can
+  correct and retry versus one it cannot — visible to a shell script
+  rather than only to somebody reading the message. The interrupt code
+  is the signal number added to the conventional offset, so every shell
+  and supervisor that already understands "this was interrupted" keeps
+  understanding it without being taught anything.
+
+- *Should the diagnostics work be an ordinary task?* No, and dropping
+  that removes the weakest assumption in the design. **The thread that
+  receives the signal does the gathering itself.** Nothing is enqueued,
+  no free worker is required, and the "needs at least two live threads"
+  limit disappears — the interrupt path and the quit path become the
+  same shape, differing only in whether they are willing to take locks.
+
+  This also replaces the handler mechanism described below. **Block all
+  three signals in every thread and have the initial thread wait for
+  one**, rather than installing handlers. Waiting returns the signal
+  number as an ordinary value to a thread running ordinary code, so
+  every restriction on what a handler may call stops applying: it can
+  take locks, format text, do anything. The restriction was the hardest
+  part of this design and it is avoidable rather than manageable.
+
+  One wrinkle, with a pleasing fix. The initial thread would otherwise
+  be blocked collecting the workers, and waiting for a signal and
+  waiting for the pool are two different waits. Rather than have two,
+  **let the pool's own completion arrive as a signal as well** — the
+  last sleeper, having broadcast shutdown, sends a chosen signal to the
+  initial thread. Then there is exactly one place that thread waits,
+  one mechanism that wakes it, and it tells the reasons apart by which
+  number came back.
+
+- *Does the fatal policy hold where the engine is embedded?* Yes, and
+  it costs nothing, because **the embedder is already the same kind of
+  boundary the operating system is.** A program compiled into the
+  browser workbench ([801](801-browser-workbench.md)) that aborts does
+  not take the page down with it: the instance traps, the runtime
+  unwinds it, and the host receives an exception with the page intact.
+  So the workbench's answer to a refused edit is "that program died,
+  here is what it wrote on the way out, here is a fresh one" — which is
+  more useful than a half-broken program that keeps running, given that
+  the workbench exists precisely for people to make bad edits and watch
+  what happens.
 
 ## Related
 
