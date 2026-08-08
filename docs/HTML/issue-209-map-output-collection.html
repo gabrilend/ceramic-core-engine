@@ -159,10 +159,24 @@ because that is an ordinary box, **several output stations can offer
 the same results in different formats, and choosing between them is
 rewiring.** Or it may run nothing, in which case it is a station with
 one input and one output and the value crosses unchanged.</p>
-<p><strong>A station that runs no box has exactly one input port</strong>, necessarily:
-with nothing running there is no way to combine several arriving values
-into the single value an output port carries. That is the degenerate
-case of the ordinary shape rather than a second kind of thing.</p>
+<p>**The readiness check applies here exactly as it applies anywhere, box
+or no box.** Nothing crosses to the output port until <em>every</em> input
+port holds at least one value, and then one value is taken from each.
+Three values waiting on the first input and one on the second means one
+complete set moves and two stay behind, and the station waits for the
+second input to be fed again. This is not a rule added for doorways; it
+is <a href="done-204-readiness-check.html">204</a> doing what it already does,
+and the doorway gets no exemption from it.</p>
+<p><strong>Which means a program's results cannot come out of step.</strong> A program
+with several things to report through one station reports them in
+complete sets or not at all, and the partial set is held rather than
+emitted. That falls out of using the ordinary check rather than being
+arranged.</p>
+<p>A station with no box has one input and one output, and the value
+crosses unchanged. That is not a constraint the engine imposes so much
+as what having no box means — several inputs need something to combine
+them, and the something is a box. If you have more than one way in, you
+have a function.</p>
 <p>Three things follow, and all three are simplifications:</p>
 <p><strong>The output type needs no declaring.</strong> A program's output port carries
 whatever type the station wired into it produces, checked by the same
@@ -262,6 +276,15 @@ results at all**, which is a different diagnosis and deserves to be
 loud immediately rather than summarised later. It joins the two the
 phase 7 report already distinguishes — a slot piling up means uneven
 inputs, the task ring piling up means slow consumers — as a third.</p>
+<p>**And because the readiness check applies here too, an output station
+can pile up in two places that mean opposite things.** Values stuck on
+its <em>input</em> ports mean the program is producing its several results
+unevenly — one branch of the graph outrunning another, and the complete
+set never forming. Values stuck on its <em>output</em> port mean complete sets
+are forming fine and nobody outside is taking them. The first is a
+problem inside the program, the second is a problem with whoever
+started it, and a report that ran them together would send somebody to
+look in the wrong place. They must be named separately.</p>
 <p><strong>Reading them is the caller's business.</strong> The engine's contract ends
 at the buffer: results accumulate at the output station's port, and
 whoever embedded the engine takes them out. That is the exact mirror of
@@ -280,7 +303,9 @@ warning is the notice, and it fires from the first doubling.</p>
 3. The unwired case — hold the values rather than discarding — and the
    growth warning, which fires from the first doubling and says which
    station, unlike the ordinary growth report which waits and
-   summarises.
+   summarises. <strong>Two warnings, not one</strong>: a doorway backing up on its
+   inputs and one backing up on its output are opposite diagnoses and
+   must read differently.
 4. The call that takes values out, from outside the graph, mirroring
    the call that writes a static in — **and beside it, a call that says
    how many are waiting**, without which a caller cannot write the
