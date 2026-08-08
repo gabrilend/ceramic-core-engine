@@ -36,12 +36,34 @@ parent to wire to.
 
 ## Intended behavior
 
-**A program's input station is a pass-through whose output ports are
-the program's input ports.**
+**A program's input station is an ordinary station, designated — and
+its input ports are the program's input ports.**
 
-It runs no box. Values arriving from outside land on it and flow onward
-into the graph as ordinary deliveries. Nothing is computed at the
-crossing; the values change whose program they are in.
+Same shape as anything else: input ports, one output port, and a box
+that may or may not be there. What makes it an input is the
+designation, which says that **these are the ports the outside world is
+allowed to deliver to.** Everything after that is an ordinary delivery
+travelling an ordinary wire.
+
+**A box here is optional.** With none, the station has one input and
+one output and the value crosses unchanged. With one, arguments can be
+checked, combined, or reshaped on the way in — using a function
+somebody would have written anyway rather than one written to satisfy
+the engine.
+
+**One output port, so one station per argument group.** A box returns
+one value; a station therefore has one output port; so a program that
+takes several unrelated arguments has several input stations rather
+than one station with several outputs. The alternative needs a C
+function returning several values, which does not exist — and faking it
+with a struct that something downstream takes apart means **a special
+function written to fit the engine**, which is exactly what a person
+adopting this should never have to do.
+
+Fan-out is not the same thing and is already free: one input station's
+single output port may feed as many interior stations as you wire it
+to, because every output port has always had a list of destinations.
+One argument reaching six places needs no mechanism at all.
 
 **Where "outside" is depends on who is running it, and the mechanism is
 the same either way.** For a sub-program, the outside is the parent map,
@@ -83,9 +105,13 @@ want to.
 
 1. Box file syntax for declaring which station is the input, alongside
    the output declaration, and reader support for both.
-2. The pass-through station kind — shared with
+2. **The designation, not a new station kind** — shared with
    [209](209-map-output-collection.md), since the two differ only in
-   which side the boundary is on.
+   which side the boundary is on. An ordinary station carries a mark
+   saying it is a door and which way it faces. The only genuinely new
+   mechanism either issue needs is a station that runs no box, which is
+   the ordinary shape with one input, one output, and nothing in
+   between.
 3. Deriving each input port's type from what it feeds, and refusing a
    port whose destinations disagree.
 4. Delivery from outside: a call naming a program, a port, and a value,
@@ -98,9 +124,30 @@ want to.
 
 ## Open questions
 
-- Can a program have several input stations, or exactly one with
-  several ports? Same question as the output side and it should get the
-  same answer.
+**Answered:**
+
+- *Several input stations, or one with several ports?* **Several
+  stations, each with one output port** — and the reason is not the one
+  the output side recorded. Readiness is a property of input ports, and
+  an input station's ports on the graph side are output ports, which
+  the engine has always allowed many of; a comparator has three and an
+  iterator has as many as you wire. So the subset-readiness argument
+  does not reach this side at all.
+
+  What decides it is C. A box returns one value, so a station has one
+  output port. Several outputs would mean a box returning several
+  values, and faking that with a struct built by one box and taken
+  apart by another is **a function written to fit the engine** — the
+  one cost this design refuses to impose. Somebody bringing existing C
+  to this should be able to bring it unchanged.
+
+  Written up above, along with the reminder that fan-out already covers
+  the case people usually mean: one argument reaching many interior
+  stations is one output port with many destinations, which has always
+  worked.
+
+**Still open:**
+
 - Does an input port accept several arrows, like any other port? If a
   parent and a control socket both deliver to the same program input,
   they interleave — which is ordinary for a ring port and probably

@@ -42,13 +42,27 @@ program that writes to disk simply has a station that writes to disk.
 **Saying what a program produces** is the missing piece, and it is not
 a computation. It is a name for a set of ports.
 
-### So: the output station is a pass-through
+### So: an output station is an ordinary station, designated
 
-It runs no box. Its **input ports are the program's output ports** —
-values arriving at them have arrived at the boundary, and a parent
-wiring into a sub-program's output port reads whatever landed on the
-matching input. Nothing is computed at the crossing; the values simply
-change whose program they are in.
+**It is the same shape as any other station** — several input ports fed
+by the graph, one output port — and it may run a box or not. What makes
+it an output is the designation, not a different mechanism. Its
+**output port is the program's output port**: a parent wires from it
+exactly as it would wire from any station, and when nobody is wired
+there the values are held rather than discarded, which is the one rule
+this designation actually adds.
+
+**A box here is optional and ordinary.** An output station may run a
+box that shapes results into whatever a caller wants to receive — and
+because that is an ordinary box, **several output stations can offer
+the same results in different formats, and choosing between them is
+rewiring.** Or it may run nothing, in which case it is a station with
+one input and one output and the value crosses unchanged.
+
+**A station that runs no box has exactly one input port**, necessarily:
+with nothing running there is no way to combine several arriving values
+into the single value an output port carries. That is the degenerate
+case of the ordinary shape rather than a second kind of thing.
 
 Three things follow, and all three are simplifications:
 
@@ -62,15 +76,16 @@ output port exactly as it would wire from any station. There is no
 serves every program, because nothing about finishing requires knowing
 which program a task came from.
 
-**The concurrency rule disappears.** The earlier draft had to warn that
-an output box runs concurrently with itself, that it must be safe on
-several threads at once, that it may only issue one write per
-invocation, and that a file handle held as a static would never be
-closed by the engine. None of that applies to something that runs no
-code. It all still applies to a station whose box writes to disk —
-which is the ordinary rule for any box that reaches out to the world,
-stated where it belongs rather than as a special property of being an
-output.
+**The concurrency rule stops being a special rule.** The earlier draft
+warned that an output box runs concurrently with itself, that it must
+be safe on several threads at once, that it may only issue one write
+per invocation, and that a file handle held as a static would never be
+closed by the engine. Every word of that is still true — and it is
+true of **any** box that reaches out to the world, which is where it
+now lives. Being designated an output grants a box no special
+protection and imposes no special burden, because the designation
+changes who may wire to the station from outside and what happens to
+an unwired output, and nothing else.
 
 ### Every program has one, even when it carries nothing
 
@@ -114,18 +129,26 @@ way.
 ### Several outputs means several stations
 
 A program that produces more than one thing has more than one output
-station, each with its own inputs and its own single output port.
+station, each with its own input ports and its one output port.
 
-The alternative was one station whose output ports each owned a subset
-of its input ports — fill inputs one through three and the first output
-fires, fill four and five and the second does. It is expressible and it
-was nearly taken, and the reason it was not is worth keeping: **it
-would be the only thing in the engine with several readiness checks
-over subsets of its ports.** Every other station has one check over all
-of them. Several stations gets identical behaviour out of the check
-that already exists, with no grouping syntax and no new shape.
+**The reason is the C function underneath.** A box returns one value,
+so a station has one output port, so a program output is one station.
+The alternative — one station whose output ports each owned a subset of
+its input ports, fill one through three and the first output fires,
+fill four and five and the second — would need a box returning several
+values, which C does not have. Faking it means a struct the box builds
+and something downstream takes apart, and **that is a special function
+somebody has to write in order to fit the engine**, which is the thing
+this design will not ask for. A box should be a function somebody was
+going to write anyway.
 
-What it costs is that a program has several doors out rather than one.
+It has a second cost that seals it: such a station would be the only
+thing in the engine with several readiness checks over subsets of its
+ports, where every other station has one check over all of them.
+Several stations get identical behaviour from the check that already
+exists, with no grouping syntax and no new shape.
+
+What it buys is that a program has several doors out rather than one.
 That turned out to be fine, and it settles something else: since a
 program's several outputs are several stations, a program used as a box
 never needs a box with several output ports — which retires
