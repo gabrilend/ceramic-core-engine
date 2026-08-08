@@ -72,6 +72,36 @@ which is the ordinary rule for any box that reaches out to the world,
 stated where it belongs rather than as a special property of being an
 output.
 
+### Every program has one, even when it carries nothing
+
+**An output station is required, and a program with nothing wired into
+it emits nothing.** The parallel is a C function returning void: the
+function still declares its return, and the declaration is what a
+caller reads. Here the station is the declaration, and what flows
+through it is a separate matter.
+
+This is what makes a program's interface **total**. Without the
+requirement there are two different ways to produce nothing — no output
+station, and an output station nobody wired — and only the second is
+legible. The engine cannot tell a program that deliberately does all
+its work by side effect from one whose author forgot the results,
+because a box is a C function and nothing about it says whether it
+touches the world. Requiring the station moves that distinction from
+something the engine would have to guess into something the program
+states. A program that writes to disk and returns nothing declares
+exactly that, and is ordinary rather than suspicious.
+
+**The requirement is checked when the program is released to run**, not
+when a file finishes being read. There is no end-of-file moment any
+more — reading is a sequence of operations and several files can build
+one program ([212](212-one-way-to-build-a-program.md)) — but there is
+still a starting gate, where every worker parks until released
+([102](completed/102-workers-and-run-loop.md)). That gate is the one
+moment when a program stops being built and starts being a program, so
+it is where a whole-program requirement can honestly be asked. Failing
+it is an invalid operation and therefore fatal
+([106](106-stopping-on-purpose.md)).
+
 ### The symmetric half
 
 If a program has named output ports, it needs named input ports for the
@@ -166,10 +196,42 @@ warning is the notice, and it fires from the first doubling.
 
 ## Open questions
 
-- Does a program with no output station get refused? Yes, per an
-  earlier decision — it has not said what it is for. But that
-  interacted with a seeding rule that no longer exists, so the reason
-  needs restating on its own terms.
+**Answered:**
+
+- *Does a program with no output station get refused?* Yes, and the
+  reason no longer leans on the deleted seeding rule. A program may
+  only be wired into and out of through its input and output stations,
+  so those stations are the interface, and an interface that is
+  sometimes absent is not one. A program producing nothing declares it
+  by having the station with nothing wired in — the same way a C
+  function returning void still declares a return. Written up under
+  "every program has one, even when it carries nothing" above,
+  including where the check happens now that files no longer end.
+
+**Still open:**
+
+- **A void sub-program cannot be sequenced after, and the C analogy is
+  where this became visible.** A void function still *returns*, and the
+  return is an event the caller observes — which is why `f(); g();`
+  runs g afterwards. An output station with nothing wired into it never
+  receives anything, so it never fires, so nothing downstream of it can
+  ever be triggered by it. A program used as a box that produces no
+  values is therefore a leaf: nothing can depend on it, because there
+  is nothing to depend on.
+
+  This may be correct rather than missing. The engine has no sequencing
+  at all — things happen when their inputs are ready, and "run this
+  after that" is not expressible anywhere else in the design either. So
+  the declaration half of the analogy holds and the ordering half does
+  not, and the ordering half may simply be a thing this kind of engine
+  does not do.
+
+  What decides it: is a void sub-program meant to be composable at all?
+  If it is, something valueless has to cross the boundary to say it
+  happened — and this issue currently claims the opposite, that
+  composition needs "no *finished* to detect, no per-program task
+  counting." Those two cannot both stay.
+
 - An output buffer that nobody drains grows until memory runs out. The
   warning names it from the first doubling, which is the honest signal
   — but whether there should also be a ceiling, and what reaching one
