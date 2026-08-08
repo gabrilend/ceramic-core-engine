@@ -208,29 +208,28 @@ warning is the notice, and it fires from the first doubling.
   "every program has one, even when it carries nothing" above,
   including where the check happens now that files no longer end.
 
+- *Can anything be sequenced after a void sub-program?* No, and that is
+  what void **means** here rather than a gap in it. **Ordering in this
+  engine is wiring.** One thing happens after another because it
+  consumes what that other produced; there is no separate notion of
+  sequence anywhere in the design and none is wanted. So a program with
+  nothing wired out of its output station is exactly a program nothing
+  depends on, which is "produces nothing" said in the engine's own
+  vocabulary.
+
+  Where ordering genuinely matters, the answer is not a valueless token
+  announcing completion — it is that the program should produce
+  something, and then it is not void. That something may be as small as
+  an acknowledgement, and it is still a value carrying a meaning (the
+  file is written, the row is committed) rather than a bare pulse. A
+  dataflow engine already spells "afterwards" as "downstream," and a
+  second mechanism would give one idea two spellings.
+
+  So the promise above stands unqualified: composition needs no
+  finishing to detect, because everything anyone would detect it *for*
+  is already an edge.
+
 **Still open:**
-
-- **A void sub-program cannot be sequenced after, and the C analogy is
-  where this became visible.** A void function still *returns*, and the
-  return is an event the caller observes — which is why `f(); g();`
-  runs g afterwards. An output station with nothing wired into it never
-  receives anything, so it never fires, so nothing downstream of it can
-  ever be triggered by it. A program used as a box that produces no
-  values is therefore a leaf: nothing can depend on it, because there
-  is nothing to depend on.
-
-  This may be correct rather than missing. The engine has no sequencing
-  at all — things happen when their inputs are ready, and "run this
-  after that" is not expressible anywhere else in the design either. So
-  the declaration half of the analogy holds and the ordering half does
-  not, and the ordering half may simply be a thing this kind of engine
-  does not do.
-
-  What decides it: is a void sub-program meant to be composable at all?
-  If it is, something valueless has to cross the boundary to say it
-  happened — and this issue currently claims the opposite, that
-  composition needs "no *finished* to detect, no per-program task
-  counting." Those two cannot both stay.
 
 - An output buffer that nobody drains grows until memory runs out. The
   warning names it from the first doubling, which is the honest signal
