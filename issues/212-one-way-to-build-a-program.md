@@ -270,7 +270,7 @@ rather than drifting into place.
 - [703 — The map dump](completed/703-map-dump.md), which becomes the
   exact inverse of the reader
 - [209 — The output station](209-map-output-collection.md) and
-  [506 — Boxes with several output ports](506-multi-output-boxes.md),
+  [506 — Boxes with several output ports](completed/506-multi-output-boxes.md),
   the two halves of a program being usable as a box
 - [008 — Map file format](../docs/008-map-file-format.md) and
   [009 — Loading](../docs/009-datapath-load.md), both of which this

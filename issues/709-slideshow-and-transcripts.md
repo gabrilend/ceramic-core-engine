@@ -51,7 +51,7 @@ Why does a comparator have three exits. How does a text file become a
 running graph. What does the pool do while all this is happening.
 
 **The mechanics shown must be the real ones.** The same rule the demos
-are held to under [707](707-demos-as-word-problems.md): a picture that
+are held to under [707](completed/707-demos-as-word-problems.md): a picture that
 simplifies away the thing that makes a mechanism interesting teaches
 someone a machine that does not exist. If a screen cannot be drawn
 honestly, it is cut and its subject stays prose.
@@ -166,7 +166,7 @@ Kept verbatim:
 
 - [705 — The HTML documentation set](705-html-documentation.md), whose
   generator, aesthetic, and directory-walk fix this builds on
-- [707 — The demos told as word problems](707-demos-as-word-problems.md),
+- [707 — The demos told as word problems](completed/707-demos-as-word-problems.md),
   the other half of making this project legible to someone who did not
   build it, and the source of the rule about honest mechanics
 - [801 — The workbench in the browser](801-browser-workbench.md), which

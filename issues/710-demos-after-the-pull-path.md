@@ -94,7 +94,7 @@ expect to find it* is a lesson about measurement, not about gathering,
 and it cost a real mistake to learn. Whatever replaces that scene
 should carry it.
 
-**The story contract from [707](707-demos-as-word-problems.md).** Every
+**The story contract from [707](completed/707-demos-as-word-problems.md).** Every
 new scene opens with the problem in the engine's own terms, offers one
 analogy never reused inside that demo, prints the mapping, justifies
 every row of it, measures in the story's units beside the engine's, and
@@ -133,7 +133,7 @@ reader care is evidence about the mechanic, not about the story.
   [606](completed/606-phase-6-demo.md), and
   [706](completed/706-phase-7-demo.md), each of which names what it
   needs
-- [707 — The demos told as word problems](707-demos-as-word-problems.md),
+- [707 — The demos told as word problems](completed/707-demos-as-word-problems.md),
   the contract every new scene is held to
 - [004 — Statics and recalculation](../docs/004-datapath-statics.md),
   the mechanism phase 4 now demonstrates

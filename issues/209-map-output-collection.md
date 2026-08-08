@@ -99,7 +99,7 @@ What it costs is that a program has several doors out rather than one.
 That turned out to be fine, and it settles something else: since a
 program's several outputs are several stations, a program used as a box
 never needs a box with several output ports — which retires
-[506](506-multi-output-boxes.md), whose whole argument was that boxes
+[506](completed/506-multi-output-boxes.md), whose whole argument was that boxes
 had to catch up to what programs could do.
 
 ### An unwired output port holds its values
@@ -183,7 +183,7 @@ warning is the notice, and it fires from the first doubling.
   pointed the other way
 - [212 — One way to build a program](212-one-way-to-build-a-program.md),
   where a program becoming usable as a box is the point
-- [506 — Boxes with several output ports](506-multi-output-boxes.md),
+- [506 — Boxes with several output ports](completed/506-multi-output-boxes.md),
   the box side of the same question
 - [205 — The delivery walk](completed/205-delivery-walk.md), which
   gains one case: a destination that is a boundary rather than a slot
