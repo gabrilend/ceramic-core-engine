@@ -23,6 +23,42 @@ says how much the guarantee is worth:
 
 ---
 
+## The bargain
+
+One trade, made once, in one direction — and nearly every entry in the
+*not guaranteed* section at the bottom is the price of this single
+purchase. It is stated first because a list of guarantees read without
+it looks like a set of unrelated concessions rather than one decision.
+
+| # | always true | what it costs | held by |
+|---|---|---|---|
+| U1 | No worker sits idle while a task is ready to run. | Order, timing, pairing, batches, rounds — everything in the closing section. | discipline (via B4) |
+
+**What is bought** is the processor. Every core is kept doing work for
+as long as work exists, as completely as the design can manage. This is
+the thing the engine is for, and it is the reason to accept any of the
+rest.
+
+**What is sold** is every promise that would require a worker to wait.
+Ordering values would mean a slow write holding finished ones behind
+it. Pairing across ports would mean a ready value waiting for its
+partner. A batch or a round would mean the cores that finished early
+standing still until the cores that finished late caught up. Each is a
+worker not running one of the ten things that are ready, which is the
+one cost this design will not pay.
+
+**Which is why values must stand on their own.** A value passing
+through this engine has to be usable by anyone, interchangeably with
+any other value of its type at the same port. Nothing is anybody's in
+particular. That is what lets whichever worker is free take whatever is
+ready, and it is the same sentence as V1 read from the scheduler's side
+rather than the data's.
+
+**How it is held, honestly.** By structure everywhere except the one
+place: a box that blocks (B4) parks a worker on something the engine
+cannot see, and the guarantee is withdrawn for as long as that box
+runs, silently. This is the strongest reason B4 deserves a linter.
+
 ## Values
 
 | # | always true | what it costs | held by |

@@ -92,9 +92,21 @@ The alternative — one input station per caller — also works and needs
 no argument, but it scales with callers rather than with the interface,
 which is the wrong axis.
 
-This belongs in [058](../docs/058-guarantees.md) as a stated
-non-guarantee beside the ordering one, because it is the form in which
-that non-guarantee will actually bite somebody.
+**This is not a defect and is already written down.**
+[058](../docs/058-guarantees.md) states it twice over: a value carries
+no relationship to any other value, and a station pairs whatever is at
+the head of each of its ports. What the door adds is only a new place
+for somebody to walk into it, since a caller who has just written two
+arguments feels much more like they sent *a pair* than a graph author
+splitting one value down two paths does.
+
+The reason it must be this way is the bargain that page now opens with:
+pairing across ports would mean a ready value waiting for its partner,
+and a waiting value is a worker not running one of the ten things that
+are ready. **Values here stand on their own, interchangeable with any
+other of their type at the same port** — that is what lets whichever
+worker is free take whatever is ready, and it is what the engine is
+spending order and pairing to buy.
 
 **Where "outside" is depends on who is running it, and the mechanism is
 the same either way.** For a sub-program, the outside is the parent map,
