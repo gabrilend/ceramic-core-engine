@@ -211,11 +211,35 @@ want to.
   round-trips the program; it was never claiming to round-trip the
   world around it.
 
-**Still open:**
-- A program run from a shell whose input station has ports that the
-  command line does not fill: those ports never receive a value, so the
-  stations behind them never become ready and the program sits. Is that
-  a refusal at startup, a report, or simply what happens?
+- *A program whose command line does not fill every input port?* **It
+  waits**, and that is simply what happens rather than a condition
+  needing a name. A port not yet filled cannot be told apart from one
+  that will be filled in a minute, and the answer above forces this: if
+  several callers may deliver to one input port, then "the shell did
+  not fill port three" is not a mistake, it is port three not filled
+  *yet*. Refusing would mean assuming the command line is the only
+  caller there will ever be, which this door was specifically built not
+  to assume.
+
+  **Waiting needs nothing built.** The stations behind those ports
+  never become ready, by the ordinary check, and there is no state
+  called "waiting for arguments" distinct from any other station
+  waiting for a value.
+
+  **What decides whether it waits forever or ends is already in the
+  pool.** [104](completed/104-termination-by-last-sleeper.md) gave an
+  outside submitter a way to register a standing promise that more work
+  may come, and termination waits while any such promise is held. A
+  control socket still open holds one, and the program waits. The shell
+  runner holds one while it delivers the command line and drops it
+  afterwards. **If nobody is promising to deliver, nothing more can
+  arrive, and the program ends by the ordinary rule** — having run
+  whatever it could and left the rest unrun.
+
+  So incomplete arguments produce a finished program rather than a hung
+  one, and the diagnosis is already legible: the stations that never
+  became ready carry a completed-run count of zero, which names exactly
+  what did not happen and why nothing downstream of it did either.
 
 ## Related
 
