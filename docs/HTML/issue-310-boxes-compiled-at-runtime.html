@@ -202,27 +202,73 @@ would eventually disagree with the first about what a box is.</p>
    already loaded, at the same width, **is accepted and delivers
    scrambled fields.** Written deliberately, because this is the
    accepted cost of comparing widths and a test that pins it is how
-   somebody later discovers it was a decision rather than an oversight.</p>
+   somebody later discovers it was a decision rather than an oversight.
+7. The source saved to the RAM-backed directory at the moment the box
+   is compiled, named so a reloader can find it from the box's name
+   alone. A test that a dump taken after a runtime box is added reloads
+   in a fresh process.
+8. Unloading, on the retire-sweep-free mechanism from
+   <a href="issue-214-destinations-without-a-lock.html">214</a>, with the per-worker
+   counter widened to span the whole task rather than the delivery
+   walk. A test that a box compiled, never placed, and unloaded frees
+   its library while a saturated pool runs.</p>
 <h2>Open questions</h2>
+<p><strong>Answered:</strong></p>
 <ul>
-<li>Where does the compiler come from? Requiring one at runtime is a</li>
-<p>  dependency on the deployment environment, which is exactly what
-  <a href="impl-057-packaging.html">057</a> spends its
-  length trying to reduce. It may be that this is a capability a
-  consumer opts into rather than something the engine assumes.</p>
-<li>Can a loaded box ever be unloaded? Unloading a shared library while</li>
-<p>  any task might still call into it is the same lifetime problem as
-  freeing a destination array, and probably wants the same answer —
-  retire, sweep, free — but stations placed from it would have to be
-  removable first, and station removal is deliberately out of scope
-  everywhere else.</p>
-<li>Does a runtime-added box need to survive a dump and reload? The dump</li>
-<p>  writes a program back out as text naming its boxes; reloading that
-  text needs those boxes to exist again, which means the source has to
-  live somewhere. Either the dump records where it came from, or a
-  dumped program is only reloadable into a process that already has
-  them.</p>
+<li><em>Where does the compiler come from?</em> <strong>Assume it is there.</strong> The</li>
+<p>  engine calls a C compiler at runtime and does not negotiate about it.
+  What answers the packaging concern is an install script that builds
+  the dependencies from source into a local place, written once the
+  system is finished rather than designed around now — so the
+  dependency is real, acknowledged, and handled by installation rather
+  than by making the engine tiptoe. Compiling boxes late is not a
+  capability worth crippling to spare a deployment one package.</p>
 </ul>
+<ul>
+<li><em>Can a loaded box ever be unloaded?</em> **Yes, by retire, sweep, free —</li>
+<p>  the mechanism <a href="issue-214-destinations-without-a-lock.html">214</a> builds for
+  destination arrays**, including the scrapyard's own lock and the rule
+  that nothing is acquired while holding it. Unloading a shared library
+  out from under a worker running its code is the same lifetime problem
+  wearing different clothes.</p>
+</ul>
+<p>  <strong>Two things about it are not the same, and both matter.</strong></p>
+<p>  The liveness test is a different window. The destination sweep asks
+  whether a worker is inside a <em>delivery walk</em>; this has to ask whether
+  a worker is inside a <em>box</em>, which happens earlier in the same task.
+  Rather than carry two counters, one per worker bumped at the start
+  and end of the whole task — call, finish hook, and free — is odd
+  across both windows and answers both questions. Less precise for
+  destinations, since an array becomes freeable slightly later than it
+  strictly must; one mechanism instead of two, on a path nothing
+  measures.</p>
+<p>  And <strong>you can only reach the retire step for a box no station uses.</strong>
+  A station's box cannot be changed and a station cannot be removed
+  (<a href="issue-211-growing-the-station-table.html">211</a> keeps growth only, because
+  an index is a position and reclaiming one means either a hole every
+  walk must skip or a renumbering that invalidates every wire at once).
+  So unloading serves the box that was compiled and then not placed, or
+  placed nowhere that survived. That is narrower than it sounds useful,
+  and it should be built anyway, because the alternative is code that
+  accumulates forever in a program whose whole point is being edited
+  while it runs.</p>
+<ul>
+<li><em>Does a runtime-added box survive a dump and reload?</em> **Yes, because</li>
+<p>  its source is written down when the box is created, not when a dump
+  asks for it.** Every box compiled at runtime has its source saved to
+  the RAM-backed directory the moment it comes into existence, treated
+  exactly like a log: written as it happens, ephemeral, gone at reboot.</p>
+</ul>
+<p>  **Writing it at creation rather than at dump time is the whole
+  decision**, and it is the same one <a href="issue-106-stopping-on-purpose.html">106</a>
+  makes about opening the report's destination during startup. A dump
+  may be taken while the program is dying, and a failure path is the
+  worst possible moment to discover that something needs saving. The
+  artifact exists before anybody needs it.</p>
+<p>  So a dumped program reloads into any process that can see that
+  directory, which includes a fresh process on the same machine and
+  excludes one after a reboot — the same lifetime a log has, stated
+  rather than implied.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-308-generator-in-c.html">308 — The generator, in C</a>, which is what</li>

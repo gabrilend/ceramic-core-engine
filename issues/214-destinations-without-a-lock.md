@@ -83,6 +83,18 @@ long run and read as unchanged when it is not.
 It is a scrapyard rather than a leak: everything in it is accounted
 for, and anything still filed at teardown is freed then.
 
+**This mechanism has a second customer, so build it to be shared.**
+[310](310-boxes-compiled-at-runtime.md) needs to unload the compiled
+code of a box while workers may be inside it, which is the same
+lifetime problem in different clothes. It asks about a wider window,
+though: a worker is inside a *box* earlier in a task than it is inside
+a *delivery walk*. Rather than two counters, **bump one per worker at
+the start and end of the whole task** — call, finish hook, free — so it
+is odd across both windows and answers both questions. Destinations
+then become freeable slightly later than they strictly must, which
+costs nothing anybody measures, and there is one mechanism instead of
+two that drift.
+
 **The scrapyard owns a mutex.** Not against tearing — nothing reads a
 filed array's contents — but against two hands freeing the same one.
 There are two touchers and only one of them is obvious: rewiring
