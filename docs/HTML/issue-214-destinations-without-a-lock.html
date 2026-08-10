@@ -193,16 +193,36 @@ for, and anything still filed at teardown is freed then.</p>
 4. The per-worker counters, odd while walking, and the sweep. Its own
    change with its own test: many rewires against a saturated pool,
    with the retire list observed emptying.
-5. Confirm the dump still round-trips after a batch rewire, since the
-   destination order it relies on is now an array's order rather than a
-   list's append order.</p>
+5. Confirm the dump still round-trips after a batch rewire. Not
+   because destination order must be preserved — it need not be, and is
+   not — but because the rewire is the one thing that rebuilds the
+   array, and a round trip taken after one is the round trip most
+   likely to reveal that something else got lost in the rebuild.</p>
 <h2>Open questions</h2>
+<p><strong>Answered:</strong></p>
 <ul>
-<li>Destinations were appended at the list's tail so wiring order was</li>
-<p>  preserved, and the dump's round-trip test leans on that. An array
-  built fresh per rewire has to preserve the same order, which is easy
-  — but it is an invariant that used to be structural and is now
-  something the rebuild has to remember.</p>
+<li><em>Must a rebuilt array preserve wiring order?</em> **No, and the invariant</li>
+<p>  is deleted rather than defended.** Nothing in the running engine
+  reads destination order and means anything by it: a delivery visits
+  all of them, and the order values arrive at different stations was
+  never promised — that is part of the bargain in
+  <a href="doc-058-guarantees.html">058</a>, where ordering is one of the things
+  sold to keep every core busy. An order nothing depends on is not an
+  invariant, so there is nothing to demote from structure to
+  discipline, and nothing for a test to stand guard over.</p>
+</ul>
+<p>  <strong>The round trip survives without anyone arranging it.</strong> Dump, load,
+  dump contains no rewire: loading appends destinations in file order,
+  dumping writes them in array order, so the second text matches the
+  first. <a href="doc-058-guarantees.html">C5</a> holds by construction rather
+  than by care.</p>
+<p>  <strong>What is knowingly passed up:</strong> the dump is not a canonical form.
+  Two programs of identical shape, wired in different orders, dump to
+  different text, so two save-files cannot be compared to answer "are
+  these the same program." Sorting destinations at dump time would buy
+  that, and it can be added later by whoever wants it, since it
+  requires nothing of the rebuild.</p>
+<ul>
 <li>Does the retire list need its own lock? Only rewiring touches it, and</li>
 <p>  rewiring is already serialized by the rewiring lock, so probably not
   — but that is an argument from a lock existing elsewhere, which is
