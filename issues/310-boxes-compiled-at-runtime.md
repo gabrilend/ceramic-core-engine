@@ -52,14 +52,29 @@ already there, and readers resolving a row are never disturbed. That is
 the fourth or fifth use of the same pattern in this engine, and by now
 it should be a shared piece rather than a fifth hand-rolled one.
 
-**This is unsafe without shape-based type comparison, and safe with
-it.** Types are currently compared by name. A box compiled after the
-program started brings its own idea of every struct it touches, and two
-structs both called `vec3` with different layouts compare equal by name
-and then corrupt each other silently. [309](309-types-by-width.md)
-compares the field tables instead, which catches the mismatch at the
-moment a wire is drawn — the only moment anybody can still act on it.
-That issue is a hard prerequisite, not a nice companion.
+**A box arriving late needs to report the width of each input and of
+its output, and that is the whole of what the type system asks of it.**
+Under [309](309-types-by-width.md) a wire is legal when the two sides
+count the same number of bytes, and those numbers come from the same
+place they always came from: a `sizeof` the compiler computed while
+compiling this box. So a runtime box supplies exactly what a build-time
+box supplies, by exactly the same means.
+
+**It introduces no new kind of error**, which is worth stating because
+an earlier draft of this issue said the opposite. Two structs of the
+same width and different layouts already wire without complaint at
+build time — that is the accepted cost of comparing widths. A box
+compiled later increases the *opportunity* for that to happen, since
+two separately-written sources are likelier to disagree than one, but
+the failure is the same failure and it is already on the books. Shape
+comparison would have closed it, here and everywhere else equally; it
+was declined for reasons that have nothing to do with this issue, and
+declining it does not make this one more dangerous than the ground it
+stands on.
+
+What a runtime box must still supply beyond widths is mechanical: a
+name to be found by, a shim to call, and — if its return type is
+orderable — a comparison, for a comparator to use.
 
 **The generator has to be reachable at runtime**, which is what
 [308](308-generator-in-c.md) delivers by making it a standalone C
@@ -75,15 +90,21 @@ would eventually disagree with the first about what a box is.
 2. Compile-and-load as a deliberate call: take source, produce a shared
    library in the RAM-backed build tier, load it, resolve the shim.
    Failures name the compiler's own output rather than summarising it.
-3. Adding a registry row, with the shape comparison from
-   [309](309-types-by-width.md) applied to every type the new box
-   brings against every type already known by the same name — so a
-   collision is caught at load rather than at first delivery.
+3. Adding a registry row: name, shim, per-parameter widths, return
+   width, task size, and a comparison if there is one. Nothing about
+   the new box's types is checked against the program's, because
+   [309](309-types-by-width.md) checks widths when a wire is drawn and
+   there is nothing earlier worth asking.
 4. A test that a box written after the program started is placed,
    wired, and delivers values byte-identically.
-5. A test that a box whose struct disagrees in layout with one already
-   loaded is refused, naming both and the first field where they
-   diverge.
+5. A test that a box whose parameter is a different **width** from what
+   feeds it is refused, naming both types and both widths — the same
+   refusal a build-time box gets, arriving by the same path.
+6. A test that a box whose struct disagrees in *layout* with one
+   already loaded, at the same width, **is accepted and delivers
+   scrambled fields.** Written deliberately, because this is the
+   accepted cost of comparing widths and a test that pins it is how
+   somebody later discovers it was a decision rather than an oversight.
 
 ## Open questions
 

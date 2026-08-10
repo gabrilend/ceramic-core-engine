@@ -111,17 +111,22 @@ exactly this, per struct, with every offset an `offsetof` and every
 size a `sizeof`, so the padded case with its seven-byte hole reads
 correctly.
 
-It would have caught both same-width primitives and reordered structs,
-and it is the only version of this that makes a **runtime-compiled box
-safe** — a box compiled after the program started brings its own idea
-of every struct it touches, and a layout disagreement there is exactly
-the corruption width comparison cannot see.
+It would have caught both same-width primitives and reordered structs.
 
-That is a real cost and it lands on [310](310-boxes-compiled-at-runtime.md),
-which must now say what it does about a box whose structs disagree with
-the program's. It is recorded here rather than deleted, because if that
-issue finds it needs shape comparison, the design is written and the
-tables it needs have been emitted since phase 3.
+**It is not a prerequisite for anything, including compiling boxes
+while the program runs.** That was claimed while this issue still
+proposed shape comparison, and it was wrong in a way worth recording: a
+box arriving late reports the width of each input and its output, by
+the same `sizeof` the compiler computes for every other box, so it asks
+nothing the type system cannot answer. Two same-width structs with
+different layouts already wire at build time — that is the accepted
+cost here — and a box compiled later makes it likelier without making
+it different. [310](310-boxes-compiled-at-runtime.md) records the same
+correction from its own side.
+
+The design is kept because if anybody ever wants layout disagreements
+caught, it is written and the tables it needs have been emitted since
+phase 3, unconsulted the entire time.
 
 ## Suggested implementation steps
 
