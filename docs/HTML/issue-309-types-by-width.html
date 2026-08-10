@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>309 — Types compared by shape, not by name</title>
+<title>309 — Types compared by width, not by name</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -35,7 +35,7 @@
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
-<a href="issue-309-types-by-shape.html" class="here">309 — Types compared by shape, not by name</a>
+<a href="issue-309-types-by-width.html" class="here">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
@@ -113,7 +113,14 @@
 <a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
 </nav>
 <main>
-<h1>309 — Types compared by shape, not by name</h1>
+<h1>309 — Types compared by width, not by name</h1>
+<p><strong>Renamed from "compared by shape."</strong> Shape comparison — matching kind,
+size, and offset field by field — was designed in full and then not
+taken. What is taken is simpler and weaker: **a wire is legal when the
+two sides are the same number of bytes.** The shape design is kept
+below under what was considered, because the reasoning is worth more
+than the mechanism was and because the field tables it would have used
+exist and are needed elsewhere.</p>
 <h2>Current behavior</h2>
 <p>Every type check in the engine is a string comparison.</p>
 <p>The generator emits, for each box, the text of each parameter's type and
@@ -145,75 +152,104 @@ disagree with itself, so it is theoretical. It stops being theoretical
 the moment a box can be compiled at runtime and loaded into a running
 program — which is the direction the workbench and the runtime
 construction surface both point.</p>
+<p><strong>Only the first of those two is fixed here.</strong> Width comparison lets
+identical layouts wire and does nothing about disagreeing ones — it
+widens the hole rather than closing it, since same-width types of every
+kind now pass. That is a deliberate trade and the reasoning is below;
+what it leaves behind belongs to
+<a href="issue-310-boxes-compiled-at-runtime.html">310</a>, where a box arriving with its
+own idea of a struct is no longer theoretical at all.</p>
 <h2>Intended behavior</h2>
-<p>**Two types are compatible when their shapes match, and nothing else is
-consulted.**</p>
-<p>A shape is what the field table already records: for a primitive, its
-kind and its size; for a struct, the ordered list of its fields' kinds,
-sizes, and offsets, recursed into nested structs. Field <em>names</em> are not
-part of a shape and neither is the struct's own name. A four-integer
-struct is a four-integer struct — whether its fields are called x, y, z
-and g or strength, agility, wisdom and fondness, the pattern of the data
-is the same and that pattern is what a wire carries.</p>
-<p><strong>Names stay, for people.</strong> Every message that names a type keeps naming
-it, because *"box returns vec4, slot takes stats — four signed 4-byte
-fields against three"* is the sentence somebody needs. What changes is
-that the name is reported rather than decided upon.</p>
-<p><strong>Padding is part of the shape and this is not negotiable.</strong> Offsets
-come from the compiler through the generated tables, so two structs with
-the same fields in a different order, or the same fields with different
-alignment, have different shapes and do not match. This is not
-pedantry — the delivery path is a memory copy, so anything that
-disagrees about where a field sits produces silently wrong values rather
-than an error.</p>
-<p><strong>What this costs, and it should be stated rather than discovered.</strong>
-Two types with identical layout and unrelated meaning become
-interchangeable, silently. A four-float position wires into a four-float
-colour without complaint. That is the price of caring about the pattern
-of the data rather than the label on it, and it is chosen rather than
-overlooked: names are what one author called something, and a wire is
-about what the bytes are. Anyone who wants the label enforced can make
-the shapes differ.</p>
-<p><strong>This is what makes a box loadable at runtime safely.</strong> A box compiled
-after the program started brings its own idea of every struct it
-touches. Comparing names would accept a mismatched layout and corrupt;
-comparing shapes catches it at the moment the wire is drawn, which is
-the only moment anybody can still do something about it.</p>
+<p>**Two types are compatible when they are the same number of bytes, and
+nothing else is consulted.**</p>
+<p>The size is already there — the registry carries a <code>sizeof</code> the
+compiler computed for every parameter and every return, and that number
+is what the engine has always actually run on. Cells are that many
+bytes, a delivery copies that many bytes, a task is allocated for
+exactly that many. **The check stops asking a question the engine does
+not otherwise care about.**</p>
+<p><strong>Names stay, for people.</strong> Every message keeps naming both types,
+because *"box returns vec4, slot takes stats — 16 bytes against 12"* is
+the sentence somebody can act on. What changes is that the name is
+reported rather than decided upon.</p>
+<p><strong>Why this and not shape.</strong> Both fix the problem that identically-laid-
+out types with different names cannot be wired. Shape comparison also
+catches layout disagreements, which width does not. It was declined
+anyway because **every stricter check eventually makes somebody write a
+box that takes one type and returns another and does nothing** — an
+adapter written for no reason except to satisfy the engine. This design
+does not ask for those. Somebody bringing C they already had should be
+able to bring it unchanged, and a rule that is one sentence long — *the
+bytes must be the same count* — is a rule they can hold in their head
+while doing it.</p>
+<p><strong>What is caught, which is more than it sounds like.</strong> Any mismatch
+that changes the width still fails loudly at the moment the wire is
+drawn: an <code>int</code> into a <code>double</code> is four against eight and refuses. Most
+type mistakes are width mistakes.</p>
+<p><strong>What is not caught, stated plainly rather than discovered.</strong> Two
+types of the same width are interchangeable, silently and completely.
+On a 64-bit machine that means <code>int</code> against <code>float</code>, and <code>long</code>
+against <code>double</code> against a pointer. A <code>1.0f</code> delivered into an <code>int</code>
+slot arrives as <code>1065353216</code>, with no error anywhere, ever. Two structs
+with the same fields in a different order have the same total width and
+will wire, putting every field in the wrong place. **The delivery path
+is a memory copy and it will copy whatever it is told to.**</p>
+<p>This is the same bargain the rest of the engine makes, extended one
+step further. <a href="doc-058-guarantees.html">058</a> already sells order,
+timing, and pairing; this sells the last thing standing between a value
+and a wire that fits it. What is bought is that nothing anybody wrote
+in C has to be adjusted to fit through.</p>
+<h3>What was considered instead</h3>
+<p>Shape comparison: for a primitive its kind and its size, for a struct
+the ordered list of its fields' kinds, sizes, and offsets, recursing
+into nested structs, ignoring every name. The generator already emits
+exactly this, per struct, with every offset an <code>offsetof</code> and every
+size a <code>sizeof</code>, so the padded case with its seven-byte hole reads
+correctly.</p>
+<p>It would have caught both same-width primitives and reordered structs,
+and it is the only version of this that makes a **runtime-compiled box
+safe** — a box compiled after the program started brings its own idea
+of every struct it touches, and a layout disagreement there is exactly
+the corruption width comparison cannot see.</p>
+<p>That is a real cost and it lands on <a href="issue-310-boxes-compiled-at-runtime.html">310</a>,
+which must now say what it does about a box whose structs disagree with
+the program's. It is recorded here rather than deleted, because if that
+issue finds it needs shape comparison, the design is written and the
+tables it needs have been emitted since phase 3.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. A shape comparison over two field-table entries: kinds, sizes, and
-   offsets, recursing into nested structs, ignoring every name. Its own
-   tests first, including the padded case, the nested case, the
-   same-fields-different-order case, and the fixed-string case, because
-   everything above it trusts the answer.
-2. Primitives compared the same way — kind and size — so one routine
-   answers for every type rather than one for structs and one for the
-   rest.
-3. The wire check calls it instead of comparing strings, at every place
-   a wire is checked: the loader, the runtime construction surface, and
-   the comparator's return-type check.
-4. Error messages rewritten to report both names <em>and</em> the first place
-   the shapes diverge, since "these do not match" is much less useful
-   than "field two is four bytes here and eight bytes there".
-5. A test that two identically-shaped, differently-named structs wire
+<p>1. The wire check compares the two sizes instead of the two name
+   strings, at every place a wire is checked: the loader, the runtime
+   construction surface, and the comparator's return-type check. This
+   is a smaller change than the issue it replaces — the sizes are
+   already sitting in the registry beside the names.
+2. Error messages report both names <strong>and</strong> both widths, since a person
+   reading *"box returns vec4, slot takes stats"* cannot see why those
+   disagree, and *"16 bytes against 12"* tells them.
+3. A test that two identically-laid-out, differently-named structs wire
    together and deliver byte-identical values, which is the capability
-   this adds.
-6. A test that two identically-named, differently-shaped structs are
-   refused, which is the corruption this prevents.
-7. Record the interchangeability in <a href="doc-058-guarantees.html">058</a> as
-   a stated non-guarantee.</p>
+   this adds and the reason for the change.
+4. A test that two types of different width are refused, naming both.
+5. Record the interchangeability in <a href="doc-058-guarantees.html">058</a> as
+   a stated non-guarantee, in its own words rather than folded into the
+   value-independence one — this is a different fact, about a wire
+   rather than about a value.
+6. Leave the field tables where they are. Nothing here consults them,
+   and two other things do: the reader that turns brace text into bytes
+   (<a href="done-402-struct-constants.html">402</a>) and the writer that will
+   turn bytes back into text (<a href="issue-408-values-back-into-text.html">408</a>).</p>
 <h2>Open questions</h2>
+<p><strong>Answered — all three dissolved with the move to width:</strong></p>
 <ul>
-<li>A fixed string field carries its length. Are a 16-byte string field</li>
-<p>  and a 16-byte array of signed bytes the same shape? They occupy the
-  same bytes and mean different things, and the field table can tell
-  them apart — so this is a choice about how far the principle goes.</p>
-<li>Does the comparison belong to the generator, emitted once per pair it</li>
-<p>  can see, or to the engine, computed when a wire is drawn? The
-  generator cannot see every pair, since a runtime-loaded box brings new
-  types — which argues for the engine.</p>
-<li>The registry currently stores type names as text for messages. Does it</li>
-<p>  also need to store a shape, or is a pointer into the struct table
-  enough for everything except primitives?</p>
+<li><em>Are a 16-byte text field and 16 signed bytes the same shape?</em> The</li>
+<p>  same <strong>width</strong>, so yes, they wire. The question only existed under
+  shape comparison, where kind was part of the answer. Nothing consults
+  kind now.</p>
+<li><em>Does the comparison belong to the generator or the engine?</em> The</li>
+<p>  engine, at the moment a wire is drawn. There is nothing left to
+  precompute — it is one integer against another.</p>
+<li><em>Does the registry need to store a shape beside the name?</em> No. It</li>
+<p>  already stores the size, which is now the whole of what a wire is
+  checked against.</p>
 </ul>
 <h2>Related</h2>
 <ul>

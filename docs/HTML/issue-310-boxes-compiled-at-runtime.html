@@ -35,7 +35,7 @@
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
-<a href="issue-309-types-by-shape.html">309 — Types compared by shape, not by name</a>
+<a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html" class="here">310 — Boxes compiled while the program runs</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
@@ -159,7 +159,7 @@ it should be a shared piece rather than a fifth hand-rolled one.</p>
 it.** Types are currently compared by name. A box compiled after the
 program started brings its own idea of every struct it touches, and two
 structs both called <code>vec3</code> with different layouts compare equal by name
-and then corrupt each other silently. <a href="issue-309-types-by-shape.html">309</a>
+and then corrupt each other silently. <a href="issue-309-types-by-width.html">309</a>
 compares the field tables instead, which catches the mismatch at the
 moment a wire is drawn — the only moment anybody can still act on it.
 That issue is a hard prerequisite, not a nice companion.</p>
@@ -176,7 +176,7 @@ would eventually disagree with the first about what a box is.</p>
    library in the RAM-backed build tier, load it, resolve the shim.
    Failures name the compiler's own output rather than summarising it.
 3. Adding a registry row, with the shape comparison from
-   <a href="issue-309-types-by-shape.html">309</a> applied to every type the new box
+   <a href="issue-309-types-by-width.html">309</a> applied to every type the new box
    brings against every type already known by the same name — so a
    collision is caught at load rather than at first delivery.
 4. A test that a box written after the program started is placed,
@@ -208,7 +208,7 @@ would eventually disagree with the first about what a box is.</p>
 <ul>
 <li><a href="issue-308-generator-in-c.html">308 — The generator, in C</a>, which is what</li>
 <p>  makes the parser callable at runtime rather than only at build time</p>
-<li><a href="issue-309-types-by-shape.html">309 — Types compared by shape</a>, a hard</li>
+<li><a href="issue-309-types-by-width.html">309 — Types compared by width</a>, a hard</li>
 <p>  prerequisite — by-name comparison makes this corrupt silently</p>
 <li><a href="done-303-registry-emission.html">303 — The registry</a>, the table</li>
 <p>  this makes growable</p>

@@ -56,7 +56,7 @@ it should be a shared piece rather than a fifth hand-rolled one.
 it.** Types are currently compared by name. A box compiled after the
 program started brings its own idea of every struct it touches, and two
 structs both called `vec3` with different layouts compare equal by name
-and then corrupt each other silently. [309](309-types-by-shape.md)
+and then corrupt each other silently. [309](309-types-by-width.md)
 compares the field tables instead, which catches the mismatch at the
 moment a wire is drawn — the only moment anybody can still act on it.
 That issue is a hard prerequisite, not a nice companion.
@@ -76,7 +76,7 @@ would eventually disagree with the first about what a box is.
    library in the RAM-backed build tier, load it, resolve the shim.
    Failures name the compiler's own output rather than summarising it.
 3. Adding a registry row, with the shape comparison from
-   [309](309-types-by-shape.md) applied to every type the new box
+   [309](309-types-by-width.md) applied to every type the new box
    brings against every type already known by the same name — so a
    collision is caught at load rather than at first delivery.
 4. A test that a box written after the program started is placed,
@@ -109,7 +109,7 @@ would eventually disagree with the first about what a box is.
 
 - [308 — The generator, in C](308-generator-in-c.md), which is what
   makes the parser callable at runtime rather than only at build time
-- [309 — Types compared by shape](309-types-by-shape.md), a hard
+- [309 — Types compared by width](309-types-by-width.md), a hard
   prerequisite — by-name comparison makes this corrupt silently
 - [303 — The registry](completed/303-registry-emission.md), the table
   this makes growable

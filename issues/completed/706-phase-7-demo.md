@@ -11,7 +11,7 @@ itself is worth keeping — an edit refused on a running program, with
 the next delivery still flowing, is exactly the thing worth showing —
 so it needs a different illegal edit. A wire whose types do not match
 is the obvious candidate, and under
-[309](../309-types-by-shape.md) it gets better rather than worse: the
+[309](../309-types-by-width.md) it gets better rather than worse: the
 message can name the first field where two layouts diverge instead of
 only that two names differ.
 

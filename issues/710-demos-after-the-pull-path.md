@@ -80,7 +80,7 @@ exercises statics-with-writes where it exercised gatherers.
 
 Keep the scene; change what is refused. A wire whose types do not match
 is the natural candidate, and under
-[309](309-types-by-shape.md) it reads better than a cycle ever did: the
+[309](309-types-by-width.md) it reads better than a cycle ever did: the
 message can name the first field where two layouts diverge rather than
 only reporting that two names differ.
 
@@ -137,5 +137,5 @@ reader care is evidence about the mechanic, not about the story.
   the contract every new scene is held to
 - [004 — Statics and recalculation](../docs/004-datapath-statics.md),
   the mechanism phase 4 now demonstrates
-- [309 — Types compared by shape](309-types-by-shape.md), which gives
+- [309 — Types compared by width](309-types-by-width.md), which gives
   phase 7's refusal a better message than the one it replaces
