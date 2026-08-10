@@ -83,6 +83,18 @@ long run and read as unchanged when it is not.
 It is a scrapyard rather than a leak: everything in it is accounted
 for, and anything still filed at teardown is freed then.
 
+**The scrapyard owns a mutex.** Not against tearing — nothing reads a
+filed array's contents — but against two hands freeing the same one.
+There are two touchers and only one of them is obvious: rewiring
+sweeps, and teardown empties. Anything touching it takes the lock,
+confirms the array is still filed, unfiles it, and frees it under that
+same hold, so a second arrival simply does not find it. The lock is a
+leaf; nothing is acquired while it is held.
+
+This costs nothing that this issue is trying to save. The lock being
+removed is the one on the delivery walk. The scrapyard is touched when
+wiring changes and when the program ends, and never in between.
+
 ## Suggested implementation steps
 
 1. Change the destination representation from a linked list to an
@@ -97,7 +109,10 @@ for, and anything still filed at teardown is freed then.
    wire exactly as it would have a moment earlier.
 4. The per-worker counters, odd while walking, and the sweep. Its own
    change with its own test: many rewires against a saturated pool,
-   with the retire list observed emptying.
+   with the retire list observed emptying. **The scrapyard's mutex
+   arrives here**, with a test that a teardown racing a sweep frees
+   each array exactly once — the double-free this lock exists for, and
+   the one an argument from another lock would have missed.
 5. Confirm the dump still round-trips after a batch rewire. Not
    because destination order must be preserved — it need not be, and is
    not — but because the rewire is the one thing that rebuilds the
@@ -130,10 +145,32 @@ for, and anything still filed at teardown is freed then.
   these the same program." Sorting destinations at dump time would buy
   that, and it can be added later by whoever wants it, since it
   requires nothing of the rebuild.
-- Does the retire list need its own lock? Only rewiring touches it, and
-  rewiring is already serialized by the rewiring lock, so probably not
-  — but that is an argument from a lock existing elsewhere, which is
-  the kind of reasoning that stops being true quietly.
+- *Does the retire list need its own lock?* **Yes, it gets one, and the
+  reason is double-freeing rather than tearing.** The old argument —
+  only rewiring touches it, and rewiring is serialized elsewhere — was
+  already false when written: **teardown frees whatever is still filed,
+  and teardown is not rewiring.** That is two touchers, one of which
+  nobody would think to look for, and the two could free the same array
+  between them.
+
+  **The protocol is take the lock, confirm the array is still filed,
+  unfile it, free it — all under one hold.** Unfiling before freeing,
+  under the lock, is the whole mechanism: a second toucher arriving
+  afterwards does not find it, so there is nothing for it to free
+  twice. Holding the lock across the free itself is fine and simpler
+  than not; this list is touched only when wiring changes or the
+  program ends.
+
+  **It costs nothing, because delivery never touches this list.** The
+  mutex this issue exists to remove is the one on the *walk* — read the
+  pointer, visit the array, no lock. The retire list sits entirely off
+  that path, so giving it a lock takes nothing back.
+
+  **The lock is a leaf: nothing else may be acquired while holding
+  it.** Stated as a rule here rather than left to be inferred, because
+  a lock-ordering cycle is precisely the kind of thing that gets built
+  later by somebody who had no way to know. Rewiring may take the
+  rewiring lock and then this one; nothing goes the other way.
 
 ## Related
 

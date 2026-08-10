@@ -179,6 +179,16 @@ would otherwise deadlock the sweep against an idle pool. Counters are
 long run and read as unchanged when it is not.</p>
 <p>It is a scrapyard rather than a leak: everything in it is accounted
 for, and anything still filed at teardown is freed then.</p>
+<p><strong>The scrapyard owns a mutex.</strong> Not against tearing — nothing reads a
+filed array's contents — but against two hands freeing the same one.
+There are two touchers and only one of them is obvious: rewiring
+sweeps, and teardown empties. Anything touching it takes the lock,
+confirms the array is still filed, unfiles it, and frees it under that
+same hold, so a second arrival simply does not find it. The lock is a
+leaf; nothing is acquired while it is held.</p>
+<p>This costs nothing that this issue is trying to save. The lock being
+removed is the one on the delivery walk. The scrapyard is touched when
+wiring changes and when the program ends, and never in between.</p>
 <h2>Suggested implementation steps</h2>
 <p>1. Change the destination representation from a linked list to an
    array behind a pointer, with rewiring rebuilding rather than
@@ -192,7 +202,10 @@ for, and anything still filed at teardown is freed then.</p>
    wire exactly as it would have a moment earlier.
 4. The per-worker counters, odd while walking, and the sweep. Its own
    change with its own test: many rewires against a saturated pool,
-   with the retire list observed emptying.
+   with the retire list observed emptying. **The scrapyard's mutex
+   arrives here**, with a test that a teardown racing a sweep frees
+   each array exactly once — the double-free this lock exists for, and
+   the one an argument from another lock would have missed.
 5. Confirm the dump still round-trips after a batch rewire. Not
    because destination order must be preserved — it need not be, and is
    not — but because the rewire is the one thing that rebuilds the
@@ -223,11 +236,30 @@ for, and anything still filed at teardown is freed then.</p>
   that, and it can be added later by whoever wants it, since it
   requires nothing of the rebuild.</p>
 <ul>
-<li>Does the retire list need its own lock? Only rewiring touches it, and</li>
-<p>  rewiring is already serialized by the rewiring lock, so probably not
-  — but that is an argument from a lock existing elsewhere, which is
-  the kind of reasoning that stops being true quietly.</p>
+<li><em>Does the retire list need its own lock?</em> **Yes, it gets one, and the</li>
+<p>  reason is double-freeing rather than tearing.** The old argument —
+  only rewiring touches it, and rewiring is serialized elsewhere — was
+  already false when written: **teardown frees whatever is still filed,
+  and teardown is not rewiring.** That is two touchers, one of which
+  nobody would think to look for, and the two could free the same array
+  between them.</p>
 </ul>
+<p>  **The protocol is take the lock, confirm the array is still filed,
+  unfile it, free it — all under one hold.** Unfiling before freeing,
+  under the lock, is the whole mechanism: a second toucher arriving
+  afterwards does not find it, so there is nothing for it to free
+  twice. Holding the lock across the free itself is fine and simpler
+  than not; this list is touched only when wiring changes or the
+  program ends.</p>
+<p>  <strong>It costs nothing, because delivery never touches this list.</strong> The
+  mutex this issue exists to remove is the one on the <em>walk</em> — read the
+  pointer, visit the array, no lock. The retire list sits entirely off
+  that path, so giving it a lock takes nothing back.</p>
+<p>  **The lock is a leaf: nothing else may be acquired while holding
+  it.** Stated as a rule here rather than left to be inferred, because
+  a lock-ordering cycle is precisely the kind of thing that gets built
+  later by somebody who had no way to know. Rewiring may take the
+  rewiring lock and then this one; nothing goes the other way.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the input</li>
