@@ -108,22 +108,82 @@ reader care is evidence about the mechanic, not about the story.
 2. Phase 4 end to end, since it is effectively a new demo rather than
    an edited one, and it establishes the voice for the other two.
 3. Phase 6's substitution and phase 7's, which are single scenes.
-4. Run every demo from the launcher, which is the standing rule after
+4. Rename phase 4's source and runner to say config rather than pull,
+   keeping the index, and chase every reference to the old names —
+   the launcher, the phase demo issue, the docs site's generated
+   pages, and anything in the transcripts index that points at them.
+5. Replace the launcher's filename glob with a read of an ordering
+   file in the demos directory, and write the new rule into the
+   conventions, since the first-pass report asked for it in writing
+   rather than only in code.
+6. Run every demo from the launcher, which is the standing rule after
    any demo change.
-5. Update each phase demo issue's current behavior to describe the
+7. Update each phase demo issue's current behavior to describe the
    scenes as they then read — and remove the marks this issue's
    existence made redundant.
 
 ## Open questions
 
-- Does phase 4 keep its number and name? It is called the pull demo,
-  the phase is no longer called the pull path, and the file carries an
-  index that means something in the reading order. Renaming it is the
-  same class of act as the two documents renamed alongside this work.
-- The launcher discovers demos by a `phase-*` filename while the source
-  carries a file index — a naming collision the first-pass report
-  already recorded. Rewriting a demo is the cheapest moment to resolve
-  it, or the worst moment to try.
+**Answered:**
+
+- *Does phase 4 keep its number and name?* It is renamed and keeps its
+  index. The source becomes `037-phase-4-config-demo.c` and the runner
+  becomes a config demo, matching the roadmap, which already calls the
+  phase Configuration and leaves the demo as the last place the word
+  "pull" survives. The index stays 037 because **an index is a
+  position in the reading order, not an identity** — it says where
+  this work sits in the story, between the generator and routing, and
+  that has not moved. What changed is what the demo demonstrates, not
+  when it arrived. Re-indexing it to the end would have said the
+  opposite, and would have put phase 4's demo after phase 7's work in
+  the one ordering the project uses to be read.
+
+- *How is the launcher's discovery pattern reconciled with the file
+  index rule?* **The launcher stops discovering and reads a list.** A
+  file in the demos directory names the runners in the order they
+  should be offered, and the launcher reads it instead of globbing for
+  a filename shape.
+
+  This costs the property the launcher's own header advertises — a new
+  demo appearing merely by being dropped in place — and buys something
+  worth more: **run order and reading order stop having to be the same
+  thing.** The filename says where a file sits in the project's story;
+  the list says where a demo sits in the menu. Neither has to bend to
+  the other, and the collision the first-pass report recorded stops
+  being a collision because the two conventions no longer share a
+  channel. The list also becomes the place a demo can be temporarily
+  withheld or reordered without renaming anything, which globbing
+  never allowed.
+
+- *What index do the runner scripts get, now that the list allows them
+  one?* **Their source's index with a letter appended** —
+  `037-phase-4-config-demo.c` is run by `037a-phase-4-config`. The
+  numbers around each demo source are spent on engine files, so a
+  runner cannot have a number of its own near the thing it runs; a
+  letter gives it one anyway. The project already uses exactly this
+  shape for issues that split into parts, where 522 becomes 522a and
+  522b, and the relationship is the same one: **a runner is not a step
+  in the story, it is the second half of the step its source is.**
+
+  Taken as a judgment call rather than a preference, on the grounds
+  that the alternative — seven fresh numbers at the end of the
+  counter — puts phase 1's runner after phase 7's engine work, which
+  is the one thing an index is supposed to prevent.
+
+**Open:**
+
+- **The index convention does not visibly do what it is for.** The
+  numbers are supposed to encode a reading order for the whole
+  project, and nothing in the project makes that apparent — a reader
+  meeting `033-statics.c` beside `034-gather.c` has no way to learn
+  that the numbers mean "read these in this order" rather than
+  "these were created in this order" or "these are related." The
+  convention is followed carefully and communicates nothing to anyone
+  who was not told about it. Whether the fix is a document that states
+  the rule, a generated reading index that lists every file in order
+  with a line about each, or something the docs site renders, is
+  undecided. Raised while numbering the runners, and larger than they
+  are.
 
 ## Related
 

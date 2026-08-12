@@ -56,18 +56,43 @@ simplifies away the thing that makes a mechanism interesting teaches
 someone a machine that does not exist. If a screen cannot be drawn
 honestly, it is cut and its subject stays prose.
 
-**Artwork.** The gif generator at
-`/mnt/mtwo/programming/ai-stuff/gif-generator/` is available for
-producing the animated pieces. Whether frames are generated ahead of
-time as images or drawn live in the browser is an open question below,
-and it is not a small one — the interactive pieces 705 already built
-are drawn live and steerable, and a slideshow of flat images beside
-them would read as a different, lesser thing on the same site.
+**It narrates the engine, not the project.** The sequence follows one
+value through the machine — what a station is, how a value reaches the
+next box, what happens when the destination is full, why a comparator
+has three exits, how a text file becomes a running graph, what the
+pool is doing throughout. The phases and the lessons of building them
+are a different sequence and a good one, and they are not what a
+reader arriving with no context needs: the problem this issue names is
+that such a reader meets a sidebar of seventy entries, and the first
+thing they need is to know what the thing in front of them *is*. The
+project's own story is what someone wants once they already care, and
+the first-pass report already tells it in prose.
 
-**Where it sits.** It is the site's front door — the thing
-`index.html` offers first, with the reference behind it — because a
+**Artwork: drawn live, screen by screen.** Each screen is a script
+that draws stations and moving values in the browser, the way the
+three live interactive pieces from [705](705-html-documentation.md)
+already are. This is the expensive choice and it is taken on purpose —
+generated image frames would be far easier to make beautiful, and they
+would be dead on a page whose neighbours can be paused, stepped and
+steered, which the reader would feel as two different grades of thing
+on one site. The gif generator at
+`/mnt/mtwo/programming/ai-stuff/gif-generator/` remains available for
+any still or decorative piece that is genuinely an illustration rather
+than a mechanism.
+
+**The honesty rule is kept by hand here, so it has to be kept
+deliberately.** Nothing about a hand-drawn screen prevents it from
+showing a machine that does not exist. Every screen's drawing owes a
+reading of the mechanism it depicts, and a screen whose drawing and
+whose engine disagree is a bug in the screen.
+
+**Where it sits.** It is one of the site's front doors — the first
+thing `index.html` offers, with the reference behind it — because a
 reader who wants the reference will find it and a reader who wants an
-introduction currently has nowhere to be sent.
+introduction currently has nowhere to be sent. Phase 8's workbench
+([801](801-browser-workbench.md)) becomes a third door beside it, so
+the entrance reads *watch, read, build*; the slideshow should be
+written knowing it will have neighbours rather than the whole page.
 
 ### The transcript library
 
@@ -91,13 +116,33 @@ tool output, and long machine-generated blocks. The same highlighting
 and the same layout as the rest of the site, with the long mechanical
 passages foldable so the argument stays readable through them.
 
-**This is a decision about what the project is.** Publishing the
-transcripts means publishing the reasoning with its false starts
-attached, including the parts where something was got wrong and then
-corrected. That is the point — the completed issues are blueprints and
-deliberately do not carry the arguments — but it is worth choosing
-rather than doing by default, because it is not reversible in the way
-an unpublished file is.
+**Whole and unedited.** The logs go up as they happened — the false
+starts, the reversals, the parts where something was got wrong and
+then corrected, and the asides that were never written as
+documentation. Nothing is selected for them, because a record that was
+chosen from is a curated artifact, and the completed issues are
+already the curated artifact: they are blueprints that deliberately
+drop the arguments. The transcripts are worth having precisely as the
+place the arguments survive, which only holds if nobody decided which
+arguments were worth surviving.
+
+This was chosen rather than defaulted to, because it is the one part
+of this issue that is not reversible the way an unpublished file is.
+As of this writing the repository has no remote and the site is local
+files, so the decision binds a future publication rather than
+describing a present one.
+
+**They get decorated, every once in a while.** A recurring pass over
+the transcripts that adds cute emoji and MS-Paint-style drawings —
+flowers, hearts, a smiling sun, carrots, horses, stick figure people,
+and whatever else belongs beside a passage. This is not in tension
+with unedited: **decoration adds and never removes**, so the record
+stays whole underneath and gains a margin. It is the difference
+between a transcript and a scrapbook, and the scrapbook is the thing
+worth having on a site meant to be read by a person rather than
+searched by a tool. Nothing about it is automated and nothing about it
+is scheduled; it happens when someone is in the mood, which is the
+correct trigger for a drawing of a horse.
 
 ### What both need from the generator
 
@@ -109,6 +154,13 @@ the generator was not told about is missing from the site *silently*.
 documentation roots downward, with a directory that yields no pages
 reported rather than passed over, is the prerequisite for both halves
 of this issue and belongs to 705 rather than here.
+
+That same walk is the whole of the transcript library's inclusion
+policy: whatever is in the directory is on the site after the next
+build, with no list in between. The generator therefore needs a title
+and a date for each log without being told them, which the existing
+filenames already carry, and needs to survive a log it has never seen
+a shape like before rather than refusing the build.
 
 ## Suggested implementation steps
 
@@ -129,24 +181,45 @@ of this issue and belongs to 705 rather than here.
 
 ## Open questions
 
-- Generated frames or live drawing? Frames are easier to make
-  beautiful and are dead on the page; live drawing matches what the
-  interactive pieces already do and costs a great deal more work per
-  screen. A mixture is possible and might be the worst of both, since
-  the seam would be visible.
-- Should the slideshow narrate the *engine* or the *project*? Those are
-  different sequences. The engine's is the datapath; the project's is
-  the phases, and would double as an answer to "what did building this
-  teach", which the first-pass report already answers in prose.
-- The transcripts contain the user's own words at length, including
-  asides that were never meant as documentation. Is the whole log
-  published, or an edited one? Editing them makes them a curated
-  artifact rather than a record, which costs the thing that makes them
-  worth publishing.
-- The transcripts grow every session. Does the site regenerate to
-  include new ones automatically — in which case a build publishes
-  whatever was said that day — or does adding a transcript stay a
-  deliberate act?
+**Answered:**
+
+- *Generated frames or live drawing?* **Live, hand-drawn per screen.**
+  The deciding fact is not which is better in isolation but that the
+  site already has live, steerable pieces on it: flat images placed
+  beside them are not merely less capable, they announce themselves as
+  a lesser grade of thing, and a front door is the worst page to say
+  that on. The cost is real and is accepted — this is the most
+  expensive way to build the slideshow, and it buys a site with one
+  texture instead of two.
+
+- *Does the slideshow narrate the engine or the project?* **The
+  engine.** Both sequences are worth telling, and only one of them
+  answers the question this issue exists to answer. A reader who does
+  not know what a station is cannot be told what phase 3 added; a
+  reader who does know will find the project's story in the first-pass
+  report and the completed issues, which already tell it well.
+
+- *Whole transcripts or an edited log?* **Whole and unedited**, with a
+  recurring decorating pass that only ever adds. Written up above.
+
+- *Does a new transcript reach the site automatically, or by a
+  deliberate act?* **Automatically, on the next build.** The generator
+  walks the directory and renders what it finds, so a session becomes
+  a page the next time the site is built. This is the unedited
+  decision carried one level outward: if nobody selects which passages
+  are worth keeping, nobody selects which sessions are either, and a
+  list of approved transcripts would be that selection wearing a
+  different hat.
+
+  **The consequence is accepted: building the site is publishing it.**
+  Someone who builds to check a broken link puts that day's
+  conversation up along with the fix. That is only tolerable because
+  the whole-and-unedited decision already means nothing is being held
+  back for review — there is no state in which a transcript exists but
+  is not meant to be seen, so there is nothing for a build to leak.
+  A deliberate list would also have reintroduced the exact failure 705
+  is being fixed to eliminate: something missing from the site because
+  nobody remembered to name it, with no complaint from the build.
 
 ## The note that started this
 
