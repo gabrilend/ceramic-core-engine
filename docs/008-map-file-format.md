@@ -109,6 +109,13 @@ destination port is a static, the arrow overwrites it rather than
 queueing.
 [056](implementation-notes/056-no-pull-path.md) is why.
 
+**A file still using that form is refused, not reinterpreted.** The
+reader demands the dollar and says what the bare name used to mean, so
+an old map stops with an explanation rather than loading into
+something its author did not write. This matters more than it looks:
+the two forms differ by one character, and the wrong one would have
+loaded and run.
+
 Ring buffers carry no capacity, because they grow on their own.
 
 That is becoming *no capacity is required*. Issue 210 gives every port

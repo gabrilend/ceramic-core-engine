@@ -11,13 +11,16 @@
  * How it does it, in general terms: each delivery takes exactly one
  * station's mutex, writes one value, and asks one question — is this
  * station now complete? The contended section is a handful of memory
- * copies and index arithmetic; task allocation, and later gathering,
- * happen after the lock is dropped. Values are claimed (copied out)
- * before the lock releases, which is the entire reason two
- * invocations of one station can run at once without meeting.
+ * copies and index arithmetic; task allocation happens after the lock
+ * is dropped. Values are claimed (copied out) before the lock
+ * releases, which is the entire reason two invocations of one station
+ * can run at once without meeting.
  *
- * Built across issues 202–206; routing grows in phase 5, the pull
- * path in phase 4, exactly at the dispatch rows marked for them.
+ * Built across issues 202–206; routing grew in phase 5 at the
+ * dispatch row marked for it. A second row was marked for the pull
+ * path and filled in phase 4, and issue 210 took it out again — see
+ * docs/implementation-notes/056-no-pull-path.md for why. The shape
+ * held up: adding that path was a row, and removing it was a row.
  */
 #include "018-station.h"
 
@@ -141,24 +144,15 @@ static void slot_pop_locked(slot_t *sl, void *into)
 
 /* ------------------------------------------------------------------ */
 /* The readiness dispatch (issue 204). Two tables, indexed by the     */
-/* slot's kind: "does it hold a value?" and "claim one". A fourth     */
+/* slot's kind: "does it hold a value?" and "claim one". Another      */
 /* slot kind is a new row in each, never a new branch in two          */
 /* functions that must be kept in agreement.                          */
 /* ------------------------------------------------------------------ */
 
-/* {{{ filled: ring / gather / static */
+/* {{{ filled: ring / static */
 static int ring_filled(const slot_t *sl)
 {
     return sl->head != sl->tail;
-}
-
-static int gather_filled(const slot_t *sl)
-{
-    /* A gatherer's value is produced on demand, so the slot always
-     * holds one, by definition. Real production arrives in phase 4
-     * (issue 403); the readiness answer is already correct. */
-    (void)sl;
-    return 1;
 }
 
 static int static_filled(const slot_t *sl)
@@ -170,20 +164,23 @@ static int static_filled(const slot_t *sl)
 
 static int (*const slot_filled[SLOT_KIND_COUNT])(const slot_t *) = {
     [SLOT_RING]   = ring_filled,
-    [SLOT_GATHER] = gather_filled,
     [SLOT_STATIC] = static_filled,
 };
 /* }}} */
 
-/* {{{ claim: ring / gather / static */
+/* {{{ claim: ring / static */
 /*
  * Claiming happens in two moments. Ring values are popped here,
- * under the mutex, which is what makes them spoken-for. Gathered and
- * static values are resolved later, during task construction,
- * outside the mutex — a gatherer runs user code, and user code under
- * a station's lock would hand the hot path to whoever wrote the
- * slowest box. The claim table records that split: a null entry
- * means "resolved at build time".
+ * under the mutex, which is what makes them spoken-for. A static is
+ * resolved later, during task construction, outside the mutex, so
+ * the statics table's lock never nests inside a station's. The claim
+ * table records that split: a null entry means "resolved at build
+ * time".
+ *
+ * The split used to carry a second reason and a sharper one — a
+ * gatherer ran user code, and user code under a station's lock would
+ * hand the hot path to whoever wrote the slowest box. Nothing is
+ * gathered now (issue 210), so what remains is only lock ordering.
  */
 static void ring_claim(slot_t *sl, void *into)
 {
@@ -192,7 +189,6 @@ static void ring_claim(slot_t *sl, void *into)
 
 static void (*const slot_claim_locked[SLOT_KIND_COUNT])(slot_t *, void *) = {
     [SLOT_RING]   = ring_claim,
-    [SLOT_GATHER] = NULL,
     [SLOT_STATIC] = NULL,
 };
 /* }}} */
@@ -247,10 +243,10 @@ static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed)
  * One allocation, sized exactly for this box: the struct, the array
  * of input pointers, the input bytes, the output bytes. Runs after
  * the station's mutex is released, so a slow allocator delays one
- * task rather than everyone aiming at that station. Gathered and
- * static slots are resolved here — outside the lock, on the
- * assembling thread's own time. Non-static since phase 6: the seed
- * sweep builds its first tasks through this same door.
+ * task rather than everyone aiming at that station. Static slots are
+ * resolved here — outside the lock, on the assembling thread's own
+ * time. Non-static since phase 6: the seed sweep builds its first
+ * tasks through this same door.
  */
 task_t *task_build(map_t *m, int station_index,
                    const unsigned char *claimed, int port)
@@ -293,17 +289,6 @@ task_t *task_build(map_t *m, int station_index,
              * table's own lock never nests inside a station's. */
             static_claim(m, sl, t->in[i]);
             break;
-        case SLOT_GATHER: {
-            /* The upstream box runs inline, right now, on this
-             * thread (issue 403) — after the station's mutex was
-             * released, so user code never runs under it. The time
-             * is charged to this station, the puller, because this
-             * is where it is actually paid (issue 702). */
-            STATS_MARK(gather_start);
-            gather_claim(m, sl, t->in[i]);
-            STATS_CHARGE(s->gather_ns, gather_start);
-            break;
-        }
         default:
             die("a slot of an unknown kind", station_index);
         }

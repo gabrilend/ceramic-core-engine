@@ -76,8 +76,12 @@ from it.
 | storage | `void *` | For a ring buffer, the cells. For a static, unused. |
 | capacity | `int` | Ring buffer only — how many cells. |
 | head, tail | `int` | Ring buffer only — where the oldest value sits and where the next one goes. |
-| source | `int` | Unused. It named the station a gatherer pulled from, and nothing pulls now. |
 | static_id | `int` | Static only — which entry in the statics table. |
+
+There used to be a `source` field here, naming the station a gatherer
+pulled from. It is gone from the record rather than left sitting
+unused, because a field nobody writes is a question every reader has
+to answer for themselves.
 
 Two things about that table are changing and are worth reading beside
 it. **A static's value is moving onto the port itself**, so `static_id`

@@ -40,10 +40,14 @@ void map_report_buffers(map_t *m, FILE *out);
 /* {{{ map_report_stations() — issue 702 */
 /*
  * Per station: runs, tasks produced for others, and — when compiled
- * with SORA_STATS — time inside the box, time spent waiting on the
- * station's mutex, and gather time charged to the station that
- * pulled. Three orderings of the same data, because the interesting
- * station is a different one under each.
+ * with SORA_STATS — time inside the box and time spent waiting on the
+ * station's mutex. Three orderings of the same data, because the
+ * interesting station is a different one under each.
+ *
+ * A third time was reported until issue 210: gather time, charged to
+ * the station that pulled rather than to the one that ran, because
+ * that is where a pulled value was actually paid for. Nothing pulls
+ * now, so a station's own box time is the whole of its cost.
  */
 enum report_order {
     REPORT_BY_TIME = 0,
@@ -102,26 +106,32 @@ void map_dump(map_t *m, FILE *out);
 /* Rewiring (issue 704). Lives in 051-rewire.c.                       */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_rewire_connect() / map_rewire_disconnect() / map_rewire_gather() */
+/* {{{ map_rewire_connect() / map_rewire_disconnect() */
 /*
  * Change the shape while it runs. Every load-time rule applies per
- * edge — type compatibility, buffer-slot destinations, port limits,
- * the gather cycle walk — and the check and the change happen under
- * one lock, because two threads each adding an individually legal
- * edge can produce an illegal pair.
+ * edge — type compatibility, buffer-slot destinations, port limits —
+ * and the check and the change happen under one lock, because two
+ * threads each adding an individually legal edge can produce an
+ * illegal pair.
+ *
+ * A third operation lived here: repointing a gather wire, which
+ * carried the cycle walk and was the sharpest example of why the
+ * check and the change must share a lock. It went with the pull path
+ * (issue 210). The joint-illegality argument did not go with it — it
+ * still governs these two, and the port limits are where it now
+ * shows.
  *
  * Refusal behaviour, decided rather than defaulted: these return -1
  * with the reason on stderr instead of stopping the program. A
  * loader that dies serves its author; a running engine that dies
  * because a control surface sent one bad instruction takes the whole
  * plant down with it. The debt is that a caller can ignore the -1 —
- * the first-pass report weighs the trade.
+ * the first-pass report weighs the trade, and issue 212 overturns it.
  */
 int map_rewire_connect(map_t *m, int from_station, int port,
                        int to_station, int to_slot);
 int map_rewire_disconnect(map_t *m, int from_station, int port,
                           int to_station, int to_slot);
-int map_rewire_gather(map_t *m, int station, int slot, int source_station);
 /* }}} */
 
 #endif

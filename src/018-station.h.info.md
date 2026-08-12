@@ -11,12 +11,11 @@ buffers grow.
 **slot** — one input's waiting place.
 | field | type | meaning |
 |---|---|---|
-| kind | `unsigned char` | Ring buffer (0), gatherer (1), or static (2). Stored, never inferred. |
+| kind | `unsigned char` | Ring buffer (0) or static (1). Stored, never inferred. |
 | elem_size | `int` | Bytes per value; exactly the parameter's size. |
 | storage | `void *` | The ring's cells. Reallocated on growth; the slot itself never moves. |
 | capacity | `int` | Cells allocated. One always spare, so usable is one less. |
 | head, tail | `int` | Oldest value / next free cell. Equal means empty. |
-| source | `int` | Gatherer only: upstream station index (phase 4). |
 | static_id | `int` | Static only: statics-table entry (phase 4). |
 | growths, high_water | `int` | How many doublings, and the deepest backlog — phase 7's reading. |
 

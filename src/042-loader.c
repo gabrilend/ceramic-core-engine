@@ -70,9 +70,14 @@ static int find_station_index(const name_table_t *names, const char *name)
 /*
  * Create every station (issue 602): registry lookup, slot array with
  * ring buffers as the default, the comparator's extra slot, statics
- * bound from their entries. Gather inputs wait for the second pass —
- * their sources are names, and a name may belong to a station
- * declared further down.
+ * bound from their entries.
+ *
+ * Every input line is resolvable here now. They used to divide: a
+ * static bound immediately, while a gather source was a *name*, and a
+ * name may belong to a station declared further down the file, so it
+ * had to wait for the second pass. With the pull path gone (issue
+ * 210) an input line names an entry number, and a number needs
+ * nothing else to exist first.
  */
 static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
 {
@@ -112,9 +117,7 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
                              ? ", plus the threshold" : "");
                 die_load(d->path, in->line, s->name, message);
             }
-            if (in->is_static)
-                map_slot_static(m, index, in->slot, in->static_id);
-            /* gather lines resolve in the second pass */
+            map_slot_static(m, index, in->slot, in->static_id);
         }
     }
     names->count = index;
@@ -146,8 +149,10 @@ static void type_check_wire(map_description_t *d, int line,
 
 /* {{{ second_pass() */
 /*
- * Resolve every arrow and every gather source (issue 603). By now
- * every station exists and can be found by name.
+ * Resolve every arrow (issue 603). By now every station exists and
+ * can be found by name, which is the whole reason for a second pass:
+ * an arrow names its destination, and a file may draw an arrow to a
+ * station it has not declared yet.
  */
 static void second_pass(map_t *m, map_description_t *d, name_table_t *names)
 {
@@ -179,33 +184,6 @@ static void second_pass(map_t *m, map_description_t *d, name_table_t *names)
                             dest_station->slots[out->dest_slot].type_name);
             map_connect(m, index, out->port, dest, out->dest_slot);
         }
-
-        for (desc_input_t *in = s->inputs; in; in = in->next) {
-            if (in->is_static)
-                continue;
-            int source = find_station_index(names, in->gather_source);
-            if (source < 0) {
-                char message[256];
-                snprintf(message, sizeof message,
-                         "gathers from '%s', which does not exist",
-                         in->gather_source);
-                die_load(d->path, in->line, s->name, message);
-            }
-            const box_info_t *source_box =
-                registry_find(names->by_index[source]->box);
-            const char *slot_type = m->stations[index].slots[in->slot].type_name;
-            if (strcmp(source_box->return_type, slot_type) != 0) {
-                fprintf(stderr,
-                        "map %s:%d: %s gathers %s.%d: box returns %s, slot "
-                        "takes %s\n",
-                        d->path, in->line, s->name, in->gather_source,
-                        in->slot, source_box->return_type, slot_type);
-                abort();
-            }
-            /* The cycle check runs inside, at the moment the edge is
-             * drawn (issue 404). */
-            map_slot_gather(m, index, in->slot, source);
-        }
     }
 }
 /* }}} */
@@ -213,10 +191,17 @@ static void second_pass(map_t *m, map_description_t *d, name_table_t *names)
 /* {{{ whole_map_validation() */
 /*
  * The checks only the finished map can answer (issue 604). Failures
- * are collected and printed together; one abort at the end. Gather
- * cycles are absent from this list only because they were refused
- * edge by edge as the wires were drawn — the same rule, applied
- * earlier, which the issue records.
+ * are collected and printed together; one abort at the end.
+ *
+ * Three of these checks went with the pull path (issue 210), and it
+ * is worth naming what they were so nobody reintroduces them looking
+ * for lost rigour: a gathered-from station could not have ring
+ * inputs, because gathering ran inline and could not wait for a value
+ * to arrive; a station could not be both pushed into and gathered
+ * from, because that is neither one discipline nor the other; and
+ * gather cycles were refused edge by edge as wires were drawn, since
+ * a gather cycle was a call that never returned. None of the three
+ * describes anything that can happen now.
  */
 static void whole_map_validation(map_t *m, map_description_t *d,
                                  name_table_t *names)
@@ -232,55 +217,31 @@ static void whole_map_validation(map_t *m, map_description_t *d,
             if (s->slots[j].kind == SLOT_RING)
                 has_ring = 1;
 
-        /* Is anyone pushing into this station, and is anyone pulling
-         * from it? Both at once is incoherent (mixed fan-out, seen
-         * from the destination side); pulled-while-buffered can
-         * never complete a gather. Sized to the station's real slot
-         * count — a fixed cap here would be a silent hole in the
-         * checking. */
+        /* Which slots does an arrow land on? Sized to the station's
+         * real slot count — a fixed cap here would be a silent hole
+         * in the checking. */
         int pushed_into[s->n_slots > 0 ? s->n_slots : 1];
         memset(pushed_into, 0, sizeof pushed_into);
-        int is_pulled = 0;
         for (int k = 0; k < m->n_stations; k++) {
             station_t *other = &m->stations[k];
             for (port_t *p = other->ports; p; p = p->next)
                 for (destination_t *dst = p->destinations; dst; dst = dst->next)
                     if (dst->station == i && dst->slot < s->n_slots)
                         pushed_into[dst->slot] = 1;
-            for (int j = 0; j < other->n_slots; j++)
-                if (other->slots[j].kind == SLOT_GATHER
-                    && other->slots[j].source == i)
-                    is_pulled = 1;
         }
         int any_push = 0;
         for (int j = 0; j < s->n_slots; j++)
             any_push |= pushed_into[j];
 
-        if (is_pulled && has_ring) {
-            fprintf(stderr,
-                    "map %s: station '%s' is gathered from, but it has "
-                    "ring-buffer inputs — gathering runs inline and cannot "
-                    "wait for a value to arrive\n",
-                    d->path, name);
-            failures++;
-        }
-        if (is_pulled && any_push) {
-            fprintf(stderr,
-                    "map %s: station '%s' is both written into by arrows and "
-                    "gathered from — neither pushed nor pulled coherently\n",
-                    d->path, name);
-            failures++;
-        }
         /* An arrow landing on a slot that is not a buffer would have
          * nowhere to put its value. */
         for (int j = 0; j < s->n_slots; j++) {
             if (pushed_into[j] && s->slots[j].kind != SLOT_RING) {
                 fprintf(stderr,
                         "map %s: an arrow lands on '%s.%d', but that slot is "
-                        "%s, not a buffer — the value would have nowhere to "
-                        "go\n",
-                        d->path, name, j,
-                        s->slots[j].kind == SLOT_STATIC ? "static" : "gathered");
+                        "static, not a buffer — the value would have nowhere "
+                        "to go\n",
+                        d->path, name, j);
                 failures++;
             }
         }
@@ -289,7 +250,7 @@ static void whole_map_validation(map_t *m, map_description_t *d,
          * but not fatal — a map under construction has these, and
          * silently-never-running is the hardest thing to notice from
          * outside (issue 604). */
-        if (has_ring && !any_push && !is_pulled) {
+        if (has_ring && !any_push) {
             int externally_fed = 0;
             /* The seed only reaches bufferless stations, so a ring
              * station with no arrows can only be fed by a test or a
@@ -319,11 +280,14 @@ static void whole_map_validation(map_t *m, map_description_t *d,
  * through a wire — the engine never scans, and this is the single
  * exception, which is why the sweep announces itself.
  *
- * Enqueue every station that has no ring-buffer inputs and is not
- * gathered from. The second half excludes gatherers: their values go
- * into tasks being assembled, not into buffers, and at startup
- * nobody is assembling. Sinks with no inputs qualify — they run once
- * for their effect.
+ * Enqueue every station that has no ring-buffer inputs. Sinks with no
+ * inputs qualify — they run once for their effect.
+ *
+ * There used to be a second condition: a station that was gathered
+ * from was skipped, because its value went into a task being
+ * assembled rather than into a buffer, and at startup nobody is
+ * assembling. With the pull path gone (issue 210) nothing is gathered
+ * from, so having no ring inputs is the whole of the test.
  */
 static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
 {
@@ -338,17 +302,6 @@ static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
         if (has_ring)
             continue;
 
-        int is_pulled = 0;
-        for (int k = 0; k < m->n_stations && !is_pulled; k++) {
-            station_t *other = &m->stations[k];
-            for (int j = 0; j < other->n_slots; j++)
-                if (other->slots[j].kind == SLOT_GATHER
-                    && other->slots[j].source == i)
-                    is_pulled = 1;
-        }
-        if (is_pulled)
-            continue;
-
         /* Through the same door delivery uses — one way a task comes
          * into existence, not two. No ring slots, so no claim
          * buffer. The workers are still parked at their gate, which
@@ -361,9 +314,8 @@ static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
 
     if (m->seeded == 0) {
         fprintf(stderr,
-                "map %s: nothing to seed — every station either waits for a "
-                "buffered value or is gathered on demand, so the map cannot "
-                "ever start\n", d->path);
+                "map %s: nothing to seed — every station waits for a buffered "
+                "value, so the map cannot ever start\n", d->path);
         abort();
     }
 }

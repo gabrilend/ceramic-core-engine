@@ -95,8 +95,8 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
         if (elem_sizes[i] <= 0)
             fail("a slot's element size must be positive");
         /* Every slot starts life as a ring buffer — the default the
-         * map format also assumes (issue 601). Statics and gatherers
-         * are conversions applied afterwards, in phase 4. */
+         * map format also assumes (issue 601). Becoming a static is a
+         * conversion applied afterwards, in phase 4. */
         sl->kind = SLOT_RING;
         sl->elem_size = elem_sizes[i];
         sl->capacity = SLOT_INITIAL_CAPACITY;
@@ -104,7 +104,6 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
         if (!sl->storage) fail("out of memory for a ring buffer");
         sl->head = 0;
         sl->tail = 0;
-        sl->source = -1;
         sl->static_id = -1;
     }
 }

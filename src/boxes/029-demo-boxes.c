@@ -113,9 +113,11 @@ void swallow(int x)
 /* }}} */
 
 /* {{{ seven() */
-/* No inputs at all: every slot vacuously satisfied. A station
- * placing this can only ever run by being gathered (or, later,
- * seeded) — nothing can be written into it to discover it. */
+/* No inputs at all: every slot vacuously satisfied. A station placing
+ * this can only ever run by being seeded — nothing can be written
+ * into it to discover it. It could once also be reached by being
+ * gathered from, which is gone (issue 210), so seeding is now the
+ * only door. */
 int seven(void)
 {
     return 7;
@@ -158,10 +160,13 @@ int slow_double(int x)
 
 /* {{{ slow_seven() */
 /*
- * Seven, expensively: a gatherable box whose cost is measurable, so
- * the phase 4 demo can show what "once per task assembled" charges
- * the delivery path. Burns arithmetic rather than sleeping, because
- * nothing in this engine is allowed to block.
+ * Seven, expensively: an input-less box whose cost is measurable.
+ * It existed to show what gathering charged the delivery path once
+ * per task assembled; with the pull path gone (issue 210) it is a
+ * costly source that runs once when seeded, which is what phase 4's
+ * rewritten demo needs to show a chain recalculating. Burns
+ * arithmetic rather than sleeping, because nothing in this engine is
+ * allowed to block.
  */
 int slow_seven(void)
 {
@@ -182,20 +187,22 @@ int slow_seven(void)
 /* {{{ read_int_file() */
 /*
  * A read box, written as an ordinary function to prove no engine
- * support is required — the dedicated read box type from the
- * original vision dissolves into "a gatherable function". Opens,
- * reads, closes: safe for two workers to be inside at the same
+ * support is required — the dedicated read box type from the original
+ * vision dissolves into "an ordinary function that happens to read".
+ * Opens, reads, closes: safe for two workers to be inside at the same
  * instant, which a kept-open seeking handle would not be.
  *
- * A gatherer cannot decline (the task struct has a place waiting for
- * bytes and no way to say absence), so a missing file stops the
- * program and says so.
+ * A box cannot decline (the task struct has a place waiting for bytes
+ * and no way to say absence), so a missing file stops the program and
+ * says so. That was true of a gatherer and stayed true without it:
+ * absence is a thing the value has no room to express, which is what
+ * optional parameters are for when issue 210 gets to them.
  */
 int read_int_file(const char *path)
 {
     FILE *f = fopen(path, "r");
     if (!f) {
-        fprintf(stderr, "read_int_file: '%s' does not exist — a gathered "
+        fprintf(stderr, "read_int_file: '%s' does not exist — a box's "
                         "value cannot be absent\n", path);
         abort();
     }

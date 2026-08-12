@@ -155,46 +155,6 @@ static void test_a_program_is_a_text_file(void)
 }
 /* }}} */
 
-/* {{{ test_gathered_source_in_a_map() */
-static void test_gathered_source_in_a_map(void)
-{
-    char result_path[512], map_path[512], map_text[1024];
-    snprintf(result_path, sizeof result_path, "%s/gathered.txt", work_dir);
-    snprintf(map_path, sizeof map_path, "%s/gathered.map", work_dir);
-
-    /* add pulls its second input from seven at every assembly; its
-     * first is pushed by the seeded head. 7 (head) + 7 (gathered)
-     * lands as 14 through the pull path, all described in text. */
-    snprintf(map_text, sizeof map_text,
-        "statics\n"
-        "  0 = \"%s\"\n"
-        "\n"
-        "head seven p\n"
-        "  out 0 - summer.0\n"
-        "\n"
-        "fresh seven p\n"
-        "\n"
-        "summer add p\n"
-        "  in 1 fresh\n"
-        "  out 0 - sink.1\n"
-        "\n"
-        "sink write_int_file p\n"
-        "  in 0 $0\n",
-        result_path);
-    write_text(map_path, map_text);
-
-    unlink(result_path);
-    map_t *m = map_load_file(map_path, 2);
-    check(map_seed_count(m) == 1, "the gathered source was not seeded");
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
-
-    check(read_int(result_path) == 14, "pushed seven plus gathered seven");
-    printf("  a map file drew the pull path; the gatherer was rightly unseeded\n");
-}
-/* }}} */
-
 /* {{{ the gallery of refusals */
 static void test_every_refusal(void)
 {
@@ -250,12 +210,17 @@ static void test_every_refusal(void)
         "that slot is static",
         "an arrow onto a static slot was accepted");
 
+    /* The pull path's grave marker (issue 210). A bare station name
+     * on an 'in' line used to mean "gather from there"; it is refused
+     * rather than reinterpreted, because an old map file saying it
+     * meant something real, and reading it as anything else would run
+     * a program nobody wrote. */
     expect_death_saying(
         "puller add p\n"
         "  in 1 fed\n"
         "fed double_it p\n",
-        "gathered from, but it has ring-buffer inputs",
-        "gathering from a buffered station was accepted");
+        "there is no pull path any more",
+        "a gather line from an old map was accepted");
 
     expect_death_saying(
         "lonely add p\n",
@@ -281,7 +246,6 @@ int main(void)
         exit(1);
 
     test_a_program_is_a_text_file();
-    test_gathered_source_in_a_map();
     test_every_refusal();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);

@@ -20,11 +20,16 @@
 #include "018-station.h"
 
 /* {{{ the description — what the file said, nothing more */
+/* An input line names a static entry and nothing else. It once had a
+ * second form — a bare station name, meaning "gather from there" —
+ * which went with the pull path (issue 210). is_static is therefore
+ * always true and is kept because the reader still checks for the
+ * dollar that distinguishes the form, and a field that records what
+ * was checked is worth more than one the reader has to remember. */
 typedef struct desc_input {
     int   slot;
     int   is_static;      /* $n if so */
     int   static_id;
-    char *gather_source;  /* station name if not static */
     int   line;
     struct desc_input *next;
 } desc_input_t;

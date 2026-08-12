@@ -4,9 +4,18 @@
  * What this is: the tests that a running map can be seen and
  * changed. The buffer report names the right slot; the station
  * report counts truly; a loaded map dumps to a file that loads to a
- * map that dumps identically; a wire changed mid-run changes
- * behaviour from that moment with nothing lost; and of two threads
- * drawing jointly-cyclic gather edges, exactly one is refused.
+ * map that dumps identically; and a wire changed mid-run changes
+ * behaviour from that moment with nothing lost.
+ *
+ * One test left here with the pull path (issue 210): two threads
+ * drawing gather edges that were individually legal and jointly a
+ * cycle, of which exactly one had to be refused. It proved that
+ * validating an edge and installing it happen under one lock. That
+ * property is not merely untested now — it is unreachable, because
+ * every remaining rewiring rule is a property of a single edge and
+ * the fixed shape of a station, so no two legal edges can combine
+ * into an illegal pair. If a whole-graph rule ever returns, this
+ * test returns with it.
  *
  * How it does it, in general terms: real maps loaded from text where
  * names matter (the dump and reports speak them), hand maps where
@@ -15,9 +24,10 @@
  */
 #include "040-mapfile.h"
 #include "049-observe.h"
-#include "026-registry.h"
 
-#include <pthread.h>
+/* The registry header and pthread.h left with the joint-cycle test:
+ * it placed boxes by name and raced two threads by hand. Nothing
+ * else here does either. */
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -150,19 +160,22 @@ static void test_round_trip(void)
     snprintf(out_path, sizeof out_path, "%s/trip-out.txt", work_dir);
 
     /* Every feature the format has: statics, a comparator with its
-     * threshold, a gatherer, an iterator, fan-out. */
+     * threshold, an iterator, fan-out. The gatherer that used to sit
+     * here is gone with the pull path (issue 210); boost's second
+     * input is a static now, which lands the same 14 and exercises
+     * the same round trip. */
     snprintf(map_text, sizeof map_text,
         "statics\n"
         "  0 = 5\n"
         "  1 = \"%s\"\n"
+        "  2 = 7\n"
         "first seven p\n"
         "  out 0 - judge.0\n"
-        "fresh seven p\n"
         "judge keep c\n"
         "  in 1 $0\n"
         "  out 2 - boost.0\n"
         "boost add p\n"
-        "  in 1 fresh\n"
+        "  in 1 $2\n"
         "  out 0 - deal.0\n"
         "deal keep i\n"
         "  out 0 - sink.1\n"
@@ -259,63 +272,6 @@ static void test_rewire_mid_run(void)
 }
 /* }}} */
 
-/* {{{ test_joint_cycle_refused() */
-static map_t *race_map;
-static _Atomic int race_refusals;
-
-static void *edge_one(void *arg)
-{
-    (void)arg;
-    if (map_rewire_gather(race_map, 2, 0, 3) != 0)
-        race_refusals++;
-    return NULL;
-}
-
-static void *edge_two(void *arg)
-{
-    (void)arg;
-    if (map_rewire_gather(race_map, 3, 0, 2) != 0)
-        race_refusals++;
-    return NULL;
-}
-
-static void test_joint_cycle_refused(void)
-{
-    enum { ROUNDS = 50 };
-    int ever_refused_exactly_one = 1;
-    for (int r = 0; r < ROUNDS; r++) {
-        /* Stations 2 and 3 each already gather from a harmless leaf,
-         * so each is a legal gather source (no ring inputs). One
-         * thread repoints 2 to pull from 3; the other repoints 3 to
-         * pull from 2. Each edge alone is legal; together they are a
-         * call that never returns. Under the one rewiring lock,
-         * exactly one must lose. */
-        race_map = map_create(4);
-        map_place_box(race_map, 0, "seven", STATION_PLAIN);
-        map_place_box(race_map, 1, "seven", STATION_PLAIN);
-        map_place_box(race_map, 2, "double_it", STATION_PLAIN);
-        map_place_box(race_map, 3, "double_it", STATION_PLAIN);
-        map_slot_gather(race_map, 2, 0, 0);
-        map_slot_gather(race_map, 3, 0, 1);
-
-        race_refusals = 0;
-        pthread_t t1, t2;
-        pthread_create(&t1, NULL, edge_one, NULL);
-        pthread_create(&t2, NULL, edge_two, NULL);
-        pthread_join(t1, NULL);
-        pthread_join(t2, NULL);
-
-        if (race_refusals != 1)
-            ever_refused_exactly_one = 0;
-        map_destroy(race_map);
-    }
-    check(ever_refused_exactly_one,
-          "of two individually-legal, jointly-cyclic edges, exactly one "
-          "was refused, every round");
-    printf("  %d rounds of racing edges: always exactly one refusal\n",
-           ROUNDS);
-}
-/* }}} */
 
 int main(void)
 {
@@ -330,7 +286,6 @@ int main(void)
     test_station_counts();
     test_round_trip();
     test_rewire_mid_run();
-    test_joint_cycle_refused();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);
     if (system(command) != 0)

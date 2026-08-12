@@ -44,8 +44,6 @@ void map_dump(map_t *m, FILE *out)
     fprintf(out, "# dumped from the live station table — what the engine is\n");
     fprintf(out, "# actually running, which is not necessarily what any file\n");
     fprintf(out, "# said. derived facts appear as comments.\n");
-    if (m->gather_depth > 0)
-        fprintf(out, "# deepest gather chain: %d\n", m->gather_depth);
 
     if (m->n_statics > 0) {
         fprintf(out, "\nstatics\n");
@@ -75,11 +73,6 @@ void map_dump(map_t *m, FILE *out)
             case SLOT_STATIC:
                 fprintf(out, "  in %d $%d   # %s, %d bytes\n", j,
                         sl->static_id,
-                        sl->type_name ? sl->type_name : "?", sl->elem_size);
-                break;
-            case SLOT_GATHER:
-                fprintf(out, "  in %d %s   # %s, %d bytes, pulled\n", j,
-                        m->station_names[sl->source],
                         sl->type_name ? sl->type_name : "?", sl->elem_size);
                 break;
             case SLOT_RING:

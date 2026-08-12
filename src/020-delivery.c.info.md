@@ -19,11 +19,12 @@ never runs under a station's lock.
 Three tables, each indexed by a kind, each a row per kind rather
 than a branch per case:
 
-- **slot_filled[slot kind]** — ring: head differs from tail;
-  gatherer and static: always yes.
+- **slot_filled[slot kind]** — ring: head differs from tail; static:
+  always yes.
 - **slot_claim_locked[slot kind]** — ring: pop under the mutex; a
   null row means "resolved during task construction, outside the
-  lock" (gatherers and statics, phase 4).
+  lock" (statics, so the statics table's lock never nests inside a
+  station's).
 - **route_choose[station kind]** — consulted at exactly one moment,
   on the way out: plain returns its only port; comparator and
   iterator rows fail loudly until phase 5 fills them.

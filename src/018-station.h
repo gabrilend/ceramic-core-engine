@@ -27,17 +27,30 @@
 #include "011-pool.h"
 
 /*
- * The three slot kinds (issue 202). The tag is stored, never
- * inferred: asking "is my upstream input-less?" on every readiness
- * check would chase an index to answer a question that cannot change
- * while the program runs. Gatherers and statics activate in phase 4;
- * the rows exist from the start so adding them is a row, not a
- * restructure.
+ * The slot kinds (issue 202). The tag is stored, never inferred:
+ * asking "is my upstream input-less?" on every readiness check would
+ * chase an index to answer a question that cannot change while the
+ * program runs.
+ *
+ * There were three. The gatherer — a slot whose value was produced by
+ * running its upstream box inline at the moment a task was assembled
+ * — is gone, and the reasoning is kept in
+ * docs/implementation-notes/056-no-pull-path.md rather than repeated
+ * here. What it bought was a value fresh at the moment of use; what
+ * it cost was user code running on a thread that was in the middle of
+ * assembling someone else's task, and a queue depth nothing kept in
+ * step with the station's other ports. Writing a static now runs the
+ * ordinary readiness check on its station, which is what replaced it
+ * (issue 210).
+ *
+ * The numbering closed up rather than leaving a hole where the
+ * gatherer was, because nothing outside this file ever saw these as
+ * numbers — the map file spells a slot's kind as text, and the dump
+ * writes text back.
  */
 enum slot_kind {
     SLOT_RING    = 0,
-    SLOT_GATHER  = 1,
-    SLOT_STATIC  = 2,
+    SLOT_STATIC  = 1,
     SLOT_KIND_COUNT
 };
 
@@ -55,11 +68,14 @@ enum station_kind {
 
 /* {{{ struct slot */
 /*
- * One input slot. Which fields matter depends on the kind:
- * a ring buffer uses storage/capacity/head/tail, a gatherer uses
- * source, a static uses static_id. elem_size matters to all three —
- * cells are exactly the size of the parameter this slot feeds, which
- * is what makes a write a memcpy with no allocation on the hot path.
+ * One input slot. Which fields matter depends on the kind: a ring
+ * buffer uses storage/capacity/head/tail, a static uses static_id.
+ * elem_size matters to both — cells are exactly the size of the
+ * parameter this slot feeds, which is what makes a write a memcpy
+ * with no allocation on the hot path.
+ *
+ * The `source` field went with the gatherer (issue 210): it held the
+ * upstream station a slot pulled from, and nothing pulls now.
  */
 typedef struct slot {
     unsigned char kind;
@@ -68,7 +84,6 @@ typedef struct slot {
     int   capacity;
     int   head;
     int   tail;
-    int   source;     /* gatherer only — upstream station index (phase 4) */
     int   static_id;  /* static only — statics table entry (phase 4) */
 
     /* The type this slot feeds, as text from the registry — what
@@ -144,7 +159,6 @@ typedef struct station {
     _Atomic long runs;           /* tasks of this station completed */
     _Atomic long produced;       /* tasks its outputs made due elsewhere */
     _Atomic long box_ns;         /* time inside the box function */
-    _Atomic long gather_ns;      /* gather time, charged to this puller */
     _Atomic long mutex_wait_ns;  /* time deliverers waited on the mutex */
 } station_t;
 /* }}} */
@@ -181,10 +195,6 @@ typedef struct map {
     static_entry_t *statics;
     int             n_statics;
     pthread_mutex_t statics_mutex;
-
-    /* The deepest gather chain seen while wiring — the worst-case
-     * inline work a worker does assembling one task (issue 404). */
-    int gather_depth;
 
     /* How many stations the seed sweep enqueued (issue 605). Zero
      * on hand-built maps that seed by delivering. */
@@ -322,23 +332,6 @@ void sora_static_write(int id, const void *bytes, int size);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
-/* The pull path (issues 403, 404). Lives in 034-gather.c.            */
-/* ------------------------------------------------------------------ */
-
-/* {{{ map_slot_gather() */
-/*
- * Convert a slot to a gatherer: its value is produced on demand by
- * running the named upstream station inline at task assembly. The
- * upstream must have no ring-buffer slots (nothing could ever fill
- * them mid-gather), and the connection is refused if it would close
- * a gather cycle — a cycle here is a call that never returns,
- * surfacing as a bare segfault, so it is caught at wiring time when
- * it can still say two station numbers out loud.
- */
-void map_slot_gather(map_t *m, int station, int slot, int source_station);
-/* }}} */
-
-/* ------------------------------------------------------------------ */
 /* Internal joints between the engine's files. Not part of the       */
 /* surface a map author touches.                                      */
 /* ------------------------------------------------------------------ */
@@ -349,12 +342,13 @@ void map_slot_gather(map_t *m, int station, int slot, int source_station);
 port_t *station_port(station_t *s, int index);
 /* }}} */
 
-/* {{{ static_claim() / gather_claim() — task-build resolution */
-/* Called by task construction, outside the station's mutex: a
- * static claim is a locked copy from the table; a gather claim runs
- * the upstream box inline on the assembling thread's own stack. */
+/* {{{ static_claim() — task-build resolution */
+/* Called by task construction, outside the station's mutex: a locked
+ * copy from the statics table, so that table's lock never nests
+ * inside a station's. It is the only kind still resolved here now
+ * that nothing is gathered; ring values were already claimed under
+ * the mutex before the task was built. */
 void static_claim(map_t *m, const slot_t *sl, void *into);
-void gather_claim(map_t *m, const slot_t *sl, void *into);
 /* }}} */
 
 /* {{{ map_statics_free() — teardown joint */

@@ -103,24 +103,33 @@ static void handle_in(parse_state_t *st, const char *rest)
         die_parse(st->path, st->line, "expected a slot number after 'in'");
     if (!ref[0])
         die_parse(st->path, st->line,
-                  "expected '$entry' or a station name after the slot number");
+                  "expected '$entry' after the slot number");
     if (extra[0])
         die_parse(st->path, st->line, "unexpected trailing words on an 'in' line");
+
+    /* An 'in' line used to take either form: '$entry' named a static,
+     * and a bare station name named a gather source. Nothing is
+     * gathered now (issue 210), so the bare name is refused rather
+     * than quietly reinterpreted — an old map file saying it meant
+     * something the engine no longer does, and reading it as anything
+     * else would run a program nobody wrote. */
+    if (ref[0] != '$')
+        die_parse(st->path, st->line,
+                  "expected '$entry'; a bare station name here meant "
+                  "'gather from that station', and there is no pull path "
+                  "any more");
 
     desc_input_t *in = need(calloc(1, sizeof *in), st->path, st->line);
     in->slot = slot;
     in->line = st->line;
-    if (ref[0] == '$') {
-        /* The dollar is technically unnecessary — a static reference
-         * is a number and a source is a name — but 'in 1 0' reading
-         * as "static entry zero" is not something anyone will guess
-         * a year from now (issue 601). */
-        in->is_static = 1;
-        if (!parse_number(ref + 1, &in->static_id))
-            die_parse(st->path, st->line, "expected a number after '$'");
-    } else {
-        in->gather_source = copy_string(ref, st->path, st->line);
-    }
+
+    /* The dollar is technically unnecessary now that it is the only
+     * form — but 'in 1 0' reading as "static entry zero" is not
+     * something anyone will guess a year from now (issue 601), and
+     * it is what tells an old map file apart from a new one. */
+    in->is_static = 1;
+    if (!parse_number(ref + 1, &in->static_id))
+        die_parse(st->path, st->line, "expected a number after '$'");
 
     desc_input_t **tail = &st->current->inputs;
     while (*tail)
@@ -323,7 +332,6 @@ void mapfile_free(map_description_t *d)
         desc_input_t *in = s->inputs;
         while (in) {
             desc_input_t *next = in->next;
-            free(in->gather_source);
             free(in);
             in = next;
         }

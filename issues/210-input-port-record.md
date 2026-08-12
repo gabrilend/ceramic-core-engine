@@ -24,16 +24,41 @@ deliberately rather than as a side effect.
 ## Current behavior
 
 An input port carries a kind tag and the fields that kind needs, with
-the fields for the other kinds sitting unused: storage, capacity, and
-two indices for a ring buffer; an upstream station index for a
-gatherer; a table entry number for a static.
+the fields for the other kind sitting unused: storage, capacity, and
+two indices for a ring buffer; a table entry number for a static.
 
-**One of those kinds is being removed entirely.** Nothing is pulled any
-more — see
-[056](../docs/implementation-notes/056-no-pull-path.md) — so the
-gatherer tag, the upstream index, and everything that read them are
-going. What remains is a ring buffer, a static, and the state of not
-being configured at all.
+**Step 1 is done: the gatherer is gone.** Nothing is pulled any more —
+see [056](../docs/implementation-notes/056-no-pull-path.md). The tag,
+the upstream-station field, the pull module, the inline execution of a
+box during task assembly, the cycle walk, the runtime gather-repoint
+operation, the gather timing charged to the puller, and the loader's
+three gather-shaped validations all left together. The tag's numbering
+closed up rather than keeping a hole, because nothing outside the
+station header ever saw a slot kind as a number.
+
+**An old map file is refused rather than reinterpreted.** An input
+line's two forms differed by one character — `in 0 $3` bound a static,
+`in 0 reader` gathered — so a file written for the old engine would
+otherwise have loaded and run as something its author never wrote. The
+reader now demands the dollar and names what the bare form used to
+mean.
+
+**What remains** is a ring buffer, a static, and — still to be built —
+the state of not being configured at all.
+
+**One property was lost rather than relocated, and it is worth
+knowing about before somebody goes looking for it.** Runtime rewiring
+takes one lock across validating an edge and installing it, because
+two threads each adding an individually legal edge could produce an
+illegal pair — two gather edges that were separately fine and jointly
+a cycle. There was a test proving exactly one of the two racing
+threads was refused, every round, and it is gone. **No two legal
+edges can combine into an illegal pair any more**, because every
+surviving rewiring rule is a property of one edge and the fixed shape
+of a station. The lock still earns its place serialising list surgery;
+it no longer defends a whole-graph invariant, because there is not one.
+If any future rule is about the graph rather than the edge, that test
+comes back with it.
 
 **Converting a port between kinds destroys and rebuilds rather than
 switching.** Both conversion paths in the source do the same three
@@ -353,13 +378,14 @@ error made much earlier.
   hardware, and software that stops when the memory under it stops is
   behaving correctly rather than lacking a feature.
 
-  **This becomes true rather than being true.** There is one place
-  today where user code runs inside the claim walk: a gather slot
-  invokes its upstream box inline, on the claiming thread, while cells
-  are held. A box that crashes there really does strand them. That is
-  the pull path, and removing it is what closes the window — so the
-  concern is real, and it belongs to gathering, which is going, rather
-  than to the port record, which is staying.
+  **This became true rather than being true, and now it is true.**
+  There was one place where user code ran inside the claim walk: a
+  gather slot invoked its upstream box inline, on the claiming thread,
+  while cells were held, so a box that crashed there really did strand
+  them. That was the pull path, and removing it is what closed the
+  window. Step 1 removed it, so nothing that can die is able to get
+  into the window any more, and the answer above rests on the engine
+  as it is rather than on the engine as it is going to be.
 
   A box that crashes while it *runs* is still an event worth having an
   answer for, but it cannot strand a cell, because by then it holds

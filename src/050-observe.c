@@ -77,9 +77,14 @@ void map_report_buffers(map_t *m, FILE *out)
 /* {{{ the three orderings — a dispatch table of comparators */
 static map_t *sorting_map;   /* qsort has no context argument */
 
+/* Time attributable to a station's own work. This used to add the
+ * gather time charged to it as a puller, because a station that
+ * pulled paid for its upstream's run on its own thread and hiding
+ * that would have mis-ranked it (issue 702). Nothing pulls now
+ * (issue 210), so the box's own time is the whole of it. */
 static long station_time(const station_t *s)
 {
-    return s->box_ns + s->gather_ns;
+    return s->box_ns;
 }
 
 static int by_time(const void *a, const void *b)
@@ -139,8 +144,8 @@ void map_report_stations(map_t *m, FILE *out, int order)
                 station_label(m, i, fallback, sizeof fallback),
                 (long)s->runs, (long)s->produced);
 #ifdef SORA_STATS
-        fprintf(out, " box %8.2fms  gather %8.2fms  waited %8.2fms",
-                s->box_ns / 1e6, s->gather_ns / 1e6, s->mutex_wait_ns / 1e6);
+        fprintf(out, " box %8.2fms  waited %8.2fms",
+                s->box_ns / 1e6, s->mutex_wait_ns / 1e6);
 #endif
         fprintf(out, "\n");
     }

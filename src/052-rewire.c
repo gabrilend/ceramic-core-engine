@@ -4,10 +4,14 @@
  * What this is: issue 704, the feature the whole design has been
  * quietly preparing for. Wires hold station indices rather than
  * addresses; stations never move; delivery snapshots destination
- * lists under the station's mutex; the cycle check runs when a
- * connection is made rather than when it is traversed. Each of those
- * was chosen partly for this moment, and this file is the debt being
- * redeemed.
+ * lists under the station's mutex. Each of those was chosen partly
+ * for this moment, and this file is the debt being redeemed.
+ *
+ * A fourth preparation was here and is gone: the gather cycle check
+ * ran when a connection was made rather than when it was traversed,
+ * and repointing a gather wire at runtime was this file's third
+ * operation. The pull path was removed in issue 210, so what remains
+ * is connecting and disconnecting.
  *
  * How it does it, in general terms: one rewiring lock makes edge
  * validation and list mutation a single operation — two threads each
@@ -45,22 +49,6 @@ static int station_kind_port_limit(unsigned char kind)
         [STATION_PLAIN] = 1, [STATION_COMPARATOR] = 3, [STATION_ITERATOR] = 0,
     };
     return kind < STATION_KIND_COUNT ? limits[kind] : 1;
-}
-/* }}} */
-
-/* {{{ walk_reaches_gather() */
-/* The same forward walk the loader uses (issue 404), reused here
- * under the rewiring lock. */
-static int walk_reaches_gather(map_t *m, int from, int target)
-{
-    if (from == target)
-        return 1;
-    station_t *s = &m->stations[from];
-    for (int i = 0; i < s->n_slots; i++)
-        if (s->slots[i].kind == SLOT_GATHER
-            && walk_reaches_gather(m, s->slots[i].source, target))
-            return 1;
-    return 0;
 }
 /* }}} */
 
@@ -190,74 +178,3 @@ int map_rewire_disconnect(map_t *m, int from_station, int port,
 }
 /* }}} */
 
-/* {{{ map_rewire_gather() */
-/*
- * Repoint or create a gather wire at runtime. The joint-cycle race
- * is the reason this exists as more than a wrapper: the walk and the
- * conversion happen under the one rewiring lock, so of two threads
- * adding edges that are individually legal and jointly a cycle,
- * exactly one is refused.
- */
-int map_rewire_gather(map_t *m, int station, int slot, int source_station)
-{
-    pthread_mutex_lock(&m->rewire_mutex);
-
-    if (station < 0 || station >= m->n_stations
-        || source_station < 0 || source_station >= m->n_stations) {
-        pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("a station index outside the table");
-    }
-    station_t *s = &m->stations[station];
-    if (slot < 0 || slot >= s->n_slots) {
-        pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("a slot the box does not have");
-    }
-    slot_t *sl = &s->slots[slot];
-    if (sl->kind != SLOT_RING && sl->kind != SLOT_GATHER) {
-        pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("only a buffer or an existing gather slot can gather");
-    }
-    station_t *src = &m->stations[source_station];
-    if (!src->call || src->out_size != sl->elem_size) {
-        pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("the source returns a different size than the slot takes");
-    }
-    for (int j = 0; j < src->n_slots; j++) {
-        if (src->slots[j].kind == SLOT_RING) {
-            pthread_mutex_unlock(&m->rewire_mutex);
-            return refuse("the source has buffered inputs — gathering runs "
-                          "inline and cannot wait");
-        }
-    }
-    if (walk_reaches_gather(m, source_station, station)) {
-        char message[192];
-        const char *a = m->station_names ? m->station_names[station] : NULL;
-        const char *b = m->station_names ? m->station_names[source_station] : NULL;
-        if (a && b)
-            snprintf(message, sizeof message,
-                     "'%s' pulling from '%s' would close a gather cycle — a "
-                     "call that never returns", a, b);
-        else
-            snprintf(message, sizeof message,
-                     "station %d pulling from station %d would close a gather "
-                     "cycle — a call that never returns", station, source_station);
-        pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse(message);
-    }
-
-    /* The conversion, under the station's own mutex so no readiness
-     * walk sees a slot mid-change. */
-    pthread_mutex_lock(&s->mutex);
-    free(sl->storage);
-    sl->storage = NULL;
-    sl->capacity = 0;
-    sl->head = 0;
-    sl->tail = 0;
-    sl->kind = SLOT_GATHER;
-    sl->source = source_station;
-    pthread_mutex_unlock(&s->mutex);
-
-    pthread_mutex_unlock(&m->rewire_mutex);
-    return 0;
-}
-/* }}} */
