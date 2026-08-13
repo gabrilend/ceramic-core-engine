@@ -1,6 +1,6 @@
 # Conversation Summary: aee72b0d-cb15-44fd-b161-ed51af0dc6e2
 
-Generated on: 2026-08-12 12:03:07
+Generated on: 2026-08-12 20:11:09
 
 --------------------------------------------------------------------------------
 
@@ -1490,6 +1490,278 @@ or break the remaining steps into sub-issues first? My read is that steps 4–7
 (the per-cell state machine through paged growth) are one coherent unit that
 shouldn't be split, but steps 9–10 (the single construction surface, optional
 parameters) are separable work that could stand as their own sub-issue.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 4
+
+Sounds like we need to break issue 210 into sub-issues. Can you do that, and
+make the first 210a issue the stuff you just did, and complete it with a commit?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 4
+
+Breaking it up. Let me match the house style for a completed issue first.
+
+
+No sub-issue precedent yet — 210a will be the first. Let me see what points at
+210 before I restructure it.
+
+
+Sixteen references point at `210-input-port-record.md`, so the parent keeps that
+path and the children hang off it. Rewriting it as the umbrella now.
+
+
+Now the parent.
+
+
+Now 210a — the one that's done.
+
+
+Now the remaining seven children.
+
+
+Now moving 210a to completed and updating the phase progress.
+
+
+The links in 210a were written for `issues/`; now that it's in `completed/` they
+need re-basing. Let me check the convention.
+
+
+Pre-existing link rot in `completed/` — some files use `../docs/`, which
+resolves wrong from there. Fixing 210a's links correctly.
+
+
+Every link resolves. Now the phase progress file.
+
+
+Now re-pointing references that name a specific mechanism at the child that owns
+it — starting with 710, whose blocker just changed.
+
+
+Now verifying every link in the new files resolves before committing.
+
+
+The docs generator makes a page per issue — let me make sure it handles the
+letter-suffixed names.
+
+
+All 106 pages regenerated — and this also catches up HTML that my previous
+commit left stale. Verifying the code is still green before committing.
+
+
+Transcripts regenerated again — folding them in as you asked.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 5
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 5
+
+No response requested.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 6
+
+please continue
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 6
+
+Done — working tree clean, tests green.
+
+
+## The split
+
+
+Issue 210 stays where it was as a **parent**, which matters practically: sixteen
+documents across `docs/` and `issues/` link to it, and all of those stay true.
+It now holds only what no single child owns — the vocabulary (port versus
+slot), the shared design, and the two open questions that were answered once for
+the whole family.
+
+
+Eight children, along seams that were already in the thirteen steps:
+
+
+| child | what it builds | state |
+
+|---|---|---|
+
+| **210a** the pull path removed | the gatherer kind and everything reading it | **complete** |
+
+| **210b** the port record | both storages, three-value tag, cells for every port at instantiation | open |
+
+| **210c** a state on every cell | four states, one atomic swap each; then copies leave the lock | open |
+
+| **210d** the claim takes no lock | ascending order, roll back on first empty, scan from a hint | open |
+
+| **210e** growth adds a page | append rather than copy | open |
+
+| **210f** changing what a port is | a field write, waiting values left where they sit | open |
+
+| **210g** one way to build a station | one configuration surface | open |
+
+| **210h** optional parameters | a parameter a box can do without | open |
+
+
+**The order is real rather than tidy.** 210c→d→e must go in sequence because
+each removes the reason the next was hard: per-cell states are what make a
+lockless claim *expressible*, and a claim that scans instead of computing a
+position is what makes append-growth safe. 210f and 210g branch off 210b and can
+run alongside.
+
+
+One thing worth flagging from writing 210e: **the existing growth doesn't merely
+get better, it stops being correct** once the claim goes lockless. What made
+copy-and-unwrap safe was the mutex covering the whole copy, and 210d removes
+that mutex from the path. So d and e can't be separated by long.
+
+
+## On 210a's provenance
+
+
+Convention here is to write the ticket before the work. This one was written
+after, because you asked for 210 and we split it retroactively. I wrote it as a
+blueprint rather than a log — someone rebuilding from the completed tickets
+alone would arrive at the same absence, including the one judgment actually made
+during the work (refusing old map files rather than reinterpreting them). But
+it's a deviation and you should know it happened.
+
+
+## New open questions
+
+
+Writing the children surfaced five that weren't in the original:
+
+
+- **210b, 210h** — how an unconfigured port is spelled in a map file. Every
+  natural spelling reads like a value rather than an absence.
+
+- **210c** — the baseline measurement for the delivery path under wide fan-in
+  has to be taken *before* the work, not at the end, or the improvement is a
+  claim rather than a finding. Phase 4 already learned once that a cost measured
+  in the wrong place measures nothing.
+
+- **210d** — a livelock test that passes proves nothing; it has to be run once
+  with the ordering rule deliberately broken and seen to fail.
+
+- **210e** — equal pages or growing pages. The old buffer doubled, so deep
+  backlogs cost few allocations, and that's worth not losing by accident.
+
+- **210f** — whether a port that was static, became a ring, and became static
+  again still holds its old value.
+
+- **210g** — whether hand placement survives at all, which depends on whether
+  its callers (phase 2's tests) can place by name instead.
+
+
+## Two things I noticed but didn't fix
+
+
+**Link rot in `completed/`.** Some completed issues use `../docs/…` where they
+need `../../docs/…` — 407 and 203 have it, 604 gets it right in one place
+and wrong in another. I made 210a's links correct and verified all ten resolve,
+but the pre-existing rot spans many files and would have swamped this commit.
+The HTML generator reports zero unresolved references, so it's resolving those
+differently than the filesystem does — worth a look on its own.
+
+
+**710 is partly unblocked.** Its phase 7 scene needs only 309 (types by width),
+not the statics work, so one of the three broken demos could be restored now
+rather than waiting. I updated its steps to say so.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 7
+
+  Convention here is to write the ticket before the work. This one was written
+  after, because you asked for 210 and we split it retroactively. I wrote it as
+  a
+
+  blueprint rather than a log — someone rebuilding from the completed tickets
+  alone would arrive at the same absence, including the one judgment actually
+  made
+
+  during the work (refusing old map files rather than reinterpreting them). But
+  it's a deviation and you should know it happened.
+
+
+
+issue files are actually intended to be blueprints rather than logs, and I'm
+pretty sure the claude.md file says so.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 7
+
+You're right, and the correction lands on both halves of what I said.
+
+
+Blueprint-not-log is the standing rule for every issue file — `CLAUDE.md` says
+it three ways ("not intended to record work," "not meant to be a record of
+completed work," "blueprints for creating the software, not work logs"). So
+writing 210a as a blueprint wasn't an accommodation I made for an awkward
+situation. It's just what an issue file is. Presenting it as a mitigating choice
+implied the default was otherwise.
+
+
+And the deviation I flagged was smaller than I made it sound, close to
+nonexistent. The rule is that work needs a blueprint before it starts — and it
+had one. Issue 210 existed, and its first implementation step was *"Remove the
+gatherer tag and everything reading it, following 056. This first, because every
+step below is smaller once it is gone."* That's the specification the work was
+done against. Splitting 210 afterwards changed which file holds that step; it
+didn't create work that was unspecified when it happened. Nothing was built
+without a plan.
+
+
+Let me confirm I didn't write that muddle into the files themselves.
+
+
+The only hit is inside 210d's open question about whether an inverted livelock
+test stays in the tree or survives as a note — about a test, not about
+provenance. The files themselves read as blueprints throughout, with no log
+framing to strip out.
+
+
+Where that leaves the plan you set: 210 was going to be one commit and then
+statics. It became eight children with one done, so "after 210 is done" is
+further off than when you said it. But 401 doesn't need all of 210 — it needs
+**210b**, the port record, for the port's own storage to bind a static into.
+
+
+Two things are true about 401 independently of that:
+
+
+- **It has stale content right now**, which I found earlier and haven't touched:
+  it still lists "a third may pull from a gatherer" as a port kind, still
+  explains sharing as "everyone who needs it gathers from it," and still
+  describes the formatter as walking a field table, which we replaced with
+  per-type generated code when we answered 408's questions. All three describe
+  machinery that no longer exists or was never going to.
+
+- **It can't be completed yet**, since the storage it spends is what 210b
+  builds.
+
+
+So the honest options are to fix 401's staleness now as a documentation
+correction — no issue file needed for that, by your own rule — and leave
+completion until 210b lands; or to build 210b first so 401 becomes completable
+and the two land together the way you originally wanted. Which would you rather?
 
 
 --------------------------------------------------------------------------------
