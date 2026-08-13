@@ -28,15 +28,25 @@ manufacturing parallelism for everyone else.
 
 **3. For each destination, take that station's mutex.**
 
-**4. Write the value into the slot.** `memcpy` of `elem_size` bytes
-into the cell at the tail index, then advance the tail. If advancing
-the tail would land on the head, the buffer grows first — see
-[002](002-stations-and-slots.md).
+**4. Write the value into the slot.** Search for an empty cell,
+starting where this port's write hint points and sweeping forward until
+it wraps back to where it began; take the first one that will move from
+empty to reserved, `memcpy` `elem_size` bytes into it, and publish it
+as ready. If the sweep finds nothing the buffer is genuinely full and
+grows first — see [002](002-stations-and-slots.md).
+
+The hint is read once and the sweep is bounded by it: at most every
+cell the port has, exactly one time each. Re-reading a hint that other
+workers keep pushing forward would let a searcher chase it, and a
+search that can be outrun is a search with no bound.
 
 **5. Run the readiness check, still holding the mutex.** Walk every
 port on this station and ask whether it holds a value. A ring buffer
-holds one if head and tail differ. A static always does, because its
-value is simply there and reading it does not consume it.
+holds one if its count of ready cells is above zero. A static always
+does, because its value is simply there and reading it does not consume
+it. A port with no source never does, so a station carrying one waits
+forever — which is what lets a station exist before anybody has
+finished wiring it.
 
 This same check is what a **write to a static** triggers — see
 [004](004-datapath-statics.md). It reaches this step from a different
@@ -49,8 +59,12 @@ destination. Nothing more happens; the value sits in the buffer waiting
 for its siblings.
 
 **6. If every slot is occupied, claim one value from each.** Ring
-buffer slots are popped — the value is copied out and the head advances,
-so the value is now spoken for and no other thread can claim it. If the
+buffer slots are popped — the same sweep as step 4 run the other way,
+looking for a ready cell and taking it to claimed, then copying the
+value out and releasing the cell as empty. Taking the cell is what
+makes the value spoken for: no other thread can claim it, because a
+cell moves out of ready exactly once. Which value a port yields is not
+promised to be the oldest, and [058](058-guarantees.md) says why. If the
 station is an iterator, its cursor advances now and the port it landed
 on is recorded, so that two tasks assembled moments apart go to
 different ports.

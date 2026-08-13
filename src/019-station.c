@@ -181,8 +181,9 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
          * behind and believe it. */
         sl->storage = calloc((size_t)sl->capacity, (size_t)sl->stride);
         if (!sl->storage) fail("out of memory for a ring buffer");
-        sl->head = 0;
-        sl->tail = 0;
+        sl->read_hint = 0;
+        sl->write_hint = 0;
+        sl->held = 0;
         sl->static_id = -1;
     }
 }
@@ -196,15 +197,15 @@ void map_slot_start_depth(map_t *m, int station, int slot, int cells)
     station_t *s = &m->stations[station];
     if (slot < 0 || slot >= s->n_slots)
         fail("setting the starting depth of a port the box does not have");
-    /* Two cells is the floor rather than one, because one spare cell
-     * is what distinguishes full from empty — a single-cell buffer
-     * would be permanently full and permanently empty at once. */
-    if (cells < 2)
-        fail("a ring buffer needs at least two cells — one is always spare, "
-             "so that head meeting tail can mean empty");
+    /* One cell is a legitimate depth. It used to take two, because a
+     * spare was held back so that head meeting tail could mean empty
+     * rather than full; a cell that carries its own state needs no
+     * such stand-in, and every cell is usable (issue 210c). */
+    if (cells < 1)
+        fail("a ring buffer needs at least one cell");
 
     slot_t *sl = &s->slots[slot];
-    if (sl->head != sl->tail)
+    if (sl->held != 0)
         fail("setting the starting depth of a port that already holds values "
              "— this is a starting depth, and the start has been and gone");
 
@@ -217,8 +218,8 @@ void map_slot_start_depth(map_t *m, int station, int slot, int cells)
     free(sl->storage);
     sl->storage = fresh;
     sl->capacity = cells;
-    sl->head = 0;
-    sl->tail = 0;
+    sl->read_hint = 0;
+    sl->write_hint = 0;
 }
 /* }}} */
 
@@ -367,12 +368,16 @@ int map_slot_depth(map_t *m, int station, int slot)
         fail("asking the depth of a slot that does not exist");
     slot_t *sl = &s->slots[slot];
 
+    /* A maintained count rather than index arithmetic (issue 210d):
+     * with values claimed wherever they sit, the distance between two
+     * indices stopped describing how many are waiting.
+     *
+     * A port that is not a buffer still answers, and answers honestly.
+     * A static reports whatever its cells were carrying when it
+     * stopped being a buffer, which is the truth — those values are
+     * waiting, and will be served if it becomes a buffer again. */
     pthread_mutex_lock(&s->mutex);
-    int depth;
-    if (sl->tail >= sl->head)
-        depth = sl->tail - sl->head;
-    else
-        depth = sl->tail + sl->capacity - sl->head;
+    int depth = sl->held;
     pthread_mutex_unlock(&s->mutex);
     return depth;
 }

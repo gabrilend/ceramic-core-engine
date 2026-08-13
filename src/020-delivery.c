@@ -64,14 +64,54 @@ static void die(const char *what, int station)
 /* Slot motion (issues 202, 203). Callers hold the station's mutex.   */
 /* ------------------------------------------------------------------ */
 
-/* {{{ slot_count_locked() */
-static int slot_count_locked(const slot_t *sl)
+/* {{{ slot_scan() */
+/*
+ * The scan (issue 210d). Start where the hint says, sweep forward,
+ * wrap, stop where you started; take the first cell that will move
+ * from `from` to `to`, and leave the hint pointing just past it.
+ * Returns the cell's index, or -1 for a sweep that found nothing.
+ *
+ * **The hint is read once**, and that is what bounds the work: the
+ * sweep visits at most every cell the port has, exactly one time
+ * each, and then gives up. Re-reading a hint that other workers keep
+ * pushing forward would let a reader chase it, and a scan that can be
+ * outrun is a scan with no bound.
+ *
+ * **Other workers move the hint while a sweep is in progress, and
+ * that is fine.** It is a hint, so a sweeper that started from a value
+ * now stale is not wrong, only slightly less lucky — it pays a few
+ * extra cells of walking. Nothing about correctness rests on the
+ * number being current; what rests on it is only how quickly a worker
+ * finds work.
+ *
+ * The write to the hint is a plain one and races with other writes to
+ * it. The worst outcome of losing that race is a hint pointing
+ * somewhere unhelpful, which costs a longer sweep next time. Making it
+ * atomic would buy nothing, because there is no value it could hold
+ * that would be wrong.
+ *
+ * One function serves both directions because a reader looking for a
+ * ready cell and a writer looking for an empty one are the same
+ * search with different names, and the ways they differ — which
+ * transition, which hint — are arguments rather than logic.
+ */
+static int slot_scan(slot_t *sl, int *hint, int from, int to)
 {
-    /* Two paths: tail ahead of head reads directly; tail wrapped
-     * behind adds one lap. */
-    if (sl->tail >= sl->head)
-        return sl->tail - sl->head;
-    return sl->tail + sl->capacity - sl->head;
+    int start = *hint;
+    if (start < 0 || start >= sl->capacity)
+        start = 0;
+
+    for (int i = 0; i < sl->capacity; i++) {
+        int c = start + i;
+        if (c >= sl->capacity)
+            c -= sl->capacity;
+        if (slot_cell_move(sl, c, from, to)) {
+            int next = c + 1;
+            *hint = next >= sl->capacity ? 0 : next;
+            return c;
+        }
+    }
+    return -1;
 }
 /* }}} */
 
@@ -79,12 +119,10 @@ static int slot_count_locked(const slot_t *sl)
 /*
  * Double the cells (issue 203). Only the storage the slot points at
  * is reallocated — never the slot, never the station — so every wire
- * and every in-flight value is untouched. The wrapped portion is
- * copied so the contents read contiguously from cell zero again.
+ * and every in-flight value is untouched.
  */
 static void slot_grow_locked(slot_t *sl)
 {
-    int held = slot_count_locked(sl);
     int new_capacity = sl->capacity * 2;
     /* Zeroed, so every cell past the ones carried over is empty
      * (issue 210c). The carried-over ones are published ready below. */
@@ -95,34 +133,52 @@ static void slot_grow_locked(slot_t *sl)
         abort();
     }
 
-    /* Value by value rather than in one or two block copies. The old
-     * storage's cells carry their states interleaved with their
-     * bytes, and the states are not what should be carried across —
-     * the fresh run is being *built* rather than moved, so each
-     * surviving value is written into an empty cell and published as
-     * ready, exactly as an ordinary arrival would be. Copying the
-     * bytes wholesale would carry the old states with them, and a
-     * cell that was mid-transition in the old array would arrive in
-     * the new one claiming to be mid-transition with nobody in it.
+    /* Value by value rather than in one or two block copies, and each
+     * one taken out of the old array before it is put into the new.
+     *
+     * The old cells carry their states interleaved with their bytes,
+     * and the states are not what should be carried across — the
+     * fresh run is being *built* rather than moved, so each surviving
+     * value is written into an empty cell and published as ready,
+     * exactly as an ordinary arrival would be. Copying the bytes
+     * wholesale would bring the old states with them.
+     *
+     * Claiming each cell on the way out is what identifies which ones
+     * held a value: only a ready cell will move, so the walk finds
+     * every value and nothing else. It also means the old array is
+     * left correctly emptied rather than merely abandoned, which
+     * costs nothing here and would be a real bug if this ever ran
+     * with anything else looking.
      *
      * Nothing else can be happening during this: the station's mutex
-     * is held for the whole of a growth, which is what makes it safe
-     * to walk cells one at a time here. Issue 210e removes both the
+     * is held for the whole of a growth. Issue 210e removes both the
      * copying and the need for that.
      */
-    for (int i = 0; i < held; i++) {
-        int from = (sl->head + i) % sl->capacity;
-        unsigned char *src = (unsigned char *)slot_cell(sl, from);
-        unsigned char *dst = fresh + (size_t)i * (size_t)sl->stride;
-        memcpy(dst, src, (size_t)sl->elem_size);
+    int placed = 0;
+    for (int c = 0; c < sl->capacity; c++) {
+        if (!slot_cell_move(sl, c, CELL_READY, CELL_CLAIMED))
+            continue;
+        unsigned char *dst = fresh + (size_t)placed * (size_t)sl->stride;
+        memcpy(dst, slot_cell(sl, c), (size_t)sl->elem_size);
         dst[sl->elem_size] = CELL_READY;
+        placed++;
+    }
+    if (placed != sl->held) {
+        fprintf(stderr, "delivery: growth found %d values in a port holding "
+                        "%d — the count and the cells disagree\n",
+                placed, (int)sl->held);
+        abort();
     }
 
     free(sl->storage);
     sl->storage = fresh;
     sl->capacity = new_capacity;
-    sl->head = 0;
-    sl->tail = held;
+    /* Values sit at the front of the fresh run and space follows
+     * them, so a reader should start at the front and a writer just
+     * past the values. Both are only hints; being wrong would cost a
+     * sweep, not a mistake. */
+    sl->read_hint = 0;
+    sl->write_hint = placed;
     sl->growths++;
 }
 /* }}} */
@@ -130,10 +186,23 @@ static void slot_grow_locked(slot_t *sl)
 /* {{{ slot_write_locked() */
 static void slot_write_locked(slot_t *sl, const void *value)
 {
-    /* An input buffer should never be full: grow before the tail can
-     * land on the head (issue 203). */
-    if ((sl->tail + 1) % sl->capacity == sl->head)
+    /* Look for somewhere to put it, and grow only if there is
+     * genuinely nowhere (issue 210d). This used to grow when the tail
+     * was one short of the head — a test on indices, which had to
+     * leave a cell spare so that the two meeting could mean empty
+     * rather than full. Asking the cells directly needs no spare and
+     * no arithmetic: a full buffer is one where nothing answers.
+     */
+    int c = slot_scan(sl, &sl->write_hint, CELL_EMPTY, CELL_RESERVED);
+    if (c < 0) {
         slot_grow_locked(sl);
+        c = slot_scan(sl, &sl->write_hint, CELL_EMPTY, CELL_RESERVED);
+        if (c < 0) {
+            fprintf(stderr, "delivery: a port with no free cell immediately "
+                            "after growing to %d cells\n", sl->capacity);
+            abort();
+        }
+    }
 
     /* The state machine, running for real (issue 210c) — while the
      * station's mutex still covers the copy, which is deliberate.
@@ -141,51 +210,50 @@ static void slot_write_locked(slot_t *sl, const void *value)
      * means a bug here shows up as a refused transition rather than
      * as a torn value.
      *
-     * Both transitions must win, because the mutex means nobody else
-     * is touching this port at all. A refusal is therefore not a lost
-     * race — there is no other racer — but a disagreement between the
-     * indices and the states, which is an engine bug and is worth
-     * stopping for rather than papering over. */
-    if (!slot_cell_move(sl, sl->tail, CELL_EMPTY, CELL_RESERVED)) {
-        fprintf(stderr, "delivery: writing into a cell that was not empty — "
-                        "the tail index and the cell states disagree\n");
-        abort();
-    }
-    memcpy(slot_cell(sl, sl->tail), value, (size_t)sl->elem_size);
-    if (!slot_cell_move(sl, sl->tail, CELL_RESERVED, CELL_READY)) {
+     * The scan already won this cell, so publishing it cannot fail
+     * for any reason but somebody else having touched a cell that was
+     * this thread's alone — an engine bug, and worth stopping for
+     * rather than papering over. */
+    memcpy(slot_cell(sl, c), value, (size_t)sl->elem_size);
+    if (!slot_cell_move(sl, c, CELL_RESERVED, CELL_READY)) {
         fprintf(stderr, "delivery: publishing a cell this thread had "
                         "reserved, and somebody else had moved it\n");
         abort();
     }
-    sl->tail = (sl->tail + 1) % sl->capacity;
 
-    int held = slot_count_locked(sl);
+    int held = ++sl->held;
     if (held > sl->high_water)
         sl->high_water = held;
 }
 /* }}} */
 
 /* {{{ slot_pop_locked() */
-static void slot_pop_locked(slot_t *sl, void *into)
+/*
+ * The mirror of the write: find a ready cell, copy out, release it.
+ * Returns whether it got one — which under the mutex it always will,
+ * because the readiness walk asked first, but which becomes a real
+ * answer the moment the lock comes off and the claim walk has to be
+ * able to roll back.
+ *
+ * The reader is finished with the cell the moment the copy lands in
+ * the caller's buffer — the box does not run until a worker picks the
+ * task up later, reading from the task and holding no cell at all.
+ * That is why nothing that can die is ever inside this window.
+ */
+static int slot_pop_locked(slot_t *sl, void *into)
 {
-    /* The mirror of the write: take the cell, copy out, release it.
-     * The reader is finished with the cell the moment the copy lands
-     * in the caller's buffer — the box does not run until a worker
-     * picks the task up later, reading from the task and holding no
-     * cell at all. That is why nothing that can die is ever inside
-     * this window. */
-    if (!slot_cell_move(sl, sl->head, CELL_READY, CELL_CLAIMED)) {
-        fprintf(stderr, "delivery: claiming a cell that was not ready — "
-                        "the head index and the cell states disagree\n");
-        abort();
-    }
-    memcpy(into, slot_cell(sl, sl->head), (size_t)sl->elem_size);
-    if (!slot_cell_move(sl, sl->head, CELL_CLAIMED, CELL_EMPTY)) {
+    int c = slot_scan(sl, &sl->read_hint, CELL_READY, CELL_CLAIMED);
+    if (c < 0)
+        return 0;
+
+    memcpy(into, slot_cell(sl, c), (size_t)sl->elem_size);
+    if (!slot_cell_move(sl, c, CELL_CLAIMED, CELL_EMPTY)) {
         fprintf(stderr, "delivery: releasing a cell this thread had claimed, "
                         "and somebody else had moved it\n");
         abort();
     }
-    sl->head = (sl->head + 1) % sl->capacity;
+    sl->held--;
+    return 1;
 }
 /* }}} */
 
@@ -199,7 +267,12 @@ static void slot_pop_locked(slot_t *sl, void *into)
 /* {{{ filled: ring / static */
 static int ring_filled(const slot_t *sl)
 {
-    return sl->head != sl->tail;
+    /* A maintained count rather than two indices differing. The
+     * indices stopped being able to answer this when values began
+     * being claimed wherever they sat rather than from a computed
+     * position (issue 210d) — the distance between a head and a tail
+     * describes a contiguous run, and there is no longer one. */
+    return sl->held > 0;
 }
 
 static int static_filled(const slot_t *sl)
@@ -244,7 +317,17 @@ static int (*const slot_filled[SLOT_KIND_COUNT])(const slot_t *) = {
  */
 static void ring_claim(slot_t *sl, void *into)
 {
-    slot_pop_locked(sl, into);
+    /* Under the mutex the readiness walk has already established that
+     * this port holds something and nobody can have taken it since,
+     * so a scan that comes back empty-handed means the count and the
+     * cells disagree. That stops being an engine bug and becomes an
+     * ordinary lost race when the lock comes off, at which point this
+     * row grows the roll-back that issue 210d designs. */
+    if (!slot_pop_locked(sl, into)) {
+        fprintf(stderr, "delivery: a port that answered ready had no ready "
+                        "cell when asked for one\n");
+        abort();
+    }
 }
 
 static void none_claim(slot_t *sl, void *into)

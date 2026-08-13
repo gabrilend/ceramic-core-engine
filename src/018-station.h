@@ -76,10 +76,11 @@ enum slot_kind {
  * slow. A port that knows better can say so through
  * map_slot_start_depth.
  *
- * One cell is left spare so head-equals-tail can mean empty, which is
- * why the usable depth is one less than this. That spare disappears
- * with the head-and-tail scheme itself in issue 210c, where a cell's
- * own state says whether it is occupied.
+ * Every cell is usable. A spare one used to be held back so that
+ * head-equals-tail could mean empty rather than full, and with a
+ * state on every cell there is nothing left for it to disambiguate —
+ * a full buffer is one where no cell answers empty, which is a
+ * question that gets asked directly now (issue 210c).
  */
 #define SLOT_DEFAULT_CAPACITY 10
 
@@ -176,8 +177,35 @@ typedef struct slot {
      * rounding is the only arithmetic on the delivery path that is
      * not a single operation. */
     int   stride;
-    int   head;
-    int   tail;
+
+    /* Where to start looking, for a reader and for a writer (issue
+     * 210d). These replaced a head and a tail, and the difference is
+     * the whole of that issue: **a position must be exact and is
+     * therefore computed; a hint may be wrong and therefore is not.**
+     *
+     * A head index had to be right, because it was what said which
+     * cells were occupied — which meant maintaining it under
+     * exclusion, which meant the lock. A hint says only "somebody
+     * found a cell near here recently". A stale one costs a slightly
+     * longer scan and nothing else, so nothing has to be excluded to
+     * keep it true, because there is nothing about it that must be.
+     *
+     * They are ordinals into the port's cells rather than pointers,
+     * because storage is the one thing in this design that gets
+     * reallocated — a saved pointer means something else afterwards,
+     * while an ordinal keeps meaning what it meant. Same reason a
+     * wire is a pair of integers rather than an address.
+     */
+    int   read_hint;
+    int   write_hint;
+
+    /* How many cells are ready right now. Maintained rather than
+     * counted, because readiness asks this question on every single
+     * delivery and a scan to answer it would be the walk this design
+     * is trying to get rid of. Atomic because it stops being read
+     * under the mutex as the lock comes off the claim path. */
+    _Atomic int held;
+
     int   static_id;  /* static only — statics table entry (phase 4) */
 
     /* The type this slot feeds, as text from the registry — what

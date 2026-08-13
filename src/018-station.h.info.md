@@ -14,8 +14,10 @@ buffers grow.
 | kind | `unsigned char` | Ring buffer (0), static (1), or no source yet (2). Stored, never inferred. |
 | elem_size | `int` | Bytes per value; exactly the parameter's size. |
 | storage | `void *` | The ring's cells. Allocated at placement whatever the kind, and never freed until the map is. Reallocated on growth; the slot itself never moves. |
-| capacity | `int` | Cells allocated. One always spare, so usable is one less. Starts at ten unless the port was told otherwise. |
-| head, tail | `int` | Oldest value / next free cell. Equal means empty. |
+| capacity | `int` | Cells allocated, all of them usable. Starts at ten unless the port was told otherwise. |
+| stride | `int` | Bytes from one cell to the next: a value, its state, and padding to keep the next value aligned. |
+| read_hint, write_hint | `int` | Where a reader and a writer each start looking. Hints, not positions. |
+| held | `int`, atomic | Cells ready right now. |
 | static_id | `int` | Static only: statics-table entry (phase 4). Kept when the port is converted away, so a port that goes static, buffer, static reads the same entry. |
 | growths, high_water | `int` | How many doublings, and the deepest backlog — phase 7's reading. |
 
@@ -33,6 +35,21 @@ currently for, so changing a port's source is a field write rather
 than an allocation, and values already waiting in it are still there
 afterwards. A port that is a static all its life carries cells it
 never uses; that is paid once, at startup.
+
+**A cell says what is happening to it**: nothing here, a writer is
+filling me, the bytes have landed, a reader is emptying me. Every move
+between those names the state it starts from and is one atomic swap,
+so two threads can never own one cell and a move out of a state a cell
+is not in is refused. That is the mutual exclusion, per cell rather
+than per port, and it is what lets a reader *look* for a usable cell
+instead of computing where one must be — which in turn is what lets
+the copying leave the station's lock, and what will let a buffer grow
+by adding a page rather than copying.
+
+Cells are never cleared when released. Every write covers the full
+element size, so a stale value is always completely overwritten; the
+promise is not that a cell was cleaned but that its bytes are never
+read unless its state says ready.
 
 **destination** — one landing place: `{station int32, slot int32}`,
 linked. **port** — one exit: a linked list of destinations, itself

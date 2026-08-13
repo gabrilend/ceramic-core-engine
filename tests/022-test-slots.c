@@ -2,17 +2,35 @@
  * 022-test-slots.c — proves ring-buffer slots (issues 202, 203).
  *
  * What this is: the test that values of any size go into a slot and
- * come back out byte-identical and in order, across buffer growth
- * that begins from a wrapped ring — the state where the unwrap copy
- * would be wrong first.
+ * come back out byte-identical, and that none is lost or doubled,
+ * across buffer growth that begins from a wrapped ring — the state
+ * where the unwrap copy would be wrong first.
  *
  * How it does it, in general terms: a station pairing a large struct
  * with a small integer is fed through the public delivery call. The
  * ring is first wrapped by running a few pairs through, then flooded
  * on one side only so it must grow while wrapped, then completed on
- * the other side so every pair fires. The box itself checks that the
- * struct's fields agree with the integer it was paired with — a pair
- * formed out of order or a byte moved in the copy fails the check.
+ * the other side so every pair fires. The box checks that each struct
+ * is internally consistent — its three fields were manufactured from
+ * one seed, so a byte moved in the copy makes them disagree with each
+ * other — and the tallies afterwards check that every value delivered
+ * on each side arrived exactly once.
+ *
+ * **This test used to check the pairing too**, and no longer does.
+ * It asserted that serial *i* met parcel *i*: first in, first out,
+ * across every doubling. That promise is withdrawn — see the
+ * ordering entry in docs/058-guarantees.md, which explains why an
+ * order that was arbitrary to begin with was not worth the cost of
+ * keeping. A reader is about to scan for a usable cell rather than
+ * compute where the oldest one must be (issue 210d), and positional
+ * pairing goes with it.
+ *
+ * What is left is stronger than what went, and it is worth being
+ * clear about which is which. Tearing is the failure that matters:
+ * a value assembled from two different writes is silent corruption,
+ * and the struct's self-consistency catches it. Losing or doubling a
+ * value is the other one, and the tallies catch that. Neither of
+ * those was ever the ordering.
  */
 #include "018-station.h"
 
@@ -30,25 +48,43 @@ typedef struct parcel {
     int     serial;
 } parcel_t;
 
+enum { WARMUP = 3, FLOOD = 300, TOTAL = WARMUP + FLOOD };
+
 static _Atomic int pairs_checked;
 static _Atomic int pairs_wrong;
+/* Which parcel serials and which integers came out, so that losing a
+ * value or serving one twice is caught without anything being said
+ * about which met which. */
+static _Atomic int parcels_seen[TOTAL];
+static _Atomic int integers_seen[TOTAL];
 
 /* {{{ inspect() and its hand shim */
 /*
- * The box: confirms a parcel and its companion serial agree. Both
- * values were manufactured from one seed, so any disagreement means
- * the engine tore, reordered, or mispaired them.
+ * The box: confirms a parcel is internally consistent, and records
+ * both of the values it was handed.
+ *
+ * All three of a parcel's fields are manufactured from one seed, so
+ * they agree with each other or the engine tore the struct — which is
+ * the failure worth catching, and the one that stays catchable now
+ * that the parcel need not correspond to the integer beside it.
  * Hand shim in generator shape; deleted by issue 302.
  */
 static int inspect(parcel_t p, int serial)
 {
     char expect[24];
-    snprintf(expect, sizeof expect, "parcel-%d", serial);
-    int good = p.serial == serial
-            && p.weight == serial * 1.5
+    snprintf(expect, sizeof expect, "parcel-%d", p.serial);
+    int good = p.serial >= 0 && p.serial < TOTAL
+            && p.weight == p.serial * 1.5
             && strcmp(p.label, expect) == 0;
     pairs_checked++;
-    if (!good)
+    if (!good) {
+        pairs_wrong++;
+        return good;
+    }
+    parcels_seen[p.serial]++;
+    if (serial >= 0 && serial < TOTAL)
+        integers_seen[serial]++;
+    else
         pairs_wrong++;
     return good;
 }
@@ -77,8 +113,6 @@ static parcel_t make_parcel(int serial)
 
 int main(void)
 {
-    enum { WARMUP = 3, FLOOD = 300 };
-
     map_t *m = map_create(1);
     int sizes[2] = { sizeof(parcel_t), sizeof(int) };
     map_place(m, 0, inspect__call, STATION_PLAIN, 2, sizes, sizeof(int));
@@ -107,8 +141,9 @@ int main(void)
         exit(1);
     }
 
-    /* Now complete the pairs. Serial i must meet parcel i — first
-     * in, first out, across every doubling. */
+    /* Now complete the pairs. Which serial meets which parcel is not
+     * promised and is not checked; that every one of them is served
+     * exactly once is both. */
     for (int i = 0; i < FLOOD; i++) {
         int serial = WARMUP + i;
         map_deliver_value(m, 0, 1, &serial);
@@ -117,21 +152,32 @@ int main(void)
     pool_submitter_unregister(m->pool);
     pool_join(m->pool);
 
-    if (pairs_checked != WARMUP + FLOOD) {
+    if (pairs_checked != TOTAL) {
         fprintf(stderr, "%d pairs fired, expected %d\n",
-                (int)pairs_checked, WARMUP + FLOOD);
+                (int)pairs_checked, TOTAL);
         exit(1);
     }
     if (pairs_wrong != 0) {
-        fprintf(stderr, "%d pairs came through torn or out of order\n",
-                (int)pairs_wrong);
+        fprintf(stderr, "%d values came through torn\n", (int)pairs_wrong);
         exit(1);
+    }
+    for (int i = 0; i < TOTAL; i++) {
+        if (parcels_seen[i] != 1) {
+            fprintf(stderr, "parcel %d came out %d times\n",
+                    i, (int)parcels_seen[i]);
+            exit(1);
+        }
+        if (integers_seen[i] != 1) {
+            fprintf(stderr, "integer %d came out %d times\n",
+                    i, (int)integers_seen[i]);
+            exit(1);
+        }
     }
 
     int growths = m->stations[0].slots[0].growths;
     int high_water = m->stations[0].slots[0].high_water;
     map_destroy(m);
-    printf("  %d struct+int pairs intact across %d wrapped growths (high water %d)\n",
-           WARMUP + FLOOD, growths, high_water);
+    printf("  %d struct+int pairs, none torn and none lost, across %d "
+           "wrapped growths (high water %d)\n", TOTAL, growths, high_water);
     return 0;
 }

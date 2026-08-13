@@ -316,14 +316,26 @@ first is not necessarily claimed first. A reader scans for a usable
 cell rather than computing where the oldest one must be, and a claim
 that rolls back releases cells wherever they sit, so gaps open and
 "oldest" stops being cheap to find.</p>
-<p>This was true and tested before it was given up — there is a retired
-test that checked several hundred deliveries arriving in order. Two
-things made it worth losing. Values reaching one port from two upstream
-stations were already in whatever order the threads happened to produce
-them, so the order being preserved was arbitrary to begin with. And
-keeping it would have meant a slow write blocking every finished value
-behind it, which is a real cost paid on every delivery to buy an order
-nobody could rely on anyway.</p>
+<p>This was true and tested before it was given up. Two things made it
+worth losing. Values reaching one port from two upstream stations were
+already in whatever order the threads happened to produce them, so the
+order being preserved was arbitrary to begin with. And keeping it would
+have meant a slow write blocking every finished value behind it, which
+is a real cost paid on every delivery to buy an order nobody could rely
+on anyway.</p>
+<p><strong>A second reason, and it is not the scan.</strong> A port that is converted
+away from being a buffer and back keeps whatever was waiting in it
+(issue 210f) — nothing is destroyed on any path through a conversion.
+So a value that arrived before the conversion may be served after
+values that arrived during it. This costs nothing that was still being
+promised, but somebody tracing an out-of-order delivery should know
+there are two ways to get one.</p>
+<p><strong>The test that held it is not deleted, it is narrowed.</strong> Several
+hundred values through a growing, wrapped buffer still have to arrive
+untorn and arrive exactly once; what has gone is the assertion that the
+fifth value on one side met the fifth on the other. Tearing and loss
+are the failures worth catching, and neither of them was ever the
+ordering.</p>
 <p><strong>What this costs is positional pairing.</strong> A station with two ring
 ports takes one value from each, and it can no longer be assumed that
 the fifth from the left meets the fifth from the right. A program that

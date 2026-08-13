@@ -6,10 +6,59 @@ purpose to let it.
 
 ## Current behavior
 
-Readiness and claiming happen together under the station's mutex: walk
-every port asking whether it holds a value, and if all do, take one
-from each. Both copies still happen under that lock too, so every
-deliverer into a busy station queues behind every other.
+**The scan is built and the positions are gone.** Head and tail have
+been replaced by two hints — one for a reader, one for a writer — and
+by a maintained count of ready cells. Each search starts where its hint
+points, sweeps forward, wraps, and stops where it began, taking the
+first cell that will make the transition it wants. The hint is read
+once, which is what bounds the sweep; a hint another worker has moved
+in the meantime is not wrong, only less lucky.
+
+One function serves both directions, because a reader looking for a
+ready cell and a writer looking for an empty one are the same search
+with different arguments.
+
+**A spare cell stopped being necessary and is gone.** One was always
+held back so that head meeting tail could mean empty rather than full.
+A buffer is now full when nothing answers to a search for an empty
+cell, which is a question asked directly, so every cell is usable and
+growth happens when there is genuinely nowhere to put a value rather
+than one cell before.
+
+**Readiness and claiming still happen together under the station's
+mutex**, and both copies are still inside it. Nothing about the locking
+has changed yet — deliberately, so that the search could be proven
+while the old lock still covered for it.
+
+### The scan is not free, and the payoff has not landed
+
+Measured on the fan-in apparatus (`tests/063-test-fan-in-cost.c`),
+small values got **meaningfully slower** — roughly half again as long
+per delivery — while large values did not move outside the noise.
+
+That is the expected shape of this moment and is worth writing down
+rather than explaining away. The search replaced index arithmetic with
+a compare-and-swap per candidate cell, and the count of ready cells
+replaced a subtraction with an atomic read-modify-write that the
+delivering threads share. Both costs are paid now; the thing they were
+paid for — taking the mutex off the copying, and then off the walk — is
+still ahead. A delivery currently does the new work *and* holds the old
+lock.
+
+**The first suspect was wrong, and ruling it out is the useful part.**
+A search over a nearly-full buffer walking past every ready cell to
+find an empty one would be O(occupancy), and the apparatus pins its
+ports at about ninety-five per cent full to keep growth out of the
+measurement — a plausible pathology. Running it again with ports four
+times roomier produced the same numbers, so the cost is the mechanism
+itself rather than the buffer's fullness. The hints do their job: a
+writer's next empty cell and a reader's next ready one are usually one
+step away, because both hints advance in the same direction and the
+region between them is exactly the occupied run.
+
+This number is the one to beat when the copies move out. If the small
+figure does not come back down, something other than the lock is
+holding it up.
 
 **The scan below is needed earlier than this issue's place in the
 order suggests.** [210c](210c-a-state-on-every-cell.md) built the
@@ -100,18 +149,28 @@ to promise.
 
 ## Suggested implementation steps
 
-1. Record the lost ordering in [058](../docs/058-guarantees.md) as a
-   stated non-guarantee, with its reason.
-2. Retire the in-order delivery test, citing that entry.
-3. The scan: a bookmark per port, read once, sweep forward, wrap, stop
-   where it started. **This is the next thing built in the family**,
+1. **Done.** The lost ordering recorded in
+   [058](../docs/058-guarantees.md) as a stated non-guarantee, with its
+   reason. It was already written there — ahead of the code, and
+   claiming the test below had already gone.
+2. **Done.** The in-order delivery test narrowed rather than deleted.
+   It held three things at once: that values arrive untorn, that none
+   is lost or doubled, and that the fifth value on one side meets the
+   fifth on the other. Only the third was the retired promise. Tearing
+   and loss are the failures worth catching and neither of them was
+   ever the ordering, so what is left is the part that still means
+   something.
+3. **Done.** The scan: a bookmark per port, read once, sweep forward,
+   wrap, stop where it started. Built ahead of its place in the order,
    for the reason under *Current behavior* — 210c's copy moves wait on
-   it rather than the other way round. It can land while the walk is
+   it rather than the other way round — and landed while the walk is
    still under the mutex, which keeps 210c's staging principle intact:
    build the mechanism while the old lock still covers for it, prove
    it, then remove the cover.
 4. The claim walk in ascending port order, with roll-back on the first
-   port that has nothing ready.
+   port that has nothing ready. The claim already reports whether it
+   found anything, which is the answer the roll-back needs; today a no
+   is treated as an engine bug, because under the mutex it is one.
 5. A livelock test that would fail without the ordering rule: many
    threads, a multi-input station, values arriving on all sides, run
    long enough that a repeating interleaving would show as a stall

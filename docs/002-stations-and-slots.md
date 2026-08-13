@@ -71,28 +71,42 @@ from it.
 
 | Field | Type | What it is |
 |---|---|---|
-| kind | `unsigned char` | Ring buffer or static. There was a third, a gatherer, and [056](implementation-notes/056-no-pull-path.md) is where it went. |
+| kind | `unsigned char` | Ring buffer, static, or no source yet. There was another, a gatherer, and [056](implementation-notes/056-no-pull-path.md) is where it went. |
 | elem_size | `int` | Bytes per value. Copied from the registry at load; equals `sizeof` the box function's parameter type. |
-| storage | `void *` | For a ring buffer, the cells. For a static, unused. |
-| capacity | `int` | Ring buffer only — how many cells. |
-| head, tail | `int` | Ring buffer only — where the oldest value sits and where the next one goes. |
-| static_id | `int` | Static only — which entry in the statics table. |
+| storage | `void *` | The cells. Allocated whatever the kind and never freed until the map is, so changing what a port is costs no allocation and loses nothing that was waiting. |
+| capacity | `int` | How many cells. Ten unless the port was told otherwise. |
+| stride | `int` | Bytes from one cell to the next: a value, its state, and enough padding to keep the next value aligned. |
+| read_hint, write_hint | `int` | Where a reader and a writer each start looking. Hints, not positions — a stale one costs a longer search and nothing else. |
+| held | `int`, atomic | How many cells are ready right now. Maintained rather than counted, because readiness asks on every delivery. |
+| static_id | `int` | Static only — which entry in the statics table. Kept when the port is converted away, so a port that goes static, buffer, static reads the same entry. |
 
 There used to be a `source` field here, naming the station a gatherer
 pulled from. It is gone from the record rather than left sitting
 unused, because a field nobody writes is a question every reader has
 to answer for themselves.
 
-Two things about that table are changing and are worth reading beside
-it. **A static's value is moving onto the port itself**, so `static_id`
-becomes the bytes rather than an index into a shared table — which is
-what lets a process hold more than one program at a time, and what
-makes claiming a static happen under the same lock as the ring pop
-instead of a second one. And **head and tail are going**, because each
-cell will carry its own state and a reader will scan for a usable one
-rather than compute where it must be; that is what lets a buffer grow
-by adding a page instead of copying. Issue 210b carries the first;
-210c and 210e carry the second between them.
+**Head and tail are gone, and what replaced them is the interesting
+part.** They were exact positions: the head said where the oldest value
+sat, and it had to be right, because it was also what said which cells
+were occupied at all. A number that must be right has to be maintained
+under exclusion, and that is why the station's mutex had to be held
+across the copying — the indices called a cell occupied the moment it
+was spoken for, which is before its bytes had landed.
+
+Each cell now carries its own state, and a reader looks for a usable
+one instead of calculating where it must be. **A position must be
+exact and is therefore computed; a hint may be wrong and therefore is
+not.** That one sentence is what lets the lock come off the copying,
+and it is also what will let a buffer grow by adding a page instead of
+copying, since nothing computes a location from the capacity any more.
+Issues 210c and 210d carry it between them; 210e collects.
+
+One thing in that table is still changing. **A static's value is moving
+onto the port itself**, so `static_id` becomes the bytes rather than an
+index into a shared table — which is what lets a process hold more than
+one program at a time, and what makes claiming a static happen under
+the same lock as the ring pop instead of a second one. Issue 401 owns
+that, and issue 210b waits on it.
 
 **Ring buffer.** The ordinary case. Values arrive by being written into
 it and wait their turn. It is a real ring: two indices, wrapping at the
