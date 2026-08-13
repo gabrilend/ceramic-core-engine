@@ -30,6 +30,13 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-210b-the-port-record.html">210b — The port record</a>
+<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
+<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -65,6 +72,7 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -104,7 +112,6 @@
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
 <a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
-<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -122,10 +129,10 @@ backlog: doublings, capacity, high water, named by station. Plus the
 task ring's own story, with the reminder that slot piles and ring
 piles are different diagnoses.</p>
 <p><strong>map_report_stations(map, stream, order)</strong> — runs and
-tasks-produced per station (always on), plus box time, gather time
-charged to the puller, and mutex wait when built with <code>-DSORA_STATS</code>
-(clock reads compile out otherwise). Orders: by time, by contention,
-by count — a dispatch table of comparators.</p>
+tasks-produced per station (always on), plus box time and mutex wait
+when built with <code>-DSORA_STATS</code> (clock reads compile out otherwise).
+Orders: by time, by contention, by count — a dispatch table of
+comparators.</p>
 <p><strong>map_observe_start(map, path, interval ms) / map_observe_stop</strong> —
 periodic emission from a non-worker thread that pushes nothing.
 A non-positive interval refuses: unwanted observation is refused,
@@ -134,16 +141,18 @@ not defaulted.</p>
 the shout threshold are named on stderr.</p>
 <h2>The dump</h2>
 <p><strong>map_dump(map, stream)</strong> — the live table in map format, derived
-facts as comments (types, sizes, indices, gather depth). Loaded maps
+facts as comments (types, sizes, indices). Loaded maps
 only (names required). Load → dump → load → dump is byte-identical;
 statics render their load-time text, with runtime byte-writes noted
 as not re-serialized.</p>
 <h2>Rewiring</h2>
-<p><strong>map_rewire_connect / map_rewire_disconnect / map_rewire_gather</strong> —
+<p><strong>map_rewire_connect / map_rewire_disconnect</strong> —
 change the shape while it runs. All load-time rules per edge, check
 and mutation under one rewiring lock, list surgery additionally
 under the owning station's mutex (delivery snapshots under the
-same). Refusals return -1 with the reason on stderr — a running
+same). A third operation repointed a gather wire and carried the
+cycle walk; it went with the pull path. Refusals return -1 with the
+reason on stderr — a running
 engine is not killed by one bad instruction; the trade is weighed in
 the first-pass report.</p>
 

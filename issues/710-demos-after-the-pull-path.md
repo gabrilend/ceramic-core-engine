@@ -1,11 +1,27 @@
 # 710 — The demos after the pull path
 
-**This cannot be built before the engine changes it describes.** The
-demos are runnable programs compiled against the engine as it exists,
-and they call the pull path directly. Rewriting them first produces
-programs that do not compile. Rewriting them last means the launcher
-demonstrates a machine that is gone. So this issue exists to be *ready*
-when the implementation lands, not to be worked ahead of it.
+**The window this issue was written to wait for is now open.**
+[210a](completed/210a-the-pull-path-removed.md) removed the pull path,
+so the three demos that call it no longer compile — phase 4 fails on
+the slot-conversion call, phase 6 on the gatherer tag, phase 7 on the
+runtime repoint. Each says so plainly and names the missing call,
+which is the honest failure, but the project's front door currently
+offers three entries that will not build.
+
+That was foreseen and is the reason this issue exists. It could not be
+worked earlier — the demos are compiled against the engine, so
+rewriting them ahead of the removal produces programs that do not
+compile either — and it should not wait long, because a launcher
+demonstrating a machine that is gone is worse than one demonstrating
+a machine that is unfinished.
+
+**What it still waits on is narrower than it was.** Phase 4's rebuilt
+scenes turn on writing a static and watching a chain recalculate,
+which needs the statics work ([401](401-static-slots.md),
+[405](405-statics-mutation.md)) standing on the port record
+([210b](210b-the-port-record.md)). Phase 6's substitution needs the
+same. Phase 7's replacement scene needs only
+[309](309-types-by-width.md), and could go first.
 
 ## Current behavior
 
@@ -103,8 +119,10 @@ reader care is evidence about the mechanic, not about the story.
 
 ## Suggested implementation steps
 
-1. Wait. Land [210](210-input-port-record.md) and the statics work
-   first; nothing here compiles before they do.
+1. Phase 7's scene first, since it needs only
+   [309](309-types-by-width.md) and restores one of the three broken
+   demos immediately. Then wait for the statics work — phases 4 and 6
+   demonstrate a mechanism that does not exist yet.
 2. Phase 4 end to end, since it is effectively a new demo rather than
    an edited one, and it establishes the voice for the other two.
 3. Phase 6's substitution and phase 7's, which are single scenes.

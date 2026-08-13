@@ -75,7 +75,7 @@ the first caller's object with the second caller's colour is a
 perfectly legal outcome.
 
 The reason is already written down and is deliberate:
-[210](210-input-port-record.md) states that values may leave a port in
+[210d](210d-the-claim-takes-no-lock.md) states that values may leave a port in
 a different order than they arrived, because with positions gone a
 reader takes the first ready cell its scan finds, and rollback opens
 gaps wherever it happens. If order within one port is not promised,

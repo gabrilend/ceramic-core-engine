@@ -89,7 +89,7 @@ in its wiring — which is the same argument that moves them onto ports.
 ## Suggested implementation steps
 
 1. Take the port's own storage from
-   [210](210-input-port-record.md), which provides it — this issue
+   [210b](210b-the-port-record.md), which provides it — this issue
    spends that room rather than building it, so binding becomes a copy
    into the port rather than an index into a table.
 2. Move the claim into the readiness walk, under the station's mutex,

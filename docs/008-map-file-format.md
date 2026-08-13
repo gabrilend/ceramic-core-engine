@@ -99,7 +99,7 @@ unconfigured — a state, not a value, in which the station simply never
 becomes ready. The dump writes those out rather than omitting them,
 because the dump's value is that it says what is actually there, and a
 half-built program should dump to a faithful record of a half-built
-program. So the format needs a form for it. Issue 210.
+program. So the format needs a form for it. Issue 210b.
 
 **There used to be a second form** — `in 0 reader`, meaning this port
 pulls its value from the station named `reader` when it is needed. The
@@ -118,7 +118,7 @@ loaded and run.
 
 Ring buffers carry no capacity, because they grow on their own.
 
-That is becoming *no capacity is required*. Issue 210 gives every port
+That is becoming *no capacity is required*. Issue 210b gives every port
 a buffer of ten values at instantiation and lets a port be told a
 different starting depth — in this file or as an argument to the call
 that creates the station — with growth still covering any figure that

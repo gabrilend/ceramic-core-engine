@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>210g — One way to build a station</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-210b-the-port-record.html">210b — The port record</a>
+<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="issue-210g-one-way-to-build-a-station.html" class="here">210g — One way to build a station</a>
+<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>210g — One way to build a station</h1>
+<p>Seventh child of <a href="issue-210-input-port-record.html">210</a>. Everything above
+made a port describable; this makes there be exactly one way to say
+it.</p>
+<h2>Current behavior</h2>
+<p>**Two ways exist to create a station, and they can bind different
+things.**</p>
+<p>Placement by name looks the box up in the registry and copies each
+parameter's type name onto the corresponding port. Hand placement
+takes an array of element sizes and no type names at all.</p>
+<p>Binding a static needs the type, because a static in a map file is
+<em>text</em> and turning <code>{ 5, 2.0, { 0, 0, 0 }, "hey there", 2 }</code> into
+bytes means knowing the field layout. So **a hand-placed station
+cannot bind a static** — and the reason is not a design limit. It is
+that phase 2's scaffolding was written before the registry existed and
+was never given the argument afterwards.</p>
+<p>The result is two contracts where there should be one, differing in
+what programs they can express, with the difference undocumented and
+discovered by trying.</p>
+<p>Configuring a port is likewise scattered: binding a static, drawing a
+wire, and converting a tag are separate calls with separate shapes,
+some of which die on refusal and some of which return a code.</p>
+<h2>Intended behavior</h2>
+<p>**Configuring a port is a single operation naming a station, a port, a
+source, and a value.** The loader calls it while reading a file; a
+debugger, a control socket, or a workbench calls the same one on a
+running program. There is one description of what it means to give a
+port a source, and it is executable.</p>
+<p>**Hand placement stops being a second contract that can bind fewer
+things than the first.** It takes the type names the registry already
+has, or it stops existing. The second option is worth weighing
+seriously: the tests that use it predate the registry, and if every
+one of them can place by name instead, then keeping a weaker door open
+is keeping a way to build a program that the loader cannot.</p>
+<p>**A program built by calling the surface directly and one read from a
+file are the same program.** Not equivalent — the same, provably, by
+dumping both and comparing bytes. That is the test that makes the
+claim mean something, and it is the reason this issue exists as more
+than tidying: it is what lets <a href="issue-212-one-way-to-build-a-program.html">212</a>
+say that reading a file is a sequence of ordinary operations rather
+than a privileged path.</p>
+<p><strong>Refusal follows one policy.</strong> The surface returns a refusal that
+travels upward and accumulates rather than dying where it happens,
+because the loader's rule is to collect every failure in a file and
+present them together. <a href="issue-212-one-way-to-build-a-program.html">212</a> owns
+that policy and overturns the one rewiring chose; this issue supplies
+the surface it applies to.</p>
+<p><strong>The configuration-time check for an unconfigured port.</strong> A
+non-optional parameter left facing a <em>none</em> port is a configuration
+error, and it should be caught at configuration time — which names the
+station and the port while a person is still there to read it —
+rather than on the first task built minutes into a run. This is
+separate from <a href="issue-210h-optional-parameters.html">210h</a> and comes first: the
+check exists before there is any way to declare a parameter exempt
+from it.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. Give hand placement the registry's type names, or establish that
+   every caller can place by name and remove it. Decide by looking at
+   the callers, not in the abstract.
+2. One port-configuration operation, with the existing static-binding
+   and tag-conversion calls becoming cases of it.
+3. The loader becomes its first caller, losing whatever it does today
+   that the surface does not offer.
+4. Runtime editing becomes its second caller.
+5. The configuration-time check for a <em>none</em> port feeding a
+   non-optional parameter.
+6. A test that a station with an unconfigured port never becomes
+   ready, and becomes ready the moment that port is given a source.
+7. A test that a program read from a file and one built by calling the
+   configuration surface directly produce identical dumps.</p>
+<h2>Open questions</h2>
+<ul>
+<li>Whether hand placement survives at all depends on what its callers</li>
+<p>  need, and the tests that use it are phase 2's, which were written to
+  prove the station layer without a registry existing. If they can all
+  place by name, removing it is better than teaching it — but a test
+  that must construct a registry to test the station table is a test
+  that has stopped testing only the station table.</p>
+</ul>
+<h2>Related</h2>
+<ul>
+<li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the parent</li>
+<li><a href="issue-210b-the-port-record.html">210b — The port record</a>, whose <em>none</em> tag</li>
+<p>  this checks for</p>
+<li><a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>,</li>
+<p>  whose conversion becomes a case of this surface</p>
+<li><a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>, which</li>
+<p>  gives a parameter a way to be exempt from the check added here</p>
+<li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
+<p>  which stands on this and owns the refusal policy</p>
+<li><a href="done-207-hand-built-maps.html">207 — Hand-built maps</a>, the second</li>
+<p>  contract in question</p>
+<li><a href="done-602-loader-first-pass.html">602 — The loader's first pass</a>,</li>
+<p>  which becomes a caller rather than a builder</p>
+</ul>
+
+</main>
+</div></body></html>

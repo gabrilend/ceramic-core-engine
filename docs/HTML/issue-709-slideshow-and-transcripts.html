@@ -30,6 +30,13 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-210b-the-port-record.html">210b — The port record</a>
+<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
+<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -65,6 +72,7 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -104,7 +112,6 @@
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
 <a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
-<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -158,17 +165,40 @@ are held to under <a href="done-707-demos-as-word-problems.html">707</a>: a pict
 simplifies away the thing that makes a mechanism interesting teaches
 someone a machine that does not exist. If a screen cannot be drawn
 honestly, it is cut and its subject stays prose.</p>
-<p><strong>Artwork.</strong> The gif generator at
-<code>/mnt/mtwo/programming/ai-stuff/gif-generator/</code> is available for
-producing the animated pieces. Whether frames are generated ahead of
-time as images or drawn live in the browser is an open question below,
-and it is not a small one — the interactive pieces 705 already built
-are drawn live and steerable, and a slideshow of flat images beside
-them would read as a different, lesser thing on the same site.</p>
-<p><strong>Where it sits.</strong> It is the site's front door — the thing
-<code>index.html</code> offers first, with the reference behind it — because a
+<p><strong>It narrates the engine, not the project.</strong> The sequence follows one
+value through the machine — what a station is, how a value reaches the
+next box, what happens when the destination is full, why a comparator
+has three exits, how a text file becomes a running graph, what the
+pool is doing throughout. The phases and the lessons of building them
+are a different sequence and a good one, and they are not what a
+reader arriving with no context needs: the problem this issue names is
+that such a reader meets a sidebar of seventy entries, and the first
+thing they need is to know what the thing in front of them <em>is</em>. The
+project's own story is what someone wants once they already care, and
+the first-pass report already tells it in prose.</p>
+<p><strong>Artwork: drawn live, screen by screen.</strong> Each screen is a script
+that draws stations and moving values in the browser, the way the
+three live interactive pieces from <a href="issue-705-html-documentation.html">705</a>
+already are. This is the expensive choice and it is taken on purpose —
+generated image frames would be far easier to make beautiful, and they
+would be dead on a page whose neighbours can be paused, stepped and
+steered, which the reader would feel as two different grades of thing
+on one site. The gif generator at
+<code>/mnt/mtwo/programming/ai-stuff/gif-generator/</code> remains available for
+any still or decorative piece that is genuinely an illustration rather
+than a mechanism.</p>
+<p>**The honesty rule is kept by hand here, so it has to be kept
+deliberately.** Nothing about a hand-drawn screen prevents it from
+showing a machine that does not exist. Every screen's drawing owes a
+reading of the mechanism it depicts, and a screen whose drawing and
+whose engine disagree is a bug in the screen.</p>
+<p><strong>Where it sits.</strong> It is one of the site's front doors — the first
+thing <code>index.html</code> offers, with the reference behind it — because a
 reader who wants the reference will find it and a reader who wants an
-introduction currently has nowhere to be sent.</p>
+introduction currently has nowhere to be sent. Phase 8's workbench
+(<a href="issue-801-browser-workbench.html">801</a>) becomes a third door beside it, so
+the entrance reads <em>watch, read, build</em>; the slideshow should be
+written knowing it will have neighbours rather than the whole page.</p>
 <h3>The transcript library</h3>
 <p>The conversation logs, readable on the site as a book.</p>
 <p><strong>Paged, not scrolled.</strong> They are hundreds of kilobytes of dialogue,
@@ -186,13 +216,31 @@ theoretical.</p>
 tool output, and long machine-generated blocks. The same highlighting
 and the same layout as the rest of the site, with the long mechanical
 passages foldable so the argument stays readable through them.</p>
-<p><strong>This is a decision about what the project is.</strong> Publishing the
-transcripts means publishing the reasoning with its false starts
-attached, including the parts where something was got wrong and then
-corrected. That is the point — the completed issues are blueprints and
-deliberately do not carry the arguments — but it is worth choosing
-rather than doing by default, because it is not reversible in the way
-an unpublished file is.</p>
+<p><strong>Whole and unedited.</strong> The logs go up as they happened — the false
+starts, the reversals, the parts where something was got wrong and
+then corrected, and the asides that were never written as
+documentation. Nothing is selected for them, because a record that was
+chosen from is a curated artifact, and the completed issues are
+already the curated artifact: they are blueprints that deliberately
+drop the arguments. The transcripts are worth having precisely as the
+place the arguments survive, which only holds if nobody decided which
+arguments were worth surviving.</p>
+<p>This was chosen rather than defaulted to, because it is the one part
+of this issue that is not reversible the way an unpublished file is.
+As of this writing the repository has no remote and the site is local
+files, so the decision binds a future publication rather than
+describing a present one.</p>
+<p><strong>They get decorated, every once in a while.</strong> A recurring pass over
+the transcripts that adds cute emoji and MS-Paint-style drawings —
+flowers, hearts, a smiling sun, carrots, horses, stick figure people,
+and whatever else belongs beside a passage. This is not in tension
+with unedited: <strong>decoration adds and never removes</strong>, so the record
+stays whole underneath and gains a margin. It is the difference
+between a transcript and a scrapbook, and the scrapbook is the thing
+worth having on a site meant to be read by a person rather than
+searched by a tool. Nothing about it is automated and nothing about it
+is scheduled; it happens when someone is in the mood, which is the
+correct trigger for a drawing of a horse.</p>
 <h3>What both need from the generator</h3>
 <p><a href="issue-705-html-documentation.html">705</a> already carries the fix that makes
 this possible and names it as outstanding: discovery is currently a
@@ -202,6 +250,12 @@ the generator was not told about is missing from the site <em>silently</em>.
 documentation roots downward, with a directory that yields no pages
 reported rather than passed over, is the prerequisite for both halves
 of this issue and belongs to 705 rather than here.</p>
+<p>That same walk is the whole of the transcript library's inclusion
+policy: whatever is in the directory is on the site after the next
+build, with no list in between. The generator therefore needs a title
+and a date for each log without being told them, which the existing
+filenames already carry, and needs to survive a log it has never seen
+a shape like before rather than refusing the build.</p>
 <h2>Suggested implementation steps</h2>
 <p>1. Take the discovery fix from 705 first; without it neither half of
    this reaches the site.
@@ -218,26 +272,48 @@ of this issue and belongs to 705 rather than here.</p>
 6. Make the slideshow the site's entry point, with the reference one
    click behind it.</p>
 <h2>Open questions</h2>
+<p><strong>Answered:</strong></p>
 <ul>
-<li>Generated frames or live drawing? Frames are easier to make</li>
-<p>  beautiful and are dead on the page; live drawing matches what the
-  interactive pieces already do and costs a great deal more work per
-  screen. A mixture is possible and might be the worst of both, since
-  the seam would be visible.</p>
-<li>Should the slideshow narrate the <em>engine</em> or the <em>project</em>? Those are</li>
-<p>  different sequences. The engine's is the datapath; the project's is
-  the phases, and would double as an answer to "what did building this
-  teach", which the first-pass report already answers in prose.</p>
-<li>The transcripts contain the user's own words at length, including</li>
-<p>  asides that were never meant as documentation. Is the whole log
-  published, or an edited one? Editing them makes them a curated
-  artifact rather than a record, which costs the thing that makes them
-  worth publishing.</p>
-<li>The transcripts grow every session. Does the site regenerate to</li>
-<p>  include new ones automatically — in which case a build publishes
-  whatever was said that day — or does adding a transcript stay a
-  deliberate act?</p>
+<li><em>Generated frames or live drawing?</em> <strong>Live, hand-drawn per screen.</strong></li>
+<p>  The deciding fact is not which is better in isolation but that the
+  site already has live, steerable pieces on it: flat images placed
+  beside them are not merely less capable, they announce themselves as
+  a lesser grade of thing, and a front door is the worst page to say
+  that on. The cost is real and is accepted — this is the most
+  expensive way to build the slideshow, and it buys a site with one
+  texture instead of two.</p>
 </ul>
+<ul>
+<li><em>Does the slideshow narrate the engine or the project?</em> **The</li>
+<p>  engine.** Both sequences are worth telling, and only one of them
+  answers the question this issue exists to answer. A reader who does
+  not know what a station is cannot be told what phase 3 added; a
+  reader who does know will find the project's story in the first-pass
+  report and the completed issues, which already tell it well.</p>
+</ul>
+<ul>
+<li><em>Whole transcripts or an edited log?</em> <strong>Whole and unedited</strong>, with a</li>
+<p>  recurring decorating pass that only ever adds. Written up above.</p>
+</ul>
+<ul>
+<li>*Does a new transcript reach the site automatically, or by a</li>
+<p>  deliberate act?* <strong>Automatically, on the next build.</strong> The generator
+  walks the directory and renders what it finds, so a session becomes
+  a page the next time the site is built. This is the unedited
+  decision carried one level outward: if nobody selects which passages
+  are worth keeping, nobody selects which sessions are either, and a
+  list of approved transcripts would be that selection wearing a
+  different hat.</p>
+</ul>
+<p>  <strong>The consequence is accepted: building the site is publishing it.</strong>
+  Someone who builds to check a broken link puts that day's
+  conversation up along with the fix. That is only tolerable because
+  the whole-and-unedited decision already means nothing is being held
+  back for review — there is no state in which a transcript exists but
+  is not meant to be seen, so there is nothing for a build to leak.
+  A deliberate list would also have reintroduced the exact failure 705
+  is being fixed to eliminate: something missing from the site because
+  nobody remembered to name it, with no complaint from the build.</p>
 <h2>The note that started this</h2>
 <p>Kept verbatim:</p>
 <blockquote>we should add to the HTML documentation a slideshow that goes through</blockquote>

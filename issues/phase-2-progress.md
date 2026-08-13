@@ -24,7 +24,15 @@ its own.
 | 207 — hand-built maps | **being retired** | The scaffolding is absorbed into one construction surface, or deleted. |
 | 208 — phase 2 demo | complete | Occupancy, overlap, both backlog kinds, fan-out cost, live backpressure. |
 | 209 — the output station | open | A pass-through naming where results come from; unwired means hold, not discard. |
-| 210 — what an input port is | open | The record all three input kinds share, designed once — now two kinds plus unconfigured. |
+| 210 — what an input port is | **parent, in progress** | The record all three input kinds share, designed once — now two kinds plus unconfigured. Split into eight children; see below. |
+| 210a — the pull path removed | **complete** | The gatherer kind and everything reading it, taken out. Every box now runs on a worker that picked it up. |
+| 210b — the port record | open | Both storages, the three-value tag, cells allocated for every port at instantiation. |
+| 210c — a state on every cell | open | Four states, one atomic swap each; then the copies leave the lock, write side first. |
+| 210d — the claim takes no lock | open | Ascending port order, roll back on the first empty, scan from a hint that may be wrong. |
+| 210e — growth adds a page | open | Append rather than copy — which the lockless claim makes necessary, not merely nicer. |
+| 210f — changing what a port is | open | A field write, with waiting values left where they sit rather than freed. |
+| 210g — one way to build a station | open | One configuration surface; a hand-built program and a loaded one dump identically. |
+| 210h — optional parameters | open | A parameter a box declares it can do without, carried as a wrapper rather than a sentinel. |
 | 211 — growing the station table | open | Shelves: grow by adding, so nothing already placed ever moves. |
 | 212 — one way to build a program | open | The capstone. Create, configure, wire — legal at any moment, loading as one caller. |
 | 213 — the input station | open | The other door: where arguments arrive, and what makes a program composable. |
@@ -47,6 +55,22 @@ wire and every value in flight survives untouched.
 would freeze every thread delivering into that station. This is why the
 claim dispatch table had rows it deliberately left empty, and the
 reasoning outlived the rows.
+
+**And now no user code runs anywhere but on a worker that picked up a
+task.** 210a removed the pull path, which was the engine's one named
+exception — a box run inline, on the thread of whoever was assembling
+somebody else's work. The rule above was always the interesting half;
+this is the other half arriving late.
+
+**A guarantee can be lost rather than moved, and 210a is where the
+phase learned to say so.** Rewiring holds one lock across checking an
+edge and installing it, because two threads adding separately-legal
+edges could produce an illegal pair. After the pull path went, no two
+legal edges can — every surviving rule concerns one edge and one
+station's fixed shape. The test that proved it is retired with a note
+saying why, rather than deleted quietly. **A property that stops being
+true is worth a paragraph; a test that stops existing without one is
+how a project forgets what it used to guarantee.**
 
 **Cells are exactly the size of the parameter they feed**, so a write
 is a memory copy into a fixed offset with no allocation on the hot

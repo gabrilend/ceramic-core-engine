@@ -30,6 +30,13 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-210b-the-port-record.html">210b — The port record</a>
+<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
+<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -65,6 +72,7 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -104,7 +112,6 @@
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
 <a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
-<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -114,12 +121,26 @@
 </nav>
 <main>
 <h1>710 — The demos after the pull path</h1>
-<p><strong>This cannot be built before the engine changes it describes.</strong> The
-demos are runnable programs compiled against the engine as it exists,
-and they call the pull path directly. Rewriting them first produces
-programs that do not compile. Rewriting them last means the launcher
-demonstrates a machine that is gone. So this issue exists to be <em>ready</em>
-when the implementation lands, not to be worked ahead of it.</p>
+<p><strong>The window this issue was written to wait for is now open.</strong>
+<a href="done-210a-the-pull-path-removed.html">210a</a> removed the pull path,
+so the three demos that call it no longer compile — phase 4 fails on
+the slot-conversion call, phase 6 on the gatherer tag, phase 7 on the
+runtime repoint. Each says so plainly and names the missing call,
+which is the honest failure, but the project's front door currently
+offers three entries that will not build.</p>
+<p>That was foreseen and is the reason this issue exists. It could not be
+worked earlier — the demos are compiled against the engine, so
+rewriting them ahead of the removal produces programs that do not
+compile either — and it should not wait long, because a launcher
+demonstrating a machine that is gone is worse than one demonstrating
+a machine that is unfinished.</p>
+<p><strong>What it still waits on is narrower than it was.</strong> Phase 4's rebuilt
+scenes turn on writing a static and watching a chain recalculate,
+which needs the statics work (<a href="issue-401-static-slots.html">401</a>,
+<a href="issue-405-statics-mutation.html">405</a>) standing on the port record
+(<a href="issue-210b-the-port-record.html">210b</a>). Phase 6's substitution needs the
+same. Phase 7's replacement scene needs only
+<a href="issue-309-types-by-width.html">309</a>, and could go first.</p>
 <h2>Current behavior</h2>
 <p>Three of the seven demos have scenes that demonstrate a capability
 being removed (<a href="impl-056-no-pull-path.html">056</a>).</p>
@@ -198,26 +219,87 @@ every row of it, measures in the story's units beside the engine's, and
 ends with a finding. A scene that cannot be given a story that makes a
 reader care is evidence about the mechanic, not about the story.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Wait. Land <a href="issue-210-input-port-record.html">210</a> and the statics work
-   first; nothing here compiles before they do.
+<p>1. Phase 7's scene first, since it needs only
+   <a href="issue-309-types-by-width.html">309</a> and restores one of the three broken
+   demos immediately. Then wait for the statics work — phases 4 and 6
+   demonstrate a mechanism that does not exist yet.
 2. Phase 4 end to end, since it is effectively a new demo rather than
    an edited one, and it establishes the voice for the other two.
 3. Phase 6's substitution and phase 7's, which are single scenes.
-4. Run every demo from the launcher, which is the standing rule after
+4. Rename phase 4's source and runner to say config rather than pull,
+   keeping the index, and chase every reference to the old names —
+   the launcher, the phase demo issue, the docs site's generated
+   pages, and anything in the transcripts index that points at them.
+5. Replace the launcher's filename glob with a read of an ordering
+   file in the demos directory, and write the new rule into the
+   conventions, since the first-pass report asked for it in writing
+   rather than only in code.
+6. Run every demo from the launcher, which is the standing rule after
    any demo change.
-5. Update each phase demo issue's current behavior to describe the
+7. Update each phase demo issue's current behavior to describe the
    scenes as they then read — and remove the marks this issue's
    existence made redundant.</p>
 <h2>Open questions</h2>
+<p><strong>Answered:</strong></p>
 <ul>
-<li>Does phase 4 keep its number and name? It is called the pull demo,</li>
-<p>  the phase is no longer called the pull path, and the file carries an
-  index that means something in the reading order. Renaming it is the
-  same class of act as the two documents renamed alongside this work.</p>
-<li>The launcher discovers demos by a <code>phase-*</code> filename while the source</li>
-<p>  carries a file index — a naming collision the first-pass report
-  already recorded. Rewriting a demo is the cheapest moment to resolve
-  it, or the worst moment to try.</p>
+<li><em>Does phase 4 keep its number and name?</em> It is renamed and keeps its</li>
+<p>  index. The source becomes <code>037-phase-4-config-demo.c</code> and the runner
+  becomes a config demo, matching the roadmap, which already calls the
+  phase Configuration and leaves the demo as the last place the word
+  "pull" survives. The index stays 037 because **an index is a
+  position in the reading order, not an identity** — it says where
+  this work sits in the story, between the generator and routing, and
+  that has not moved. What changed is what the demo demonstrates, not
+  when it arrived. Re-indexing it to the end would have said the
+  opposite, and would have put phase 4's demo after phase 7's work in
+  the one ordering the project uses to be read.</p>
+</ul>
+<ul>
+<li>*How is the launcher's discovery pattern reconciled with the file</li>
+<p>  index rule?* <strong>The launcher stops discovering and reads a list.</strong> A
+  file in the demos directory names the runners in the order they
+  should be offered, and the launcher reads it instead of globbing for
+  a filename shape.</p>
+</ul>
+<p>  This costs the property the launcher's own header advertises — a new
+  demo appearing merely by being dropped in place — and buys something
+  worth more: **run order and reading order stop having to be the same
+  thing.** The filename says where a file sits in the project's story;
+  the list says where a demo sits in the menu. Neither has to bend to
+  the other, and the collision the first-pass report recorded stops
+  being a collision because the two conventions no longer share a
+  channel. The list also becomes the place a demo can be temporarily
+  withheld or reordered without renaming anything, which globbing
+  never allowed.</p>
+<ul>
+<li>*What index do the runner scripts get, now that the list allows them</li>
+<p>  one?* <strong>Their source's index with a letter appended</strong> —
+  <code>037-phase-4-config-demo.c</code> is run by <code>037a-phase-4-config</code>. The
+  numbers around each demo source are spent on engine files, so a
+  runner cannot have a number of its own near the thing it runs; a
+  letter gives it one anyway. The project already uses exactly this
+  shape for issues that split into parts, where 522 becomes 522a and
+  522b, and the relationship is the same one: **a runner is not a step
+  in the story, it is the second half of the step its source is.**</p>
+</ul>
+<p>  Taken as a judgment call rather than a preference, on the grounds
+  that the alternative — seven fresh numbers at the end of the
+  counter — puts phase 1's runner after phase 7's engine work, which
+  is the one thing an index is supposed to prevent.</p>
+<p><strong>Open:</strong></p>
+<ul>
+<li><strong>The index convention does not visibly do what it is for.</strong> The</li>
+<p>  numbers are supposed to encode a reading order for the whole
+  project, and nothing in the project makes that apparent — a reader
+  meeting <code>033-statics.c</code> beside <code>034-gather.c</code> has no way to learn
+  that the numbers mean "read these in this order" rather than
+  "these were created in this order" or "these are related." The
+  convention is followed carefully and communicates nothing to anyone
+  who was not told about it. Whether the fix is a document that states
+  the rule, a generated reading index that lists every file in order
+  with a line about each, or something the docs site renders, is
+  undecided. Raised while numbering the runners, and larger than they
+  are.</p>
 </ul>
 <h2>Related</h2>
 <ul>

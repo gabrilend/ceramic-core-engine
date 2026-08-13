@@ -30,6 +30,13 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-210b-the-port-record.html">210b — The port record</a>
+<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
+<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -65,6 +72,7 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -104,7 +112,6 @@
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
 <a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
-<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -135,25 +142,58 @@ reads it (<a href="issue-401-static-slots.html">401</a>). There is no table then
 and no retained string — only bytes on a port and a field table
 describing their shape. The dump would have nothing to print.</p>
 <h2>Intended behavior</h2>
-<p>**One routine that walks a field table and a value together and
-produces text**, recursing into nested structs, emitting the brace form
-the reader accepts.</p>
+<p><strong>Both directions are emitted per type by the generator.</strong> For each
+registered struct the generator writes two routines — one that reads
+the brace text into bytes, one that writes the bytes back out as brace
+text — with every offset and every field kind resolved when the engine
+is built rather than dispatched on while it runs. This replaces the
+generic walk <a href="done-402-struct-constants.html">402</a> built, and it is
+the larger change, chosen because it puts each type's text grammar in
+exactly one place, written by the only thing that knows the type
+concretely.</p>
+<p><strong>What the field table is left doing.</strong> It keeps names and sizes,
+which is what the registry's own description routine and the
+width-based type comparison of <a href="issue-309-types-by-width.html">309</a> ask of it.
+Nothing walks it to read or write a value any more; the two callers
+that do so today are the statics reader, which is being replaced, and
+the registry's describe-yourself printout, which only wants names.</p>
 <p><strong>Its output must be readable by the reader.</strong> Not approximately —
 exactly. Format a value, read it back, and the bytes are identical.
 That is the property worth testing hardest, because it is what makes a
 dumped program reloadable and what makes a program's results usable as
-another program's input with no conversion at all.</p>
-<p><strong>Every kind the field table knows must round-trip</strong>: signed and
-unsigned integers of each width, floating point, a fixed string, and a
-nested struct. Floating point is the one that needs deciding rather
-than defaulting — enough digits to round-trip exactly is a different
-number from enough digits to read nicely, and the reader is what has to
-be satisfied.</p>
-<p><strong>Padding is not printed.</strong> The field table names fields and their
-offsets; the holes between them are the compiler's business and appear
-nowhere in the text. A struct written with a seven-byte hole reads back
-into a struct with a seven-byte hole because the reader consults the
-same table, not because the text said anything about it.</p>
+another program's input with no conversion at all. With both
+directions generated from one description, the test is also what keeps
+the emitter honest — the two halves are written by the same script and
+can disagree only through a bug in it.</p>
+<p><strong>Every kind must round-trip</strong>: signed and unsigned integers of each
+width, floating point, a fixed string, and a nested struct. Floating
+point is the one that needs deciding rather than defaulting — enough
+digits to round-trip exactly is a different number from enough digits
+to read nicely, and the reader is what has to be satisfied.</p>
+<p><strong>Strings end at the first NUL, and the scan is bounded anyway.</strong> A
+character array is a C string and stays one; nothing is added to the
+author's struct to carry a count, because the engine's standing
+refusal is to make anyone write a function to fit it. The formatter
+walks at most <code>array_len</code> bytes and stops there whether or not it
+found a terminator, so bytes arriving without one cost a bounded scan
+rather than a read past the field. A separate length field would not
+improve on that: it can claim more than the array holds, so it would
+have to be checked against <code>array_len</code> before being trusted, leaving
+the same bound plus a second value that can be wrong.</p>
+<p><strong>The text is pure seven-bit ASCII.</strong> Bytes below 0x20, the double
+quote, the backslash, and everything from 0x80 up are written as
+escapes, so a map file survives any editor, terminal, or transport
+that mangles high bytes. The cost is accepted with open eyes: text in
+a language that needs bytes above 0x7F is no longer readable or
+typable in place — a name in French appears as escape codes rather
+than as itself. The reader gains the matching decoder, generated
+alongside.</p>
+<p><strong>Padding is not printed.</strong> The emitter names fields and reaches them
+by compiler-computed offsets; the holes between them are the
+compiler's business and appear nowhere in the text. A struct written
+with a seven-byte hole reads back into a struct with a seven-byte hole
+because both generated routines took their offsets from the same
+<code>offsetof</code>, not because the text said anything about it.</p>
 <p><strong>Three callers, one routine.</strong> The dump, which needs it the moment
 statics move onto ports. Anything showing a value to a person — a
 diagnostic report, a debugger, a workbench. And a program's results: an
@@ -161,30 +201,53 @@ output station's values are text for the same reason a static is, since
 text resolves its layout when it is read and therefore survives a
 rebuild that would silently change what raw bytes meant.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The formatter, over the same field table structure the reader walks,
-   with the same recursion into nested types.
-2. A round-trip test as the primary one: for every kind and for the
+<p>1. Teach the generator to emit a formatter per registered struct,
+   recursing into nested types by calling the nested type's own
+   emitted routine rather than by walking anything.
+2. The escape rules, written once in the generator and emitted into
+   both halves so they cannot drift: quote, backslash, everything
+   below 0x20 and everything from 0x80 up.
+3. A round-trip test as the primary one: for every kind and for the
    deliberately padded struct, format then read then compare bytes.
-3. The floating-point decision, made explicitly and left as a comment
+   Include a string holding a quote, a tab, and a byte above 0x7F.
+4. The floating-point decision, made explicitly and left as a comment
    where it lives — shortest representation that reads back identical,
    most likely.
-4. Point the dump at it, and remove the retained original string from
-   wherever it still lives once nothing reads it.
-5. A test that a dumped program's statics section is accepted by the
+5. Move reading into generated code too, and retire the field-table
+   walk in the statics reader once nothing calls it.
+6. Point the dump at the formatter, and remove the retained original
+   string from wherever it still lives once nothing reads it.
+7. A test that a dumped program's statics section is accepted by the
    reader unchanged, which is the round trip at program scale rather
    than value scale.</p>
 <h2>Open questions</h2>
+<p><strong>Answered:</strong></p>
 <ul>
-<li>A fixed string field containing bytes that are not printable — a</li>
-<p>  length-prefixed blob someone declared as a character array. The
-  reader accepts a quoted string; the formatter has to produce
-  <em>something</em> for arbitrary bytes, and escaping them is a small format
-  decision with a long tail.</p>
-<li>Does the formatter belong beside the reader, or in the generated</li>
-<p>  code? Beside the reader keeps one file that knows about field tables.
-  Generated would let the compiler see each type concretely, which is
-  how everything else in this engine avoids guessing — but the reader
-  already proves a generic walk is enough.</p>
+<li>*What does the formatter emit for a character array holding bytes</li>
+<p>  that are not plain printable text?* Escapes, for a wider set than
+  strictly necessary: the quote and backslash because they break the
+  grammar, bytes below 0x20 because they have no visible shape, and
+  bytes from 0x80 up so that a map file is seven-bit ASCII end to end
+  and cannot be damaged by anything that handles high bytes carelessly.
+  The price is that non-English text stops being readable in the file
+  itself, which is a real loss taken deliberately in exchange for a
+  format that never depends on the encoding of the tool looking at it.</p>
+</ul>
+<p>  A NUL in the middle of a string stopped being part of this question.
+  Character arrays remain C strings, so the formatter stops at the
+  first terminator — which is where the author's own C stops reading
+  too — and stops at <code>array_len</code> regardless, so a field arriving with
+  no terminator costs a bounded scan rather than a read past the end.</p>
+<ul>
+<li>*Does the formatter belong beside the reader, or in the generated</li>
+<p>  code?* Generated — and reading moves there with it, so each type's
+  text grammar exists once, written by the generator that sees the
+  type concretely. The generic walk is not wrong and its existence
+  proved the grammar is small enough to walk; what decides against
+  keeping it is that a walk re-derives at run time what the compiler
+  already knew, and this engine's whole habit is to ask the compiler
+  instead of re-deriving. Retiring a finished reader to get there is
+  the cost, and it is a one-time cost against a permanent one.</p>
 </ul>
 <h2>Related</h2>
 <ul>

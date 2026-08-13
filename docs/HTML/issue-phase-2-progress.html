@@ -30,6 +30,13 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-210b-the-port-record.html">210b — The port record</a>
+<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
+<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -65,6 +72,7 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -104,7 +112,6 @@
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
 <a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
-<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -136,7 +143,15 @@ its own.</p>
 <tr><td>207 — hand-built maps</td><td><strong>being retired</strong></td><td>The scaffolding is absorbed into one construction surface, or deleted.</td></tr>
 <tr><td>208 — phase 2 demo</td><td>complete</td><td>Occupancy, overlap, both backlog kinds, fan-out cost, live backpressure.</td></tr>
 <tr><td>209 — the output station</td><td>open</td><td>A pass-through naming where results come from; unwired means hold, not discard.</td></tr>
-<tr><td>210 — what an input port is</td><td>open</td><td>The record all three input kinds share, designed once — now two kinds plus unconfigured.</td></tr>
+<tr><td>210 — what an input port is</td><td><strong>parent, in progress</strong></td><td>The record all three input kinds share, designed once — now two kinds plus unconfigured. Split into eight children; see below.</td></tr>
+<tr><td>210a — the pull path removed</td><td><strong>complete</strong></td><td>The gatherer kind and everything reading it, taken out. Every box now runs on a worker that picked it up.</td></tr>
+<tr><td>210b — the port record</td><td>open</td><td>Both storages, the three-value tag, cells allocated for every port at instantiation.</td></tr>
+<tr><td>210c — a state on every cell</td><td>open</td><td>Four states, one atomic swap each; then the copies leave the lock, write side first.</td></tr>
+<tr><td>210d — the claim takes no lock</td><td>open</td><td>Ascending port order, roll back on the first empty, scan from a hint that may be wrong.</td></tr>
+<tr><td>210e — growth adds a page</td><td>open</td><td>Append rather than copy — which the lockless claim makes necessary, not merely nicer.</td></tr>
+<tr><td>210f — changing what a port is</td><td>open</td><td>A field write, with waiting values left where they sit rather than freed.</td></tr>
+<tr><td>210g — one way to build a station</td><td>open</td><td>One configuration surface; a hand-built program and a loaded one dump identically.</td></tr>
+<tr><td>210h — optional parameters</td><td>open</td><td>A parameter a box declares it can do without, carried as a wrapper rather than a sentinel.</td></tr>
 <tr><td>211 — growing the station table</td><td>open</td><td>Shelves: grow by adding, so nothing already placed ever moves.</td></tr>
 <tr><td>212 — one way to build a program</td><td>open</td><td>The capstone. Create, configure, wire — legal at any moment, loading as one caller.</td></tr>
 <tr><td>213 — the input station</td><td>open</td><td>The other door: where arguments arrive, and what makes a program composable.</td></tr>
@@ -156,6 +171,20 @@ wire and every value in flight survives untouched.</p>
 would freeze every thread delivering into that station. This is why the
 claim dispatch table had rows it deliberately left empty, and the
 reasoning outlived the rows.</p>
+<p>**And now no user code runs anywhere but on a worker that picked up a
+task.** 210a removed the pull path, which was the engine's one named
+exception — a box run inline, on the thread of whoever was assembling
+somebody else's work. The rule above was always the interesting half;
+this is the other half arriving late.</p>
+<p>**A guarantee can be lost rather than moved, and 210a is where the
+phase learned to say so.** Rewiring holds one lock across checking an
+edge and installing it, because two threads adding separately-legal
+edges could produce an illegal pair. After the pull path went, no two
+legal edges can — every surviving rule concerns one edge and one
+station's fixed shape. The test that proved it is retired with a note
+saying why, rather than deleted quietly. **A property that stops being
+true is worth a paragraph; a test that stops existing without one is
+how a project forgets what it used to guarantee.**</p>
 <p><strong>Cells are exactly the size of the parameter they feed</strong>, so a write
 is a memory copy into a fixed offset with no allocation on the hot
 path. Everything since has been arranged to keep that true.</p>

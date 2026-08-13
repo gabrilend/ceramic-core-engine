@@ -30,6 +30,13 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html" class="here">210 — What an input port is</a>
+<a href="issue-210b-the-port-record.html">210b — The port record</a>
+<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
+<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -65,6 +72,7 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -104,7 +112,6 @@
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
 <a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
-<a href="info-034-gather-c.html">034-gather.c — the pull path, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -117,6 +124,33 @@
 <p>Supersedes the port half of issues 202, 401, and 403, which each
 designed one kind of input in isolation. This is the record all three
 share, designed once — and one of the three no longer exists.</p>
+<p><strong>This is a parent issue.</strong> It was one ticket with thirteen
+implementation steps, which is not a ticket but a phase wearing one.
+The steps divided along seams that were already there: a removal, a
+record, a state machine, a claim, a growth strategy, a conversion, a
+construction surface, and a declaration. Each is separately
+buildable, separately testable, and separately wrong-able. What stays
+here is what all of them share — the vocabulary, the shared design
+that no single child owns, and the questions answered once for the
+whole family.</p>
+<h2>The children</h2>
+<table>
+<tr><td>issue</td><td>what it builds</td><td>depends on</td></tr>
+<tr><td><a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a></td><td>the gatherer kind and everything reading it, taken out</td><td>—</td></tr>
+<tr><td><a href="issue-210b-the-port-record.html">210b — The port record</a></td><td>both storages, the three-value tag, cells allocated at instantiation</td><td>210a</td></tr>
+<tr><td><a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a></td><td>the four-state per-cell machine, then the copies moved out of the lock</td><td>210b</td></tr>
+<tr><td><a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a></td><td>ascending port order, claim-or-roll-back, the bookmark scan</td><td>210c</td></tr>
+<tr><td><a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a></td><td>a ring buffer that grows by appending, copying nothing</td><td>210d</td></tr>
+<tr><td><a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a></td><td>conversion between tags as one operation, cells left alone</td><td>210b</td></tr>
+<tr><td><a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a></td><td>a single construction and configuration surface</td><td>210b, 210f</td></tr>
+<tr><td><a href="issue-210h-optional-parameters.html">210h — Optional parameters</a></td><td>a parameter a box declares it can do without</td><td>210g</td></tr>
+</table>
+<p>The order is real rather than tidy. **210c through 210e must land in
+that sequence**, because each removes the reason the next one was
+hard: per-cell states are what make a lockless claim expressible, and
+a claim that scans rather than computes a position is what makes
+growth-by-appending safe. <strong>210f and 210g branch off 210b</strong> and can
+be built while the concurrency line is in progress.</p>
 <h2>Vocabulary, since this issue is about the record itself</h2>
 <ul>
 <li><strong>A port</strong> is the standing interface for one input of one station:</li>
@@ -128,51 +162,23 @@ share, designed once — and one of the three no longer exists.</p>
   inside a task. **The port decides how a value is stored; the slot is
   where it lands.**</p>
 </ul>
-<p>The source calls the port a slot, which is a naming debt this issue
+<p>The source calls the port a slot, which is a naming debt this family
 does not pay off — renaming reaches the station header, delivery,
 statics, the loader, the dump, and
 <a href="doc-002-stations-and-slots.html">002</a>, and is worth doing
-deliberately rather than as a side effect.</p>
+deliberately rather than as a side effect of any of these.</p>
 <h2>Current behavior</h2>
 <p>An input port carries a kind tag and the fields that kind needs, with
-the fields for the other kinds sitting unused: storage, capacity, and
-two indices for a ring buffer; an upstream station index for a
-gatherer; a table entry number for a static.</p>
-<p><strong>One of those kinds is being removed entirely.</strong> Nothing is pulled any
-more — see
-<a href="impl-056-no-pull-path.html">056</a> — so the
-gatherer tag, the upstream index, and everything that read them are
-going. What remains is a ring buffer, a static, and the state of not
-being configured at all.</p>
-<p>**Converting a port between kinds destroys and rebuilds rather than
-switching.** Both conversion paths in the source do the same three
-things: free the cell array, null the pointer, flip the tag. So making
-a ring port into a static throws away a buffer that is already the
-right size for the type it holds, and making it a ring port again would
-have to allocate a new one.</p>
-<p><strong>The station's mutex is held for the whole of an arrival.</strong> A delivery
-takes it, copies the value into a cell, walks every port asking whether
-it holds a value, claims one from each, and only then lets go. A
-station that three arrows fan into, carrying two-hundred-byte structs,
-holds its lock for six hundred bytes of copying while every other
-deliverer waits.</p>
-<p><strong>A dispatch table answers with an absence.</strong> Readiness asks each port
-whether it holds a value; the claim table then asks each for one, and
-its non-ring rows are <strong>null</strong>, with the caller guarding them by
-testing the function pointer. The meaning is "resolved later, outside
-the mutex," which was a real and correct decision — but it is a
-decision written as a hole, and a reader has to already know which hole
-means what.</p>
-<p>**Two ways exist to create a station, and they can bind different
-things.** Placement by name looks the box up in the registry and copies
-each parameter's type name onto the corresponding port; hand placement
-takes an array of element sizes and no type names at all. Binding a
-static needs the type, because a static in a box file is <em>text</em> and
-turning <code>{ 5, 2.0, { 0, 0, 0 }, "hey there", 2 }</code> into bytes means
-knowing the field layout. So a hand-placed station cannot bind a
-static, and the reason is not a design limit — it is that phase 2's
-scaffolding was never given the argument.</p>
-<h2>Intended behavior</h2>
+the fields for the other kind sitting unused: storage, capacity, and
+two indices for a ring buffer; a table entry number for a static.</p>
+<p><strong>210a is done: the gatherer is gone</strong>, along with the pull module,
+the inline execution of a box during task assembly, the cycle walk,
+the runtime gather-repoint operation, the gather timing charged to
+the puller, and the loader's three gather-shaped validations. What
+remains is a ring buffer, a static, and — still to be built — the
+state of not being configured at all.</p>
+<p>Everything else described below is still ahead.</p>
+<h2>The design all the children share</h2>
 <h3>Three tags, one live, and switching is a field write</h3>
 <p>The tag has three values: <strong>ring</strong>, <strong>static</strong>, and <strong>none</strong>. Exactly
 one is in effect; the storage belonging to the other sits idle. A
@@ -181,149 +187,11 @@ every port regardless of what that port is currently for — the element
 size is known from the registry at placement, so the space is exactly
 right, and a buffer standing ready is what makes changing a port's
 source <strong>a field write</strong> rather than an allocation dance.</p>
-<p><strong>Every port's ring buffer starts at ten values.</strong> Ten cells of that
-port's element size, so a port carrying four-byte integers starts at
-forty bytes and one carrying a two-hundred-byte struct starts at two
-thousand. Ten is a magic number and is meant to be one: it lives as a
-single named constant, and it barely matters, because a buffer that
-starts too small grows to whatever depth the program actually demands
-and then stops. The cost of guessing low is a slower startup, which is
-the cheapest time in a program's life to be slow.</p>
-<p><strong>A port may be told its own starting capacity instead</strong>, written in
-the box file or handed to the call that creates the station, with any
-port not given one getting ten. It is a hint rather than a setting:
-growth covers being wrong, so nobody has to be right.</p>
 <p>**None means unconfigured, and a station holding one can never be
 ready.** It is a state, not a value — no null is invented and nothing
 is ever handed to a box — and it is what lets a program be assembled
 from nothing, a station coming into existence with every port unset and
 becoming runnable as its ports are given sources one at a time.</p>
-<p><strong>An unconfigured port is written into a dump.</strong> The dump's whole value
-is that it says what is actually there, walking the live station table
-rather than any remembered file text — so a half-built program dumps to
-a faithful record of a half-built program, and reloading that file
-gives the same one back. Omitting the port would be the dump quietly
-lying, producing a file that loads into something different from what
-was dumped; refusing to dump at all would make the tool useless
-precisely when somebody is mid-construction and most wants to see what
-they have. That the result cannot run is not a problem the dump has to
-solve: a station with an unconfigured port simply never becomes ready,
-which is the same ordinary state an unwired station is already in.</p>
-<p>This means the file format needs a way to say it, since today a port is
-a ring buffer unless a line says otherwise and the only exception
-written is a static.</p>
-<p><strong>Values survive a change of source.</strong> Switching a port's tag away from
-ring leaves its cells exactly as they are — not freed, not cleared, not
-drained. They are waiting if the port becomes a ring again. Discarding
-them would throw away values a producer already handed over,
-invisibly, which is worse than serving them slightly late.</p>
-<h3>Every cell carries its own state, and that state is the lock</h3>
-<table>
-<tr><td>state</td><td>meaning</td><td>who may touch it</td></tr>
-<tr><td><strong>empty</strong></td><td>nothing here</td><td>a writer, by taking it</td></tr>
-<tr><td><strong>reserved</strong></td><td>a writer owns it and is copying in</td><td>that writer only</td></tr>
-<tr><td><strong>ready</strong></td><td>the bytes have landed</td><td>a reader, by taking it</td></tr>
-<tr><td><strong>claimed</strong></td><td>a reader owns it and is copying out</td><td>that reader only</td></tr>
-</table>
-<p>Every transition is a single atomic compare-and-swap, so two threads
-can never own one cell. That is the whole of the mutual exclusion: a
-writer must not write while anyone reads or writes, a reader must not
-read while anyone writes, and the state machine says so <strong>per cell</strong>
-rather than per port. No lock is involved.</p>
-<p><strong>The state lives on the cell, not in a parallel array.</strong> A parallel
-array would put every cell's state in one cache line, so a writer at
-one end and a reader at the other would invalidate each other's copy on
-every flip — a hardware cost no lock can remove, because it is not a
-race. Carried on the cell, a writer working at cell three and a reader
-working at cell zero touch different lines entirely whenever the value
-is large, which is exactly when the copying being moved out of the lock
-was worth moving. Small values share a line and do not care, because
-their copies were never the problem.</p>
-<p><strong>Cells are not cleared when released.</strong> Every write is a memory copy
-of the port's full element size, so a stale value is always completely
-covered and there is no such thing as a partial write into a cell. The
-guarantee is not that a cell was cleaned but that its bytes are never
-read unless its state says ready, which is the state machine's entire
-job. Zeroing on release would cost a full erase per claim and buy
-nothing.</p>
-<h3>The claim takes no lock</h3>
-<p><strong>Walk the ports in ascending index order.</strong> At each ring port, find a
-ready cell and flip it to claimed. Statics are skipped — they are
-peeked, never consumed, so there is nothing to take. Reach the end
-having claimed one from every ring port and the invocation is real.
-Meet a ring port with nothing ready and walk back, flipping what you
-claimed to ready again, and give up.</p>
-<p><strong>The fixed order is what prevents livelock</strong>, and it is the only
-subtle part. Without it, two threads at a two-input station can claim
-one port each, each fail on the other's port, each roll back, and
-retry into the same interleaving forever — nobody blocked, nobody
-progressing, and a complete input set sitting there the whole time.
-Lowest index first means both reach for the same port, one wins
-outright, and the loser fails at the first step having claimed nothing.</p>
-<p><strong>Finding a ready cell is a scan, with a bookmark.</strong> There are no
-positions any more, so a reader starts at a hint and looks forward.
-The hint advances as cells are used and is allowed to be wrong — a
-stale one costs a slightly longer scan and nothing else. That is the
-distinction that makes everything below work: **a position must be
-exact and is therefore computed from the capacity; a hint may be wrong
-and therefore is not.**</p>
-<p><strong>The bookmark is one shared number per port, and it is an index.</strong>
-Not a pointer, and not a copy per worker. An index because the port's
-storage is the one thing in this design that gets reallocated: growth
-adds a page, and a pointer saved into a page is a pointer that means
-something else afterwards, while an ordinal position into the port's
-cells keeps meaning what it meant. This is the same reason a wire is a
-pair of integers rather than an address, and the reason has now been
-paid for twice.</p>
-<p>**The scan reads the bookmark once, sweeps forward, wraps, and stops
-where it started.** Reading it once is what bounds the work: the sweep
-visits at most every cell the port has, exactly one time each, and then
-gives up. Re-reading a bookmark that other workers keep pushing forward
-would let a reader chase it, and a scan that can be outrun is a scan
-with no bound.</p>
-<p>**Other workers move the bookmark while a sweep is in progress, and
-that is fine.** It is a hint, so a reader that started from a value now
-stale is not wrong, only slightly less lucky — it pays a few extra
-cells of walking. Nothing about correctness rests on the number being
-current; what rests on it is only how quickly a reader finds work. The
-shared write remains a shared write, and its cost is the subject of the
-answered question at the bottom of this issue.</p>
-<p><strong>Values may leave a port in a different order than they arrived.</strong>
-This is a real loss and it is chosen deliberately. Values reaching one
-port from two upstream stations were already in whatever order the
-threads produced them, so arrival order was arbitrary to begin with;
-and rollback releases cells wherever they sit, so gaps open and the
-oldest occupied cell stops being findable without a search nobody wants
-to pay for. It belongs in <a href="doc-058-guarantees.html">058</a> as a stated
-non-guarantee, and there is a passing test asserting several hundred
-in-order deliveries that has to be retired on purpose rather than
-discovered.</p>
-<h3>Growth adds a page</h3>
-<p>Because nothing computes a location from the capacity, changing the
-capacity disturbs nothing. A ring buffer grows by allocating another
-page of cells and adding it to a short list — the same shape the
-station table uses, and for the same reason. Nothing is copied, no
-existing cell moves, and there is no window to get right.</p>
-<p>That removes the whole ordering problem growth used to have. Copy the
-values across and then publish, and a value popped from the old storage
-during the copy exists in both places and gets delivered twice; publish
-first and then copy, and readers see an empty buffer while it fills.
-Neither order is safe, because the real requirement was that nothing
-else happen at all during the copy. With nothing copied, there is
-nothing to protect.</p>
-<h3>A static lives on the port, and writing one is an event</h3>
-<p>There is no statics table. Binding a static copies the value into the
-port that reads it, and from that moment the file's entry has done its
-job. Claiming happens in the same window as the ring pop, so the static
-half of an input set is as mutually consistent as the buffered half —
-one lock instead of two.</p>
-<p><strong>Writing a static runs the readiness check on its station.</strong> That is
-what replaces the pull path, and it is one addition rather than a
-subsystem: a chain of stations wired through static ports becomes a
-recalculation graph, and construction's own writes are what start a
-program. A write cannot make something run that could not run anyway,
-because the check it triggers is the ordinary one and an empty ring
-port still answers no.</p>
 <h3>What is left for the station's mutex</h3>
 <p>Four things, all rare and all structural: growing a ring buffer,
 rewiring, writing a static, and changing a port's tag. Nothing on the
@@ -331,64 +199,21 @@ hot path. It stays <strong>inside the station record</strong>, because shelves k
 station records still, so a mutex inside one never moves — the separate
 paged array of locks that was considered would buy nothing and would
 pack unrelated stations' locks into shared cache lines.</p>
-<h3>One way to build a station</h3>
-<p>Configuring a port is a single operation naming a station, a port, a
-source, and a value. The loader calls it while reading a file; a
-debugger, a control socket, or a workbench calls the same one on a
-running program. Hand placement stops being a second contract that can
-bind fewer things than the first — it takes the type names the registry
-already has, or it stops existing.</p>
-<h3>Optional parameters</h3>
-<p>A box may declare a parameter optional. Because there is no spare value
-inside an <code>int</code>'s range that could honestly mean "deliberately absent",
-an optional parameter's type is a small generated wrapper carrying a
-presence flag beside the value — so the C signature <em>looks</em> optional
-rather than being an ordinary parameter that might secretly be a
-sentinel. The check that a non-optional parameter is not left facing an
-unconfigured port belongs at configuration time, which names the
-station and the port while a person is still there to read it, rather
-than on the first task built minutes into a run. The shim keeps a cheap
-assertion as a backstop and never has to make a decision, so the hot
-path carries no check that can only fail because of a configuration
-error made much earlier.</p>
-<h2>Suggested implementation steps</h2>
-<p>1. Remove the gatherer tag and everything reading it, following
-   <a href="impl-056-no-pull-path.html">056</a>. This
-   first, because every step below is smaller once it is gone.
-2. The port record: both storages, the three-value tag, and accessors
-   that read the live one. Ring cells allocated at station
-   instantiation, ten deep from one named constant or as many as that
-   port was told, sized from the registry.
-3. Both dispatch tables gain a row per tag, with the <em>none</em> row
-   answering "not filled" and never claimable, and no row anywhere
-   being an absence.
-4. The per-cell state, carried on the cell, every transition an atomic
-   compare-and-swap — but with the copies still inside the station's
-   mutex, so the state machine is proven correct while the old locking
-   still guarantees it cannot matter.
-5. Move the write copy out of the lock, then the read copy. Measure the
-   delivery path at each step against a wide fan-in with large values,
-   which is where the win is supposed to be and the only place it will
-   show.
-6. The lock-free claim: ascending port order, claim-or-roll-back,
-   scanning from a hint. Retire the in-order delivery test in the same
-   change, with the non-guarantee recorded first.
-7. Paged growth, replacing the copy-and-unwrap path.
-8. Conversion between tags as a single operation under the station's
-   mutex, leaving the cells alone.
-9. One station-construction and port-configuration surface, with the
-   loader as its first caller and runtime editing as its second.
-10. The configuration-time check for an unconfigured port feeding a
-    non-optional parameter, then optional parameters themselves — the
-    declaration, the generated wrapper type, and the generator's
-    handling of both.
-11. A test that a port cycles through all three tags while the program
-    runs, with a station upstream delivering throughout, and nothing
-    tears.
-12. A test that a station with an unconfigured port never becomes
-    ready, and becomes ready the moment that port is given a source.
-13. A test that a program read from a file and one built by calling the
-    configuration surface directly produce identical dumps.</p>
+<h3>A static lives on the port, and writing one is an event</h3>
+<p>There is no statics table. Binding a static copies the value into the
+port that reads it, and from that moment the file's entry has done its
+job. Claiming happens in the same window as the ring pop, so the static
+half of an input set is as mutually consistent as the buffered half —
+one lock instead of two.</p>
+<p><strong>Writing a static runs the readiness check on its station.</strong> That is
+what replaced the pull path, and it is one addition rather than a
+subsystem: a chain of stations wired through static ports becomes a
+recalculation graph, and construction's own writes are what start a
+program. A write cannot make something run that could not run anyway,
+because the check it triggers is the ordinary one and an empty ring
+port still answers no.</p>
+<p>The statics work proper belongs to <a href="issue-401-static-slots.html">401</a> and
+<a href="issue-405-statics-mutation.html">405</a>, which stand on 210b's record.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>
@@ -406,7 +231,8 @@ error made much earlier.</p>
   touched on the transitions of a claim rather than throughout one. If
   a measurement ever shows that fixed cost mattering, the cheap move is
   the second option, publishing progress every so often rather than
-  every time, and nothing above has to change for it.</p>
+  every time, and nothing above has to change for it. Belongs to
+  <a href="issue-210d-the-claim-takes-no-lock.html">210d</a>.</p>
 </ul>
 <ul>
 <li>*A writer that dies mid-copy leaves a cell reserved forever — should</li>
@@ -423,13 +249,14 @@ error made much earlier.</p>
   hardware, and software that stops when the memory under it stops is
   behaving correctly rather than lacking a feature.</p>
 </ul>
-<p>  <strong>This becomes true rather than being true.</strong> There is one place
-  today where user code runs inside the claim walk: a gather slot
-  invokes its upstream box inline, on the claiming thread, while cells
-  are held. A box that crashes there really does strand them. That is
-  the pull path, and removing it is what closes the window — so the
-  concern is real, and it belongs to gathering, which is going, rather
-  than to the port record, which is staying.</p>
+<p>  <strong>This became true rather than being true, and now it is true.</strong>
+  There was one place where user code ran inside the claim walk: a
+  gather slot invoked its upstream box inline, on the claiming thread,
+  while cells were held, so a box that crashed there really did strand
+  them. That was the pull path, and removing it is what closed the
+  window. <a href="done-210a-the-pull-path-removed.html">210a</a> removed it,
+  so the answer above rests on the engine as it is rather than on the
+  engine as it is going to be.</p>
 <p>  A box that crashes while it <em>runs</em> is still an event worth having an
   answer for, but it cannot strand a cell, because by then it holds
   none. It loses a task, which is a different problem.</p>
@@ -442,7 +269,7 @@ error made much earlier.</p>
 <li><a href="issue-405-statics-mutation.html">405 — Changing a static while it runs</a>,</li>
 <p>  which becomes one case of changing a port</p>
 <li><a href="done-403-gatherer-slots.html">403 — Gatherer slots</a>, the kind</li>
-<p>  this removes</p>
+<p>  210a removed</p>
 <li><a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>,</li>
 <p>  the same paging shape one level up</p>
 <li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>

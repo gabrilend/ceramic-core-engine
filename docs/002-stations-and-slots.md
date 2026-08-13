@@ -91,7 +91,8 @@ makes claiming a static happen under the same lock as the ring pop
 instead of a second one. And **head and tail are going**, because each
 cell will carry its own state and a reader will scan for a usable one
 rather than compute where it must be; that is what lets a buffer grow
-by adding a page instead of copying. Issue 210 carries both.
+by adding a page instead of copying. Issue 210b carries the first;
+210c and 210e carry the second between them.
 
 **Ring buffer.** The ordinary case. Values arrive by being written into
 it and wait their turn. It is a real ring: two indices, wrapping at the
