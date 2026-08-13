@@ -86,26 +86,39 @@ static void slot_grow_locked(slot_t *sl)
 {
     int held = slot_count_locked(sl);
     int new_capacity = sl->capacity * 2;
-    unsigned char *fresh = malloc((size_t)new_capacity * (size_t)sl->elem_size);
+    /* Zeroed, so every cell past the ones carried over is empty
+     * (issue 210c). The carried-over ones are published ready below. */
+    unsigned char *fresh = calloc((size_t)new_capacity, (size_t)sl->stride);
     if (!fresh) {
         fprintf(stderr, "delivery: ring buffer growth to %d cells failed\n",
                 new_capacity);
         abort();
     }
 
-    unsigned char *old = sl->storage;
-    if (sl->tail >= sl->head) {
-        memcpy(fresh, old + (size_t)sl->head * (size_t)sl->elem_size,
-               (size_t)held * (size_t)sl->elem_size);
-    } else {
-        int first_block = sl->capacity - sl->head;
-        memcpy(fresh, old + (size_t)sl->head * (size_t)sl->elem_size,
-               (size_t)first_block * (size_t)sl->elem_size);
-        memcpy(fresh + (size_t)first_block * (size_t)sl->elem_size, old,
-               (size_t)sl->tail * (size_t)sl->elem_size);
+    /* Value by value rather than in one or two block copies. The old
+     * storage's cells carry their states interleaved with their
+     * bytes, and the states are not what should be carried across —
+     * the fresh run is being *built* rather than moved, so each
+     * surviving value is written into an empty cell and published as
+     * ready, exactly as an ordinary arrival would be. Copying the
+     * bytes wholesale would carry the old states with them, and a
+     * cell that was mid-transition in the old array would arrive in
+     * the new one claiming to be mid-transition with nobody in it.
+     *
+     * Nothing else can be happening during this: the station's mutex
+     * is held for the whole of a growth, which is what makes it safe
+     * to walk cells one at a time here. Issue 210e removes both the
+     * copying and the need for that.
+     */
+    for (int i = 0; i < held; i++) {
+        int from = (sl->head + i) % sl->capacity;
+        unsigned char *src = (unsigned char *)slot_cell(sl, from);
+        unsigned char *dst = fresh + (size_t)i * (size_t)sl->stride;
+        memcpy(dst, src, (size_t)sl->elem_size);
+        dst[sl->elem_size] = CELL_READY;
     }
 
-    free(old);
+    free(sl->storage);
     sl->storage = fresh;
     sl->capacity = new_capacity;
     sl->head = 0;
@@ -122,8 +135,28 @@ static void slot_write_locked(slot_t *sl, const void *value)
     if ((sl->tail + 1) % sl->capacity == sl->head)
         slot_grow_locked(sl);
 
-    memcpy((unsigned char *)sl->storage + (size_t)sl->tail * (size_t)sl->elem_size,
-           value, (size_t)sl->elem_size);
+    /* The state machine, running for real (issue 210c) — while the
+     * station's mutex still covers the copy, which is deliberate.
+     * Building the states first and removing the lock afterwards
+     * means a bug here shows up as a refused transition rather than
+     * as a torn value.
+     *
+     * Both transitions must win, because the mutex means nobody else
+     * is touching this port at all. A refusal is therefore not a lost
+     * race — there is no other racer — but a disagreement between the
+     * indices and the states, which is an engine bug and is worth
+     * stopping for rather than papering over. */
+    if (!slot_cell_move(sl, sl->tail, CELL_EMPTY, CELL_RESERVED)) {
+        fprintf(stderr, "delivery: writing into a cell that was not empty — "
+                        "the tail index and the cell states disagree\n");
+        abort();
+    }
+    memcpy(slot_cell(sl, sl->tail), value, (size_t)sl->elem_size);
+    if (!slot_cell_move(sl, sl->tail, CELL_RESERVED, CELL_READY)) {
+        fprintf(stderr, "delivery: publishing a cell this thread had "
+                        "reserved, and somebody else had moved it\n");
+        abort();
+    }
     sl->tail = (sl->tail + 1) % sl->capacity;
 
     int held = slot_count_locked(sl);
@@ -135,9 +168,23 @@ static void slot_write_locked(slot_t *sl, const void *value)
 /* {{{ slot_pop_locked() */
 static void slot_pop_locked(slot_t *sl, void *into)
 {
-    memcpy(into,
-           (unsigned char *)sl->storage + (size_t)sl->head * (size_t)sl->elem_size,
-           (size_t)sl->elem_size);
+    /* The mirror of the write: take the cell, copy out, release it.
+     * The reader is finished with the cell the moment the copy lands
+     * in the caller's buffer — the box does not run until a worker
+     * picks the task up later, reading from the task and holding no
+     * cell at all. That is why nothing that can die is ever inside
+     * this window. */
+    if (!slot_cell_move(sl, sl->head, CELL_READY, CELL_CLAIMED)) {
+        fprintf(stderr, "delivery: claiming a cell that was not ready — "
+                        "the head index and the cell states disagree\n");
+        abort();
+    }
+    memcpy(into, slot_cell(sl, sl->head), (size_t)sl->elem_size);
+    if (!slot_cell_move(sl, sl->head, CELL_CLAIMED, CELL_EMPTY)) {
+        fprintf(stderr, "delivery: releasing a cell this thread had claimed, "
+                        "and somebody else had moved it\n");
+        abort();
+    }
     sl->head = (sl->head + 1) % sl->capacity;
 }
 /* }}} */

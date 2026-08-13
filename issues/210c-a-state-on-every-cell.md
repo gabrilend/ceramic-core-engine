@@ -7,22 +7,75 @@ that says so.
 
 ## Current behavior
 
-**The station's mutex is held for the whole of an arrival.** A
-delivery takes it, copies the value into a cell, walks every port
-asking whether it holds a value, claims one from each, and only then
-lets go. A station that three arrows fan into, carrying two-hundred-byte
-structs, holds its lock for six hundred bytes of copying while every
-other deliverer waits.
+**Every cell carries its own state, and the machine is proven.** A
+cell is a value followed by the state of that value, and the four
+transitions are compare-and-swaps that name the state they start
+from — so a move out of a state a cell is not in simply fails, and an
+illegal transition is impossible rather than discouraged. Delivery
+runs through it: a write reserves an empty cell, copies, and publishes
+it ready; a claim takes a ready cell, copies out, and releases it
+empty.
 
-The copying is the part that does not belong there. Deciding whether
-an input set is complete is a handful of index comparisons; moving the
-bytes is unbounded in the size of the type and has nothing to do with
-any other port.
+**The copies are still inside the station's mutex, and that is the
+plan.** The machine is exercised for real while the old locking still
+guarantees a bug in it cannot matter — a wrong transition shows up as
+a refused move that stops the program, rather than as a torn value
+that does not. Every refusal in the delivery path is therefore fatal
+and says so: under the mutex nobody else is touching the port, so a
+refusal is not a lost race but a disagreement between the indices and
+the states.
 
-A cell's occupancy is implied by two indices — head and tail — which
-is why the lock must cover the copy: the indices say a cell is
-occupied before its bytes have finished landing, so nothing but
-exclusion can stop a reader from arriving early.
+Proven three ways with no delivery around it: sixteen threads over
+four thousand cells win every cell exactly once; every move from a
+state a cell is not in is refused, walked over the whole table rather
+than spot-checked; and a hundred thousand values pass through eight
+cells between four writers and four readers with no lock anywhere,
+each coming out exactly once.
+
+**The cost of the state is in the stride.** A cell is now its value,
+its state, and enough padding to keep the next value aligned. The
+engine does not know any type's alignment — the registry carries sizes
+and not alignments — so the stride rounds up to the largest power of
+two dividing the element size, which is guaranteed to be at least the
+alignment because a type's alignment always divides its size. A
+four-byte integer port goes from four bytes per cell to eight; a
+two-hundred-byte struct port goes to two hundred and eight. The
+overhead is proportionally large exactly where it is absolutely small.
+
+**What is left.** Both copies are still under the mutex.
+
+## What steps 3 and 4 turned out to need
+
+**The write copy cannot leave the lock without the reader learning to
+search**, and the plan above did not see it. It is worth writing down
+because it is the same fact this issue is built on, arriving one step
+earlier than expected.
+
+Occupancy is still implied by the head and tail indices. Move the
+write copy outside the lock and the sequence becomes: take a cell to
+reserved, advance the tail, release the lock, copy, publish. Between
+the tail advancing and the publish landing, **the indices say a value
+is waiting and the cell says it is still being written.** A claimer
+arriving in that window computes the position of the value it wants,
+finds a reserved cell there, and is refused — correctly, because the
+bytes have not landed, but it had nowhere else to look, because a
+computed position is the only one it has.
+
+So the reader has to stop computing a position and start looking for a
+ready cell. That is exactly
+[210d](210d-the-claim-takes-no-lock.md)'s scan, and it is needed
+*before* the lock comes off the copy rather than after. The
+distinction that issue draws — a position must be exact and is
+therefore computed, a hint may be wrong and therefore is not — is what
+makes the reserved-but-unpublished window survivable, and there is no
+smaller thing that does.
+
+**The two issues are therefore one piece of work in the middle, and
+they should be resequenced rather than forced.** The scan belongs at
+the head of the remaining work, with both copy moves and the claim
+walk's rollback following it. What does not change is the staging
+principle that made this issue safe: build the mechanism while the old
+lock still covers for it, prove it, and only then remove the cover.
 
 ## Intended behavior
 
@@ -67,23 +120,36 @@ then start removing the thing that was covering for it.
 
 ## Suggested implementation steps
 
-1. The per-cell state, carried on the cell, every transition an atomic
-   compare-and-swap — **but with the copies still inside the station's
-   mutex**. The state machine is exercised for real and the old
-   locking still guarantees it cannot matter. A bug here shows up as a
-   failed transition rather than as a torn value.
-2. A test that hammers the transitions directly, without delivery
-   around them: many threads competing for the same cell, exactly one
-   winning each transition, no state ever reached from a state that
+1. **Done.** The per-cell state, carried on the cell, every transition
+   an atomic compare-and-swap — **but with the copies still inside the
+   station's mutex**. The state machine is exercised for real and the
+   old locking still guarantees it cannot matter. A bug here shows up
+   as a failed transition rather than as a torn value.
+2. **Done.** A test that hammers the transitions directly, without
+   delivery around them: many threads competing for the same cells,
+   exactly one winning each, no state ever reached from a state that
    cannot reach it.
-3. Move the **write** copy out of the lock. A deliverer takes a cell
+
+   Contention there comes from breadth rather than from a barrier —
+   every thread walks the same long run of cells at once — because the
+   one-cell-per-round shape needs a barrier between rounds, and
+   building a correct barrier to test a mechanism whose purpose is to
+   avoid needing one is the wrong way round. The scaffolding's own
+   race was the first thing that shape produced.
+3. **The scan comes first**, from
+   [210d](210d-the-claim-takes-no-lock.md), for the reason set out
+   above: a reserved-but-unpublished cell is indistinguishable from a
+   full one to anything that computes a position, so the reader has to
+   look rather than calculate before either copy can leave the lock.
+4. Move the **write** copy out of the lock. A deliverer takes a cell
    to reserved, copies outside, then publishes as ready.
-4. Move the **read** copy out of the lock. A claimer takes a cell to
+5. Move the **read** copy out of the lock. A claimer takes a cell to
    claimed, copies outside, then releases as empty.
-5. Measure the delivery path at each of those two steps against a wide
+6. Measure the delivery path at each of those two steps against a wide
    fan-in with large values — which is where the win is supposed to be
    and the only place it will show. A measurement on small values will
-   show nothing and would be evidence of nothing.
+   show nothing and would be evidence of nothing. The apparatus and
+   the baseline both exist; see above.
 
 ## What this issue does not do
 

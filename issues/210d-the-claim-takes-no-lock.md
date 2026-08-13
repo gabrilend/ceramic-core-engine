@@ -8,9 +8,23 @@ purpose to let it.
 
 Readiness and claiming happen together under the station's mutex: walk
 every port asking whether it holds a value, and if all do, take one
-from each. After [210c](210c-a-state-on-every-cell.md) the *copies*
-happen outside that lock, but the walk itself still holds it, so every
-deliverer into a busy station still queues behind every other.
+from each. Both copies still happen under that lock too, so every
+deliverer into a busy station queues behind every other.
+
+**The scan below is needed earlier than this issue's place in the
+order suggests.** [210c](210c-a-state-on-every-cell.md) built the
+per-cell states and then found it could not move either copy out of
+the mutex without it: a cell that a writer has reserved and not yet
+published is, to anything that computes a position, indistinguishable
+from a cell holding a value. A claimer that arrives there is refused
+and has nowhere else to look, because a computed position is the only
+one it has. The distinction this issue draws — a position must be
+exact, a hint may be wrong — is what makes that window survivable, and
+nothing smaller does.
+
+So the scan is the next thing built, and 210c's two copy moves follow
+it rather than precede it. Nothing about the design below changes;
+only when it happens does.
 
 **A value's position is computed.** A reader takes the cell at the
 head index, which is exact and must be, because head and tail are what
@@ -90,7 +104,12 @@ to promise.
    stated non-guarantee, with its reason.
 2. Retire the in-order delivery test, citing that entry.
 3. The scan: a bookmark per port, read once, sweep forward, wrap, stop
-   where it started.
+   where it started. **This is the next thing built in the family**,
+   for the reason under *Current behavior* — 210c's copy moves wait on
+   it rather than the other way round. It can land while the walk is
+   still under the mutex, which keeps 210c's staging principle intact:
+   build the mechanism while the old lock still covers for it, prove
+   it, then remove the cover.
 4. The claim walk in ascending port order, with roll-back on the first
    port that has nothing ready.
 5. A livelock test that would fail without the ordering rule: many

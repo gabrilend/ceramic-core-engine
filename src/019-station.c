@@ -42,6 +42,75 @@ static void fail(const char *what)
 }
 /* }}} */
 
+/* {{{ cell_stride() */
+/*
+ * How many bytes one cell occupies: its value, then its state, then
+ * enough padding that the next cell's value is aligned too.
+ *
+ * The alignment is inferred rather than known, and the inference is
+ * the only subtle line in this file. The registry carries every
+ * type's *size* and no type's *alignment* — nothing has needed the
+ * latter before, because a plain array of values strided by their own
+ * size is aligned for free. Adding a state byte per cell breaks that
+ * for the first time.
+ *
+ * What rescues it is a rule the C standard guarantees: a type's
+ * alignment always divides its size. So the largest power of two
+ * dividing elem_size is *at least* the alignment the type wants, and
+ * rounding the stride up to it is safe without knowing what the type
+ * actually is. Sixteen is the ceiling because no ordinary C type
+ * needs more than max_align_t, and rounding past it would only waste
+ * memory.
+ *
+ * The cost is worth stating plainly. A port of four-byte integers
+ * goes from four bytes per cell to eight — the state needs a byte and
+ * the alignment rounds it to four. A port of two-hundred-byte structs
+ * goes from two hundred to two hundred and eight. So the overhead is
+ * large in proportion exactly where it is small in absolute terms,
+ * and negligible where the values are big, which is the case this
+ * whole line of work is about.
+ */
+static int cell_stride(int elem_size)
+{
+    int align = 1;
+    while (align < 16 && elem_size % (align * 2) == 0)
+        align *= 2;
+    int total = elem_size + (int)sizeof(_Atomic unsigned char);
+    return (total + align - 1) / align * align;
+}
+/* }}} */
+
+/* {{{ slot_cell() */
+void *slot_cell(const slot_t *sl, int index)
+{
+    return (unsigned char *)sl->storage + (size_t)index * (size_t)sl->stride;
+}
+/* }}} */
+
+/* {{{ slot_cell_move() */
+int slot_cell_move(const slot_t *sl, int index, int from, int to)
+{
+    /* The state sits immediately after the value bytes. Reached
+     * through a byte pointer and an explicit offset rather than a
+     * struct member, because a cell's size is not known until the
+     * port exists — the value in the middle of it is as wide as the
+     * parameter this port feeds. */
+    _Atomic unsigned char *state = (_Atomic unsigned char *)
+        ((unsigned char *)slot_cell(sl, index) + sl->elem_size);
+
+    unsigned char expected = (unsigned char)from;
+    /* Acquire-release on success: a reader that wins ready-to-claimed
+     * must see every byte the writer copied before it published, and
+     * a writer that wins claimed-to-empty must not have its next copy
+     * hoisted above the release. Acquire on failure, because a caller
+     * that lost still read the state and will decide what to do from
+     * it. */
+    return atomic_compare_exchange_strong_explicit(
+        state, &expected, (unsigned char)to,
+        memory_order_acq_rel, memory_order_acquire);
+}
+/* }}} */
+
 /* {{{ map_create() */
 map_t *map_create(int n_stations)
 {
@@ -104,7 +173,13 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
         sl->kind = SLOT_RING;
         sl->elem_size = elem_sizes[i];
         sl->capacity = SLOT_DEFAULT_CAPACITY;
-        sl->storage = malloc((size_t)sl->capacity * (size_t)sl->elem_size);
+        sl->stride = cell_stride(sl->elem_size);
+        /* Zeroed rather than merely allocated, because a cell's state
+         * is part of it now and empty is zero (issue 210c) — a fresh
+         * run of cells has to be a fresh run of *empty* cells, or the
+         * first reader to look would find whatever the allocator left
+         * behind and believe it. */
+        sl->storage = calloc((size_t)sl->capacity, (size_t)sl->stride);
         if (!sl->storage) fail("out of memory for a ring buffer");
         sl->head = 0;
         sl->tail = 0;
@@ -137,7 +212,7 @@ void map_slot_start_depth(map_t *m, int station, int slot, int cells)
      * the buffer it already had rather than with none. Growth is what
      * covers a depth that turns out wrong, so there is nothing to
      * copy: the port is empty, which is what the check above proved. */
-    void *fresh = malloc((size_t)cells * (size_t)sl->elem_size);
+    void *fresh = calloc((size_t)cells, (size_t)sl->stride);
     if (!fresh) fail("out of memory resizing a ring buffer to its starting depth");
     free(sl->storage);
     sl->storage = fresh;

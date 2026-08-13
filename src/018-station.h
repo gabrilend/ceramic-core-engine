@@ -84,6 +84,48 @@ enum slot_kind {
 #define SLOT_DEFAULT_CAPACITY 10
 
 /*
+ * What is happening to one cell (issue 210c), and who is allowed to
+ * touch it while it is happening.
+ *
+ * | state    | meaning                    | who may touch it     |
+ * |----------|----------------------------|----------------------|
+ * | empty    | nothing here               | a writer, by taking  |
+ * | reserved | a writer is copying in     | that writer only     |
+ * | ready    | the bytes have landed      | a reader, by taking  |
+ * | claimed  | a reader is copying out    | that reader only     |
+ *
+ * **This is the mutual exclusion, per cell rather than per port.** A
+ * writer must not write while anyone reads or writes; a reader must
+ * not read while anyone writes; and the state says so. Every
+ * transition is a single compare-and-swap, so two threads can never
+ * own one cell — the loser of a race is told it lost and goes
+ * elsewhere.
+ *
+ * A cell's occupancy used to be *implied* by the head and tail
+ * indices, and that is why the station's mutex had to cover the copy:
+ * the indices said a cell was occupied before its bytes had finished
+ * landing, so nothing but exclusion could stop a reader arriving
+ * early. A cell that says what is happening to it needs no such help.
+ *
+ * **Cells are not cleared when released.** Every write is a copy of
+ * the port's full element size, so a stale value is always completely
+ * covered and there is no such thing as a partial write into a cell.
+ * The guarantee is not that a cell was cleaned but that its bytes are
+ * never read unless its state says ready, which is this machine's
+ * entire job. Zeroing on release would cost a full erase per claim
+ * and buy nothing.
+ *
+ * Empty is zero so that a freshly allocated run of cells is a
+ * freshly empty run of cells.
+ */
+enum cell_state {
+    CELL_EMPTY    = 0,
+    CELL_RESERVED = 1,
+    CELL_READY    = 2,
+    CELL_CLAIMED  = 3,
+};
+
+/*
  * The three station kinds (issue 201, consulted only in phase 5's
  * routing dispatch). Identical in every respect except which output
  * port a returned value goes down.
@@ -128,6 +170,12 @@ typedef struct slot {
     int   elem_size;
     void *storage;
     int   capacity;
+    /* Bytes from one cell to the next: the value's own size, plus its
+     * state, rounded up so every value keeps the alignment its type
+     * needs (issue 210c). Computed once at allocation, because the
+     * rounding is the only arithmetic on the delivery path that is
+     * not a single operation. */
+    int   stride;
     int   head;
     int   tail;
     int   static_id;  /* static only — statics table entry (phase 4) */
@@ -446,6 +494,35 @@ void sora_static_write(int id, const void *bytes, int size);
 /* Internal joints between the engine's files. Not part of the       */
 /* surface a map author touches.                                      */
 /* ------------------------------------------------------------------ */
+
+/* {{{ slot_cell() / slot_cell_move() — issue 210c */
+/*
+ * One cell, and the one way its state ever changes.
+ *
+ * slot_cell returns where cell `index`'s value bytes live. The value
+ * comes first in a cell and its state sits after it, so that the
+ * value keeps the alignment the allocator gave the array — a state
+ * byte in front would push every value off by one, which on some
+ * machines is a fault and on the rest is slow.
+ *
+ * slot_cell_move is the whole state machine: a compare-and-swap from
+ * one named state to another, returning whether this caller won it.
+ * There is one primitive rather than four named transitions because
+ * the rule worth enforcing is *this exact state became that exact
+ * state*, and naming the pair at the call site is what makes a
+ * reader of the delivery path able to see the machine running. A
+ * transition from a state a cell is not in simply fails, which is
+ * what makes an illegal move impossible rather than merely
+ * discouraged.
+ *
+ * Two callers race for one cell and exactly one of them wins. The
+ * loser is not blocked and does not retry in place — it goes and
+ * looks at another cell, which is the property the whole design is
+ * for.
+ */
+void *slot_cell(const slot_t *sl, int index);
+int   slot_cell_move(const slot_t *sl, int index, int from, int to);
+/* }}} */
 
 /* {{{ slot_kind_name() — issue 210b */
 /*
