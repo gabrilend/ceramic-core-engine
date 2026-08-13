@@ -83,7 +83,7 @@ void map_report_shutdown(map_t *m);
  * station's own counters; all of the *timing* callers compile out
  * without the define.
  */
-void sora_stats_box_time(int32_t station, long ns);
+void sora_stats_box_time(task_t *t, long ns);
 /* }}} */
 
 /* ------------------------------------------------------------------ */

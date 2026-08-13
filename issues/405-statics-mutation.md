@@ -2,22 +2,39 @@
 
 ## Current behavior
 
-REOPENED. The locking is right and survives; the reachability is wrong
-and is the reason a process can hold only one map.
+**Mostly done**, and it landed with [401](401-static-slots.md) because
+it could not be separated: removing the table breaks a write addressed
+by entry number, and the write has nowhere to live until the value is
+on a port.
 
-Built. One mutex over the statics table, taken on every claim and every
-write, held for the length of one copy — reads constant, writes rare,
-contention nil, exactly the analysis this issue made. The write call is
-size-checked against the entry and refuses entries no port has bound,
-since their shape is unknown. Proven by four thousand claims racing a
-writer alternating a struct between two self-consistent worlds: zero
-torn reads, and the last write visible to the next claim.
+Changing a static is a call naming a station and a port. It is
+size-checked against what that port holds, takes the station's own
+mutex — the lock the claim already takes — and runs the readiness check
+afterwards. The locking analysis survives unchanged; the only thing
+that changed is which mutex does the work. The racing test is
+retargeted rather than retired: four thousand claims against a writer
+alternating a vec3 between two self-consistent worlds, zero torn reads,
+last write visible to the next claim.
 
-Reaching it from inside a box landed as a bare-name call against a
-process-wide "active map" pointer, because a box receives only values
-and has no handle to anything. **That pointer is the singleton.** It
-exists for this feature and for one optional timing hook, and nothing
-else in the engine needs it.
+**The singleton is gone**, and both of its users with it. A box can no
+longer write a static, so nothing inside a box needs to reach a map.
+The optional box-timing hook was the pointer's only other user, and it
+now charges its time onto the task, which the delivery walk — holding
+both the map and the finished task — moves onto the station afterwards.
+The pool carries that field without reading it, the same way it already
+carried the station index, so it stays ignorant of maps.
+
+Two maps now run in one process and do not see each other's values.
+That is the property this whole change bought, and the one that could
+not be tested at all before; it is a test now.
+
+**Not done: a wire delivering into a static port.** An arrow whose
+destination holds a static is still refused at load time, and a
+delivery into a non-buffer port is still fatal. Both refusals predate
+there being anywhere for such a value to go. The write call now exists
+and takes the right lock, so what is left is teaching delivery to call
+it, removing the load-time check that calls the arrow a mistake, and
+recording last-writer-wins as a stated non-guarantee.
 
 ## Intended behavior
 

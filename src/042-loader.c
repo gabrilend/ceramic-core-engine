@@ -81,13 +81,6 @@ static int find_station_index(const name_table_t *names, const char *name)
  */
 static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
 {
-    /* The statics table first, so bindings can parse entries. */
-    if (d->max_static_id >= 0) {
-        map_statics_alloc(m, d->max_static_id + 1);
-        for (desc_static_t *e = d->statics; e; e = e->next)
-            map_static_set_text(m, e->id, e->text);
-    }
-
     int index = 0;
     for (desc_station_t *s = d->stations; s; s = s->next, index++) {
         names->by_index[index] = s;
@@ -117,7 +110,31 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
                              ? ", plus the threshold" : "");
                 die_load(d->path, in->line, s->name, message);
             }
-            map_slot_static(m, index, in->slot, in->static_id);
+            /* Both forms of an input line end here, with text going
+             * into this port at this port's own type (issue 401). The
+             * `statics` section is notation and nothing more: its text
+             * is copied into every port that names an entry, and the
+             * entry has then done its job. Two ports naming one entry
+             * end up with two independent values — writing one cannot
+             * disturb the other, and neither can be shaped by the
+             * other's type, which is a hazard that stops being
+             * expressible rather than being better documented. */
+            const char *text = in->text;
+            if (in->is_static) {
+                for (desc_static_t *e = d->statics; e; e = e->next)
+                    if (e->id == in->static_id) {
+                        text = e->text;
+                        break;
+                    }
+                if (!text) {
+                    char message[256];
+                    snprintf(message, sizeof message,
+                             "'in %d $%d' names a statics entry the file does "
+                             "not give a value for", in->slot, in->static_id);
+                    die_load(d->path, in->line, s->name, message);
+                }
+            }
+            map_slot_static_text(m, index, in->slot, text);
         }
     }
     names->count = index;
@@ -319,11 +336,18 @@ static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
             continue;
 
         /* Through the same door delivery uses — one way a task comes
-         * into existence, not two. No ring slots, so no claim
-         * buffer. The workers are still parked at their gate, which
-         * is what keeps the termination rule's "nothing pushes from
-         * outside after startup" true. */
-        pool_push(m->pool, task_build(m, i, NULL, 0));
+         * into existence, not two. It used to build and push directly
+         * with no claim buffer, on the grounds that a station with no
+         * ring ports had nothing to claim; that stopped being true
+         * when a static's value moved onto its port and had to be
+         * claimed like any other (issue 401). Asking the readiness
+         * walk is both correct and less to know.
+         *
+         * The workers are still parked at their gate, which is what
+         * keeps the termination rule's "nothing pushes from outside
+         * after startup" true. */
+        if (!map_station_try_start(m, i))
+            continue;
         m->seeded++;
         fprintf(stderr, "map %s: seeded '%s'\n", d->path, names->by_index[i]->name);
     }

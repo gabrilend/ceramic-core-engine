@@ -93,43 +93,64 @@ static void handle_in(parse_state_t *st, const char *rest)
     if (!st->current)
         die_parse(st->path, st->line, "an 'in' line before any station line");
 
-    char slot_word[64], ref[128], extra[8];
-    rest = next_word(rest, slot_word, sizeof slot_word);
-    rest = next_word(rest, ref, sizeof ref);
-    next_word(rest, extra, sizeof extra);
+    char slot_word[64], ref[128];
+    const char *after_slot = next_word(rest, slot_word, sizeof slot_word);
+    const char *after_ref = next_word(after_slot, ref, sizeof ref);
 
     int slot;
     if (!parse_number(slot_word, &slot))
         die_parse(st->path, st->line, "expected a slot number after 'in'");
     if (!ref[0])
         die_parse(st->path, st->line,
-                  "expected '$entry' after the slot number");
-    if (extra[0])
-        die_parse(st->path, st->line, "unexpected trailing words on an 'in' line");
-
-    /* An 'in' line used to take either form: '$entry' named a static,
-     * and a bare station name named a gather source. Nothing is
-     * gathered now (issue 210), so the bare name is refused rather
-     * than quietly reinterpreted — an old map file saying it meant
-     * something the engine no longer does, and reading it as anything
-     * else would run a program nobody wrote. */
-    if (ref[0] != '$')
-        die_parse(st->path, st->line,
-                  "expected '$entry'; a bare station name here meant "
-                  "'gather from that station', and there is no pull path "
-                  "any more");
+                  "expected '$entry' or '= value' after the slot number");
 
     desc_input_t *in = need(calloc(1, sizeof *in), st->path, st->line);
     in->slot = slot;
     in->line = st->line;
 
-    /* The dollar is technically unnecessary now that it is the only
-     * form — but 'in 1 0' reading as "static entry zero" is not
-     * something anyone will guess a year from now (issue 601), and
-     * it is what tells an old map file apart from a new one. */
-    in->is_static = 1;
-    if (!parse_number(ref + 1, &in->static_id))
-        die_parse(st->path, st->line, "expected a number after '$'");
+    /* Two forms, and the first character tells them apart.
+     *
+     * '= value' carries the value on this line. It is what the dump
+     * writes, because a dump has values on ports and no entry numbers
+     * to point at; the '=' matches the statics section's own 'N =
+     * value', so the two places a value can be written spell it the
+     * same way. The text runs to the end of the line, because a struct
+     * value has spaces in it.
+     *
+     * '$entry' points at the statics section, which is notation
+     * resolved while the file is read (issue 401).
+     *
+     * A bare station name used to be a third form, meaning "gather
+     * from that station". Nothing is gathered now (issue 210), so it
+     * is refused rather than quietly reinterpreted — the forms differ
+     * by one character, and reading an old file as a new one would run
+     * a program nobody wrote. */
+    if (ref[0] == '=') {
+        const char *value = after_slot;
+        while (*value == ' ' || *value == '\t')
+            value++;
+        value++;                                  /* past the '=' */
+        while (*value == ' ' || *value == '\t')
+            value++;
+        if (!*value)
+            die_parse(st->path, st->line, "an input with no value after '='");
+        in->is_static = 0;
+        in->text = copy_string(value, st->path, st->line);
+    } else if (ref[0] == '$') {
+        char extra[8];
+        next_word(after_ref, extra, sizeof extra);
+        if (extra[0])
+            die_parse(st->path, st->line,
+                      "unexpected trailing words on an 'in' line");
+        in->is_static = 1;
+        if (!parse_number(ref + 1, &in->static_id))
+            die_parse(st->path, st->line, "expected a number after '$'");
+    } else {
+        die_parse(st->path, st->line,
+                  "expected '$entry' or '= value'; a bare station name here "
+                  "meant 'gather from that station', and there is no pull "
+                  "path any more");
+    }
 
     desc_input_t **tail = &st->current->inputs;
     while (*tail)
@@ -332,6 +353,9 @@ void mapfile_free(map_description_t *d)
         desc_input_t *in = s->inputs;
         while (in) {
             desc_input_t *next = in->next;
+            /* Null unless the line carried its value inline; free
+             * copes either way. */
+            free(in->text);
             free(in);
             in = next;
         }

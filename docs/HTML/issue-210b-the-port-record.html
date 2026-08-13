@@ -111,7 +111,7 @@
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
-<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -124,21 +124,19 @@
 <p>Second child of <a href="issue-210-input-port-record.html">210</a>. The shape every other
 child stands on: what a port <em>is</em>, once there are two live kinds and a
 third state meaning nobody has said yet.</p>
-<p>**BLOCKED, in half, on <a href="issue-401-static-slots.html">401</a> and
-<a href="issue-405-statics-mutation.html">405</a>.** The half of this record that faces a
-static cannot be built while a global statics register still owns the
-bytes: the port would be given room for a value that lives somewhere
-else, and the map file's <code>$n</code> form names a table the design has already
-decided to delete. The half that faces a ring buffer is unaffected and
-is built.</p>
-<p><strong>The block runs against 401's own first step</strong>, which reads *take the
-port's own storage from 210b, which provides it — this issue spends
-that room rather than building it*. Both issues cannot be second. The
-cycle is broken by having 401 build the port-side storage it spends,
-which is a one-line change to that step and is where the knowledge
-belongs anyway: whoever deletes the table is the one who has to know
-what replaces it. Until that is decided, the static-facing steps below
-stay unbuilt and are marked.</p>
+<p><strong>The statics block is cleared.</strong> This issue was blocked in half on
+<a href="issue-401-static-slots.html">401</a> and <a href="issue-405-statics-mutation.html">405</a>: a port
+could not be given room for a value that lived in a global register,
+and the map file's <code>$n</code> form named a table the design had decided to
+delete.</p>
+<p><strong>The cycle resolved the way this file argued it should.</strong> 401's first
+step had read *take the port's own storage from 210b, which provides
+it*, so both issues were waiting on each other. 401 went first and
+built the storage it spends, because whoever deletes the table is the
+one who has to know what replaces it. That work is done, and the
+static-facing steps below unblocked with it.</p>
+<p>What remains unbuilt here is one thing and it is small: the map file
+form for an unconfigured port. See the open question.</p>
 <h2>Current behavior</h2>
 <p><strong>The tag has three values, and the third is built.</strong> <em>None</em> means a
 port nobody has given a source to. The readiness dispatch answers no
@@ -167,19 +165,25 @@ what it becomes, which is the shape this already has.</p>
 see <a href="issue-210c-a-state-on-every-cell.html">210c</a>, where the delivery baseline
 turned out to be measuring buffer growth until the ports were sized
 past what the run could fill.</p>
-<p><strong>Still ahead, and blocked:</strong></p>
+<p><strong>Both storages are real, and no dispatch row is an absence.</strong> A
+static's bytes live on the port beside the cells, allocated at the same
+moment for the same reason, so exactly one is in effect and the other
+sits idle — which is what makes changing what a port is a field write
+in both directions rather than only one. The claim table's static row
+was a null meaning "resolved later, outside the mutex", and it is an
+ordinary function now; the caller has stopped testing a function
+pointer for truth. <a href="issue-401-static-slots.html">401</a> did both.</p>
+<p>**The map file gained a form for a value, which was half of what was
+owed.** <code>in 1 = 5</code> carries a constant on the line, matching the statics
+section's own <code>N = value</code>, and it is what the dump writes — a dump has
+values on ports and no entry numbers to point back at.</p>
+<p><strong>Still ahead:</strong></p>
 <ul>
-<li>A static's <em>bytes</em> live in the map's statics table rather than on</li>
-<p>  the port. The record has room for one storage and an index to the
-  other, which is the honest shape of a half-finished move.</p>
-<li>The claim dispatch table's static row is still a null meaning</li>
-<p>  "resolved outside the mutex". 401 moves that claim inside the walk,
-  so naming the hole now means naming it twice.</p>
-<li>The map file has no form for an unconfigured port and no form for a</li>
-<p>  starting depth. The dump writes an unconfigured port as a comment
-  saying the format cannot yet spell it, which keeps the dump honest
-  at the cost of the round trip — a half-built program is currently
-  one of the things a dump cannot promise to reload.</p>
+<li>The map file has no form for an unconfigured port. The dump writes</li>
+<p>  one as a comment saying the format cannot spell it, which keeps the
+  dump honest at the cost of the round trip: a half-built program is
+  currently one of the things a dump cannot promise to reload.</p>
+<li>No form for a starting depth either, though the call exists.</li>
 </ul>
 <h2>Intended behavior</h2>
 <p><strong>Both storages live on the port; the tag says which is in effect.</strong>
@@ -263,20 +267,21 @@ as a null the caller tests for.</p>
 <p>  line, because the format writes only exceptions and <em>unconfigured</em>
   is one — but the natural spellings all read like a value rather than
   like an absence, and the reader should not have to guess whether
-  somebody meant it. <strong>This cannot be settled alone.</strong> The three
-  spellings offered — a bare dash, the word <em>none</em>, a question mark —
-  were all shown beside a <code>$n</code> static line, and the static line is the
-  problem: it names a numbered global register that 401 deletes. The
-  whole <code>in</code> line grammar is in flux, so the absent form and the
-  static form should be chosen together, once, by whoever settles the
-  latter.</p>
+  somebody meant it.</p>
 </ul>
-<ul>
-<li>Where does a static's bytes actually live, and which issue puts them</li>
-<p>  there? 401 says this issue provides the room and 401 spends it; this
-  issue is now blocked on 401. Somebody has to go first, and the note
-  at the top of this file argues it should be 401.</p>
-</ul>
+<p>  <strong>The obstacle is cleared and the question is now answerable.</strong> It
+  could not be settled while the <code>in</code> line's other forms were in flux;
+  they have settled. A port's source is now written one of two ways,
+  <code>$0</code> fetching text from the statics section and <code>= 5</code> carrying it on
+  the line, and an absent form has to be visibly neither. The three
+  candidates were a bare dash, the word <em>none</em>, and a question mark.</p>
+<p>  A bare dash reads best against the forms that now exist — no value
+  in this format is ever a lone dash, and the dash already means
+  "wire" on an out line, so <code>in 2 -</code> reads as a wire that is not there
+  yet. But it is one character and somebody has to live with it, so it
+  is asked rather than assumed.</p>
+<p>  A starting depth wants a spelling at the same time, since it is the
+  third thing an <code>in</code> line could say about a port.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the parent</li>

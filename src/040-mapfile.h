@@ -20,16 +20,34 @@
 #include "018-station.h"
 
 /* {{{ the description — what the file said, nothing more */
-/* An input line names a static entry and nothing else. It once had a
- * second form — a bare station name, meaning "gather from there" —
- * which went with the pull path (issue 210). is_static is therefore
- * always true and is kept because the reader still checks for the
- * dollar that distinguishes the form, and a field that records what
- * was checked is worth more than one the reader has to remember. */
+/*
+ * An input line says where one port's value comes from, and there are
+ * two ways to say it.
+ *
+ * `in 1 $0` points at an entry in the `statics` section. That section
+ * is **notation** (issue 401): a way to write a value down once while
+ * describing a map and point several ports at it, resolved as the file
+ * is read and retained nowhere afterwards. Two ports naming one entry
+ * end up with two independent values.
+ *
+ * `in 1 = 5` carries the value on the line itself, which is what the
+ * dump writes — it has values on ports and no entry numbers to refer
+ * to, and inventing a section of numbers to point back at would be
+ * notation the engine made up rather than something a person wrote.
+ *
+ * Both end in the same place, so `text` is what the loader uses and
+ * `static_id` only says which entry the text was fetched from, for an
+ * error message.
+ *
+ * There was a third form — a bare station name, meaning "gather from
+ * there" — which went with the pull path (issue 210). The reader still
+ * refuses it by name rather than reinterpreting it.
+ */
 typedef struct desc_input {
     int   slot;
-    int   is_static;      /* $n if so */
-    int   static_id;
+    int   is_static;      /* $n rather than an inline value */
+    int   static_id;      /* which entry, when is_static */
+    char *text;           /* the value as written, when inline */
     int   line;
     struct desc_input *next;
 } desc_input_t;

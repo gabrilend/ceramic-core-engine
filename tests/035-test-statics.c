@@ -83,9 +83,7 @@ static void test_static_feeds_forever(void)
     map_place(m, 1, tally_sum__call, STATION_PLAIN, 1, one_int, 0);
     map_connect(m, 0, 0, 1, 0);
 
-    map_statics_alloc(m, 4);
-    map_static_set_text(m, 0, "1000");
-    map_slot_static(m, 0, 1, 0);
+    map_slot_static_text(m, 0, 1, "1000");
 
     map_start(m, 4);
     static_sum = 0;
@@ -115,11 +113,8 @@ static void test_all_static_station_never_fires(void)
      * property the seed sweep and gatherers both stand on. */
     map_t *m = map_create(1);
     map_place_box(m, 0, "add", STATION_PLAIN);
-    map_statics_alloc(m, 2);
-    map_static_set_text(m, 0, "1");
-    map_static_set_text(m, 1, "2");
-    map_slot_static(m, 0, 0, 0);
-    map_slot_static(m, 0, 1, 1);
+    map_slot_static_text(m, 0, 0, "1");
+    map_slot_static_text(m, 0, 1, "2");
     map_start(m, 2);
     pool_release(m->pool);
     /* If the vacuously-ready station were runnable by delivery, the
@@ -168,6 +163,25 @@ static void relay_record__call(task_t *t)
     memcpy(t->out, &r, sizeof r);
 }
 
+/* {{{ claim_constant() */
+/*
+ * Read a port's constant exactly the way the engine's claim does:
+ * under the station's own mutex, which is the lock a runtime write
+ * also takes (issue 405). The engine's own claim is not exported —
+ * it is a row in a dispatch table on the delivery path — so the test
+ * performs the same two steps rather than calling it, and the point
+ * of the test is that those two steps never see a half-written value.
+ */
+static void claim_constant(map_t *m, int station, int slot, void *into)
+{
+    station_t *s = &m->stations[station];
+    slot_t *sl = &s->slots[slot];
+    pthread_mutex_lock(&s->mutex);
+    memcpy(into, sl->constant, (size_t)sl->elem_size);
+    pthread_mutex_unlock(&s->mutex);
+}
+/* }}} */
+
 static void test_struct_constant_bytes(void)
 {
     map_t *m = map_create(2);
@@ -185,16 +199,12 @@ static void test_struct_constant_bytes(void)
     map_place(m, 1, check_record__call, STATION_PLAIN, 1, one_record, 0);
     map_connect(m, 0, 0, 1, 0);
 
-    map_statics_alloc(m, 1);
-    map_static_set_text(m, 0, "{ 5, { 1.5, 2.5, 3.5 }, \"hey there\", 42 }");
-    map_slot_static(m, 0, 0, 0);
+    map_slot_static_text(m, 0, 0, "{ 5, { 1.5, 2.5, 3.5 }, \"hey there\", 42 }");
 
-    /* All-static station: deliver cannot wake it, so run it by hand
-     * once through the gather path's claim — the same resolution the
-     * seed will use. Simplest honest route: bind and read the entry
-     * through a claim into a local, then feed the checker. */
+    /* All-static station: delivery cannot wake it, so read its
+     * constant the way a claim does and feed the checker by hand. */
     record claimed;
-    static_claim(m, &m->stations[0].slots[0], &claimed);
+    claim_constant(m, 0, 0, &claimed);
     map_start(m, 2);
     map_deliver_value(m, 1, 0, &claimed);
     pool_release(m->pool);
@@ -214,35 +224,34 @@ static void die_too_many(void)
 {
     doomed = map_create(1);
     map_place_box(doomed, 0, "nudge", STATION_PLAIN); /* (vec3, float) */
-    map_statics_alloc(doomed, 1);
-    map_static_set_text(doomed, 0, "{ 1.0, 2.0, 3.0, 4.0 }");
-    map_slot_static(doomed, 0, 0, 0);
+    map_slot_static_text(doomed, 0, 0, "{ 1.0, 2.0, 3.0, 4.0 }");
 }
 
 static void die_too_few(void)
 {
     doomed = map_create(1);
     map_place_box(doomed, 0, "nudge", STATION_PLAIN);
-    map_statics_alloc(doomed, 1);
-    map_static_set_text(doomed, 0, "{ 1.0, 2.0 }");
-    map_slot_static(doomed, 0, 0, 0);
+    map_slot_static_text(doomed, 0, 0, "{ 1.0, 2.0 }");
 }
 
 static void die_string_for_number(void)
 {
     doomed = map_create(1);
     map_place_box(doomed, 0, "nudge", STATION_PLAIN);
-    map_statics_alloc(doomed, 1);
-    map_static_set_text(doomed, 0, "{ \"one\", 2.0, 3.0 }");
-    map_slot_static(doomed, 0, 0, 0);
+    map_slot_static_text(doomed, 0, 0, "{ \"one\", 2.0, 3.0 }");
 }
 
-static void die_absent_entry(void)
+static void die_untyped_port(void)
 {
+    /* A hand-placed station carries element sizes and no type names,
+     * so there is nothing to tell the reader what shape the text
+     * should become. This replaces a scenario that stopped existing:
+     * an entry the file never gave a value for, which was a hole in a
+     * table, and there is no table (issue 401). */
     doomed = map_create(1);
-    map_place_box(doomed, 0, "add", STATION_PLAIN);
-    map_statics_alloc(doomed, 1);
-    map_slot_static(doomed, 0, 0, 0); /* entry 0 has no text */
+    int one_int[1] = { sizeof(int) };
+    map_place(doomed, 0, tally_sum__call, STATION_PLAIN, 1, one_int, 0);
+    map_slot_static_text(doomed, 0, 0, "5");
 }
 /* }}} */
 
@@ -274,7 +283,7 @@ static void *world_writer(void *arg)
     map_t *m = arg;
     vec3 worlds[2] = { { 1, 1, 1 }, { 2, 2, 2 } };
     for (int i = 0; i < 4000; i++)
-        map_static_write(m, 0, &worlds[i & 1], sizeof(vec3));
+        map_slot_static_write(m, 0, 0, &worlds[i & 1], sizeof(vec3));
     return NULL;
 }
 
@@ -283,15 +292,7 @@ static void test_mutation_and_torn_reads(void)
     enum { CLAIMS = 4000 };
     map_t *m = map_create(1);
     map_place_box(m, 0, "magnitude_squared", STATION_PLAIN); /* (vec3) */
-    map_statics_alloc(m, 1);
-    map_static_set_text(m, 0, "{ 1, 1, 1 }");
-
-    /* The station's one slot must stay a buffer so deliveries drive
-     * it; the static under mutation is claimed via static_claim in a
-     * tight loop instead, plus through a second map below. Simpler
-     * and just as honest: bind the entry, then race claims directly
-     * against the writer. */
-    map_slot_static(m, 0, 0, 0);
+    map_slot_static_text(m, 0, 0, "{ 1, 1, 1 }");
 
     torn_seen = 0;
     pthread_t writer;
@@ -300,7 +301,7 @@ static void test_mutation_and_torn_reads(void)
     vec3 got;
     int local_claims = 0;
     for (int i = 0; i < CLAIMS; i++) {
-        static_claim(m, &m->stations[0].slots[0], &got);
+        claim_constant(m, 0, 0, &got);
         int a = got.x == 1.0f && got.y == 1.0f && got.z == 1.0f;
         int b = got.x == 2.0f && got.y == 2.0f && got.z == 2.0f;
         if (!a && !b)
@@ -314,15 +315,98 @@ static void test_mutation_and_torn_reads(void)
 
     /* And the altered value is picked up: after the writer's last
      * write (world B), a fresh claim reads all 2s. */
-    static_claim(m, &m->stations[0].slots[0], &got);
+    claim_constant(m, 0, 0, &got);
     check(got.x == 2.0f && got.y == 2.0f && got.z == 2.0f,
           "the last write is what the next claim sees");
 
     map_destroy(m);
     (void)mutation_claims;
     (void)check_world__call;
-    printf("  %d claims raced a writer: zero torn, last write visible\n",
-           CLAIMS);
+    printf("  %d claims raced a writer through the station's own mutex: "
+           "zero torn, last write visible\n", CLAIMS);
+}
+/* }}} */
+
+/* {{{ test_ports_are_independent() */
+/*
+ * Two ports given the same text end up with two independent values.
+ *
+ * This is the observable difference from the table (issue 401), and it
+ * is what makes the old hazard stop being expressible rather than
+ * merely documented. Under the table an entry's bytes were shaped by
+ * whichever port bound it first, and both ports read those same bytes
+ * — so two ports of different types read one value each their own way,
+ * and writing through one was visible through the other.
+ */
+static void test_ports_are_independent(void)
+{
+    map_t *m = map_create(1);
+    map_place_box(m, 0, "add", STATION_PLAIN);   /* (int, int) */
+    map_slot_static_text(m, 0, 0, "7");
+    map_slot_static_text(m, 0, 1, "7");
+
+    int a = 0, b = 0;
+    claim_constant(m, 0, 0, &a);
+    claim_constant(m, 0, 1, &b);
+    check(a == 7 && b == 7, "both ports took the same written value");
+
+    int changed = 99;
+    map_slot_static_write(m, 0, 0, &changed, sizeof changed);
+    claim_constant(m, 0, 0, &a);
+    claim_constant(m, 0, 1, &b);
+    check(a == 99, "the written port changed");
+    check(b == 7, "its neighbour did not");
+
+    map_destroy(m);
+    printf("  two ports given one value are independent afterwards\n");
+}
+/* }}} */
+
+/* {{{ test_two_maps_at_once() */
+/*
+ * Two maps alive in one process at the same time, not seeing each
+ * other's values.
+ *
+ * This is the property the whole change buys, and it could not be
+ * tested at all before: a process-wide pointer named one map as *the*
+ * map, so a second one silently took the first's place as the target
+ * of every box-initiated statics write and every timing sample. The
+ * pointer existed for the box-reachable write; removing that write
+ * removed the reason for the pointer, and the restriction went with
+ * it (issue 405).
+ */
+static void test_two_maps_at_once(void)
+{
+    map_t *first = map_create(1);
+    map_t *second = map_create(1);
+    map_place_box(first, 0, "add", STATION_PLAIN);
+    map_place_box(second, 0, "add", STATION_PLAIN);
+
+    map_slot_static_text(first, 0, 0, "10");
+    map_slot_static_text(second, 0, 0, "20");
+
+    map_start(first, 1);
+    map_start(second, 1);
+
+    int a = 0, b = 0;
+    claim_constant(first, 0, 0, &a);
+    claim_constant(second, 0, 0, &b);
+    check(a == 10 && b == 20, "each map kept its own value while both ran");
+
+    int changed = 555;
+    map_slot_static_write(first, 0, 0, &changed, sizeof changed);
+    claim_constant(first, 0, 0, &a);
+    claim_constant(second, 0, 0, &b);
+    check(a == 555, "the written map changed");
+    check(b == 20, "the other map did not notice");
+
+    pool_release(first->pool);
+    pool_release(second->pool);
+    pool_join(first->pool);
+    pool_join(second->pool);
+    map_destroy(first);
+    map_destroy(second);
+    printf("  two maps ran side by side and did not see each other\n");
 }
 /* }}} */
 
@@ -335,9 +419,11 @@ int main(void)
     expect_death(die_too_many, "too many values accepted");
     expect_death(die_too_few, "too few values accepted");
     expect_death(die_string_for_number, "a string where a number belongs accepted");
-    expect_death(die_absent_entry, "an entry with no text accepted");
-    printf("  four malformed statics each died at bind, as promised\n");
+    expect_death(die_untyped_port, "a constant on a port with no type accepted");
+    printf("  four malformed statics each died where they were given\n");
 
     test_mutation_and_torn_reads();
+    test_ports_are_independent();
+    test_two_maps_at_once();
     return 0;
 }

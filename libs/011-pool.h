@@ -50,6 +50,19 @@ struct task {
     int32_t     n_in;     /* how many input values ride along */
     void      **in;       /* one claimed value per input slot, in parameter order */
     void       *out;      /* where the return value lands; null for a sink */
+
+    /* How long the box took, when the engine is built with timing
+     * compiled in. The pool never reads it — it is carried here the
+     * same way `station` and `port` are, as something the pool ferries
+     * without interpreting, which is what keeps the pool ignorant of
+     * maps (issue 405).
+     *
+     * It rides on the task because the alternative was a process-wide
+     * pointer to the running map, so that a shim — which receives only
+     * a task — could find the station to charge. That pointer was what
+     * made a process able to run only one map at a time, and one
+     * optional measurement was the last thing holding it. */
+    long        box_ns;
 };
 
 typedef struct pool pool_t;

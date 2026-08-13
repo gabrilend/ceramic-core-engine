@@ -18,19 +18,28 @@ constant lost however many values happened to be waiting, and found
 out never.
 
 **One conversion operation exists, naming a station, a port, and the
-tag it is becoming** — but it reaches two of the three tags. A port
-can be made a buffer or unconfigured, in any direction, while the
-program runs. Becoming a static is refused there and still goes
-through the statics binding call, because what a port needs to become
-a static is a *value*, and where that value lives is
-[401](401-static-slots.md)'s question. So the operation has no room to
-carry one yet.
+tag it is becoming, and all three tags are reachable.** A port can be
+made a buffer, a static, or unconfigured while the program runs.
 
-**Blocked, therefore:** the static-facing third of the conversion
-matrix, and both tests below that cycle a port through all three tags.
-The ring-to-unconfigured pair is tested — a station is held still by
-an unconfigured port with values waiting at its other ports, then runs
-when the port is given a source, with the waiting values intact.
+Becoming a static *for the first time* is refused there and goes
+through the call that gives a port a constant, because what a port
+needs to become a static is a value and this call has no room to carry
+one. Becoming a static **again** is what the conversion does, and it
+is the answered open question made real: the constant survives being
+converted away, exactly as the cells do, so a port that goes static,
+buffer, static reads the value it read before. A port that has never
+held one is refused with a message saying to give it one first — which
+keeps *none* meaning one thing, since it is then only ever reached by
+asking for it.
+
+**Tested:** a station held still by an unconfigured port with values
+waiting at its other ports, then running when the port is given a
+source, with the waiting values intact.
+
+**Still owed:** a test that cycles a port through all three tags while
+a station upstream delivers throughout, and one that values waiting in
+a buffer are still served after a round trip through static. The
+mechanism is there; the tests are not.
 
 ## Intended behavior
 

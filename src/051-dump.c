@@ -45,20 +45,31 @@ void map_dump(map_t *m, FILE *out)
     fprintf(out, "# actually running, which is not necessarily what any file\n");
     fprintf(out, "# said. derived facts appear as comments.\n");
 
-    if (m->n_statics > 0) {
-        fprintf(out, "\nstatics\n");
-        for (int i = 0; i < m->n_statics; i++) {
-            static_entry_t *e = &m->statics[i];
-            if (!e->text)
-                continue;
-            fprintf(out, "  %d = %s", i, e->text);
-            if (e->bytes)
-                fprintf(out, "   # %d bytes as loaded; runtime writes are "
-                             "not re-serialized", e->size);
-            fprintf(out, "\n");
-        }
-    }
-
+    /*
+     * There is no statics section any more, and its absence is the
+     * dump getting *more* accurate rather than less.
+     *
+     * The file format's statics section is notation — a way to write a
+     * value down once while describing a map and point ports at it by
+     * number. The engine used to keep that table alive, so the dump
+     * echoed the text each entry was given and wrote the numbers back.
+     * That had a hole in it, admitted in its own comment: a value
+     * changed while the program ran was not re-serialized, so the dump
+     * printed what the file had said rather than what the engine was
+     * holding.
+     *
+     * With each value living on the port that reads it (issue 401),
+     * every constant is written out beside its port, from its bytes,
+     * by the formatter that mirrors the reader. What comes out is what
+     * is actually there — including anything a runtime write changed
+     * — which is the whole reason the dump exists.
+     *
+     * Two ports that shared an entry in the original file dump as two
+     * ports each holding their own copy, because that is what they now
+     * are. A file that goes in with sharing comes out without it, and
+     * reloading gives the same program: the sharing was never
+     * observable in behaviour, only in notation.
+     */
     for (int i = 0; i < m->n_stations; i++) {
         station_t *s = &m->stations[i];
         fprintf(out, "\n%s ", m->station_names[i]);
@@ -70,11 +81,29 @@ void map_dump(map_t *m, FILE *out)
         for (int j = 0; j < s->n_slots; j++) {
             slot_t *sl = &s->slots[j];
             switch (sl->kind) {
-            case SLOT_STATIC:
-                fprintf(out, "  in %d $%d   # %s, %d bytes\n", j,
-                        sl->static_id,
+            case SLOT_STATIC: {
+                /* The value itself, spoken from its bytes rather than
+                 * echoed from remembered text (issue 401) — so a
+                 * constant a runtime write changed dumps as what it
+                 * now is, which the old table-and-number form could
+                 * not do.
+                 *
+                 * Asked for its length first and then written, because
+                 * a struct constant has no useful upper bound and a
+                 * fixed buffer would quietly truncate exactly the
+                 * values most worth reading. */
+                int wanted = slot_constant_text(sl, NULL, 0);
+                char *text = malloc((size_t)wanted + 1);
+                if (!text) {
+                    fprintf(stderr, "dump: out of memory writing a constant\n");
+                    abort();
+                }
+                slot_constant_text(sl, text, wanted + 1);
+                fprintf(out, "  in %d = %s   # %s, %d bytes\n", j, text,
                         sl->type_name ? sl->type_name : "?", sl->elem_size);
+                free(text);
                 break;
+            }
             case SLOT_RING:
                 /* The default; the format writes only exceptions,
                  * but the derived facts still deserve saying. */

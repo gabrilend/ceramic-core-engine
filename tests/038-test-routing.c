@@ -75,9 +75,7 @@ static void test_three_outcomes(void)
     map_place_box(m, 0, "add", STATION_COMPARATOR);
     wire_three_sinks(m, 0, 1, sizeof(int));
 
-    map_statics_alloc(m, 1);
-    map_static_set_text(m, 0, "100");
-    map_slot_static(m, 0, 2, 0);   /* the threshold slot, last */
+    map_slot_static_text(m, 0, 2, "100");   /* the threshold slot, last */
 
     map_start(m, 4);
     reset_hits();
@@ -142,9 +140,7 @@ static void test_unwired_port_discards(void)
     map_place(m, 1, greater_sink__call, STATION_PLAIN, 1, one, 0);
     map_connect(m, 0, 2, 1, 0);
 
-    map_statics_alloc(m, 1);
-    map_static_set_text(m, 0, "100");
-    map_slot_static(m, 0, 2, 0);
+    map_slot_static_text(m, 0, 2, "100");
 
     map_start(m, 2);
     reset_hits();
@@ -177,9 +173,7 @@ static void test_float_semantics(void)
     map_place_box(m, 0, "mix", STATION_COMPARATOR);
     wire_three_sinks(m, 0, 1, sizeof(double));
 
-    map_statics_alloc(m, 1);
-    map_static_set_text(m, 0, "0.5");
-    map_slot_static(m, 0, 2, 0);
+    map_slot_static_text(m, 0, 2, "0.5");
 
     map_start(m, 2);
     reset_hits();
@@ -208,9 +202,7 @@ static void test_struct_author_order(void)
     map_place_box(m, 0, "make_vec3", STATION_COMPARATOR);
     wire_three_sinks(m, 0, 1, sizeof(vec3));
 
-    map_statics_alloc(m, 1);
-    map_static_set_text(m, 0, "{ 1, 8, 8 }");   /* magnitude^2 = 129 */
-    map_slot_static(m, 0, 3, 0);
+    map_slot_static_text(m, 0, 3, "{ 1, 8, 8 }");   /* magnitude^2 = 129 */
 
     map_start(m, 2);
     reset_hits();

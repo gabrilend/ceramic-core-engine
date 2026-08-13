@@ -111,7 +111,7 @@
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
-<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -225,7 +225,7 @@ system will say so.</p>
 <tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
 <tr><td>T1</td><td>A task is self-contained once built. Nothing another thread can change affects it.</td><td>Every value in it is a copy, taken before it existed. This was nearly given up to buy fresher pulled values; removing the pull path keeps it outright.</td><td>structure</td></tr>
 <tr><td>T2</td><td>A task's run time is its box's run time. Nothing hidden rides along.</td><td>Same as T1 — nothing runs inside a task but the box it names, so per-box timings measure what their name says and throughput is runs times per-box cost.</td><td>structure</td></tr>
-<tr><td>T3</td><td>One invocation's ring values are claimed atomically with respect to each other — all under a single hold of the station's mutex.</td><td>No other thread can interleave between them, so the buffered half of an input set is always mutually consistent. Statics are <strong>not</strong> covered: each was written at its own earlier moment, so two of them may never have been correct together.</td><td>structure</td></tr>
+<tr><td>T3</td><td>One invocation's inputs are claimed atomically with respect to each other — <strong>all of them</strong>, of every kind, under a single hold of the station's mutex.</td><td>No other thread can interleave between them, so an input set is always mutually consistent. Statics used to be excluded, because their values lived in a table with a lock of its own that could not be nested inside a station's, so each was read at its own later moment; issue 401 moved the value onto the port and the exclusion went with the second lock.</td><td>structure</td></tr>
 <tr><td>T4</td><td>One allocation per task, sized exactly for its box; one free.</td><td>The size comes from the registry, so it is known before the task exists.</td><td>build</td></tr>
 <tr><td>T5</td><td>A task comes into existence by exactly one path.</td><td>Everything that starts a station — a delivery arriving, a static being written, the statics bound while a program is built — reaches the same readiness check and the same task build. One door, not several.</td><td>structure</td></tr>
 <tr><td>T6</td><td>A ring value claimed by one task cannot be claimed by another.</td><td>Claiming happens under the station's mutex, and the read index advances there.</td><td>structure</td></tr>
@@ -257,7 +257,10 @@ for and what removing them cost.</p>
 <tr><td>G5</td><td>A static is always present and never consumed.</td><td>It cannot participate in readiness, so a station with only statics is always ready — which is what makes writing one enough to run it.</td><td>structure</td></tr>
 <tr><td>G8</td><td>Writing a static runs the ordinary readiness check on its station.</td><td>Nothing extra is needed to make recalculation propagate, and nothing can be made to run that could not run anyway: an empty ring port still answers no, because the engine will not invent a value for it.</td><td>structure</td></tr>
 <tr><td>G9</td><td>Every box runs on a worker that picked up a task for it.</td><td>There is no longer any path that executes a box anywhere else. This was the one exception in the engine, and it is gone.</td><td>structure</td></tr>
-<tr><td>G6</td><td>A statics write never tears.</td><td>One mutex, one copy — a struct half-overwritten while a claim reads it would yield fields from two different worlds.</td><td>runtime</td></tr>
+<tr><td>G6</td><td>A statics write never tears.</td><td>One mutex, one copy — a struct half-overwritten while a claim reads it would yield fields from two different worlds. The mutex is now the station's own, which the claim already takes, rather than a second one belonging to a table.</td><td>runtime</td></tr>
+<tr><td>G10</td><td>A static value belongs to exactly one port.</td><td>Two ports written from one entry in a file are independent from the moment they are written; sharing is drawn as a wire instead, which costs a station and gains something visible in the picture.</td><td>structure</td></tr>
+<tr><td>G11</td><td>A box cannot write a static.</td><td>It returns a value and the value is wired somewhere, like everything else. What this bought back is G12: reaching a map from inside a box needed a process-wide map pointer, and that pointer was the one-map-per-process restriction.</td><td>structure</td></tr>
+<tr><td>G12</td><td>A process may run any number of maps at once, and they cannot see each other.</td><td>Nothing in the engine is process-wide. Held by a test that runs two and writes into one.</td><td>structure</td></tr>
 <tr><td>G7</td><td>Push cycles are legal.</td><td>They must be: since a box cannot remember (B1), a loop through a ring buffer is the only way to carry state. A blanket cycle check would forbid the engine's sole mechanism for state.</td><td>structure</td></tr>
 </table>
 <p>---</p>
@@ -281,11 +284,17 @@ for and what removing them cost.</p>
 <h2>Not guaranteed — and worth knowing</h2>
 <p>These are the places where somebody could reasonably expect a guarantee
 and not get one. Naming them is the same work as naming the guarantees.</p>
-<p><strong>Only one map exists per process.</strong> Not a guarantee — a restriction,
-and an unannounced one. Two process-wide variables hold the active map
-and the last load's timings. A second map silently takes the first's
-place as the target of any box-initiated statics write and of every
-box-timing sample.</p>
+<p>**One process-wide variable is left, and it is the last load's
+timings.** A second load overwrites the first's breakdown, which
+matters to nobody except somebody loading two maps and then asking how
+long the first took.</p>
+<p>The serious one that used to sit here is gone. A process-wide pointer
+named the active map, so a second map silently took the first's place
+as the target of any box-initiated statics write and of every
+box-timing sample. That pointer existed for exactly one feature — a
+box reaching out to write a static — and issue 405 removed the
+feature, which removed the reason for the pointer, which removed the
+restriction. See G11 and G12.</p>
 <p>**No value is ever fresh at the moment it is used, and this engine is
 not for timing-critical work.** Nothing produces a value at the instant
 it is consumed. A static holds whatever was last written into it, and
@@ -301,11 +310,18 @@ because somebody read it.** For a recalculation graph that is right.
 For something that genuinely should be re-read per use, the drawing has
 to say what makes it re-read, which means a wire back from whatever
 consumes it — and that will look like a loop, because it is one.</p>
-<p><strong>An invocation's inputs are not all read at one instant.</strong> Ring values
-are claimed together under the station's mutex (T3). A static is read
-in the same window but was written at some earlier, unrelated moment,
-so a box reading two statics gets values that were correct at two
-different times and may never have been correct together.</p>
+<p>**An invocation's inputs are all read at one instant, and this used to
+be a warning here.** Ring values were claimed under the station's
+mutex while a static was read afterwards, outside it, so a box reading
+two statics could get values that were correct at two different times
+and never together. The gap existed because a static's value lived in
+a table with a lock of its own, and that lock could not be taken while
+the station's was held. With the value on the port there is no second
+lock, so the claim moved inside the same window as the ring pops and
+the warning became guarantee T3.</p>
+<p>A static still holds whatever was last written into it, so it may be
+<em>old</em>. What it can no longer be is inconsistent with its siblings in
+the same invocation.</p>
 <p><strong>A ring port with a backlog is drained by static writes.</strong> Each write
 runs the readiness check, and a waiting ring value completes the input
 set, so it is consumed. That is real work on real values rather than an

@@ -330,6 +330,27 @@ static void ring_claim(slot_t *sl, void *into)
     }
 }
 
+static void static_claim_locked(slot_t *sl, void *into)
+{
+    /* A copy, under the station's mutex, beside the ring pops (issue
+     * 401). It used to be resolved later, during task construction and
+     * outside this lock, and the reason was lock ordering: the value
+     * lived in a table with a mutex of its own, and that mutex must
+     * never nest inside a station's.
+     *
+     * With the value on the port there is no second lock to order, so
+     * the split has nothing left to buy — and closing it gains
+     * something real. The static half of an input set is now as
+     * mutually consistent as the buffered half: every value a task
+     * carries was taken in one window, under one lock, so a box
+     * reading two statics can no longer get values that were correct
+     * at two different moments and never together.
+     *
+     * Nothing is consumed. A static is always full, which is the whole
+     * reason the kind exists. */
+    memcpy(into, sl->constant, (size_t)sl->elem_size);
+}
+
 static void none_claim(slot_t *sl, void *into)
 {
     /* Unreachable, and saying so out loud is the point. The walk above
@@ -344,16 +365,17 @@ static void none_claim(slot_t *sl, void *into)
     abort();
 }
 
+/*
+ * **No row here is an absence any more** (issues 210b, 401). The
+ * static row was a null, and the caller tested the function pointer
+ * for truth to discover it; the meaning was "resolved later, outside
+ * the mutex", which was a real and correct decision written as a hole
+ * that a reader had to already know the meaning of. The decision it
+ * encoded is gone with the statics table, so the hole is gone with it.
+ */
 static void (*const slot_claim_locked[SLOT_KIND_COUNT])(slot_t *, void *) = {
     [SLOT_RING]   = ring_claim,
-    /* Still an absence, and still meaning "resolved later, outside the
-     * mutex" — issue 210b wanted this to become a named function
-     * saying so, and it cannot yet. What the function would say
-     * changes under issue 401, which moves a static's claim *into*
-     * this walk beside the ring pop; writing the honest version now
-     * would mean writing it twice. The caller therefore still tests
-     * the pointer, and this comment is the hole's label until then. */
-    [SLOT_STATIC] = NULL,
+    [SLOT_STATIC] = static_claim_locked,
     [SLOT_NONE]   = none_claim,
 };
 /* }}} */
@@ -391,8 +413,11 @@ static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed)
     int offset = 0;
     for (int i = 0; i < s->n_slots; i++) {
         slot_t *sl = &s->slots[i];
-        if (slot_claim_locked[sl->kind])
-            slot_claim_locked[sl->kind](sl, claimed + offset);
+        /* Every kind, unconditionally. The caller used to test the
+         * function pointer here because the static row was null; there
+         * is no null now, so the dispatch is a call rather than a call
+         * guarded by a question about the table's own shape. */
+        slot_claim_locked[sl->kind](sl, claimed + offset);
         offset += sl->elem_size;
     }
     return 1;
@@ -432,6 +457,10 @@ task_t *task_build(map_t *m, int station_index,
     t->station = station_index;
     t->port = port;
     t->n_in = s->n_slots;
+    /* Zero rather than left over: with timing compiled out nothing
+     * ever writes it, and the delivery walk adds it to the station
+     * unconditionally. */
+    t->box_ns = 0;
 
     /* The pointer array sits immediately after the struct; the value
      * bytes after it; the output after those. One free() takes the
@@ -439,36 +468,27 @@ task_t *task_build(map_t *m, int station_index,
     t->in = (void **)(t + 1);
     unsigned char *data = (unsigned char *)(t->in + s->n_slots);
 
+    /*
+     * Every value was claimed under the station's mutex before this
+     * ran, whatever kind of port it came from (issue 401) — so this is
+     * one copy per port out of the caller's buffer, and there is no
+     * longer a case that reaches back into the map for a value it
+     * failed to bring along.
+     *
+     * The claimed buffer may be null only for a station with no ports
+     * at all, which the loop below then does not enter.
+     */
     int offset = 0;
     for (int i = 0; i < s->n_slots; i++) {
         slot_t *sl = &s->slots[i];
         t->in[i] = data + offset;
-        switch (sl->kind) {
-        case SLOT_RING:
-            /* Claimed under the mutex; copied into the task here. */
-            memcpy(t->in[i], claimed + offset, (size_t)sl->elem_size);
-            break;
-        case SLOT_STATIC:
-            /* A locked copy from the statics table (issue 401) —
-             * resolved here, outside the station's mutex, so the
-             * table's own lock never nests inside a station's. */
-            static_claim(m, sl, t->in[i]);
-            break;
-        case SLOT_NONE:
-            /* A task exists, so something decided this station was
-             * ready; readiness cannot say yes about an unconfigured
-             * port. Both callers are guarded — delivery asks the
-             * readiness walk, and the seed sweep skips a station with
-             * any unconfigured port — so reaching here means one of
-             * those guards was removed (issue 210b). */
-            die("building a task for a station with a port that has no source",
-                station_index);
-            break;
-        default:
-            die("a slot of an unknown kind", station_index);
-        }
+        if (!claimed)
+            die("building a task with no claimed values for a station that "
+                "has ports", station_index);
+        memcpy(t->in[i], claimed + offset, (size_t)sl->elem_size);
         offset += sl->elem_size;
     }
+    (void)m;
 
     t->out = s->out_size > 0 ? data + in_bytes : NULL;
     return t;
@@ -479,6 +499,55 @@ task_t *task_build(map_t *m, int station_index,
 /* Delivery itself (issues 204, 205).                                 */
 /* ------------------------------------------------------------------ */
 
+/* {{{ map_station_try_start() */
+/*
+ * Readiness, claim, build, push — a delivery with the delivering taken
+ * out. Three callers wanted exactly this and were each doing their own
+ * version of it (issue 401).
+ *
+ * The seed sweep enqueued a station without asking whether it was
+ * ready, which was safe only while the unasked question happened to
+ * have the same answer — and stopped being safe the moment a static's
+ * value had to be claimed like any other, because the seed had no
+ * claim buffer to put one in.
+ *
+ * Setting or writing a static is supposed to run the ordinary
+ * readiness check on its station. That is what replaced the pull path,
+ * and it is what makes a chain of stations wired through static ports
+ * into a recalculation graph. It was documented as a guarantee and was
+ * not actually happening.
+ *
+ * A write cannot make something run that could not run anyway, because
+ * the check it triggers is this one: an empty ring port still answers
+ * no, and the engine will not invent a value for it.
+ */
+int map_station_try_start(map_t *m, int station)
+{
+    if (station < 0 || station >= m->n_stations)
+        die("starting a station outside the table", station);
+    station_t *s = &m->stations[station];
+    if (!s->call)
+        die("starting a station with no box placed", station);
+
+    int in_bytes = station_input_bytes(s);
+    unsigned char claimed[in_bytes > 0 ? in_bytes : 1];
+    int port = 0;
+
+    pthread_mutex_lock(&s->mutex);
+    int due = station_ready_and_claim_locked(s, claimed);
+    if (due && s->kind == STATION_ITERATOR && s->n_ports > 0) {
+        port = s->cursor;
+        s->cursor = (s->cursor + 1) % s->n_ports;
+    }
+    pthread_mutex_unlock(&s->mutex);
+
+    if (due)
+        pool_push(m->pool, task_build(m, station, in_bytes > 0 ? claimed : NULL,
+                                      port));
+    return due;
+}
+/* }}} */
+
 /* {{{ map_deliver_value() */
 int map_deliver_value(map_t *m, int station, int slot, const void *value)
 {
@@ -488,9 +557,17 @@ int map_deliver_value(map_t *m, int station, int slot, const void *value)
     if (slot < 0 || slot >= s->n_slots)
         die("delivering to a slot the station does not have", station);
     /* Two ways this is wrong, and they deserve different sentences: a
-     * static already holds its value and has nowhere to queue one
-     * (until issue 405, where an arrow into a static overwrites it),
-     * and an unconfigured port is one nobody has finished wiring. */
+     * static already holds its value and has nowhere to queue one, and
+     * an unconfigured port is one nobody has finished wiring.
+     *
+     * The first of those is not permanent. Issue 405 makes an arrow
+     * into a static port *overwrite* the static rather than queue —
+     * which is how a constant gets computed at startup instead of
+     * written by hand, and is a property of the wire rather than of
+     * the box, so it shows up in the map file instead of happening
+     * invisibly inside C. The write call exists; teaching delivery to
+     * use it belongs with the load-time check that currently refuses
+     * such a wire. */
     if (s->slots[slot].kind == SLOT_NONE)
         die("delivering into a port that has no source yet", station);
     if (s->slots[slot].kind != SLOT_RING)
@@ -588,6 +665,11 @@ void map_deliver(void *ctx, task_t *t)
     station_t *s = &m->stations[t->station];
 
     s->runs++;
+    /* The box's own time, charged onto the task by the shim and moved
+     * onto the station here — the one place that holds both (issue
+     * 405). Zero when timing is compiled out, so this costs an add of
+     * nothing rather than a branch. */
+    s->box_ns += t->box_ns;
 
     if (s->out_size == 0)
         return;

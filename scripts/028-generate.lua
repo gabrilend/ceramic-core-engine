@@ -538,7 +538,13 @@ local function emit(description, sources, out_path)
         end
         line("#ifdef SORA_STATS")
         line("    clock_gettime(CLOCK_MONOTONIC, &sora_t1);")
-        line("    sora_stats_box_time(t->station,")
+        -- The time is charged onto the task, and the delivery walk
+        -- moves it onto the station afterwards. It used to be charged
+        -- straight to the station, found through a process-wide
+        -- pointer to the running map, because a shim receives only a
+        -- task and had no other way to reach one. That pointer was
+        -- what limited a process to a single running map (issue 405).
+        line("    sora_stats_box_time(t,")
         line("        (sora_t1.tv_sec - sora_t0.tv_sec) * 1000000000L")
         line("        + (sora_t1.tv_nsec - sora_t0.tv_nsec));")
         line("#endif")

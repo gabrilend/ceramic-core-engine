@@ -111,7 +111,7 @@
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
-<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -157,14 +157,20 @@ socket, a person turning a knob, or a parent program configuring a
 child. The write names a station and a port, is size-checked against
 what that port holds, and takes the station's own mutex — the same lock
 the claim takes, so no invocation can see a half-written value.</p>
-<p><strong>From a wire.</strong> An arrow whose destination port holds a static
-overwrites that static rather than queueing into a ring buffer. The box
-producing the value is untouched by this: it takes its arguments,
-returns one value, and has no idea what happens next. The <em>wire</em> is
-what says the value lands in a cell. This matters because it keeps the
-capability visible — it is in the file, in the dump, and drawable —
-rather than being a box reaching sideways into something no arrow
-connects it to.</p>
+<p><strong>From a wire — designed, and the only one of the three not built.</strong> An
+arrow whose destination port holds a static would overwrite that static
+rather than queueing into a ring buffer. The box producing the value is
+untouched by this: it takes its arguments, returns one value, and has
+no idea what happens next. The <em>wire</em> is what says the value lands in a
+cell. This matters because it keeps the capability visible — it is in
+the file, in the dump, and drawable — rather than being a box reaching
+sideways into something no arrow connects it to.</p>
+<p>Today such a wire is <strong>refused at load time</strong> and a delivery into a
+static port stops the program. Both refusals are older than this design
+and predate there being anywhere for the value to go; the write call
+they would need now exists and takes the right lock. What is left is
+teaching delivery to use it and removing the load-time check that
+currently calls the arrow a mistake. Issue 405 carries it.</p>
 <h2>A write is an event</h2>
 <p>**Writing a static runs the readiness check on the station that holds
 it.** That is the mechanism that replaces the pull path, and it is one

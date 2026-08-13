@@ -160,11 +160,10 @@ enum station_kind {
  * absent — and that values already waiting in a port survive it being
  * turned into something else and back (issue 210f).
  *
- * The storage a *static* needs is still the table entry number rather
- * than the bytes themselves. Moving the bytes onto the port here is
- * blocked on issue 401, which deletes the table they currently live
- * in; until then this record has room for one storage and an index to
- * the other, which is the honest shape of a half-finished move.
+ * **Both storages are real** (issues 210b, 401): the cells, and the
+ * bytes of a static. Exactly one is in effect and the other sits idle,
+ * which is what makes changing what a port is a field write in both
+ * directions rather than only one.
  */
 typedef struct slot {
     unsigned char kind;
@@ -206,7 +205,38 @@ typedef struct slot {
      * under the mutex as the lock comes off the claim path. */
     _Atomic int held;
 
-    int   static_id;  /* static only — statics table entry (phase 4) */
+    /*
+     * What a static needs, and it is the value itself now rather than
+     * an index into a table everyone shared (issue 401).
+     *
+     * A station is one instantiation of a box, wired its own way. Its
+     * input ports are its own: one may be fed by a wire, another may
+     * hold a value that is simply always there. Which of those a port
+     * is, and what it holds, is a property of that port on that
+     * station and of nothing else — so there is nothing shared, and
+     * therefore nothing to share a table for.
+     *
+     * Three things came out of the table with it. A process may hold
+     * more than one running program, because the table was the map
+     * state that forced the singleton. Claiming a static happens under
+     * the station's own mutex beside the ring pop, so the static half
+     * of an input set is as mutually consistent as the buffered half.
+     * And two ports of different types can no longer reference one
+     * entry and read the same bytes each their own way — that stops
+     * being a rule to document and becomes a thing that cannot be
+     * said.
+     *
+     * `constant` is elem_size bytes, allocated at placement like the
+     * cells and kept for the life of the map. `constant_string` is
+     * where a string static's characters live, since the value for
+     * such a port is a pointer and it has to point at something the
+     * port owns. `constant_set` is what stops a port being turned
+     * into a static that has no value: the tag would be in effect and
+     * the storage behind it would be nothing anybody wrote.
+     */
+    void *constant;
+    char *constant_string;
+    int   constant_set;
 
     /* The type this slot feeds, as text from the registry — what
      * lets a static entry's text become bytes of the right shape.
@@ -285,38 +315,35 @@ typedef struct station {
 } station_t;
 /* }}} */
 
-/* {{{ struct static_entry / struct map */
+/* {{{ struct map */
 /*
- * One statics-table entry (issues 401, 402, 405). The text is what
- * the map said; the bytes are its parse, produced when the first
- * slot binds and sized to that slot's type. The first pass departs
- * from the docs here deliberately: entries hold parsed bytes rather
- * than being re-read from text at every claim, because runtime
- * mutation (issue 405) writes bytes, and a table that is sometimes
- * text and sometimes bytes is two tables wearing one name. The
- * "two slots read one entry each their own way" side effect is
- * narrowed to same-size types; the first-pass report carries the
- * reasoning.
+ * **There was a statics table here and it is gone** (issue 401). It
+ * held numbered entries, each a piece of text from the map file and
+ * the bytes that text parsed into, shared by every port that named
+ * the entry and guarded by a mutex of its own.
+ *
+ * What it cost was out of proportion to what it was: a way to write a
+ * value once in a file and point several ports at it. Being map-level
+ * mutable state, it was the reason a process could hold only one
+ * running program. Its mutex was a second lock a claim had to take,
+ * nested inside the station's. And because an entry's bytes were
+ * shaped by whichever port bound it first, two ports of different
+ * types could name one entry and read the same bytes each their own
+ * way — a footgun that had to be documented because it could not be
+ * prevented.
+ *
+ * The `statics` section of a map file is now notation and nothing
+ * else: a way to write a value down once while describing the map.
+ * Reading it copies the value into each port that names it, and from
+ * that moment the entry has done its job. Sharing, when it is wanted,
+ * is drawn — one station holds the value and everyone who needs it
+ * has an arrow from it, which costs a station and gains a wire
+ * somebody can see.
  */
-typedef struct static_entry {
-    char          *text;            /* what the map said; owned here */
-    unsigned char *bytes;           /* the parse; what claims copy */
-    int            size;            /* bytes' length once parsed */
-    char          *string_storage;  /* for string entries: the characters
-                                     * the claimed pointer points at */
-} static_entry_t;
-
 typedef struct map {
     station_t *stations;
     int        n_stations;
     pool_t    *pool;            /* set by map_start; delivery pushes here */
-
-    /* The statics table: numbered constants, alive for the life of
-     * the program, guarded by one mutex the moment writes exist
-     * (issue 405). Reads are a memcpy under it; contention is nil. */
-    static_entry_t *statics;
-    int             n_statics;
-    pthread_mutex_t statics_mutex;
 
     /* How many stations the seed sweep enqueued (issue 605). Zero
      * on hand-built maps that seed by delivering. */
@@ -484,38 +511,101 @@ void map_deliver(void *ctx, task_t *t);
 int map_slot_depth(map_t *m, int station, int slot);
 /* }}} */
 
-/* ------------------------------------------------------------------ */
-/* The statics table (issues 401, 402, 405). Lives in 033-statics.c.  */
-/* ------------------------------------------------------------------ */
-
-/* {{{ map_statics_alloc() / map_static_set_text() */
-/* Create the numbered table; give an entry its text. Text must be
- * set before any slot binds the entry. */
-void map_statics_alloc(map_t *m, int n_entries);
-void map_static_set_text(map_t *m, int id, const char *text);
+/* {{{ map_station_try_start() — issues 401, 605 */
+/*
+ * Ask a station whether it is ready, and if it is, claim one value
+ * from every port, build a task, and push it. Returns whether one
+ * became due.
+ *
+ * This is the interior of a delivery with the delivering taken out,
+ * and it exists because two other things needed exactly that and were
+ * each doing their own version. The seed sweep enqueued a station
+ * without asking whether it was ready at all, which was safe only
+ * while an unasked question happened to have the same answer. Writing
+ * a static is supposed to run the ordinary readiness check on its
+ * station — that is what replaced the pull path, and it is what makes
+ * a chain of stations wired through static ports into a recalculation
+ * graph — and it was not running one.
+ *
+ * A write cannot make something run that could not run anyway,
+ * because the check it triggers is the ordinary one: an empty ring
+ * port still answers no, and the engine will not invent a value for
+ * it.
+ */
+int map_station_try_start(map_t *m, int station);
 /* }}} */
 
-/* {{{ map_slot_static() */
+/* ------------------------------------------------------------------ */
+/* Statics, which live on the ports that read them (issues 401, 402,  */
+/* 405). In 033-statics.c, which is now a reader and a writer of      */
+/* values rather than the keeper of a table.                          */
+/* ------------------------------------------------------------------ */
+
+/* {{{ map_slot_static_text() */
 /*
- * Convert a slot from ring buffer to static, binding it to an entry.
- * The entry's text is parsed here, into bytes shaped by the slot's
- * registry type — which is why only stations placed by name can bind
- * statics. Always full, never consumed, never affects readiness.
+ * Give a port a constant, written as text, and make it a static.
+ *
+ * The text is parsed here into the port's own storage, shaped by the
+ * port's registry type — which is why only stations placed by name
+ * can hold statics: turning `{ 5, 2.0, { 0, 0, 0 }, "hey there", 2 }`
+ * into bytes means knowing the field layout, and the type is where
+ * that comes from.
+ *
+ * Nothing is retained afterwards. A map file's `statics` section is
+ * notation: a way to write a value down once and point ports at it by
+ * number while the file is being read. Two ports given the same
+ * entry's text end up with two independent values, and writing one
+ * does not disturb the other.
+ *
+ * A static is always full, never consumed, and never affects
+ * readiness — but setting one runs the readiness check on its
+ * station, because a port that was the last one missing is no longer
+ * missing.
  */
-void map_slot_static(map_t *m, int station, int slot, int static_id);
+void map_slot_static_text(map_t *m, int station, int slot, const char *text);
 /* }}} */
 
-/* {{{ map_static_write() / sora_static_write() */
+/* {{{ map_slot_static_write() — issue 405 */
 /*
- * Alter an entry while the program runs (issue 405), size-checked
- * against the entry. The bare-name variant reaches the active map,
- * and exists so a box can call it — which is a back channel around
- * "a box cannot remember": shared mutable state, relocated, wearing
- * a table for a disguise. It works. Treat it with exactly the
- * suspicion a global variable deserves, and for the same reason.
+ * Change a static while the program runs. It names a station and a
+ * port, because that is where the value lives, and it is size-checked
+ * against what that port holds.
+ *
+ * It takes the station's own mutex — the one the claim already takes
+ * — so no claim can see a half-written value. That matters for
+ * anything wider than a machine word: a struct half-overwritten while
+ * a claim copies it yields fields that were never simultaneously
+ * true, which is not theoretical and was demonstrated.
+ *
+ * Like setting one, writing one runs the readiness check on the
+ * station. Writing does not *consume* anything, so a station that was
+ * already able to run runs again — which is what makes a chain of
+ * stations wired through static ports recalculate.
+ *
+ * **A box may no longer write a static, and that is the point of the
+ * removal.** There used to be a bare-name variant taking an entry
+ * number and reaching a process-wide "active map" pointer, because a
+ * box receives only values and has no handle to anything. It worked,
+ * and it was always described as deserving the suspicion a global
+ * variable deserves — a box could stash a value and read it back on
+ * its next run, with none of it visible in the wiring, so a map
+ * showing no connection between two stations might still have them
+ * talking.
+ *
+ * What was not obvious until it was traced is what it cost: reaching
+ * a map from inside a box requires a process-wide map pointer, and a
+ * process-wide map pointer means a process can only ever run one map.
+ * A feature the design already distrusted was quietly charging the
+ * whole engine its ability to compose.
+ *
+ * A box that needs to affect something later in the run does it the
+ * way everything else does: it returns a value, and the value is
+ * wired somewhere. Writers are otherwise all outside the graph — a
+ * debugger, a control socket, a person turning a knob, or a parent
+ * program configuring a child.
  */
-void map_static_write(map_t *m, int id, const void *bytes, int size);
-void sora_static_write(int id, const void *bytes, int size);
+void map_slot_static_write(map_t *m, int station, int slot,
+                           const void *bytes, int size);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
@@ -571,32 +661,45 @@ const char *slot_kind_name(unsigned char kind);
 port_t *station_port(station_t *s, int index);
 /* }}} */
 
-/* {{{ static_claim() — task-build resolution */
-/* Called by task construction, outside the station's mutex: a locked
- * copy from the statics table, so that table's lock never nests
- * inside a station's. It is the only kind still resolved here now
- * that nothing is gathered; ring values were already claimed under
- * the mutex before the task was built. */
-void static_claim(map_t *m, const slot_t *sl, void *into);
+/* {{{ slot_constant_free() — teardown joint */
+/* A port's constant and, for a string, the characters it points at.
+ * Owned by the port and freed with the map. */
+void slot_constant_free(slot_t *sl);
 /* }}} */
 
-/* {{{ map_statics_free() — teardown joint */
-void map_statics_free(map_t *m);
+/* {{{ slot_constant_text() — issue 401 */
+/*
+ * A port's constant, turned back into the text a map file would use.
+ * Writes at most `room` bytes including the terminator, and returns
+ * how many characters it wanted — so a caller can tell it was cut
+ * short.
+ *
+ * This is the exact mirror of the reader that walks a field table
+ * turning text into bytes, and it exists because the dump lost its
+ * source of words. The statics table used to keep the original string
+ * a file gave it, and the dump wrote that string back out; with the
+ * value living on the port and no text retained anywhere, there is
+ * nothing to echo and the bytes have to be spoken.
+ *
+ * It is one piece of work with more than one caller in waiting: the
+ * dump, anything showing a value to a person, and eventually a
+ * program's results — which are text for the same reason a static is,
+ * because text resolves its layout when it is read and so survives a
+ * rebuild that would silently change what raw bytes meant.
+ */
+int slot_constant_text(const slot_t *sl, char *out, int room);
 /* }}} */
 
 /* {{{ task_build() — the one way a task comes into existence */
 /*
  * Exposed so the seed sweep (issue 605) creates its first tasks
- * through the same path delivery uses — one way, not two. The
- * claimed buffer feeds ring slots only and may be null for a
- * station that has none, which is the only kind the seed touches.
+ * through the same path delivery uses — one way, not two. The claimed
+ * buffer carries one value per port, of every kind: statics are
+ * claimed under the station's mutex beside the ring pops now (issue
+ * 401), so nothing is left to resolve here.
  */
 task_t *task_build(map_t *m, int station_index,
                    const unsigned char *claimed, int port);
-/* }}} */
-
-/* {{{ sora_active_map — the one live map, for box-reachable calls */
-extern map_t *sora_active_map;
 /* }}} */
 
 #endif

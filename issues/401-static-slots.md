@@ -2,29 +2,52 @@
 
 ## Current behavior
 
-REOPENED. The capability is built and correct; where the value lives is
-wrong, and that is what this issue now covers.
+**Done.** A static value belongs to the input port that reads it, and
+the table is gone.
 
-Built, in its own statics module: a numbered table of entries held on
-the map behind one mutex. A static input is always full, never affects
-readiness, and claiming copies without consuming — proven by a station
-running fifty times off one entry, driven only by its buffer side, and
-by an all-static station that delivery can never wake. Binding requires
-the port to know its type, which only registry placement provides, so
-hand-placed stations cannot bind statics.
+Binding is one call naming a station, a port, and text; it parses at
+the port's own registry type into the port's own storage. The parse
+happens into scratch and is installed under the station's mutex, so a
+malformed value never half-overwrites a working one and no concurrent
+claim sees a value mid-parse. Claiming is a copy under the station's
+mutex beside the ring pops — the claim dispatch table's static row was
+a null meaning "resolved later, outside the lock", and it is now an
+ordinary function, which is the last of the two holes issue 210b set
+out to close.
 
-One departure from the original design, reasoned in the first-pass
-report: entries hold parsed bytes shaped by the first port that binds
-them, rather than text re-parsed at every claim. Runtime mutation
-(issue 405) writes bytes, and a table that is sometimes text and
-sometimes bytes is two tables wearing one name.
+The old behaviors survive and are still proven: a station running fifty
+times off one constant driven only by its buffer side, an all-static
+station that delivery can never wake, brace text becoming bytes
+identical to a compiled initializer, and four malformed constants each
+dying where they were given. Binding still requires the port to know
+its type, which only registry placement provides.
 
-**What is now wrong with it.** The table is state held by the map, and
-map-level mutable state is what forces a running process to contain
-exactly one map. It is also a second mechanism for something the wiring
-already expresses: one value read by several stations is a thing the
-graph can say, by putting the value on a station and having everyone
-gather from it, where a reader can see it.
+**Three things came out with the table**, and each is now a test.
+
+- Two ports written from one file entry are independent afterwards:
+  writing one does not disturb the other. Under the table both read the
+  same bytes, shaped by whichever bound first, so two ports of
+  different types could read one value each their own way. That hazard
+  stopped being expressible rather than being better documented.
+- An invocation's inputs are all claimed in one window. A static used
+  to be read after the station's mutex was released, because its value
+  lived behind a second lock that could not nest inside the first — so
+  a box reading two statics could get values that were never
+  simultaneously true. That was a stated non-guarantee and is now
+  guarantee T3.
+- Two maps run in one process and do not see each other. Carried by
+  issue 405, which the next section explains could not be separated.
+
+**Issue 405 landed with this one and had to.** Removing the table
+breaks the runtime write, which addressed an entry number in it; the
+write has nowhere to live until the value is on a port. The two are one
+piece of work and were attempted as one.
+
+**Not done:** an arrow delivering into a static port, which
+[004](../docs/004-datapath-statics.md) describes and which is still
+refused at load time and fatal at delivery. The write call it needs
+exists and takes the right lock; what is left is teaching delivery to
+call it and removing the load-time check. It belongs to 405.
 
 ## Intended behavior
 
@@ -88,10 +111,17 @@ in its wiring — which is the same argument that moves them onto ports.
 
 ## Suggested implementation steps
 
-1. Take the port's own storage from
+1. ~~Take the port's own storage from
    [210b](210b-the-port-record.md), which provides it — this issue
-   spends that room rather than building it, so binding becomes a copy
-   into the port rather than an index into a table.
+   spends that room rather than building it~~ — **inverted, and the
+   inversion is the useful record here.** 210b was blocked on this
+   issue instead: a port cannot be given room for a value that lives
+   somewhere else, and the map file's `$n` form names a table this
+   issue deletes. Both could not be second. Whoever removes the table
+   is the one who has to know what replaces it, so this issue builds
+   the port-side storage it spends — a byte buffer beside the cells,
+   allocated at placement, plus the characters a string constant points
+   at. 210b's static half unblocked the moment it existed.
 2. Move the claim into the readiness walk, under the station's mutex,
    beside the ring-buffer pop. The claim dispatch table's static row
    stops being an absence and becomes an ordinary copy, which is one

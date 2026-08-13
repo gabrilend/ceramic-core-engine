@@ -111,7 +111,7 @@
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
-<a href="info-033-statics-c.html">033-statics.c — the statics table, from outside</a>
+<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
@@ -185,15 +185,28 @@ parameters — but that means forgetting the threshold line silently
 demotes a comparator to a plain box that routes everything one way. One
 letter of redundancy buys an error instead of a wrong answer.</p>
 <h2>Input lines</h2>
-<p><strong>A port is a ring buffer unless a line says otherwise.</strong> There is
-exactly one exception, and it carries the port index:</p>
+<p><strong>A port is a ring buffer unless a line says otherwise.</strong> There are two
+ways for a line to say otherwise, and both carry the port index:</p>
 <pre class="code">
-in 1 $0        port 1 is <span class="kw">static</span>, holding the value of entry 0
+in 1 $0        port 1 holds the value written at statics entry 0
+in 1 = 5       port 1 holds 5
+in 2 = { 1.5, 2.5, 3.5 }       and a <span class="kw">struct</span> is written the same way
 </pre>
 <p>So <code>split</code> above has no input lines at all — every port is an ordinary
 ring buffer and there is nothing to say about them.</p>
 <p>Port indices match the box function's parameter order, so the loader
 can check that no line names a port the function does not have.</p>
+<p><strong>The two forms differ only in where the text comes from.</strong> <code>$0</code> fetches
+it from the statics section, which is notation for writing a value once
+and pointing several ports at it; <code>=</code> carries it on the line. Either
+way the text is parsed into that port's own storage, at that port's own
+type, and nothing is retained afterwards.</p>
+<p>The <code>=</code> matches the statics section's own <code>N = value</code>, so a value is
+spelled the same way wherever it is written. It is the form **the dump
+writes**, because a dump has values sitting on ports and no entry
+numbers to point back at — inventing a numbered section to refer to
+would be notation the engine made up rather than something a person
+wrote.</p>
 <p>The <code>$</code> is there because <code>in 1 0</code> reading as "static entry zero" is not
 something anyone will guess a year from now.</p>
 <p><strong>A second exception is coming: a port with no source at all.</strong> A
@@ -259,18 +272,29 @@ generator emitted for that struct.</p>
 <p>This is the same reason the wiring carries no types: if the table said
 <code>int</code> where the box wanted <code>float</code>, there would be two sources of truth
 and the file would be the one that was wrong.</p>
-<p>The section is notation: a way to write a value once while describing
-the map, and point ports at it by number.</p>
-<p>The engine currently keeps that table alive for the whole run, shared
-across every port that bound an entry and guarded by its own mutex. Two
-consequences follow from the table's shape, and neither is a feature to
-build on: two ports of different types may reference one entry and read
-it each their own way, and a box may write to the table — a back channel
-around "a box cannot remember," invisible in the wiring, and the reason
-a process can hold only one running map.</p>
-<p>Both are being retired, along with the table itself. Issues 401 and 405
-carry that work; a static value belongs to the input port that reads it,
-and this document will say so plainly once it does.</p>
+<p><strong>The section is notation and nothing else</strong>: a way to write a value
+once while describing the map, and point ports at it by number. It is
+resolved as the file is read, and the running program holds no table.</p>
+<p>That is worth stating plainly because it used to be otherwise, and the
+difference is visible. Each port that names an entry gets **its own
+copy** of that value, so two ports written from one entry are
+independent from the moment they are written — changing one cannot
+change the other, and neither can be shaped by the other's type. The
+engine used to keep the table alive for the whole run, shared, behind a
+mutex of its own, and two consequences followed that were never
+features: two ports of different types could reference one entry and
+read the same bytes each their own way, and a box could write to the
+table, which was a back channel around "a box cannot remember" and, by
+requiring a process-wide pointer to the running map, the reason a
+process could hold only one program.</p>
+<p><strong>Sharing, when it is wanted, is drawn.</strong> One station holds the value
+and everyone who needs it has an arrow from it. That costs a station
+and gains visibility: a constant five stations read appears in the
+wiring as five wires rather than as five references to a number that
+appears nowhere in the shape of the map.</p>
+<p>A dump therefore has no <code>statics</code> section. Every constant is written
+out beside the port that holds it, from its bytes — including anything
+a runtime write changed, which the old form could not say.</p>
 <h2>What the loader checks</h2>
 <p>Load-time failures, all of them fatal and all naming the offending
 station:</p>

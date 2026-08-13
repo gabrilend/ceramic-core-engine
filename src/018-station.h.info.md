@@ -18,7 +18,9 @@ buffers grow.
 | stride | `int` | Bytes from one cell to the next: a value, its state, and padding to keep the next value aligned. |
 | read_hint, write_hint | `int` | Where a reader and a writer each start looking. Hints, not positions. |
 | held | `int`, atomic | Cells ready right now. |
-| static_id | `int` | Static only: statics-table entry (phase 4). Kept when the port is converted away, so a port that goes static, buffer, static reads the same entry. |
+| constant | `void *` | The static's value, `elem_size` bytes, allocated at placement like the cells. Kept when the port is converted away, so a port that goes static, buffer, static reads the value it read before. |
+| constant_string | `char *` | A string constant's characters, since the value is a pointer that has to point at something the port owns. |
+| constant_set | `int` | Whether anybody has written one. |
 | growths, high_water | `int` | How many doublings, and the deepest backlog — phase 7's reading. |
 
 **The three kinds, and what each one answers when readiness asks
@@ -61,7 +63,10 @@ Fields: mutex, call (the shim), kind (plain 0 / comparator 1 /
 iterator 2), slots + n_slots, ports + n_ports, cursor (iterator's one
 memory), out_size (`int`, bytes of return value, 0 = sink).
 
-**map** — stations + count + the pool delivery pushes into.
+**map** — stations + count + the pool delivery pushes into. It used to
+carry a numbered table of shared constants too; that is gone, and with
+it the process-wide pointer naming one map as *the* map, so any number
+of maps can run in one process without seeing each other.
 
 ## Functions
 

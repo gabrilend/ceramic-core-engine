@@ -156,14 +156,26 @@ void map_report_stations(map_t *m, FILE *out, int order)
 /* }}} */
 
 /* {{{ sora_stats_box_time() */
-/* Called by every generated shim when SORA_STATS is compiled in;
- * reaches the active map the same way a box's statics write does. */
-void sora_stats_box_time(int32_t station, long ns)
+/*
+ * Called by every generated shim when SORA_STATS is compiled in.
+ *
+ * It used to reach a process-wide "active map" pointer, the same way a
+ * box's statics write did — and that pointer was the singleton, the
+ * thing that made a process able to run only one map at a time. Issue
+ * 405 removed the statics write's need for it, which left this as its
+ * only remaining user: one optional measurement hook holding the whole
+ * engine's ability to compose.
+ *
+ * So the time rides out on the task instead. The shim charges it to a
+ * field the pool carries and never reads, and the delivery walk — which
+ * has both the map and the finished task in hand — moves it onto the
+ * station afterwards. The pool stays ignorant of stations, and nothing
+ * anywhere is process-wide.
+ */
+void sora_stats_box_time(task_t *t, long ns)
 {
-    map_t *m = sora_active_map;
-    if (!m || station < 0 || station >= m->n_stations)
-        return;
-    m->stations[station].box_ns += ns;
+    if (t)
+        t->box_ns += ns;
 }
 /* }}} */
 

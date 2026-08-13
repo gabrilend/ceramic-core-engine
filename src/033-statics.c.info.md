@@ -1,40 +1,70 @@
-# 033-statics.c — the statics table, from outside
+# 033-statics.c — constants on ports, from outside
 
-Numbered constants a slot binds instead of being fed: thresholds,
-paths, configuration. Always full, never consumed, never part of
-readiness.
+A value that sits on one input port and is simply always there:
+thresholds, paths, configuration. Always full, never consumed, never
+part of readiness — so a station driven by its buffered side reads the
+same constant on every one of its runs.
+
+**A constant belongs to the port that reads it.** There was a numbered
+table on the map, shared by every port that named an entry, and it is
+gone. What it cost was out of proportion to what it bought: it was
+map-level mutable state, so a process could hold only one running
+program; its mutex was a second lock a claim had to take, nested inside
+the station's; and an entry's bytes were shaped by whichever port bound
+it first, so two ports of different types could read the same bytes
+each their own way.
+
+Two ports written from one entry in a file are now independent from the
+moment they are written. Sharing, when it is wanted, is drawn — one
+station holds the value and everyone who needs it has an arrow from it,
+which costs a station and gains a wire somebody can see.
 
 ## Functions
 
-**map_statics_alloc(map, entry count)** — create the table and its
-mutex.
+**map_slot_static_text(map, station, slot, text)** — give a port a
+constant written as text, and make it a static. Parses into the port's
+own storage, shaped by the port's registry type: a number for
+int/unsigned/float ports, a brace walk over the generated field table
+for a struct port, the characters themselves for a `const char *` port
+(claimed as a pointer to storage the port owns). Fatal, naming station,
+port and field, on any mismatch: too many values, too few, a string
+where a number belongs, an untyped port.
 
-**map_static_set_text(map, id, text)** — give an entry the text the
-map wrote. Must precede any binding; once per entry.
+Parsed into scratch first and installed under the station's mutex, so a
+malformed value never half-overwrites a working one and no concurrent
+claim sees a value mid-parse. Runs the readiness check afterwards.
 
-**map_slot_static(map, station, slot, id)** — convert a ring slot to
-a static bound to an entry. Parses the entry's text into bytes shaped
-by the slot's registry type: a number for int/unsigned/float slots, a
-brace walk over the generated field table for a struct slot, the
-characters (claimed as a pointer to table-owned storage) for a
-`const char *` slot. Fatal, naming entry and field, on any mismatch:
-too many values, too few, a string where a number belongs, unknown
-entry, untyped slot.
+**map_slot_static_write(map, station, slot, bytes, size)** — change a
+constant mid-run. Size-checked against what the port holds, and the
+station's own mutex — the lock the claim already takes — is held for
+the length of the copy, so no invocation sees fields from two worlds.
+Runs the readiness check afterwards.
 
-**map_static_write(map, id, bytes, size)** — alter an entry mid-run;
-size-checked, mutex-held for the length of the copy so no claim ever
-sees fields from two worlds.
+Refuses a port that has never held a constant, because its shape is
+unknown.
 
-**sora_static_write(id, bytes, size)** — same, against the active
-map; the variant a box can call. A back channel around "a box cannot
-remember" — treat with a global variable's suspicion.
+**slot_constant_text(slot, out, room) → wanted** — a constant turned
+back into the text a map file would use, the exact mirror of the
+reader, walking the same field table the other way. Writes at most
+`room` bytes including the terminator and returns how many characters
+it wanted, so a caller can ask again with a bigger buffer. Floats get
+enough significant digits to read back as the same value.
 
-**static_claim(map, slot, out)** — internal: the locked memcpy a
-task build performs.
+Nothing needed this until the table went: the table kept the original
+string a file gave it and the dump echoed that string, which had a hole
+in it — a value changed while the program ran was not re-serialized, so
+the dump printed what the file said rather than what the engine held.
 
-## The first-pass departure
+**slot_constant_free(slot)** — internal: the constant and, for a
+string, the characters it points at.
 
-Entries hold parsed bytes (shaped by the first binder), not
-re-parsed text per claim; two slots may share an entry only at equal
-sizes. The docs' "each slot reads the text its own way" conflicts
-with byte-level runtime mutation — the report explains the choice.
+## What a box may no longer do
+
+**Write a static.** There used to be a bare-name call taking an entry
+number, reachable from inside a box. It was always described as
+deserving a global variable's suspicion — a box could stash a value and
+read it back next run, invisible in the wiring — but the cost that
+settled it was structural: reaching a map from inside a box needs a
+process-wide map pointer, and that pointer is what limited a process to
+one running map. A box that needs to affect something later returns a
+value, and the value is wired somewhere.

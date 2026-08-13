@@ -77,11 +77,13 @@ letter of redundancy buys an error instead of a wrong answer.
 
 ## Input lines
 
-**A port is a ring buffer unless a line says otherwise.** There is
-exactly one exception, and it carries the port index:
+**A port is a ring buffer unless a line says otherwise.** There are two
+ways for a line to say otherwise, and both carry the port index:
 
 ```
-in 1 $0        port 1 is static, holding the value of entry 0
+in 1 $0        port 1 holds the value written at statics entry 0
+in 1 = 5       port 1 holds 5
+in 2 = { 1.5, 2.5, 3.5 }       and a struct is written the same way
 ```
 
 So `split` above has no input lines at all — every port is an ordinary
@@ -89,6 +91,19 @@ ring buffer and there is nothing to say about them.
 
 Port indices match the box function's parameter order, so the loader
 can check that no line names a port the function does not have.
+
+**The two forms differ only in where the text comes from.** `$0` fetches
+it from the statics section, which is notation for writing a value once
+and pointing several ports at it; `=` carries it on the line. Either
+way the text is parsed into that port's own storage, at that port's own
+type, and nothing is retained afterwards.
+
+The `=` matches the statics section's own `N = value`, so a value is
+spelled the same way wherever it is written. It is the form **the dump
+writes**, because a dump has values sitting on ports and no entry
+numbers to point back at — inventing a numbered section to refer to
+would be notation the engine made up rather than something a person
+wrote.
 
 The `$` is there because `in 1 0` reading as "static entry zero" is not
 something anyone will guess a year from now.
@@ -171,20 +186,32 @@ This is the same reason the wiring carries no types: if the table said
 `int` where the box wanted `float`, there would be two sources of truth
 and the file would be the one that was wrong.
 
-The section is notation: a way to write a value once while describing
-the map, and point ports at it by number.
+**The section is notation and nothing else**: a way to write a value
+once while describing the map, and point ports at it by number. It is
+resolved as the file is read, and the running program holds no table.
 
-The engine currently keeps that table alive for the whole run, shared
-across every port that bound an entry and guarded by its own mutex. Two
-consequences follow from the table's shape, and neither is a feature to
-build on: two ports of different types may reference one entry and read
-it each their own way, and a box may write to the table — a back channel
-around "a box cannot remember," invisible in the wiring, and the reason
-a process can hold only one running map.
+That is worth stating plainly because it used to be otherwise, and the
+difference is visible. Each port that names an entry gets **its own
+copy** of that value, so two ports written from one entry are
+independent from the moment they are written — changing one cannot
+change the other, and neither can be shaped by the other's type. The
+engine used to keep the table alive for the whole run, shared, behind a
+mutex of its own, and two consequences followed that were never
+features: two ports of different types could reference one entry and
+read the same bytes each their own way, and a box could write to the
+table, which was a back channel around "a box cannot remember" and, by
+requiring a process-wide pointer to the running map, the reason a
+process could hold only one program.
 
-Both are being retired, along with the table itself. Issues 401 and 405
-carry that work; a static value belongs to the input port that reads it,
-and this document will say so plainly once it does.
+**Sharing, when it is wanted, is drawn.** One station holds the value
+and everyone who needs it has an arrow from it. That costs a station
+and gains visibility: a constant five stations read appears in the
+wiring as five wires rather than as five references to a number that
+appears nowhere in the shape of the map.
+
+A dump therefore has no `statics` section. Every constant is written
+out beside the port that holds it, from its bytes — including anything
+a runtime write changed, which the old form could not say.
 
 ## What the loader checks
 

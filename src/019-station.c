@@ -184,7 +184,18 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
         sl->read_hint = 0;
         sl->write_hint = 0;
         sl->held = 0;
-        sl->static_id = -1;
+
+        /* The other storage, allocated at the same moment and for the
+         * same reason (issues 210b, 401): a port has room for both a
+         * buffer and a constant whatever it is currently for, so
+         * changing which one is in effect is a field write and never
+         * an allocation. Zeroed, so a port whose constant has not been
+         * set holds zeroes rather than whatever was there — though
+         * nothing reads it until constant_set says somebody wrote it. */
+        sl->constant = calloc(1, (size_t)sl->elem_size);
+        if (!sl->constant) fail("out of memory for a port's constant");
+        sl->constant_string = NULL;
+        sl->constant_set = 0;
     }
 }
 /* }}} */
@@ -231,12 +242,19 @@ void map_slot_convert(map_t *m, int station, int slot, int kind)
     station_t *s = &m->stations[station];
     if (slot < 0 || slot >= s->n_slots)
         fail("converting a port the box does not have");
-    if (kind == SLOT_STATIC)
-        fail("becoming a static needs a value, which this call has no room "
-             "for — bind through the statics table until issue 401 moves the "
-             "value onto the port");
-    if (kind != SLOT_RING && kind != SLOT_NONE)
+    if (kind < 0 || kind >= SLOT_KIND_COUNT)
         fail("converting a port to a kind that does not exist");
+
+    /* Becoming a static again is legitimate and is why the constant
+     * survives being converted away (issue 210f): a port that goes
+     * static, buffer, static reads the value it read before. Becoming
+     * one for the first time is not, because the tag would be in
+     * effect over storage nobody has written — and that is a
+     * different thing from *none*, which is honest about having no
+     * source at all. */
+    if (kind == SLOT_STATIC && !s->slots[slot].constant_set)
+        fail("this port has never held a constant, so there is no value for "
+             "it to go back to — give it one as text first");
 
     /* Under the station's mutex, as one of the four rare structural
      * operations (issue 210), so no readiness walk sees a port
@@ -352,11 +370,16 @@ void map_start(map_t *m, int n_workers)
      * task, the map decides where its output goes. This is the whole
      * of the pool's knowledge of the engine — one function pointer. */
     m->pool = pool_create(n_workers, map_deliver, m);
-    /* The started map becomes the process's active map, which is how
-     * a box — which receives only values — can reach the statics
-     * table's write call. One live map per process is the standing
-     * assumption; the first-pass report weighs it. */
-    sora_active_map = m;
+
+    /* A process-wide "active map" pointer used to be set here, so that
+     * a box — which receives only values and has no handle to anything
+     * — could reach the statics table's write call. **That pointer was
+     * the singleton**: it is what made a process able to run only one
+     * map. Issue 405 removed the reason for it by giving a static's
+     * write a real address, a station and a port, reachable from
+     * outside the graph where every other configuration change already
+     * comes from. Nothing here holds process-wide state now, so two
+     * maps can run side by side and not see each other. */
 }
 /* }}} */
 
@@ -395,9 +418,6 @@ void map_destroy(map_t *m)
     if (m->pool)
         pool_destroy(m->pool);
     map_report_shutdown(m);
-    if (sora_active_map == m)
-        sora_active_map = NULL;
-    map_statics_free(m);
     if (m->station_names) {
         for (int i = 0; i < m->n_stations; i++)
             free(m->station_names[i]);
@@ -408,8 +428,12 @@ void map_destroy(map_t *m)
         station_t *s = &m->stations[i];
         if (!s->call)
             continue;
-        for (int j = 0; j < s->n_slots; j++)
+        for (int j = 0; j < s->n_slots; j++) {
             free(s->slots[j].storage);
+            /* Both storages, because a port carries both whatever it
+             * was being used for (issue 401). */
+            slot_constant_free(&s->slots[j]);
+        }
         free(s->slots);
         port_t *p = s->ports;
         while (p) {

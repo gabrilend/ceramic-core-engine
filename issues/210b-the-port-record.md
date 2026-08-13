@@ -4,22 +4,21 @@ Second child of [210](210-input-port-record.md). The shape every other
 child stands on: what a port *is*, once there are two live kinds and a
 third state meaning nobody has said yet.
 
-**BLOCKED, in half, on [401](401-static-slots.md) and
-[405](405-statics-mutation.md).** The half of this record that faces a
-static cannot be built while a global statics register still owns the
-bytes: the port would be given room for a value that lives somewhere
-else, and the map file's `$n` form names a table the design has already
-decided to delete. The half that faces a ring buffer is unaffected and
-is built.
+**The statics block is cleared.** This issue was blocked in half on
+[401](401-static-slots.md) and [405](405-statics-mutation.md): a port
+could not be given room for a value that lived in a global register,
+and the map file's `$n` form named a table the design had decided to
+delete.
 
-**The block runs against 401's own first step**, which reads *take the
-port's own storage from 210b, which provides it — this issue spends
-that room rather than building it*. Both issues cannot be second. The
-cycle is broken by having 401 build the port-side storage it spends,
-which is a one-line change to that step and is where the knowledge
-belongs anyway: whoever deletes the table is the one who has to know
-what replaces it. Until that is decided, the static-facing steps below
-stay unbuilt and are marked.
+**The cycle resolved the way this file argued it should.** 401's first
+step had read *take the port's own storage from 210b, which provides
+it*, so both issues were waiting on each other. 401 went first and
+built the storage it spends, because whoever deletes the table is the
+one who has to know what replaces it. That work is done, and the
+static-facing steps below unblocked with it.
+
+What remains unbuilt here is one thing and it is small: the map file
+form for an unconfigured port. See the open question.
 
 ## Current behavior
 
@@ -55,19 +54,27 @@ see [210c](210c-a-state-on-every-cell.md), where the delivery baseline
 turned out to be measuring buffer growth until the ports were sized
 past what the run could fill.
 
-**Still ahead, and blocked:**
+**Both storages are real, and no dispatch row is an absence.** A
+static's bytes live on the port beside the cells, allocated at the same
+moment for the same reason, so exactly one is in effect and the other
+sits idle — which is what makes changing what a port is a field write
+in both directions rather than only one. The claim table's static row
+was a null meaning "resolved later, outside the mutex", and it is an
+ordinary function now; the caller has stopped testing a function
+pointer for truth. [401](401-static-slots.md) did both.
 
-- A static's *bytes* live in the map's statics table rather than on
-  the port. The record has room for one storage and an index to the
-  other, which is the honest shape of a half-finished move.
-- The claim dispatch table's static row is still a null meaning
-  "resolved outside the mutex". 401 moves that claim inside the walk,
-  so naming the hole now means naming it twice.
-- The map file has no form for an unconfigured port and no form for a
-  starting depth. The dump writes an unconfigured port as a comment
-  saying the format cannot yet spell it, which keeps the dump honest
-  at the cost of the round trip — a half-built program is currently
-  one of the things a dump cannot promise to reload.
+**The map file gained a form for a value, which was half of what was
+owed.** `in 1 = 5` carries a constant on the line, matching the statics
+section's own `N = value`, and it is what the dump writes — a dump has
+values on ports and no entry numbers to point back at.
+
+**Still ahead:**
+
+- The map file has no form for an unconfigured port. The dump writes
+  one as a comment saying the format cannot spell it, which keeps the
+  dump honest at the cost of the round trip: a half-built program is
+  currently one of the things a dump cannot promise to reload.
+- No form for a starting depth either, though the call exists.
 
 ## Intended behavior
 
@@ -163,18 +170,23 @@ as a null the caller tests for.
   line, because the format writes only exceptions and *unconfigured*
   is one — but the natural spellings all read like a value rather than
   like an absence, and the reader should not have to guess whether
-  somebody meant it. **This cannot be settled alone.** The three
-  spellings offered — a bare dash, the word *none*, a question mark —
-  were all shown beside a `$n` static line, and the static line is the
-  problem: it names a numbered global register that 401 deletes. The
-  whole `in` line grammar is in flux, so the absent form and the
-  static form should be chosen together, once, by whoever settles the
-  latter.
+  somebody meant it.
 
-- Where does a static's bytes actually live, and which issue puts them
-  there? 401 says this issue provides the room and 401 spends it; this
-  issue is now blocked on 401. Somebody has to go first, and the note
-  at the top of this file argues it should be 401.
+  **The obstacle is cleared and the question is now answerable.** It
+  could not be settled while the `in` line's other forms were in flux;
+  they have settled. A port's source is now written one of two ways,
+  `$0` fetching text from the statics section and `= 5` carrying it on
+  the line, and an absent form has to be visibly neither. The three
+  candidates were a bare dash, the word *none*, and a question mark.
+
+  A bare dash reads best against the forms that now exist — no value
+  in this format is ever a lone dash, and the dash already means
+  "wire" on an out line, so `in 2 -` reads as a wire that is not there
+  yet. But it is one character and somebody has to live with it, so it
+  is asked rather than assumed.
+
+  A starting depth wants a spelling at the same time, since it is the
+  third thing an `in` line could say about a port.
 
 ## Related
 

@@ -78,7 +78,9 @@ from it.
 | stride | `int` | Bytes from one cell to the next: a value, its state, and enough padding to keep the next value aligned. |
 | read_hint, write_hint | `int` | Where a reader and a writer each start looking. Hints, not positions — a stale one costs a longer search and nothing else. |
 | held | `int`, atomic | How many cells are ready right now. Maintained rather than counted, because readiness asks on every delivery. |
-| static_id | `int` | Static only — which entry in the statics table. Kept when the port is converted away, so a port that goes static, buffer, static reads the same entry. |
+| constant | `void *` | The static's value, `elem_size` bytes, allocated at placement like the cells. Kept when the port is converted away, so a port that goes static, buffer, static reads the value it read before. |
+| constant_string | `char *` | Where a string constant's characters live, since the value for such a port is a pointer and it has to point at something the port owns. |
+| constant_set | `int` | Whether anybody has written one. A port can be turned back into a static, but not into one for the first time — the tag would be in effect over storage nobody wrote. |
 
 There used to be a `source` field here, naming the station a gatherer
 pulled from. It is gone from the record rather than left sitting
@@ -101,12 +103,16 @@ and it is also what will let a buffer grow by adding a page instead of
 copying, since nothing computes a location from the capacity any more.
 Issues 210c and 210d carry it between them; 210e collects.
 
-One thing in that table is still changing. **A static's value is moving
-onto the port itself**, so `static_id` becomes the bytes rather than an
-index into a shared table — which is what lets a process hold more than
-one program at a time, and what makes claiming a static happen under
-the same lock as the ring pop instead of a second one. Issue 401 owns
-that, and issue 210b waits on it.
+**A static's value lives on the port**, rather than in a numbered table
+every port shared. Three things came out of the table with it. A
+process may hold more than one running program, because the table was
+the map-level state that forced a process-wide pointer to "the" map.
+Claiming a static happens under the station's own mutex beside the ring
+pop, instead of taking a second lock that could not be nested inside
+the first — so an invocation's inputs are now all taken in one window.
+And two ports of different types can no longer name one entry and read
+the same bytes each their own way, which stops being a rule to
+document and becomes a thing that cannot be said. Issue 401 did that.
 
 **Ring buffer.** The ordinary case. Values arrive by being written into
 it and wait their turn. It is a real ring: two indices, wrapping at the
