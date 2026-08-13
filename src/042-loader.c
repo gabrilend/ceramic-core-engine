@@ -234,14 +234,17 @@ static void whole_map_validation(map_t *m, map_description_t *d,
             any_push |= pushed_into[j];
 
         /* An arrow landing on a slot that is not a buffer would have
-         * nowhere to put its value. */
+         * nowhere to put its value. The message names which of the
+         * other two it found, because the fixes differ: a static wants
+         * the arrow removed or the static unbound, while an
+         * unconfigured port wants finishing. */
         for (int j = 0; j < s->n_slots; j++) {
             if (pushed_into[j] && s->slots[j].kind != SLOT_RING) {
                 fprintf(stderr,
-                        "map %s: an arrow lands on '%s.%d', but that slot is "
-                        "static, not a buffer — the value would have nowhere "
+                        "map %s: an arrow lands on '%s.%d', but that port is "
+                        "%s, not a buffer — the value would have nowhere "
                         "to go\n",
-                        d->path, name, j);
+                        d->path, name, j, slot_kind_name(s->slots[j].kind));
                 failures++;
             }
         }
@@ -287,7 +290,16 @@ static void whole_map_validation(map_t *m, map_description_t *d,
  * from was skipped, because its value went into a task being
  * assembled rather than into a buffer, and at startup nobody is
  * assembling. With the pull path gone (issue 210) nothing is gathered
- * from, so having no ring inputs is the whole of the test.
+ * from.
+ *
+ * There is a second condition again, and it is a different one. A
+ * station with an unconfigured port is skipped, because seeding it
+ * would build a task for a port that has no value to put in it
+ * (issue 210b). This sweep is the one place in the engine that
+ * decides a station may run without consulting the readiness walk —
+ * it asks its own question, "could this ever be woken by an arrival?"
+ * — which is exactly why it has to be taught separately about every
+ * way an answer can be no.
  */
 static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
 {
@@ -296,10 +308,14 @@ static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
         station_t *s = &m->stations[i];
 
         int has_ring = 0;
-        for (int j = 0; j < s->n_slots; j++)
+        int has_unconfigured = 0;
+        for (int j = 0; j < s->n_slots; j++) {
             if (s->slots[j].kind == SLOT_RING)
                 has_ring = 1;
-        if (has_ring)
+            if (s->slots[j].kind == SLOT_NONE)
+                has_unconfigured = 1;
+        }
+        if (has_ring || has_unconfigured)
             continue;
 
         /* Through the same door delivery uses — one way a task comes

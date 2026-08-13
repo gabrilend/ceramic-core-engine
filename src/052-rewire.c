@@ -81,9 +81,12 @@ int map_rewire_connect(map_t *m, int from_station, int port,
     }
     slot_t *dest = &to->slots[to_slot];
     if (dest->kind != SLOT_RING) {
+        char message[192];
+        snprintf(message, sizeof message,
+                 "the destination port is %s, not a buffer — the value would "
+                 "have nowhere to go", slot_kind_name(dest->kind));
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("the destination slot is not a buffer — the value "
-                      "would have nowhere to go");
+        return refuse(message);
     }
     if (from->slots && to->slots && dest->type_name) {
         const char *from_type = NULL;

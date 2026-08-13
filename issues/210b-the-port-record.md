@@ -4,36 +4,70 @@ Second child of [210](210-input-port-record.md). The shape every other
 child stands on: what a port *is*, once there are two live kinds and a
 third state meaning nobody has said yet.
 
+**BLOCKED, in half, on [401](401-static-slots.md) and
+[405](405-statics-mutation.md).** The half of this record that faces a
+static cannot be built while a global statics register still owns the
+bytes: the port would be given room for a value that lives somewhere
+else, and the map file's `$n` form names a table the design has already
+decided to delete. The half that faces a ring buffer is unaffected and
+is built.
+
+**The block runs against 401's own first step**, which reads *take the
+port's own storage from 210b, which provides it — this issue spends
+that room rather than building it*. Both issues cannot be second. The
+cycle is broken by having 401 build the port-side storage it spends,
+which is a one-line change to that step and is where the knowledge
+belongs anyway: whoever deletes the table is the one who has to know
+what replaces it. Until that is decided, the static-facing steps below
+stay unbuilt and are marked.
+
 ## Current behavior
 
-An input port carries a kind tag and the fields that kind needs, with
-the other kind's fields sitting unused: storage, capacity, and two
-indices for a ring buffer; a table entry number for a static.
+**The tag has three values, and the third is built.** *None* means a
+port nobody has given a source to. The readiness dispatch answers no
+for it forever, so a station holding one can never run no matter what
+arrives at its other ports, and becomes runnable the moment that port
+is given a source — proven on one station, both ways, without being
+rebuilt. Nothing outside the engine can produce one yet, because the
+map file has no word for it; the way in is the conversion call.
 
-**Converting between kinds destroys and rebuilds rather than
-switching.** Both conversion paths in the source do the same three
-things: free the cell array, null the pointer, flip the tag. So making
-a ring port into a static throws away a buffer that is already exactly
-the right size for the type it holds, and making it a ring port again
-has to allocate a new one.
+**Cells are allocated at instantiation for every port and are never
+freed until the map is.** Ten cells deep, from one named constant
+beside the record, sized from the registry. A port that is a static
+for the whole life of a program carries cells it never uses.
 
-**A dispatch table answers with an absence.** Readiness asks each port
-whether it holds a value; the claim table then asks each for one, and
-its non-ring row is **null**, with the caller guarding it by testing
-the function pointer. The meaning is "resolved later, outside the
-mutex," which is a real and correct decision — but it is a decision
-written as a hole, and a reader has to already know which hole means
-what.
+**Converting no longer destroys.** Binding a static used to free the
+cell array and null the pointer; it now writes the tag and nothing
+else. Values a producer had already handed over and nobody had claimed
+survive the port becoming something else, and are served if it becomes
+a ring buffer again.
 
-**There is no way to say a port has no source.** A port is a ring
-buffer unless something converts it, so a station cannot exist in a
-half-wired state. That is what stops a program being assembled from
-nothing, one instruction at a time.
+**A port can be told its own starting depth**, and a port never told
+gets ten. This landed as its own call rather than as an argument on
+the call that creates the station — that array would have been null at
+roughly eighty existing call sites across the tests and the phase
+demos, and [210g](210g-one-way-to-build-a-station.md) is about to make
+configuring a port a single operation naming a station, a port, and
+what it becomes, which is the shape this already has.
 
-**A ring buffer's cells are allocated at placement** at a fixed
-starting capacity, which is nearly right already — what is missing is
-that the allocation belongs to *every* port rather than to ports that
-happen to be rings at the time.
+The first thing the depth call was used for was fixing a measurement:
+see [210c](210c-a-state-on-every-cell.md), where the delivery baseline
+turned out to be measuring buffer growth until the ports were sized
+past what the run could fill.
+
+**Still ahead, and blocked:**
+
+- A static's *bytes* live in the map's statics table rather than on
+  the port. The record has room for one storage and an index to the
+  other, which is the honest shape of a half-finished move.
+- The claim dispatch table's static row is still a null meaning
+  "resolved outside the mutex". 401 moves that claim inside the walk,
+  so naming the hole now means naming it twice.
+- The map file has no form for an unconfigured port and no form for a
+  starting depth. The dump writes an unconfigured port as a comment
+  saying the format cannot yet spell it, which keeps the dump honest
+  at the cost of the round trip — a half-built program is currently
+  one of the things a dump cannot promise to reload.
 
 ## Intended behavior
 
@@ -103,20 +137,25 @@ as a null the caller tests for.
 
 1. The record itself: both storages, the three-value tag, and
    accessors that read the live one so nothing outside reaches past
-   the tag to a field that may not be in effect.
+   the tag to a field that may not be in effect. *The ring storage and
+   the tag are built; the static storage waits on 401.*
 2. Cells allocated at station instantiation for every port, ten deep
    from one named constant, sized from the registry.
 3. The per-port starting capacity: a form in the map file, an argument
-   on the creation call, and ten when neither says otherwise.
+   on the creation call, and ten when neither says otherwise. *The
+   argument is built; the file form waits, because it shares a line
+   with the static form 401 is redesigning.*
 4. Both dispatch tables gain their rows. The claim table's null
    becomes a named function; the caller stops testing a function
-   pointer for truth.
+   pointer for truth. *The none rows are built. The static row's null
+   waits on 401, which changes what it would say: today it means
+   "resolved outside the mutex," and 401 moves that claim inside.*
 5. The *none* tag as a readiness answer, with a test that a station
    holding one never becomes ready no matter what arrives at its other
    ports.
 6. The map file form for an unconfigured port, in the reader and the
    dump together, with a round-trip test on a deliberately half-built
-   program.
+   program. *Waits on 401 with step 3, and for the same reason.*
 
 ## Open questions
 
@@ -124,7 +163,18 @@ as a null the caller tests for.
   line, because the format writes only exceptions and *unconfigured*
   is one — but the natural spellings all read like a value rather than
   like an absence, and the reader should not have to guess whether
-  somebody meant it.
+  somebody meant it. **This cannot be settled alone.** The three
+  spellings offered — a bare dash, the word *none*, a question mark —
+  were all shown beside a `$n` static line, and the static line is the
+  problem: it names a numbered global register that 401 deletes. The
+  whole `in` line grammar is in flux, so the absent form and the
+  static form should be chosen together, once, by whoever settles the
+  latter.
+
+- Where does a static's bytes actually live, and which issue puts them
+  there? 401 says this issue provides the room and 401 spends it; this
+  issue is now blocked on 401. Somebody has to go first, and the note
+  at the top of this file argues it should be 401.
 
 ## Related
 

@@ -34,6 +34,33 @@ a claim that scans rather than computes a position is what makes
 growth-by-appending safe. **210f and 210g branch off 210b** and can
 be built while the concurrency line is in progress.
 
+## The statics blocker, which the table above does not show
+
+Half of this family waits on [401](401-static-slots.md) and
+[405](405-statics-mutation.md), which are not children of this issue
+and were expected to stand on it rather than the reverse.
+
+The reason is one sentence: **a port cannot be given room for a static
+while a global register still owns the bytes.** 210b would be building
+a place for a value that lives somewhere else, and the map file's `$n`
+form — the only way anything is bound today — names a numbered table
+the design has already decided to delete. Every step in this family
+that touches a static inherits that: 210b's static storage and both
+map-file forms, 210f's conversion to and from static, 210g's
+construction surface, and the dump's account of any of it.
+
+**This cuts the family in two along a seam that was already there.**
+The ring-buffer line — 210b's cells and *none* tag, then the
+concurrency work of 210c, 210d, and 210e — touches no static at any
+point and is unaffected. The static line waits.
+
+**It also runs against 401's own first step**, which reads *take the
+port's own storage from 210b, which provides it*. Both cannot be
+second. The proposal on the table is that 401 build the port-side
+storage it spends, since whoever deletes the table is the one who has
+to know what replaces it; that is recorded as an open question in
+[210b](210b-the-port-record.md) rather than decided here.
+
 ## Vocabulary, since this issue is about the record itself
 
 - **A port** is the standing interface for one input of one station:

@@ -73,12 +73,32 @@ than a single number, and the report should say the sum.
 
 ## Open questions
 
-- Every page after the first could be the same size as the first, or
-  each could be larger than the last. Equal pages make the scan's page
-  arithmetic trivial and make a very deep backlog into a very long
-  list; growing pages keep the list short and make the arithmetic a
-  search. The old buffer doubled, so a deep backlog cost few
-  allocations, and that property is worth not losing by accident.
+**Answered:**
+
+- *Every page after the first could be the same size as the first, or
+  each could be larger than the last.* **Every page is the same size.**
+  Turning a cell's ordinal position into a page and an offset is then a
+  divide and a remainder — arithmetic the scan does on every step,
+  where growing pages would have made it a walk down the list
+  comparing ranges. The scan is the hot path here and the growth is
+  not, so the cheap operation belongs on the side that repeats.
+
+  The old buffer doubled, and losing that is the real cost: a backlog
+  ten thousand deep is a thousand pages rather than ten, and a scan
+  crossing all of it follows a thousand pointers. That is accepted
+  with two things in mind. The first is that a port that deep is
+  already a report phase 7 shouts about — one input side outpacing its
+  siblings — so the long list is a symptom of a problem the engine is
+  supposed to be complaining about rather than quietly absorbing. The
+  second is that the page size is the same named constant the first
+  page uses, so a program that genuinely wants deep buffers raises the
+  starting depth and gets large pages everywhere, which is the same
+  lever pointed at the same problem.
+
+  If a measurement ever shows the walk mattering, the move that keeps
+  this decision is a page-lookup array beside the list — an index into
+  pages rather than a chain through them — which restores constant-time
+  addressing without making the pages unequal.
 
 ## Related
 

@@ -180,14 +180,31 @@ than a single number, and the report should say the sum.</p>
    working it, asserting no value is lost and none is delivered twice
    — which is exactly the failure the old ordering problem produced.</p>
 <h2>Open questions</h2>
+<p><strong>Answered:</strong></p>
 <ul>
-<li>Every page after the first could be the same size as the first, or</li>
-<p>  each could be larger than the last. Equal pages make the scan's page
-  arithmetic trivial and make a very deep backlog into a very long
-  list; growing pages keep the list short and make the arithmetic a
-  search. The old buffer doubled, so a deep backlog cost few
-  allocations, and that property is worth not losing by accident.</p>
+<li>*Every page after the first could be the same size as the first, or</li>
+<p>  each could be larger than the last.* <strong>Every page is the same size.</strong>
+  Turning a cell's ordinal position into a page and an offset is then a
+  divide and a remainder — arithmetic the scan does on every step,
+  where growing pages would have made it a walk down the list
+  comparing ranges. The scan is the hot path here and the growth is
+  not, so the cheap operation belongs on the side that repeats.</p>
 </ul>
+<p>  The old buffer doubled, and losing that is the real cost: a backlog
+  ten thousand deep is a thousand pages rather than ten, and a scan
+  crossing all of it follows a thousand pointers. That is accepted
+  with two things in mind. The first is that a port that deep is
+  already a report phase 7 shouts about — one input side outpacing its
+  siblings — so the long list is a symptom of a problem the engine is
+  supposed to be complaining about rather than quietly absorbing. The
+  second is that the page size is the same named constant the first
+  page uses, so a program that genuinely wants deep buffers raises the
+  starting depth and gets large pages everywhere, which is the same
+  lever pointed at the same problem.</p>
+<p>  If a measurement ever shows the walk mattering, the move that keeps
+  this decision is a page-lookup array beside the list — an index into
+  pages rather than a chain through them — which restores constant-time
+  addressing without making the pages unequal.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the parent</li>

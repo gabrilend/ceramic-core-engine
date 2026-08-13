@@ -93,14 +93,44 @@ leaves. Making the claim itself lockless is
 the rollback and the ordering rule that make it safe are their own
 argument.
 
+## The baseline, taken
+
+Step 5 needed a number to compare against and there was none. There is
+now: `tests/063-test-fan-in-cost.c` runs four ports fed by four
+contending threads and reports nanoseconds per delivery, once with
+two-hundred-byte values and once with four-byte ones. It runs in the
+ordinary test suite, so the number is re-taken on every build and
+nobody has to remember to look.
+
+Read the current figures by running it rather than from here; what is
+worth writing down is the **shape** of the result, because that is
+what the comparison rests on. A large value costs roughly three to
+four times what a small one does. That gap is the copy's share of a
+delivery, and it is the entire thing this issue is trying to move —
+so a successful 210c shrinks the large number toward the small one and
+leaves the small one alone. If a later run shows both falling
+together, whatever improved was not this.
+
+**The measurement had to be corrected before it was worth keeping, and
+the correction is the interesting part.** Taken first with the default
+buffer depth, the ports grew thirteen times each during the run. Every
+growth allocates a new array and copies every value across *under the
+same mutex being measured*, and that copy is proportional to the
+element size — so the large-value figure was substantially a
+measurement of growth. Growth is [210e](210e-growth-adds-a-page.md)'s
+problem. A baseline containing it would have made this issue look like
+it achieved less than it did, because moving the delivery copy out of
+the lock leaves the growth copy inside it. The ports are now sized
+past what the run can fill, and what remains is the cost this issue
+is aiming at.
+
+The stray reading is worth keeping in mind for step 5: the same
+apparatus, pointed at a port that *is* allowed to grow, is most of the
+measurement 210e will want.
+
 ## Open questions
 
-- Step 5 needs a number to compare against, and there is no recorded
-  baseline for the delivery path under wide fan-in with large values.
-  Taking that measurement belongs *before* step 1 rather than at step
-  5, or the improvement is a claim rather than a finding — and phase
-  4 already learned once that a cost measured in the wrong place
-  measures nothing.
+None outstanding. The baseline question above is answered.
 
 ## Related
 

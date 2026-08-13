@@ -82,6 +82,31 @@ void map_dump(map_t *m, FILE *out)
                         j, sl->type_name ? sl->type_name : "?",
                         sl->elem_size, sl->capacity);
                 break;
+            case SLOT_NONE:
+                /* An unconfigured port, written as a comment because
+                 * the format has no word for one yet — issue 210b owes
+                 * that word and is blocked on issue 401, which is
+                 * redesigning the line it would share with the static
+                 * form.
+                 *
+                 * A comment is the honest placeholder rather than a
+                 * good answer. Omitting the port would be the dump
+                 * quietly lying: the file would load into a program
+                 * with a *buffered* port where this one has none,
+                 * which is a different program that happens to run.
+                 * Saying it in a comment loses the round trip and
+                 * keeps the truth, and losing the round trip is
+                 * visible while a wrong program is not. The test that
+                 * a dump of a dump is the dump still holds, because a
+                 * comment survives being read and written again.
+                 *
+                 * Until the word exists, a half-built program is one
+                 * of the things this file cannot promise to reload. */
+                fprintf(out, "  # slot %d: NO SOURCE — %s, %d bytes; the "
+                             "format cannot yet write this, so reloading "
+                             "this file gives a buffer here instead\n",
+                        j, sl->type_name ? sl->type_name : "?", sl->elem_size);
+                break;
             }
         }
 

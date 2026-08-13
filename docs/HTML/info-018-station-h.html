@@ -130,14 +130,27 @@ buffers grow.</p>
 <p><strong>slot</strong> — one input's waiting place.</p>
 <table>
 <tr><td>field</td><td>type</td><td>meaning</td></tr>
-<tr><td>kind</td><td><code>unsigned char</code></td><td>Ring buffer (0) or static (1). Stored, never inferred.</td></tr>
+<tr><td>kind</td><td><code>unsigned char</code></td><td>Ring buffer (0), static (1), or no source yet (2). Stored, never inferred.</td></tr>
 <tr><td>elem_size</td><td><code>int</code></td><td>Bytes per value; exactly the parameter's size.</td></tr>
-<tr><td>storage</td><td><code>void *</code></td><td>The ring's cells. Reallocated on growth; the slot itself never moves.</td></tr>
-<tr><td>capacity</td><td><code>int</code></td><td>Cells allocated. One always spare, so usable is one less.</td></tr>
+<tr><td>storage</td><td><code>void *</code></td><td>The ring's cells. Allocated at placement whatever the kind, and never freed until the map is. Reallocated on growth; the slot itself never moves.</td></tr>
+<tr><td>capacity</td><td><code>int</code></td><td>Cells allocated. One always spare, so usable is one less. Starts at ten unless the port was told otherwise.</td></tr>
 <tr><td>head, tail</td><td><code>int</code></td><td>Oldest value / next free cell. Equal means empty.</td></tr>
-<tr><td>static_id</td><td><code>int</code></td><td>Static only: statics-table entry (phase 4).</td></tr>
+<tr><td>static_id</td><td><code>int</code></td><td>Static only: statics-table entry (phase 4). Kept when the port is converted away, so a port that goes static, buffer, static reads the same entry.</td></tr>
 <tr><td>growths, high_water</td><td><code>int</code></td><td>How many doublings, and the deepest backlog — phase 7's reading.</td></tr>
 </table>
+<p>**The three kinds, and what each one answers when readiness asks
+whether the port holds a value.** A <em>buffer</em> answers yes when
+anything is waiting in it. A <em>static</em> always answers yes, and is
+never consumed. A port with <em>no source yet</em> always answers no — so
+the station holding it can never run, which is what lets a station
+exist before anybody has finished wiring it. That last one is a
+state, not a value: no null is invented and nothing is ever handed to
+a box.</p>
+<p><strong>The cells outlive the kind.</strong> A port keeps its buffer whatever it is
+currently for, so changing a port's source is a field write rather
+than an allocation, and values already waiting in it are still there
+afterwards. A port that is a static all its life carries cells it
+never uses; that is paid once, at startup.</p>
 <p><strong>destination</strong> — one landing place: <code>{station int32, slot int32}</code>,
 linked. <strong>port</strong> — one exit: a linked list of destinations, itself
 linked to the station's next port.</p>
@@ -153,6 +166,24 @@ memory), out_size (<code>int</code>, bytes of return value, 0 = sink).</p>
 sizes array, output size)** — put a box at a station: one ring-buffer
 slot per element size. Scaffolding until the loader takes over
 (phase 6); sizes come from the registry from phase 3.</p>
+<p><strong>map_slot_start_depth(map, station, slot, cells)</strong> — tell one port
+how deep its buffer should start. A hint, not a setting: growth covers
+being wrong, so nobody has to be right. Refuses a port that already
+holds values, and refuses fewer than two cells (one is always spare).
+Worth using when an author already knows one input side outruns its
+siblings and would rather not watch it grow thirteen times to find
+out.</p>
+<p><strong>map_slot_convert(map, station, slot, kind)</strong> — change what a port
+is. The tag changes and nothing else: cells are not freed, not
+cleared, not drained, so values waiting in a buffer are still waiting
+if it becomes a buffer again. Becoming a static is refused here
+because it needs a value this call has no room for — bind through the
+statics table instead. Takes the station's mutex, so no readiness
+walk sees a port mid-change.</p>
+<p>The honest cost of losing nothing: a port converted away and back may
+serve a value that arrived before the conversion after values that
+arrived during it. Arrival order is not promised, so nothing that was
+still being offered is lost here.</p>
 <p><strong>map_connect(map, from station, port index, to station, to slot)</strong> —
 draw a wire. Ports are created in order, no gaps; repeat a port to
 fan out. Destination must already be placed. Fails loudly on any

@@ -137,11 +137,15 @@ never runs under a station's lock.</p>
 than a branch per case:</p>
 <ul>
 <li><strong>slot_filled[slot kind]</strong> — ring: head differs from tail; static:</li>
-<p>  always yes.</p>
-<li><strong>slot_claim_locked[slot kind]</strong> — ring: pop under the mutex; a</li>
-<p>  null row means "resolved during task construction, outside the
-  lock" (statics, so the statics table's lock never nests inside a
-  station's).</p>
+<p>  always yes; no source yet: always no, so the station never runs.</p>
+<li><strong>slot_claim_locked[slot kind]</strong> — ring: pop under the mutex; no</li>
+<p>  source yet: a named function that stops the program, because
+  reaching it means the readiness walk and the claim walk disagreed
+  about the same port. The static row is still a null meaning
+  "resolved during task construction, outside the lock" (so the
+  statics table's lock never nests inside a station's) — issue 210b
+  wanted that hole given a name too, and issue 401 changes what the
+  name would say, so it waits rather than being written twice.</p>
 <li><strong>route_choose[station kind]</strong> — consulted at exactly one moment,</li>
 <p>  on the way out: plain returns its only port; comparator and
   iterator rows fail loudly until phase 5 fills them.</p>

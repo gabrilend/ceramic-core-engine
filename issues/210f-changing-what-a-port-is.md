@@ -6,22 +6,31 @@ line, and can be built alongside it.
 
 ## Current behavior
 
-Converting a port between kinds destroys and rebuilds. Both conversion
-paths in the source do the same three things: free the cell array,
-null the pointer, flip the tag.
+**Conversion no longer destroys anything, and half of this is built.**
 
-Two consequences follow, and both are worse than they look.
-
-**A buffer that is exactly the right size is thrown away.** Making a
-ring port into a static frees cells sized to the very type that port
-will still be carrying if it ever becomes a ring again — at which
-point they are allocated afresh.
-
-**Values in flight are discarded silently.** Whatever a producer had
-already handed over and that nobody had claimed yet is freed with the
-array. Nothing is said. A person turning a port from a wire into a
-constant loses however many values happened to be waiting, and finds
+The destruction is gone from every path. Binding a static used to free
+the cell array and null the pointer; it writes the tag and nothing
+else now, so a buffer sized to the very type the port carries is no
+longer thrown away and reallocated, and values a producer had already
+handed over are no longer discarded silently. That was the part that
+was worse than it looked: a person turning a port from a wire into a
+constant lost however many values happened to be waiting, and found
 out never.
+
+**One conversion operation exists, naming a station, a port, and the
+tag it is becoming** — but it reaches two of the three tags. A port
+can be made a buffer or unconfigured, in any direction, while the
+program runs. Becoming a static is refused there and still goes
+through the statics binding call, because what a port needs to become
+a static is a *value*, and where that value lives is
+[401](401-static-slots.md)'s question. So the operation has no room to
+carry one yet.
+
+**Blocked, therefore:** the static-facing third of the conversion
+matrix, and both tests below that cycle a port through all three tags.
+The ring-to-unconfigured pair is tested — a station is held still by
+an unconfigured port with values waiting at its other ports, then runs
+when the port is given a source, with the waiting values intact.
 
 ## Intended behavior
 
@@ -73,12 +82,26 @@ destroyed.
 
 ## Open questions
 
-- A port that has been a static, is turned into a ring, and is turned
+**Answered:**
+
+- *A port that has been a static, is turned into a ring, and is turned
   back into a static: does it still hold the static value it had
-  before, or must one be written again? Keeping it is consistent with
-  cells surviving; requiring a fresh write is consistent with *none*
-  existing as the honest way to say a port has no source. Whichever it
-  is, the dump has to be able to say it.
+  before, or must one be written again?* **It keeps the value.** The
+  rule this issue is built on is that conversion destroys nothing, and
+  a static's binding is storage like the cells are storage — carving
+  out an exception for it would mean the issue's one sentence had a
+  second clause nobody could derive from the first.
+
+  It also keeps *none* honest. If a port coming back from a ring
+  arrived unconfigured, then *none* would mean two different things:
+  "nobody has said yet" and "somebody said, then said something else."
+  Those want different answers from a person looking at a dump. Keeping
+  the value means *none* is only ever reached by asking for it, which
+  is what makes it a state rather than a leftover.
+
+  The dump says the binding it finds, so a port that has cycled reads
+  identically to one that never moved — which is correct, because they
+  are in the same state.
 
 ## Related
 

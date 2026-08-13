@@ -173,9 +173,101 @@ static void test_hammer(void)
 }
 /* }}} */
 
+/* {{{ test_unconfigured_port_never_ready() */
+/*
+ * A port with no source is a state, not a value (issue 210b): the
+ * station holding it can never be ready, no matter how much arrives
+ * at its other ports, and becomes ready the moment that port is given
+ * a source.
+ *
+ * The two halves are one run on one station rather than two, because
+ * the interesting claim is not "it did not fire" — a station that is
+ * simply broken also does not fire — but "it did not fire, and then
+ * the same station did." Rebuilding between the halves would prove
+ * only that two different stations behaved two different ways.
+ *
+ * The final count is what makes it airtight. Reading the firing count
+ * during the unconfigured stretch is weak on its own, since a task
+ * built wrongly might still be sitting in the queue unrun. Three
+ * firings at the end is only reachable if that stretch produced none:
+ * five values went to each of the other two ports, so anything that
+ * fired early would push the total above three.
+ *
+ * It also proves what issue 210f is about. The five values that
+ * arrived at ports 0 and 1 while port 2 was unconfigured are still
+ * there afterwards — the conversion changed a tag and destroyed
+ * nothing — and three of them are what the three firings consume.
+ * Every value on a side is identical, so the sums hold whatever
+ * order the pairing happens in; issue 210d is about to stop promising
+ * that values leave a port in the order they arrived, and a test that
+ * quietly depended on it would fail later for an unrelated reason.
+ */
+static void test_unconfigured_port_never_ready(void)
+{
+    enum { WAITING = 5, FED = 3 };
+
+    map_t *m = map_create(1);
+    int sizes[3] = { sizeof(int), sizeof(int), sizeof(int) };
+    map_place(m, 0, sum3__call, STATION_PLAIN, 3, sizes, sizeof(int));
+
+    /* Port 2 has no source. Nothing about the station is otherwise
+     * unusual — it is fully placed, its cells are allocated, and it
+     * would run happily if anyone said where port 2's values come
+     * from. */
+    map_slot_convert(m, 0, 2, SLOT_NONE);
+
+    map_start(m, 2);
+    fired = 0;
+    sum_seen = 0;
+    pool_submitter_register(m->pool);
+    pool_release(m->pool);
+
+    for (int i = 0; i < WAITING; i++) {
+        int a = 100, b = 200;
+        map_deliver_value(m, 0, 0, &a);
+        map_deliver_value(m, 0, 1, &b);
+    }
+
+    int fired_while_unconfigured = fired;
+
+    /* The port is given a source. The cells it has been carrying all
+     * along are what it starts using — no allocation happens here,
+     * which is the whole of issue 210b's standing-buffer decision. */
+    map_slot_convert(m, 0, 2, SLOT_RING);
+    for (int i = 0; i < FED; i++) {
+        int c = 300;
+        map_deliver_value(m, 0, 2, &c);
+    }
+
+    pool_submitter_unregister(m->pool);
+    pool_join(m->pool);
+
+    if (fired_while_unconfigured != 0) {
+        fprintf(stderr, "a station with an unconfigured port fired %d times\n",
+                fired_while_unconfigured);
+        exit(1);
+    }
+    if (fired != FED) {
+        fprintf(stderr, "%d firings after the port was given a source, expected %d\n",
+                (int)fired, FED);
+        exit(1);
+    }
+    if (sum_seen != (long)FED * 600) {
+        fprintf(stderr, "the waiting values did not survive: sum %ld, expected %ld\n",
+                (long)sum_seen, (long)FED * 600);
+        exit(1);
+    }
+
+    map_destroy(m);
+    printf("  an unconfigured port held a station still, then let it run "
+           "with %d values still waiting\n", WAITING - FED);
+}
+/* }}} */
+
 int main(void)
 {
     test_every_arrival_order();
     test_hammer();
+    test_unconfigured_port_never_ready();
     return 0;
 }

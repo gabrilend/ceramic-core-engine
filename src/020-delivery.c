@@ -162,9 +162,22 @@ static int static_filled(const slot_t *sl)
     return 1;
 }
 
+static int none_filled(const slot_t *sl)
+{
+    /* Nobody has said where this port's value comes from, so there is
+     * no value and there is no prospect of one (issue 210b). This is
+     * the whole of what *none* does at run time: a station holding one
+     * answers no to readiness forever, no matter what arrives at its
+     * other ports, and therefore never runs. Not an error, and not a
+     * value — a station waiting to be finished being built. */
+    (void)sl;
+    return 0;
+}
+
 static int (*const slot_filled[SLOT_KIND_COUNT])(const slot_t *) = {
     [SLOT_RING]   = ring_filled,
     [SLOT_STATIC] = static_filled,
+    [SLOT_NONE]   = none_filled,
 };
 /* }}} */
 
@@ -187,9 +200,31 @@ static void ring_claim(slot_t *sl, void *into)
     slot_pop_locked(sl, into);
 }
 
+static void none_claim(slot_t *sl, void *into)
+{
+    /* Unreachable, and saying so out loud is the point. The walk above
+     * this one asks every port whether it is filled before it claims
+     * from any of them, and an unconfigured port answers no — so
+     * arriving here means the readiness check and the claim disagreed
+     * about the same port, which is an engine bug rather than a
+     * situation to handle (issue 210b). */
+    (void)sl; (void)into;
+    fprintf(stderr, "delivery: claimed from a port that has no source — the "
+                    "readiness walk and the claim walk disagreed\n");
+    abort();
+}
+
 static void (*const slot_claim_locked[SLOT_KIND_COUNT])(slot_t *, void *) = {
     [SLOT_RING]   = ring_claim,
+    /* Still an absence, and still meaning "resolved later, outside the
+     * mutex" — issue 210b wanted this to become a named function
+     * saying so, and it cannot yet. What the function would say
+     * changes under issue 401, which moves a static's claim *into*
+     * this walk beside the ring pop; writing the honest version now
+     * would mean writing it twice. The caller therefore still tests
+     * the pointer, and this comment is the hole's label until then. */
     [SLOT_STATIC] = NULL,
+    [SLOT_NONE]   = none_claim,
 };
 /* }}} */
 
@@ -289,6 +324,16 @@ task_t *task_build(map_t *m, int station_index,
              * table's own lock never nests inside a station's. */
             static_claim(m, sl, t->in[i]);
             break;
+        case SLOT_NONE:
+            /* A task exists, so something decided this station was
+             * ready; readiness cannot say yes about an unconfigured
+             * port. Both callers are guarded — delivery asks the
+             * readiness walk, and the seed sweep skips a station with
+             * any unconfigured port — so reaching here means one of
+             * those guards was removed (issue 210b). */
+            die("building a task for a station with a port that has no source",
+                station_index);
+            break;
         default:
             die("a slot of an unknown kind", station_index);
         }
@@ -312,6 +357,12 @@ int map_deliver_value(map_t *m, int station, int slot, const void *value)
     station_t *s = &m->stations[station];
     if (slot < 0 || slot >= s->n_slots)
         die("delivering to a slot the station does not have", station);
+    /* Two ways this is wrong, and they deserve different sentences: a
+     * static already holds its value and has nowhere to queue one
+     * (until issue 405, where an arrow into a static overwrites it),
+     * and an unconfigured port is one nobody has finished wiring. */
+    if (s->slots[slot].kind == SLOT_NONE)
+        die("delivering into a port that has no source yet", station);
     if (s->slots[slot].kind != SLOT_RING)
         die("delivering into a slot that is not a buffer", station);
 

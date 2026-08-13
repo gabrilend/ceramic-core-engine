@@ -368,14 +368,25 @@ void map_slot_static(map_t *m, int station, int slot, int static_id)
         }
     }
 
-    /* The conversion itself: the ring storage goes, the tag flips.
+    /* The conversion itself, and it is now only the tag (issue 210f).
      * From here the readiness walk answers "always full" and claims
-     * resolve at task build through static_claim. */
-    free(sl->storage);
-    sl->storage = NULL;
-    sl->capacity = 0;
-    sl->head = 0;
-    sl->tail = 0;
+     * resolve at task build through static_claim.
+     *
+     * The cells used to be freed here. They are left exactly as they
+     * are for two reasons. A buffer sized to the very type this port
+     * carries was being thrown away and allocated again if the port
+     * ever became a ring buffer again — and worse, whatever a producer
+     * had already handed over and nobody had claimed yet was freed
+     * with it, silently. A person turning a port from a wire into a
+     * constant lost however many values happened to be waiting, and
+     * found out never. They now wait, and are served if the port
+     * becomes a ring buffer again.
+     *
+     * The honest cost is that they may then be served late — after
+     * values that arrived during the port's time as a static. Issue
+     * 210d gives up arrival order as a guarantee anyway, so this
+     * costs nothing that was still being promised, but it is a second
+     * reason for the same non-guarantee. */
     sl->kind = SLOT_STATIC;
     sl->static_id = static_id;
 }

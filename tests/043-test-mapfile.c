@@ -207,7 +207,11 @@ static void test_every_refusal(void)
         "  out 0 - eater.0\n"
         "eater double_it p\n"
         "  in 0 $0\n",
-        "that slot is static",
+        /* The refusal names which of the two non-buffer states it
+         * found, rather than assuming static (issue 210b): an
+         * unconfigured port is also not a buffer, and it wants a
+         * different fix. */
+        "that port is a static value",
         "an arrow onto a static slot was accepted");
 
     /* The pull path's grave marker (issue 210). A bare station name

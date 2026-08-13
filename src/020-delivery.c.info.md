@@ -20,11 +20,15 @@ Three tables, each indexed by a kind, each a row per kind rather
 than a branch per case:
 
 - **slot_filled[slot kind]** — ring: head differs from tail; static:
-  always yes.
-- **slot_claim_locked[slot kind]** — ring: pop under the mutex; a
-  null row means "resolved during task construction, outside the
-  lock" (statics, so the statics table's lock never nests inside a
-  station's).
+  always yes; no source yet: always no, so the station never runs.
+- **slot_claim_locked[slot kind]** — ring: pop under the mutex; no
+  source yet: a named function that stops the program, because
+  reaching it means the readiness walk and the claim walk disagreed
+  about the same port. The static row is still a null meaning
+  "resolved during task construction, outside the lock" (so the
+  statics table's lock never nests inside a station's) — issue 210b
+  wanted that hole given a name too, and issue 401 changes what the
+  name would say, so it waits rather than being written twice.
 - **route_choose[station kind]** — consulted at exactly one moment,
   on the way out: plain returns its only port; comparator and
   iterator rows fail loudly until phase 5 fills them.

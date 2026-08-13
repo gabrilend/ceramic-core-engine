@@ -22,10 +22,12 @@
 /*
  * Ring buffers start small on purpose: growth is cheap, proven, and
  * worth seeing in the demo; a generous initial size would only hide
- * the mechanism. One spare cell distinguishes full from empty, so
- * the usable count is one less than this.
+ * the mechanism. The depth itself is SLOT_DEFAULT_CAPACITY, declared
+ * beside the record in the header because the port's contract is
+ * where a reader looks for it — and because issue 210b gave a port a
+ * way to ask for a different one, which means two places now have to
+ * agree on what "unless somebody says otherwise" is.
  */
-#define SLOT_INITIAL_CAPACITY 4
 
 /* {{{ fail() */
 /*
@@ -95,17 +97,92 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
         if (elem_sizes[i] <= 0)
             fail("a slot's element size must be positive");
         /* Every slot starts life as a ring buffer — the default the
-         * map format also assumes (issue 601). Becoming a static is a
-         * conversion applied afterwards, in phase 4. */
+         * map format also assumes (issue 601). Becoming a static, or
+         * having its source taken away, is a conversion applied
+         * afterwards; neither one frees what is allocated here
+         * (issue 210b). */
         sl->kind = SLOT_RING;
         sl->elem_size = elem_sizes[i];
-        sl->capacity = SLOT_INITIAL_CAPACITY;
+        sl->capacity = SLOT_DEFAULT_CAPACITY;
         sl->storage = malloc((size_t)sl->capacity * (size_t)sl->elem_size);
         if (!sl->storage) fail("out of memory for a ring buffer");
         sl->head = 0;
         sl->tail = 0;
         sl->static_id = -1;
     }
+}
+/* }}} */
+
+/* {{{ map_slot_start_depth() */
+void map_slot_start_depth(map_t *m, int station, int slot, int cells)
+{
+    if (station < 0 || station >= m->n_stations)
+        fail("setting the starting depth of a port on a station outside the table");
+    station_t *s = &m->stations[station];
+    if (slot < 0 || slot >= s->n_slots)
+        fail("setting the starting depth of a port the box does not have");
+    /* Two cells is the floor rather than one, because one spare cell
+     * is what distinguishes full from empty — a single-cell buffer
+     * would be permanently full and permanently empty at once. */
+    if (cells < 2)
+        fail("a ring buffer needs at least two cells — one is always spare, "
+             "so that head meeting tail can mean empty");
+
+    slot_t *sl = &s->slots[slot];
+    if (sl->head != sl->tail)
+        fail("setting the starting depth of a port that already holds values "
+             "— this is a starting depth, and the start has been and gone");
+
+    /* Allocate before freeing, so a failure here leaves the port with
+     * the buffer it already had rather than with none. Growth is what
+     * covers a depth that turns out wrong, so there is nothing to
+     * copy: the port is empty, which is what the check above proved. */
+    void *fresh = malloc((size_t)cells * (size_t)sl->elem_size);
+    if (!fresh) fail("out of memory resizing a ring buffer to its starting depth");
+    free(sl->storage);
+    sl->storage = fresh;
+    sl->capacity = cells;
+    sl->head = 0;
+    sl->tail = 0;
+}
+/* }}} */
+
+/* {{{ map_slot_convert() */
+void map_slot_convert(map_t *m, int station, int slot, int kind)
+{
+    if (station < 0 || station >= m->n_stations)
+        fail("converting a port on a station outside the table");
+    station_t *s = &m->stations[station];
+    if (slot < 0 || slot >= s->n_slots)
+        fail("converting a port the box does not have");
+    if (kind == SLOT_STATIC)
+        fail("becoming a static needs a value, which this call has no room "
+             "for — bind through the statics table until issue 401 moves the "
+             "value onto the port");
+    if (kind != SLOT_RING && kind != SLOT_NONE)
+        fail("converting a port to a kind that does not exist");
+
+    /* Under the station's mutex, as one of the four rare structural
+     * operations (issue 210), so no readiness walk sees a port
+     * mid-change. Nothing is freed and nothing is cleared: the whole
+     * of the change is the tag, which is the entire point — see the
+     * header for why the storage staying put is what makes this
+     * cheap and what makes it lossless. */
+    pthread_mutex_lock(&s->mutex);
+    s->slots[slot].kind = (unsigned char)kind;
+    pthread_mutex_unlock(&s->mutex);
+}
+/* }}} */
+
+/* {{{ slot_kind_name() */
+const char *slot_kind_name(unsigned char kind)
+{
+    static const char *const names[SLOT_KIND_COUNT] = {
+        [SLOT_RING]   = "a buffer",
+        [SLOT_STATIC] = "a static value",
+        [SLOT_NONE]   = "a port with no source yet",
+    };
+    return kind < SLOT_KIND_COUNT ? names[kind] : "a port of an unknown kind";
 }
 /* }}} */
 
