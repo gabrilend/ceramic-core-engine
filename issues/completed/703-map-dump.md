@@ -7,7 +7,7 @@
 The dump prints a static's value by repeating the **original string**
 the file gave it, because a statics entry keeps both the text and the
 parsed bytes. Once a static's value lives on the port that reads it
-([401](401-static-slots.md)) there is no entry and no retained
+([401](401-static-ports.md)) there is no entry and no retained
 string — only bytes and a field table describing their shape. So the
 dump needs a formatter that walks a field table and produces text, the
 exact mirror of the reader that walks one and produces bytes

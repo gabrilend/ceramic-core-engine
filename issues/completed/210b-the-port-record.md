@@ -5,7 +5,7 @@ child stands on: what a port *is*, once there are two live kinds and a
 third state meaning nobody has said yet.
 
 **The statics block is cleared.** This issue was blocked in half on
-[401](401-static-slots.md) and [405](405-statics-mutation.md): a port
+[401](401-static-ports.md) and [405](405-statics-mutation.md): a port
 could not be given room for a value that lived in a global register,
 and the map file's `$n` form named a table the design had decided to
 delete.
@@ -30,13 +30,13 @@ is given a source — proven on one station, both ways, without being
 rebuilt. Nothing outside the engine can produce one yet, because the
 map file has no word for it; the way in is the conversion call.
 
-**Cells are allocated at instantiation for every port and are never
-freed until the map is.** Ten cells deep, from one named constant
+**Slots are allocated at instantiation for every port and are never
+freed until the map is.** Ten slots deep, from one named constant
 beside the record, sized from the registry. A port that is a static
-for the whole life of a program carries cells it never uses.
+for the whole life of a program carries slots it never uses.
 
 **Converting no longer destroys.** Binding a static used to free the
-cell array and null the pointer; it now writes the tag and nothing
+slot array and null the pointer; it now writes the tag and nothing
 else. Values a producer had already handed over and nobody had claimed
 survive the port becoming something else, and are served if it becomes
 a ring buffer again.
@@ -50,18 +50,18 @@ configuring a port a single operation naming a station, a port, and
 what it becomes, which is the shape this already has.
 
 The first thing the depth call was used for was fixing a measurement:
-see [210c](../210c-a-state-on-every-cell.md), where the delivery baseline
+see [210c](../210c-a-state-on-every-slot.md), where the delivery baseline
 turned out to be measuring buffer growth until the ports were sized
 past what the run could fill.
 
 **Both storages are real, and no dispatch row is an absence.** A
-static's bytes live on the port beside the cells, allocated at the same
+static's bytes live on the port beside the slots, allocated at the same
 moment for the same reason, so exactly one is in effect and the other
 sits idle — which is what makes changing what a port is a field write
 in both directions rather than only one. The claim table's static row
 was a null meaning "resolved later, outside the mutex", and it is an
 ordinary function now; the caller has stopped testing a function
-pointer for truth. [401](401-static-slots.md) did both.
+pointer for truth. [401](401-static-ports.md) did both.
 
 **The map file gained a form for a value, which was half of what was
 owed.** `in 1 = 5` carries a constant on the line, matching the statics
@@ -84,7 +84,7 @@ rule with an exception in it. The spelling was chosen the other way
 round and corrected here; the documents say the corrected thing.
 
 **The dump writes a depth only when it is not the default**, because
-this format writes exceptions and a port at ten cells is not one. It
+this format writes exceptions and a port at ten slots is not one. It
 also means a port whose only exception *is* its depth now gets a real
 line rather than a comment — `in 1 x64 -` where a buffered port at the
 default still gets a comment saying what it derived.
@@ -100,19 +100,19 @@ being a phase.
 ## Intended behavior
 
 **Both storages live on the port; the tag says which is in effect.**
-Ring cells and a static's bytes both have room, exactly one is
+Ring slots and a static's bytes both have room, exactly one is
 current, and the other sits idle. This is the whole trick that makes
 [210f](../210f-changing-what-a-port-is.md) a field write.
 
-**Cells are allocated when the station is instantiated, for every port
+**Slots are allocated when the station is instantiated, for every port
 regardless of what that port is currently for.** The element size is
 known from the registry at placement, so the space is exactly right,
 and a buffer standing ready is what removes allocation from every
 later conversion. A port that is a static for the whole life of a
-program carries cells it never uses, and that is the price: it is
+program carries slots it never uses, and that is the price: it is
 paid once, at startup, in the cheapest moment a program has.
 
-**Every port's ring buffer starts at ten values.** Ten cells of that
+**Every port's ring buffer starts at ten values.** Ten slots of that
 port's element size, so a port carrying four-byte integers starts at
 forty bytes and one carrying a two-hundred-byte struct starts at two
 thousand. Ten is a magic number and is meant to be one: it lives as a
@@ -171,9 +171,9 @@ because they say which pieces are built and which are not.
    accessors that read the live one so nothing outside reaches past
    the tag to a field that may not be in effect. **Built** — the ring
    storage and the tag by this issue, the static storage by
-   [401](401-static-slots.md), which built the room it spends
+   [401](401-static-ports.md), which built the room it spends
    rather than waiting to be handed it.
-2. Cells allocated at station instantiation for every port, ten deep
+2. Slots allocated at station instantiation for every port, ten deep
    from one named constant, sized from the registry.
 3. The per-port starting capacity: a form in the map file, an argument
    on the creation call, and ten when neither says otherwise.
@@ -230,7 +230,7 @@ because they say which pieces are built and which are not.
 
   **A depth may appear beside any of the three source forms, including
   the dash**, because depth and source are independent — every port
-  owns ring cells whatever its tag currently says, which is the
+  owns ring slots whatever its tag currently says, which is the
   standing buffer this issue is built on. `in 1 x256 -` is a port with
   no source yet and room for two hundred and fifty-six values when it
   gets one.
@@ -249,7 +249,7 @@ because they say which pieces are built and which are not.
   which is only cheap because of the standing buffer decided here
 - [212 — One way to build a program](../212-one-way-to-build-a-program.md),
   which needs the *none* tag to assemble a program from nothing
-- [202 — Ring buffer slots](202-ring-buffer-slots.md), the
+- [202 — Ring buffer slots](202-ring-buffer-ports.md), the
   storage this keeps
 - [008 — Map file format](../../docs/008-map-file-format.md), which names
   both the unconfigured form and the optional capacity as owed

@@ -28,7 +28,7 @@ inputs are all present and destroyed by the worker that ran it.
 | call | function pointer | The shim to run |
 | station | `int` | Which station produced it, so delivery knows where to look |
 | port | `int` | For an iterator, which port was assigned. Inert until phase 5. |
-| in | array of value buffers | One claimed value per input slot |
+| in | array of value buffers | One claimed value per input port |
 | out | value buffer | Where the return value lands |
 
 **Sized exactly, not maximally.** A task for a two-int box holds two

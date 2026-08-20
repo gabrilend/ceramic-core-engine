@@ -65,10 +65,10 @@ to run at all, it must be started here.
 
 **Whose output feeds a ring buffer** excludes gatherers. A gatherer's
 value goes into a task struct that someone is assembling right now, not
-into a slot — that is the entire difference between the push path and
+into a port — that is the entire difference between the push path and
 the pull path. At startup nobody is assembling anything, so a gatherer
 enqueued as a task would run, produce a value, walk its destinations
-looking for a buffer to write into, and find a gatherer slot, which by
+looking for a buffer to write into, and find a gatherer port, which by
 definition has none. The value would have nowhere to go.
 
 **This is the only time anything iterates the station table.** From
@@ -102,7 +102,7 @@ correctly and uselessly.
    check passes vacuously — the case this issue's second condition
    exists for.
 7. A test that a map whose only input-less station feeds a gatherer
-   slot fails to seed and says so.
+   port fails to seed and says so.
 
 ## Related
 

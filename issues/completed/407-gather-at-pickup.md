@@ -253,7 +253,7 @@ step inside it.
 - [210 — What an input port is](210-input-port-record.md), which
   supplies the per-slot tag this reads and the port record it reads it
   from
-- [403 — Gatherer slots](completed/403-gatherer-slots.md) and
+- [403 — Gatherer slots](completed/403-gatherer-ports.md) and
   [404 — Gather chains and cycles](completed/404-gather-chains-and-cycles.md),
   the mechanism whose timing this moves
 - [704 — Rewiring while it runs](completed/704-runtime-rewiring.md),

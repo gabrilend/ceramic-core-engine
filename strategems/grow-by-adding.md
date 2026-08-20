@@ -47,14 +47,14 @@ number, name it once, move on.
 Anywhere addressed by a stable integer index. In minimal-soramech that
 turned out to be almost everything: the station table, the pool's task
 queue, the per-station locks, the registry once boxes can be compiled
-at runtime, and eventually a port's ring buffer cells.
+at runtime, and eventually a port's ring buffer slots.
 
 **The condition is that the index arithmetic must not depend on the
 total size.** A ring buffer looked like an exception for exactly this
 reason — its read and write positions are taken modulo the capacity, so
 changing the capacity moves where every existing value lives, and the
 copy is doing real work rather than just relocating. It stopped being
-an exception the moment its cells started carrying their own state and
+an exception the moment its slots started carrying their own state and
 readers scanned for a usable one instead of computing where it must be.
 The moment nothing computes a position from the size, nothing cares
 that the size changed.

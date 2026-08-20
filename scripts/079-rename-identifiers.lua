@@ -133,13 +133,15 @@ end
 
 -- {{{ local function main()
 local function main()
-    local mapping_path, apply = nil, false
+    local mapping_path, apply, list_path = nil, false, nil
     for _, a in ipairs(arg) do
         local roots = a:match("^%-%-roots=(.+)$")
+        local files = a:match("^%-%-files=(.+)$")
         if a == "--apply" then apply = true
         elseif roots then
             ROOTS = {}
             for r in roots:gmatch("[^,]+") do ROOTS[#ROOTS + 1] = r end
+        elseif files then list_path = files
         elseif not mapping_path then mapping_path = a
         else DIR = a end
     end
@@ -149,7 +151,24 @@ local function main()
 
     local mapping = read_mapping(mapping_path)
     local files = {}
-    for _, r in ipairs(ROOTS) do collect(DIR .. "/" .. r, files) end
+    if list_path then
+        -- An explicit list, for when a corpus is written in more than
+        -- one vocabulary and the pairs that are right for half of it
+        -- are wrong for the other half. Walking a root would apply one
+        -- mapping to both halves, which corrupts the half that was
+        -- already correct — and does so invisibly, because the result
+        -- is well-formed prose that says the wrong thing.
+        local f = assert(io.open(list_path, "r"), "cannot read list: " .. list_path)
+        for line in f:lines() do
+            local p = line:gsub("^%s+", ""):gsub("%s+$", "")
+            if p ~= "" and not p:find("^#") then
+                files[#files + 1] = p:find("^/") and p or (DIR .. "/" .. p)
+            end
+        end
+        f:close()
+    else
+        for _, r in ipairs(ROOTS) do collect(DIR .. "/" .. r, files) end
+    end
 
     local counts, touched, total = {}, 0, 0
     for _, path in ipairs(files) do

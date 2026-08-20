@@ -84,7 +84,7 @@ later in search of lost rigour.
 **The exception dissolves.** Every box in the engine now runs on a
 worker that picked one up. This is the removal's largest quiet
 benefit: it closes the only window in which user code ran while
-claimed cells were held, which is what lets 210's answer about a
+claimed slots were held, which is what lets 210's answer about a
 writer dying mid-copy rest on the engine as it is.
 
 **One property is lost rather than relocated, and it must be written
@@ -147,7 +147,7 @@ window and cannot open before this lands.
 
 ## What this issue does not do
 
-It does not add the *none* tag, allocate cells at instantiation,
+It does not add the *none* tag, allocate slots at instantiation,
 touch the claim, or change how a buffer grows. Those are
 [210b](210b-the-port-record.md) onward. The port record after this is
 the old record minus one kind, which is deliberately a small place to
@@ -165,7 +165,7 @@ files rather than reinterpret them, which is written up above.
 - [056 — Why there is no pull path](../../docs/implementation-notes/056-no-pull-path.md),
   the reasoning this carries out
 - [210 — What an input port is](../210-input-port-record.md), the parent
-- [403 — Gatherer slots](403-gatherer-slots.md) and
+- [403 — Gatherer slots](403-gatherer-ports.md) and
   [404 — Gather chains and cycles](404-gather-chains-and-cycles.md),
   which built what this removes
 - [407 — Gathering at pickup](407-gather-at-pickup.md), which had

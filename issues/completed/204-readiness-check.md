@@ -21,7 +21,7 @@ cases, because a decision written as a hole is one a reader has to
 already know how to interpret ([210](../210-input-port-record.md)).
 
 **And the mutex goes.** The claim becomes a walk of the ports in
-ascending index order, flipping a ready cell to claimed at each and
+ascending index order, flipping a ready slot to claimed at each and
 rolling back if any port has nothing — with the fixed order being what
 stops two threads grabbing crosswise and livelocking.
 
@@ -32,8 +32,8 @@ claim table had null rows at all, and the reasoning outlived the rows.
 
 The remainder describes it as built.
 
-Built, as the tail end of every write. The check walks the slots
-through a dispatch table keyed on the slot's kind — ring buffers
+Built, as the tail end of every write. The check walks the ports
+through a dispatch table keyed on the port's kind — ring buffers
 answer by head-differs-from-tail, gatherer and static rows answer
 "always" from the start, exactly as planned. Claiming is a second
 table: ring values are popped into a caller-supplied stack buffer
@@ -49,7 +49,7 @@ for sixteen thousand claims with nothing lost, torn, or doubled.
 
 This is the engine's one rule made real:
 
-> A station runs when, and only when, every one of its input slots
+> A station runs when, and only when, every one of its input ports
 > holds a value.
 
 **Nothing polls.** The check runs as the tail end of a write, on
@@ -60,16 +60,16 @@ the act of finishing is the act of scheduling.
 
 **The check, holding the station's mutex:**
 
-1. Walk every slot. A ring buffer holds a value when head and tail
-   differ. A gatherer slot always holds one, because its value is
-   produced on demand. A static slot always holds one, because its
+1. Walk every port. A ring buffer holds a value when head and tail
+   differ. A gatherer port always holds one, because its value is
+   produced on demand. A static port always holds one, because its
    value is simply there. The last two arrive in phase 4; the walk
-   should dispatch on the slot's tag from the start rather than assume
-   every slot is a buffer.
-2. If any slot is empty, release and stop. The value sits in the buffer
+   should dispatch on the port's tag from the start rather than assume
+   every port is a buffer.
+2. If any port is empty, release and stop. The value sits in the buffer
    waiting for its siblings.
 3. If all are occupied, **claim one value from each.** Ring buffer
-   slots are popped — copied out and the head advanced — so the value
+   ports are popped — copied out and the head advanced — so the value
    is now spoken for and no other thread can take it.
 4. Release the mutex.
 
@@ -85,13 +85,13 @@ picks the task up, and two of them can be inside the same box function
 at the same instant.
 
 **The contended section is deliberately short** — a walk over a handful
-of slots, a few `memcpy`s, some index arithmetic. Nothing that can
+of ports, a few `memcpy`s, some index arithmetic. Nothing that can
 block, nothing that calls into user code, no allocation. Building the
 task struct happens after the release, in issue 206.
 
-**The slot walk is a dispatch table**, not a chain of conditionals: the
-slot's tag indexes into "is it filled?" and "give me a value." Adding a
-fourth slot kind later should be a row rather than a new branch in two
+**The port walk is a dispatch table**, not a chain of conditionals: the
+port's tag indexes into "is it filled?" and "give me a value." Adding a
+fourth port kind later should be a row rather than a new branch in two
 functions that must be kept in agreement.
 
 ## Suggested implementation steps

@@ -39,13 +39,13 @@ C unchanged.
 
 **Because it would have been the only exemption to the one rule.**
 
-> A station runs when, and only when, every one of its input slots
+> A station runs when, and only when, every one of its input ports
 > holds a value.
 
 Nothing in this engine polls and nothing scans for ready work; the
 check is the tail end of a write, and every part of it is simple
 because that sentence has no exceptions in it. Readiness answering
-*satisfied* for a slot holding nothing is an exception, and it is the
+*satisfied* for a port holding nothing is an exception, and it is the
 first one. Spending the design's single invariant on a convenience is a
 bad trade, and it is a worse trade at engine level than anywhere else,
 because everyone downstream inherits the exception permanently and
@@ -83,7 +83,7 @@ to consume nothing.
 The engine already answers it in its own vocabulary. The box returns a
 struct carrying a validity flag beside the bytes, and a **comparator**
 station downstream — three output ports, choosing one by comparing the
-returned value against a threshold in an extra input slot, built and
+returned value against a threshold in an extra input port, built and
 working since phase 5 — sends success down one wire and failure down
 another. **Absence becomes a value that gets routed**, rather than a
 hole in readiness. That is the little options struct again, doing the

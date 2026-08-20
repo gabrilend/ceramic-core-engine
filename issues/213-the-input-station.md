@@ -77,7 +77,7 @@ perfectly legal outcome.
 The reason is already written down and is deliberate:
 [210d](210d-the-copies-leave-the-lock.md) states that values may leave a port in
 a different order than they arrived, because with positions gone a
-reader takes the first ready cell its scan finds, and rollback opens
+reader takes the first ready slot its scan finds, and rollback opens
 gaps wherever it happens. If order within one port is not promised,
 correspondence across two ports certainly is not.
 

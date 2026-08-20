@@ -29,11 +29,11 @@ The remainder describes it as built.
 
 Built. Every station line becomes a station through placement by
 name: the registry supplies shim, parameter count, sizes, and type
-names; slots default to ring buffers; a comparator grows its typed
-threshold slot; the statics table fills first so bindings can parse
+names; ports default to ring buffers; a comparator grows its typed
+threshold port; the statics table fills first so bindings can parse
 their entries. The misspelled-box message names the name and where
-box sources live, and every input line naming a slot beyond the box
-stops the load saying how many slots exist and why. The name table
+box sources live, and every input line naming a port beyond the box
+stops the load saying how many ports exist and why. The name table
 lives in file order and dies when loading ends.
 
 One refinement of this issue's split, recorded in the first-pass
@@ -43,7 +43,7 @@ belong to a station declared further down, so the first pass cannot
 resolve them by construction. The construction calls did become what
 the loader calls rather than what a person calls, and issue 207's
 record was updated when that moment arrived. Proven by the
-forward-reference map and the slot-range and misspelling refusals.
+forward-reference map and the port-range and misspelling refusals.
 
 ## Intended behavior
 
@@ -58,19 +58,19 @@ is why creation and connection are separated.
    name not in the registry stops the load and says so; this is the
    most common error a map will have and its message should be the best
    one in the program.
-2. **Allocate the slots array**, one ring-buffer slot per parameter —
+2. **Allocate the ports array**, one ring-buffer port per parameter —
    the default — each sized exactly `sizeof` its parameter. A
-   comparator gets one extra slot on the end, typed to match the box's
+   comparator gets one extra port on the end, typed to match the box's
    return value.
 3. **Record the name** in a lookup table used by the second pass and
    discarded when loading ends.
-4. **Apply the input lines**, converting named slots from ring buffers
-   to statics or gatherers. A line naming a slot the function does not
+4. **Apply the input lines**, converting named ports from ring buffers
+   to statics or gatherers. A line naming a port the function does not
    have stops the load.
 
-**The statics table is filled here**, since a static slot needs its
+**The statics table is filled here**, since a static port needs its
 entry to exist. Each value is read from text into bytes using the type
-of the slot claiming it — issue 402's reader, walking issue 304's field
+of the port claiming it — issue 402's reader, walking issue 304's field
 tables. The table itself never declares a type.
 
 **This pass takes over from issue 207's construction calls.** They stop

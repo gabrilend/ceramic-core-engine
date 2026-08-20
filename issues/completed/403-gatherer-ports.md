@@ -1,4 +1,4 @@
-# 403 — Gatherer slots and inline gathering
+# 403 — Gatherer ports and inline gathering
 
 ## Current behavior
 
@@ -21,7 +21,7 @@ them.
 
 The remainder describes it as built.
 
-Built, in its own gather module. A gatherer slot holds a source
+Built, in its own gather module. A gatherer port holds a source
 station index; at task construction — after the station's mutex is
 released, exactly as this issue placed it — the upstream box runs
 inline on the assembling thread's own stack, its arguments statics
@@ -39,12 +39,12 @@ demo stages side by side.
 
 ## Intended behavior
 
-The third slot kind, and the one place the engine runs backwards. A
-slot with no buffer reaches upstream at the moment it is needed and
+The third port kind, and the one place the engine runs backwards. A
+port with no buffer reaches upstream at the moment it is needed and
 pulls a value into existence.
 
-**A gatherer is a station with no ring-buffer slots.** Every one of its
-slots is static or itself gathered, or it has none at all.
+**A gatherer is a station with no ring-buffer ports.** Every one of its
+ports is static or itself gathered, or it has none at all.
 
 This is not a rule imposed on the design; it falls out of it. A station
 with no ring buffer has nothing that can ever be written into it, so no
@@ -52,7 +52,7 @@ delivery can ever discover it, so being pulled is the only way it could
 ever run.
 
 The same fact decides which end of a wire is which. A box whose output
-feeds a gatherer slot is pulled. A box whose output feeds a ring buffer
+feeds a gatherer port is pulled. A box whose output feeds a ring buffer
 is pushed. A box whose output fans out to both is neither coherently,
 and the loader rejects it — see issue 604.
 
@@ -61,7 +61,7 @@ station's mutex has been released. That placement is deliberate: the
 contended section stays short, the mutex is not held while user code
 runs, and everyone upstream is unblocked before any gathering begins.
 
-**The path:** read the slot's source station index; assemble that
+**The path:** read the port's source station index; assemble that
 station's arguments, which are static or recursively gathered; call its
 shim on the worker's own stack; copy the return value straight into the
 task struct being built. No task is pushed, no pool is involved, no
@@ -99,7 +99,7 @@ file that is not there stops the program and says so.
 2. The gathering call, invoked during task construction, outside the
    mutex.
 3. Extend the map construction calls from issue 207 to place a gatherer
-   slot.
+   port.
 4. A read box written as an ordinary function taking a path and
    returning contents, to prove no engine support is required — the
    original design called for a dedicated read box type and it

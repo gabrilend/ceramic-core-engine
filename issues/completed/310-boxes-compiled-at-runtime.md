@@ -106,7 +106,7 @@ The path is not exotic and each step already exists somewhere:
 **A function signature is not enough on its own, and it is worth being
 precise about why.** A signature gives you names: the box's name, its
 parameter type names, its return type name. What it cannot give you is
-**sizes and offsets** — how many bytes a cell holds, how far into a
+**sizes and offsets** — how many bytes a slot holds, how far into a
 struct a field sits, how large a task must be. Those are what the
 engine actually runs on, and the standing rule is that the compiler
 computes every one of them and the generator never guesses. So the

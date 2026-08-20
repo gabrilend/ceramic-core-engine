@@ -20,25 +20,25 @@ What actually made it safe was that nothing else could happen at all
 during the copy, because the station's mutex was held for the whole of
 it — and after
 [210d](210d-the-copies-leave-the-lock.md) that is no longer true. The
-lock still exists, but it covers only the cell states: a worker copying
-bytes out of a cell it has claimed holds **no lock at all**, because a
-claimed cell belongs to it alone and needs no exclusion from anybody.
-Relocating that cell underneath it is exactly the thing that
+lock still exists, but it covers only the slot states: a worker copying
+bytes out of a slot it has claimed holds **no lock at all**, because a
+claimed slot belongs to it alone and needs no exclusion from anybody.
+Relocating that slot underneath it is exactly the thing that
 protection does not cover. So this is not merely an improvement;
 **the existing growth stops being correct** once the copies leave the
 lock, and the two cannot be separated by very long.
 
 ## Intended behavior
 
-**A ring buffer grows by allocating another page of cells and adding
+**A ring buffer grows by allocating another page of slots and adding
 it to a short list.** The same shape the station table uses, for the
-same reason. Nothing is copied, no existing cell moves, and there is
+same reason. Nothing is copied, no existing slot moves, and there is
 no window to get right.
 
 Because nothing computes a location from the capacity, changing the
 capacity disturbs nothing. That sentence is the whole issue. A reader
-scanning from a hint does not care how many cells exist or where they
-live; it walks what is there. Adding cells is therefore a matter of
+scanning from a hint does not care how many slots exist or where they
+live; it walks what is there. Adding slots is therefore a matter of
 making them findable, not of rearranging anything.
 
 **With nothing copied, there is nothing to protect.** The real
@@ -82,7 +82,7 @@ than a single number, and the report should say the sum.
 
 - *Every page after the first could be the same size as the first, or
   each could be larger than the last.* **Every page is the same size.**
-  Turning a cell's ordinal position into a page and an offset is then a
+  Turning a slot's ordinal position into a page and an offset is then a
   divide and a remainder — arithmetic the scan does on every step,
   where growing pages would have made it a walk down the list
   comparing ranges. The scan is the hot path here and the growth is
@@ -111,7 +111,7 @@ than a single number, and the report should say the sum.
 - [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md),
   which must land first, and which this must follow closely because it
   is what makes the existing growth unsafe
-- [203 — Slot buffer growth](completed/203-slot-buffer-growth.md), the
+- [203 — Slot buffer growth](completed/203-port-buffer-growth.md), the
   copy-and-unwrap this retires, and whose premise the parent removes
   rather than fixes
 - [211 — Growing the station table](completed/211-growing-the-station-table.md),

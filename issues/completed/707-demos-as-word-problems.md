@@ -100,7 +100,7 @@ Three specific gaps:
 number before the question the number answers.
 
 **Engine units only.** Times are microseconds per task, capacities are
-cells, throughputs are tasks per second. These are the units the
+slots, throughputs are tasks per second. These are the units the
 machine thinks in, and they are the right units to *check* against —
 but a reader with no model of a "task" cannot tell whether 72
 microseconds is alarming or unremarkable.

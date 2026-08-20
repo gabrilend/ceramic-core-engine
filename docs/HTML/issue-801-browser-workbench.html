@@ -30,14 +30,13 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
-<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
 <a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
-<a href="issue-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
@@ -67,8 +66,8 @@
 <a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
 <a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
 <a href="done-201-station-table.html">201 — The station table</a>
-<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
-<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
+<a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
@@ -79,6 +78,7 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
@@ -90,9 +90,9 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
-<a href="done-401-static-slots.html">401 — Static input values</a>
+<a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
-<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
@@ -184,8 +184,8 @@ files needed to run it.**</p>
 <p>Boxes are placed on a canvas. Each one is given a name, a kind — plain,
 comparator, or iterator — and the box function it places, **written as
 a name rather than chosen from anything the page holds**. Wires are
-drawn from an output port to an input slot. Static values are typed
-into the slots that take them. When it looks right, one button hands
+drawn from an output port to an input port. Static values are typed
+into the ports that take them. When it looks right, one button hands
 back the map file.</p>
 <p><strong>The workbench is for layout, and only for layout.</strong> It does not run
 maps, does not hold C, does not read C, and does not hand any back.
@@ -229,20 +229,20 @@ it is made rather than at startup, and this scope divides the loader's
 rules (<a href="done-604-load-time-validation.html">604</a>) sharply in two.</p>
 <p><strong>Checkable, because they are properties of the drawing:</strong></p>
 <ul>
-<li>a box fanning out to both a gatherer slot and a ring-buffer slot</li>
+<li>a box fanning out to both a gatherer port and a ring-buffer port</li>
 <li>a cycle among gather wires — the one that most repays being visible,</li>
 <p>  since it is a property of the whole graph, invisible in any single
   line of the file, and shown on a canvas simply by refusing to
   complete the drag</p>
 <li>port limits by station kind</li>
-<li>an arrow to a slot number the station does not have</li>
+<li>an arrow to a port number the station does not have</li>
 </ul>
 <p>**Not checkable, because they are properties of C the page never
 sees:**</p>
 <ul>
 <li>a wire whose source return type and destination parameter type</li>
 <p>  differ</p>
-<li>an arrow to a slot the <em>function</em> does not have, as opposed to one</li>
+<li>an arrow to a port the <em>function</em> does not have, as opposed to one</li>
 <p>  the station does not have</p>
 <li>a comparator whose box returns a type with no compare function</li>
 </ul>
@@ -361,8 +361,8 @@ that stand outside the engine live.</p>
    the divided list above, with the page saying plainly which checks
    it does not perform rather than leaving a reader to assume a clean
    canvas means a loadable map.
-5. Statics: typed into slots, written into the statics section — noting
-   that <a href="done-401-static-slots.html">401</a> and <a href="issue-405-statics-mutation.html">405</a>
+5. Statics: typed into ports, written into the statics section — noting
+   that <a href="done-401-static-ports.html">401</a> and <a href="issue-405-statics-mutation.html">405</a>
    are retiring the shared table in favour of a value owned by the port
    that reads it, so this should be built against where the format is
    going rather than where it is.
@@ -536,7 +536,7 @@ canvas can express something the format cannot, the format is what
 needs fixing.</p>
 <p>The question in the middle — <em>anything else?</em> — is answered by the
 station line and what may follow it: name, box function, and kind on
-the line itself; per-slot exceptions saying a slot is static or
+the line itself; per-port exceptions saying a port is static or
 gathered; per-port destinations. Everything else about a station is
 derived from the registry rather than authored, which is why the canvas
 can validate without asking the author to declare types.</p>

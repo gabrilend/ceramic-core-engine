@@ -19,24 +19,24 @@ whole family.
 | issue | what it builds | depends on |
 |---|---|---|
 | [210a — The pull path removed](completed/210a-the-pull-path-removed.md) | the gatherer kind and everything reading it, taken out | — |
-| [210b — The port record](completed/210b-the-port-record.md) | both storages, the three-value tag, cells allocated at instantiation | 210a |
-| [210c — A state on every cell](210c-a-state-on-every-cell.md) | the four-state per-cell machine, then the copies moved out of the lock | 210b |
-| [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md) | the mutex narrowed to the cell states, the value copies moved outside it | 210c |
+| [210b — The port record](completed/210b-the-port-record.md) | both storages, the three-value tag, slots allocated at instantiation | 210a |
+| [210c — A state on every slot](210c-a-state-on-every-slot.md) | the four-state per-slot machine, then the copies moved out of the lock | 210b |
+| [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md) | the mutex narrowed to the slot states, the value copies moved outside it | 210c |
 | [210e — Growth adds a page](210e-growth-adds-a-page.md) | a ring buffer that grows by appending, copying nothing | 210d |
-| [210f — Changing what a port is](210f-changing-what-a-port-is.md) | conversion between tags as one operation, cells left alone | 210b |
+| [210f — Changing what a port is](210f-changing-what-a-port-is.md) | conversion between tags as one operation, slots left alone | 210b |
 | [210g — One way to build a station](210g-one-way-to-build-a-station.md) | a single construction and configuration surface | 210b, 210f |
 | [210h — Optional parameters](completed/210h-optional-parameters.md) | refused — the record of why a parameter cannot be optional | 210g |
 
 The order is real rather than tidy. **210c through 210e must land in
 that sequence**, because each removes the reason the next one was
-hard: per-cell states are what let the value copies leave the lock, and
+hard: per-slot states are what let the value copies leave the lock, and
 a claim that scans rather than computes a position is what makes
 growth-by-appending safe. **210f and 210g branch off 210b** and can
 be built while the concurrency line is in progress.
 
 ## The statics blocker, which is cleared
 
-**[401](completed/401-static-slots.md) is done and this family is no
+**[401](completed/401-static-ports.md) is done and this family is no
 longer cut in two.** The record below is kept because the deadlock it
 describes was real and the way out of it is the useful part.
 
@@ -59,7 +59,7 @@ second.
 
 **The way out was to notice who has to know.** Whoever deletes the
 table is the one who has to know what replaces it, so 401 built the
-port-side storage it spends — a byte buffer beside the cells, allocated
+port-side storage it spends — a byte buffer beside the slots, allocated
 at placement, plus the characters a string constant points at — rather
 than waiting to be handed one. 210b's static half unblocked the moment
 that existed.
@@ -74,23 +74,21 @@ is unblocked.
   where its value comes from, what type it is, how many bytes one value
   occupies, and the storage it keeps. It lives on the station for the
   life of the program.
-- **A slot** is one place where one value physically sits — a cell
-  inside a port's ring buffer, or the bytes reserved for one argument
-  inside a task. **The port decides how a value is stored; the slot is
-  where it lands.**
+- **A slot** is one place where one value physically sits — one
+  position inside a port's ring buffer, or the bytes reserved for one
+  argument inside a task. **The port decides how a value is stored;
+  the slot is where it lands.**
 
-The source calls the port a slot, which is a naming debt this family
-does not pay off — renaming reaches the station header, delivery,
-statics, the loader, the dump, and
-[002](../docs/002-stations-and-ports.md), and is worth doing
-deliberately rather than as a side effect of any of these.
+**The source now says this too** ([215](completed/215-ports-and-slots.md)). It
+used to call a port a slot and call a slot a cell, so this section
+described a vocabulary that only the documents used. The rename was
+taken ahead of the rest of this family rather than after it, precisely
+so that the children below — which were written in these words — are
+implemented against source that speaks them. Building them first would
+have meant translating every noun by hand while reading, which is how
+the disagreement was contracted in the first place.
 
-**And it is now settled that it happens before the rest of this
-family rather than after** ([215](215-ports-and-slots.md)). The
-children below are written in the correct vocabulary; if the source
-still speaks the old one while they are built, whoever builds them
-translates every noun by hand, which is how the disagreement started.
-So the rename is taken first and these are implemented against it.
+The word *cell* is gone from the project entirely.
 
 ## Current behavior
 
@@ -113,7 +111,7 @@ Everything else described below is still ahead.
 
 The tag has three values: **ring**, **static**, and **none**. Exactly
 one is in effect; the storage belonging to the other sits idle. A
-port's ring cells are allocated when the station is instantiated, for
+port's ring slots are allocated when the station is instantiated, for
 every port regardless of what that port is currently for — the element
 size is known from the registry at placement, so the space is exactly
 right, and a buffer standing ready is what makes changing a port's
@@ -127,7 +125,7 @@ becoming runnable as its ports are given sources one at a time.
 
 ### What the station's mutex covers
 
-**The cell states of every port on that station, and nothing else.**
+**The slot states of every port on that station, and nothing else.**
 Not the value bytes, not the destinations, not the station record at
 large. One lock per station rather than one per port, so anyone
 claiming holds exactly one lock and there is no lock ordering anywhere
@@ -141,15 +139,15 @@ unrelated stations' locks into shared cache lines.
 **What takes it:** the four rare structural operations — growing a ring
 buffer, rewiring, writing a static, and changing a port's tag — and the
 claim, which is not rare at all. The claim is on the hot path and that
-is accepted, because it needs several cells at once and nothing
+is accepted, because it needs several slots at once and nothing
 composes several atomic operations into one. What is *not* under it is
 the expensive part: both value copies happen outside, protected by the
-fact that a cell in *reserved* or *claimed* belongs to exactly one
+fact that a slot in *reserved* or *claimed* belongs to exactly one
 worker. See [210d](210d-the-copies-leave-the-lock.md), which also
 records why the lock-free claim that was planned here was abandoned.
 
 **A delivering writer takes it not at all.** Writing a value touches
-one cell, and one cell is already atomic with a single compare-and-swap.
+one slot, and one slot is already atomic with a single compare-and-swap.
 So deliveries into a station never serialize; only task construction
 does.
 
@@ -169,7 +167,7 @@ program. A write cannot make something run that could not run anyway,
 because the check it triggers is the ordinary one and an empty ring
 port still answers no.
 
-The statics work proper belongs to [401](completed/401-static-slots.md) and
+The statics work proper belongs to [401](completed/401-static-ports.md) and
 [405](405-statics-mutation.md), which stand on 210b's record.
 
 ## Open questions
@@ -182,8 +180,8 @@ The statics work proper belongs to [401](completed/401-static-slots.md) and
   per-worker copy trades a contended hint for a cold one, and a hint
   that is always cold has stopped shortening the scan it exists to
   shorten — which is the whole of its job. The contention is real and
-  is accepted with its eyes open: the per-cell states were arranged so
-  that workers claiming *different* cells never write the same line,
+  is accepted with its eyes open: the per-slot states were arranged so
+  that workers claiming *different* slots never write the same line,
   and that is the property worth protecting, because it scales with how
   much work is in flight. The bookmark does not — it is one line, its
   cost is fixed no matter how large the port grows, and it is only
@@ -193,42 +191,42 @@ The statics work proper belongs to [401](completed/401-static-slots.md) and
   every time, and nothing above has to change for it. Belongs to
   [210d](210d-the-copies-leave-the-lock.md).
 
-- *A writer that dies mid-copy leaves a cell reserved forever — should
+- *A writer that dies mid-copy leaves a slot reserved forever — should
   that be detected, reclaimed, or reported?* None of the three, because
-  nothing that can die is able to get into that window. A cell is
+  nothing that can die is able to get into that window. A slot is
   reserved for the length of one copy whose size is the port's element
   size — a `sizeof` the compiler computed, carried on the box record —
   from one allocation the engine owns into another. No pointer is
   followed, nothing is allocated, and nothing is called. The claim in
-  the other direction is the same shape: a reader copies the cell into
-  the task's own value area and is finished with the cell there, and
+  the other direction is the same shape: a reader copies the slot into
+  the task's own value area and is finished with the slot there, and
   the box does not run until a worker picks that task up later, reading
-  from the task and holding no cell at all. What remains is failing
+  from the task and holding no slot at all. What remains is failing
   hardware, and software that stops when the memory under it stops is
   behaving correctly rather than lacking a feature.
 
   **This became true rather than being true, and now it is true.**
   There was one place where user code ran inside the claim walk: a
   gather slot invoked its upstream box inline, on the claiming thread,
-  while cells were held, so a box that crashed there really did strand
+  while slots were held, so a box that crashed there really did strand
   them. That was the pull path, and removing it is what closed the
   window. [210a](completed/210a-the-pull-path-removed.md) removed it,
   so the answer above rests on the engine as it is rather than on the
   engine as it is going to be.
 
   A box that crashes while it *runs* is still an event worth having an
-  answer for, but it cannot strand a cell, because by then it holds
+  answer for, but it cannot strand a slot, because by then it holds
   none. It loses a task, which is a different problem.
 
 ## Related
 
-- [202 — Ring buffer slots](completed/202-ring-buffer-slots.md), whose
+- [202 — Ring buffer slots](completed/202-ring-buffer-ports.md), whose
   storage this keeps and whose exclusivity it drops
-- [401 — Static input values](completed/401-static-slots.md), whose value moves
+- [401 — Static input values](completed/401-static-ports.md), whose value moves
   onto the port here
 - [405 — Changing a static while it runs](405-statics-mutation.md),
   which becomes one case of changing a port
-- [403 — Gatherer slots](completed/403-gatherer-slots.md), the kind
+- [403 — Gatherer slots](completed/403-gatherer-ports.md), the kind
   210a removed
 - [211 — Growing the station table](completed/211-growing-the-station-table.md),
   the same paging shape one level up

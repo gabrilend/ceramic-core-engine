@@ -119,7 +119,7 @@ in its wiring — which is the same argument that moves them onto ports.
    somewhere else, and the map file's `$n` form names a table this
    issue deletes. Both could not be second. Whoever removes the table
    is the one who has to know what replaces it, so this issue builds
-   the port-side storage it spends — a byte buffer beside the cells,
+   the port-side storage it spends — a byte buffer beside the slots,
    allocated at placement, plus the characters a string constant points
    at. 210b's static half unblocked the moment it existed.
 2. Move the claim into the readiness walk, under the station's mutex,

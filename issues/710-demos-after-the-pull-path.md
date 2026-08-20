@@ -26,7 +26,7 @@ a machine that is unfinished.
 
 **What it still waits on is narrower than it was.** Phase 4's rebuilt
 scenes turn on writing a static and watching a chain recalculate,
-which needs the statics work ([401](completed/401-static-slots.md),
+which needs the statics work ([401](completed/401-static-ports.md),
 [405](405-statics-mutation.md)) standing on the port record
 ([210b](completed/210b-the-port-record.md)). Phase 6's substitution needs the
 same. Phase 7's replacement scene needs only

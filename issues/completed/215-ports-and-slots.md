@@ -172,23 +172,56 @@ in one deliberate pass rather than drift:
 7. A pass over the `.info.md` files, which describe the interfaces in
    the old vocabulary.
 
+## The issue files, and why they could not be done in one pass
+
+**Decided: one vocabulary everywhere, open and completed alike**, so
+that nobody reading a blueprint has to translate it into the words the
+source uses. Four issue files were renamed — ring-buffer input ports,
+port buffer growth, static ports, gatherer ports — and one open child,
+*a state on every slot*. The project's own instruction file stated the
+one rule in the old words and now does not.
+
+**The first attempt at this was wrong and had to be reverted**, and
+the reason is the most useful thing this issue found:
+
+**The issue corpus is written in two vocabularies, and some files are
+written in both.** Everything predating the port record calls an input
+port a slot; everything written after it already says *port* for an
+input and already uses *slot* for the place a value sits. A single
+mapping applied to all of them renames the
+second group *a second time* — turning "a slot is one place a value
+sits" into "a port is one place a value sits". It corrupted the
+vocabulary definition in this family's own parent, which is the one
+sentence in the project that the rename exists to make true.
+
+**The damage is invisible in the way that matters**: the result is
+well-formed prose that reads naturally and says the wrong thing. A
+build catches a bad rename in source; nothing catches one in a
+document except somebody reading it.
+
+So the corpus was classified before anything was rewritten — files
+saying *input port* got the ring-position rename only, files saying
+*input slot* got both renames in one substitution, and the handful
+using both were done by hand.
+
+**Two kinds of file were deliberately left alone.** Verbatim quoted
+notes keep their words, because a note that has been edited to agree
+with a later decision is no longer evidence of what somebody actually
+asked for — issue 407's argument survives only in the note that
+prompted it. And this issue keeps both vocabularies on purpose, since
+a record of a rename that speaks only the new words cannot say what
+changed.
+
+**One more premise here was wrong.** This issue claimed issue 202's
+title was "already correct under the new vocabulary". It was not: the
+title read *Ring-buffer input slots*, meaning input ports, and it was
+renamed with the rest. What is true is the narrower thing — the word
+*slots* in that title is correct *now*, for a different reason than it
+was written.
+
 ## Open questions
 
-**The issue files still speak the old vocabulary.** The code and the
-documents now agree; the blueprints do not. Three open children of the
-port family are titled and written around *cells* — a state on every
-cell, the copies leaving the lock, growth adding a page — and their
-filenames carry the word. Whoever implements them will read *cell* in
-the blueprint and type *slot* into the source, which is the exact
-translation-by-hand this issue exists to abolish, running in the
-opposite direction.
-
-Completed issues are a different case: they are the record of what was
-built and when, and rewriting them edits history. The open ones are
-not history, they are instructions.
-
-Unanswered, and it belongs to whoever owns the issue files rather than
-to this rename.
+None outstanding.
 
 ## Related
 
@@ -198,6 +231,6 @@ to this rename.
   filename and body were both part of the debt
 - [205 — The delivery walk](completed/205-delivery-walk.md), which
   speaks both nouns constantly
-- [202 — Ring buffer slots](completed/202-ring-buffer-slots.md), whose
+- [202 — Ring buffer slots](completed/202-ring-buffer-ports.md), whose
   title is already correct under the new vocabulary and was not under
   the old one

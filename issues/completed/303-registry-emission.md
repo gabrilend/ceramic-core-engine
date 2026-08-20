@@ -42,7 +42,7 @@ two sources of truth able to disagree, and the map would always be the
 one that was wrong — the compiler enforces the C, and nothing enforces
 the file.
 
-The same table sizes every ring buffer cell, so a slot's cells are
+The same table sizes every ring buffer slot, so a port's slots are
 exactly `sizeof` the parameter they feed and a write is a `memcpy` with
 no allocation. In phase 2 those sizes were typed in by hand; from here
 they are correct by construction.

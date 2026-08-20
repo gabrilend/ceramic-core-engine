@@ -55,13 +55,13 @@ it makes an error message legible. The names cost one lookup table
 thrown away when loading ends.
 
 **The kind is written rather than inferred.** A comparator *is*
-inferable — it is the station with one more input slot than its
+inferable — it is the station with one more input port than its
 function has parameters — but that means forgetting the threshold line
 silently demotes a comparator to a plain box that routes everything one
 way. One letter of redundancy buys an error instead of a wrong answer.
 
-**A slot is a ring buffer unless a line says otherwise.** Only the
-exceptions are written, and those carry the slot index: `$n` for a
+**A port is a ring buffer unless a line says otherwise.** Only the
+exceptions are written, and those carry the port index: `$n` for a
 static, a bare name for a gatherer source. A station with no input
 lines has nothing unusual about it.
 
@@ -73,7 +73,7 @@ It stays because `in 1 0` reading as "static entry zero" is not
 something anyone will guess a year from now.
 
 **An output line names a port and one destination**: which station,
-which slot. Repeat the line to fan out. Port numbers stay explicit
+which port. Repeat the line to fan out. Port numbers stay explicit
 because they mean something — a comparator's three are less, equal and
 greater in that order, and an iterator's are the sequence it walks.
 

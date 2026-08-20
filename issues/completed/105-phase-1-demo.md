@@ -9,7 +9,7 @@
 
 Built and discoverable from the root launcher. Four scenes, every
 number measured on the run: a fan-out burst that doubles the queue six
-times from its starting eight cells without ever overflowing; four
+times from its starting eight slots without ever overflowing; four
 wildly uneven chains whose termination decision costs a twentieth of a
 millisecond after the last task ends; a trickle across a second of
 near-total idleness costing three milliseconds of processor time —

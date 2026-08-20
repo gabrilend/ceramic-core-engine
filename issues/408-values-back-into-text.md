@@ -10,7 +10,7 @@ in the other direction.
 **Both directions exist, as runtime walks over the field tables.** The
 opening of this issue used to say the engine could not turn bytes into
 text; that stopped being true when statics moved onto their ports
-([401](completed/401-static-slots.md)), which could not be done without
+([401](completed/401-static-ports.md)), which could not be done without
 building the writer, because deleting the table deleted the original
 strings the dump had been echoing.
 
@@ -198,7 +198,7 @@ field tables stop being walked and start being pointed at:**
   follows
 - [304 — Struct field tables](completed/304-struct-field-tables.md),
   which emits the offsets and kinds both directions read
-- [401 — Static input values](completed/401-static-slots.md), which creates the
+- [401 — Static input values](completed/401-static-ports.md), which creates the
   need by removing the retained text
 - [703 — The map dump](completed/703-map-dump.md), the first caller
 - [209 — The output station](209-map-output-collection.md), where a

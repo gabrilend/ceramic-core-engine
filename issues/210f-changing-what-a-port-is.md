@@ -9,7 +9,7 @@ line, and can be built alongside it.
 **Conversion no longer destroys anything, and half of this is built.**
 
 The destruction is gone from every path. Binding a static used to free
-the cell array and null the pointer; it writes the tag and nothing
+the slot array and null the pointer; it writes the tag and nothing
 else now, so a buffer sized to the very type the port carries is no
 longer thrown away and reallocated, and values a producer had already
 handed over are no longer discarded silently. That was the part that
@@ -26,7 +26,7 @@ through the call that gives a port a constant, because what a port
 needs to become a static is a value and this call has no room to carry
 one. Becoming a static **again** is what the conversion does, and it
 is the answered open question made real: the constant survives being
-converted away, exactly as the cells do, so a port that goes static,
+converted away, exactly as the slots do, so a port that goes static,
 buffer, static reads the value it read before. A port that has never
 held one is refused with a message saying to give it one first — which
 keeps *none* meaning one thing, since it is then only ever reached by
@@ -45,12 +45,12 @@ mechanism is there; the tests are not.
 
 **Conversion is a field write.** The tag changes; storage does not
 move. [210b](completed/210b-the-port-record.md) is what makes this possible by
-giving every port its cells at instantiation regardless of what the
+giving every port its slots at instantiation regardless of what the
 port is currently for, so there is never a moment when the storage a
 tag needs is absent.
 
 **Values survive a change of source.** Switching a port's tag away
-from ring leaves its cells exactly as they are — not freed, not
+from ring leaves its slots exactly as they are — not freed, not
 cleared, not drained. They are waiting if the port becomes a ring
 again. Discarding them would throw away values a producer already
 handed over, invisibly, which is worse than serving them slightly
@@ -78,7 +78,7 @@ destroyed.
 
 1. One conversion operation naming a station, a port, and the tag it
    is becoming, replacing both existing paths.
-2. Leave the cells alone on every path through it. This is the whole
+2. Leave the slots alone on every path through it. This is the whole
    change and it is mostly deletions.
 3. A test that a port cycles through all three tags while the program
    runs, with a station upstream delivering throughout, and nothing
@@ -97,7 +97,7 @@ destroyed.
   back into a static: does it still hold the static value it had
   before, or must one be written again?* **It keeps the value.** The
   rule this issue is built on is that conversion destroys nothing, and
-  a static's binding is storage like the cells are storage — carving
+  a static's binding is storage like the slots are storage — carving
   out an exception for it would mean the issue's one sentence had a
   second clause nobody could derive from the first.
 

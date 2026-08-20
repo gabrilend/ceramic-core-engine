@@ -52,8 +52,8 @@ files needed to run it.**
 Boxes are placed on a canvas. Each one is given a name, a kind — plain,
 comparator, or iterator — and the box function it places, **written as
 a name rather than chosen from anything the page holds**. Wires are
-drawn from an output port to an input slot. Static values are typed
-into the slots that take them. When it looks right, one button hands
+drawn from an output port to an input port. Static values are typed
+into the ports that take them. When it looks right, one button hands
 back the map file.
 
 **The workbench is for layout, and only for layout.** It does not run
@@ -107,20 +107,20 @@ rules ([604](completed/604-load-time-validation.md)) sharply in two.
 
 **Checkable, because they are properties of the drawing:**
 
-- a box fanning out to both a gatherer slot and a ring-buffer slot
+- a box fanning out to both a gatherer port and a ring-buffer port
 - a cycle among gather wires — the one that most repays being visible,
   since it is a property of the whole graph, invisible in any single
   line of the file, and shown on a canvas simply by refusing to
   complete the drag
 - port limits by station kind
-- an arrow to a slot number the station does not have
+- an arrow to a port number the station does not have
 
 **Not checkable, because they are properties of C the page never
 sees:**
 
 - a wire whose source return type and destination parameter type
   differ
-- an arrow to a slot the *function* does not have, as opposed to one
+- an arrow to a port the *function* does not have, as opposed to one
   the station does not have
 - a comparator whose box returns a type with no compare function
 
@@ -261,8 +261,8 @@ that stand outside the engine live.
    the divided list above, with the page saying plainly which checks
    it does not perform rather than leaving a reader to assume a clean
    canvas means a loadable map.
-5. Statics: typed into slots, written into the statics section — noting
-   that [401](completed/401-static-slots.md) and [405](405-statics-mutation.md)
+5. Statics: typed into ports, written into the statics section — noting
+   that [401](completed/401-static-ports.md) and [405](405-statics-mutation.md)
    are retiring the shared table in favour of a value owned by the port
    that reads it, so this should be built against where the format is
    going rather than where it is.
@@ -445,7 +445,7 @@ needs fixing.
 
 The question in the middle — *anything else?* — is answered by the
 station line and what may follow it: name, box function, and kind on
-the line itself; per-slot exceptions saying a slot is static or
+the line itself; per-port exceptions saying a port is static or
 gathered; per-port destinations. Everything else about a station is
 derived from the registry rather than authored, which is why the canvas
 can validate without asking the author to declare types.

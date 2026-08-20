@@ -28,12 +28,12 @@ station lives as long as the program, the task lives for one call.
 
 ## The one rule
 
-> A station runs when, and only when, every one of its input slots
+> A station runs when, and only when, every one of its input ports
 > holds a value.
 
 Nothing polls and nothing scans for ready work. The check is the
-tail end of a write: whoever delivered a value into a slot looks at
-that station's other slots, and if all are occupied, takes one value
+tail end of a write: whoever delivered a value into a port looks at
+that station's other ports, and if all are occupied, takes one value
 from each and builds a task.
 
 ## Orientation
