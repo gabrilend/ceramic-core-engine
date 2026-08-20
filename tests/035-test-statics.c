@@ -195,9 +195,24 @@ static void test_struct_constant_bytes(void)
      * case and a hand relay for the full record below. */
     int one_record[1] = { sizeof(record) };
     map_place(m, 0, relay_record__call, STATION_PLAIN, 1, one_record, sizeof(record));
-    /* Hand placement has no type names, so grant this port its type
-     * the way the loader would: through the registry's name for it. */
+    /*
+     * Hand placement grants no type, so this port is given one the way
+     * a placement function would — and that is now **two** things, not
+     * one (issue 311b). The spelling, which messages and the dump
+     * read; and the field table, which is what turning brace text into
+     * bytes actually needs, because it says which field sits at which
+     * offset.
+     *
+     * It used to be enough to set the spelling, because the reader
+     * searched every emitted struct table for a matching name. It does
+     * not search any more: a generated placement function knows the
+     * type concretely and hands the address over. A hand-placed port
+     * that is given only a name is therefore a port whose constant
+     * cannot be read — which is the same limit hand placement has
+     * always had, arriving where it can be seen.
+     */
     map_station(m, 0)->in_ports[0].type_name = "record";
+    map_station(m, 0)->in_ports[0].fields = struct_find("record");
     map_place(m, 1, check_record__call, STATION_PLAIN, 1, one_record, 0);
     map_connect(m, 0, 0, 1, 0);
 

@@ -331,12 +331,29 @@ typedef struct in_port {
      * which field sits at which offset — because turning
      * `{ 5, 2.0, "hey" }` into bytes needs more than a byte count.
      *
-     * And it goes: the placement function knows the type concretely,
-     * so it can write the field table's address onto the port and the
-     * reader can follow a pointer instead of searching by name
-     * (issue 311b).
+     * The *searching* half of that is gone already: the field table
+     * below is handed over at placement. What is left here is the
+     * spelling, which messages and the dump still read, and which goes
+     * when the binary carries its own box sources (issue 311c).
      */
     const char *type_name;
+
+    /*
+     * Which fields this port's type has, and where each one sits —
+     * the address of a generated table, written by the placement
+     * function because it knows the type concretely (issue 311b).
+     *
+     * Null unless the type is a struct, and null on a hand-placed
+     * station, which is why the reader still checks before following
+     * it. It replaced a search of every emitted struct table for one
+     * whose name matched, which was a lookup performed to answer a
+     * question the placement already knew.
+     *
+     * Declared as an incomplete type because the field table belongs
+     * to the build path and this header must not depend on it — the
+     * dependency runs the other way.
+     */
+    const struct struct_info *fields;
 
     /* The growth story, written by issue 203 and read by phase 7:
      * how many times this buffer has doubled, and the deepest the

@@ -166,6 +166,9 @@ build a station.</p>
 <li><strong>A test places every box both ways and compares field for field</strong>,</li>
 <p>  including as a comparator wherever a box can be one. Sixteen boxes,
   twelve of them comparators, identical.</p>
+<li><strong>A struct port is handed its field table</strong>, so reading a written-out</li>
+<p>  constant follows a pointer rather than searching every emitted table
+  for a matching name.</p>
 </ul>
 <p><strong>Two things the plan did not see</strong>, both found by building it:</p>
 <p>**Generated code that builds stations needs the engine's symbols to be

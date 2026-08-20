@@ -49,6 +49,25 @@ static int struct_index(const description_t *d, const sdef_t *s)
 }
 /* }}} */
 
+/* {{{ static int struct_index_by_name() */
+/*
+ * Which row of the emitted struct table describes this type, or -1
+ * when the type is not a struct at all. Used to hand a port its field
+ * table's address at placement, so that reading a written-out
+ * constant follows a pointer instead of searching the table by name
+ * (issue 311b).
+ */
+static int struct_index_by_name(const description_t *d, const char *type)
+{
+    for (int i = 0; i < d->structs.n; i++) {
+        const sdef_t *s = vec_at(&d->structs, i);
+        if (strcmp(s->name, type) == 0)
+            return i;
+    }
+    return -1;
+}
+/* }}} */
+
 /* {{{ static void emit_compares() */
 /*
  * A comparison per return type that some box produces, emitted once
@@ -407,13 +426,27 @@ static void emit_placements(buf_t *w, const description_t *d,
          * Bare today because that is what a map file says; it becomes
          * the full address when the format carries one. */
         buf_line(w, "    s->box_name = \"%s\";", b->name);
-        for (int j = 0; j < b->n_params; j++)
+        for (int j = 0; j < b->n_params; j++) {
             buf_line(w, "    s->in_ports[%d].type_name = \"%s\";",
                      j, b->params[j].type);
+            /* The layout, handed over rather than looked for. A
+             * written-out constant needs to know which field sits at
+             * which offset, and the placement function knows the type
+             * concretely — so the port is given the address instead of
+             * searching a table by name (issue 311b). */
+            int si = struct_index_by_name(d, b->params[j].type);
+            if (si >= 0)
+                buf_line(w, "    s->in_ports[%d].fields = &registry_structs[%d];",
+                         j, si);
+        }
         if (!is_void && compare_of[i]) {
+            int rsi = struct_index_by_name(d, b->ret);
             buf_line(w, "    if (extra) {");
             buf_line(w, "        s->in_ports[%d].type_name = \"%s\";",
                      b->n_params, b->ret);
+            if (rsi >= 0)
+                buf_line(w, "        s->in_ports[%d].fields = "
+                            "&registry_structs[%d];", b->n_params, rsi);
             /* Resolved once, here, so the delivery path compares
              * through a pointer the station already holds rather than
              * looking anything up per value. */

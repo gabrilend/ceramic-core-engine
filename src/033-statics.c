@@ -81,10 +81,27 @@ typedef enum {
     TN_INT, TN_UINT, TN_FLOAT, TN_STRING, TN_STRUCT, TN_UNKNOWN
 } type_class_t;
 
-/* {{{ classify_type_name() */
-static type_class_t classify_type_name(const char *tn,
-                                       const struct_info_t **out_struct)
+/* {{{ classify_port() */
+/*
+ * What kind of thing this port holds, and — when it is a struct —
+ * where its field table is.
+ *
+ * **The struct is not searched for.** The port was handed its field
+ * table's address at placement, because the placement function knew
+ * the type concretely (issue 311b); this used to scan every emitted
+ * struct table looking for a matching name.
+ *
+ * The primitives are still told apart by their spelling, and that is
+ * a different act from comparing two types: a wire is legal on
+ * **width** alone, because two boxes may spell one shape differently
+ * and mean the same data (issue 309). Nothing here compares one type
+ * against another. It asks how to turn text into bytes, which needs
+ * to know whether those bytes are a number, and which kind.
+ */
+static type_class_t classify_port(const in_port_t *sl,
+                                  const struct_info_t **out_struct)
 {
+    const char *tn = sl->type_name ? sl->type_name : "";
     static const char *const ints[] = {
         "char", "signed char", "short", "int", "long", "long long",
         "int32_t", "int64_t", NULL
@@ -106,9 +123,8 @@ static type_class_t classify_type_name(const char *tn,
     for (int i = 0; strings[i]; i++)
         if (strcmp(tn, strings[i]) == 0) return TN_STRING;
 
-    const struct_info_t *si = struct_find(tn);
-    if (si) {
-        if (out_struct) *out_struct = si;
+    if (sl->fields) {
+        if (out_struct) *out_struct = sl->fields;
         return TN_STRUCT;
     }
     return TN_UNKNOWN;
@@ -431,7 +447,7 @@ int in_port_constant_text(const in_port_t *sl, char *out, int room)
         tb_addf(&tb, "?");
     } else {
         const struct_info_t *si = NULL;
-        switch (classify_type_name(sl->type_name ? sl->type_name : "", &si)) {
+        switch (classify_port(sl, &si)) {
         case TN_INT:
             tb_addf(&tb, "%lld",
                     read_integer(sl->constant, sl->elem_size, &w));
@@ -512,7 +528,7 @@ void map_in_port_static_text(map_t *m, int station, int port, const char *text)
     char *fresh_string = NULL;
 
     const struct_info_t *si = NULL;
-    switch (classify_type_name(sl->type_name, &si)) {
+    switch (classify_port(sl, &si)) {
     case TN_INT: {
         char *end;
         long long v = strtoll(text, &end, 0);

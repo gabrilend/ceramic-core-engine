@@ -29,6 +29,9 @@ What stands:
 - **A test places every box both ways and compares field for field**,
   including as a comparator wherever a box can be one. Sixteen boxes,
   twelve of them comparators, identical.
+- **A struct port is handed its field table**, so reading a written-out
+  constant follows a pointer rather than searching every emitted table
+  for a matching name.
 
 **Two things the plan did not see**, both found by building it:
 
