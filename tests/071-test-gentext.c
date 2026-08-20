@@ -219,6 +219,109 @@ static void test_strings(void)
 }
 /* }}} */
 
+/* {{{ static void test_box_symbols() */
+/*
+ * The escaping that keeps two boxes from becoming one symbol (issue
+ * 311a).
+ *
+ * A bug here does not surface here. It surfaces as a duplicate-symbol
+ * error hundreds of lines away in a generated file, naming a mangled
+ * identifier rather than the two source files that should have been
+ * told apart — which is exactly the failure the scheme exists to
+ * prevent, arriving through the scheme instead.
+ *
+ * So this checks the property rather than the spelling: **every
+ * distinct input produces a distinct symbol**, over a list chosen to
+ * include every pair that a naive mangling would collapse.
+ */
+static void test_box_symbols(void)
+{
+    arena_t *a = arena_new();
+
+    /* The pair that motivates the whole scheme. Turning punctuation
+     * into a single underscore would make both of these `math_c__add`
+     * and the linker would reject the build without ever mentioning
+     * either file. */
+    check_str(gt_box_symbol(a, "math.c", "add"), "sora_box_math_dot_c__add",
+              "a dot becomes a word");
+    check_str(gt_box_symbol(a, "math_c", "add"), "sora_box_math_und_c__add",
+              "an underscore escapes itself");
+
+    /* Reading left to right: math + _dot_ + dot + _dot_ + c. */
+    check_str(gt_box_symbol(a, "math.dot.c", "add"),
+              "sora_box_math_dot_dot_dot_c__add",
+              "a name that spells out the escape still decodes");
+
+    /* The path is what settles two files sharing a basename, so the
+     * separator needs a rule of its own. */
+    check_str(gt_box_symbol(a, "src/boxes/math.c", "add"),
+              "sora_box_src_sl_boxes_sl_math_dot_c__add",
+              "a path is part of the symbol");
+
+    /* This project's own sources: a leading digit and hyphens, which
+     * is why there is a prefix and a rule for the hyphen. */
+    check_str(gt_box_symbol(a, "029-demo-boxes.c", "add"),
+              "sora_box_029_dsh_demo_dsh_boxes_dot_c__add",
+              "a real source of this project produces a legal identifier");
+
+    /* Anything else at all, so no filename can defeat the scheme. */
+    check_str(gt_box_symbol(a, "od d.c", "add"),
+              "sora_box_od_x20_d_dot_c__add",
+              "an unforeseen character is transcribed rather than dropped");
+
+    /*
+     * The property, over every pair. These are chosen to collide under
+     * a naive mangling: the same characters arranged differently, the
+     * escape spelled out literally, a path against a basename, and the
+     * separator's two halves swapped.
+     */
+    static const char *const files[] = {
+        "math.c", "math_c", "math-c", "math_dot_c", "math.dot.c",
+        "a/math.c", "a_math.c", "boxes/math.c", "boxes_math.c",
+        "029-demo-boxes.c", "029_demo_boxes.c", "od d.c",
+    };
+    static const char *const funcs[] = { "add", "add_two", "add.two", "a__b" };
+
+    enum { NF = (int)(sizeof files / sizeof files[0]) };
+    enum { NG = (int)(sizeof funcs / sizeof funcs[0]) };
+    const char *seen[NF * NG];
+    int n = 0, distinct = 1;
+
+    for (int i = 0; i < NF; i++)
+        for (int j = 0; j < NG; j++) {
+            const char *sym = gt_box_symbol(a, files[i], funcs[j]);
+            for (int k = 0; k < n; k++)
+                if (strcmp(seen[k], sym) == 0) {
+                    fprintf(stderr, "  two boxes share the symbol %s\n", sym);
+                    distinct = 0;
+                }
+            seen[n++] = sym;
+        }
+    check(distinct, "48 awkward names, 48 distinct symbols");
+
+    /* And every one of them is a legal C identifier, which is the
+     * other half of the job — a unique symbol the compiler refuses is
+     * no better than a colliding one. */
+    int legal = 1;
+    for (int i = 0; i < n; i++) {
+        const char *sym = seen[i];
+        if (!((sym[0] >= 'a' && sym[0] <= 'z') || sym[0] == '_'))
+            legal = 0;
+        for (const char *p = sym; *p; p++) {
+            unsigned char c = (unsigned char)*p;
+            int ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                  || (c >= '0' && c <= '9') || c == '_';
+            if (!ok) legal = 0;
+        }
+    }
+    check(legal, "and every one of them is a C identifier");
+
+    arena_free(a);
+    printf("  box symbols: %d awkward names, %d distinct legal identifiers\n",
+           n, n);
+}
+/* }}} */
+
 /* {{{ main */
 int main(void)
 {
@@ -226,6 +329,7 @@ int main(void)
     test_buf();
     test_vec();
     test_strings();
+    test_box_symbols();
 
     if (failures) {
         fprintf(stderr, "%d support-machinery checks failed\n", failures);

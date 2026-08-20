@@ -244,6 +244,13 @@ states and nothing else, with every value copy happening outside it.</p>
 is left of this family is one thing: the construction surface
 (<a href="issue-210g-one-way-to-build-a-station.html">210g</a>), which is also what phase
 2's capstone stands on.</p>
+<p><strong>And that one is blocked outside this family.</strong> Making a station
+constructible one way means hand placement and by-name placement
+stopping being two contracts, and the answer chosen for that is a
+generated placement function per box —
+<a href="issue-311b-placement-instead-of-records.html">311b</a>'s work, not this
+family's. So the last child waits on the generator line, and the order
+runs: boxes addressed by file, placement functions, then this.</p>
 <p><strong>210a is done: the gatherer is gone</strong>, along with the pull module,
 the inline execution of a box during task assembly, the cycle walk,
 the runtime gather-repoint operation, the gather timing charged to

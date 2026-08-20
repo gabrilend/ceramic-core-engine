@@ -103,6 +103,52 @@ char *gt_normalize_type(arena_t *a, const char *s, size_t n);
  * be C identifiers and must not collide. */
 char *gt_mangle(arena_t *a, const char *type_name);
 
+/* {{{ gt_box_symbol() — issue 311a */
+/*
+ * The C identifier for one box, built from **the file it lives in and
+ * the function's name**, so that two boxes called `read` in two files
+ * are two symbols rather than a duplicate-definition error naming
+ * neither of them.
+ *
+ * The path is the one the caller has already canonicalised. Both must
+ * arrive in the same spelling every time, because a map that names a
+ * box briefly and one that names it by path have to produce the *same*
+ * symbol — otherwise one function acquires two definitions and the
+ * problem the address was meant to solve comes back wearing a hat.
+ *
+ * **Punctuation is transcribed into words, and the escape character
+ * escapes itself**, which is what makes the scheme injective rather
+ * than merely tidier:
+ *
+ * | in a name | in a symbol |     | why |
+ * |---|---|---|
+ * | `.`  | `_dot_` |  a filename's extension |
+ * | `/`  | `_sl_`  |  the path, which is what settles two files sharing a basename |
+ * | `-`  | `_dsh_` |  this project's own sources are named like `029-demo-boxes.c` |
+ * | `_`  | `_und_` |  the escape character, escaping itself |
+ * | `:`  | `__`    |  the separator between the file and the function |
+ * | else | `_xNN_` |  hex, so no filename can defeat this |
+ *
+ * Without the `_und_` row the scheme would move the collision rather
+ * than remove it: `math.c` and `math_c` would both become `math_c`.
+ * It is the same reason percent-encoding has to write `%` as `%25`.
+ *
+ * Every symbol carries a fixed prefix, which does two jobs for one
+ * decision: it keeps generated names out of the way of anything a box
+ * author writes, and it means a file whose name **begins with a
+ * digit** — which every source in this project does — still produces a
+ * legal identifier.
+ *
+ * **Uniqueness is the job; recovery is not.** Nothing decodes a symbol
+ * back into a name. A name a person reads comes from the string
+ * literal a placement function writes onto its station, because these
+ * are static functions whose symbols may not survive a stripped binary
+ * at all. The scheme is reversible because being reversible is how a
+ * scheme is proved injective, not because anything reverses it.
+ */
+char *gt_box_symbol(arena_t *a, const char *file, const char *function);
+/* }}} */
+
 /* Which line a byte offset falls on, counting from 1. Linear, and
  * called only when something is being reported or recorded, never in
  * a loop over the whole file. */

@@ -124,6 +124,14 @@ is left of this family is one thing: the construction surface
 ([210g](210g-one-way-to-build-a-station.md)), which is also what phase
 2's capstone stands on.
 
+**And that one is blocked outside this family.** Making a station
+constructible one way means hand placement and by-name placement
+stopping being two contracts, and the answer chosen for that is a
+generated placement function per box —
+[311b](311b-placement-instead-of-records.md)'s work, not this
+family's. So the last child waits on the generator line, and the order
+runs: boxes addressed by file, placement functions, then this.
+
 **210a is done: the gatherer is gone**, along with the pull module,
 the inline execution of a box during task assembly, the cycle walk,
 the runtime gather-repoint operation, the gather timing charged to

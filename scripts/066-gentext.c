@@ -373,6 +373,60 @@ char *gt_mangle(arena_t *a, const char *type_name)
 }
 /* }}} */
 
+/* {{{ gt_box_symbol() */
+/*
+ * The prefix. Kept here rather than in the header because nothing
+ * outside this function needs to know what it is — a caller wants a
+ * symbol, not a naming convention.
+ */
+#define BOX_SYMBOL_PREFIX "sora_box_"
+
+static void escape_into(buf_t *b, const char *s)
+{
+    for (const char *p = s; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+            || (c >= '0' && c <= '9')) {
+            buf_addch(b, (char)c);
+        } else if (c == '.') {
+            buf_addstr(b, "_dot_");
+        } else if (c == '/') {
+            buf_addstr(b, "_sl_");
+        } else if (c == '-') {
+            buf_addstr(b, "_dsh_");
+        } else if (c == '_') {
+            buf_addstr(b, "_und_");
+        } else {
+            /* Total rather than partial. A filename this project has
+             * never seen must still produce a legal identifier, and
+             * one that produces a *different* identifier from every
+             * other filename. Falling through to "drop it" or "turn it
+             * into an underscore" would be how two files quietly
+             * become one symbol. */
+            buf_addf(b, "_x%02x_", c);
+        }
+    }
+}
+
+char *gt_box_symbol(arena_t *a, const char *file, const char *function)
+{
+    buf_t b;
+    buf_init(&b);
+    buf_addstr(&b, BOX_SYMBOL_PREFIX);
+    escape_into(&b, file);
+    /* The separator, which is the one sequence escaping never
+     * produces: every escape above both begins and ends with a single
+     * underscore around letters, so a doubled underscore can only be
+     * this. */
+    buf_addstr(&b, "__");
+    escape_into(&b, function);
+
+    char *out = arena_strndup(a, b.data ? b.data : "", b.len);
+    buf_free(&b);
+    return out;
+}
+/* }}} */
+
 /* {{{ gt_line_of() */
 int gt_line_of(const char *text, size_t pos)
 {

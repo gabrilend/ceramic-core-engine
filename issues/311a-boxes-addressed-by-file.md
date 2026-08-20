@@ -6,6 +6,70 @@ Everything else in the family is written against both.
 
 ## Current behavior
 
+**The escaping is built and proven; the map-file half waits, and the
+waiting is structural rather than a matter of effort.**
+
+This issue reads as one change and is two. The **symbol scheme** — how
+a box's file and function become one C identifier — is what
+[311b](311b-placement-instead-of-records.md) needs in order to emit a
+placement function per box, and it stands entirely on its own. The
+**map file format** — a station line naming `file:function`, and the
+resolution rules behind it — is a generation-time rule, and the
+generator does not read maps until
+[311d](311d-the-map-becomes-code.md), which waits on the construction
+surface, which waits on 311b. Building the format half now would mean
+putting it in the runtime loader that 311d deletes.
+
+So the order is: the scheme, then placement functions, then the
+construction surface, then the map format arrives with the generator's
+map reader.
+
+### What the scheme turned out to need
+
+**The escape table in this issue was incomplete, and the gap was
+load-bearing.** It transcribed the dot and the underscore so that
+`math.c` and `math_c` could not collapse into one symbol — but it had
+no rule for the **path separator**, while the design leans on paths to
+settle two files sharing a basename. Those two cannot both hold: if a
+symbol comes from the basename alone, two `math.c` files in different
+directories produce one symbol and the linker rejects the build, so a
+path settles nothing.
+
+**Decided: the symbol comes from the full path**, canonicalised before
+use so that a map naming a box briefly and one naming it by path
+produce the *same* symbol rather than two definitions of one function.
+
+Two more characters had to be faced, and this project's own sources
+are why: they are named like `029-demo-boxes.c`, which is a **hyphen**
+and a **leading digit**. So the table gained a row for the hyphen, and
+every symbol carries a fixed prefix — which handles the leading digit
+and keeps generated names clear of anything a box author writes, for
+one decision.
+
+| in a name | in a symbol | why |
+|---|---|---|
+| `.` | `_dot_` | a filename's extension |
+| `/` | `_sl_` | the path, which is what settles a shared basename |
+| `-` | `_dsh_` | this project's own sources |
+| `_` | `_und_` | the escape character, escaping itself |
+| `:` | `__` | the separator between file and function |
+| anything else | `_xNN_` | hex, so no filename can defeat it |
+
+The last row is the one that makes the scheme **total** rather than
+merely adequate for names anybody has thought of. A character with no
+rule would otherwise have to be dropped or flattened, and either is
+how two files quietly become one symbol.
+
+**Proven by property rather than by spelling**, because a bug here
+does not surface here — it surfaces as a duplicate-symbol error
+hundreds of lines away in a generated file, naming a mangled
+identifier rather than the two source files that should have been told
+apart. Forty-eight awkward names, chosen so that every pair collides
+under a naive mangling, produce forty-eight distinct symbols, and
+every one of them is a legal C identifier.
+
+### What the map file still says
+
 A map's station line names a box by a **bare function name**:
 
 ```
@@ -118,13 +182,18 @@ at all. Two mechanisms, two jobs, neither doing the other's badly.
 2. Resolution: exact path match when the name contains a separator,
    otherwise basename search across the known box sources. One match
    resolves; several refuse and name every candidate.
-3. The escaping, as its own small pair of functions with a test that
-   round-trips a list of awkward names — including `math.c`, `math_c`,
-   `math_dot_c`, and a name containing both characters — because a bug
-   here surfaces as a duplicate-symbol error hundreds of lines away.
-4. The collision check run over the whole box source tree rather than
-   only over what a map mentions, so two `math.c` files are caught
-   whether or not anyone has referenced them yet.
+3. **Done.** The escaping, with a test over a list of awkward names —
+   including `math.c`, `math_c`, `math_dot_c`, a name containing both
+   characters, a path, and one of this project's own hyphenated
+   sources — asserting the property that distinct names give distinct
+   legal identifiers, rather than asserting particular spellings.
+4. The collision check over the whole box source tree. **Note what the
+   decision above did to this step**: two files sharing a basename no
+   longer collide at the symbol level, because the symbol carries the
+   path, so this is no longer a build-breaking condition to detect. It
+   becomes what it always should have been — the question resolution
+   asks when a map addresses a basename briefly, and it belongs with
+   the resolution in step 2.
 5. The dump reads each station's name literal and chooses bare-or-path
    by asking whether the bare form resolves uniquely.
 6. A test that a map naming an ambiguous basename refuses and names

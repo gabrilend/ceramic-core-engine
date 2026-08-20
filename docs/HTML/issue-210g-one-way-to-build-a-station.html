@@ -144,6 +144,28 @@
 made a port describable; this makes there be exactly one way to say
 it.</p>
 <h2>Current behavior</h2>
+<p>**Blocked on <a href="issue-311b-placement-instead-of-records.html">311b</a>, and the
+block is step 1.** Everything else in this family is finished; this is
+the one child left, and it cannot be finished first.</p>
+<p>The reason is written into step 1 already but is easy to read past:
+hand placement becoming the primitive means *a generated placement
+function per box*, and that is the generator's work rather than this
+issue's. Until it exists there are still two contracts, and unifying
+them by hand would mean writing a third that the generator is about to
+replace.</p>
+<p><strong>Two of its steps can be taken early and are not, deliberately.</strong> The
+single port-configuration operation and the identical-dumps test both
+stand on placement being one thing; building them against two
+placement paths would mean writing the surface twice, once for each,
+which is the exact duplication this issue exists to remove.</p>
+<p><strong>One step is already done</strong> and was done elsewhere: a station with an
+unconfigured port never becomes ready, and becomes ready the moment
+that port is given a source. The test for it lives with the readiness
+tests, where it was written alongside the <em>none</em> tag.</p>
+<p>So the order for this corner of the project is: boxes addressed by
+file, then placement functions, then this, then
+<a href="issue-212-one-way-to-build-a-program.html">212</a>.</p>
+<h3>What stands today</h3>
 <p>**Two ways exist to create a station, and they can bind different
 things.**</p>
 <p>Placement by name looks the box up in the registry and copies each
@@ -210,8 +232,9 @@ unqualified: a port with no source is an error, full stop.</p>
 4. Runtime editing becomes its second caller.
 5. The configuration-time check for a <em>none</em> port, unqualified — every
    parameter needs a source, with no exemption.
-6. A test that a station with an unconfigured port never becomes
-   ready, and becomes ready the moment that port is given a source.
+6. <strong>Done</strong>, with the readiness tests: a station with an unconfigured
+   port never becomes ready, and becomes ready the moment that port is
+   given a source, with the values waiting at its other ports intact.
 7. A test that a program read from a file and one built by calling the
    configuration surface directly produce identical dumps.</p>
 <h2>Open questions</h2>

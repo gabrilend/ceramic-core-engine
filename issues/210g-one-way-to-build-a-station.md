@@ -6,6 +6,34 @@ it.
 
 ## Current behavior
 
+**Blocked on [311b](311b-placement-instead-of-records.md), and the
+block is step 1.** Everything else in this family is finished; this is
+the one child left, and it cannot be finished first.
+
+The reason is written into step 1 already but is easy to read past:
+hand placement becoming the primitive means *a generated placement
+function per box*, and that is the generator's work rather than this
+issue's. Until it exists there are still two contracts, and unifying
+them by hand would mean writing a third that the generator is about to
+replace.
+
+**Two of its steps can be taken early and are not, deliberately.** The
+single port-configuration operation and the identical-dumps test both
+stand on placement being one thing; building them against two
+placement paths would mean writing the surface twice, once for each,
+which is the exact duplication this issue exists to remove.
+
+**One step is already done** and was done elsewhere: a station with an
+unconfigured port never becomes ready, and becomes ready the moment
+that port is given a source. The test for it lives with the readiness
+tests, where it was written alongside the *none* tag.
+
+So the order for this corner of the project is: boxes addressed by
+file, then placement functions, then this, then
+[212](212-one-way-to-build-a-program.md).
+
+### What stands today
+
 **Two ways exist to create a station, and they can bind different
 things.**
 
@@ -85,8 +113,9 @@ unqualified: a port with no source is an error, full stop.
 4. Runtime editing becomes its second caller.
 5. The configuration-time check for a *none* port, unqualified — every
    parameter needs a source, with no exemption.
-6. A test that a station with an unconfigured port never becomes
-   ready, and becomes ready the moment that port is given a source.
+6. **Done**, with the readiness tests: a station with an unconfigured
+   port never becomes ready, and becomes ready the moment that port is
+   given a source, with the values waiting at its other ports intact.
 7. A test that a program read from a file and one built by calling the
    configuration surface directly produce identical dumps.
 
