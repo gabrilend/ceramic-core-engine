@@ -14,8 +14,10 @@
  * exactly once — the property the claim-under-mutex exists for.
  */
 #include "018-station.h"
+#include "026-registry.h"
 
 #include <pthread.h>
+#include <stdint.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -264,10 +266,181 @@ static void test_unconfigured_port_never_ready(void)
 }
 /* }}} */
 
+
+/* {{{ test_values_survive_a_round_trip_through_static */
+/*
+ * The second half of issue 210f's promise: **conversion destroys
+ * nothing**, in the direction that is easy to get wrong.
+ *
+ * Values are put into a ring port, the port is turned into a static
+ * and back, and those values must still be served. The tempting
+ * implementation frees the slots when a port stops being a buffer —
+ * it looks like tidying up, and the buffer is sized to exactly the
+ * type the port carries so it looks wasteful to keep. What it
+ * actually does is throw away values a producer already handed over,
+ * silently, and the person who converted the port finds out never.
+ *
+ * The station is placed **by name** rather than by hand, because
+ * binding a static needs the port's type from the registry and hand
+ * placement is never given one.
+ *
+ * Port 1 is starved until after the round trip, so nothing can
+ * consume port 0's backlog while it is being carried across.
+ */
+static void test_values_survive_a_round_trip_through_static(void)
+{
+    enum { WAITING = 6 };
+
+    map_t *m = map_create(1);
+    map_place_box(m, 0, "add", STATION_PLAIN);
+
+    map_start(m, 2);
+    pool_submitter_register(m->pool);
+    pool_release(m->pool);
+
+    /* Port 0 fills up. Port 1 is empty, so nothing fires and the
+     * values simply wait. */
+    for (int i = 0; i < WAITING; i++) {
+        int a = 7;
+        map_deliver_value(m, 0, 0, &a);
+    }
+
+    /* Away from a buffer and back. A static needs a value before it
+     * can be one, so port 0 is given a constant first — which is also
+     * the path that used to free the slots. */
+    map_in_port_static_text(m, 0, 0, "1000");
+    map_in_port_convert(m, 0, 0, IN_PORT_RING);
+
+    /* Now let it run. If the round trip lost the backlog, fewer than
+     * WAITING pairs can ever form. */
+    for (int i = 0; i < WAITING; i++) {
+        int b = 3;
+        map_deliver_value(m, 0, 1, &b);
+    }
+
+    pool_submitter_unregister(m->pool);
+    pool_join(m->pool);
+
+    long runs = atomic_load(&map_station(m, 0)->runs);
+    if (runs != WAITING) {
+        fprintf(stderr, "a round trip through static lost values: %ld of %d "
+                        "runs\n", runs, WAITING);
+        exit(1);
+    }
+
+    map_destroy(m);
+    printf("  %d values waited out a round trip through static and were "
+           "all served\n", WAITING);
+}
+/* }}} */
+
+/* {{{ test_cycling_a_tag_under_load */
+/*
+ * A port cycled through all three tags while a station is being fed
+ * throughout, which is the case the mechanism has to survive rather
+ * than merely permit.
+ *
+ * What it watches for is tearing: a readiness walk seeing a port
+ * mid-change, or a claim dispatching on one tag while the storage
+ * belongs to another. Conversion takes the station's mutex and so do
+ * both of those, which is the argument — this is the test that the
+ * argument holds when the two actually interleave, thousands of times.
+ *
+ * The feeder only ever touches port 1. Delivering into the port being
+ * converted is refused outright while it is not a buffer, and a test
+ * that raced against its own abort would be testing the harness.
+ *
+ * What must hold exactly: every run consumed one real value from each
+ * port, so the number of runs can never exceed what was fed. Nothing
+ * is asserted about *how many* runs happen, because that depends on
+ * which tag port 0 happened to be wearing at each moment — and
+ * pinning it down would be asserting a schedule rather than a
+ * property.
+ */
+static _Atomic int cycle_stop;
+static map_t      *cycle_map;
+
+static void *cycle_feeder(void *arg)
+{
+    (void)arg;
+    long fed = 0;
+    pool_submitter_register(cycle_map->pool);
+    while (!atomic_load(&cycle_stop)) {
+        int b = 3;
+        map_deliver_value(cycle_map, 0, 1, &b);
+        fed++;
+    }
+    pool_submitter_unregister(cycle_map->pool);
+    return (void *)(intptr_t)fed;
+}
+
+static void test_cycling_a_tag_under_load(void)
+{
+    enum { ROUNDS = 2000 };
+
+    cycle_map = map_create(1);
+    map_place_box(cycle_map, 0, "add", STATION_PLAIN);
+    /* Port 0 starts as a static so that every tag in the cycle is
+     * reachable from the one before it. */
+    map_in_port_static_text(cycle_map, 0, 0, "7");
+
+    /* The feeder floods port 1 while port 0 spends most of its time
+     * unusable, so port 1 builds exactly the backlog the buffer
+     * report exists to shout about. Saying so first is the difference
+     * between a diagnostic doing its job and a line somebody has to
+     * go and investigate. */
+    printf("  (the growth warning below is what this scene is provoking)\n");
+    fflush(stdout);
+
+    map_start(cycle_map, 3);
+    cycle_stop = 0;
+    pool_submitter_register(cycle_map->pool);
+    pool_release(cycle_map->pool);
+
+    pthread_t feeder;
+    pthread_create(&feeder, NULL, cycle_feeder, NULL);
+
+    for (int i = 0; i < ROUNDS; i++) {
+        map_in_port_convert(cycle_map, 0, 0, IN_PORT_NONE);
+        map_in_port_convert(cycle_map, 0, 0, IN_PORT_RING);
+        map_in_port_convert(cycle_map, 0, 0, IN_PORT_STATIC);
+    }
+
+    atomic_store(&cycle_stop, 1);
+    void *fed_p = NULL;
+    pthread_join(feeder, &fed_p);
+    long fed = (long)(intptr_t)fed_p;
+    pool_submitter_unregister(cycle_map->pool);
+    pool_join(cycle_map->pool);
+
+    long runs = atomic_load(&map_station(cycle_map, 0)->runs);
+    if (runs > fed) {
+        fprintf(stderr, "cycling a tag under load invented values: %ld runs "
+                        "from %ld deliveries\n", runs, fed);
+        exit(1);
+    }
+    /* And it has to have actually run. A station wedged by the
+     * cycling would satisfy the check above trivially, which would
+     * make this a test that passes by doing nothing. */
+    if (runs == 0) {
+        fprintf(stderr, "cycling a tag under load wedged the station: "
+                        "%ld deliveries and not one run\n", fed);
+        exit(1);
+    }
+
+    map_destroy(cycle_map);
+    printf("  a port cycled through three tags %d times under load; "
+           "%ld runs from %ld deliveries, none invented\n",
+           ROUNDS * 3, runs, fed);
+}
+/* }}} */
+
 int main(void)
 {
     test_every_arrival_order();
     test_hammer();
     test_unconfigured_port_never_ready();
+    test_values_survive_a_round_trip_through_static();
+    test_cycling_a_tag_under_load();
     return 0;
 }

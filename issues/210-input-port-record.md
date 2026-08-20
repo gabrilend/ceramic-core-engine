@@ -23,7 +23,7 @@ whole family.
 | [210c — A state on every slot](completed/210c-a-state-on-every-slot.md) | **complete** — the four-state per-slot machine | 210b |
 | [210d — The copies leave the lock](completed/210d-the-copies-leave-the-lock.md) | **complete** — the mutex narrowed to the slot states, the value copies moved outside it | 210c, and its second half needs 210e |
 | [210e — Growth adds a page](completed/210e-growth-adds-a-page.md) | **complete** — a ring buffer that grows by appending, copying nothing | 210d's scan, and it precedes 210d's copies |
-| [210f — Changing what a port is](210f-changing-what-a-port-is.md) | conversion between tags as one operation, slots left alone | 210b |
+| [210f — Changing what a port is](completed/210f-changing-what-a-port-is.md) | **complete** — conversion between tags as one operation, slots left alone | 210b |
 | [210g — One way to build a station](210g-one-way-to-build-a-station.md) | a single construction and configuration surface | 210b, 210f |
 | [210h — Optional parameters](completed/210h-optional-parameters.md) | refused — the record of why a parameter cannot be optional | 210g |
 
@@ -119,11 +119,10 @@ ready slots; every slot carries its own state; growth appends a page
 rather than reallocating; and the station's mutex covers the slot
 states and nothing else, with every value copy happening outside it.
 
-**The concurrency line is finished.** What is left of this family is
-the conversion between tags
-([210f](210f-changing-what-a-port-is.md)) and the construction surface
-([210g](210g-one-way-to-build-a-station.md)), both of which branch off
-the port record rather than off the concurrency work.
+**The concurrency line is finished, and so is the conversion.** What
+is left of this family is one thing: the construction surface
+([210g](210g-one-way-to-build-a-station.md)), which is also what phase
+2's capstone stands on.
 
 **210a is done: the gatherer is gone**, along with the pull module,
 the inline execution of a box during task assembly, the cycle walk,

@@ -282,9 +282,14 @@ the producer alone would have.
 
 **Nothing about the order values leave a port.** A value delivered
 first is not necessarily claimed first. A reader scans for a usable
-slot rather than computing where the oldest one must be, and a claim
-that rolls back releases slots wherever they sit, so gaps open and
-"oldest" stops being cheap to find.
+slot rather than computing where the oldest one must be, and slots are
+released individually wherever they sit, so gaps open and "oldest"
+stops being cheap to find.
+
+*(An earlier draft of this blamed a claim that rolls back. There is no
+roll-back path: the claim checks every port before taking from any of
+them, so a partial claim never exists. The scan is the reason on its
+own.)*
 
 This was true and tested before it was given up. Two things made it
 worth losing. Values reaching one port from two upstream stations were

@@ -213,7 +213,22 @@ typedef struct in_port_page {
 } in_port_page_t;
 
 typedef struct in_port {
-    unsigned char kind;
+    /*
+     * Atomic because a delivery reads it holding no lock while a
+     * conversion may be writing it (issues 210d, 210f). Conversion
+     * takes the station's mutex, so it does not race the readiness
+     * walk or the claim — but the two guard checks at the top of a
+     * delivery run before any lock is taken, and a plain byte read
+     * against a plain byte write is a data race whatever the values
+     * involved.
+     *
+     * The outcome of losing that race is benign, which is why this is
+     * the only thing needed: a value written into a port that has just
+     * become a static lands in slots that exist regardless of the tag,
+     * and waits there until the port is a buffer again. That is the
+     * same promise conversion already makes about values it finds.
+     */
+    _Atomic unsigned char kind;
     int   elem_size;
     /* The pages, oldest first. The first is allocated when the
      * station is placed; growth appends. Never reordered, never
@@ -673,17 +688,17 @@ void map_in_port_start_depth(map_t *m, int station, int port, int slots);
  * conversion after values that arrived during it. Arrival order is
  * not promised (issue 210d), so this costs nothing that was still
  * being offered — but it is a second reason for the same
- * non-guarantee, and rollback is not the only thing that opens gaps.
+ * non-guarantee, and the scan is not the only thing that opens gaps.
  *
- * Becoming a static is refused here and goes through map_in_port_static,
- * which needs an entry number this call has no room for. That is the
- * half of issue 210f blocked on issue 401 — once a static's value
- * lives on the port rather than in a table, what a port needs to
- * become one is a *value*, and this call grows a way to carry it.
+ * Becoming a static **for the first time** is refused here and goes
+ * through map_in_port_static_text, because what a port needs in order
+ * to become a static is a *value*, and this call names only a tag.
+ * Becoming a static **again** is what this does, and it works because
+ * a constant survives being converted away exactly as the slots do.
  *
  * A port that has been a static and is converted away keeps its
  * binding, so a port that goes static, ring, static reads the same
- * entry it read before. That is the same rule as the slots: nothing
+ * value it read before. That is the same rule as the slots: nothing
  * on any path through here is destroyed. It is also what keeps
  * IN_PORT_NONE meaning one thing — "nobody has said yet" — rather than
  * also meaning "somebody said, then said something else."

@@ -30,7 +30,6 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
-<a href="issue-210f-changing-what-a-port-is.html" class="here">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -75,6 +74,7 @@
 <a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
 <a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="done-210f-changing-what-a-port-is.html" class="here">210f — Changing what a port is</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
@@ -144,6 +144,33 @@
 <a href="done-210b-the-port-record.html">210b</a> rather than following the concurrency
 line, and can be built alongside it.</p>
 <h2>Current behavior</h2>
+<p><strong>Done.</strong> The mechanism was already there; what this closes is the two
+tests it owed and one thing the concurrency work quietly changed
+underneath it.</p>
+<p><strong>The tests.</strong> A port now has values put into it, is turned into a
+static and back, and every one of those values is still served — the
+round trip that a tidy-looking implementation would have thrown away
+silently. And a port is cycled through all three tags six thousand
+times while a feeder floods its sibling throughout, asserting both
+that no run was invented from values nobody delivered and that the
+station actually ran, since a wedged station would satisfy the first
+check by doing nothing.</p>
+<p><strong>What changed underneath.</strong> The tag is read by a delivery *before any
+lock is taken* — the two guard checks that refuse a delivery into an
+unconfigured or non-buffer port — while conversion writes it under the
+station's mutex. That was a plain byte read against a plain byte
+write, which is a data race whatever the values involved, and it
+predates the concurrency work rather than being caused by it: those
+guards were always outside the lock. The tag is now atomic, which
+costs nothing measurable and removes the undefined behaviour.</p>
+<p>**The outcome of losing that race is benign, and that is the reason
+nothing more is needed.** A value written into a port that has just
+become a static lands in slots that exist regardless of the tag, and
+waits there until the port is a buffer again — which is the same
+promise conversion already makes about values it finds. Refusing the
+delivery would have been the wrong answer for the same reason
+destroying the values would be.</p>
+<h3>What stood before</h3>
 <p><strong>Conversion no longer destroys anything, and half of this is built.</strong></p>
 <p>The destruction is gone from every path. Binding a static used to free
 the slot array and null the pointer; it writes the tag and nothing
@@ -205,14 +232,18 @@ destroyed.</p>
    is becoming, replacing both existing paths.
 2. Leave the slots alone on every path through it. This is the whole
    change and it is mostly deletions.
-3. A test that a port cycles through all three tags while the program
-   runs, with a station upstream delivering throughout, and nothing
-   tears.
-4. A test that values waiting in a ring port when it becomes a static
+3. <strong>Done.</strong> A port cycles through all three tags while a feeder
+   delivers throughout, asserting both that nothing was invented and
+   that the station was not wedged.
+4. <strong>Done.</strong> Values waiting in a ring port when it becomes a static
    are still there, and still delivered, when it becomes a ring again.
-5. Note the second source of out-of-order delivery in
-   <a href="doc-058-guarantees.html">058</a> beside the first, so the
-   non-guarantee lists both reasons rather than one.</p>
+5. <strong>Done.</strong> Both reasons for out-of-order delivery are listed in
+   <a href="doc-058-guarantees.html">058</a>. While correcting it, the first
+   reason turned out to name a roll-back path that no longer exists —
+   the claim checks every port before taking from any of them, so a
+   partial claim cannot happen. The scan is the reason on its own.
+6. <strong>Done, and not foreseen here.</strong> The tag became atomic, because the
+   guard checks at the top of a delivery read it with no lock held.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>

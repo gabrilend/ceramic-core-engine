@@ -30,7 +30,6 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
-<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -75,6 +74,7 @@
 <a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
 <a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
@@ -378,9 +378,13 @@ error — but a fast writer against a deep queue empties it faster than
 the producer alone would have.</p>
 <p><strong>Nothing about the order values leave a port.</strong> A value delivered
 first is not necessarily claimed first. A reader scans for a usable
-slot rather than computing where the oldest one must be, and a claim
-that rolls back releases slots wherever they sit, so gaps open and
-"oldest" stops being cheap to find.</p>
+slot rather than computing where the oldest one must be, and slots are
+released individually wherever they sit, so gaps open and "oldest"
+stops being cheap to find.</p>
+<p>*(An earlier draft of this blamed a claim that rolls back. There is no
+roll-back path: the claim checks every port before taking from any of
+them, so a partial claim never exists. The scan is the reason on its
+own.)*</p>
 <p>This was true and tested before it was given up. Two things made it
 worth losing. Values reaching one port from two upstream stations were
 already in whatever order the threads happened to produce them, so the

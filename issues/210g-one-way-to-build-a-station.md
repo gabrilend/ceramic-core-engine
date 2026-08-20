@@ -124,7 +124,7 @@ unqualified: a port with no source is an error, full stop.
 - [210 — What an input port is](210-input-port-record.md), the parent
 - [210b — The port record](completed/210b-the-port-record.md), whose *none* tag
   this checks for
-- [210f — Changing what a port is](210f-changing-what-a-port-is.md),
+- [210f — Changing what a port is](completed/210f-changing-what-a-port-is.md),
   whose conversion becomes a case of this surface
 - [210h — Optional parameters](completed/210h-optional-parameters.md),
   refused, which is what leaves the check added here unqualified

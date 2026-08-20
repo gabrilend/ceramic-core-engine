@@ -30,7 +30,6 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
-<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -75,6 +74,7 @@
 <a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
 <a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
@@ -225,7 +225,7 @@ being a phase.</p>
 <p><strong>Both storages live on the port; the tag says which is in effect.</strong>
 Ring slots and a static's bytes both have room, exactly one is
 current, and the other sits idle. This is the whole trick that makes
-<a href="issue-210f-changing-what-a-port-is.html">210f</a> a field write.</p>
+<a href="done-210f-changing-what-a-port-is.html">210f</a> a field write.</p>
 <p>**Slots are allocated when the station is instantiated, for every port
 regardless of what that port is currently for.** The element size is
 known from the registry at placement, so the space is exactly right,
@@ -351,7 +351,7 @@ because they say which pieces are built and which are not.</p>
 <li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the parent</li>
 <li><a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>,</li>
 <p>  which leaves the record with one fewer kind to carry</p>
-<li><a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>,</li>
+<li><a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>,</li>
 <p>  which is only cheap because of the standing buffer decided here</p>
 <li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
 <p>  which needs the <em>none</em> tag to assemble a program from nothing</p>

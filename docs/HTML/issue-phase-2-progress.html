@@ -30,7 +30,6 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
-<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -75,6 +74,7 @@
 <a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
 <a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
@@ -168,7 +168,7 @@ its own.</p>
 <tr><td><a href="done-210c-a-state-on-every-slot.html">210c — a state on every slot</a></td><td><strong>complete</strong></td><td>Four states on every slot, and only one of them a compare-and-swap once it was clear which transitions have a single possible mover. Built first and exercised while the old locking still made a bug in it harmless, which is why nothing tore when the lock came off.</td></tr>
 <tr><td><a href="done-210d-the-copies-leave-the-lock.html">210d — the copies leave the lock</a></td><td><strong>complete</strong></td><td>The mutex covers the slot states and nothing else; a delivering writer takes no lock at all; the copies happen either side of the hold, protected by the fact that a reserved or claimed slot belongs to exactly one worker. Check-all-then-flip-all, so no roll-back path exists. Large values fell from about 1180 ns a delivery to about 620.</td></tr>
 <tr><td><a href="done-210e-growth-adds-a-page.html">210e — growth adds a page</a></td><td><strong>complete</strong></td><td>Append rather than copy, in equal-sized pages, so no slot that already exists ever moves. Taken <em>before</em> 210d's copies rather than after, because that is the order with no window in it — the dependency turned out to run between two halves of 210d rather than between two issues.</td></tr>
-<tr><td>210f — changing what a port is</td><td>open</td><td>A field write, with waiting values left where they sit rather than freed.</td></tr>
+<tr><td><a href="done-210f-changing-what-a-port-is.html">210f — changing what a port is</a></td><td><strong>complete</strong></td><td>A field write, with waiting values left where they sit rather than freed — proven by a round trip through static that serves every value it was carrying. The tag became atomic, because a delivery reads it before taking any lock.</td></tr>
 <tr><td>210g — one way to build a station</td><td>open</td><td>One configuration surface; a hand-built program and a loaded one dump identically.</td></tr>
 <tr><td><a href="done-210h-optional-parameters.html">210h — optional parameters</a></td><td>refused</td><td>Refused: it would have been the only exemption to the rule that a station runs when every slot holds a value. The record of why, and where the case it reached for actually belongs.</td></tr>
 <tr><td><a href="done-211-growing-the-station-table.html">211 — growing the station table</a></td><td><strong>complete</strong></td><td>Shelves: grow by adding one, so nothing already placed ever moves — mutex included, which is the whole reason. A removed place is reused before the table grows, and reading a map file is now that same growth, one station per line.</td></tr>

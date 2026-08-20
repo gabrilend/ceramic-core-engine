@@ -30,7 +30,6 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html" class="here">210 — What an input port is</a>
-<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -75,6 +74,7 @@
 <a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
 <a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
@@ -160,7 +160,7 @@ whole family.</p>
 <tr><td><a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a></td><td><strong>complete</strong> — the four-state per-slot machine</td><td>210b</td></tr>
 <tr><td><a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a></td><td><strong>complete</strong> — the mutex narrowed to the slot states, the value copies moved outside it</td><td>210c, and its second half needs 210e</td></tr>
 <tr><td><a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a></td><td><strong>complete</strong> — a ring buffer that grows by appending, copying nothing</td><td>210d's scan, and it precedes 210d's copies</td></tr>
-<tr><td><a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a></td><td>conversion between tags as one operation, slots left alone</td><td>210b</td></tr>
+<tr><td><a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a></td><td><strong>complete</strong> — conversion between tags as one operation, slots left alone</td><td>210b</td></tr>
 <tr><td><a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a></td><td>a single construction and configuration surface</td><td>210b, 210f</td></tr>
 <tr><td><a href="done-210h-optional-parameters.html">210h — Optional parameters</a></td><td>refused — the record of why a parameter cannot be optional</td><td>210g</td></tr>
 </table>
@@ -240,11 +240,10 @@ constant's own bytes for a static.</p>
 ready slots; every slot carries its own state; growth appends a page
 rather than reallocating; and the station's mutex covers the slot
 states and nothing else, with every value copy happening outside it.</p>
-<p><strong>The concurrency line is finished.</strong> What is left of this family is
-the conversion between tags
-(<a href="issue-210f-changing-what-a-port-is.html">210f</a>) and the construction surface
-(<a href="issue-210g-one-way-to-build-a-station.html">210g</a>), both of which branch off
-the port record rather than off the concurrency work.</p>
+<p><strong>The concurrency line is finished, and so is the conversion.</strong> What
+is left of this family is one thing: the construction surface
+(<a href="issue-210g-one-way-to-build-a-station.html">210g</a>), which is also what phase
+2's capstone stands on.</p>
 <p><strong>210a is done: the gatherer is gone</strong>, along with the pull module,
 the inline execution of a box during task assembly, the cycle walk,
 the runtime gather-repoint operation, the gather timing charged to

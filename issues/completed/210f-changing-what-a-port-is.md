@@ -6,6 +6,38 @@ line, and can be built alongside it.
 
 ## Current behavior
 
+**Done.** The mechanism was already there; what this closes is the two
+tests it owed and one thing the concurrency work quietly changed
+underneath it.
+
+**The tests.** A port now has values put into it, is turned into a
+static and back, and every one of those values is still served — the
+round trip that a tidy-looking implementation would have thrown away
+silently. And a port is cycled through all three tags six thousand
+times while a feeder floods its sibling throughout, asserting both
+that no run was invented from values nobody delivered and that the
+station actually ran, since a wedged station would satisfy the first
+check by doing nothing.
+
+**What changed underneath.** The tag is read by a delivery *before any
+lock is taken* — the two guard checks that refuse a delivery into an
+unconfigured or non-buffer port — while conversion writes it under the
+station's mutex. That was a plain byte read against a plain byte
+write, which is a data race whatever the values involved, and it
+predates the concurrency work rather than being caused by it: those
+guards were always outside the lock. The tag is now atomic, which
+costs nothing measurable and removes the undefined behaviour.
+
+**The outcome of losing that race is benign, and that is the reason
+nothing more is needed.** A value written into a port that has just
+become a static lands in slots that exist regardless of the tag, and
+waits there until the port is a buffer again — which is the same
+promise conversion already makes about values it finds. Refusing the
+delivery would have been the wrong answer for the same reason
+destroying the values would be.
+
+### What stood before
+
 **Conversion no longer destroys anything, and half of this is built.**
 
 The destruction is gone from every path. Binding a static used to free
@@ -80,14 +112,18 @@ destroyed.
    is becoming, replacing both existing paths.
 2. Leave the slots alone on every path through it. This is the whole
    change and it is mostly deletions.
-3. A test that a port cycles through all three tags while the program
-   runs, with a station upstream delivering throughout, and nothing
-   tears.
-4. A test that values waiting in a ring port when it becomes a static
+3. **Done.** A port cycles through all three tags while a feeder
+   delivers throughout, asserting both that nothing was invented and
+   that the station was not wedged.
+4. **Done.** Values waiting in a ring port when it becomes a static
    are still there, and still delivered, when it becomes a ring again.
-5. Note the second source of out-of-order delivery in
-   [058](../docs/058-guarantees.md) beside the first, so the
-   non-guarantee lists both reasons rather than one.
+5. **Done.** Both reasons for out-of-order delivery are listed in
+   [058](../docs/058-guarantees.md). While correcting it, the first
+   reason turned out to name a roll-back path that no longer exists —
+   the claim checks every port before taking from any of them, so a
+   partial claim cannot happen. The scan is the reason on its own.
+6. **Done, and not foreseen here.** The tag became atomic, because the
+   guard checks at the top of a delivery read it with no lock held.
 
 ## Open questions
 
