@@ -78,8 +78,8 @@ void map_dump(map_t *m, FILE *out)
         fprintf(out, "%s %c   # station %d\n",
                 registry_box_name_for_shim(s->call), kind_letter(s->kind), i);
 
-        for (int j = 0; j < s->n_slots; j++) {
-            slot_t *sl = &s->slots[j];
+        for (int j = 0; j < s->n_in_ports; j++) {
+            in_port_t *sl = &s->in_ports[j];
 
             /*
              * A starting depth, written only when it differs from the
@@ -91,11 +91,11 @@ void map_dump(map_t *m, FILE *out)
              * runs to the end of the line, so nothing can follow it.
              */
             char depth[32] = "";
-            if (sl->capacity != SLOT_DEFAULT_CAPACITY)
+            if (sl->capacity != IN_PORT_DEFAULT_CAPACITY)
                 snprintf(depth, sizeof depth, "x%d ", sl->capacity);
 
             switch (sl->kind) {
-            case SLOT_STATIC: {
+            case IN_PORT_STATIC: {
                 /* The value itself, spoken from its bytes rather than
                  * echoed from remembered text (issue 401) — so a
                  * constant a runtime write changed dumps as what it
@@ -106,20 +106,20 @@ void map_dump(map_t *m, FILE *out)
                  * a struct constant has no useful upper bound and a
                  * fixed buffer would quietly truncate exactly the
                  * values most worth reading. */
-                int wanted = slot_constant_text(sl, NULL, 0);
+                int wanted = in_port_constant_text(sl, NULL, 0);
                 char *text = malloc((size_t)wanted + 1);
                 if (!text) {
                     fprintf(stderr, "dump: out of memory writing a constant\n");
                     abort();
                 }
-                slot_constant_text(sl, text, wanted + 1);
+                in_port_constant_text(sl, text, wanted + 1);
                 fprintf(out, "  in %d %s= %s   # %s, %d bytes\n", j, depth,
                         text, sl->type_name ? sl->type_name : "?",
                         sl->elem_size);
                 free(text);
                 break;
             }
-            case SLOT_RING:
+            case IN_PORT_RING:
                 /* The default source; the format writes only
                  * exceptions, but the derived facts still deserve
                  * saying — and a non-default depth is an exception, so
@@ -130,11 +130,11 @@ void map_dump(map_t *m, FILE *out)
                             sl->elem_size);
                 else
                     fprintf(out,
-                            "  # slot %d: buffer, %s, %d bytes, %d cells\n",
+                            "  # port %d: buffer, %s, %d bytes, %d slots\n",
                             j, sl->type_name ? sl->type_name : "?",
                             sl->elem_size, sl->capacity);
                 break;
-            case SLOT_NONE:
+            case IN_PORT_NONE:
                 /*
                  * A port with no source at all, written as a bare dash
                  * (issue 210b). It is a state and not a value, so the
@@ -157,13 +157,13 @@ void map_dump(map_t *m, FILE *out)
          * drawn, so dump -> load -> dump produces the same text
          * without anybody arranging it (issue 214). Nothing in the
          * running engine reads that order or means anything by it. */
-        int port_index = 0;
-        for (port_t *p = s->ports; p; p = p->next, port_index++) {
-            dest_set_t *set = port_dests(p);
+        int out_port_index = 0;
+        for (out_port_t *p = s->out_ports; p; p = p->next, out_port_index++) {
+            dest_set_t *set = out_port_dests(p);
             for (int di = 0; set && di < set->n; di++)
-                fprintf(out, "  out %d - %s.%d\n", port_index,
+                fprintf(out, "  out %d - %s.%d\n", out_port_index,
                         m->station_names[set->items[di].station],
-                        set->items[di].slot);
+                        set->items[di].port);
         }
     }
 }

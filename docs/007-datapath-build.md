@@ -120,8 +120,8 @@ constant the compiler folded:
 static void place__math_dot_c__add(station_t *s) {
     s->box_name = "math.c:add";      /* a literal, for the dump */
     s->call     = add__call;
-    s->slots[0].elem_size = sizeof(int);
-    s->slots[1].elem_size = sizeof(int);
+    s->ports[0].elem_size = sizeof(int);
+    s->ports[1].elem_size = sizeof(int);
     s->out_size = sizeof(int);
     s->compare  = int__compare_g;
 }
@@ -172,7 +172,7 @@ one that was wrong.
 Naming the *file* beside the function is provenance, not a type
 declaration, so this still holds.
 
-The same numbers size every ring buffer cell, so a port's cells are
+The same numbers size every ring buffer slot, so a port's slots are
 exactly `sizeof` the parameter they feed and a write is a `memcpy` with
 no allocation.
 
@@ -280,7 +280,7 @@ last place that trace still exists.
 
 ## Related
 
-- [002 — Stations and slots](002-stations-and-slots.md), which stores the shim pointer
+- [002 — Stations and ports](002-stations-and-ports.md), which stores the shim pointer
 - [008 — Map file format](008-map-file-format.md), the other half
 - [009 — Loading](009-datapath-load.md), which describes a runtime parser
   that this replaces with generated code

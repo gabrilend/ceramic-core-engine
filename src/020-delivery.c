@@ -61,18 +61,18 @@ static void die(const char *what, int station)
 /* }}} */
 
 /* ------------------------------------------------------------------ */
-/* Slot motion (issues 202, 203). Callers hold the station's mutex.   */
+/* Port motion (issues 202, 203). Callers hold the station's mutex.   */
 /* ------------------------------------------------------------------ */
 
-/* {{{ slot_scan() */
+/* {{{ in_port_scan() */
 /*
  * The scan (issue 210d). Start where the hint says, sweep forward,
- * wrap, stop where you started; take the first cell that will move
+ * wrap, stop where you started; take the first slot that will move
  * from `from` to `to`, and leave the hint pointing just past it.
- * Returns the cell's index, or -1 for a sweep that found nothing.
+ * Returns the slot's index, or -1 for a sweep that found nothing.
  *
  * **The hint is read once**, and that is what bounds the work: the
- * sweep visits at most every cell the port has, exactly one time
+ * sweep visits at most every slot the port has, exactly one time
  * each, and then gives up. Re-reading a hint that other workers keep
  * pushing forward would let a reader chase it, and a scan that can be
  * outrun is a scan with no bound.
@@ -80,7 +80,7 @@ static void die(const char *what, int station)
  * **Other workers move the hint while a sweep is in progress, and
  * that is fine.** It is a hint, so a sweeper that started from a value
  * now stale is not wrong, only slightly less lucky — it pays a few
- * extra cells of walking. Nothing about correctness rests on the
+ * extra slots of walking. Nothing about correctness rests on the
  * number being current; what rests on it is only how quickly a worker
  * finds work.
  *
@@ -91,11 +91,11 @@ static void die(const char *what, int station)
  * that would be wrong.
  *
  * One function serves both directions because a reader looking for a
- * ready cell and a writer looking for an empty one are the same
+ * ready slot and a writer looking for an empty one are the same
  * search with different names, and the ways they differ — which
  * transition, which hint — are arguments rather than logic.
  */
-static int slot_scan(slot_t *sl, int *hint, int from, int to)
+static int in_port_scan(in_port_t *sl, int *hint, int from, int to)
 {
     int start = *hint;
     if (start < 0 || start >= sl->capacity)
@@ -105,7 +105,7 @@ static int slot_scan(slot_t *sl, int *hint, int from, int to)
         int c = start + i;
         if (c >= sl->capacity)
             c -= sl->capacity;
-        if (slot_cell_move(sl, c, from, to)) {
+        if (in_port_slot_move(sl, c, from, to)) {
             int next = c + 1;
             *hint = next >= sl->capacity ? 0 : next;
             return c;
@@ -115,20 +115,20 @@ static int slot_scan(slot_t *sl, int *hint, int from, int to)
 }
 /* }}} */
 
-/* {{{ slot_grow_locked() */
+/* {{{ in_port_grow_locked() */
 /*
- * Double the cells (issue 203). Only the storage the slot points at
- * is reallocated — never the slot, never the station — so every wire
+ * Double the slots (issue 203). Only the storage the port points at
+ * is reallocated — never the port, never the station — so every wire
  * and every in-flight value is untouched.
  */
-static void slot_grow_locked(slot_t *sl)
+static void in_port_grow_locked(in_port_t *sl)
 {
     int new_capacity = sl->capacity * 2;
-    /* Zeroed, so every cell past the ones carried over is empty
+    /* Zeroed, so every slot past the ones carried over is empty
      * (issue 210c). The carried-over ones are published ready below. */
     unsigned char *fresh = calloc((size_t)new_capacity, (size_t)sl->stride);
     if (!fresh) {
-        fprintf(stderr, "delivery: ring buffer growth to %d cells failed\n",
+        fprintf(stderr, "delivery: ring buffer growth to %d slots failed\n",
                 new_capacity);
         abort();
     }
@@ -136,15 +136,15 @@ static void slot_grow_locked(slot_t *sl)
     /* Value by value rather than in one or two block copies, and each
      * one taken out of the old array before it is put into the new.
      *
-     * The old cells carry their states interleaved with their bytes,
+     * The old slots carry their states interleaved with their bytes,
      * and the states are not what should be carried across — the
      * fresh run is being *built* rather than moved, so each surviving
-     * value is written into an empty cell and published as ready,
+     * value is written into an empty slot and published as ready,
      * exactly as an ordinary arrival would be. Copying the bytes
      * wholesale would bring the old states with them.
      *
-     * Claiming each cell on the way out is what identifies which ones
-     * held a value: only a ready cell will move, so the walk finds
+     * Claiming each slot on the way out is what identifies which ones
+     * held a value: only a ready slot will move, so the walk finds
      * every value and nothing else. It also means the old array is
      * left correctly emptied rather than merely abandoned, which
      * costs nothing here and would be a real bug if this ever ran
@@ -156,16 +156,16 @@ static void slot_grow_locked(slot_t *sl)
      */
     int placed = 0;
     for (int c = 0; c < sl->capacity; c++) {
-        if (!slot_cell_move(sl, c, CELL_READY, CELL_CLAIMED))
+        if (!in_port_slot_move(sl, c, SLOT_READY, SLOT_CLAIMED))
             continue;
         unsigned char *dst = fresh + (size_t)placed * (size_t)sl->stride;
-        memcpy(dst, slot_cell(sl, c), (size_t)sl->elem_size);
-        dst[sl->elem_size] = CELL_READY;
+        memcpy(dst, in_port_slot(sl, c), (size_t)sl->elem_size);
+        dst[sl->elem_size] = SLOT_READY;
         placed++;
     }
     if (placed != sl->held) {
         fprintf(stderr, "delivery: growth found %d values in a port holding "
-                        "%d — the count and the cells disagree\n",
+                        "%d — the count and the slots disagree\n",
                 placed, (int)sl->held);
         abort();
     }
@@ -183,23 +183,23 @@ static void slot_grow_locked(slot_t *sl)
 }
 /* }}} */
 
-/* {{{ slot_write_locked() */
-static void slot_write_locked(slot_t *sl, const void *value)
+/* {{{ in_port_write_locked() */
+static void in_port_write_locked(in_port_t *sl, const void *value)
 {
     /* Look for somewhere to put it, and grow only if there is
      * genuinely nowhere (issue 210d). This used to grow when the tail
      * was one short of the head — a test on indices, which had to
-     * leave a cell spare so that the two meeting could mean empty
-     * rather than full. Asking the cells directly needs no spare and
+     * leave a slot spare so that the two meeting could mean empty
+     * rather than full. Asking the slots directly needs no spare and
      * no arithmetic: a full buffer is one where nothing answers.
      */
-    int c = slot_scan(sl, &sl->write_hint, CELL_EMPTY, CELL_RESERVED);
+    int c = in_port_scan(sl, &sl->write_hint, SLOT_EMPTY, SLOT_RESERVED);
     if (c < 0) {
-        slot_grow_locked(sl);
-        c = slot_scan(sl, &sl->write_hint, CELL_EMPTY, CELL_RESERVED);
+        in_port_grow_locked(sl);
+        c = in_port_scan(sl, &sl->write_hint, SLOT_EMPTY, SLOT_RESERVED);
         if (c < 0) {
-            fprintf(stderr, "delivery: a port with no free cell immediately "
-                            "after growing to %d cells\n", sl->capacity);
+            fprintf(stderr, "delivery: a port with no free slot immediately "
+                            "after growing to %d slots\n", sl->capacity);
             abort();
         }
     }
@@ -210,13 +210,13 @@ static void slot_write_locked(slot_t *sl, const void *value)
      * means a bug here shows up as a refused transition rather than
      * as a torn value.
      *
-     * The scan already won this cell, so publishing it cannot fail
-     * for any reason but somebody else having touched a cell that was
+     * The scan already won this slot, so publishing it cannot fail
+     * for any reason but somebody else having touched a slot that was
      * this thread's alone — an engine bug, and worth stopping for
      * rather than papering over. */
-    memcpy(slot_cell(sl, c), value, (size_t)sl->elem_size);
-    if (!slot_cell_move(sl, c, CELL_RESERVED, CELL_READY)) {
-        fprintf(stderr, "delivery: publishing a cell this thread had "
+    memcpy(in_port_slot(sl, c), value, (size_t)sl->elem_size);
+    if (!in_port_slot_move(sl, c, SLOT_RESERVED, SLOT_READY)) {
+        fprintf(stderr, "delivery: publishing a slot this thread had "
                         "reserved, and somebody else had moved it\n");
         abort();
     }
@@ -227,28 +227,28 @@ static void slot_write_locked(slot_t *sl, const void *value)
 }
 /* }}} */
 
-/* {{{ slot_pop_locked() */
+/* {{{ in_port_pop_locked() */
 /*
- * The mirror of the write: find a ready cell, copy out, release it.
+ * The mirror of the write: find a ready slot, copy out, release it.
  * Returns whether it got one — which under the mutex it always will,
  * because the readiness walk asked first, but which becomes a real
  * answer the moment the lock comes off and the claim walk has to be
  * able to roll back.
  *
- * The reader is finished with the cell the moment the copy lands in
+ * The reader is finished with the slot the moment the copy lands in
  * the caller's buffer — the box does not run until a worker picks the
- * task up later, reading from the task and holding no cell at all.
+ * task up later, reading from the task and holding no slot at all.
  * That is why nothing that can die is ever inside this window.
  */
-static int slot_pop_locked(slot_t *sl, void *into)
+static int in_port_pop_locked(in_port_t *sl, void *into)
 {
-    int c = slot_scan(sl, &sl->read_hint, CELL_READY, CELL_CLAIMED);
+    int c = in_port_scan(sl, &sl->read_hint, SLOT_READY, SLOT_CLAIMED);
     if (c < 0)
         return 0;
 
-    memcpy(into, slot_cell(sl, c), (size_t)sl->elem_size);
-    if (!slot_cell_move(sl, c, CELL_CLAIMED, CELL_EMPTY)) {
-        fprintf(stderr, "delivery: releasing a cell this thread had claimed, "
+    memcpy(into, in_port_slot(sl, c), (size_t)sl->elem_size);
+    if (!in_port_slot_move(sl, c, SLOT_CLAIMED, SLOT_EMPTY)) {
+        fprintf(stderr, "delivery: releasing a slot this thread had claimed, "
                         "and somebody else had moved it\n");
         abort();
     }
@@ -259,13 +259,13 @@ static int slot_pop_locked(slot_t *sl, void *into)
 
 /* ------------------------------------------------------------------ */
 /* The readiness dispatch (issue 204). Two tables, indexed by the     */
-/* slot's kind: "does it hold a value?" and "claim one". Another      */
-/* slot kind is a new row in each, never a new branch in two          */
+/* port's kind: "does it hold a value?" and "claim one". Another      */
+/* port kind is a new row in each, never a new branch in two          */
 /* functions that must be kept in agreement.                          */
 /* ------------------------------------------------------------------ */
 
 /* {{{ filled: ring / static */
-static int ring_filled(const slot_t *sl)
+static int ring_filled(const in_port_t *sl)
 {
     /* A maintained count rather than two indices differing. The
      * indices stopped being able to answer this when values began
@@ -275,14 +275,14 @@ static int ring_filled(const slot_t *sl)
     return sl->held > 0;
 }
 
-static int static_filled(const slot_t *sl)
+static int static_filled(const in_port_t *sl)
 {
     /* A static's value is simply always there (issue 401). */
     (void)sl;
     return 1;
 }
 
-static int none_filled(const slot_t *sl)
+static int none_filled(const in_port_t *sl)
 {
     /* Nobody has said where this port's value comes from, so there is
      * no value and there is no prospect of one (issue 210b). This is
@@ -294,10 +294,10 @@ static int none_filled(const slot_t *sl)
     return 0;
 }
 
-static int (*const slot_filled[SLOT_KIND_COUNT])(const slot_t *) = {
-    [SLOT_RING]   = ring_filled,
-    [SLOT_STATIC] = static_filled,
-    [SLOT_NONE]   = none_filled,
+static int (*const in_port_filled[IN_PORT_KIND_COUNT])(const in_port_t *) = {
+    [IN_PORT_RING]   = ring_filled,
+    [IN_PORT_STATIC] = static_filled,
+    [IN_PORT_NONE]   = none_filled,
 };
 /* }}} */
 
@@ -315,22 +315,22 @@ static int (*const slot_filled[SLOT_KIND_COUNT])(const slot_t *) = {
  * hand the hot path to whoever wrote the slowest box. Nothing is
  * gathered now (issue 210), so what remains is only lock ordering.
  */
-static void ring_claim(slot_t *sl, void *into)
+static void ring_claim(in_port_t *sl, void *into)
 {
     /* Under the mutex the readiness walk has already established that
      * this port holds something and nobody can have taken it since,
      * so a scan that comes back empty-handed means the count and the
-     * cells disagree. That stops being an engine bug and becomes an
+     * slots disagree. That stops being an engine bug and becomes an
      * ordinary lost race when the lock comes off, at which point this
      * row grows the roll-back that issue 210d designs. */
-    if (!slot_pop_locked(sl, into)) {
+    if (!in_port_pop_locked(sl, into)) {
         fprintf(stderr, "delivery: a port that answered ready had no ready "
-                        "cell when asked for one\n");
+                        "slot when asked for one\n");
         abort();
     }
 }
 
-static void static_claim_locked(slot_t *sl, void *into)
+static void static_claim_locked(in_port_t *sl, void *into)
 {
     /* A copy, under the station's mutex, beside the ring pops (issue
      * 401). It used to be resolved later, during task construction and
@@ -351,7 +351,7 @@ static void static_claim_locked(slot_t *sl, void *into)
     memcpy(into, sl->constant, (size_t)sl->elem_size);
 }
 
-static void none_claim(slot_t *sl, void *into)
+static void none_claim(in_port_t *sl, void *into)
 {
     /* Unreachable, and saying so out loud is the point. The walk above
      * this one asks every port whether it is filled before it claims
@@ -373,10 +373,11 @@ static void none_claim(slot_t *sl, void *into)
  * that a reader had to already know the meaning of. The decision it
  * encoded is gone with the statics table, so the hole is gone with it.
  */
-static void (*const slot_claim_locked[SLOT_KIND_COUNT])(slot_t *, void *) = {
-    [SLOT_RING]   = ring_claim,
-    [SLOT_STATIC] = static_claim_locked,
-    [SLOT_NONE]   = none_claim,
+static void (*const in_port_claim_locked[IN_PORT_KIND_COUNT])
+                   (in_port_t *, void *) = {
+    [IN_PORT_RING]   = ring_claim,
+    [IN_PORT_STATIC] = static_claim_locked,
+    [IN_PORT_NONE]   = none_claim,
 };
 /* }}} */
 
@@ -388,36 +389,36 @@ static void (*const slot_claim_locked[SLOT_KIND_COUNT])(slot_t *, void *) = {
 static int station_input_bytes(const station_t *s)
 {
     int total = 0;
-    for (int i = 0; i < s->n_slots; i++)
-        total += s->slots[i].elem_size;
+    for (int i = 0; i < s->n_in_ports; i++)
+        total += s->in_ports[i].elem_size;
     return total;
 }
 /* }}} */
 
 /* {{{ station_ready_and_claim_locked() */
 /*
- * The one rule made real: walk every slot; if any is empty, nothing
+ * The one rule made real: walk every port; if any is empty, nothing
  * happens and the value just written waits for its siblings. If all
- * are full, claim one value from each ring slot into the caller's
+ * are full, claim one value from each ring port into the caller's
  * buffer — copied out and the head advanced, so no other thread can
  * claim the same ones. Returns whether a task became due.
  */
 static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed)
 {
-    for (int i = 0; i < s->n_slots; i++) {
-        slot_t *sl = &s->slots[i];
-        if (!slot_filled[sl->kind](sl))
+    for (int i = 0; i < s->n_in_ports; i++) {
+        in_port_t *sl = &s->in_ports[i];
+        if (!in_port_filled[sl->kind](sl))
             return 0;
     }
 
     int offset = 0;
-    for (int i = 0; i < s->n_slots; i++) {
-        slot_t *sl = &s->slots[i];
+    for (int i = 0; i < s->n_in_ports; i++) {
+        in_port_t *sl = &s->in_ports[i];
         /* Every kind, unconditionally. The caller used to test the
          * function pointer here because the static row was null; there
          * is no null now, so the dispatch is a call rather than a call
          * guarded by a question about the table's own shape. */
-        slot_claim_locked[sl->kind](sl, claimed + offset);
+        in_port_claim_locked[sl->kind](sl, claimed + offset);
         offset += sl->elem_size;
     }
     return 1;
@@ -445,7 +446,7 @@ task_t *task_build(map_t *m, int station_index,
 
     int in_bytes = station_input_bytes(s);
     size_t total = sizeof(task_t)
-                 + (size_t)s->n_slots * sizeof(void *)
+                 + (size_t)s->n_in_ports * sizeof(void *)
                  + (size_t)in_bytes
                  + (size_t)s->out_size;
 
@@ -456,7 +457,7 @@ task_t *task_build(map_t *m, int station_index,
     t->call = s->call;
     t->station = station_index;
     t->port = port;
-    t->n_in = s->n_slots;
+    t->n_in = s->n_in_ports;
     /* Zero rather than left over: with timing compiled out nothing
      * ever writes it, and the delivery walk adds it to the station
      * unconditionally. */
@@ -466,7 +467,7 @@ task_t *task_build(map_t *m, int station_index,
      * bytes after it; the output after those. One free() takes the
      * whole thing back. */
     t->in = (void **)(t + 1);
-    unsigned char *data = (unsigned char *)(t->in + s->n_slots);
+    unsigned char *data = (unsigned char *)(t->in + s->n_in_ports);
 
     /*
      * Every value was claimed under the station's mutex before this
@@ -479,8 +480,8 @@ task_t *task_build(map_t *m, int station_index,
      * at all, which the loop below then does not enter.
      */
     int offset = 0;
-    for (int i = 0; i < s->n_slots; i++) {
-        slot_t *sl = &s->slots[i];
+    for (int i = 0; i < s->n_in_ports; i++) {
+        in_port_t *sl = &s->in_ports[i];
         t->in[i] = data + offset;
         if (!claimed)
             die("building a task with no claimed values for a station that "
@@ -539,9 +540,9 @@ int map_station_try_start(map_t *m, int station)
 
     pthread_mutex_lock(&s->mutex);
     int due = station_ready_and_claim_locked(s, claimed);
-    if (due && s->kind == STATION_ITERATOR && s->n_ports > 0) {
+    if (due && s->kind == STATION_ITERATOR && s->n_out_ports > 0) {
         port = s->cursor;
-        s->cursor = (s->cursor + 1) % s->n_ports;
+        s->cursor = (s->cursor + 1) % s->n_out_ports;
     }
     pthread_mutex_unlock(&s->mutex);
 
@@ -553,7 +554,7 @@ int map_station_try_start(map_t *m, int station)
 /* }}} */
 
 /* {{{ map_deliver_value() */
-int map_deliver_value(map_t *m, int station, int slot, const void *value)
+int map_deliver_value(map_t *m, int station, int port, const void *value)
 {
     if (station < 0 || station >= m->n_stations)
         die("delivering to a station outside the table", station);
@@ -578,8 +579,8 @@ int map_deliver_value(map_t *m, int station, int slot, const void *value)
     if (atomic_load_explicit(&s->removed, memory_order_acquire) || !s->call)
         return 0;
 
-    if (slot < 0 || slot >= s->n_slots)
-        die("delivering to a slot the station does not have", station);
+    if (port < 0 || port >= s->n_in_ports)
+        die("delivering to a port the station does not have", station);
     /* Two ways this is wrong, and they deserve different sentences: a
      * static already holds its value and has nowhere to queue one, and
      * an unconfigured port is one nobody has finished wiring.
@@ -592,10 +593,10 @@ int map_deliver_value(map_t *m, int station, int slot, const void *value)
      * invisibly inside C. The write call exists; teaching delivery to
      * use it belongs with the load-time check that currently refuses
      * such a wire. */
-    if (s->slots[slot].kind == SLOT_NONE)
+    if (s->in_ports[port].kind == IN_PORT_NONE)
         die("delivering into a port that has no source yet", station);
-    if (s->slots[slot].kind != SLOT_RING)
-        die("delivering into a slot that is not a buffer", station);
+    if (s->in_ports[port].kind != IN_PORT_RING)
+        die("delivering into a port that is not a buffer", station);
 
     /* The claim buffer lives on this thread's stack, sized for one
      * complete input set. It exists so the readiness check allocates
@@ -603,25 +604,25 @@ int map_deliver_value(map_t *m, int station, int slot, const void *value)
     int in_bytes = station_input_bytes(s);
     unsigned char claimed[in_bytes > 0 ? in_bytes : 1];
 
-    int port = 0;
+    int out_port = 0;
 
     STATS_MARK(wait_start);
     pthread_mutex_lock(&s->mutex);
     STATS_CHARGE(s->mutex_wait_ns, wait_start);
-    slot_write_locked(&s->slots[slot], value);
+    in_port_write_locked(&s->in_ports[port], value);
     int due = station_ready_and_claim_locked(s, claimed);
-    if (due && s->kind == STATION_ITERATOR && s->n_ports > 0) {
+    if (due && s->kind == STATION_ITERATOR && s->n_out_ports > 0) {
         /* The one memory a station keeps, touched at the one moment
          * only one thread can be looking (issue 504): this task
          * takes the cursor's exit, the cursor moves on, and the
          * choice rides out inside the task. The box never sees it. */
-        port = s->cursor;
-        s->cursor = (s->cursor + 1) % s->n_ports;
+        out_port = s->cursor;
+        s->cursor = (s->cursor + 1) % s->n_out_ports;
     }
     pthread_mutex_unlock(&s->mutex);
 
     if (due)
-        pool_push(m->pool, task_build(m, station, claimed, port));
+        pool_push(m->pool, task_build(m, station, claimed, out_port));
     return due;
 }
 /* }}} */
@@ -644,7 +645,7 @@ static int route_plain(station_t *s, task_t *t)
 static int route_comparator(station_t *s, task_t *t)
 {
     /* The threshold rode along as the task's last input — claimed
-     * like any other slot, never handed to the box (issue 502). The
+     * like any other port, never handed to the box (issue 502). The
      * comparison happens here, after the box returned, through the
      * type's own three-way compare (issue 503): the sign maps
      * straight onto the ports — less is 0, equal is 1, greater 2. */
@@ -704,10 +705,10 @@ void map_deliver(void *ctx, task_t *t)
     if (s->out_size == 0)
         return;
 
-    int port_index = route_choose[s->kind](s, t);
+    int out_port_index = route_choose[s->kind](s, t);
 
-    port_t *port = station_port(s, port_index);
-    dest_set_t *set = port_dests(port);
+    out_port_t *port = station_out_port(s, out_port_index);
+    dest_set_t *set = out_port_dests(port);
     if (!set)
         return;
 
@@ -717,6 +718,6 @@ void map_deliver(void *ctx, task_t *t)
      * manufacturing parallelism for everyone else. */
     for (int i = 0; i < set->n; i++)
         s->produced += map_deliver_value(m, set->items[i].station,
-                                         set->items[i].slot, t->out);
+                                         set->items[i].port, t->out);
 }
 /* }}} */

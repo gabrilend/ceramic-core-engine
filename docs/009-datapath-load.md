@@ -13,11 +13,11 @@ a station declared further down. That requires reading the file twice.
 **First pass: create every station.** For each station line, look its
 box function up in the registry. That gives the shim pointer, the
 parameter count, and each parameter's type and size. Allocate the
-station's slot array with one ring-buffer slot per parameter — the
+station's port array with one ring-buffer port per parameter — the
 default — each sized exactly `sizeof` its parameter, and record the
 station's name in a lookup table that is thrown away when loading ends.
 
-A comparator gets one extra slot on the end, typed to match the box's
+A comparator gets one extra port on the end, typed to match the box's
 return value.
 
 Then apply the input lines, converting the named ports from ring
@@ -25,7 +25,7 @@ buffers to statics and copying each one's value in.
 
 **Second pass: resolve the arrows.** By now every station exists and
 can be found by name. For each output line, look up the destination
-station and slot, and append a `{station, slot}` pair to that port's
+station and port, and append a `{station, port}` pair to that port's
 destination list.
 
 This is also where every wire is type-checked, because it is the first

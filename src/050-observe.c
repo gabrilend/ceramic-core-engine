@@ -44,15 +44,15 @@ void map_report_buffers(map_t *m, FILE *out)
     int spoke = 0;
     for (int i = 0; i < m->n_stations; i++) {
         station_t *s = map_station(m, i);
-        for (int j = 0; j < s->n_slots; j++) {
-            slot_t *sl = &s->slots[j];
-            if (sl->kind != SLOT_RING)
+        for (int j = 0; j < s->n_in_ports; j++) {
+            in_port_t *sl = &s->in_ports[j];
+            if (sl->kind != IN_PORT_RING)
                 continue;
             if (sl->growths == 0 && sl->high_water <= 1)
                 continue;
             char fallback[32];
             fprintf(out,
-                    "  %s.%d: grew %d time%s to %d cells, high water %d\n",
+                    "  %s.%d: grew %d time%s to %d slots, high water %d\n",
                     station_label(m, i, fallback, sizeof fallback), j,
                     sl->growths, sl->growths == 1 ? "" : "s",
                     sl->capacity, sl->high_water);
@@ -60,14 +60,14 @@ void map_report_buffers(map_t *m, FILE *out)
         }
     }
     if (!spoke)
-        fprintf(out, "  every slot stayed shallow; no imbalance to report\n");
+        fprintf(out, "  every port stayed shallow; no imbalance to report\n");
 
     if (m->pool) {
         int capacity, high_water, growths;
         pool_queue_stats(m->pool, &capacity, &high_water, &growths);
         fprintf(out,
                 "  the task ring: grew %d time%s to %d entries, high water %d\n"
-                "  (slot piles mean uneven inputs; ring piles mean consumers\n"
+                "  (port piles mean uneven inputs; ring piles mean consumers\n"
                 "   slower than producers — two different diagnoses)\n",
                 growths, growths == 1 ? "" : "s", capacity, high_water);
     }
@@ -229,7 +229,7 @@ void map_observe_stop(map_t *m)
 
 /* {{{ map_report_shutdown() */
 /*
- * The loud parting word (issue 701): any slot that grew past the
+ * The loud parting word (issue 701): any port that grew past the
  * threshold gets named at teardown, because a map that works while
  * one buffer quietly absorbs a mismatch forever is a map with a
  * design problem nothing else will surface.
@@ -238,12 +238,12 @@ void map_report_shutdown(map_t *m)
 {
     for (int i = 0; i < m->n_stations; i++) {
         station_t *s = map_station(m, i);
-        for (int j = 0; j < s->n_slots; j++) {
-            slot_t *sl = &s->slots[j];
-            if (sl->kind == SLOT_RING && sl->growths >= GROWTH_SHOUT_THRESHOLD) {
+        for (int j = 0; j < s->n_in_ports; j++) {
+            in_port_t *sl = &s->in_ports[j];
+            if (sl->kind == IN_PORT_RING && sl->growths >= GROWTH_SHOUT_THRESHOLD) {
                 char fallback[32];
                 fprintf(stderr,
-                        "observe: %s.%d grew %d times (to %d cells, high water "
+                        "observe: %s.%d grew %d times (to %d slots, high water "
                         "%d) — a producer outran a sibling input the whole "
                         "run; memory absorbed it, and someone should decide\n",
                         station_label(m, i, fallback, sizeof fallback), j,

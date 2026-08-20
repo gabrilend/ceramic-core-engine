@@ -10,11 +10,11 @@
  * How it does it, in general terms: everything about a station that
  * varies in size hangs off a pointer, so the array stays a row of
  * identical records and a station never moves once placed. Values
- * move by being copied — into a slot's ring, out of it into a task,
+ * move by being copied — into a port's ring, out of it into a task,
  * never shared — which is the entire reason two invocations of one
  * station can run at the same moment without touching.
  *
- * Built across phase 2 (issues 201–207); grows slot kinds in phase 4
+ * Built across phase 2 (issues 201–207); grows port kinds in phase 4
  * and routing kinds in phase 5, as marked.
  */
 #ifndef SORA_STATION_H
@@ -27,12 +27,12 @@
 #include "011-pool.h"
 
 /*
- * The slot kinds (issue 202). The tag is stored, never inferred:
+ * The port kinds (issue 202). The tag is stored, never inferred:
  * asking "is my upstream input-less?" on every readiness check would
  * chase an index to answer a question that cannot change while the
  * program runs.
  *
- * There were three. The gatherer — a slot whose value was produced by
+ * There were three. The gatherer — a port whose value was produced by
  * running its upstream box inline at the moment a task was assembled
  * — is gone, and the reasoning is kept in
  * docs/implementation-notes/056-no-pull-path.md rather than repeated
@@ -45,10 +45,10 @@
  *
  * The numbering closed up rather than leaving a hole where the
  * gatherer was, because nothing outside this file ever saw these as
- * numbers — the map file spells a slot's kind as text, and the dump
+ * numbers — the map file spells a port's kind as text, and the dump
  * writes text back.
  *
- * SLOT_NONE is not a third kind of value; it is the absence of a
+ * IN_PORT_NONE is not a third kind of value; it is the absence of a
  * decision (issue 210b). A port in it has been given no source, and a
  * station holding one can never be ready — which is what lets a
  * program be assembled from nothing, a station coming into existence
@@ -56,15 +56,15 @@
  * sources one at a time. No null is invented and nothing is ever
  * handed to a box; the readiness walk simply answers no forever.
  */
-enum slot_kind {
-    SLOT_RING    = 0,
-    SLOT_STATIC  = 1,
-    SLOT_NONE    = 2,
-    SLOT_KIND_COUNT
+enum in_port_kind {
+    IN_PORT_RING    = 0,
+    IN_PORT_STATIC  = 1,
+    IN_PORT_NONE    = 2,
+    IN_PORT_KIND_COUNT
 };
 
 /*
- * Every port's ring buffer starts this deep, in cells of that port's
+ * Every port's ring buffer starts this deep, in slots of that port's
  * own element size — so a port carrying four-byte integers starts at
  * forty bytes and one carrying a two-hundred-byte struct at two
  * thousand (issue 210b).
@@ -74,18 +74,18 @@ enum slot_kind {
  * actually demands and then stops, so the cost of guessing low is a
  * slower startup, which is the cheapest time in a program's life to be
  * slow. A port that knows better can say so through
- * map_slot_start_depth.
+ * map_in_port_start_depth.
  *
- * Every cell is usable. A spare one used to be held back so that
+ * Every slot is usable. A spare one used to be held back so that
  * head-equals-tail could mean empty rather than full, and with a
- * state on every cell there is nothing left for it to disambiguate —
- * a full buffer is one where no cell answers empty, which is a
+ * state on every slot there is nothing left for it to disambiguate —
+ * a full buffer is one where no slot answers empty, which is a
  * question that gets asked directly now (issue 210c).
  */
-#define SLOT_DEFAULT_CAPACITY 10
+#define IN_PORT_DEFAULT_CAPACITY 10
 
 /*
- * What is happening to one cell (issue 210c), and who is allowed to
+ * What is happening to one slot (issue 210c), and who is allowed to
  * touch it while it is happening.
  *
  * | state    | meaning                    | who may touch it     |
@@ -95,35 +95,35 @@ enum slot_kind {
  * | ready    | the bytes have landed      | a reader, by taking  |
  * | claimed  | a reader is copying out    | that reader only     |
  *
- * **This is the mutual exclusion, per cell rather than per port.** A
+ * **This is the mutual exclusion, per slot rather than per port.** A
  * writer must not write while anyone reads or writes; a reader must
  * not read while anyone writes; and the state says so. Every
  * transition is a single compare-and-swap, so two threads can never
- * own one cell — the loser of a race is told it lost and goes
+ * own one slot — the loser of a race is told it lost and goes
  * elsewhere.
  *
- * A cell's occupancy used to be *implied* by the head and tail
+ * A slot's occupancy used to be *implied* by the head and tail
  * indices, and that is why the station's mutex had to cover the copy:
- * the indices said a cell was occupied before its bytes had finished
+ * the indices said a slot was occupied before its bytes had finished
  * landing, so nothing but exclusion could stop a reader arriving
- * early. A cell that says what is happening to it needs no such help.
+ * early. A slot that says what is happening to it needs no such help.
  *
- * **Cells are not cleared when released.** Every write is a copy of
+ * **Slots are not cleared when released.** Every write is a copy of
  * the port's full element size, so a stale value is always completely
- * covered and there is no such thing as a partial write into a cell.
- * The guarantee is not that a cell was cleaned but that its bytes are
+ * covered and there is no such thing as a partial write into a slot.
+ * The guarantee is not that a slot was cleaned but that its bytes are
  * never read unless its state says ready, which is this machine's
  * entire job. Zeroing on release would cost a full erase per claim
  * and buy nothing.
  *
- * Empty is zero so that a freshly allocated run of cells is a
- * freshly empty run of cells.
+ * Empty is zero so that a freshly allocated run of slots is a
+ * freshly empty run of slots.
  */
-enum cell_state {
-    CELL_EMPTY    = 0,
-    CELL_RESERVED = 1,
-    CELL_READY    = 2,
-    CELL_CLAIMED  = 3,
+enum slot_state {
+    SLOT_EMPTY    = 0,
+    SLOT_RESERVED = 1,
+    SLOT_READY    = 2,
+    SLOT_CLAIMED  = 3,
 };
 
 /*
@@ -138,39 +138,39 @@ enum station_kind {
     STATION_KIND_COUNT
 };
 
-/* {{{ struct slot */
+/* {{{ struct in_port */
 /*
- * One input slot. Which fields are *in effect* depends on the kind: a
+ * One input port. Which fields are *in effect* depends on the kind: a
  * ring buffer reads storage/capacity/head/tail, a static reads
  * static_id, and an unconfigured port reads neither. elem_size
- * matters to all three — cells are exactly the size of the parameter
- * this slot feeds, which is what makes a write a memcpy with no
+ * matters to all three — slots are exactly the size of the parameter
+ * this port feeds, which is what makes a write a memcpy with no
  * allocation on the hot path.
  *
  * The `source` field went with the gatherer (issue 210): it held the
- * upstream station a slot pulled from, and nothing pulls now.
+ * upstream station a port pulled from, and nothing pulls now.
  *
- * **The cells are allocated at instantiation and are never freed
+ * **The slots are allocated at instantiation and are never freed
  * until the map is** (issue 210b), whatever the tag currently says.
  * A port that is a static for the whole life of a program carries
- * cells it never uses, and that is the price: it is paid once, at
+ * slots it never uses, and that is the price: it is paid once, at
  * startup, in the cheapest moment a program has. What it buys is that
  * changing a port's source is a field write rather than an allocation
  * dance — there is never a moment when the storage a tag needs is
  * absent — and that values already waiting in a port survive it being
  * turned into something else and back (issue 210f).
  *
- * **Both storages are real** (issues 210b, 401): the cells, and the
+ * **Both storages are real** (issues 210b, 401): the slots, and the
  * bytes of a static. Exactly one is in effect and the other sits idle,
  * which is what makes changing what a port is a field write in both
  * directions rather than only one.
  */
-typedef struct slot {
+typedef struct in_port {
     unsigned char kind;
     int   elem_size;
     void *storage;
     int   capacity;
-    /* Bytes from one cell to the next: the value's own size, plus its
+    /* Bytes from one slot to the next: the value's own size, plus its
      * state, rounded up so every value keeps the alignment its type
      * needs (issue 210c). Computed once at allocation, because the
      * rounding is the only arithmetic on the delivery path that is
@@ -183,13 +183,13 @@ typedef struct slot {
      * therefore computed; a hint may be wrong and therefore is not.**
      *
      * A head index had to be right, because it was what said which
-     * cells were occupied — which meant maintaining it under
+     * slots were occupied — which meant maintaining it under
      * exclusion, which meant the lock. A hint says only "somebody
-     * found a cell near here recently". A stale one costs a slightly
+     * found a slot near here recently". A stale one costs a slightly
      * longer scan and nothing else, so nothing has to be excluded to
      * keep it true, because there is nothing about it that must be.
      *
-     * They are ordinals into the port's cells rather than pointers,
+     * They are ordinals into the port's slots rather than pointers,
      * because storage is the one thing in this design that gets
      * reallocated — a saved pointer means something else afterwards,
      * while an ordinal keeps meaning what it meant. Same reason a
@@ -198,7 +198,7 @@ typedef struct slot {
     int   read_hint;
     int   write_hint;
 
-    /* How many cells are ready right now. Maintained rather than
+    /* How many slots are ready right now. Maintained rather than
      * counted, because readiness asks this question on every single
      * delivery and a scan to answer it would be the walk this design
      * is trying to get rid of. Atomic because it stops being read
@@ -227,7 +227,7 @@ typedef struct slot {
      * said.
      *
      * `constant` is elem_size bytes, allocated at placement like the
-     * cells and kept for the life of the map. `constant_string` is
+     * slots and kept for the life of the map. `constant_string` is
      * where a string static's characters live, since the value for
      * such a port is a pointer and it has to point at something the
      * port owns. `constant_set` is what stops a port being turned
@@ -238,7 +238,7 @@ typedef struct slot {
     char *constant_string;
     int   constant_set;
 
-    /* The type this slot feeds, as text from the registry — what
+    /* The type this port feeds, as text from the registry — what
      * lets a static entry's text become bytes of the right shape.
      * Null on hand-placed stations, which therefore cannot bind
      * statics; the loader always places by name (phase 4/6). */
@@ -246,14 +246,14 @@ typedef struct slot {
 
     /* The growth story, written by issue 203 and read by phase 7:
      * how many times this buffer has doubled, and the deepest the
-     * backlog ever got. A growing slot is one input side outpacing
+     * backlog ever got. A growing port is one input side outpacing
      * its siblings, with memory absorbing the imbalance. */
     int growths;
     int high_water;
-} slot_t;
+} in_port_t;
 /* }}} */
 
-/* {{{ struct destination / struct port */
+/* {{{ struct destination / struct out_port */
 /*
  * A port is one exit from a station; a destination is one place a
  * port delivers. Both numbers of a destination are needed: delivery
@@ -262,7 +262,7 @@ typedef struct slot {
  */
 typedef struct destination {
     int32_t station;
-    int32_t slot;
+    int32_t port;
 } destination_t;
 
 /* {{{ dest_set_t */
@@ -291,7 +291,7 @@ typedef struct dest_set {
 } dest_set_t;
 /* }}} */
 
-typedef struct port {
+typedef struct out_port {
     /*
      * Read without any lock on the hot path, written only while the
      * rewiring lock is held. Atomic because a reader and a writer
@@ -303,8 +303,8 @@ typedef struct port {
      * an unwired comparator outcome should do.
      */
     _Atomic(dest_set_t *) dests;
-    struct port          *next;
-} port_t;
+    struct out_port      *next;
+} out_port_t;
 /* }}} */
 
 /*
@@ -323,13 +323,13 @@ typedef int (*station_compare_t)(const void *a, const void *b);
  * to this shape.
  */
 typedef struct station {
-    pthread_mutex_t mutex;      /* guards the slots during delivery and readiness */
+    pthread_mutex_t mutex;      /* held across delivery and readiness */
     task_call_t     call;       /* the shim; hand-written until phase 3 */
     unsigned char   kind;       /* plain, comparator, iterator */
-    slot_t         *slots;
-    int             n_slots;
-    port_t         *ports;      /* linked list; one for plain, three for comparator */
-    int             n_ports;
+    in_port_t      *in_ports;
+    int             n_in_ports;
+    out_port_t     *out_ports;  /* list; one plain, three comparator */
+    int             n_out_ports;
     int             cursor;     /* iterator's next port; the one memory a station keeps */
 
     /*
@@ -338,7 +338,7 @@ typedef struct station {
      *
      * **Its fields stay readable until the scrapyard frees them**,
      * and that is the whole trick. A task is built from a station's
-     * slot count, return size, and shim *after* the readiness check
+     * port count, return size, and shim *after* the readiness check
      * released the mutex — so clearing those at the moment of removal
      * would leave a worker building a task out of a station that had
      * just been emptied underneath it. Instead the record stays
@@ -554,21 +554,21 @@ map_t *map_create_empty(void);
 /* {{{ map_place() — issues 201, 202, 207 */
 /*
  * Place a box at station index: its shim, its kind, one ring-buffer
- * slot per element size given, and the byte size of its return value
+ * port per element size given, and the byte size of its return value
  * (zero for a sink). Element sizes are hand-supplied here; from
  * phase 3 they come from the registry, derived from the real C.
  */
 void map_place(map_t *m, int station, task_call_t shim, int kind,
-               int n_slots, const int *elem_sizes, int out_size);
+               int n_in_ports, const int *elem_sizes, int out_size);
 /* }}} */
 
-/* {{{ map_slot_start_depth() — issue 210b */
+/* {{{ map_in_port_start_depth() — issue 210b */
 /*
- * Tell one port how deep its ring buffer should start, in cells.
+ * Tell one port how deep its ring buffer should start, in slots.
  *
  * It is a hint rather than a setting: growth covers being wrong, so
  * nobody has to be right. A port never told anything starts at
- * SLOT_DEFAULT_CAPACITY, and a program that guesses low pays a slower
+ * IN_PORT_DEFAULT_CAPACITY, and a program that guesses low pays a slower
  * startup and nothing else. What this exists for is the case where an
  * author already knows one input side outruns its siblings — the
  * situation phase 7's buffer report shouts about — and would rather
@@ -588,15 +588,15 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
  * building a station. Naming a station, a port, and what that port
  * should be is the shape that surface already has.
  */
-void map_slot_start_depth(map_t *m, int station, int slot, int cells);
+void map_in_port_start_depth(map_t *m, int station, int port, int slots);
 /* }}} */
 
-/* {{{ map_slot_convert() — issues 210b, 210f */
+/* {{{ map_in_port_convert() — issues 210b, 210f */
 /*
  * Change what one port is: name the station, the port, and the tag it
  * is becoming.
  *
- * **Conversion is a field write.** Storage does not move. The cells
+ * **Conversion is a field write.** Storage does not move. The slots
  * stay exactly as they are on every path through this — not freed,
  * not cleared, not drained — so whatever a producer had already
  * handed over and nobody had claimed is still waiting if the port
@@ -611,7 +611,7 @@ void map_slot_start_depth(map_t *m, int station, int slot, int cells);
  * being offered — but it is a second reason for the same
  * non-guarantee, and rollback is not the only thing that opens gaps.
  *
- * Becoming a static is refused here and goes through map_slot_static,
+ * Becoming a static is refused here and goes through map_in_port_static,
  * which needs an entry number this call has no room for. That is the
  * half of issue 210f blocked on issue 401 — once a static's value
  * lives on the port rather than in a table, what a port needs to
@@ -619,23 +619,23 @@ void map_slot_start_depth(map_t *m, int station, int slot, int cells);
  *
  * A port that has been a static and is converted away keeps its
  * binding, so a port that goes static, ring, static reads the same
- * entry it read before. That is the same rule as the cells: nothing
+ * entry it read before. That is the same rule as the slots: nothing
  * on any path through here is destroyed. It is also what keeps
- * SLOT_NONE meaning one thing — "nobody has said yet" — rather than
+ * IN_PORT_NONE meaning one thing — "nobody has said yet" — rather than
  * also meaning "somebody said, then said something else."
  */
-void map_slot_convert(map_t *m, int station, int slot, int kind);
+void map_in_port_convert(map_t *m, int station, int port, int kind);
 /* }}} */
 
 /* {{{ map_connect() — issues 201, 205, 207 */
 /*
- * Wire: from a station's output port to a destination station's slot.
+ * Wire: from a station's output port to a destination station's port.
  * Ports are created on first use, in index order. Repeat with the
  * same port to fan out.
  */
-/* {{{ port_dests() / dest_set_build() / dest_set_retire() — issue 214 */
+/* {{{ out_port_dests() / dest_set_build() / dest_set_retire() — issue 214 */
 /*
- * port_dests reads a port's current set. One atomic load, no lock,
+ * out_port_dests reads a port's current set. One atomic load, no lock,
  * and the pointer it returns is to something nobody will modify.
  * Null means the port is wired nowhere.
  *
@@ -645,9 +645,9 @@ void map_slot_convert(map_t *m, int station, int slot, int kind);
  * dest_set_retire files a replaced set in the map's scrapyard. It
  * takes the scrap lock and nothing else.
  */
-dest_set_t *port_dests(const port_t *p);
+dest_set_t *out_port_dests(const out_port_t *p);
 dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
-                           int add_slot, int drop_station, int drop_slot);
+                           int add_port, int drop_station, int drop_port);
 
 /*
  * **The scrapyard takes anything.** Hand it a pointer and the
@@ -704,7 +704,7 @@ int map_remove_station(map_t *m, int station);
 /* }}} */
 
 void map_connect(map_t *m, int from_station, int port,
-                 int to_station, int to_slot);
+                 int to_station, int to_port);
 /* }}} */
 
 /* {{{ map_start() / map_destroy() — issue 207 */
@@ -723,14 +723,14 @@ void map_destroy(map_t *m);
 
 /* {{{ map_deliver_value() — issues 204, 205 */
 /*
- * Deliver one value into one slot of one station: take the mutex,
+ * Deliver one value into one port of one station: take the mutex,
  * write, run the readiness check, claim if complete, release, then
  * build and push a task if one became due. This is both the interior
  * of the delivery walk and the way a test or a seed drops a value
  * into a map from outside. Returns whether a task became due, which
  * the statistics read as "the deliverer produced one".
  */
-int map_deliver_value(map_t *m, int station, int slot, const void *value);
+int map_deliver_value(map_t *m, int station, int port, const void *value);
 /* }}} */
 
 /* {{{ map_deliver() — issue 205 */
@@ -742,10 +742,10 @@ int map_deliver_value(map_t *m, int station, int slot, const void *value);
 void map_deliver(void *ctx, task_t *t);
 /* }}} */
 
-/* {{{ map_slot_depth() — issue 208 */
-/* How many values are waiting in a slot right now. Takes the mutex.
+/* {{{ map_in_port_depth() — issue 208 */
+/* How many values are waiting in a port right now. Takes the mutex.
  * Exists for demos and diagnostics, not for engine decisions. */
-int map_slot_depth(map_t *m, int station, int slot);
+int map_in_port_depth(map_t *m, int station, int port);
 /* }}} */
 
 /* {{{ map_station_try_start() — issues 401, 605 */
@@ -778,7 +778,7 @@ int map_station_try_start(map_t *m, int station);
 /* values rather than the keeper of a table.                          */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_slot_static_text() */
+/* {{{ map_in_port_static_text() */
 /*
  * Give a port a constant, written as text, and make it a static.
  *
@@ -799,10 +799,11 @@ int map_station_try_start(map_t *m, int station);
  * station, because a port that was the last one missing is no longer
  * missing.
  */
-void map_slot_static_text(map_t *m, int station, int slot, const char *text);
+void map_in_port_static_text(map_t *m, int station, int port,
+                             const char *text);
 /* }}} */
 
-/* {{{ map_slot_static_write() — issue 405 */
+/* {{{ map_in_port_static_write() — issue 405 */
 /*
  * Change a static while the program runs. It names a station and a
  * port, because that is where the value lives, and it is size-checked
@@ -841,7 +842,7 @@ void map_slot_static_text(map_t *m, int station, int slot, const char *text);
  * debugger, a control socket, a person turning a knob, or a parent
  * program configuring a child.
  */
-void map_slot_static_write(map_t *m, int station, int slot,
+void map_in_port_static_write(map_t *m, int station, int port,
                            const void *bytes, int size);
 /* }}} */
 
@@ -850,36 +851,36 @@ void map_slot_static_write(map_t *m, int station, int slot,
 /* surface a map author touches.                                      */
 /* ------------------------------------------------------------------ */
 
-/* {{{ slot_cell() / slot_cell_move() — issue 210c */
+/* {{{ in_port_slot() / in_port_slot_move() — issue 210c */
 /*
- * One cell, and the one way its state ever changes.
+ * One slot, and the one way its state ever changes.
  *
- * slot_cell returns where cell `index`'s value bytes live. The value
- * comes first in a cell and its state sits after it, so that the
+ * in_port_slot returns where slot `index`'s value bytes live. The value
+ * comes first in a slot and its state sits after it, so that the
  * value keeps the alignment the allocator gave the array — a state
  * byte in front would push every value off by one, which on some
  * machines is a fault and on the rest is slow.
  *
- * slot_cell_move is the whole state machine: a compare-and-swap from
+ * in_port_slot_move is the whole state machine: a compare-and-swap from
  * one named state to another, returning whether this caller won it.
  * There is one primitive rather than four named transitions because
  * the rule worth enforcing is *this exact state became that exact
  * state*, and naming the pair at the call site is what makes a
  * reader of the delivery path able to see the machine running. A
- * transition from a state a cell is not in simply fails, which is
+ * transition from a state a slot is not in simply fails, which is
  * what makes an illegal move impossible rather than merely
  * discouraged.
  *
- * Two callers race for one cell and exactly one of them wins. The
+ * Two callers race for one slot and exactly one of them wins. The
  * loser is not blocked and does not retry in place — it goes and
- * looks at another cell, which is the property the whole design is
+ * looks at another slot, which is the property the whole design is
  * for.
  */
-void *slot_cell(const slot_t *sl, int index);
-int   slot_cell_move(const slot_t *sl, int index, int from, int to);
+void *in_port_slot(const in_port_t *sl, int index);
+int   in_port_slot_move(const in_port_t *sl, int index, int from, int to);
 /* }}} */
 
-/* {{{ slot_kind_name() — issue 210b */
+/* {{{ in_port_kind_name() — issue 210b */
 /*
  * What a port's tag is called, in the words a person would use. Every
  * refusal that turns somebody away from a port has to say which of the
@@ -889,22 +890,22 @@ int   slot_cell_move(const slot_t *sl, int index, int from, int to);
  * nobody has finished wiring. One table, so a fourth tag would be a
  * row rather than three edits nobody finds.
  */
-const char *slot_kind_name(unsigned char kind);
+const char *in_port_kind_name(unsigned char kind);
 /* }}} */
 
-/* {{{ station_port() */
+/* {{{ station_out_port() */
 /* The port at an index, or null if never wired — which delivery
  * reads as "discard". */
-port_t *station_port(station_t *s, int index);
+out_port_t *station_out_port(station_t *s, int index);
 /* }}} */
 
-/* {{{ slot_constant_free() — teardown joint */
+/* {{{ in_port_constant_free() — teardown joint */
 /* A port's constant and, for a string, the characters it points at.
  * Owned by the port and freed with the map. */
-void slot_constant_free(slot_t *sl);
+void in_port_constant_free(in_port_t *sl);
 /* }}} */
 
-/* {{{ slot_constant_text() — issue 401 */
+/* {{{ in_port_constant_text() — issue 401 */
 /*
  * A port's constant, turned back into the text a map file would use.
  * Writes at most `room` bytes including the terminator, and returns
@@ -924,7 +925,7 @@ void slot_constant_free(slot_t *sl);
  * because text resolves its layout when it is read and so survives a
  * rebuild that would silently change what raw bytes meant.
  */
-int slot_constant_text(const slot_t *sl, char *out, int room);
+int in_port_constant_text(const in_port_t *sl, char *out, int room);
 /* }}} */
 
 /* {{{ task_build() — the one way a task comes into existence */

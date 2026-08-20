@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>033-statics.c — constants on ports, from outside</h1>
@@ -156,7 +157,7 @@ moment they are written. Sharing, when it is wanted, is drawn — one
 station holds the value and everyone who needs it has an arrow from it,
 which costs a station and gains a wire somebody can see.</p>
 <h2>Functions</h2>
-<p><strong>map_slot_static_text(map, station, slot, text)</strong> — give a port a
+<p><strong>map_in_port_static_text(map, station, port, text)</strong> — give a port a
 constant written as text, and make it a static. Parses into the port's
 own storage, shaped by the port's registry type: a number for
 int/unsigned/float ports, a brace walk over the generated field table
@@ -167,14 +168,14 @@ where a number belongs, an untyped port.</p>
 <p>Parsed into scratch first and installed under the station's mutex, so a
 malformed value never half-overwrites a working one and no concurrent
 claim sees a value mid-parse. Runs the readiness check afterwards.</p>
-<p><strong>map_slot_static_write(map, station, slot, bytes, size)</strong> — change a
+<p><strong>map_in_port_static_write(map, station, port, bytes, size)</strong> — change a
 constant mid-run. Size-checked against what the port holds, and the
 station's own mutex — the lock the claim already takes — is held for
 the length of the copy, so no invocation sees fields from two worlds.
 Runs the readiness check afterwards.</p>
 <p>Refuses a port that has never held a constant, because its shape is
 unknown.</p>
-<p><strong>slot_constant_text(slot, out, room) → wanted</strong> — a constant turned
+<p><strong>in_port_constant_text(port, out, room) → wanted</strong> — a constant turned
 back into the text a map file would use, the exact mirror of the
 reader, walking the same field table the other way. Writes at most
 <code>room</code> bytes including the terminator and returns how many characters
@@ -184,7 +185,7 @@ enough significant digits to read back as the same value.</p>
 string a file gave it and the dump echoed that string, which had a hole
 in it — a value changed while the program ran was not re-serialized, so
 the dump printed what the file said rather than what the engine held.</p>
-<p><strong>slot_constant_free(slot)</strong> — internal: the constant and, for a
+<p><strong>in_port_constant_free(port)</strong> — internal: the constant and, for a
 string, the characters it points at.</p>
 <h2>What a box may no longer do</h2>
 <p><strong>Write a static.</strong> There used to be a bare-name call taking an entry

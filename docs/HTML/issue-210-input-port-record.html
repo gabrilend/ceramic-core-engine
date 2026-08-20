@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>210 — What an input port is</h1>
@@ -210,7 +211,7 @@ is unblocked.</p>
 <p>The source calls the port a slot, which is a naming debt this family
 does not pay off — renaming reaches the station header, delivery,
 statics, the loader, the dump, and
-<a href="doc-002-stations-and-slots.html">002</a>, and is worth doing
+<a href="doc-002-stations-and-ports.html">002</a>, and is worth doing
 deliberately rather than as a side effect of any of these.</p>
 <p>**And it is now settled that it happens before the rest of this
 family rather than after** (<a href="issue-215-ports-and-slots.html">215</a>). The
@@ -341,7 +342,7 @@ port still answers no.</p>
 <p>  the same paging shape one level up</p>
 <li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
 <p>  the surface that configures these</p>
-<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>, which</li>
+<li><a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>, which</li>
 <p>  this rewrites, including the word it uses for a port</p>
 <li><a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a></li>
 <li><a href="doc-058-guarantees.html">058 — Guarantees</a>, where the lost arrival</li>

@@ -21,13 +21,13 @@ destinations already does.
 
 Three output ports, meaning less, equal, and greater.
 
-A comparator station has one more input slot than its box function has
-parameters. That last slot holds the value to compare against. It is
+A comparator station has one more input port than its box function has
+parameters. That last port holds the value to compare against. It is
 not passed to the box function — the comparison happens after the
 function returns, on the delivery path — but it participates in the
-readiness check like any other slot, so the station cannot run until it
-holds something. In practice it is nearly always a static slot holding
-a fixed threshold, and a static slot is always full, so it usually has
+readiness check like any other port, so the station cannot run until it
+holds something. In practice it is nearly always a static port holding
+a fixed threshold, and a static port is always full, so it usually has
 no effect on readiness at all.
 
 Its type is never declared. It must match the box function's return
@@ -91,6 +91,6 @@ that wants ordering. It is a spreader, not a funnel.
 
 ## Related
 
-- [002 — Stations and slots](002-stations-and-slots.md), where ports live
+- [002 — Stations and ports](002-stations-and-ports.md), where ports live
 - [003 — Delivery](003-datapath-delivery.md), step 1
 - [007 — The build path](007-datapath-build.md), where compare functions are found

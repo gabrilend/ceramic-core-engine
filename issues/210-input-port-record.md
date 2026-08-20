@@ -82,7 +82,7 @@ is unblocked.
 The source calls the port a slot, which is a naming debt this family
 does not pay off — renaming reaches the station header, delivery,
 statics, the loader, the dump, and
-[002](../docs/002-stations-and-slots.md), and is worth doing
+[002](../docs/002-stations-and-ports.md), and is worth doing
 deliberately rather than as a side effect of any of these.
 
 **And it is now settled that it happens before the rest of this
@@ -234,7 +234,7 @@ The statics work proper belongs to [401](completed/401-static-slots.md) and
   the same paging shape one level up
 - [212 — One way to build a program](212-one-way-to-build-a-program.md),
   the surface that configures these
-- [002 — Stations and slots](../docs/002-stations-and-slots.md), which
+- [002 — Stations and ports](../docs/002-stations-and-ports.md), which
   this rewrites, including the word it uses for a port
 - [056 — Why there is no pull path](../docs/implementation-notes/056-no-pull-path.md)
 - [058 — Guarantees](../docs/058-guarantees.md), where the lost arrival

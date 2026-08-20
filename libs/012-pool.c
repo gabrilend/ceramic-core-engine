@@ -62,8 +62,8 @@ struct pool_epoch {
 
 struct pool {
     /* The ring. `slots` holds pointers out to tasks; capacity is the
-     * array length; head is the oldest task, tail the next free cell.
-     * One cell is always left empty so head==tail means empty and
+     * array length; head is the oldest task, tail the next free slot.
+     * One slot is always left empty so head==tail means empty and
      * never means full. All four are guarded by `mutex`. */
     task_t **slots;
     int      capacity;

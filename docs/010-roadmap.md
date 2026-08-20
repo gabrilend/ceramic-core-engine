@@ -35,7 +35,7 @@ Described by [006 — Scheduling](006-datapath-scheduling.md).
 
 The first phase where a graph runs.
 
-Built here: the station table; ring-buffer input slots with exact cell
+Built here: the station table; ring-buffer input ports with exact slot
 sizing and growth; the delivery path — take the mutex, write, check
 readiness, claim values, release, build a task, push it; output ports
 with fan-out; the task struct.
@@ -58,7 +58,7 @@ The property to test hardest is that two invocations of one station can
 run concurrently without interfering — the values are claimed under the
 mutex, so the second thread finds different ones.
 
-Described by [002 — Stations and slots](002-stations-and-slots.md) and
+Described by [002 — Stations and ports](002-stations-and-ports.md) and
 [003 — Delivery](003-datapath-delivery.md).
 
 ---
@@ -97,7 +97,7 @@ station holding it, which is what lets a chain of stations wired
 through statics behave like a recalculation graph, and what makes
 construction itself the thing that starts a program.
 
-This phase originally built a pull path as well — gatherer slots,
+This phase originally built a pull path as well — gatherer ports,
 inline gathering, chains, and a cycle check. All of it is being
 removed; [056](implementation-notes/056-no-pull-path.md) records what
 it was for, the three timings considered for it, and the accounting
@@ -113,13 +113,13 @@ Comparators and iterators, which are variations on one step of
 delivery and nothing else.
 
 Built here: the three-entry dispatch on the way out; the comparator's
-extra threshold slot and its three ports; three-way comparison through
+extra threshold port and its three ports; three-way comparison through
 the generated compare functions; the iterator's cursor, advanced under
 the station mutex at enqueue time with the chosen port recorded in the
 task struct.
 
 Depends on phase 3 for compare functions and phase 4 for the static
-slots that thresholds almost always use.
+ports that thresholds almost always use.
 
 Described by [005 — Routing](005-routing.md).
 

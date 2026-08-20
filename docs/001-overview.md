@@ -32,14 +32,14 @@ for one call.
 
 ## The one rule
 
-> A station runs when, and only when, every one of its input slots
+> A station runs when, and only when, every one of its input ports
 > holds a value.
 
 Everything else in the engine is a consequence of that sentence.
 
 Nothing polls. Nothing scans for ready work. The check happens as the
-tail end of a write: whoever just delivered a value into a slot then
-looks at that station's other slots, and if they are all occupied,
+tail end of a write: whoever just delivered a value into a port then
+looks at that station's other ports, and if they are all occupied,
 takes one value from each and builds a task. That worker then hands the
 task to the pool and goes back to its own business.
 
@@ -95,7 +95,7 @@ input, and the running total travels around the loop.
 ## Reading order
 
 The documents are numbered to be read straight through.
-[002](002-stations-and-slots.md) describes what a station is made of.
+[002](002-stations-and-ports.md) describes what a station is made of.
 [003](003-datapath-delivery.md) follows a value from one box to the
 next, which is the core of the engine. Everything after that is either
 a variation on that path or the machinery that gets the map into

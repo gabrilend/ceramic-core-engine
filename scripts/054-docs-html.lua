@@ -532,7 +532,7 @@ document.getElementById('it-run').onclick=function(){
 
 -- Which pages carry which widget, keyed by source basename.
 local WIDGETS = {
-    ["002-stations-and-slots.md"] = WIDGET_RING,
+    ["002-stations-and-ports.md"] = WIDGET_RING,
     ["003-datapath-delivery.md"] = WIDGET_READY,
     ["005-routing.md"] = WIDGET_ITERATOR,
 }

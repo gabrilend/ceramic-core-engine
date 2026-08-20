@@ -1,4 +1,4 @@
-# 002 — Stations and slots
+# 002 — Stations and ports
 
 A station is one placement of a box in a map. It is the only thing in
 the engine that persists and is written to by many threads at once, so
@@ -32,7 +32,7 @@ be reallocated later, when runtime map editing becomes real, without
 every wire in the program becoming a dangling reference.
 
 The array holds fixed-size structs. Everything about a station that
-varies in size — how many input slots it has, how many output ports,
+varies in size — how many input ports it has, how many output ports,
 how big each buffer is — hangs off a pointer, so the struct itself is
 uniform and the array stays indexable.
 
@@ -40,16 +40,16 @@ uniform and the array stays indexable.
 
 | Field | Type | What it is |
 |---|---|---|
-| mutex | `pthread_mutex_t` | Guards the input slots. Held during delivery and during the readiness check. |
+| mutex | `pthread_mutex_t` | Guards the input ports. Held during delivery and during the readiness check. |
 | call | function pointer | The generated shim for this station's box. See [007](007-datapath-build.md). |
 | kind | small integer | Plain, comparator, or iterator. Only consulted on the way out. |
-| slots | pointer to an array | The input slots, in the order the box function's parameters appear. |
-| n_slots | `int` | How many. Equals the box's parameter count, plus one if it is a comparator. |
-| ports | pointer to a linked list | The output ports. One node for a plain box, three for a comparator, however many an iterator has. |
+| in_ports | pointer to an array | The input ports, in the order the box function's parameters appear. |
+| n_in_ports | `int` | How many. Equals the box's parameter count, plus one if it is a comparator. |
+| out_ports | pointer to a linked list | The output ports. One node for a plain box, three for a comparator, however many an iterator has. |
 | cursor | `int` | Which output port an iterator sends to next. Unused by the other kinds. |
 
 The station never moves. Its buffers can grow, but they grow by
-reallocating the buffer storage the slot points at, not by reallocating
+reallocating the buffer storage the port points at, not by reallocating
 the station. This is why a wire can hold a station index forever and
 never need fixing up.
 
@@ -68,22 +68,22 @@ answer a question that cannot change.
 | **static** | **peeked** — every invocation reads the same value | replaces what was there | no, always full |
 | **none** | never — a station holding one cannot run | by being given a source | **yes**, permanently negative |
 
-A ring port is a **stream**; a static port is a **cell**. That is the
+A ring port is a **stream**; a static port is a **slot**. That is the
 whole distinction, and [004](004-datapath-statics.md) is what follows
 from it.
 
-**A slot is made of:**
+**A port is made of:**
 
 | Field | Type | What it is |
 |---|---|---|
 | kind | `unsigned char` | Ring buffer, static, or no source yet. There was another, a gatherer, and [056](implementation-notes/056-no-pull-path.md) is where it went. |
 | elem_size | `int` | Bytes per value. Copied from the registry at load; equals `sizeof` the box function's parameter type. |
-| storage | `void *` | The cells. Allocated whatever the kind and never freed until the map is, so changing what a port is costs no allocation and loses nothing that was waiting. |
-| capacity | `int` | How many cells. Ten unless the port was told otherwise. |
-| stride | `int` | Bytes from one cell to the next: a value, its state, and enough padding to keep the next value aligned. |
+| storage | `void *` | The slots. Allocated whatever the kind and never freed until the map is, so changing what a port is costs no allocation and loses nothing that was waiting. |
+| capacity | `int` | How many slots. Ten unless the port was told otherwise. |
+| stride | `int` | Bytes from one slot to the next: a value, its state, and enough padding to keep the next value aligned. |
 | read_hint, write_hint | `int` | Where a reader and a writer each start looking. Hints, not positions — a stale one costs a longer search and nothing else. |
-| held | `int`, atomic | How many cells are ready right now. Maintained rather than counted, because readiness asks on every delivery. |
-| constant | `void *` | The static's value, `elem_size` bytes, allocated at placement like the cells. Kept when the port is converted away, so a port that goes static, buffer, static reads the value it read before. |
+| held | `int`, atomic | How many slots are ready right now. Maintained rather than counted, because readiness asks on every delivery. |
+| constant | `void *` | The static's value, `elem_size` bytes, allocated at placement like the slots. Kept when the port is converted away, so a port that goes static, buffer, static reads the value it read before. |
 | constant_string | `char *` | Where a string constant's characters live, since the value for such a port is a pointer and it has to point at something the port owns. |
 | constant_set | `int` | Whether anybody has written one. A port can be turned back into a static, but not into one for the first time — the tag would be in effect over storage nobody wrote. |
 
@@ -94,13 +94,13 @@ to answer for themselves.
 
 **Head and tail are gone, and what replaced them is the interesting
 part.** They were exact positions: the head said where the oldest value
-sat, and it had to be right, because it was also what said which cells
+sat, and it had to be right, because it was also what said which slots
 were occupied at all. A number that must be right has to be maintained
 under exclusion, and that is why the station's mutex had to be held
-across the copying — the indices called a cell occupied the moment it
+across the copying — the indices called a slot occupied the moment it
 was spoken for, which is before its bytes had landed.
 
-Each cell now carries its own state, and a reader looks for a usable
+Each slot now carries its own state, and a reader looks for a usable
 one instead of calculating where it must be. **A position must be
 exact and is therefore computed; a hint may be wrong and therefore is
 not.** That one sentence is what lets the lock come off the copying,
@@ -121,7 +121,7 @@ document and becomes a thing that cannot be said. Issue 401 did that.
 
 **Ring buffer.** The ordinary case. Values arrive by being written into
 it and wait their turn. It is a real ring: two indices, wrapping at the
-end. The cells are exactly `elem_size` bytes each, allocated once when
+end. The slots are exactly `elem_size` bytes each, allocated once when
 the map loads, so a write is a `memcpy` into a fixed offset with no
 allocation anywhere on the path.
 
@@ -163,30 +163,30 @@ two indices are corrected.
 **The copy is the part that is going.** It exists because the two
 indices are positions taken modulo the capacity — change the capacity
 and every existing value is suddenly at a different index, so they have
-to be physically moved back into order. Once cells carry their own
+to be physically moved back into order. Once slots carry their own
 state and a reader scans instead of computing, nothing derives a
 location from the capacity, and a buffer can grow by **adding a page**
-of cells to a short list. No copy, no existing cell moves, and the
+of slots to a short list. No copy, no existing slot moves, and the
 ordering hazard the copy has to be careful about — publish before
 copying and readers see an empty buffer; copy before publishing and a
 value taken during the copy is delivered twice — stops existing rather
 than being handled.
 
 This is safe without any further care because the growth reallocates
-the *storage* the slot points at, not the station. Every wire in the
+the *storage* the port points at, not the station. Every wire in the
 program refers to the station by index, and every value in flight is a
 copy inside a task struct. Nothing holds a pointer into the buffer.
 
 Growth is O(number of values held) but amortized to nothing, and it
 happens at most a couple dozen times in a process lifetime. A buffer
 that keeps growing is a signal worth logging: it means one input side
-of a station is being fed faster than its sibling slots, and memory
+of a station is being fed faster than its sibling ports, and memory
 is absorbing the imbalance while values wait for their partners.
 
 A correction from the first build pass: a *single-input* station can
-never accumulate a backlog in its slot, because every write completes
+never accumulate a backlog in its port, because every write completes
 its input set and is claimed immediately. A slow single-input consumer
-backs up the pool's task ring instead. Slot growth is specifically the
+backs up the pool's task ring instead. Port growth is specifically the
 signature of a multi-input station fed unevenly; queue growth is the
 signature of consumers slower than producers overall. Phase 7 reports
 both, and reading them together is what locates a bottleneck.
@@ -195,10 +195,10 @@ both, and reading them together is what locates a bottleneck.
 
 A port is one exit from a station. It holds a linked list of
 destinations, each a pair of 32-bit numbers: which station, and which
-slot on it.
+port on it.
 
 Both numbers are needed. The delivery path takes the destination
-station's mutex and then examines *all* of its slots to decide
+station's mutex and then examines *all* of its ports to decide
 readiness, so it has to be able to name the station, not merely land
 somewhere inside it.
 
@@ -209,7 +209,7 @@ as the map gives it. What the ports mean and how one is chosen is
 
 ## Related
 
-- [003 — Delivery](003-datapath-delivery.md), the path that writes into these slots.
+- [003 — Delivery](003-datapath-delivery.md), the path that writes into these ports.
 - [004 — Statics and recalculation](004-datapath-statics.md), the input that is not a queue.
 - [007 — The build path](007-datapath-build.md), where `elem_size` and the shim pointer come from.
 - [009 — Loading](009-datapath-load.md), where the table is built.

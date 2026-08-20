@@ -11,7 +11,7 @@ program is finished.
 A ring of pointers. Each entry points at a task struct sitting on its
 own in the heap; the ring holds only the pointers.
 
-Two indices: one at the oldest task, one at the slot where the next
+Two indices: one at the oldest task, one at the port where the next
 task goes. Both wrap at the end. It is first-in-first-out, so a task
 that has been waiting cannot be starved by newer arrivals.
 

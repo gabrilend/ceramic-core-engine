@@ -158,7 +158,7 @@ static void a_different_width_is_refused(void)
 
     int rc = map_rewire_connect(m, 0, 0, 1, 0);
     check(rc != 0,
-          "eight bytes into a four-byte slot was refused, as it would be "
+          "eight bytes into a four-byte port was refused, as it would be "
           "for a box the program was built with");
 
     map_destroy(m);

@@ -35,14 +35,14 @@ existed to make that one sentence true.
 better than the others for some shape of program.
 
 **At enqueue.** The thread that completed the claim fills the gathered
-slots before the task reaches the queue. This is what was built. The
+ports before the task reaches the queue. This is what was built. The
 value is fresh as of *scheduling*, which is a different sentence from
 the one the pull path exists to make true — between the pull and the
 box running sits the whole queue. It also puts an arbitrary amount of
 somebody else's program in the middle of a delivery walk, at exactly
 the moment the engine most wants to be handing work out.
 
-**At pickup.** The worker that is about to run the box fills the slots
+**At pickup.** The worker that is about to run the box fills the ports
 first, on its own stack. Value age is as close to zero as the engine
 can make it, which is the literal reading of the promise. It costs an
 outer task struct and a generic shim to keep the pool from learning
@@ -88,7 +88,7 @@ and queues need their depths reconciled. There is no third shape.
 
 ## What replaced it
 
-**A static port is a cell, and writing one is an event.**
+**A static port is a slot, and writing one is an event.**
 
 Two kinds of input port remain:
 
@@ -105,7 +105,7 @@ check, which is the new part.
 That one addition is what makes the pull path unnecessary. A station
 whose value was previously gathered now simply *writes* into the static
 port that reads it, and the write triggers whoever depends on it. What
-was a pull becomes a push arriving at a cell instead of at a queue.
+was a pull becomes a push arriving at a slot instead of at a queue.
 
 **A static write cannot make something run that could not run anyway.**
 The readiness check it triggers is the ordinary one: if the station has

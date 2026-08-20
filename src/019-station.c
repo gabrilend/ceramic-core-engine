@@ -2,13 +2,13 @@
  * 019-station.c — building and dismantling the station table.
  *
  * What this is: the structural half of the engine. It allocates the
- * table of stations, hangs slots and ports off them, and tears
+ * table of stations, hangs input and output ports off them, and tears
  * it all down. Nothing in this file moves a value; motion lives in
  * the delivery file. Data structures here, dataflow there — an error
  * in one is then findable without reading the other.
  *
  * How it does it, in general terms: one allocation for the table,
- * one per station's slot array, one per ring buffer, ports and
+ * one per station's port array, one per ring buffer, ports and
  * destinations as small linked nodes created as wires are declared.
  * Every cross-reference is an index, so nothing here ever needs
  * fixing up when storage grows elsewhere.
@@ -22,7 +22,7 @@
 /*
  * Ring buffers start small on purpose: growth is cheap, proven, and
  * worth seeing in the demo; a generous initial size would only hide
- * the mechanism. The depth itself is SLOT_DEFAULT_CAPACITY, declared
+ * the mechanism. The depth itself is IN_PORT_DEFAULT_CAPACITY, declared
  * beside the record in the header because the port's contract is
  * where a reader looks for it — and because issue 210b gave a port a
  * way to ask for a different one, which means two places now have to
@@ -42,16 +42,16 @@ static void fail(const char *what)
 }
 /* }}} */
 
-/* {{{ cell_stride() */
+/* {{{ slot_stride() */
 /*
- * How many bytes one cell occupies: its value, then its state, then
- * enough padding that the next cell's value is aligned too.
+ * How many bytes one slot occupies: its value, then its state, then
+ * enough padding that the next slot's value is aligned too.
  *
  * The alignment is inferred rather than known, and the inference is
  * the only subtle line in this file. The registry carries every
  * type's *size* and no type's *alignment* — nothing has needed the
  * latter before, because a plain array of values strided by their own
- * size is aligned for free. Adding a state byte per cell breaks that
+ * size is aligned for free. Adding a state byte per slot breaks that
  * for the first time.
  *
  * What rescues it is a rule the C standard guarantees: a type's
@@ -63,14 +63,14 @@ static void fail(const char *what)
  * memory.
  *
  * The cost is worth stating plainly. A port of four-byte integers
- * goes from four bytes per cell to eight — the state needs a byte and
+ * goes from four bytes per slot to eight — the state needs a byte and
  * the alignment rounds it to four. A port of two-hundred-byte structs
  * goes from two hundred to two hundred and eight. So the overhead is
  * large in proportion exactly where it is small in absolute terms,
  * and negligible where the values are big, which is the case this
  * whole line of work is about.
  */
-static int cell_stride(int elem_size)
+static int slot_stride(int elem_size)
 {
     int align = 1;
     while (align < 16 && elem_size % (align * 2) == 0)
@@ -80,23 +80,23 @@ static int cell_stride(int elem_size)
 }
 /* }}} */
 
-/* {{{ slot_cell() */
-void *slot_cell(const slot_t *sl, int index)
+/* {{{ in_port_slot() */
+void *in_port_slot(const in_port_t *sl, int index)
 {
     return (unsigned char *)sl->storage + (size_t)index * (size_t)sl->stride;
 }
 /* }}} */
 
-/* {{{ slot_cell_move() */
-int slot_cell_move(const slot_t *sl, int index, int from, int to)
+/* {{{ in_port_slot_move() */
+int in_port_slot_move(const in_port_t *sl, int index, int from, int to)
 {
     /* The state sits immediately after the value bytes. Reached
      * through a byte pointer and an explicit offset rather than a
-     * struct member, because a cell's size is not known until the
+     * struct member, because a slot's size is not known until the
      * port exists — the value in the middle of it is as wide as the
      * parameter this port feeds. */
     _Atomic unsigned char *state = (_Atomic unsigned char *)
-        ((unsigned char *)slot_cell(sl, index) + sl->elem_size);
+        ((unsigned char *)in_port_slot(sl, index) + sl->elem_size);
 
     unsigned char expected = (unsigned char)from;
     /* Acquire-release on success: a reader that wins ready-to-claimed
@@ -230,13 +230,13 @@ int map_add_station(map_t *m)
 
 /* {{{ map_place() */
 void map_place(map_t *m, int station, task_call_t shim, int kind,
-               int n_slots, const int *elem_sizes, int out_size)
+               int n_in_ports, const int *elem_sizes, int out_size)
 {
     if (station < 0 || station >= m->n_stations)
         fail("placing a box at a station index outside the table");
     if (kind < 0 || kind >= STATION_KIND_COUNT)
         fail("placing a box of a kind that does not exist");
-    if (n_slots < 0)
+    if (n_in_ports < 0)
         fail("a station cannot have a negative number of slots");
 
     station_t *s = map_station(m, station);
@@ -249,29 +249,29 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
     s->out_size = out_size;
     s->cursor = 0;
 
-    s->n_slots = n_slots;
-    s->slots = NULL;
-    if (n_slots > 0) {
-        s->slots = calloc((size_t)n_slots, sizeof *s->slots);
-        if (!s->slots) fail("out of memory for a slot array");
+    s->n_in_ports = n_in_ports;
+    s->in_ports = NULL;
+    if (n_in_ports > 0) {
+        s->in_ports = calloc((size_t)n_in_ports, sizeof *s->in_ports);
+        if (!s->in_ports) fail("out of memory for a port array");
     }
 
-    for (int i = 0; i < n_slots; i++) {
-        slot_t *sl = &s->slots[i];
+    for (int i = 0; i < n_in_ports; i++) {
+        in_port_t *sl = &s->in_ports[i];
         if (elem_sizes[i] <= 0)
-            fail("a slot's element size must be positive");
-        /* Every slot starts life as a ring buffer — the default the
+            fail("a port's element size must be positive");
+        /* Every port starts life as a ring buffer — the default the
          * map format also assumes (issue 601). Becoming a static, or
          * having its source taken away, is a conversion applied
          * afterwards; neither one frees what is allocated here
          * (issue 210b). */
-        sl->kind = SLOT_RING;
+        sl->kind = IN_PORT_RING;
         sl->elem_size = elem_sizes[i];
-        sl->capacity = SLOT_DEFAULT_CAPACITY;
-        sl->stride = cell_stride(sl->elem_size);
-        /* Zeroed rather than merely allocated, because a cell's state
+        sl->capacity = IN_PORT_DEFAULT_CAPACITY;
+        sl->stride = slot_stride(sl->elem_size);
+        /* Zeroed rather than merely allocated, because a slot's state
          * is part of it now and empty is zero (issue 210c) — a fresh
-         * run of cells has to be a fresh run of *empty* cells, or the
+         * run of slots has to be a fresh run of *empty* slots, or the
          * first reader to look would find whatever the allocator left
          * behind and believe it. */
         sl->storage = calloc((size_t)sl->capacity, (size_t)sl->stride);
@@ -295,22 +295,22 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
 }
 /* }}} */
 
-/* {{{ map_slot_start_depth() */
-void map_slot_start_depth(map_t *m, int station, int slot, int cells)
+/* {{{ map_in_port_start_depth() */
+void map_in_port_start_depth(map_t *m, int station, int port, int slots)
 {
     if (station < 0 || station >= m->n_stations)
         fail("setting the starting depth of a port on a station outside the table");
     station_t *s = map_station(m, station);
-    if (slot < 0 || slot >= s->n_slots)
+    if (port < 0 || port >= s->n_in_ports)
         fail("setting the starting depth of a port the box does not have");
-    /* One cell is a legitimate depth. It used to take two, because a
+    /* One slot is a legitimate depth. It used to take two, because a
      * spare was held back so that head meeting tail could mean empty
-     * rather than full; a cell that carries its own state needs no
-     * such stand-in, and every cell is usable (issue 210c). */
-    if (cells < 1)
-        fail("a ring buffer needs at least one cell");
+     * rather than full; a slot that carries its own state needs no
+     * such stand-in, and every slot is usable (issue 210c). */
+    if (slots < 1)
+        fail("a ring buffer needs at least one slot");
 
-    slot_t *sl = &s->slots[slot];
+    in_port_t *sl = &s->in_ports[port];
     if (sl->held != 0)
         fail("setting the starting depth of a port that already holds values "
              "— this is a starting depth, and the start has been and gone");
@@ -319,25 +319,25 @@ void map_slot_start_depth(map_t *m, int station, int slot, int cells)
      * the buffer it already had rather than with none. Growth is what
      * covers a depth that turns out wrong, so there is nothing to
      * copy: the port is empty, which is what the check above proved. */
-    void *fresh = calloc((size_t)cells, (size_t)sl->stride);
+    void *fresh = calloc((size_t)slots, (size_t)sl->stride);
     if (!fresh) fail("out of memory resizing a ring buffer to its starting depth");
     free(sl->storage);
     sl->storage = fresh;
-    sl->capacity = cells;
+    sl->capacity = slots;
     sl->read_hint = 0;
     sl->write_hint = 0;
 }
 /* }}} */
 
-/* {{{ map_slot_convert() */
-void map_slot_convert(map_t *m, int station, int slot, int kind)
+/* {{{ map_in_port_convert() */
+void map_in_port_convert(map_t *m, int station, int port, int kind)
 {
     if (station < 0 || station >= m->n_stations)
         fail("converting a port on a station outside the table");
     station_t *s = map_station(m, station);
-    if (slot < 0 || slot >= s->n_slots)
+    if (port < 0 || port >= s->n_in_ports)
         fail("converting a port the box does not have");
-    if (kind < 0 || kind >= SLOT_KIND_COUNT)
+    if (kind < 0 || kind >= IN_PORT_KIND_COUNT)
         fail("converting a port to a kind that does not exist");
 
     /* Becoming a static again is legitimate and is why the constant
@@ -347,7 +347,7 @@ void map_slot_convert(map_t *m, int station, int slot, int kind)
      * effect over storage nobody has written — and that is a
      * different thing from *none*, which is honest about having no
      * source at all. */
-    if (kind == SLOT_STATIC && !s->slots[slot].constant_set)
+    if (kind == IN_PORT_STATIC && !s->in_ports[port].constant_set)
         fail("this port has never held a constant, so there is no value for "
              "it to go back to — give it one as text first");
 
@@ -358,41 +358,42 @@ void map_slot_convert(map_t *m, int station, int slot, int kind)
      * header for why the storage staying put is what makes this
      * cheap and what makes it lossless. */
     pthread_mutex_lock(&s->mutex);
-    s->slots[slot].kind = (unsigned char)kind;
+    s->in_ports[port].kind = (unsigned char)kind;
     pthread_mutex_unlock(&s->mutex);
 }
 /* }}} */
 
-/* {{{ slot_kind_name() */
-const char *slot_kind_name(unsigned char kind)
+/* {{{ in_port_kind_name() */
+const char *in_port_kind_name(unsigned char kind)
 {
-    static const char *const names[SLOT_KIND_COUNT] = {
-        [SLOT_RING]   = "a buffer",
-        [SLOT_STATIC] = "a static value",
-        [SLOT_NONE]   = "a port with no source yet",
+    static const char *const names[IN_PORT_KIND_COUNT] = {
+        [IN_PORT_RING]   = "a buffer",
+        [IN_PORT_STATIC] = "a static value",
+        [IN_PORT_NONE]   = "a port with no source yet",
     };
-    return kind < SLOT_KIND_COUNT ? names[kind] : "a port of an unknown kind";
+    return kind < IN_PORT_KIND_COUNT ? names[kind]
+                                    : "a port of an unknown kind";
 }
 /* }}} */
 
-/* {{{ station_port() */
+/* {{{ station_out_port() */
 /*
  * The port at a given index, walking the list. Ports are few — one
  * for plain, three for a comparator — so the walk is cheaper than
  * any cleverness. Returns null when the port was never created,
  * which delivery reads as "discard".
  */
-port_t *station_port(station_t *s, int index)
+out_port_t *station_out_port(station_t *s, int index)
 {
-    port_t *p = s->ports;
+    out_port_t *p = s->out_ports;
     for (int i = 0; p && i < index; i++)
         p = p->next;
     return p;
 }
 /* }}} */
 
-/* {{{ port_dests() */
-dest_set_t *port_dests(const port_t *p)
+/* {{{ out_port_dests() */
+dest_set_t *out_port_dests(const out_port_t *p)
 {
     if (!p)
         return NULL;
@@ -413,7 +414,7 @@ dest_set_t *port_dests(const port_t *p)
  * drawn twice is two wires and removing one should leave the other.
  */
 dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
-                           int add_slot, int drop_station, int drop_slot)
+                           int add_port, int drop_station, int drop_port)
 {
     int old_n = from ? from->n : 0;
     int n = old_n + (add_station >= 0 ? 1 : 0);
@@ -427,7 +428,7 @@ dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
     for (int i = 0; i < old_n; i++) {
         if (!dropped && drop_station >= 0
             && from->items[i].station == drop_station
-            && from->items[i].slot == drop_slot) {
+            && from->items[i].port == drop_port) {
             dropped = 1;
             continue;
         }
@@ -441,7 +442,7 @@ dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
          * them in array order, so keeping it means dump, load, dump
          * produces the same text without anybody arranging it. */
         set->items[out].station = add_station;
-        set->items[out].slot = add_slot;
+        set->items[out].port = add_port;
         out++;
     }
     set->n = out;
@@ -605,7 +606,7 @@ void map_scrap_free_all(map_t *m)
 
 /* {{{ map_connect() */
 void map_connect(map_t *m, int from_station, int port,
-                 int to_station, int to_slot)
+                 int to_station, int to_port)
 {
     if (from_station < 0 || from_station >= m->n_stations)
         fail("connecting from a station outside the table");
@@ -616,8 +617,8 @@ void map_connect(map_t *m, int from_station, int port,
     station_t *to = map_station(m, to_station);
     if (!from->call || !to->call)
         fail("connecting a station that has no box placed yet — place, then connect");
-    if (to_slot < 0 || to_slot >= to->n_slots)
-        fail("connecting to a slot the destination box does not have");
+    if (to_port < 0 || to_port >= to->n_in_ports)
+        fail("connecting to a port the destination box does not have");
     if (from->out_size == 0)
         fail("connecting from a sink — a box that returns nothing has no output to wire");
     if (port < 0)
@@ -632,26 +633,26 @@ void map_connect(map_t *m, int from_station, int port,
      * intermediate ports are created empty rather than refused. An
      * empty port discards, which is exactly what an unwired outcome
      * should do. A dispatch-by-kind table, not a chain. */
-    static const int port_limit[STATION_KIND_COUNT] = {
+    static const int out_port_limit[STATION_KIND_COUNT] = {
         [STATION_PLAIN]      = 1,
         [STATION_COMPARATOR] = 3,
         [STATION_ITERATOR]   = 0,   /* zero meaning: no limit */
     };
-    int limit = port_limit[from->kind];
+    int limit = out_port_limit[from->kind];
     if (limit > 0 && port >= limit)
         fail("a port index beyond what this station kind can mean — a plain "
              "box has one exit, a comparator three");
 
-    while (from->n_ports <= port) {
-        port_t *fresh = calloc(1, sizeof *fresh);
+    while (from->n_out_ports <= port) {
+        out_port_t *fresh = calloc(1, sizeof *fresh);
         if (!fresh) fail("out of memory for a port");
-        port_t **link = &from->ports;
+        out_port_t **link = &from->out_ports;
         while (*link)
             link = &(*link)->next;
         *link = fresh;
-        from->n_ports++;
+        from->n_out_ports++;
     }
-    port_t *p = station_port(from, port);
+    out_port_t *p = station_out_port(from, port);
 
     /*
      * A whole new set, published by one write, with the old one filed
@@ -660,8 +661,8 @@ void map_connect(map_t *m, int from_station, int port,
      * path anyway, so there is one way a port's destinations change
      * rather than two that must agree.
      */
-    dest_set_t *old = port_dests(p);
-    dest_set_t *fresh = dest_set_build(old, to_station, to_slot, -1, -1);
+    dest_set_t *old = out_port_dests(p);
+    dest_set_t *fresh = dest_set_build(old, to_station, to_port, -1, -1);
     atomic_store_explicit(&p->dests, fresh, memory_order_release);
     map_retire(m, old, free);
 }
@@ -689,20 +690,20 @@ void map_start(map_t *m, int n_workers)
 }
 /* }}} */
 
-/* {{{ map_slot_depth() */
-int map_slot_depth(map_t *m, int station, int slot)
+/* {{{ map_in_port_depth() */
+int map_in_port_depth(map_t *m, int station, int port)
 {
     station_t *s = map_station(m, station);
-    if (slot < 0 || slot >= s->n_slots)
-        fail("asking the depth of a slot that does not exist");
-    slot_t *sl = &s->slots[slot];
+    if (port < 0 || port >= s->n_in_ports)
+        fail("asking the depth of a port that does not exist");
+    in_port_t *sl = &s->in_ports[port];
 
     /* A maintained count rather than index arithmetic (issue 210d):
      * with values claimed wherever they sit, the distance between two
      * indices stopped describing how many are waiting.
      *
      * A port that is not a buffer still answers, and answers honestly.
-     * A static reports whatever its cells were carrying when it
+     * A static reports whatever its slots were carrying when it
      * stopped being a buffer, which is the truth — those values are
      * waiting, and will be served if it becomes a buffer again. */
     pthread_mutex_lock(&s->mutex);
@@ -736,17 +737,17 @@ void map_destroy(map_t *m)
             pthread_mutex_destroy(&s->mutex);
             continue;
         }
-        for (int j = 0; j < s->n_slots; j++) {
-            free(s->slots[j].storage);
+        for (int j = 0; j < s->n_in_ports; j++) {
+            free(s->in_ports[j].storage);
             /* Both storages, because a port carries both whatever it
              * was being used for (issue 401). */
-            slot_constant_free(&s->slots[j]);
+            in_port_constant_free(&s->in_ports[j]);
         }
-        free(s->slots);
-        port_t *p = s->ports;
+        free(s->in_ports);
+        out_port_t *p = s->out_ports;
         while (p) {
-            free(port_dests(p));
-            port_t *next = p->next;
+            free(out_port_dests(p));
+            out_port_t *next = p->next;
             free(p);
             p = next;
         }

@@ -1,4 +1,4 @@
-# 018-station.h — stations, slots, and maps, from outside
+# 018-station.h — stations, ports, and maps, from outside
 
 A map is a flat table of stations. A station is one placement of a
 box: the buffers where its input values wait, the mutex guarding
@@ -8,17 +8,17 @@ buffers grow.
 
 ## Data structures
 
-**slot** — one input's waiting place.
+**port** — one input's waiting place.
 | field | type | meaning |
 |---|---|---|
 | kind | `unsigned char` | Ring buffer (0), static (1), or no source yet (2). Stored, never inferred. |
 | elem_size | `int` | Bytes per value; exactly the parameter's size. |
-| storage | `void *` | The ring's cells. Allocated at placement whatever the kind, and never freed until the map is. Reallocated on growth; the slot itself never moves. |
-| capacity | `int` | Cells allocated, all of them usable. Starts at ten unless the port was told otherwise. |
-| stride | `int` | Bytes from one cell to the next: a value, its state, and padding to keep the next value aligned. |
+| storage | `void *` | The ring's slots. Allocated at placement whatever the kind, and never freed until the map is. Reallocated on growth; the port itself never moves. |
+| capacity | `int` | Slots allocated, all of them usable. Starts at ten unless the port was told otherwise. |
+| stride | `int` | Bytes from one slot to the next: a value, its state, and padding to keep the next value aligned. |
 | read_hint, write_hint | `int` | Where a reader and a writer each start looking. Hints, not positions. |
-| held | `int`, atomic | Cells ready right now. |
-| constant | `void *` | The static's value, `elem_size` bytes, allocated at placement like the cells. Kept when the port is converted away, so a port that goes static, buffer, static reads the value it read before. |
+| held | `int`, atomic | Slots ready right now. |
+| constant | `void *` | The static's value, `elem_size` bytes, allocated at placement like the slots. Kept when the port is converted away, so a port that goes static, buffer, static reads the value it read before. |
 | constant_string | `char *` | A string constant's characters, since the value is a pointer that has to point at something the port owns. |
 | constant_set | `int` | Whether anybody has written one. |
 | growths, high_water | `int` | How many doublings, and the deepest backlog — phase 7's reading. |
@@ -32,36 +32,37 @@ exist before anybody has finished wiring it. That last one is a
 state, not a value: no null is invented and nothing is ever handed to
 a box.
 
-**The cells outlive the kind.** A port keeps its buffer whatever it is
+**The slots outlive the kind.** A port keeps its buffer whatever it is
 currently for, so changing a port's source is a field write rather
 than an allocation, and values already waiting in it are still there
-afterwards. A port that is a static all its life carries cells it
+afterwards. A port that is a static all its life carries slots it
 never uses; that is paid once, at startup.
 
-**A cell says what is happening to it**: nothing here, a writer is
+**A slot says what is happening to it**: nothing here, a writer is
 filling me, the bytes have landed, a reader is emptying me. Every move
 between those names the state it starts from and is one atomic swap,
-so two threads can never own one cell and a move out of a state a cell
-is not in is refused. That is the mutual exclusion, per cell rather
-than per port, and it is what lets a reader *look* for a usable cell
+so two threads can never own one slot and a move out of a state a slot
+is not in is refused. That is the mutual exclusion, per slot rather
+than per port, and it is what lets a reader *look* for a usable slot
 instead of computing where one must be — which in turn is what lets
 the copying leave the station's lock, and what will let a buffer grow
 by adding a page rather than copying.
 
-Cells are never cleared when released. Every write covers the full
+Slots are never cleared when released. Every write covers the full
 element size, so a stale value is always completely overwritten; the
-promise is not that a cell was cleaned but that its bytes are never
+promise is not that a slot was cleaned but that its bytes are never
 read unless its state says ready.
 
-**destination** — one landing place: `{station int32, slot int32}`,
+**destination** — one landing place: `{station int32, port int32}`,
 linked. **port** — one exit: a linked list of destinations, itself
 linked to the station's next port.
 
 **station** — fixed-size record; everything variable hangs off
 pointers so the table stays indexable and no station ever moves.
 Fields: mutex, call (the shim), kind (plain 0 / comparator 1 /
-iterator 2), slots + n_slots, ports + n_ports, cursor (iterator's one
-memory), out_size (`int`, bytes of return value, 0 = sink).
+iterator 2), in_ports + n_in_ports, out_ports + n_out_ports, cursor
+(the iterator's one memory), out_size (`int`, bytes of the return
+value, 0 = sink).
 
 **map** — stations + count + the pool delivery pushes into. It used to
 carry a numbered table of shared constants too; that is gone, and with
@@ -79,21 +80,21 @@ anything already placed.
 **map_station(map, n) → station** — one shift, one mask, one
 dereference.
 
-**map_place(map, station index, shim, kind, slot count, element
+**map_place(map, station index, shim, kind, port count, element
 sizes array, output size)** — put a box at a station: one ring-buffer
-slot per element size. Scaffolding until the loader takes over
+port per element size. Scaffolding until the loader takes over
 (phase 6); sizes come from the registry from phase 3.
 
-**map_slot_start_depth(map, station, slot, cells)** — tell one port
+**map_in_port_start_depth(map, station, port, slots)** — tell one port
 how deep its buffer should start. A hint, not a setting: growth covers
 being wrong, so nobody has to be right. Refuses a port that already
-holds values, and refuses fewer than two cells (one is always spare).
+holds values, and refuses fewer than two slots (one is always spare).
 Worth using when an author already knows one input side outruns its
 siblings and would rather not watch it grow thirteen times to find
 out.
 
-**map_slot_convert(map, station, slot, kind)** — change what a port
-is. The tag changes and nothing else: cells are not freed, not
+**map_in_port_convert(map, station, port, kind)** — change what a port
+is. The tag changes and nothing else: slots are not freed, not
 cleared, not drained, so values waiting in a buffer are still waiting
 if it becomes a buffer again. Becoming a static is refused here
 because it needs a value this call has no room for — bind through the
@@ -105,16 +106,16 @@ serve a value that arrived before the conversion after values that
 arrived during it. Arrival order is not promised, so nothing that was
 still being offered is lost here.
 
-**map_connect(map, from station, port index, to station, to slot)** —
+**map_connect(map, from station, port index, to station, to port)** —
 draw a wire. Ports are created in order, no gaps; repeat a port to
 fan out. Destination must already be placed. Fails loudly on any
-nonsense (slot out of range, wiring from a sink, gaps in ports).
+nonsense (port out of range, wiring from a sink, gaps in ports).
 
 **map_start(map, worker count)** — create the pool with delivery as
 its finish hook. Seed values before releasing `map->pool`; release
 and join through the pool interface.
 
-**map_deliver_value(map, station, slot, value pointer)** — deliver
+**map_deliver_value(map, station, port, value pointer)** — deliver
 one value: lock, write, readiness check, claim if complete, unlock,
 then build and push a task if one became due. Both the interior of
 the delivery walk and the way tests seed a map.
@@ -123,7 +124,7 @@ the delivery walk and the way tests seed a map.
 calls it after every task. Sinks skip it; a port wired nowhere
 discards.
 
-**map_slot_depth(map, station, slot) → int** — values waiting right
+**map_in_port_depth(map, station, port) → int** — values waiting right
 now. For demos and diagnostics only.
 
 **map_destroy(map)** — tear everything down, pool included.

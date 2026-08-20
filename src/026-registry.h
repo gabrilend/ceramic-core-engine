@@ -121,7 +121,7 @@ const char *registry_box_name_for_shim(task_call_t shim);
  * Place a box at a station by name, sizes drawn from the registry
  * instead of typed in by hand — the moment phase 2's hand-supplied
  * element sizes become correct by construction (issue 303). A
- * comparator gets its extra threshold slot here, typed to the box's
+ * comparator gets its extra threshold port here, typed to the box's
  * return value (issue 502's shape, placed early so the loader needs
  * no special case).
  */

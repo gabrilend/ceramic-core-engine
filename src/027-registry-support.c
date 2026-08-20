@@ -103,7 +103,7 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
 {
     /*
      * A place that has been removed but not yet reclaimed is not free
-     * (issue 216). Its record still carries the slot count and return
+     * (issue 216). Its record still carries the port count and return
      * size a task being built right now needs, and the sweep that
      * clears them is what makes the place available. Placing here
      * before then would have the sweep clear the *new* station's
@@ -143,7 +143,7 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
         abort();
     }
 
-    /* A comparator carries one extra slot at the end of the array,
+    /* A comparator carries one extra port at the end of the array,
      * holding the value to compare against, typed to match the box's
      * return value because that is what it will be compared with
      * (issue 502). The shim is handed only the real parameters; the
@@ -179,16 +179,16 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
     map_place(m, station, b->shim, kind, n, sizes, b->return_size);
 
     /* Registry placement knows what hand placement cannot: the type
-     * each slot feeds, as text. This is what lets a static entry's
+     * each port feeds, as text. This is what lets a static entry's
      * text become bytes of the right shape (issue 401), and what the
      * wire checker will compare in phase 6. The comparator's extra
-     * slot is typed to the return value, since that is what it will
+     * port is typed to the return value, since that is what it will
      * be compared against. */
     station_t *s = map_station(m, station);
     for (int i = 0; i < b->n_params; i++)
-        s->slots[i].type_name = b->params[i].type_name;
+        s->in_ports[i].type_name = b->params[i].type_name;
     if (extra) {
-        s->slots[b->n_params].type_name = b->return_type;
+        s->in_ports[b->n_params].type_name = b->return_type;
         /* Resolved once, here, so the delivery path compares with a
          * call rather than a lookup (issue 503). */
         s->compare = b->compare;

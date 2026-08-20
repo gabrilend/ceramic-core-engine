@@ -95,7 +95,7 @@ reporting it later is a read rather than a retrofit.
 
 ## Related
 
-- [002 — Stations and slots](../docs/002-stations-and-slots.md)
+- [002 — Stations and ports](../docs/002-stations-and-ports.md)
 - Issue 201 — why the station is fixed-size
 - Issue 202 — the buffer being grown
 - Issue 701 — reporting the growth count

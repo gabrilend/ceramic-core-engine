@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>057 — Packaging the engine as a library</h1>
@@ -204,7 +205,7 @@ symbol table of a linked test binary, not by guessing.</p>
 <table>
 <tr><td>in the way</td><td>what it does to a consumer</td><td>size of the fix</td></tr>
 <tr><td><strong>Engine symbols are common words.</strong> <code>map_create</code>, <code>map_connect</code>, <code>map_start</code>, <code>map_destroy</code>, <code>pool_create</code>, <code>pool_push</code>, <code>pool_join</code> and about thirty more are exported unprefixed.</td><td>Any host program with its own notion of a map or a pool fails to link, with a duplicate-symbol error naming a function they never wrote.</td><td>Mechanical rename, ~40 symbols, touches source, interface files, docs, and issue text. Half a day, done carefully.</td></tr>
-<tr><td><strong>Internals are exported too.</strong> <code>task_build</code>, <code>station_port</code>, <code>static_claim</code>, <code>gather_claim</code>, <code>map_statics_free</code>, <code>sora_stats_box_time</code> are joints between engine files, not API.</td><td>They collide like anything else, and they invite a consumer to call them.</td><td>Free, if the amalgamation shape below is taken.</td></tr>
+<tr><td><strong>Internals are exported too.</strong> <code>task_build</code>, <code>station_out_port</code>, <code>static_claim</code>, <code>gather_claim</code>, <code>map_statics_free</code>, <code>sora_stats_box_time</code> are joints between engine files, not API.</td><td>They collide like anything else, and they invite a consumer to call them.</td><td>Free, if the amalgamation shape below is taken.</td></tr>
 <tr><td><strong>The demo boxes export <code>add</code>, <code>mix</code>, <code>keep</code>, <code>nudge</code>, <code>seven</code>, <code>swallow</code>, <code>magnitude_squared</code>.</strong></td><td>These are example code, and <code>add</code> is the single most collidable symbol in C.</td><td>Exclude <code>src/boxes/</code> from the packaged library. Trivial, but it must be deliberate — the build currently wildcards it in.</td></tr>
 <tr><td><strong>Two process-wide globals.</strong> The active map (so a box can reach the statics table) and the last load's timing.</td><td>One map per process, forever, silently. A host that wants two engines gets one, and the second quietly writes into the first.</td><td>Medium. Already the first-pass report's second priority: thread the map through the task instead of parking it in a global.</td></tr>
 <tr><td><strong>Every error calls <code>abort()</code>.</strong></td><td>A malformed map file, a missing gather source, or an out-of-memory task kills the host application. A library that can end someone else's process on bad input is not embeddable.</td><td>Small in code, large in decision. See below.</td></tr>
@@ -228,7 +229,7 @@ loading.</p>
 <p><strong>Run it</strong> — start (which creates the pool and releases it), wait,
 destroy. Inject a value from outside. Count what the seed sweep enqueued.</p>
 <p><strong>Watch it</strong> — start and stop the observer thread, print the station
-report, the buffer report, the shutdown summary, ask a slot's current
+report, the buffer report, the shutdown summary, ask a port's current
 depth, dump the live map back out as a map file.</p>
 <p><strong>Edit it while it runs</strong> — connect, disconnect, write a static value.
 Writing one is not merely configuration: it runs the readiness check on

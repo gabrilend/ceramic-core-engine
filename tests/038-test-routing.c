@@ -3,13 +3,13 @@
  *
  * What this is: the tests that a map can decide. A comparator's
  * three outcomes each reach their own port, its threshold behaves
- * like any other slot, an unwired outcome discards, comparison is
+ * like any other port, an unwired outcome discards, comparison is
  * semantic (floats and author-ordered structs route where raw bytes
  * would not), and an iterator spreads exactly evenly no matter how
  * many threads are enqueuing.
  *
  * How it does it, in general terms: comparator maps place registry
- * boxes with the extra threshold slot bound static or left buffered,
+ * boxes with the extra threshold port bound static or left buffered,
  * with counting sinks on each port; every count is then checked
  * against what the mathematics says. The plain path needs no new
  * test — the whole earlier suite is that test, unchanged.
@@ -75,7 +75,7 @@ static void test_three_outcomes(void)
     map_place_box(m, 0, "add", STATION_COMPARATOR);
     wire_three_sinks(m, 0, 1, sizeof(int));
 
-    map_slot_static_text(m, 0, 2, "100");   /* the threshold slot, last */
+    map_in_port_static_text(m, 0, 2, "100");   /* the threshold port, last */
 
     map_start(m, 4);
     reset_hits();
@@ -103,7 +103,7 @@ static void test_three_outcomes(void)
 /* {{{ test_buffered_threshold_blocks() */
 static void test_buffered_threshold_blocks(void)
 {
-    /* The threshold left as a buffer: the extra slot really is in
+    /* The threshold left as a buffer: the extra port really is in
      * the readiness walk, so the station starves without it. */
     map_t *m = map_create(4);
     map_place_box(m, 0, "add", STATION_COMPARATOR);
@@ -115,7 +115,7 @@ static void test_buffered_threshold_blocks(void)
     int a = 1, b = 2;
     map_deliver_value(m, 0, 0, &a);
     map_deliver_value(m, 0, 1, &b);
-    /* Data complete, threshold absent: were the extra slot not
+    /* Data complete, threshold absent: were the extra port not
      * checked, a task would fire here and the pool would not be
      * empty when released... */
     int threshold = 10;
@@ -126,7 +126,7 @@ static void test_buffered_threshold_blocks(void)
     check(hits_less == 1 && hits_equal == 0 && hits_greater == 0,
           "the station fired exactly once, only after its threshold arrived");
     map_destroy(m);
-    printf("  a buffered threshold gates readiness like any other slot\n");
+    printf("  a buffered threshold gates readiness like any other port\n");
 }
 /* }}} */
 
@@ -140,7 +140,7 @@ static void test_unwired_port_discards(void)
     map_place(m, 1, greater_sink__call, STATION_PLAIN, 1, one, 0);
     map_connect(m, 0, 2, 1, 0);
 
-    map_slot_static_text(m, 0, 2, "100");
+    map_in_port_static_text(m, 0, 2, "100");
 
     map_start(m, 2);
     reset_hits();
@@ -173,7 +173,7 @@ static void test_float_semantics(void)
     map_place_box(m, 0, "mix", STATION_COMPARATOR);
     wire_three_sinks(m, 0, 1, sizeof(double));
 
-    map_slot_static_text(m, 0, 2, "0.5");
+    map_in_port_static_text(m, 0, 2, "0.5");
 
     map_start(m, 2);
     reset_hits();
@@ -202,7 +202,7 @@ static void test_struct_author_order(void)
     map_place_box(m, 0, "make_vec3", STATION_COMPARATOR);
     wire_three_sinks(m, 0, 1, sizeof(vec3));
 
-    map_slot_static_text(m, 0, 3, "{ 1, 8, 8 }");   /* magnitude^2 = 129 */
+    map_in_port_static_text(m, 0, 3, "{ 1, 8, 8 }");   /* magnitude^2 = 129 */
 
     map_start(m, 2);
     reset_hits();

@@ -48,7 +48,7 @@ struct task {
     int32_t     station;  /* which station produced it, so delivery knows where to look */
     int32_t     port;     /* an iterator's assigned exit; inert until phase 5 */
     int32_t     n_in;     /* how many input values ride along */
-    void      **in;       /* one claimed value per input slot, in parameter order */
+    void      **in;       /* one claimed value per input port, in parameter order */
     void       *out;      /* where the return value lands; null for a sink */
 
     /* How long the box took, when the engine is built with timing

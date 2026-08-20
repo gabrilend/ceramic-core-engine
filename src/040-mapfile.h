@@ -44,7 +44,7 @@
  * refuses it by name rather than reinterpreting it.
  */
 typedef struct desc_input {
-    int   slot;
+    int   port;
     int   is_static;      /* $n rather than an inline value */
     int   static_id;      /* which entry, when is_static */
     char *text;           /* the value as written, when inline */
@@ -65,7 +65,7 @@ typedef struct desc_input {
 typedef struct desc_output {
     int   port;
     char *dest_station;
-    int   dest_slot;
+    int   dest_port;
     int   line;
     struct desc_output *next;
 } desc_output_t;

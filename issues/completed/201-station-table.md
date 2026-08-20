@@ -97,6 +97,6 @@ a change to this structure.
 
 ## Related
 
-- [002 — Stations and slots](../docs/002-stations-and-slots.md)
+- [002 — Stations and ports](../docs/002-stations-and-ports.md)
 - Issue 202 — what goes in the slots array
 - Issue 207 — how a table gets built before map files exist

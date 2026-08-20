@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>018-station.h — stations, slots, and maps, from outside</title>
+<title>018-station.h — stations, ports, and maps, from outside</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html" class="here">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html" class="here">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,26 +136,27 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
-<h1>018-station.h — stations, slots, and maps, from outside</h1>
+<h1>018-station.h — stations, ports, and maps, from outside</h1>
 <p>A map is a flat table of stations. A station is one placement of a
 box: the buffers where its input values wait, the mutex guarding
 them, and the ports its output leaves through. Wires name stations by
 index — a 32-bit number, never a pointer — so nothing dangles when
 buffers grow.</p>
 <h2>Data structures</h2>
-<p><strong>slot</strong> — one input's waiting place.</p>
+<p><strong>port</strong> — one input's waiting place.</p>
 <table>
 <tr><td>field</td><td>type</td><td>meaning</td></tr>
 <tr><td>kind</td><td><code>unsigned char</code></td><td>Ring buffer (0), static (1), or no source yet (2). Stored, never inferred.</td></tr>
 <tr><td>elem_size</td><td><code>int</code></td><td>Bytes per value; exactly the parameter's size.</td></tr>
-<tr><td>storage</td><td><code>void *</code></td><td>The ring's cells. Allocated at placement whatever the kind, and never freed until the map is. Reallocated on growth; the slot itself never moves.</td></tr>
-<tr><td>capacity</td><td><code>int</code></td><td>Cells allocated, all of them usable. Starts at ten unless the port was told otherwise.</td></tr>
-<tr><td>stride</td><td><code>int</code></td><td>Bytes from one cell to the next: a value, its state, and padding to keep the next value aligned.</td></tr>
+<tr><td>storage</td><td><code>void *</code></td><td>The ring's slots. Allocated at placement whatever the kind, and never freed until the map is. Reallocated on growth; the port itself never moves.</td></tr>
+<tr><td>capacity</td><td><code>int</code></td><td>Slots allocated, all of them usable. Starts at ten unless the port was told otherwise.</td></tr>
+<tr><td>stride</td><td><code>int</code></td><td>Bytes from one slot to the next: a value, its state, and padding to keep the next value aligned.</td></tr>
 <tr><td>read_hint, write_hint</td><td><code>int</code></td><td>Where a reader and a writer each start looking. Hints, not positions.</td></tr>
-<tr><td>held</td><td><code>int</code>, atomic</td><td>Cells ready right now.</td></tr>
-<tr><td>constant</td><td><code>void *</code></td><td>The static's value, <code>elem_size</code> bytes, allocated at placement like the cells. Kept when the port is converted away, so a port that goes static, buffer, static reads the value it read before.</td></tr>
+<tr><td>held</td><td><code>int</code>, atomic</td><td>Slots ready right now.</td></tr>
+<tr><td>constant</td><td><code>void *</code></td><td>The static's value, <code>elem_size</code> bytes, allocated at placement like the slots. Kept when the port is converted away, so a port that goes static, buffer, static reads the value it read before.</td></tr>
 <tr><td>constant_string</td><td><code>char *</code></td><td>A string constant's characters, since the value is a pointer that has to point at something the port owns.</td></tr>
 <tr><td>constant_set</td><td><code>int</code></td><td>Whether anybody has written one.</td></tr>
 <tr><td>growths, high_water</td><td><code>int</code></td><td>How many doublings, and the deepest backlog — phase 7's reading.</td></tr>
@@ -168,32 +169,33 @@ the station holding it can never run, which is what lets a station
 exist before anybody has finished wiring it. That last one is a
 state, not a value: no null is invented and nothing is ever handed to
 a box.</p>
-<p><strong>The cells outlive the kind.</strong> A port keeps its buffer whatever it is
+<p><strong>The slots outlive the kind.</strong> A port keeps its buffer whatever it is
 currently for, so changing a port's source is a field write rather
 than an allocation, and values already waiting in it are still there
-afterwards. A port that is a static all its life carries cells it
+afterwards. A port that is a static all its life carries slots it
 never uses; that is paid once, at startup.</p>
-<p><strong>A cell says what is happening to it</strong>: nothing here, a writer is
+<p><strong>A slot says what is happening to it</strong>: nothing here, a writer is
 filling me, the bytes have landed, a reader is emptying me. Every move
 between those names the state it starts from and is one atomic swap,
-so two threads can never own one cell and a move out of a state a cell
-is not in is refused. That is the mutual exclusion, per cell rather
-than per port, and it is what lets a reader <em>look</em> for a usable cell
+so two threads can never own one slot and a move out of a state a slot
+is not in is refused. That is the mutual exclusion, per slot rather
+than per port, and it is what lets a reader <em>look</em> for a usable slot
 instead of computing where one must be — which in turn is what lets
 the copying leave the station's lock, and what will let a buffer grow
 by adding a page rather than copying.</p>
-<p>Cells are never cleared when released. Every write covers the full
+<p>Slots are never cleared when released. Every write covers the full
 element size, so a stale value is always completely overwritten; the
-promise is not that a cell was cleaned but that its bytes are never
+promise is not that a slot was cleaned but that its bytes are never
 read unless its state says ready.</p>
-<p><strong>destination</strong> — one landing place: <code>{station int32, slot int32}</code>,
+<p><strong>destination</strong> — one landing place: <code>{station int32, port int32}</code>,
 linked. <strong>port</strong> — one exit: a linked list of destinations, itself
 linked to the station's next port.</p>
 <p><strong>station</strong> — fixed-size record; everything variable hangs off
 pointers so the table stays indexable and no station ever moves.
 Fields: mutex, call (the shim), kind (plain 0 / comparator 1 /
-iterator 2), slots + n_slots, ports + n_ports, cursor (iterator's one
-memory), out_size (<code>int</code>, bytes of return value, 0 = sink).</p>
+iterator 2), in_ports + n_in_ports, out_ports + n_out_ports, cursor
+(the iterator's one memory), out_size (<code>int</code>, bytes of the return
+value, 0 = sink).</p>
 <p><strong>map</strong> — stations + count + the pool delivery pushes into. It used to
 carry a numbered table of shared constants too; that is gone, and with
 it the process-wide pointer naming one map as <em>the</em> map, so any number
@@ -207,19 +209,19 @@ one before growing. The table is shelves, so growing never moves
 anything already placed.
 <strong>map_station(map, n) → station</strong> — one shift, one mask, one
 dereference.</p>
-<p>**map_place(map, station index, shim, kind, slot count, element
+<p>**map_place(map, station index, shim, kind, port count, element
 sizes array, output size)** — put a box at a station: one ring-buffer
-slot per element size. Scaffolding until the loader takes over
+port per element size. Scaffolding until the loader takes over
 (phase 6); sizes come from the registry from phase 3.</p>
-<p><strong>map_slot_start_depth(map, station, slot, cells)</strong> — tell one port
+<p><strong>map_in_port_start_depth(map, station, port, slots)</strong> — tell one port
 how deep its buffer should start. A hint, not a setting: growth covers
 being wrong, so nobody has to be right. Refuses a port that already
-holds values, and refuses fewer than two cells (one is always spare).
+holds values, and refuses fewer than two slots (one is always spare).
 Worth using when an author already knows one input side outruns its
 siblings and would rather not watch it grow thirteen times to find
 out.</p>
-<p><strong>map_slot_convert(map, station, slot, kind)</strong> — change what a port
-is. The tag changes and nothing else: cells are not freed, not
+<p><strong>map_in_port_convert(map, station, port, kind)</strong> — change what a port
+is. The tag changes and nothing else: slots are not freed, not
 cleared, not drained, so values waiting in a buffer are still waiting
 if it becomes a buffer again. Becoming a static is refused here
 because it needs a value this call has no room for — bind through the
@@ -229,21 +231,21 @@ walk sees a port mid-change.</p>
 serve a value that arrived before the conversion after values that
 arrived during it. Arrival order is not promised, so nothing that was
 still being offered is lost here.</p>
-<p><strong>map_connect(map, from station, port index, to station, to slot)</strong> —
+<p><strong>map_connect(map, from station, port index, to station, to port)</strong> —
 draw a wire. Ports are created in order, no gaps; repeat a port to
 fan out. Destination must already be placed. Fails loudly on any
-nonsense (slot out of range, wiring from a sink, gaps in ports).</p>
+nonsense (port out of range, wiring from a sink, gaps in ports).</p>
 <p><strong>map_start(map, worker count)</strong> — create the pool with delivery as
 its finish hook. Seed values before releasing <code>map-&gt;pool</code>; release
 and join through the pool interface.</p>
-<p><strong>map_deliver_value(map, station, slot, value pointer)</strong> — deliver
+<p><strong>map_deliver_value(map, station, port, value pointer)</strong> — deliver
 one value: lock, write, readiness check, claim if complete, unlock,
 then build and push a task if one became due. Both the interior of
 the delivery walk and the way tests seed a map.</p>
 <p><strong>map_deliver(context, task)</strong> — the delivery walk itself; the pool
 calls it after every task. Sinks skip it; a port wired nowhere
 discards.</p>
-<p><strong>map_slot_depth(map, station, slot) → int</strong> — values waiting right
+<p><strong>map_in_port_depth(map, station, port) → int</strong> — values waiting right
 now. For demos and diagnostics only.</p>
 <p><strong>map_destroy(map)</strong> — tear everything down, pool included.</p>
 

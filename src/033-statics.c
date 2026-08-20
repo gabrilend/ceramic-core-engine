@@ -58,14 +58,14 @@
  */
 typedef struct where {
     int station;
-    int slot;
+    int port;
 } where_t;
 
 /* {{{ die_static() */
 static void die_static(const where_t *w, const char *what)
 {
     fprintf(stderr, "statics: station %d port %d: %s\n",
-            w->station, w->slot, what);
+            w->station, w->port, what);
     abort();
 }
 /* }}} */
@@ -419,8 +419,8 @@ static void format_struct_text(const struct_info_t *si,
 }
 /* }}} */
 
-/* {{{ slot_constant_text() */
-int slot_constant_text(const slot_t *sl, char *out, int room)
+/* {{{ in_port_constant_text() */
+int in_port_constant_text(const in_port_t *sl, char *out, int room)
 {
     where_t w = { -1, -1 };   /* the port is the caller's to name here */
     textbuf_t tb = { out, room, 0 };
@@ -472,8 +472,8 @@ int slot_constant_text(const slot_t *sl, char *out, int room)
 /* Giving a port a constant, and changing one.                        */
 /* ------------------------------------------------------------------ */
 
-/* {{{ slot_constant_free() */
-void slot_constant_free(slot_t *sl)
+/* {{{ in_port_constant_free() */
+void in_port_constant_free(in_port_t *sl)
 {
     free(sl->constant);
     free(sl->constant_string);
@@ -483,17 +483,17 @@ void slot_constant_free(slot_t *sl)
 }
 /* }}} */
 
-/* {{{ map_slot_static_text() */
-void map_slot_static_text(map_t *m, int station, int slot, const char *text)
+/* {{{ map_in_port_static_text() */
+void map_in_port_static_text(map_t *m, int station, int port, const char *text)
 {
-    where_t w = { station, slot };
+    where_t w = { station, port };
 
     if (station < 0 || station >= m->n_stations)
         die_static(&w, "giving a constant to a station outside the table");
     station_t *s = map_station(m, station);
-    if (slot < 0 || slot >= s->n_slots)
+    if (port < 0 || port >= s->n_in_ports)
         die_static(&w, "giving a constant to a port the box does not have");
-    slot_t *sl = &s->slots[slot];
+    in_port_t *sl = &s->in_ports[port];
     if (!sl->type_name)
         die_static(&w,
                    "the port has no registry type — a constant needs a station "
@@ -582,7 +582,7 @@ void map_slot_static_text(map_t *m, int station, int slot, const char *text)
     memcpy(sl->constant, fresh, (size_t)sl->elem_size);
     sl->constant_string = fresh_string;
     sl->constant_set = 1;
-    sl->kind = SLOT_STATIC;
+    sl->kind = IN_PORT_STATIC;
     pthread_mutex_unlock(&s->mutex);
 
     free(fresh);
@@ -602,18 +602,18 @@ void map_slot_static_text(map_t *m, int station, int slot, const char *text)
 }
 /* }}} */
 
-/* {{{ map_slot_static_write() */
-void map_slot_static_write(map_t *m, int station, int slot,
+/* {{{ map_in_port_static_write() */
+void map_in_port_static_write(map_t *m, int station, int port,
                            const void *bytes, int size)
 {
-    where_t w = { station, slot };
+    where_t w = { station, port };
 
     if (station < 0 || station >= m->n_stations)
         die_static(&w, "writing to a station outside the table");
     station_t *s = map_station(m, station);
-    if (slot < 0 || slot >= s->n_slots)
+    if (port < 0 || port >= s->n_in_ports)
         die_static(&w, "writing to a port the box does not have");
-    slot_t *sl = &s->slots[slot];
+    in_port_t *sl = &s->in_ports[port];
     if (!sl->constant_set)
         die_static(&w, "writing to a port that has never held a constant — "
                        "give it one as text first, so its shape is known");

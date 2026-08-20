@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>010 — Roadmap</h1>
@@ -162,7 +163,7 @@ mode that looks like success.</p>
 <p>---</p>
 <h2>Phase 2 — Stations and the push path</h2>
 <p>The first phase where a graph runs.</p>
-<p>Built here: the station table; ring-buffer input slots with exact cell
+<p>Built here: the station table; ring-buffer input ports with exact slot
 sizing and growth; the delivery path — take the mutex, write, check
 readiness, claim values, release, build a task, push it; output ports
 with fan-out; the task struct.</p>
@@ -181,7 +182,7 @@ plug into.</p>
 <p>The property to test hardest is that two invocations of one station can
 run concurrently without interfering — the values are claimed under the
 mutex, so the second thread finds different ones.</p>
-<p>Described by <a href="doc-002-stations-and-slots.html">002 — Stations and slots</a> and
+<p>Described by <a href="doc-002-stations-and-ports.html">002 — Stations and ports</a> and
 <a href="doc-003-datapath-delivery.html">003 — Delivery</a>.</p>
 <p>---</p>
 <h2>Phase 3 — The build path</h2>
@@ -208,7 +209,7 @@ an event.** Writing a static runs the ordinary readiness check on the
 station holding it, which is what lets a chain of stations wired
 through statics behave like a recalculation graph, and what makes
 construction itself the thing that starts a program.</p>
-<p>This phase originally built a pull path as well — gatherer slots,
+<p>This phase originally built a pull path as well — gatherer ports,
 inline gathering, chains, and a cycle check. All of it is being
 removed; <a href="impl-056-no-pull-path.html">056</a> records what
 it was for, the three timings considered for it, and the accounting
@@ -219,12 +220,12 @@ problem that ended it.</p>
 <p>Comparators and iterators, which are variations on one step of
 delivery and nothing else.</p>
 <p>Built here: the three-entry dispatch on the way out; the comparator's
-extra threshold slot and its three ports; three-way comparison through
+extra threshold port and its three ports; three-way comparison through
 the generated compare functions; the iterator's cursor, advanced under
 the station mutex at enqueue time with the chosen port recorded in the
 task struct.</p>
 <p>Depends on phase 3 for compare functions and phase 4 for the static
-slots that thresholds almost always use.</p>
+ports that thresholds almost always use.</p>
 <p>Described by <a href="doc-005-routing.html">005 — Routing</a>.</p>
 <p>---</p>
 <h2>Phase 6 — The map file</h2>

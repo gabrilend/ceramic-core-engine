@@ -1,6 +1,6 @@
 /*
- * 035-test-statics.c — proves static slots and the statics table
- * (issues 401, 402, 405).
+ * 035-test-statics.c — proves static ports, whose value lives on
+ * the port that reads it (issues 401, 402, 405).
  *
  * What this is: the tests that a value which is simply always there
  * behaves like one — never consumed, never affecting readiness,
@@ -10,7 +10,7 @@
  * shape fatal at bind time.
  *
  * How it does it, in general terms: maps place registry boxes so
- * slots know their types, bind statics, and run; death cases fork a
+ * ports know their types, bind statics, and run; death cases fork a
  * child and expect it to abort. The torn-read test hammers a
  * two-field struct from a writer thread while claims stream, and any
  * task seeing fields from two different worlds fails it.
@@ -83,7 +83,7 @@ static void test_static_feeds_forever(void)
     map_place(m, 1, tally_sum__call, STATION_PLAIN, 1, one_int, 0);
     map_connect(m, 0, 0, 1, 0);
 
-    map_slot_static_text(m, 0, 1, "1000");
+    map_in_port_static_text(m, 0, 1, "1000");
 
     map_start(m, 4);
     static_sum = 0;
@@ -108,13 +108,15 @@ static void test_static_feeds_forever(void)
 /* {{{ test_all_static_station_never_fires() */
 static void test_all_static_station_never_fires(void)
 {
-    /* A station whose slots are all static is never discovered by
-     * delivery — nothing can be written into it. This is the
-     * property the seed sweep and gatherers both stand on. */
+    /* A station whose ports are all static is never discovered by
+     * delivery — nothing can be written into it. That used to be the
+     * property the seed sweep and the pull path stood on; both are
+     * gone, and what starts such a station now is a write to one of
+     * its own ports, which is an event. */
     map_t *m = map_create(1);
     map_place_box(m, 0, "add", STATION_PLAIN);
-    map_slot_static_text(m, 0, 0, "1");
-    map_slot_static_text(m, 0, 1, "2");
+    map_in_port_static_text(m, 0, 0, "1");
+    map_in_port_static_text(m, 0, 1, "2");
     map_start(m, 2);
     pool_release(m->pool);
     /* If the vacuously-ready station were runnable by delivery, the
@@ -172,10 +174,10 @@ static void relay_record__call(task_t *t)
  * performs the same two steps rather than calling it, and the point
  * of the test is that those two steps never see a half-written value.
  */
-static void claim_constant(map_t *m, int station, int slot, void *into)
+static void claim_constant(map_t *m, int station, int port, void *into)
 {
     station_t *s = map_station(m, station);
-    slot_t *sl = &s->slots[slot];
+    in_port_t *sl = &s->in_ports[port];
     pthread_mutex_lock(&s->mutex);
     memcpy(into, sl->constant, (size_t)sl->elem_size);
     pthread_mutex_unlock(&s->mutex);
@@ -185,7 +187,7 @@ static void claim_constant(map_t *m, int station, int slot, void *into)
 static void test_struct_constant_bytes(void)
 {
     map_t *m = map_create(2);
-    /* nudge takes (vec3, float): use its vec3 slot for a struct
+    /* nudge takes (vec3, float): use its vec3 port for a struct
      * static... but the full every-kind case wants `record`. Place a
      * harness relay typed by hand for the record, with the type name
      * granted through a registry-placed twin being unavailable —
@@ -193,13 +195,13 @@ static void test_struct_constant_bytes(void)
      * case and a hand relay for the full record below. */
     int one_record[1] = { sizeof(record) };
     map_place(m, 0, relay_record__call, STATION_PLAIN, 1, one_record, sizeof(record));
-    /* Hand placement has no type names, so grant this slot its type
+    /* Hand placement has no type names, so grant this port its type
      * the way the loader would: through the registry's name for it. */
-    map_station(m, 0)->slots[0].type_name = "record";
+    map_station(m, 0)->in_ports[0].type_name = "record";
     map_place(m, 1, check_record__call, STATION_PLAIN, 1, one_record, 0);
     map_connect(m, 0, 0, 1, 0);
 
-    map_slot_static_text(m, 0, 0, "{ 5, { 1.5, 2.5, 3.5 }, \"hey there\", 42 }");
+    map_in_port_static_text(m, 0, 0, "{ 5, { 1.5, 2.5, 3.5 }, \"hey there\", 42 }");
 
     /* All-static station: delivery cannot wake it, so read its
      * constant the way a claim does and feed the checker by hand. */
@@ -224,21 +226,21 @@ static void die_too_many(void)
 {
     doomed = map_create(1);
     map_place_box(doomed, 0, "nudge", STATION_PLAIN); /* (vec3, float) */
-    map_slot_static_text(doomed, 0, 0, "{ 1.0, 2.0, 3.0, 4.0 }");
+    map_in_port_static_text(doomed, 0, 0, "{ 1.0, 2.0, 3.0, 4.0 }");
 }
 
 static void die_too_few(void)
 {
     doomed = map_create(1);
     map_place_box(doomed, 0, "nudge", STATION_PLAIN);
-    map_slot_static_text(doomed, 0, 0, "{ 1.0, 2.0 }");
+    map_in_port_static_text(doomed, 0, 0, "{ 1.0, 2.0 }");
 }
 
 static void die_string_for_number(void)
 {
     doomed = map_create(1);
     map_place_box(doomed, 0, "nudge", STATION_PLAIN);
-    map_slot_static_text(doomed, 0, 0, "{ \"one\", 2.0, 3.0 }");
+    map_in_port_static_text(doomed, 0, 0, "{ \"one\", 2.0, 3.0 }");
 }
 
 static void die_untyped_port(void)
@@ -251,7 +253,7 @@ static void die_untyped_port(void)
     doomed = map_create(1);
     int one_int[1] = { sizeof(int) };
     map_place(doomed, 0, tally_sum__call, STATION_PLAIN, 1, one_int, 0);
-    map_slot_static_text(doomed, 0, 0, "5");
+    map_in_port_static_text(doomed, 0, 0, "5");
 }
 /* }}} */
 
@@ -283,7 +285,7 @@ static void *world_writer(void *arg)
     map_t *m = arg;
     vec3 worlds[2] = { { 1, 1, 1 }, { 2, 2, 2 } };
     for (int i = 0; i < 4000; i++)
-        map_slot_static_write(m, 0, 0, &worlds[i & 1], sizeof(vec3));
+        map_in_port_static_write(m, 0, 0, &worlds[i & 1], sizeof(vec3));
     return NULL;
 }
 
@@ -292,7 +294,7 @@ static void test_mutation_and_torn_reads(void)
     enum { CLAIMS = 4000 };
     map_t *m = map_create(1);
     map_place_box(m, 0, "magnitude_squared", STATION_PLAIN); /* (vec3) */
-    map_slot_static_text(m, 0, 0, "{ 1, 1, 1 }");
+    map_in_port_static_text(m, 0, 0, "{ 1, 1, 1 }");
 
     torn_seen = 0;
     pthread_t writer;
@@ -342,8 +344,8 @@ static void test_ports_are_independent(void)
 {
     map_t *m = map_create(1);
     map_place_box(m, 0, "add", STATION_PLAIN);   /* (int, int) */
-    map_slot_static_text(m, 0, 0, "7");
-    map_slot_static_text(m, 0, 1, "7");
+    map_in_port_static_text(m, 0, 0, "7");
+    map_in_port_static_text(m, 0, 1, "7");
 
     int a = 0, b = 0;
     claim_constant(m, 0, 0, &a);
@@ -351,7 +353,7 @@ static void test_ports_are_independent(void)
     check(a == 7 && b == 7, "both ports took the same written value");
 
     int changed = 99;
-    map_slot_static_write(m, 0, 0, &changed, sizeof changed);
+    map_in_port_static_write(m, 0, 0, &changed, sizeof changed);
     claim_constant(m, 0, 0, &a);
     claim_constant(m, 0, 1, &b);
     check(a == 99, "the written port changed");
@@ -382,8 +384,8 @@ static void test_two_maps_at_once(void)
     map_place_box(first, 0, "add", STATION_PLAIN);
     map_place_box(second, 0, "add", STATION_PLAIN);
 
-    map_slot_static_text(first, 0, 0, "10");
-    map_slot_static_text(second, 0, 0, "20");
+    map_in_port_static_text(first, 0, 0, "10");
+    map_in_port_static_text(second, 0, 0, "20");
 
     map_start(first, 1);
     map_start(second, 1);
@@ -394,7 +396,7 @@ static void test_two_maps_at_once(void)
     check(a == 10 && b == 20, "each map kept its own value while both ran");
 
     int changed = 555;
-    map_slot_static_write(first, 0, 0, &changed, sizeof changed);
+    map_in_port_static_write(first, 0, 0, &changed, sizeof changed);
     claim_constant(first, 0, 0, &a);
     claim_constant(second, 0, 0, &b);
     check(a == 555, "the written map changed");

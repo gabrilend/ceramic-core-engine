@@ -97,7 +97,7 @@ holding only the station's mutex.
 
 ## Related
 
-- [002 — Stations and slots](../docs/002-stations-and-slots.md)
+- [002 — Stations and ports](../docs/002-stations-and-ports.md)
 - Issue 203 — growth
 - Issue 401 — static slots, the second tag value
 - Issue 403 — gatherer slots, the third

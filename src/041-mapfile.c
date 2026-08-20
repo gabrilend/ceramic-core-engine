@@ -95,19 +95,19 @@ typedef struct parse_state {
  * second spelling and was withdrawn, because one way to say a thing
  * is the habit everywhere else in this engine.
  *
- * Returns 1 and fills *cells when the word is a depth, 0 when it is
+ * Returns 1 and fills *slots when the word is a depth, 0 when it is
  * something else entirely. A word that starts with 'x' and is not a
  * depth is not an error here — it is simply not a depth, and whatever
  * reads the source next will have its own opinion.
  */
-static int parse_depth_word(const char *word, int *cells)
+static int parse_depth_word(const char *word, int *slots)
 {
     if (word[0] != 'x' || !word[1])
         return 0;
     for (const char *p = word + 1; *p; p++)
         if (*p < '0' || *p > '9')
             return 0;
-    return parse_number(word + 1, cells);
+    return parse_number(word + 1, slots);
 }
 /* }}} */
 
@@ -117,19 +117,19 @@ static void handle_in(parse_state_t *st, const char *rest)
     if (!st->current)
         die_parse(st->path, st->line, "an 'in' line before any station line");
 
-    char slot_word[64], ref[128];
-    const char *after_slot = next_word(rest, slot_word, sizeof slot_word);
-    const char *after_ref = next_word(after_slot, ref, sizeof ref);
+    char in_port_word[64], ref[128];
+    const char *after_port = next_word(rest, in_port_word, sizeof in_port_word);
+    const char *after_ref = next_word(after_port, ref, sizeof ref);
 
-    int slot;
-    if (!parse_number(slot_word, &slot))
-        die_parse(st->path, st->line, "expected a slot number after 'in'");
+    int port;
+    if (!parse_number(in_port_word, &port))
+        die_parse(st->path, st->line, "expected a port number after 'in'");
     if (!ref[0])
         die_parse(st->path, st->line,
-                  "expected '$entry', '= value', or '-' after the slot number");
+                  "expected '$entry', '= value', or '-' after the port number");
 
     desc_input_t *in = need(calloc(1, sizeof *in), st->path, st->line);
-    in->slot = slot;
+    in->port = port;
     in->line = st->line;
 
     /*
@@ -141,9 +141,9 @@ static void handle_in(parse_state_t *st, const char *rest)
     if (parse_depth_word(ref, &in->depth)) {
         if (in->depth <= 0)
             die_parse(st->path, st->line,
-                      "a starting depth must be at least one cell");
-        after_slot = after_ref;
-        after_ref = next_word(after_slot, ref, sizeof ref);
+                      "a starting depth must be at least one slot");
+        after_port = after_ref;
+        after_ref = next_word(after_port, ref, sizeof ref);
         if (!ref[0])
             die_parse(st->path, st->line,
                       "a starting depth with no source after it — say where "
@@ -174,7 +174,7 @@ static void handle_in(parse_state_t *st, const char *rest)
      * by one character, and reading an old file as a new one would run
      * a program nobody wrote. */
     if (ref[0] == '=') {
-        const char *value = after_slot;
+        const char *value = after_port;
         while (*value == ' ' || *value == '\t')
             value++;
         value++;                                  /* past the '=' */
@@ -238,15 +238,15 @@ static void handle_out(parse_state_t *st, const char *rest)
     char *dot = strrchr(dest, '.');
     if (!dot || dot == dest || !dot[1])
         die_parse(st->path, st->line,
-                  "expected the destination as station.slot, like printer.0");
+                  "expected the destination as station.port, like printer.0");
     *dot = 0;
 
     desc_output_t *out = need(calloc(1, sizeof *out), st->path, st->line);
     out->port = port;
     out->line = st->line;
     out->dest_station = copy_string(dest, st->path, st->line);
-    if (!parse_number(dot + 1, &out->dest_slot))
-        die_parse(st->path, st->line, "expected a slot number after the dot");
+    if (!parse_number(dot + 1, &out->dest_port))
+        die_parse(st->path, st->line, "expected a port number after the dot");
 
     desc_output_t **tail = &st->current->outputs;
     while (*tail)
@@ -260,7 +260,7 @@ static void handle_static_entry(parse_state_t *st, const char *line_text)
 {
     /* Inside the statics section: `N = value`, the value kept as
      * text to the end of the line — turning it into bytes needs a
-     * type, which arrives when a slot binds it. */
+     * type, which arrives when a port binds it. */
     char id_word[64];
     const char *p = next_word(line_text, id_word, sizeof id_word);
     int id;

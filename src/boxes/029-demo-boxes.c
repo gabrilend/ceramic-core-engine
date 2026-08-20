@@ -113,7 +113,7 @@ void swallow(int x)
 /* }}} */
 
 /* {{{ seven() */
-/* No inputs at all: every slot vacuously satisfied. A station placing
+/* No inputs at all: every port vacuously satisfied. A station placing
  * this can only ever run by being seeded — nothing can be written
  * into it to discover it. It could once also be reached by being
  * gathered from, which is gone (issue 210), so seeding is now the

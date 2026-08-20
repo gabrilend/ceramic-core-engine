@@ -2,7 +2,7 @@
  * 053-test-inside.c — proves phase 7's legibility (issues 701–704).
  *
  * What this is: the tests that a running map can be seen and
- * changed. The buffer report names the right slot; the station
+ * changed. The buffer report names the right port; the station
  * report counts truly; a loaded map dumps to a file that loads to a
  * map that dumps identically; and a wire changed mid-run changes
  * behaviour from that moment with nothing lost.
@@ -71,7 +71,7 @@ static char *slurp(const char *path)
 static void test_buffer_report_names_the_right_slot(void)
 {
     /* A pairing station starved on one side: the waiting side grows,
-     * and the report must say which slot, by station name. */
+     * and the report must say which port, by station name. */
     char map_path[512], report_path[512], map_text[2048];
     snprintf(map_path, sizeof map_path, "%s/report.map", work_dir);
     snprintf(report_path, sizeof report_path, "%s/report.txt", work_dir);
@@ -84,7 +84,7 @@ static void test_buffer_report_names_the_right_slot(void)
     write_text(map_path, map_text);
 
     map_t *m = map_load_file(map_path, 2);
-    /* Flood the pairer's first slot from outside; its second side
+    /* Flood the pairer's first port from outside; its second side
      * never arrives, so the buffer must grow. */
     pool_submitter_register(m->pool);
     pool_release(m->pool);
@@ -98,7 +98,7 @@ static void test_buffer_report_names_the_right_slot(void)
 
     char *report = slurp(report_path);
     check(strstr(report, "pairer.0") != NULL,
-          "the report names the starved slot by station name");
+          "the report names the starved port by station name");
     check(strstr(report, "high water") != NULL, "high water is reported");
 
     /* Unstick the pairer so the map can finish. */
@@ -107,7 +107,7 @@ static void test_buffer_report_names_the_right_slot(void)
     pool_submitter_unregister(m->pool);
     pool_join(m->pool);
     map_destroy(m);
-    printf("  the buffer report pointed at the right slot by name\n");
+    printf("  the buffer report pointed at the right port by name\n");
 }
 /* }}} */
 

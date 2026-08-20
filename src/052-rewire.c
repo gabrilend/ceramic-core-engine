@@ -42,8 +42,8 @@ static int refuse(const char *what)
 }
 /* }}} */
 
-/* {{{ station_kind_port_limit() */
-static int station_kind_port_limit(unsigned char kind)
+/* {{{ station_kind_out_port_limit() */
+static int station_kind_out_port_limit(unsigned char kind)
 {
     static const int limits[STATION_KIND_COUNT] = {
         [STATION_PLAIN] = 1, [STATION_COMPARATOR] = 3, [STATION_ITERATOR] = 0,
@@ -54,7 +54,7 @@ static int station_kind_port_limit(unsigned char kind)
 
 /* {{{ map_rewire_connect() */
 int map_rewire_connect(map_t *m, int from_station, int port,
-                       int to_station, int to_slot)
+                       int to_station, int to_port)
 {
     pthread_mutex_lock(&m->rewire_mutex);
 
@@ -70,21 +70,21 @@ int map_rewire_connect(map_t *m, int from_station, int port,
         pthread_mutex_unlock(&m->rewire_mutex);
         return refuse("wiring from a sink — nothing comes out of it");
     }
-    int limit = station_kind_port_limit(from->kind);
+    int limit = station_kind_out_port_limit(from->kind);
     if (port < 0 || (limit > 0 && port >= limit)) {
         pthread_mutex_unlock(&m->rewire_mutex);
         return refuse("a port index beyond what this station kind can mean");
     }
-    if (to_slot < 0 || to_slot >= to->n_slots) {
+    if (to_port < 0 || to_port >= to->n_in_ports) {
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("a destination slot the box does not have");
+        return refuse("a destination port the box does not have");
     }
-    slot_t *dest = &to->slots[to_slot];
-    if (dest->kind != SLOT_RING) {
+    in_port_t *dest = &to->in_ports[to_port];
+    if (dest->kind != IN_PORT_RING) {
         char message[192];
         snprintf(message, sizeof message,
                  "the destination port is %s, not a buffer — the value would "
-                 "have nowhere to go", slot_kind_name(dest->kind));
+                 "have nowhere to go", in_port_kind_name(dest->kind));
         pthread_mutex_unlock(&m->rewire_mutex);
         return refuse(message);
     }
@@ -98,15 +98,15 @@ int map_rewire_connect(map_t *m, int from_station, int port,
      * The names still ride along in the message, because "4 bytes
      * against 4 bytes" is not a sentence anybody can act on — and
      * both widths ride along beside them, because "box returns vec4,
-     * slot takes stats" does not say why those disagree.
+     * port takes stats" does not say why those disagree.
      */
-    if (from->slots && to->slots) {
+    if (from->in_ports && to->in_ports) {
         const box_info_t *b =
             registry_find(registry_box_name_for_shim(from->call));
         if (b && b->return_size != dest->elem_size) {
             char message[192];
             snprintf(message, sizeof message,
-                     "box returns %s (%d bytes), slot takes %s (%d bytes)",
+                     "box returns %s (%d bytes), port takes %s (%d bytes)",
                      b->return_type, b->return_size,
                      dest->type_name ? dest->type_name : "?", dest->elem_size);
             pthread_mutex_unlock(&m->rewire_mutex);
@@ -118,20 +118,20 @@ int map_rewire_connect(map_t *m, int from_station, int port,
      * snapshot is mid-walk. Ports are created empty up to the index,
      * exactly as the loader would. */
     pthread_mutex_lock(&from->mutex);
-    while (from->n_ports <= port) {
-        port_t *fresh = calloc(1, sizeof *fresh);
+    while (from->n_out_ports <= port) {
+        out_port_t *fresh = calloc(1, sizeof *fresh);
         if (!fresh) {
             pthread_mutex_unlock(&from->mutex);
             pthread_mutex_unlock(&m->rewire_mutex);
             return refuse("out of memory for a port");
         }
-        port_t **link = &from->ports;
+        out_port_t **link = &from->out_ports;
         while (*link)
             link = &(*link)->next;
         *link = fresh;
-        from->n_ports++;
+        from->n_out_ports++;
     }
-    port_t *p = station_port(from, port);
+    out_port_t *p = station_out_port(from, port);
 
     /*
      * A whole new set, published by one write (issue 214). Walkers
@@ -139,8 +139,8 @@ int map_rewire_connect(map_t *m, int from_station, int port,
      * disturbed; the old set is filed rather than freed, because one
      * of them may be in it right now.
      */
-    dest_set_t *old = port_dests(p);
-    dest_set_t *fresh_set = dest_set_build(old, to_station, to_slot, -1, -1);
+    dest_set_t *old = out_port_dests(p);
+    dest_set_t *fresh_set = dest_set_build(old, to_station, to_port, -1, -1);
     atomic_store_explicit(&p->dests, fresh_set, memory_order_release);
     pthread_mutex_unlock(&from->mutex);
     map_retire(m, old, free);
@@ -152,7 +152,7 @@ int map_rewire_connect(map_t *m, int from_station, int port,
 
 /* {{{ map_rewire_disconnect() */
 int map_rewire_disconnect(map_t *m, int from_station, int port,
-                          int to_station, int to_slot)
+                          int to_station, int to_port)
 {
     pthread_mutex_lock(&m->rewire_mutex);
     if (from_station < 0 || from_station >= m->n_stations) {
@@ -162,18 +162,18 @@ int map_rewire_disconnect(map_t *m, int from_station, int port,
     station_t *from = map_station(m, from_station);
 
     pthread_mutex_lock(&from->mutex);
-    port_t *p = station_port(from, port);
-    dest_set_t *old = port_dests(p);
+    out_port_t *p = station_out_port(from, port);
+    dest_set_t *old = out_port_dests(p);
     dest_set_t *fresh_set = NULL;
     int found = 0;
     for (int i = 0; old && i < old->n; i++)
         if (old->items[i].station == to_station
-            && old->items[i].slot == to_slot) {
+            && old->items[i].port == to_port) {
             found = 1;
             break;
         }
     if (found) {
-        fresh_set = dest_set_build(old, -1, -1, to_station, to_slot);
+        fresh_set = dest_set_build(old, -1, -1, to_station, to_port);
         atomic_store_explicit(&p->dests, fresh_set, memory_order_release);
     }
     pthread_mutex_unlock(&from->mutex);
@@ -204,38 +204,38 @@ int map_rewire_disconnect(map_t *m, int from_station, int port,
  * the place is free for the next station.
  */
 typedef struct removed_parts {
-    station_t *station;
-    port_t    *ports;
-    slot_t    *slots;
-    int        n_slots;
-    char      *name;
+    station_t  *station;
+    out_port_t *out_ports;
+    in_port_t  *in_ports;
+    int         n_in_ports;
+    char       *name;
 } removed_parts_t;
 
 static void reclaim_station(void *p)
 {
     removed_parts_t *r = p;
 
-    port_t *port = r->ports;
+    out_port_t *port = r->out_ports;
     while (port) {
-        free(port_dests(port));
-        port_t *next = port->next;
+        free(out_port_dests(port));
+        out_port_t *next = port->next;
         free(port);
         port = next;
     }
-    for (int i = 0; i < r->n_slots; i++) {
-        free(r->slots[i].storage);
-        slot_constant_free(&r->slots[i]);
+    for (int i = 0; i < r->n_in_ports; i++) {
+        free(r->in_ports[i].storage);
+        in_port_constant_free(&r->in_ports[i]);
     }
-    free(r->slots);
+    free(r->in_ports);
     free(r->name);
 
     /* Last, and this is the moment the place becomes free: everything
      * that reads a station checks the shim first. */
     station_t *s = r->station;
-    s->ports = NULL;
-    s->n_ports = 0;
-    s->slots = NULL;
-    s->n_slots = 0;
+    s->out_ports = NULL;
+    s->n_out_ports = 0;
+    s->in_ports = NULL;
+    s->n_in_ports = 0;
     s->out_size = 0;
     s->compare = NULL;
     s->cursor = 0;
@@ -284,8 +284,8 @@ int map_remove_station(map_t *m, int station)
         if (!other->call)
             continue;
         pthread_mutex_lock(&other->mutex);
-        for (port_t *p = other->ports; p; p = p->next) {
-            dest_set_t *old = port_dests(p);
+        for (out_port_t *p = other->out_ports; p; p = p->next) {
+            dest_set_t *old = out_port_dests(p);
             if (!old)
                 continue;
             int names_it = 0;
@@ -321,7 +321,7 @@ int map_remove_station(map_t *m, int station)
      * Its parts handed to the scrapyard, which frees them and clears
      * the record once nobody can still be inside a task built from
      * this station. Nothing is detached here: a task being built
-     * right now reads the slot count and the return size, and they
+     * right now reads the port count and the return size, and they
      * have to still be there.
      */
     removed_parts_t *parts = calloc(1, sizeof *parts);
@@ -330,9 +330,9 @@ int map_remove_station(map_t *m, int station)
         return refuse("out of memory removing a station");
     }
     parts->station = s;
-    parts->ports = s->ports;
-    parts->slots = s->slots;
-    parts->n_slots = s->n_slots;
+    parts->out_ports = s->out_ports;
+    parts->in_ports = s->in_ports;
+    parts->n_in_ports = s->n_in_ports;
     if (m->station_names) {
         parts->name = m->station_names[station];
         m->station_names[station] = NULL;

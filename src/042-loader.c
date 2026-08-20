@@ -73,8 +73,8 @@ static int find_station_index(const name_table_t *names, const char *name)
 
 /* {{{ first_pass() */
 /*
- * Create every station (issue 602): registry lookup, slot array with
- * ring buffers as the default, the comparator's extra slot, statics
+ * Create every station (issue 602): registry lookup, port array with
+ * ring buffers as the default, the comparator's extra port, statics
  * bound from their entries.
  *
  * Every input line is resolvable here now. They used to divide: a
@@ -118,25 +118,25 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
 
         for (desc_input_t *in = s->inputs; in; in = in->next) {
             station_t *placed = map_station(m, index);
-            if (in->slot < 0 || in->slot >= placed->n_slots) {
+            if (in->port < 0 || in->port >= placed->n_in_ports) {
                 char message[256];
                 snprintf(message, sizeof message,
-                         "'in %d' names a slot that does not exist — '%s' has "
-                         "%d slot%s (its parameters%s)",
-                         in->slot, s->box, placed->n_slots,
-                         placed->n_slots == 1 ? "" : "s",
+                         "'in %d' names a port that does not exist — '%s' has "
+                         "%d port%s (its parameters%s)",
+                         in->port, s->box, placed->n_in_ports,
+                         placed->n_in_ports == 1 ? "" : "s",
                          s->kind == STATION_COMPARATOR
                              ? ", plus the threshold" : "");
                 die_load(d->path, in->line, s->name, message);
             }
             /*
              * A starting depth, if the line gave one, before anything
-             * else touches the port — it sizes the cells, and sizing
+             * else touches the port — it sizes the slots, and sizing
              * them after a value has been put in them would be a
              * reallocation nobody asked for (issue 210b).
              */
             if (in->depth > 0)
-                map_slot_start_depth(m, index, in->slot, in->depth);
+                map_in_port_start_depth(m, index, in->port, in->depth);
 
             /*
              * A bare dash: this port has no source yet. Nothing is
@@ -146,7 +146,7 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
              * half-built program be a real program (issue 210b).
              */
             if (in->is_none) {
-                map_slot_convert(m, index, in->slot, SLOT_NONE);
+                map_in_port_convert(m, index, in->port, IN_PORT_NONE);
                 continue;
             }
 
@@ -170,11 +170,11 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
                     char message[256];
                     snprintf(message, sizeof message,
                              "'in %d $%d' names a statics entry the file does "
-                             "not give a value for", in->slot, in->static_id);
+                             "not give a value for", in->port, in->static_id);
                     die_load(d->path, in->line, s->name, message);
                 }
             }
-            map_slot_static_text(m, index, in->slot, text);
+            map_in_port_static_text(m, index, in->port, text);
         }
     }
     names->count = index;
@@ -197,7 +197,7 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
  * The names still ride along, in the message and nowhere else,
  * because "4 bytes against 4 bytes" is not a sentence anybody can act
  * on. Both widths are reported beside them, because "box returns
- * vec4, slot takes stats" does not say *why* those disagree and
+ * vec4, port takes stats" does not say *why* those disagree and
  * "16 bytes against 12" does.
  *
  * What this widens rather than closes: two types of the same width
@@ -206,14 +206,14 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
  */
 static void type_check_wire(map_description_t *d, int line,
                             const char *from_name, const box_info_t *from_box,
-                            const char *to_name, int to_slot,
+                            const char *to_name, int to_port,
                             const char *to_type, int to_size)
 {
     if (from_box->return_size != to_size) {
         fprintf(stderr,
                 "map %s:%d: %s -> %s.%d: box returns %s (%d bytes), "
-                "slot takes %s (%d bytes)\n",
-                d->path, line, from_name, to_name, to_slot,
+                "port takes %s (%d bytes)\n",
+                d->path, line, from_name, to_name, to_port,
                 from_box->return_type, from_box->return_size,
                 to_type ? to_type : "?", to_size);
         abort();
@@ -245,20 +245,20 @@ static void second_pass(map_t *m, map_description_t *d, name_table_t *names)
                 die_load(d->path, out->line, s->name, message);
             }
             station_t *dest_station = map_station(m, dest);
-            if (out->dest_slot < 0 || out->dest_slot >= dest_station->n_slots) {
+            if (out->dest_port < 0 || out->dest_port >= dest_station->n_in_ports) {
                 char message[256];
                 snprintf(message, sizeof message,
-                         "arrow to '%s.%d', but that station has %d slot%s",
-                         out->dest_station, out->dest_slot,
-                         dest_station->n_slots,
-                         dest_station->n_slots == 1 ? "" : "s");
+                         "arrow to '%s.%d', but that station has %d port%s",
+                         out->dest_station, out->dest_port,
+                         dest_station->n_in_ports,
+                         dest_station->n_in_ports == 1 ? "" : "s");
                 die_load(d->path, out->line, s->name, message);
             }
             type_check_wire(d, out->line, s->name, from_box,
-                            out->dest_station, out->dest_slot,
-                            dest_station->slots[out->dest_slot].type_name,
-                            dest_station->slots[out->dest_slot].elem_size);
-            map_connect(m, index, out->port, dest, out->dest_slot);
+                            out->dest_station, out->dest_port,
+                            dest_station->in_ports[out->dest_port].type_name,
+                            dest_station->in_ports[out->dest_port].elem_size);
+            map_connect(m, index, out->port, dest, out->dest_port);
         }
     }
 }
@@ -289,41 +289,41 @@ static void whole_map_validation(map_t *m, map_description_t *d,
         const char *name = names->by_index[i]->name;
 
         int has_ring = 0;
-        for (int j = 0; j < s->n_slots; j++)
-            if (s->slots[j].kind == SLOT_RING)
+        for (int j = 0; j < s->n_in_ports; j++)
+            if (s->in_ports[j].kind == IN_PORT_RING)
                 has_ring = 1;
 
-        /* Which slots does an arrow land on? Sized to the station's
-         * real slot count — a fixed cap here would be a silent hole
+        /* Which ports does an arrow land on? Sized to the station's
+         * real port count — a fixed cap here would be a silent hole
          * in the checking. */
-        int pushed_into[s->n_slots > 0 ? s->n_slots : 1];
+        int pushed_into[s->n_in_ports > 0 ? s->n_in_ports : 1];
         memset(pushed_into, 0, sizeof pushed_into);
         for (int k = 0; k < m->n_stations; k++) {
             station_t *other = map_station(m, k);
-            for (port_t *p = other->ports; p; p = p->next) {
-                dest_set_t *set = port_dests(p);
+            for (out_port_t *p = other->out_ports; p; p = p->next) {
+                dest_set_t *set = out_port_dests(p);
                 for (int di = 0; set && di < set->n; di++)
                     if (set->items[di].station == i
-                        && set->items[di].slot < s->n_slots)
-                        pushed_into[set->items[di].slot] = 1;
+                        && set->items[di].port < s->n_in_ports)
+                        pushed_into[set->items[di].port] = 1;
             }
         }
         int any_push = 0;
-        for (int j = 0; j < s->n_slots; j++)
+        for (int j = 0; j < s->n_in_ports; j++)
             any_push |= pushed_into[j];
 
-        /* An arrow landing on a slot that is not a buffer would have
+        /* An arrow landing on a port that is not a buffer would have
          * nowhere to put its value. The message names which of the
          * other two it found, because the fixes differ: a static wants
          * the arrow removed or the static unbound, while an
          * unconfigured port wants finishing. */
-        for (int j = 0; j < s->n_slots; j++) {
-            if (pushed_into[j] && s->slots[j].kind != SLOT_RING) {
+        for (int j = 0; j < s->n_in_ports; j++) {
+            if (pushed_into[j] && s->in_ports[j].kind != IN_PORT_RING) {
                 fprintf(stderr,
                         "map %s: an arrow lands on '%s.%d', but that port is "
                         "%s, not a buffer — the value would have nowhere "
                         "to go\n",
-                        d->path, name, j, slot_kind_name(s->slots[j].kind));
+                        d->path, name, j, in_port_kind_name(s->in_ports[j].kind));
                 failures++;
             }
         }
@@ -388,10 +388,10 @@ static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
 
         int has_ring = 0;
         int has_unconfigured = 0;
-        for (int j = 0; j < s->n_slots; j++) {
-            if (s->slots[j].kind == SLOT_RING)
+        for (int j = 0; j < s->n_in_ports; j++) {
+            if (s->in_ports[j].kind == IN_PORT_RING)
                 has_ring = 1;
-            if (s->slots[j].kind == SLOT_NONE)
+            if (s->in_ports[j].kind == IN_PORT_NONE)
                 has_unconfigured = 1;
         }
         if (has_ring || has_unconfigured)

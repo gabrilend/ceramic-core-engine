@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html" class="here">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>012-pool.c — the thread pool, from inside</h1>
@@ -154,7 +155,7 @@ one unless you are debugging this file.</p>
 <tr><td>field</td><td>type</td><td>meaning</td></tr>
 <tr><td>slots</td><td>array of task pointers</td><td>The ring. Holds pointers out; nothing points in.</td></tr>
 <tr><td>capacity</td><td><code>int</code></td><td>Ring length. Doubles when full.</td></tr>
-<tr><td>head, tail</td><td><code>int</code></td><td>Oldest task / next free cell. Equal means empty; one cell always spare so full is distinguishable.</td></tr>
+<tr><td>head, tail</td><td><code>int</code></td><td>Oldest task / next free slot. Equal means empty; one slot always spare so full is distinguishable.</td></tr>
 <tr><td>mutex</td><td><code>pthread_mutex_t</code></td><td>Guards every other field here. One lock, one truth.</td></tr>
 <tr><td>wake</td><td><code>pthread_cond_t</code></td><td>Sleeping workers wait on this; push and shutdown broadcast it.</td></tr>
 <tr><td>start_gate, released</td><td>cond + <code>int</code></td><td>Workers park here until release; the seeding window.</td></tr>

@@ -96,11 +96,11 @@ then on, and the next one refuses with both paths named.
 
 Names rather than numbers, because a map is read by people and because
 it makes an error message legible: *"adder → printer.0: box returns
-int, slot takes float."* The names cost one lookup table that is
+int, port takes float."* The names cost one lookup table that is
 discarded once loading finishes.
 
 The kind is written rather than inferred. A comparator *is* inferable —
-it is the station with one more input slot than its function has
+it is the station with one more input port than its function has
 parameters — but that means forgetting the threshold line silently
 demotes a comparator to a plain box that routes everything one way. One
 letter of redundancy buys an error instead of a wrong answer.
@@ -115,7 +115,7 @@ in 1 $0        port 1 holds the value written at statics entry 0
 in 1 = 5       port 1 holds 5
 in 2 = { 1.5, 2.5, 3.5 }       and a struct is written the same way
 in 3 -         port 3 has no source yet
-in 4 x64 $1    port 4 reads statics entry 1, starting 64 cells deep
+in 4 x64 $1    port 4 reads statics entry 1, starting 64 slots deep
 ```
 
 So `split` above has no input lines at all — every port is an ordinary
@@ -179,7 +179,7 @@ source** as a count:
 ```
 in 0 x64 $0      reads statics entry 0, room for 64 to begin with
 in 1 x256 -      no source yet, room for 256 when it gets one
-in 2 x8 = 5      a constant, and eight cells standing idle behind it
+in 2 x8 = 5      a constant, and eight slots standing idle behind it
 in 3 = 5         a constant, and the default ten
 ```
 
@@ -197,13 +197,13 @@ exception in it. This was written the other way round when the spelling
 was chosen and corrected when it was built.
 
 **A depth may sit beside any source form, including the dash**, because
-the two are independent: every port owns ring cells whatever its tag
+the two are independent: every port owns ring slots whatever its tag
 currently says. That standing buffer is what makes changing a port's
 source a field write rather than an allocation, and it is decided in
 issue 210b.
 
 **The dump writes one only when it is not the default.** This format
-writes exceptions, and a port at ten cells is not one; `x10` on every
+writes exceptions, and a port at ten slots is not one; `x10` on every
 line would be noise a reader learns to skip past.
 
 **It is a hint and never a requirement.** Growth covers any figure that
@@ -219,7 +219,7 @@ right; an optional one they may supply is a different thing.
 out 0 - printer.0
 ```
 
-Port zero of this station delivers to slot zero of the station named
+Port zero of this station delivers to port zero of the station named
 `printer`. Repeat the line to fan out; one port may carry any number of
 destinations.
 
@@ -247,10 +247,10 @@ statics
   3 = { 5, 2.0, { 0, 0, 0 }, "hey there", 2 }
 ```
 
-**The table carries no types.** A slot that references an entry knows
+**The table carries no types.** A port that references an entry knows
 what type it is, because the box function's parameter at that position
 says so, and the generator knows what that is. The text is read into
-bytes at the moment a slot claims it, walking the field table the
+bytes at the moment a port claims it, walking the field table the
 generator emitted for that struct.
 
 This is the same reason the wiring carries no types: if the table said
@@ -298,8 +298,8 @@ All of these are fatal and all name the offending station:
   expected in.
 - A bare file name matching more than one box source, with both paths
   named and the instruction to write one out in full.
-- An arrow to a station or slot that does not exist.
-- More input lines than the box has parameters, or a slot index out of
+- An arrow to a station or port that does not exist.
+- More input lines than the box has parameters, or a port index out of
   range.
 - A comparator whose box returns a type with no compare function.
 

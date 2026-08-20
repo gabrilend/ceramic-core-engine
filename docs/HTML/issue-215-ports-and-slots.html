@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>215 — Ports and slots, named correctly</h1>
@@ -154,7 +155,72 @@ rename moves code four open issues are about to touch, which makes
 their diffs noisier and conflicts with any half-finished branch — paid
 once, and paid before the branches exist rather than after.</p>
 <h2>Current behavior</h2>
-<p><strong>The documents are right and the source is wrong.</strong>
+<p><strong>Done for the code, the documents, and the interface files.</strong> 787
+identifier replacements across 40 source and test files, 115 more
+across 14 documents, the document renamed, every link and every piece
+of link text followed, and the state-machine test renamed with it. The
+build is clean, every test passes, and the word <em>cell</em> no longer
+appears anywhere in the project.</p>
+<p><strong>Two things this issue claimed turned out to be wrong</strong>, and both are
+worth keeping visible because they are the kind of thing an issue gets
+wrong about itself:</p>
+<p><strong>"The documents are right and the source is wrong" was half true.</strong>
+Issue 210 states the vocabulary correctly, and the <em>newer</em> documents
+follow it. Document 002 did not: its body called an input port a slot
+throughout, so it needed the same rename its filename did. The step
+list below only ever anticipated moving the file. A document can drift
+from the vocabulary it is the authority for, and the drift is invisible
+precisely because everybody trusts it.</p>
+<p><strong>The rename could not be done in the order the steps give.</strong> Step 1
+says rename the cell first "since nothing outside the ring buffer says
+the word", and steps 2 and 4 rename the two records separately. Done
+sequentially, the input port's new name lands on the word the output
+port has not yet vacated — the map file parser has an input-port
+variable and an output-port variable in one file, and the input one
+was being renamed onto the output one's name. **All three renames had
+to happen in a single substitution**, which is what
+<a href="info-079-rename-identifiers-lua.html">079</a> exists for and
+why it was built rather than the rename being done by hand.</p>
+<h3>The mapping, so this is reproducible</h3>
+<p>Everything not listed took the obvious form: <code>slot_*</code> became
+<code>in_port_*</code>, <code>SLOT_*</code> became <code>IN_PORT_*</code>, <code>map_slot_*</code> became
+<code>map_in_port_*</code>.</p>
+<table>
+<tr><td>was</td><td>is</td><td>why</td></tr>
+<tr><td><code>cell</code>, <code>cells</code>, <code>CELL_*</code></td><td><code>slot</code>, <code>slots</code>, <code>SLOT_*</code></td><td>one place one value sits</td></tr>
+<tr><td><code>slot_t</code>, <code>struct slot</code></td><td><code>in_port_t</code>, <code>struct in_port</code></td><td>the standing interface for one input</td></tr>
+<tr><td><code>port_t</code>, <code>struct port</code></td><td><code>out_port_t</code>, <code>struct out_port</code></td><td>where a result goes</td></tr>
+<tr><td><code>slots</code>, <code>n_slots</code> on a station</td><td><code>in_ports</code>, <code>n_in_ports</code></td><td></td></tr>
+<tr><td><code>ports</code>, <code>n_ports</code> on a station</td><td><code>out_ports</code>, <code>n_out_ports</code></td><td></td></tr>
+<tr><td><code>slot_cell</code>, <code>slot_cell_move</code></td><td><code>in_port_slot</code>, <code>in_port_slot_move</code></td><td>a port's slot, which is now sayable</td></tr>
+<tr><td><code>.slot</code> on a destination</td><td><code>.port</code></td><td>it always named an input port</td></tr>
+<tr><td><code>station_port</code>, <code>port_dests</code></td><td><code>station_out_port</code>, <code>out_port_dests</code></td><td></td></tr>
+</table>
+<p><strong>Three names were deliberately left alone</strong>, each because the rename
+made them correct rather than wrong:</p>
+<ul>
+<li>the pool's ring field, which holds one task pointer per <strong>slot</strong> and</li>
+<p>  always did</p>
+<li>the generator's growable-array helper, whose local names one element</li>
+<p>  position</p>
+<li><code>022-test-slots.c</code>, which proves ring buffers and whose title was</li>
+<p>  wrong under the old vocabulary and is right under this one</p>
+</ul>
+<h3>What it took beyond the substitution</h3>
+<p>The compiler found the one collision the tool could not: a delivery
+function whose input-port parameter and output-port local both landed
+on <code>port</code>. It was an error rather than a silent shadowing, which is
+the argument for renaming a type to a name already in use rather than
+to a fresh one — the collisions surface at build time instead of
+becoming a variable that quietly means something else. A shadow-warning
+pass afterwards found nothing further.</p>
+<p>Four comments meant an input port where they said <em>slots</em> and were
+rewritten as sentences rather than substituted. One comment naming the
+seed sweep and the pull path was corrected while it was open, both
+having been removed.</p>
+<p>---</p>
+<p>The record of what was wrong, kept:</p>
+<p><strong>The documents were right and the source was wrong.</strong>
 <a href="issue-210-input-port-record.html">210</a> states the vocabulary plainly:</p>
 <blockquote><strong>A port</strong> is the standing interface for one input of one station —</blockquote>
 <blockquote>where its value comes from, what type it is, how many bytes one value</blockquote>
@@ -220,13 +286,25 @@ in one deliberate pass rather than drift:</p>
 7. A pass over the <code>.info.md</code> files, which describe the interfaces in
    the old vocabulary.</p>
 <h2>Open questions</h2>
-<p>None outstanding.</p>
+<p><strong>The issue files still speak the old vocabulary.</strong> The code and the
+documents now agree; the blueprints do not. Three open children of the
+port family are titled and written around <em>cells</em> — a state on every
+cell, the copies leaving the lock, growth adding a page — and their
+filenames carry the word. Whoever implements them will read <em>cell</em> in
+the blueprint and type <em>slot</em> into the source, which is the exact
+translation-by-hand this issue exists to abolish, running in the
+opposite direction.</p>
+<p>Completed issues are a different case: they are the record of what was
+built and when, and rewriting them edits history. The open ones are
+not history, they are instructions.</p>
+<p>Unanswered, and it belongs to whoever owns the issue files rather than
+to this rename.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, which states</li>
 <p>  the correct vocabulary and names the debt</p>
-<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>, whose</li>
-<p>  filename is part of the debt</p>
+<li><a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>, whose</li>
+<p>  filename and body were both part of the debt</p>
 <li><a href="done-205-delivery-walk.html">205 — The delivery walk</a>, which</li>
 <p>  speaks both nouns constantly</p>
 <li><a href="done-202-ring-buffer-slots.html">202 — Ring buffer slots</a>, whose</li>

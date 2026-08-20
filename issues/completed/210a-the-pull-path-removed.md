@@ -176,5 +176,5 @@ files rather than reinterpret them, which is written up above.
   which repairs the three demonstrations this breaks
 - [008 — Map file format](../../docs/008-map-file-format.md), where the
   input line's second form is recorded as gone
-- [002 — Stations and slots](../../docs/002-stations-and-slots.md), where
+- [002 — Stations and ports](../../docs/002-stations-and-ports.md), where
   the port record is described

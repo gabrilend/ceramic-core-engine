@@ -169,7 +169,7 @@ static double measure(const char *label, task_call_t shim, int elem_size)
 
     /* Deep enough that no port can ever grow during the run, and this
      * matters more than it looks. The first reading taken here had the
-     * default ten-cell buffers, and the ports grew thirteen times
+     * default ten-slot buffers, and the ports grew thirteen times
      * apiece — each growth allocating a new array and copying every
      * value across, under the very mutex being measured, with the copy
      * proportional to the element size. So the large-value number was
@@ -183,10 +183,10 @@ static double measure(const char *label, task_call_t shim, int elem_size)
      * what the run can fill takes growth out of the picture entirely
      * and leaves exactly the cost 210c is aiming at.
      *
-     * One spare cell means a buffer holds one less than its depth, and
+     * One spare slot means a buffer holds one less than its depth, and
      * a producer can be a full run ahead of its slowest sibling. */
     for (int i = 0; i < PORTS; i++)
-        map_slot_start_depth(m, 0, i, VALUES_PER_PORT + 2);
+        map_in_port_start_depth(m, 0, i, VALUES_PER_PORT + 2);
 
     map_start(m, WORKERS);
 

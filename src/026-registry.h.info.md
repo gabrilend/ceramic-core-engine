@@ -36,5 +36,5 @@ for reading what was emitted.
 
 **map_place_box(map, station, box name, kind)** — placement by name
 with sizes drawn from the registry; comparators get their extra
-threshold slot here, typed to the box's return. Aborts loudly on an
+threshold port here, typed to the box's return. Aborts loudly on an
 unknown name — the most common map mistake there is.

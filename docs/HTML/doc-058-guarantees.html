@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>058 — Guarantees</h1>
@@ -233,8 +234,8 @@ system will say so.</p>
 <tr><td>S1</td><td>A station never moves once placed.</td><td>The table is <strong>shelves</strong>: a short array of pointers to fixed runs of records. Growing means allocating one more shelf and writing its pointer, so nothing already placed is ever copied; only the array of addresses is, which is the same kind of copy the pool's ring already does. Removing one (issue 216) empties its record in place and never shifts anything, so every index keeps meaning what it meant. It has to be kept: a station holds its own mutex, and a mutex is identified by where it lives, so moving one would leave every thread parked on it waiting at an address nobody unlocks. The price is one shift, one mask and one dereference where a flat array had one add, measured on the delivery path and found to sit inside the run-to-run noise. Issue 211.</td><td>structure</td></tr>
 <tr><td>S2</td><td>A wire never names a station that is not there.</td><td>A wire is an index into the map's station array, never a pointer. Stations were once never removed at all, which held this trivially; issue 216 allows removal and holds it properly instead &amp;mdash; <strong>removing a station is what removes the wires to it</strong>, walking every station's output ports first, so no stale wire can survive to be followed. That walk is the price, paid during a rare operation rather than on every delivery, which is what a version tag on every wire would have cost. A removed place does not come free until the sweep clears its record, because a task is built from a station's fields <em>after</em> the readiness check released the mutex.</td><td>structure</td></tr>
 <tr><td>S3</td><td>Growing an input buffer invalidates nothing.</td><td>Only the storage the port points at is reallocated — never the port, never the station — so every wire and every in-flight value survives.</td><td>structure</td></tr>
-<tr><td>S4</td><td>An input buffer is never full when a value arrives.</td><td>It grows before a writer can fail to find an empty cell. Issue 210c replaced the head-and-tail indices with a per-cell state, so "full" stopped being a computed condition and became a question asked directly &amp;mdash; nothing answers a search for an empty cell &amp;mdash; and issue 210e makes the growth an appended page rather than a doubling copy, because a claimer copying bytes outside the lock would not survive having its cell relocated. Memory absorbs any imbalance between input sides.</td><td>runtime</td></tr>
-<tr><td>S5</td><td>A station's <strong>cell states</strong> are read and written only under that station's mutex; its value <strong>bytes</strong> are protected by ownership instead.</td><td>One lock per station, covering every port's states together, so a claim holds exactly one lock and no lock ordering exists to get wrong. A cell in <em>reserved</em> or <em>claimed</em> belongs to exactly one worker, so the copies into and out of it need no exclusion and happen outside the lock — which is what keeps the expensive half of a delivery off the serialized path. A delivering writer takes no lock at all, because writing touches one cell and one cell is already atomic. Issue 210d.</td><td>structure</td></tr>
+<tr><td>S4</td><td>An input buffer is never full when a value arrives.</td><td>It grows before a writer can fail to find an empty slot. Issue 210c replaced the head-and-tail indices with a per-slot state, so "full" stopped being a computed condition and became a question asked directly &amp;mdash; nothing answers a search for an empty slot &amp;mdash; and issue 210e makes the growth an appended page rather than a doubling copy, because a claimer copying bytes outside the lock would not survive having its slot relocated. Memory absorbs any imbalance between input sides.</td><td>runtime</td></tr>
+<tr><td>S5</td><td>A station's <strong>slot states</strong> are read and written only under that station's mutex; its value <strong>bytes</strong> are protected by ownership instead.</td><td>One lock per station, covering every port's states together, so a claim holds exactly one lock and no lock ordering exists to get wrong. A slot in <em>reserved</em> or <em>claimed</em> belongs to exactly one worker, so the copies into and out of it need no exclusion and happen outside the lock — which is what keeps the expensive half of a delivery off the serialized path. A delivering writer takes no lock at all, because writing touches one slot and one slot is already atomic. Issue 210d.</td><td>structure</td></tr>
 <tr><td>S8</td><td>A delivery walk takes no lock and copies nothing.</td><td>A port's destinations are one immutable array behind a pointer; a rewire builds a whole new one and swaps the pointer in a single atomic write, so a walker reads the pointer once and walks something nobody will ever modify. What it replaced was a linked list a rewire could free under a walker's feet, which is why the walk used to copy every pair onto its own stack under the station's mutex &amp;mdash; a lock acquisition and a copy proportional to fan-out on every value the engine moved. Issue 214.</td><td>structure</td></tr>
 <tr><td>S9</td><td>Nothing a rewire replaces is freed while a worker might be inside it.</td><td>Each worker keeps an epoch on its own cache line, bumped at the start and end of a whole task, so it is <strong>odd while inside one and even while not</strong>. A replaced set is filed with a snapshot of every epoch; a later sweep frees it once every worker is either even or has moved on. Nothing waits and nothing spins &amp;mdash; an idle worker is asleep and therefore even, and passes without moving, which is what would otherwise deadlock a sweep against a quiet pool. The counter spans the whole task rather than the walk, so the same mechanism answers the same question about a box's compiled code (issue 310) and a removed station (issue 216). Issue 214.</td><td>runtime</td></tr>
 <tr><td>S6</td><td>The station kind is consulted at exactly one moment — choosing an exit on the way out — and nowhere else.</td><td>A new kind is a row in one table, never a branch in several functions.</td><td>structure</td></tr>
@@ -249,7 +250,7 @@ system will say so.</p>
 <tr><td>T3</td><td>One invocation's inputs are claimed atomically with respect to each other — <strong>all of them</strong>, of every kind, under a single hold of the station's mutex.</td><td>No other thread can interleave between them, so an input set is always mutually consistent. Statics used to be excluded, because their values lived in a table with a lock of its own that could not be nested inside a station's, so each was read at its own later moment; issue 401 moved the value onto the port and the exclusion went with the second lock.</td><td>structure</td></tr>
 <tr><td>T4</td><td>One allocation per task, sized exactly for its box; one free.</td><td>The size comes from the registry, so it is known before the task exists.</td><td>build</td></tr>
 <tr><td>T5</td><td>A task comes into existence by exactly one path.</td><td>Everything that starts a station — a delivery arriving, a static being written, the statics bound while a program is built — reaches the same readiness check and the same task build. One door, not several.</td><td>structure</td></tr>
-<tr><td>T6</td><td>A ring value claimed by one task cannot be claimed by another.</td><td>The claim runs under the station's mutex, and a cell moves out of <em>ready</em> there. After issue 210c a cell carries its own state rather than being implied by a read index, so "claimed" is a fact written on the cell rather than a position somebody computed &amp;mdash; which is what lets the claimer walk away with it and copy outside the lock.</td><td>structure</td></tr>
+<tr><td>T6</td><td>A ring value claimed by one task cannot be claimed by another.</td><td>The claim runs under the station's mutex, and a slot moves out of <em>ready</em> there. After issue 210c a slot carries its own state rather than being implied by a read index, so "claimed" is a fact written on the slot rather than a position somebody computed &amp;mdash; which is what lets the claimer walk away with it and copy outside the lock.</td><td>structure</td></tr>
 <tr><td>T7</td><td>An iterator's exit is decided under the mutex and rides inside the task.</td><td>Two tasks assembled a moment apart carry different exits no matter which finishes first.</td><td>structure</td></tr>
 </table>
 <p>---</p>
@@ -377,8 +378,8 @@ error — but a fast writer against a deep queue empties it faster than
 the producer alone would have.</p>
 <p><strong>Nothing about the order values leave a port.</strong> A value delivered
 first is not necessarily claimed first. A reader scans for a usable
-cell rather than computing where the oldest one must be, and a claim
-that rolls back releases cells wherever they sit, so gaps open and
+slot rather than computing where the oldest one must be, and a claim
+that rolls back releases slots wherever they sit, so gaps open and
 "oldest" stops being cheap to find.</p>
 <p>This was true and tested before it was given up. Two things made it
 worth losing. Values reaching one port from two upstream stations were
@@ -447,7 +448,7 @@ not anyone remembers leaning on it.</p>
 <ul>
 <li><a href="doc-001-overview.html">001 — Overview</a>, the one rule everything else falls</li>
 <p>  out of</p>
-<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>, where the</li>
+<li><a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>, where the</li>
 <p>  structural ones live</p>
 <li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a>, the termination</li>
 <p>  argument in full</p>

@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>008 — Map file format</h1>
@@ -220,10 +221,10 @@ they were placed. It makes bare references to that name ambiguous from
 then on, and the next one refuses with both paths named.</p>
 <p>Names rather than numbers, because a map is read by people and because
 it makes an error message legible: *"adder → printer.0: box returns
-int, slot takes float."* The names cost one lookup table that is
+int, port takes float."* The names cost one lookup table that is
 discarded once loading finishes.</p>
 <p>The kind is written rather than inferred. A comparator <em>is</em> inferable —
-it is the station with one more input slot than its function has
+it is the station with one more input port than its function has
 parameters — but that means forgetting the threshold line silently
 demotes a comparator to a plain box that routes everything one way. One
 letter of redundancy buys an error instead of a wrong answer.</p>
@@ -235,7 +236,7 @@ in 1 $0        port 1 holds the value written at statics entry 0
 in 1 = 5       port 1 holds 5
 in 2 = { 1.5, 2.5, 3.5 }       and a <span class="kw">struct</span> is written the same way
 in 3 -         port 3 has no source yet
-in 4 x64 $1    port 4 reads statics entry 1, starting 64 cells deep
+in 4 x64 $1    port 4 reads statics entry 1, starting 64 slots deep
 </pre>
 <p>So <code>split</code> above has no input lines at all — every port is an ordinary
 ring buffer and there is nothing to say about them.</p>
@@ -287,7 +288,7 @@ source** as a count:</p>
 <pre class="code">
 in 0 x64 $0      reads statics entry 0, room <span class="kw">for</span> 64 to begin with
 in 1 x256 -      no source yet, room <span class="kw">for</span> 256 when it gets one
-in 2 x8 = 5      a constant, and eight cells standing idle behind it
+in 2 x8 = 5      a constant, and eight slots standing idle behind it
 in 3 = 5         a constant, and the default ten
 </pre>
 <p>It reads as <em>sixty-four of them</em>, the way a parts list writes a
@@ -302,12 +303,12 @@ rule that holds for all three forms, and one rule beats a rule with an
 exception in it. This was written the other way round when the spelling
 was chosen and corrected when it was built.</p>
 <p><strong>A depth may sit beside any source form, including the dash</strong>, because
-the two are independent: every port owns ring cells whatever its tag
+the two are independent: every port owns ring slots whatever its tag
 currently says. That standing buffer is what makes changing a port's
 source a field write rather than an allocation, and it is decided in
 issue 210b.</p>
 <p><strong>The dump writes one only when it is not the default.</strong> This format
-writes exceptions, and a port at ten cells is not one; <code>x10</code> on every
+writes exceptions, and a port at ten slots is not one; <code>x10</code> on every
 line would be noise a reader learns to skip past.</p>
 <p><strong>It is a hint and never a requirement.</strong> Growth covers any figure that
 turns out wrong, so nobody has to be right, and omitting it costs
@@ -319,7 +320,7 @@ right; an optional one they may supply is a different thing.</p>
 <pre class="code">
 out 0 - printer.0
 </pre>
-<p>Port zero of this station delivers to slot zero of the station named
+<p>Port zero of this station delivers to port zero of the station named
 <code>printer</code>. Repeat the line to fan out; one port may carry any number of
 destinations.</p>
 <p>An arrow whose destination port holds a static will, once issue 405
@@ -341,10 +342,10 @@ statics
   2 = <span class="st">"config.txt"</span>
   3 = { 5, 2.0, { 0, 0, 0 }, <span class="st">"hey there"</span>, 2 }
 </pre>
-<p><strong>The table carries no types.</strong> A slot that references an entry knows
+<p><strong>The table carries no types.</strong> A port that references an entry knows
 what type it is, because the box function's parameter at that position
 says so, and the generator knows what that is. The text is read into
-bytes at the moment a slot claims it, walking the field table the
+bytes at the moment a port claims it, walking the field table the
 generator emitted for that struct.</p>
 <p>This is the same reason the wiring carries no types: if the table said
 <code>int</code> where the box wanted <code>float</code>, there would be two sources of truth
@@ -384,8 +385,8 @@ a program on a stranger's machine. Issue 311d.</p>
 <p>  expected in.</p>
 <li>A bare file name matching more than one box source, with both paths</li>
 <p>  named and the instruction to write one out in full.</p>
-<li>An arrow to a station or slot that does not exist.</li>
-<li>More input lines than the box has parameters, or a slot index out of</li>
+<li>An arrow to a station or port that does not exist.</li>
+<li>More input lines than the box has parameters, or a port index out of</li>
 <p>  range.</p>
 <li>A comparator whose box returns a type with no compare function.</li>
 </ul>

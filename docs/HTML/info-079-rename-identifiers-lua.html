@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>308 — The generator, in C</title>
+<title>079-rename-identifiers.lua — changing what things are called</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -87,7 +87,7 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
-<a href="done-308-generator-in-c.html" class="here">308 — The generator, in C</a>
+<a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
 <a href="done-401-static-slots.html">401 — Static input values</a>
@@ -136,139 +136,63 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
-<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
+<a href="info-079-rename-identifiers-lua.html" class="here">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
-<h1>308 — The generator, in C</h1>
-<h2>Current behavior</h2>
-<p><strong>Done.</strong> The generator is a standalone C program —
-<code>scripts/070-generate.c</code> and the three pieces under it — compiled by
-the build before it is run. It depends on nothing the engine provides,
-so the build compiles it, runs it, and compiles everything else.
-**A program built with this engine needs a C compiler and nothing
-else.**</p>
-<p><strong>Parity was proven rather than asserted, and then retired.</strong> Both
-generators were run over the same sources and their output compared
-byte for byte: 259 lines of emitted registry identical apart from the
-first line, which names the generator that wrote it; describe mode
-identical; and thirteen malformed sources each refused by both with
-<strong>the same message</strong>. The comparison lived in
-<code>tests/072-test-generator-parity.sh</code>, said in its own header that it
-could not outlive the thing it compared against, and went with it —
-the Lua generator was renamed to mark it deprecated for one commit and
-removed in the next, so it appears in the record once as something
-deliberately put down.</p>
-<p><strong>Two behaviours changed, both deliberately, both improvements:</strong></p>
-<ul>
-<li><strong>The exit code.</strong> The Lua generator exited 1 for everything. The C</li>
-<p>  one uses the project's own codes (issue 106): 65 for a malformed
-  source, 71 for a resource it cannot get. The command-line test only
-  ever checked for non-zero, so nothing depended on the old value.</p>
-<li><strong>An unterminated block comment now names its file.</strong> The Lua</li>
-<p>  version reported <code>(input):0</code> for that one case, because the routine
-  that blanks comments had not been told which file it was reading.</p>
-</ul>
-<p><strong>What the translation actually cost</strong>, since the issue predicted it:
-the parsing is the small half. The support machinery underneath — an
-arena, a string that grows, an array that grows, and the handful of
-string operations Lua supplies for free — is <code>065-gentext.h</code> and
-<code>066-gentext.c</code>, and it has its own test, because everything above it
-assumes it is correct and a bug in it surfaces as garbled C hundreds
-of lines away.</p>
-<p><strong>One piece of the parser is worth knowing about.</strong> A function header
-is recognized by scanning <strong>backwards</strong> from the last <code>)</code> to its
-match, rather than by a pattern. The name may follow a star with no
-space — <code>char *sneaky</code> — which no single split can express, and the
-Lua version had already resorted to splitting it by hand for the same
-reason.</p>
-<p>**Out of scope and still true: the HTML documentation generator stays
-in Lua.** It is project tooling, not on the path a consumer walks, and
-the distinction is now stated in the Makefile's own header, in the
-packaging note, and in the front door's info file: building the engine
-needs a C compiler; regenerating our documentation needs LuaJIT.</p>
-<p><strong>Why it mattered</strong>, kept because it is the reason the work was done:
-a consumer's build inherits our tooling choices, and every inherited
-dependency is a reason their build fails on a machine we never saw.
-Depending on an interpreter that nothing at run time ever used was
-acceptable for a project that only builds itself and not for anything
-handed to other people —
-<a href="impl-057-packaging.html">057</a> is where that
-was first measured.</p>
-<h2>Intended behavior</h2>
-<p><strong>A program built with this engine needs a C compiler and nothing else.</strong></p>
-<p>The generator becomes a small, standalone C program with no dependency
-on the engine it feeds — it reads C source as text and writes C source
-as text, so it can be compiled by the same compiler that will compile
-its output, before anything else in the build exists.</p>
-<p>There is no bootstrap problem to solve, because the generator does not
-depend on anything it generates. The build gains one stage: compile the
-generator, run it, compile everything else. A consumer's build does the
-same, with their own box sources.</p>
-<p><strong>Behavior is unchanged.</strong> This is a translation, not a redesign. The
-emitted file should be equivalent to what the Lua generator emits from
-the same input, the describe mode should report the same findings, and
-a malformed source should still stop the build naming the file — a
-generator that writes nothing on failure is the guarantee that keeps a
-build from compiling against a stale registry, and it survives intact.</p>
-<p><strong>What the translation costs.</strong> Lua supplied growable strings, hash
-lookup, and pattern matching; C supplies none of these. The honest
-majority of this work is not parsing — it is the few hundred lines of
-support underneath it: a growable output buffer, an arena so nothing
-has to be freed individually, and a string scanner. Writing those
-deliberately, as their own readable pieces, is the difference between a
-translation and a thicket.</p>
-<p><strong>Out of scope: the documentation generator.</strong> The HTML site generator
-stays in Lua. It is project tooling, not on the path a consumer walks to
-build a program, and a documentation build that needs LuaJIT costs an
-outside consumer nothing. This issue is about the build path only, and
-the distinction should be stated wherever the dependency is declared:
-building the engine needs a C compiler; regenerating our documentation
-needs LuaJIT.</p>
-<h2>Suggested implementation steps</h2>
-<p>1. <strong>Support machinery first, as its own readable unit.</strong> The growable
-   byte buffer, the arena, and the string scanner. Each with a test,
-   because everything above them assumes they are correct and a bug
-   here surfaces as garbled C hundreds of lines away.
-2. <strong>The declaration parser</strong>, matching what the existing parser
-   accepts — return type, name, parameters with types, declarations
-   spanning several lines, braces inside string literals, helper
-   functions that are not boxes. The existing generator's test suite
-   already names these cases; they are the specification.
-3. <strong>The describe mode</strong>, before any emission. It prints what the parser
-   found, which makes every later step debuggable by reading the
-   parser's findings rather than the emitted C.
-4. <strong>Emission</strong>, in the order the existing generator emits: comparison
-   functions, shims, box records, struct field tables. Every size and
-   offset stays a <code>sizeof</code> or <code>offsetof</code> expression — the compiler
-   computes them, and the generator must continue never to guess.
-5. <strong>Parity, held by a test.</strong> Run both generators over the same box
-   sources and compare their output. This test is deliberately
-   temporary: it cannot outlive the Lua generator it compares against.
-6. <strong>Build integration.</strong> The generator compiles into the RAM-backed
-   build tier like everything else, and its output is rebuilt when a box
-   source, or the generator's own source, is newer.
-7. <strong>Retire the Lua generator</strong> once parity holds, along with the parity
-   test. Per the project's convention it is renamed to mark it deprecated
-   for one commit before removal, so it appears in the record once as a
-   thing that was deliberately retired rather than vanishing.
-8. <strong>Declare the dependency where a consumer will read it</strong> — building
-   needs a C compiler; nothing else.</p>
-<h2>Related</h2>
-<ul>
-<li><a href="done-301-box-source-parser.html">301 — Box source parser</a>, whose</li>
-<p>  accepted grammar this must match exactly</p>
-<li><a href="done-302-shim-emission.html">302 — Shim emission</a>,</li>
-<p>  <a href="done-303-registry-emission.html">303 — Registry emission</a>,
-  <a href="done-304-struct-field-tables.html">304 — Struct field tables</a>,
-  <a href="done-305-compare-functions.html">305 — Compare functions</a> — the
-  four kinds of output, unchanged</p>
-<li><a href="done-306-build-integration.html">306 — Build integration</a>, which</li>
-<p>  gains a compile stage ahead of the generate stage</p>
-<li><a href="doc-007-datapath-build.html">007 — The build path</a>, the document</li>
-<p>  this must keep true</p>
-<li><a href="impl-057-packaging.html">057 — Packaging</a>,</li>
-<p>  where the dependency was named as an obstacle</p>
-</ul>
+<h1>079-rename-identifiers.lua — changing what things are called</h1>
+<p>A rename tool for names that appear everywhere. Takes a list of
+old-to-new pairs and applies all of them in one pass, so that a rename
+which collides with another rename still comes out right.</p>
+<p>Written for <a href="issue-215-ports-and-slots.html">215</a>, where
+three renames had to happen at once and two of them collided;
+<a href="issue-711-the-index-means-reading-order.html">711</a> needs the same
+thing for file indices and is the reason it is a tool rather than an
+afternoon.</p>
+<h2>Why one pass rather than several</h2>
+<p>If A must become B while some existing B must become C, renaming in
+sequence turns the original A into C. This substitutes every old name
+for a private placeholder first and only then substitutes placeholders
+for new names, so **no name is ever renamed twice and the order of the
+pairs cannot change the result**.</p>
+<p>That is not a theoretical concern. In the rename this was built for,
+the word for an input port had to become <em>port</em> while the word already
+meaning <em>port</em> had to become <em>output port</em>, in the same files.</p>
+<h2>What counts as a match</h2>
+<p><strong>Whole identifiers only.</strong> The match requires a non-identifier
+character on both sides, so <code>port</code> inside <code>report</code> is not the word
+<code>port</code>. A tool without that rule would silently turn a project's
+reporting into something else, and the damage would look like a
+successful rename.</p>
+<h2>Running it</h2>
+<table>
+<tr><td>Argument</td><td>Does</td></tr>
+<tr><td><em>mapping file</em></td><td>Required. Lines of <code>old new</code>; blank lines and <code>#</code> comments ignored. A name appearing twice on the left is an error, because the mapping would be disagreeing with itself.</td></tr>
+<tr><td><code>--apply</code></td><td>Write the changes. <strong>Without it nothing is modified</strong> and the run is a report.</td></tr>
+<tr><td><code>--roots=a,b,c</code></td><td>Which directories to walk, relative to the project root. Defaults to everything documentary and everything source.</td></tr>
+<tr><td><em>a path</em></td><td>The project root, if not the one hard-coded at the top.</td></tr>
+</table>
+<p>Reaches <code>.c</code>, <code>.h</code>, <code>.lua</code>, <code>.md</code> and <code>.map</code> files. Never reaches the
+generated registry or the published HTML, because both are derived and
+rewriting a derived file makes it disagree with what derives it.</p>
+<h2>What it prints</h2>
+<p>A count per file and a count per pair. **A pair that matched nothing
+is called out**, because a silent zero is usually a misspelling in the
+mapping, and a misspelled pair is how a rename half-happens — which is
+worse than not starting, since half the tree then disagrees with the
+other half and both look deliberate.</p>
+<h2>What it does not do</h2>
+<p><strong>It does not know what code means.</strong> It cannot tell that a local
+variable holding an output port should not take the input port's new
+name, and it cannot rewrite an English sentence that used the old word
+as a word. Both jobs are left to the person running it, which is why
+the recommended shape is: run the identifier mapping, compile, read
+the diff for prose, and fix sentences by hand.</p>
+<p>Two habits make that tractable. Run code and prose as **separate
+passes with separate mappings** — a struct field renamed to <code>out_ports</code>
+is right in a declaration and absurd in a sentence. And compile with
+shadow warnings on afterwards, because the one failure this tool can
+produce that a compiler otherwise accepts is a renamed variable
+quietly shadowing another.</p>
 
 </main>
 </div></body></html>

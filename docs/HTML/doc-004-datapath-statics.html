@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html" class="here">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>004 — Datapath: statics and recalculation</h1>
@@ -159,7 +160,7 @@ replaced it.</p>
 <p>A ring port is a <strong>stream</strong>. Values pile up in arrival order and get
 taken one at a time, so a station with two ring ports pairs them off:
 first with first, second with second.</p>
-<p>A static port is a <strong>cell</strong>. One value sits in it. Reading does not
+<p>A static port is a <strong>slot</strong>. One value sits in it. Reading does not
 disturb it, so a station driven by its ring side reads the same static
 on every one of its runs — which is what makes a comparator's threshold
 a threshold, and a read box's file path a file path.</p>
@@ -180,7 +181,7 @@ arrow whose destination port holds a static would overwrite that static
 rather than queueing into a ring buffer. The box producing the value is
 untouched by this: it takes its arguments, returns one value, and has
 no idea what happens next. The <em>wire</em> is what says the value lands in a
-cell. This matters because it keeps the capability visible — it is in
+slot. This matters because it keeps the capability visible — it is in
 the file, in the dump, and drawable — rather than being a box reaching
 sideways into something no arrow connects it to.</p>
 <p>Today such a wire is <strong>refused at load time</strong> and a delivery into a
@@ -234,7 +235,7 @@ drawing has to say what makes it re-read — which means a wire back from
 whatever consumes it, and it will look like a loop, because it is one.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>, the record a</li>
+<li><a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>, the record a</li>
 <p>  port is</p>
 <li><a href="doc-003-datapath-delivery.html">003 — Delivery</a>, which now has one more</li>
 <p>  way to arrive</p>

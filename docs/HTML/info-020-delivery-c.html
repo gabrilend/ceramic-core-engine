@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html" class="here">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>020-delivery.c — the moving half, from inside</h1>
@@ -143,29 +144,29 @@
 hot path: everything here happens between a box returning and the
 next box being queued.</p>
 <h2>The shape of one delivery</h2>
-<p>Lock the destination station → search the ring for an empty cell and
+<p>Lock the destination station → search the ring for an empty slot and
 take it (grow first if the search comes back empty-handed) → memcpy the
-value in and publish the cell as ready → walk every slot asking "do you
-hold a value?" → if all do, search each ring slot for a ready cell,
+value in and publish the slot as ready → walk every port asking "do you
+hold a value?" → if all do, search each ring port for a ready slot,
 take it, and copy it into a stack buffer → unlock → build the task (one
 malloc holding struct, pointer array, input bytes, output bytes) → push
 it into the pool. The contended section is copies and searching only;
 user code never runs under a station's lock.</p>
 <p><strong>Both searches are the same function.</strong> A reader looking for a ready
-cell and a writer looking for an empty one differ in which transition
+slot and a writer looking for an empty one differ in which transition
 they attempt and which hint they start from, and in nothing else. Each
 starts where its hint points, sweeps forward, wraps, and stops where it
 began — reading the hint exactly once, which is what bounds the sweep
-to every cell one time each. A hint that another worker has moved in
+to every slot one time each. A hint that another worker has moved in
 the meantime is not wrong, only less lucky.</p>
 <h2>The dispatch tables</h2>
 <p>Three tables, each indexed by a kind, each a row per kind rather
 than a branch per case:</p>
 <ul>
-<li><strong>slot_filled[slot kind]</strong> — ring: its count of ready cells is above</li>
+<li><strong>in_port_filled[port kind]</strong> — ring: its count of ready slots is above</li>
 <p>  zero; static: always yes; no source yet: always no, so the station
   never runs.</p>
-<li><strong>slot_claim_locked[slot kind]</strong> — ring: pop under the mutex; no</li>
+<li><strong>in_port_claim_locked[port kind]</strong> — ring: pop under the mutex; no</li>
 <p>  source yet: a named function that stops the program, because
   reaching it means the readiness walk and the claim walk disagreed
   about the same port. The static row is still a null meaning
@@ -178,14 +179,14 @@ than a branch per case:</p>
   iterator rows fail loudly until phase 5 fills them.</p>
 </ul>
 <h2>Growth (issue 203)</h2>
-<p>Doubles the storage a slot points at — never the slot, never the
-station. Every value is claimed out of the old cells and republished
+<p>Doubles the storage a port points at — never the port, never the
+station. Every value is claimed out of the old slots and republished
 into the front of the new ones, one at a time rather than in a block
-copy: a cell carries its state interleaved with its bytes, and the
+copy: a slot carries its state interleaved with its bytes, and the
 fresh run is being <em>built</em> rather than moved, so carrying the old
 states across would be wrong. Claiming on the way out is also what
-identifies which cells held anything, since only a ready cell will
-move. Counted per slot, high water tracked on every write, both for
+identifies which slots held anything, since only a ready slot will
+move. Counted per port, high water tracked on every write, both for
 phase 7 to report.</p>
 <p><strong>The walk takes no lock and copies nothing</strong> (issue 214). A port's
 destinations are one immutable array behind a pointer; reading that

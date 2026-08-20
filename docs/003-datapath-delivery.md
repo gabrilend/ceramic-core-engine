@@ -15,11 +15,11 @@ station produced it.
 
 **1. Choose a port.** The station's kind decides which of its output
 ports this value goes down. A plain box has one. A comparator compares
-the value against its threshold slot and picks one of three. An
+the value against its threshold port and picks one of three. An
 iterator uses the port its task was assigned when it was enqueued. This
 is the whole of [005](005-routing.md).
 
-**2. Walk that port's destination list.** For each `{station, slot}`
+**2. Walk that port's destination list.** For each `{station, port}`
 pair on it, the value is delivered independently. A port wired to a
 hundred destinations means a hundred deliveries, done by this one
 worker, before it goes back for more work. That is acceptable: each
@@ -28,21 +28,21 @@ manufacturing parallelism for everyone else.
 
 **3. For each destination, take that station's mutex.**
 
-**4. Write the value into the slot.** Search for an empty cell,
+**4. Write the value into the port.** Search for an empty slot,
 starting where this port's write hint points and sweeping forward until
 it wraps back to where it began; take the first one that will move from
 empty to reserved, `memcpy` `elem_size` bytes into it, and publish it
 as ready. If the sweep finds nothing the buffer is genuinely full and
-grows first — see [002](002-stations-and-slots.md).
+grows first — see [002](002-stations-and-ports.md).
 
 The hint is read once and the sweep is bounded by it: at most every
-cell the port has, exactly one time each. Re-reading a hint that other
+slot the port has, exactly one time each. Re-reading a hint that other
 workers keep pushing forward would let a searcher chase it, and a
 search that can be outrun is a search with no bound.
 
 **5. Run the readiness check, still holding the mutex.** Walk every
 port on this station and ask whether it holds a value. A ring buffer
-holds one if its count of ready cells is above zero. A static always
+holds one if its count of ready slots is above zero. A static always
 does, because its value is simply there and reading it does not consume
 it. A port with no source never does, so a station carrying one waits
 forever — which is what lets a station exist before anybody has
@@ -54,16 +54,16 @@ direction and answers the same way, which is why nothing extra is
 needed to make a static write run a station, and why a write can never
 run one whose ring port is empty.
 
-If any slot is empty, release the mutex and move to the next
+If any port is empty, release the mutex and move to the next
 destination. Nothing more happens; the value sits in the buffer waiting
 for its siblings.
 
-**6. If every slot is occupied, claim one value from each.** Ring
-buffer slots are popped — the same sweep as step 4 run the other way,
-looking for a ready cell and taking it to claimed, then copying the
-value out and releasing the cell as empty. Taking the cell is what
+**6. If every port is occupied, claim one value from each.** Ring
+buffer ports are popped — the same sweep as step 4 run the other way,
+looking for a ready slot and taking it to claimed, then copying the
+value out and releasing the slot as empty. Taking the slot is what
 makes the value spoken for: no other thread can claim it, because a
-cell moves out of ready exactly once. Which value a port yields is not
+slot moves out of ready exactly once. Which value a port yields is not
 promised to be the oldest, and [058](058-guarantees.md) says why. If the
 station is an iterator, its cursor advances now and the port it landed
 on is recorded, so that two tasks assembled moments apart go to
@@ -132,6 +132,6 @@ out of a function declared `void`.
 
 ## Related
 
-- [002 — Stations and slots](002-stations-and-slots.md)
+- [002 — Stations and ports](002-stations-and-ports.md)
 - [005 — Routing](005-routing.md), which port step 1 chooses
 - [006 — Scheduling](006-datapath-scheduling.md), what step 9 pushes into

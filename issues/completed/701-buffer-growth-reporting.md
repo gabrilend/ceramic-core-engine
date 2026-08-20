@@ -85,4 +85,4 @@ that a person decides.
 ## Related
 
 - Issue 203 — where the count comes from
-- [002 — Stations and slots](../docs/002-stations-and-slots.md)
+- [002 — Stations and ports](../docs/002-stations-and-ports.md)

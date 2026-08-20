@@ -25,7 +25,7 @@ A ring port is a **stream**. Values pile up in arrival order and get
 taken one at a time, so a station with two ring ports pairs them off:
 first with first, second with second.
 
-A static port is a **cell**. One value sits in it. Reading does not
+A static port is a **slot**. One value sits in it. Reading does not
 disturb it, so a station driven by its ring side reads the same static
 on every one of its runs — which is what makes a comparator's threshold
 a threshold, and a read box's file path a file path.
@@ -51,7 +51,7 @@ arrow whose destination port holds a static would overwrite that static
 rather than queueing into a ring buffer. The box producing the value is
 untouched by this: it takes its arguments, returns one value, and has
 no idea what happens next. The *wire* is what says the value lands in a
-cell. This matters because it keeps the capability visible — it is in
+slot. This matters because it keeps the capability visible — it is in
 the file, in the dump, and drawable — rather than being a box reaching
 sideways into something no arrow connects it to.
 
@@ -119,7 +119,7 @@ whatever consumes it, and it will look like a loop, because it is one.
 
 ## Related
 
-- [002 — Stations and slots](002-stations-and-slots.md), the record a
+- [002 — Stations and ports](002-stations-and-ports.md), the record a
   port is
 - [003 — Delivery](003-datapath-delivery.md), which now has one more
   way to arrive

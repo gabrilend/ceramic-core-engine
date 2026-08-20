@@ -28,10 +28,10 @@
 
 /* {{{ map_report_buffers() — issue 701 */
 /*
- * Every slot's growth story: doublings, current capacity, high-water
+ * Every port's growth story: doublings, current capacity, high-water
  * occupancy — plus the pool ring's own, because the two piles form
  * in different places (a lesson from phase 2). High water matters
- * more than capacity: a thousand-cell buffer that held two values
+ * more than capacity: a thousand-slot buffer that held two values
  * had one bad moment; one that held nine hundred is a bottleneck.
  */
 void map_report_buffers(map_t *m, FILE *out);
@@ -70,7 +70,7 @@ void map_observe_stop(map_t *m);
 /* }}} */
 
 /* {{{ map_report_shutdown() — issue 701's loud parting word */
-/* Called by map_destroy: any slot grown past the shout threshold is
+/* Called by map_destroy: any port grown past the shout threshold is
  * named on stderr, so a quietly-absorbing map gets decided about. */
 void map_report_shutdown(map_t *m);
 /* }}} */
@@ -109,7 +109,7 @@ void map_dump(map_t *m, FILE *out);
 /* {{{ map_rewire_connect() / map_rewire_disconnect() */
 /*
  * Change the shape while it runs. Every load-time rule applies per
- * edge — type compatibility, buffer-slot destinations, port limits —
+ * edge — type compatibility, buffer-port destinations, port limits —
  * and the check and the change happen under one lock, because two
  * threads each adding an individually legal edge can produce an
  * illegal pair.
@@ -129,9 +129,9 @@ void map_dump(map_t *m, FILE *out);
  * the first-pass report weighs the trade, and issue 212 overturns it.
  */
 int map_rewire_connect(map_t *m, int from_station, int port,
-                       int to_station, int to_slot);
+                       int to_station, int to_port);
 int map_rewire_disconnect(map_t *m, int from_station, int port,
-                          int to_station, int to_slot);
+                          int to_station, int to_port);
 /* }}} */
 
 #endif

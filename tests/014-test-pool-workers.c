@@ -9,7 +9,7 @@
  * How it does it, in general terms: a known number of counting tasks
  * is pushed while the workers are still parked, the gate is opened,
  * and the pool is left to terminate itself. Each task marks its own
- * cell in a ledger; the ledger must read "exactly once" everywhere.
+ * slot in a ledger; the ledger must read "exactly once" everywhere.
  */
 #include "011-pool.h"
 

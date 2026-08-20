@@ -59,14 +59,14 @@ static void a_wire_removed_mid_run(void)
     map_connect(m, 0, 0, 1, 0);
     map_connect(m, 0, 0, 2, 0);
 
-    port_t *p = map_station(m, 0)->ports;
-    dest_set_t *before = port_dests(p);
+    out_port_t *p = map_station(m, 0)->out_ports;
+    dest_set_t *before = out_port_dests(p);
     check(before && before->n == 2, "two wires make a set of two");
 
     map_start(m, 4);
     check(map_rewire_disconnect(m, 0, 0, 2, 0) == 0, "a wire came out");
 
-    dest_set_t *after = port_dests(p);
+    dest_set_t *after = out_port_dests(p);
     check(after && after->n == 1, "and the new set has one");
     check(after != before, "which is a different array, not an edited one");
     check(before->n == 2,
@@ -185,7 +185,7 @@ static void the_dump_still_round_trips(void)
     map_connect(m, 0, 0, 2, 0);
     map_connect(m, 0, 0, 3, 0);
 
-    dest_set_t *set = port_dests(map_station(m, 0)->ports);
+    dest_set_t *set = out_port_dests(map_station(m, 0)->out_ports);
     check(set && set->n == 3, "three wires drawn");
     check(set->items[0].station == 1 && set->items[1].station == 2
           && set->items[2].station == 3,
@@ -193,7 +193,7 @@ static void the_dump_still_round_trips(void)
 
     map_start(m, 2);
     map_rewire_disconnect(m, 0, 0, 2, 0);
-    set = port_dests(map_station(m, 0)->ports);
+    set = out_port_dests(map_station(m, 0)->out_ports);
     check(set && set->n == 2 && set->items[0].station == 1
           && set->items[1].station == 3,
           "removing the middle one leaves the others in their order");

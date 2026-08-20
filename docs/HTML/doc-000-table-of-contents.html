@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html" class="here">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>000 — Table of contents</h1>
@@ -148,7 +149,7 @@ minimal-soramech/
 ├── docs/
 │   ├── 000-table-of-contents.md    this file
 │   ├── 001-overview.md             what the machine is, in one page
-│   ├── 002-stations-and-slots.md   the things that persist
+│   ├── 002-stations-and-ports.md   the things that persist
 │   ├── 003-datapath-delivery.md    the push path — the core of the engine
 │   ├── 004-datapath-statics.md      statics, and writes as events
 │   ├── 005-routing.md              plain, comparator, iterator
@@ -189,7 +190,7 @@ minimal-soramech/
 on each other.</p>
 <p>If you only read one, read <strong><a href="doc-001-overview.html">001 — Overview</a></strong>.</p>
 <p>If you want to understand how it actually works, read
-<strong><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a></strong> and then
+<strong><a href="doc-002-stations-and-ports.html">002 — Stations and ports</a></strong> and then
 <strong><a href="doc-003-datapath-delivery.html">003 — Delivery</a></strong>. Everything else is
 either a variation on that path or the machinery that gets a map into
 memory so that path can start.</p>
@@ -197,7 +198,7 @@ memory so that path can start.</p>
 <table>
 <tr><td>If you want to know</td><td>Read</td></tr>
 <tr><td>What is this and why</td><td><a href="doc-001-overview.html">001 — Overview</a></td></tr>
-<tr><td>What a station is made of, field by field</td><td><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a></td></tr>
+<tr><td>What a station is made of, field by field</td><td><a href="doc-002-stations-and-ports.html">002 — Stations and ports</a></td></tr>
 <tr><td>How a value gets from one box to the next</td><td><a href="doc-003-datapath-delivery.html">003 — Delivery</a></td></tr>
 <tr><td>How a value sits still while others stream past it</td><td><a href="doc-004-datapath-statics.html">004 — Statics and recalculation</a></td></tr>
 <tr><td>How a value chooses between several destinations</td><td><a href="doc-005-routing.html">005 — Routing</a></td></tr>

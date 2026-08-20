@@ -100,7 +100,7 @@ to be irritating.
 
 ## Related
 
-- [002 — Stations and slots](../docs/002-stations-and-slots.md)
+- [002 — Stations and ports](../docs/002-stations-and-ports.md)
 - [007 — The build path](../docs/007-datapath-build.md), the shape the shims should follow
 - Issue 302 — deletes the hand-written shims
 - Issue 602 — takes over map construction

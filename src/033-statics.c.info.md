@@ -21,7 +21,7 @@ which costs a station and gains a wire somebody can see.
 
 ## Functions
 
-**map_slot_static_text(map, station, slot, text)** — give a port a
+**map_in_port_static_text(map, station, port, text)** — give a port a
 constant written as text, and make it a static. Parses into the port's
 own storage, shaped by the port's registry type: a number for
 int/unsigned/float ports, a brace walk over the generated field table
@@ -34,7 +34,7 @@ Parsed into scratch first and installed under the station's mutex, so a
 malformed value never half-overwrites a working one and no concurrent
 claim sees a value mid-parse. Runs the readiness check afterwards.
 
-**map_slot_static_write(map, station, slot, bytes, size)** — change a
+**map_in_port_static_write(map, station, port, bytes, size)** — change a
 constant mid-run. Size-checked against what the port holds, and the
 station's own mutex — the lock the claim already takes — is held for
 the length of the copy, so no invocation sees fields from two worlds.
@@ -43,7 +43,7 @@ Runs the readiness check afterwards.
 Refuses a port that has never held a constant, because its shape is
 unknown.
 
-**slot_constant_text(slot, out, room) → wanted** — a constant turned
+**in_port_constant_text(port, out, room) → wanted** — a constant turned
 back into the text a map file would use, the exact mirror of the
 reader, walking the same field table the other way. Writes at most
 `room` bytes including the terminator and returns how many characters
@@ -55,7 +55,7 @@ string a file gave it and the dump echoed that string, which had a hole
 in it — a value changed while the program ran was not re-serialized, so
 the dump printed what the file said rather than what the engine held.
 
-**slot_constant_free(slot)** — internal: the constant and, for a
+**in_port_constant_free(port)** — internal: the constant and, for a
 string, the characters it points at.
 
 ## What a box may no longer do

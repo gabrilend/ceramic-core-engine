@@ -17,7 +17,7 @@ one unless you are debugging this file.
 |---|---|---|
 | slots | array of task pointers | The ring. Holds pointers out; nothing points in. |
 | capacity | `int` | Ring length. Doubles when full. |
-| head, tail | `int` | Oldest task / next free cell. Equal means empty; one cell always spare so full is distinguishable. |
+| head, tail | `int` | Oldest task / next free slot. Equal means empty; one slot always spare so full is distinguishable. |
 | mutex | `pthread_mutex_t` | Guards every other field here. One lock, one truth. |
 | wake | `pthread_cond_t` | Sleeping workers wait on this; push and shutdown broadcast it. |
 | start_gate, released | cond + `int` | Workers park here until release; the seeding window. |

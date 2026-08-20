@@ -6,7 +6,7 @@
  * buffer — ever moves a station.
  *
  * How it does it, in general terms: a small map is built by hand,
- * every station's address is written down, one slot is then flooded
+ * every station's address is written down, one port is then flooded
  * until its buffer doubles several times, and every address is read
  * again. The two readings must be identical, and the neighbours'
  * buffers must be untouched.
@@ -36,11 +36,11 @@ int main(void)
     for (int i = 0; i < STATIONS; i++)
         before[i] = map_station(m, i);
 
-    /* Leave a fingerprint in station 2's first slot. */
+    /* Leave a fingerprint in station 2's first port. */
     int fingerprint = 777;
     map_deliver_value(m, 2, 0, &fingerprint);
 
-    /* Flood station 1's first slot. Its second slot stays empty, so
+    /* Flood station 1's first port. Its second port stays empty, so
      * the station never becomes ready and the buffer must absorb
      * everything by growing. */
     for (int v = 0; v < 500; v++)
@@ -54,23 +54,23 @@ int main(void)
         }
     }
 
-    slot_t *grown = &map_station(m, 1)->slots[0];
+    in_port_t *grown = &map_station(m, 1)->in_ports[0];
     if (grown->growths < 3) {
         fprintf(stderr, "expected several growths, saw %d\n", grown->growths);
         exit(1);
     }
-    if (map_slot_depth(m, 1, 0) != 500) {
-        fprintf(stderr, "flooded slot holds %d of 500\n", map_slot_depth(m, 1, 0));
+    if (map_in_port_depth(m, 1, 0) != 500) {
+        fprintf(stderr, "flooded port holds %d of 500\n", map_in_port_depth(m, 1, 0));
         exit(1);
     }
 
     /* The neighbour's fingerprint must have survived unmoved. */
-    if (map_slot_depth(m, 2, 0) != 1) {
-        fprintf(stderr, "the neighbour's slot depth changed\n");
+    if (map_in_port_depth(m, 2, 0) != 1) {
+        fprintf(stderr, "the neighbour's port depth changed\n");
         exit(1);
     }
     int recovered;
-    memcpy(&recovered, map_station(m, 2)->slots[0].storage, sizeof recovered);
+    memcpy(&recovered, map_station(m, 2)->in_ports[0].storage, sizeof recovered);
     if (recovered != 777) {
         fprintf(stderr, "the neighbour's value was disturbed: %d\n", recovered);
         exit(1);

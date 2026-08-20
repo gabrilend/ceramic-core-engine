@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>007 — Datapath: the build</h1>
@@ -232,8 +233,8 @@ constant the compiler folded:</p>
 <span class="kw">static</span> <span class="kw">void</span> place__math_dot_c__add(station_t *s) {
     s-&gt;box_name = <span class="st">"math.c:add"</span>;      <span class="cm">/* a literal, for the dump */</span>
     s-&gt;call     = add__call;
-    s-&gt;slots[0].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
-    s-&gt;slots[1].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
+    s-&gt;ports[0].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
+    s-&gt;ports[1].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
     s-&gt;out_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
     s-&gt;compare  = int__compare_g;
 }
@@ -274,7 +275,7 @@ sources of truth that could disagree, and the map would always be the
 one that was wrong.</p>
 <p>Naming the <em>file</em> beside the function is provenance, not a type
 declaration, so this still holds.</p>
-<p>The same numbers size every ring buffer cell, so a port's cells are
+<p>The same numbers size every ring buffer slot, so a port's slots are
 exactly <code>sizeof</code> the parameter they feed and a write is a <code>memcpy</code> with
 no allocation.</p>
 <h3>Sizes cannot be computed at runtime, which is the one irreducible thing</h3>
@@ -367,7 +368,7 @@ last place that trace still exists.</p>
 </ul>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>, which stores the shim pointer</li>
+<li><a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>, which stores the shim pointer</li>
 <li><a href="doc-008-map-file-format.html">008 — Map file format</a>, the other half</li>
 <li><a href="doc-009-datapath-load.html">009 — Loading</a>, which describes a runtime parser</li>
 <p>  that this replaces with generated code</p>

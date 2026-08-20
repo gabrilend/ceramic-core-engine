@@ -11,7 +11,7 @@ minimal-soramech/
 ├── docs/
 │   ├── 000-table-of-contents.md    this file
 │   ├── 001-overview.md             what the machine is, in one page
-│   ├── 002-stations-and-slots.md   the things that persist
+│   ├── 002-stations-and-ports.md   the things that persist
 │   ├── 003-datapath-delivery.md    the push path — the core of the engine
 │   ├── 004-datapath-statics.md      statics, and writes as events
 │   ├── 005-routing.md              plain, comparator, iterator
@@ -56,7 +56,7 @@ on each other.
 If you only read one, read **[001 — Overview](001-overview.md)**.
 
 If you want to understand how it actually works, read
-**[002 — Stations and slots](002-stations-and-slots.md)** and then
+**[002 — Stations and ports](002-stations-and-ports.md)** and then
 **[003 — Delivery](003-datapath-delivery.md)**. Everything else is
 either a variation on that path or the machinery that gets a map into
 memory so that path can start.
@@ -66,7 +66,7 @@ memory so that path can start.
 | If you want to know | Read |
 |---|---|
 | What is this and why | [001 — Overview](001-overview.md) |
-| What a station is made of, field by field | [002 — Stations and slots](002-stations-and-slots.md) |
+| What a station is made of, field by field | [002 — Stations and ports](002-stations-and-ports.md) |
 | How a value gets from one box to the next | [003 — Delivery](003-datapath-delivery.md) |
 | How a value sits still while others stream past it | [004 — Statics and recalculation](004-datapath-statics.md) |
 | How a value chooses between several destinations | [005 — Routing](005-routing.md) |

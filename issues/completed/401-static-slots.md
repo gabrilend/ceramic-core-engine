@@ -147,7 +147,7 @@ in its wiring — which is the same argument that moves them onto ports.
 - Issue 405 — changing a static value while the program runs, which
   moves with it
 - Issue 402 — struct constants, whose parsing is unaffected
-- [002 — Stations and slots](../../docs/002-stations-and-slots.md)
+- [002 — Stations and ports](../../docs/002-stations-and-ports.md)
 - [008 — Map file format](../../docs/008-map-file-format.md), where the
   `statics` section becomes explicitly a notation for initial values
 - [058 — Guarantees](../../docs/058-guarantees.md), where the consistency

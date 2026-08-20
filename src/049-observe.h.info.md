@@ -5,9 +5,9 @@ and rewire (052) files.
 
 ## Reports
 
-**map_report_buffers(map, stream)** — every slot that grew or held a
+**map_report_buffers(map, stream)** — every port that grew or held a
 backlog: doublings, capacity, high water, named by station. Plus the
-task ring's own story, with the reminder that slot piles and ring
+task ring's own story, with the reminder that port piles and ring
 piles are different diagnoses.
 
 **map_report_stations(map, stream, order)** — runs and

@@ -113,7 +113,7 @@ static void test_order_across_growth(void)
 /* }}} */
 
 /* Shared state for the concurrency test. `seen` counts how many
- * times each id came back out; every cell must end at exactly one. */
+ * times each id came back out; every slot must end at exactly one. */
 enum { PUSHERS = 4, POPPERS = 4, PER_PUSHER = 5000 };
 static pool_t *shared_pool;
 static int seen[PUSHERS * PER_PUSHER];

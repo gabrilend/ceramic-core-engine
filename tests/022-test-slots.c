@@ -1,7 +1,7 @@
 /*
  * 022-test-slots.c — proves ring-buffer slots (issues 202, 203).
  *
- * What this is: the test that values of any size go into a slot and
+ * What this is: the test that values of any size go into a port and
  * come back out byte-identical, and that none is lost or doubled,
  * across buffer growth that begins from a wrapped ring — the state
  * where the unwrap copy would be wrong first.
@@ -21,7 +21,7 @@
  * across every doubling. That promise is withdrawn — see the
  * ordering entry in docs/058-guarantees.md, which explains why an
  * order that was arbitrary to begin with was not worth the cost of
- * keeping. A reader is about to scan for a usable cell rather than
+ * keeping. A reader is about to scan for a usable slot rather than
  * compute where the oldest one must be (issue 210d), and positional
  * pairing goes with it.
  *
@@ -135,9 +135,9 @@ int main(void)
         parcel_t p = make_parcel(WARMUP + i);
         map_deliver_value(m, 0, 0, &p);
     }
-    if (map_station(m, 0)->slots[0].growths < 3) {
+    if (map_station(m, 0)->in_ports[0].growths < 3) {
         fprintf(stderr, "expected several growths from the flood, saw %d\n",
-                map_station(m, 0)->slots[0].growths);
+                map_station(m, 0)->in_ports[0].growths);
         exit(1);
     }
 
@@ -174,8 +174,8 @@ int main(void)
         }
     }
 
-    int growths = map_station(m, 0)->slots[0].growths;
-    int high_water = map_station(m, 0)->slots[0].high_water;
+    int growths = map_station(m, 0)->in_ports[0].growths;
+    int high_water = map_station(m, 0)->in_ports[0].high_water;
     map_destroy(m);
     printf("  %d struct+int pairs, none torn and none lost, across %d "
            "wrapped growths (high water %d)\n", TOTAL, growths, high_water);

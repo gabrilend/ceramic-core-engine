@@ -168,11 +168,11 @@ static void test_half_built_round_trips(void)
 
     map_t *m = map_load_file(map_path, 2);
 
-    check(map_station(m, 1)->slots[0].kind == SLOT_NONE,
+    check(map_station(m, 1)->in_ports[0].kind == IN_PORT_NONE,
           "a dash left the port with no source");
-    check(map_station(m, 1)->slots[0].capacity == 64,
-          "and the depth before it still sized the cells");
-    check(map_station(m, 1)->slots[1].kind == SLOT_STATIC,
+    check(map_station(m, 1)->in_ports[0].capacity == 64,
+          "and the depth before it still sized the slots");
+    check(map_station(m, 1)->in_ports[1].kind == IN_PORT_STATIC,
           "the other port took its value as usual");
     check(map_seed_count(m) == 1,
           "only the runnable station was seeded; the half-built one was not");
@@ -187,11 +187,11 @@ static void test_half_built_round_trips(void)
     /* The dump has to reload into the same program, which is the
      * whole claim: the file says what is actually there. */
     map_t *again = map_load_file(dump1, 2);
-    check(map_station(again, 1)->slots[0].kind == SLOT_NONE,
+    check(map_station(again, 1)->in_ports[0].kind == IN_PORT_NONE,
           "reloading the dump gave a port with no source, not a buffer");
-    check(map_station(again, 1)->slots[0].capacity == 64,
+    check(map_station(again, 1)->in_ports[0].capacity == 64,
           "and the depth survived the trip");
-    check(map_station(again, 1)->slots[1].kind == SLOT_STATIC,
+    check(map_station(again, 1)->in_ports[1].kind == IN_PORT_STATIC,
           "and so did the value on the other port");
 
     FILE *d2 = fopen(dump2, "w");
@@ -274,20 +274,20 @@ static void test_every_refusal(void)
         "head seven p\n"
         "  out 0 - other.5\n"
         "other double_it p\n",
-        "that station has 1 slot",
-        "an arrow to a slot beyond the box was accepted");
+        "that station has 1 port",
+        "an arrow to a port beyond the box was accepted");
 
     expect_death_saying(
         "head seven p\n"
         "  out 0 - wrong.1\n"
         "wrong mix p\n",
-        "box returns int (4 bytes), slot takes double (8 bytes)",
+        "box returns int (4 bytes), port takes double (8 bytes)",
         "a wire between different widths was accepted");
 
     expect_death_saying(
         "head seven p\n"
         "  in 3 $0\n",
-        "names a slot that does not exist",
+        "names a port that does not exist",
         "an input line beyond the box was accepted");
 
     expect_death_saying(
@@ -313,7 +313,7 @@ static void test_every_refusal(void)
          * unconfigured port is also not a buffer, and it wants a
          * different fix. */
         "that port is a static value",
-        "an arrow onto a static slot was accepted");
+        "an arrow onto a static port was accepted");
 
     /* The pull path's grave marker (issue 210). A bare station name
      * on an 'in' line used to mean "gather from there"; it is refused

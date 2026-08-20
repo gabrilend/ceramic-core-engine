@@ -47,8 +47,8 @@ static int wires_naming(map_t *m, int station)
         station_t *s = map_station(m, i);
         if (!s->call)
             continue;
-        for (port_t *p = s->ports; p; p = p->next) {
-            dest_set_t *set = port_dests(p);
+        for (out_port_t *p = s->out_ports; p; p = p->next) {
+            dest_set_t *set = out_port_dests(p);
             for (int d = 0; set && d < set->n; d++)
                 if (set->items[d].station == station)
                     n++;

@@ -64,9 +64,9 @@ static void test_every_arrival_order(void)
     for (int round = 0; round < 6; round++) {
         int before = fired;
         for (int step = 0; step < 3; step++) {
-            int slot = orders[round][step];
-            int value = round * 10 + slot;
-            map_deliver_value(m, 0, slot, &value);
+            int port = orders[round][step];
+            int value = round * 10 + port;
+            map_deliver_value(m, 0, port, &value);
         }
         /* Nothing asserts `fired == before` between deliveries —
          * the task runs asynchronously — but by the end of all six
@@ -211,10 +211,10 @@ static void test_unconfigured_port_never_ready(void)
     map_place(m, 0, sum3__call, STATION_PLAIN, 3, sizes, sizeof(int));
 
     /* Port 2 has no source. Nothing about the station is otherwise
-     * unusual — it is fully placed, its cells are allocated, and it
+     * unusual — it is fully placed, its slots are allocated, and it
      * would run happily if anyone said where port 2's values come
      * from. */
-    map_slot_convert(m, 0, 2, SLOT_NONE);
+    map_in_port_convert(m, 0, 2, IN_PORT_NONE);
 
     map_start(m, 2);
     fired = 0;
@@ -230,10 +230,10 @@ static void test_unconfigured_port_never_ready(void)
 
     int fired_while_unconfigured = fired;
 
-    /* The port is given a source. The cells it has been carrying all
+    /* The port is given a source. The slots it has been carrying all
      * along are what it starts using — no allocation happens here,
      * which is the whole of issue 210b's standing-buffer decision. */
-    map_slot_convert(m, 0, 2, SLOT_RING);
+    map_in_port_convert(m, 0, 2, IN_PORT_RING);
     for (int i = 0; i < FED; i++) {
         int c = 300;
         map_deliver_value(m, 0, 2, &c);

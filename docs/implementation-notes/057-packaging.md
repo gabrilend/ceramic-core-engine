@@ -84,7 +84,7 @@ symbol table of a linked test binary, not by guessing.
 | in the way | what it does to a consumer | size of the fix |
 |---|---|---|
 | **Engine symbols are common words.** `map_create`, `map_connect`, `map_start`, `map_destroy`, `pool_create`, `pool_push`, `pool_join` and about thirty more are exported unprefixed. | Any host program with its own notion of a map or a pool fails to link, with a duplicate-symbol error naming a function they never wrote. | Mechanical rename, ~40 symbols, touches source, interface files, docs, and issue text. Half a day, done carefully. |
-| **Internals are exported too.** `task_build`, `station_port`, `static_claim`, `gather_claim`, `map_statics_free`, `sora_stats_box_time` are joints between engine files, not API. | They collide like anything else, and they invite a consumer to call them. | Free, if the amalgamation shape below is taken. |
+| **Internals are exported too.** `task_build`, `station_out_port`, `static_claim`, `gather_claim`, `map_statics_free`, `sora_stats_box_time` are joints between engine files, not API. | They collide like anything else, and they invite a consumer to call them. | Free, if the amalgamation shape below is taken. |
 | **The demo boxes export `add`, `mix`, `keep`, `nudge`, `seven`, `swallow`, `magnitude_squared`.** | These are example code, and `add` is the single most collidable symbol in C. | Exclude `src/boxes/` from the packaged library. Trivial, but it must be deliberate — the build currently wildcards it in. |
 | **Two process-wide globals.** The active map (so a box can reach the statics table) and the last load's timing. | One map per process, forever, silently. A host that wants two engines gets one, and the second quietly writes into the first. | Medium. Already the first-pass report's second priority: thread the map through the task instead of parking it in a global. |
 | **Every error calls `abort()`.** | A malformed map file, a missing gather source, or an out-of-memory task kills the host application. A library that can end someone else's process on bad input is not embeddable. | Small in code, large in decision. See below. |
@@ -114,7 +114,7 @@ loading.
 destroy. Inject a value from outside. Count what the seed sweep enqueued.
 
 **Watch it** — start and stop the observer thread, print the station
-report, the buffer report, the shutdown summary, ask a slot's current
+report, the buffer report, the shutdown summary, ask a port's current
 depth, dump the live map back out as a map file.
 
 **Edit it while it runs** — connect, disconnect, write a static value.

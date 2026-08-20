@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html" class="here">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>003 — Datapath: delivery</h1>
@@ -150,29 +151,29 @@ the task struct's output field, and the task struct records which
 station produced it.</p>
 <p><strong>1. Choose a port.</strong> The station's kind decides which of its output
 ports this value goes down. A plain box has one. A comparator compares
-the value against its threshold slot and picks one of three. An
+the value against its threshold port and picks one of three. An
 iterator uses the port its task was assigned when it was enqueued. This
 is the whole of <a href="doc-005-routing.html">005</a>.</p>
-<p><strong>2. Walk that port's destination list.</strong> For each <code>{station, slot}</code>
+<p><strong>2. Walk that port's destination list.</strong> For each <code>{station, port}</code>
 pair on it, the value is delivered independently. A port wired to a
 hundred destinations means a hundred deliveries, done by this one
 worker, before it goes back for more work. That is acceptable: each
 delivery may unblock a station, so the worker is spending its time
 manufacturing parallelism for everyone else.</p>
 <p><strong>3. For each destination, take that station's mutex.</strong></p>
-<p><strong>4. Write the value into the slot.</strong> Search for an empty cell,
+<p><strong>4. Write the value into the port.</strong> Search for an empty slot,
 starting where this port's write hint points and sweeping forward until
 it wraps back to where it began; take the first one that will move from
 empty to reserved, <code>memcpy</code> <code>elem_size</code> bytes into it, and publish it
 as ready. If the sweep finds nothing the buffer is genuinely full and
-grows first — see <a href="doc-002-stations-and-slots.html">002</a>.</p>
+grows first — see <a href="doc-002-stations-and-ports.html">002</a>.</p>
 <p>The hint is read once and the sweep is bounded by it: at most every
-cell the port has, exactly one time each. Re-reading a hint that other
+slot the port has, exactly one time each. Re-reading a hint that other
 workers keep pushing forward would let a searcher chase it, and a
 search that can be outrun is a search with no bound.</p>
 <p><strong>5. Run the readiness check, still holding the mutex.</strong> Walk every
 port on this station and ask whether it holds a value. A ring buffer
-holds one if its count of ready cells is above zero. A static always
+holds one if its count of ready slots is above zero. A static always
 does, because its value is simply there and reading it does not consume
 it. A port with no source never does, so a station carrying one waits
 forever — which is what lets a station exist before anybody has
@@ -182,15 +183,15 @@ finished wiring it.</p>
 direction and answers the same way, which is why nothing extra is
 needed to make a static write run a station, and why a write can never
 run one whose ring port is empty.</p>
-<p>If any slot is empty, release the mutex and move to the next
+<p>If any port is empty, release the mutex and move to the next
 destination. Nothing more happens; the value sits in the buffer waiting
 for its siblings.</p>
-<p><strong>6. If every slot is occupied, claim one value from each.</strong> Ring
-buffer slots are popped — the same sweep as step 4 run the other way,
-looking for a ready cell and taking it to claimed, then copying the
-value out and releasing the cell as empty. Taking the cell is what
+<p><strong>6. If every port is occupied, claim one value from each.</strong> Ring
+buffer ports are popped — the same sweep as step 4 run the other way,
+looking for a ready slot and taking it to claimed, then copying the
+value out and releasing the slot as empty. Taking the slot is what
 makes the value spoken for: no other thread can claim it, because a
-cell moves out of ready exactly once. Which value a port yields is not
+slot moves out of ready exactly once. Which value a port yields is not
 promised to be the oldest, and <a href="doc-058-guarantees.html">058</a> says why. If the
 station is an iterator, its cursor advances now and the port it landed
 on is recorded, so that two tasks assembled moments apart go to
@@ -245,7 +246,7 @@ straight to freeing its task. Sinks need no special support; they fall
 out of a function declared <code>void</code>.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a></li>
+<li><a href="doc-002-stations-and-ports.html">002 — Stations and ports</a></li>
 <li><a href="doc-005-routing.html">005 — Routing</a>, which port step 1 chooses</li>
 <li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a>, what step 9 pushes into</li>
 </ul>

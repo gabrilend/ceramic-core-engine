@@ -8,7 +8,7 @@
 <h2>The documents</h2>
 <a href="doc-000-table-of-contents.html">000 — Table of contents</a>
 <a href="doc-001-overview.html">001 — Overview</a>
-<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
@@ -117,7 +117,7 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
-<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html" class="here">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
@@ -136,6 +136,7 @@
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>019-station.c — the structural half, from inside</h1>
@@ -145,13 +146,13 @@ and dismantles; it never moves a value. Its private pieces:</p>
 <li>A construction failure routine that prints what was wrong with the</li>
 <p>  map being described and stops — building on a wrong description
   helps nobody.</p>
-<li>Ring buffers start at ten cells on purpose: growth is cheap and</li>
+<li>Ring buffers start at ten slots on purpose: growth is cheap and</li>
 <p>  proven, and a generous initial size would only hide the mechanism
   the demos exist to show. Ten is a magic number and is meant to be
   one — it lives as a single named constant beside the record in the
   header, because a port can now ask for a different depth and two
   places have to agree on what the default is.</p>
-<li>Every port gets its cells at placement whatever it is for, and</li>
+<li>Every port gets its slots at placement whatever it is for, and</li>
 <p>  nothing frees them until the map is torn down. A conversion is then
   a field write, and values already waiting survive one.</p>
 <li>One table names the three kinds in the words a person would use, so</li>
@@ -162,7 +163,7 @@ and dismantles; it never moves a value. Its private pieces:</p>
 <p>  order wires were declared. <strong>Destinations are not a list at all</strong>
   (issue 214): a port holds one immutable array behind an atomic
   pointer, and drawing or removing a wire builds a whole new array and
-  swaps the pointer. <code>port_dests</code> reads it with one atomic load and no
+  swaps the pointer. <code>out_port_dests</code> reads it with one atomic load and no
   lock; <code>dest_set_build</code> makes the replacement; <code>dest_set_retire</code>
   files what it replaced. New wires are appended within the array, so
   fan-out order still matches declaration order and the dump still
@@ -176,8 +177,8 @@ and dismantles; it never moves a value. Its private pieces:</p>
   and free it under one hold of the scrap lock, so a second toucher
   does not find it and cannot free it twice; the lock is a leaf and
   nothing is acquired while it is held.</p>
-<li>Teardown walks stations, then slots, then ports, freeing leaf-first,</li>
-<p>  and then empties the scrapyard.</p>
+<li>Teardown walks stations, then input ports, then output ports,</li>
+<p>  freeing leaf-first, and then empties the scrapyard.</p>
 </ul>
 
 </main>

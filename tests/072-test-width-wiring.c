@@ -133,7 +133,7 @@ static void byte_identical(void)
  * The refusal that remains, through the runtime rewiring surface —
  * `add` returns an int and `mix` takes a double at its second port,
  * four bytes against eight. The message has to carry both names *and*
- * both widths: "box returns int, slot takes double" does not say why
+ * both widths: "box returns int, port takes double" does not say why
  * those disagree, and "4 bytes against 8 bytes" does.
  *
  * The rewiring surface writes its reason to stderr and returns -1
@@ -146,7 +146,7 @@ static void different_widths_refused(void)
 {
     map_t *m = map_create(2);
     map_place_box(m, 0, "add", STATION_PLAIN);   /* -> int         */
-    map_place_box(m, 1, "mix", STATION_PLAIN);   /* slot 1: double */
+    map_place_box(m, 1, "mix", STATION_PLAIN);   /* port 1: double */
 
     char path[256];
     snprintf(path, sizeof path, "/tmp/minimal-soramech/width-refusal-%d.txt",
@@ -170,7 +170,7 @@ static void different_widths_refused(void)
     close(sink);
     close(saved);
 
-    check(rc != 0, "a four-byte value into an eight-byte slot was refused");
+    check(rc != 0, "a four-byte value into an eight-byte port was refused");
 
     char said[512] = { 0 };
     FILE *f = fopen(path, "r");

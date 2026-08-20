@@ -23,7 +23,7 @@ fatal naming file, line, and what was expected.
 parse; first pass (stations from the registry, ring slots by
 default, comparator threshold appended, statics bound); second pass
 (arrows resolved by name and type-checked — "adder -> printer.0: box
-returns int, slot takes float"); whole-map validation (collected,
+returns int, port takes float"); whole-map validation (collected,
 printed together);
 pool started with workers parked; seed swept. Caller releases the
 pool, joins it, destroys the map.
