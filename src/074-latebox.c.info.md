@@ -28,10 +28,11 @@ it back from the saved source when a name is not found, and says out
 loud that it did, because a fallback nobody was told about is the shape
 this project treats as an error.
 
-**What is deliberately absent: unloading.** A shared object is never
-closed, so a late box stays for the life of the process. Doing it
-safely means waiting until no worker is inside the code being freed —
-the same retire-sweep-free mechanism issues 214 and 216 need — and it
-should be built once and shared rather than three times. Until then
-this leaks a library per compile, bounded by how often somebody adds
-code, and stated rather than hidden.
+**Unloading** (`registry_unload_box`) closes the library a late box
+came in. Refused while any station in the given map places it; the
+harder half — a worker may be *inside* that code right now — is
+answered by handing the handle to the map's scrapyard, which closes it
+once the per-worker counter says nobody can be. It checks the map you
+hand it: a process running several maps could have another one placing
+the box, and nothing here can see that, which is stated rather than
+defended.

@@ -143,7 +143,7 @@ int map_rewire_connect(map_t *m, int from_station, int port,
     dest_set_t *fresh_set = dest_set_build(old, to_station, to_slot, -1, -1);
     atomic_store_explicit(&p->dests, fresh_set, memory_order_release);
     pthread_mutex_unlock(&from->mutex);
-    dest_set_retire(m, old);
+    map_retire(m, old, free);
 
     pthread_mutex_unlock(&m->rewire_mutex);
     return 0;
@@ -186,9 +186,160 @@ int map_rewire_disconnect(map_t *m, int from_station, int port,
      * (issue 214). A value already on its way down the removed wire
      * is delivered, which is indistinguishable from having been
      * delivered a moment earlier and is fine (issue 704). */
-    dest_set_retire(m, old);
+    map_retire(m, old, free);
 
     return 0;
 }
 /* }}} */
 
+
+/* {{{ removed_parts_t / reclaim_station() */
+/*
+ * A removed station's parts, reclaimed by the scrapyard once nobody
+ * can still be inside a task built from it.
+ *
+ * The station record itself stays in the table — it is what an index
+ * means, and indices are what wires are made of. What goes is
+ * everything hanging off it, and the shim, whose absence is what says
+ * the place is free for the next station.
+ */
+typedef struct removed_parts {
+    station_t *station;
+    port_t    *ports;
+    slot_t    *slots;
+    int        n_slots;
+    char      *name;
+} removed_parts_t;
+
+static void reclaim_station(void *p)
+{
+    removed_parts_t *r = p;
+
+    port_t *port = r->ports;
+    while (port) {
+        free(port_dests(port));
+        port_t *next = port->next;
+        free(port);
+        port = next;
+    }
+    for (int i = 0; i < r->n_slots; i++) {
+        free(r->slots[i].storage);
+        slot_constant_free(&r->slots[i]);
+    }
+    free(r->slots);
+    free(r->name);
+
+    /* Last, and this is the moment the place becomes free: everything
+     * that reads a station checks the shim first. */
+    station_t *s = r->station;
+    s->ports = NULL;
+    s->n_ports = 0;
+    s->slots = NULL;
+    s->n_slots = 0;
+    s->out_size = 0;
+    s->compare = NULL;
+    s->cursor = 0;
+    s->call = NULL;
+    atomic_store_explicit(&s->removed, 0, memory_order_release);
+
+    free(r);
+}
+/* }}} */
+
+/* {{{ map_remove_station() */
+int map_remove_station(map_t *m, int station)
+{
+    pthread_mutex_lock(&m->rewire_mutex);
+
+    if (station < 0 || station >= m->n_stations) {
+        pthread_mutex_unlock(&m->rewire_mutex);
+        return refuse("removing a station outside the table");
+    }
+    station_t *s = &m->stations[station];
+    if (!s->call || atomic_load_explicit(&s->removed, memory_order_acquire)) {
+        pthread_mutex_unlock(&m->rewire_mutex);
+        return refuse("removing a station that is not there");
+    }
+
+    /*
+     * Marked first, so nothing new starts from it while the wires are
+     * being cut. Values already on their way are discarded when they
+     * arrive, which is what this engine already does with a value
+     * that has nowhere to go.
+     */
+    pthread_mutex_lock(&s->mutex);
+    atomic_store_explicit(&s->removed, 1, memory_order_release);
+    pthread_mutex_unlock(&s->mutex);
+
+    /*
+     * Every wire that names this station, cut before the station
+     * goes. A wire lives only as a destination record on some
+     * station's output port, so this walk finds all of them — and
+     * because it happens first, nothing stale can survive to be
+     * followed afterwards. That is what makes reusing the place safe
+     * without a version on every wire.
+     */
+    for (int i = 0; i < m->n_stations; i++) {
+        station_t *other = &m->stations[i];
+        if (!other->call)
+            continue;
+        pthread_mutex_lock(&other->mutex);
+        for (port_t *p = other->ports; p; p = p->next) {
+            dest_set_t *old = port_dests(p);
+            if (!old)
+                continue;
+            int names_it = 0;
+            for (int d = 0; d < old->n; d++)
+                if (old->items[d].station == station)
+                    names_it = 1;
+            if (!names_it)
+                continue;
+            /* Rebuilt without every wire to this station, in one new
+             * set rather than one per wire, so a walker sees the
+             * before or the after and never a partial cut. */
+            dest_set_t *fresh =
+                calloc(1, sizeof *fresh
+                          + (size_t)(old->n > 0 ? old->n : 1)
+                            * sizeof(destination_t));
+            if (!fresh) {
+                pthread_mutex_unlock(&other->mutex);
+                pthread_mutex_unlock(&m->rewire_mutex);
+                return refuse("out of memory rebuilding a destination set");
+            }
+            int out = 0;
+            for (int d = 0; d < old->n; d++)
+                if (old->items[d].station != station)
+                    fresh->items[out++] = old->items[d];
+            fresh->n = out;
+            atomic_store_explicit(&p->dests, fresh, memory_order_release);
+            map_retire(m, old, free);
+        }
+        pthread_mutex_unlock(&other->mutex);
+    }
+
+    /*
+     * Its parts handed to the scrapyard, which frees them and clears
+     * the record once nobody can still be inside a task built from
+     * this station. Nothing is detached here: a task being built
+     * right now reads the slot count and the return size, and they
+     * have to still be there.
+     */
+    removed_parts_t *parts = calloc(1, sizeof *parts);
+    if (!parts) {
+        pthread_mutex_unlock(&m->rewire_mutex);
+        return refuse("out of memory removing a station");
+    }
+    parts->station = s;
+    parts->ports = s->ports;
+    parts->slots = s->slots;
+    parts->n_slots = s->n_slots;
+    if (m->station_names) {
+        parts->name = m->station_names[station];
+        m->station_names[station] = NULL;
+    }
+
+    map_retire(m, parts, reclaim_station);
+    pthread_mutex_unlock(&m->rewire_mutex);
+    return 0;
+}
+/* }}} */

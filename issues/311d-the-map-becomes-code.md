@@ -104,7 +104,7 @@ never seen a map.
   start a fresh map, and feed it through its input station. See
   [212](212-one-way-to-build-a-program.md).
 - **A box arriving mid-run** → compiled when the source arrives, which
-  is [310](310-boxes-compiled-at-runtime.md)'s path.
+  is [310](completed/310-boxes-compiled-at-runtime.md)'s path.
 
 The last two are the same mechanism at different scale, and both are
 the compiler being needed exactly when new code genuinely arrives.
@@ -183,7 +183,7 @@ the compiler being needed exactly when new code genuinely arrives.
 - [212 — One way to build a program](212-one-way-to-build-a-program.md),
   where composing and starting are separated, and where a program that
   runs other programs turns out to be a map rather than a tool
-- [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
+- [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
   the same path at the scale of one function
 - [602 — The loader, first pass](completed/602-loader-first-pass.md)
   and [603 — The loader, second pass](completed/603-loader-second-pass.md),

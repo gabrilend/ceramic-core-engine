@@ -38,7 +38,7 @@ its own.
 | 213 — the input station | open | The other door: where arguments arrive, and what makes a program composable. |
 | [214 — destinations without a lock](completed/214-destinations-without-a-lock.md) | **complete** | An immutable array published by one atomic write, so a delivery walk takes no lock and copies nothing — the last thing holding a station's mutex on the hot path. The scrapyard reclaims what a rewire replaced, using a per-worker counter that is odd inside a task and even outside it, and that same counter is what issues 310 and 216 need. |
 | [215 — ports and slots](215-ports-and-slots.md) | open | A naming debt paid: the source calls a port a slot and a slot a cell, which is backwards from what every document says. One deliberate pass, reaching a filename. |
-| [216 — removing a station](216-removing-a-station.md) | open | A station comes out and its place is reused. Removing the wires that name it first is what makes a version tag on every wire unnecessary — the walk is paid once, rarely, instead of on every delivery. |
+| [216 — removing a station](completed/216-removing-a-station.md) | **complete** | A station comes out and its place is reused. Cutting the wires that name it *first* is what makes a version tag on every wire unnecessary — the walk is paid once, rarely, instead of on every delivery. A removed place comes free when the sweep says nobody can still be inside a task built from it. |
 
 ## What the phase established
 

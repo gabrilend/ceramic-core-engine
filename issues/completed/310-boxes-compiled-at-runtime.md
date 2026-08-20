@@ -2,7 +2,7 @@
 
 ## Current behavior
 
-**Built, except for unloading, which is blocked.** A box's C source
+**Built.** A box's C source
 can be handed to a running program and a station can place it. The
 path is the one this issue described and every step of it runs the
 same program the build runs: the generator turns the source into a
@@ -41,7 +41,7 @@ code can never shadow a box a map already depends on.
 **That fifth one asserts a wrong answer on purpose.** Two structs of
 three floats in different orders have the same width, so the wire is
 legal and the fields arrive transposed. That is the accepted cost of
-[309](completed/309-types-by-width.md)'s width comparison, recorded as
+[309](309-types-by-width.md)'s width comparison, recorded as
 a non-guarantee, and pinned by a test so nobody later mistakes it for
 an oversight. If shape comparison is ever built, that test is what
 fails, and its failure is the good news.
@@ -63,14 +63,31 @@ load, with a message about mapping a segment that says nothing about
 the cause. The project's two-tier rule existed; what it was *for* was
 found by breaking it.
 
-**Not done: unloading, and it is blocked rather than skipped.** A
-shared object is never closed, so a late box stays for the life of the
-process and this leaks a library per compile. Doing it safely means
-waiting until no worker is inside the code being freed, which is the
-retire-sweep-free mechanism
-[214](completed/214-destinations-without-a-lock.md) builds and
-[216](216-removing-a-station.md) also needs. It should be built once
-and shared by all three rather than three times, so it waits for 214.
+**Unloading is built, on the mechanism 214 provides.** A box added
+while the program ran can be unloaded, closing the library its code
+came in. It is refused while any station in the given map places it —
+unloading code a station names is exactly the crash this avoids — and
+the harder half, that a worker may be *inside* that code right now, is
+answered by the per-worker counter the scrapyard uses. That counter
+deliberately spans a whole task rather than a delivery walk, which is
+what lets one number answer "might somebody be inside this box" and
+"might somebody be inside this station" at once.
+
+**What it checks is the map you hand it.** A process running several
+maps could have another one placing this box, and nothing here can see
+that, because nothing in this engine is process-wide and there is no
+list of running maps to consult. Unloading a box another map places is
+the caller's to avoid — stated rather than defended, on the same
+footing as reaching into a program by anything other than its input
+and output stations.
+
+**And [216](216-removing-a-station.md) made this worth much more than
+it looked.** The original reasoning was that a station's box cannot
+change and a station cannot be removed, so unloading served only a box
+compiled and then never placed. Stations can be removed now, so a box
+really can stop being used, and unloading reclaims code from programs
+that reshape themselves rather than only from ones that guessed wrong
+at startup.
 
 ## Intended behavior
 
@@ -103,7 +120,7 @@ already there, and readers resolving a row are never disturbed. That is
 the fourth or fifth use of the same pattern in this engine, and by now
 it should be a shared piece rather than a fifth hand-rolled one.
 
-[311](311-the-registry-dissolved.md) shrinks that table to two columns
+[311](../311-the-registry-dissolved.md) shrinks that table to two columns
 — a name and a placement function — which makes growing it cheaper than
 this issue assumed and changes nothing about the shape.
 
@@ -153,7 +170,7 @@ already has a word for.
 
 **A box arriving late needs to report the width of each input and of
 its output, and that is the whole of what the type system asks of it.**
-Under [309](completed/309-types-by-width.md) a wire is legal when the two sides
+Under [309](309-types-by-width.md) a wire is legal when the two sides
 count the same number of bytes, and those numbers come from the same
 place they always came from: a `sizeof` the compiler computed while
 compiling this box. So a runtime box supplies exactly what a build-time
@@ -176,7 +193,7 @@ name to be found by, a shim to call, and — if its return type is
 orderable — a comparison, for a comparator to use.
 
 **The generator has to be reachable at runtime**, which is what
-[308](completed/308-generator-in-c.md) delivers by making it a standalone C
+[308](308-generator-in-c.md) delivers by making it a standalone C
 program with no dependency on the engine. As a Lua script it is a build
 tool; as a C program it is something the engine can call, and it is the
 same parser either way — which is the point, because a second parser
@@ -192,7 +209,7 @@ would eventually disagree with the first about what a box is.
 3. Adding a registry row: name, shim, per-parameter widths, return
    width, task size, and a comparison if there is one. Nothing about
    the new box's types is checked against the program's, because
-   [309](completed/309-types-by-width.md) checks widths when a wire is drawn and
+   [309](309-types-by-width.md) checks widths when a wire is drawn and
    there is nothing earlier worth asking.
 4. A test that a box written after the program started is placed,
    wired, and delivers values byte-identically.
@@ -209,7 +226,7 @@ would eventually disagree with the first about what a box is.
    alone. A test that a dump taken after a runtime box is added reloads
    in a fresh process.
 8. Unloading, on the retire-sweep-free mechanism from
-   [214](completed/214-destinations-without-a-lock.md), with the per-worker
+   [214](214-destinations-without-a-lock.md), with the per-worker
    counter widened to span the whole task rather than the delivery
    walk. A test that a box compiled, never placed, and unloaded frees
    its library while a saturated pool runs.
@@ -225,7 +242,7 @@ would eventually disagree with the first about what a box is.
   script that builds the dependencies from source into a local place,
   written once the system is finished rather than designed around now.
 
-  **[311d](311d-the-map-becomes-code.md) narrows when that bites.** A
+  **[311d](../311d-the-map-becomes-code.md) narrows when that bites.** A
   program whose map names only boxes the binary already carries never
   invokes a compiler at all and ships as one file. The toolchain is
   required precisely when new code is genuinely arriving, which is the
@@ -246,7 +263,7 @@ would eventually disagree with the first about what a box is.
   the shape of fallback this project treats as an error.
 
 - *Can a loaded box ever be unloaded?* **Yes, by retire, sweep, free —
-  the mechanism [214](completed/214-destinations-without-a-lock.md) builds for
+  the mechanism [214](214-destinations-without-a-lock.md) builds for
   destination arrays**, including the scrapyard's own lock and the rule
   that nothing is acquired while holding it. Unloading a shared library
   out from under a worker running its code is the same lifetime problem
@@ -286,7 +303,7 @@ would eventually disagree with the first about what a box is.
   exactly like a log: written as it happens, ephemeral, gone at reboot.
 
   **Writing it at creation rather than at dump time is the whole
-  decision**, and it is the same one [106](106-stopping-on-purpose.md)
+  decision**, and it is the same one [106](../106-stopping-on-purpose.md)
   makes about opening the report's destination during startup. A dump
   may be taken while the program is dying, and a failure path is the
   worst possible moment to discover that something needs saving. The
@@ -299,21 +316,21 @@ would eventually disagree with the first about what a box is.
 
 ## Related
 
-- [308 — The generator, in C](completed/308-generator-in-c.md), which is what
+- [308 — The generator, in C](308-generator-in-c.md), which is what
   makes the parser callable at runtime rather than only at build time
-- [309 — Types compared by width](completed/309-types-by-width.md), a hard
+- [309 — Types compared by width](309-types-by-width.md), a hard
   prerequisite — by-name comparison makes this corrupt silently
-- [311 — The registry dissolved](311-the-registry-dissolved.md), which
+- [311 — The registry dissolved](../311-the-registry-dissolved.md), which
   shrinks the table this makes growable to a name and a pointer, and
   narrows when a toolchain is needed at all
-- [303 — The registry](completed/303-registry-emission.md), the table
+- [303 — The registry](303-registry-emission.md), the table
   this makes growable
-- [306 — Build integration](completed/306-build-integration.md), whose
+- [306 — Build integration](306-build-integration.md), whose
   no-partial-output guarantee applies here too: a failed generation
   must leave nothing loadable
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
   which made the frozen registry a visible limit
-- [801 — The workbench in the browser](801-browser-workbench.md), which
+- [801 — The workbench in the browser](../801-browser-workbench.md), which
   reads C files the running program never compiled
-- [057 — Packaging](../docs/implementation-notes/057-packaging.md),
+- [057 — Packaging](../../docs/implementation-notes/057-packaging.md),
   where a runtime dependency on a compiler has to be weighed

@@ -355,31 +355,52 @@ dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
 }
 /* }}} */
 
+/* {{{ struct scrap_item */
+/*
+ * One thing waiting to be freed, and the photograph of every worker's
+ * epoch taken when it was filed.
+ *
+ * A worker whose epoch is now **even** is not inside a task, and one
+ * whose epoch **differs from the snapshot** has finished the task it
+ * was in. Either way it cannot still be using what this holds.
+ */
+struct scrap_item {
+    struct scrap_item *next;
+    void              *p;
+    void             (*free_fn)(void *);
+    uint64_t          *snapshot;
+    int                n_snapshot;
+};
+/* }}} */
+
 /* {{{ static int nobody_can_hold() */
 /*
  * True when no worker can still be inside the task it was in when
- * this set was retired.
+ * this was filed.
  *
- * A worker passes on either of two grounds: its epoch is **even**, so
- * it is not inside a task at all; or its epoch **differs** from the
- * snapshot, so whatever task it was in has ended. An idle worker is
- * asleep and therefore even, and passes without having to move —
- * which is what would otherwise deadlock a sweep against a quiet
- * pool. Nothing waits and nothing spins.
+ * Nothing waits and nothing spins. An idle worker is asleep and
+ * therefore even, so it passes without ever having to move — which is
+ * what would otherwise deadlock a sweep against a quiet pool.
  *
  * Sixty-four bits, so a counter cannot wrap all the way back to its
  * snapshot in any run this engine will ever have and read as
  * unchanged when it is not.
  */
-static int nobody_can_hold(map_t *m, const dest_set_t *set)
+static int nobody_can_hold(map_t *m, const struct scrap_item *it)
 {
-    if (!set->snapshot)
-        return 0;
-    for (int i = 0; i < set->n_snapshot; i++) {
+    /*
+     * Filed when there were no workers at all — during construction,
+     * before the pool exists. Nobody can be inside something that was
+     * already replaced before anyone could reach it, so it is free to
+     * go the first time anybody sweeps.
+     */
+    if (it->n_snapshot == 0)
+        return 1;
+    for (int i = 0; i < it->n_snapshot; i++) {
         uint64_t now = pool_worker_epoch(m->pool, i);
         if ((now % 2) == 0)
             continue;                       /* not in a task */
-        if (now != set->snapshot[i])
+        if (now != it->snapshot[i])
             continue;                       /* a different task since */
         return 0;                           /* might be inside this one */
     }
@@ -391,35 +412,35 @@ static int nobody_can_hold(map_t *m, const dest_set_t *set)
 void map_scrap_sweep(map_t *m)
 {
     pthread_mutex_lock(&m->scrap_mutex);
-    dest_set_t **link = &m->scrap_head;
+    struct scrap_item **link = &m->scrap_head;
     while (*link) {
-        dest_set_t *set = *link;
-        if (nobody_can_hold(m, set)) {
+        struct scrap_item *it = *link;
+        if (nobody_can_hold(m, it)) {
             /* Unfiled first, freed under the same hold: a second
              * toucher arriving afterwards does not find it, so there
              * is nothing for it to free twice. That is the whole of
              * what this lock is for. */
-            *link = set->retired_next;
-            free(set->snapshot);
-            free(set);
+            *link = it->next;
+            it->free_fn(it->p);
+            free(it->snapshot);
+            free(it);
         } else {
-            link = &set->retired_next;
+            link = &it->next;
         }
     }
     pthread_mutex_unlock(&m->scrap_mutex);
 }
 /* }}} */
 
-/* {{{ dest_set_retire() */
-void dest_set_retire(map_t *m, dest_set_t *old)
+/* {{{ map_retire() */
+void map_retire(map_t *m, void *p, void (*free_fn)(void *))
 {
-    if (!old)
+    if (!p)
         return;
 
-    /* Sweep before filing, so a program that rewires forever reclaims
-     * as it goes rather than growing forever. Doing it here rather
-     * than on a timer means the work happens exactly where the need
-     * is created and nowhere else. */
+    /* Sweep before filing, so the work happens exactly where the need
+     * is created and a program that changes shape forever reclaims as
+     * it goes. */
     map_scrap_sweep(m);
 
     int workers = m->pool ? pool_worker_count(m->pool) : 0;
@@ -427,25 +448,30 @@ void dest_set_retire(map_t *m, dest_set_t *old)
     if (workers > 0) {
         snapshot = calloc((size_t)workers, sizeof *snapshot);
         if (!snapshot)
-            fail("out of memory retiring a destination set");
+            fail("out of memory retiring something");
         for (int i = 0; i < workers; i++)
             snapshot[i] = pool_worker_epoch(m->pool, i);
     }
 
+    struct scrap_item *it = calloc(1, sizeof *it);
+    if (!it)
+        fail("out of memory retiring something");
+    it->p = p;
+    it->free_fn = free_fn;
+    it->snapshot = snapshot;
+    it->n_snapshot = workers;
+
     pthread_mutex_lock(&m->scrap_mutex);
-    old->snapshot = snapshot;
-    old->n_snapshot = workers;
-    old->retired_next = m->scrap_head;
-    m->scrap_head = old;
+    it->next = m->scrap_head;
+    m->scrap_head = it;
     pthread_mutex_unlock(&m->scrap_mutex);
 
     /*
-     * A map with no pool has no workers and therefore nothing that
-     * could be inside anything — but it also has no epochs to
-     * snapshot, so nobody_can_hold refuses on the null snapshot and
-     * these sets simply wait for teardown. That is the construction
-     * case, where a handful of sets is nothing, and it keeps the test
-     * for "can this be freed" from having a second shape.
+     * A map with no pool has no workers, so there are no epochs to
+     * snapshot and nothing that could be inside anything. Those items
+     * are freeable the first time anybody sweeps — which is the
+     * construction case, where every wire drawn replaces the set the
+     * one before it made.
      */
 }
 /* }}} */
@@ -455,7 +481,7 @@ int map_scrap_count(map_t *m)
 {
     pthread_mutex_lock(&m->scrap_mutex);
     int n = 0;
-    for (dest_set_t *set = m->scrap_head; set; set = set->retired_next)
+    for (struct scrap_item *it = m->scrap_head; it; it = it->next)
         n++;
     pthread_mutex_unlock(&m->scrap_mutex);
     return n;
@@ -465,22 +491,19 @@ int map_scrap_count(map_t *m)
 /* {{{ map_scrap_free_all() */
 /*
  * Empties the scrapyard. Called at teardown, when every worker has
- * been collected and nothing can be walking anything.
- *
- * Unfiles under the lock and frees under the same hold, so a second
- * toucher arriving does not find it and cannot free it twice — which
- * is the entire reason this lock exists.
+ * been collected and nothing can be using anything.
  */
 void map_scrap_free_all(map_t *m)
 {
     pthread_mutex_lock(&m->scrap_mutex);
-    dest_set_t *set = m->scrap_head;
+    struct scrap_item *it = m->scrap_head;
     m->scrap_head = NULL;
-    while (set) {
-        dest_set_t *next = set->retired_next;
-        free(set->snapshot);
-        free(set);
-        set = next;
+    while (it) {
+        struct scrap_item *next = it->next;
+        it->free_fn(it->p);
+        free(it->snapshot);
+        free(it);
+        it = next;
     }
     pthread_mutex_unlock(&m->scrap_mutex);
 }
@@ -546,7 +569,7 @@ void map_connect(map_t *m, int from_station, int port,
     dest_set_t *old = port_dests(p);
     dest_set_t *fresh = dest_set_build(old, to_station, to_slot, -1, -1);
     atomic_store_explicit(&p->dests, fresh, memory_order_release);
-    dest_set_retire(m, old);
+    map_retire(m, old, free);
 }
 /* }}} */
 

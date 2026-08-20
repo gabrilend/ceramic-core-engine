@@ -13,6 +13,7 @@
  */
 #include "026-registry.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,6 +101,24 @@ void registry_print(FILE *out)
 /* {{{ map_place_box() */
 void map_place_box(map_t *m, int station, const char *box_name, int kind)
 {
+    /*
+     * A place that has been removed but not yet reclaimed is not free
+     * (issue 216). Its record still carries the slot count and return
+     * size a task being built right now needs, and the sweep that
+     * clears them is what makes the place available. Placing here
+     * before then would have the sweep clear the *new* station's
+     * record.
+     */
+    if (station >= 0 && station < m->n_stations
+        && atomic_load_explicit(&m->stations[station].removed,
+                                memory_order_acquire)) {
+        fprintf(stderr,
+                "map: station %d was removed and is not reclaimed yet — "
+                "something may still be inside a task built from it\n",
+                station);
+        abort();
+    }
+
     const box_info_t *b = registry_find(box_name);
     if (!b) {
         /*

@@ -286,20 +286,8 @@ typedef struct destination {
  * contiguous run of pairs is what a processor wants for that.
  */
 typedef struct dest_set {
-    struct dest_set *retired_next;  /* the scrapyard's link; see below */
-    /*
-     * Every worker's epoch at the moment this set was retired, and how
-     * many workers there were. Null until it is retired.
-     *
-     * A worker whose epoch is now **even** is not inside a task, and a
-     * worker whose epoch **differs from this snapshot** has finished
-     * the task it was in. Either way it cannot still be holding this
-     * set. When every worker passes, the set is freed.
-     */
-    uint64_t        *snapshot;
-    int              n_snapshot;
-    int              n;
-    destination_t    items[];
+    int           n;
+    destination_t items[];
 } dest_set_t;
 /* }}} */
 
@@ -343,6 +331,28 @@ typedef struct station {
     port_t         *ports;      /* linked list; one for plain, three for comparator */
     int             n_ports;
     int             cursor;     /* iterator's next port; the one memory a station keeps */
+
+    /*
+     * Set when this station has been removed and not yet reclaimed
+     * (issue 216).
+     *
+     * **Its fields stay readable until the scrapyard frees them**,
+     * and that is the whole trick. A task is built from a station's
+     * slot count, return size, and shim *after* the readiness check
+     * released the mutex — so clearing those at the moment of removal
+     * would leave a worker building a task out of a station that had
+     * just been emptied underneath it. Instead the record stays
+     * intact and this flag says not to start anything new from it.
+     * The fields go when nobody can still be inside a task that
+     * needs them, which is the same question the scrapyard already
+     * answers.
+     *
+     * So a removed place is not immediately a free place: it becomes
+     * one when the sweep clears the shim. That is correct rather than
+     * inconvenient — you cannot reuse something while somebody might
+     * still be using it.
+     */
+    _Atomic unsigned char removed;
     int             out_size;   /* bytes of the box's return value; 0 means sink */
 
     /* Comparator only: the three-way compare for the box's return
@@ -429,8 +439,8 @@ typedef struct map {
      * removed is the one on the delivery walk; this one is touched
      * when wiring changes and when the program ends, never between.
      */
-    pthread_mutex_t scrap_mutex;
-    dest_set_t     *scrap_head;
+    pthread_mutex_t   scrap_mutex;
+    struct scrap_item *scrap_head;
 
     /* The observer (issue 701): a small reporting thread, not a
      * worker, pushing nothing. */
@@ -550,17 +560,61 @@ void map_slot_convert(map_t *m, int station, int slot, int kind);
  * takes the scrap lock and nothing else.
  */
 dest_set_t *port_dests(const port_t *p);
-/* Frees every filed set no worker can still be inside. Called by
- * rewiring before it retires another, so a program that rewires
- * forever does not grow forever. */
-void        map_scrap_sweep(map_t *m);
-/* How many sets are filed right now. For the tests and for a report
- * that wants to say whether the scrapyard is draining. */
-int         map_scrap_count(map_t *m);
 dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
                            int add_slot, int drop_station, int drop_slot);
-void        dest_set_retire(map_t *m, dest_set_t *old);
+
+/*
+ * **The scrapyard takes anything.** Hand it a pointer and the
+ * function that frees it, and it holds on until no worker can still
+ * be inside whatever was using it.
+ *
+ * It began as a place for destination sets a rewire replaced, and it
+ * is general because the same question is asked about three different
+ * things: a replaced destination set, a removed station's ports and
+ * buffers (issue 216), and the compiled code of a box nobody places
+ * any more (issue 310). One mechanism rather than three that drift.
+ *
+ * map_retire sweeps before filing, so a program that changes shape
+ * forever reclaims as it goes rather than growing forever.
+ */
+void        map_retire(map_t *m, void *p, void (*free_fn)(void *));
+void        map_scrap_sweep(map_t *m);
+int         map_scrap_count(map_t *m);
 void        map_scrap_free_all(map_t *m);
+/* }}} */
+
+/* {{{ map_remove_station() — issue 216 */
+/*
+ * Take a station out of a running program and free its place for the
+ * next one.
+ *
+ * **Removing the wires that name it is the first thing it does**, and
+ * that is what makes a version tag on every wire unnecessary. A wire
+ * exists only as a destination record on some station's output port,
+ * so walking every station, every output port, every destination
+ * finds all of them — nothing else in the engine names a station.
+ * With none left, nothing stale can survive to be followed, and the
+ * place can be reused with no tag, no version, and no cost anywhere
+ * on the delivery path.
+ *
+ * The guarantee this changes gets **sharper**, not weaker. It used to
+ * say a wire written down today is valid forever, held by nothing
+ * ever being removed. It now says a wire never names a station that
+ * is not there, held by removal removing the wires to it.
+ *
+ * The station's ports and buffers go to the scrapyard rather than
+ * being freed, because a worker may be running a task from this
+ * station right now and will touch them when it finishes.
+ *
+ * Returns 0, or -1 with a reason on stderr. What it cannot see: a
+ * caller **outside** the map holding on to this station's index. The
+ * input station deliberately does not remember who delivered into it,
+ * so there is nothing to walk. That is undefined rather than
+ * defended — a program is reached through its input and output
+ * stations, and holding anything else across a removal is your own
+ * affair.
+ */
+int map_remove_station(map_t *m, int station);
 /* }}} */
 
 void map_connect(map_t *m, int from_station, int port,

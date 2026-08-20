@@ -6,34 +6,69 @@ stronger one rather than a weaker one.
 
 ## Current behavior
 
-**A station cannot be removed**, and guarantee
-[S2](../docs/058-guarantees.md) says so: *a wire is an index, never a
-pointer; a wire written down today is valid forever* — held by
-*stations can never be removed or reordered, only added to a table that
-has room.*
+**Done.** A station comes out of a running program and its place is
+reused, with no version tag on any wire and no cost anywhere on the
+delivery path.
 
-The reason is mechanical. A wire is a destination record living on some
-station's output port:
+The sequence is the one this issue described: take the rewiring lock,
+mark the station so nothing new starts from it, walk every station's
+every output port cutting every wire that names it, hand its parts to
+the scrapyard, and let the sweep free them once nobody can still be
+inside a task built from it.
 
-```c
-typedef struct destination {
-    int32_t station;   /* index into map.stations */
-    int32_t slot;      /* which input port of it  */
-    struct destination *next;
-};
-```
+**Cutting the wires first is what makes a version tag unnecessary**, and
+that is the whole argument. A wire exists only as a destination record
+on some station's output port, so one walk finds all of them; with none
+left, nothing stale can survive to be followed, and the place is safe
+to hand to the next station. A generation counter would have cost four
+bytes on every wire and a comparison on **every single delivery**,
+forever, to guard against a situation removal now makes impossible.
 
-Remove station 2 from a four-station map and there are two bad
-outcomes. Leave a hole and the slot is dead forever. Shift everything
-down and station 3 becomes station 2, so **every destination record
-naming a station above 2 is now wrong** — pointing past the end, or at
-whatever moved into its place, silently.
+**Two things came out of building it that the issue had not seen.**
 
-**And a program that cannot remove anything leaks.** A long-running
-program that adds stations as work arrives and never takes any away
-holds every station it ever made. That is the real cost, and it is not
-acceptable for a system whose point is being reconfigured while it
-runs.
+**A removed place is not immediately a free place.** A task is built
+from a station's slot count, return size, and shim *after* the
+readiness check has released the mutex — so clearing those at the
+moment of removal leaves a worker building a task out of a station
+emptied underneath it. It surfaced as a jump to address zero, which is
+a null shim called by a worker. So the record stays intact and a flag
+says not to start anything new from it; the fields go when the sweep
+says nobody can be inside a task that needs them, and clearing the shim
+is what finally frees the place. Placing into a removed-but-unreclaimed
+place is refused, loudly, rather than corrupting the station that took
+it.
+
+That is correct rather than inconvenient: you cannot reuse something
+while somebody might still be using it, and the sweep is exactly the
+machinery that knows when that stops being true.
+
+**A value already in flight toward a removed station is discarded.** A
+worker reads a port's destinations once and then visits them, so a
+removal can land between the read and the visit. Discarding is what
+this engine already does with a value that has nowhere to go — a port
+wired nowhere discards, an unwired comparator outcome discards — and
+the alternative, stopping the program, would make every removal a race
+against whatever was already moving.
+
+**Proven**, in `tests/077-test-removal.c`:
+
+- three wires naming one station, and removing it cuts all three
+- a freed place is reused, and the new station receives **only** what
+  is wired to it — which is the thing a design reusing places without
+  cutting wires first would get wrong
+- eighty-odd removals and placements against a working pool, with the
+  scrapyard drained afterwards
+- and, from [310](310-boxes-compiled-at-runtime.md), a box no station
+  places unloaded while the pool is busy
+
+Under a leak checker the whole test is **2,736 allocations and 2,736
+frees, no leaks and no errors** — including a shared library opened and
+closed.
+
+**The guarantee got sharper, as predicted.** It used to say a wire
+written down today is valid forever, held by nothing ever being
+removed. It now says **a wire never names a station that is not
+there**, held by removal removing the wires to it.
 
 ## Intended behavior
 
@@ -102,7 +137,7 @@ shrinks, which was never worth anything by itself.
 The one thing step 2 cannot find is a **caller outside the map**. The
 input station accepts deliveries from outside, several callers into one
 port, and the engine deliberately does not remember who called
-([213](213-the-input-station.md)) — so there is nothing to walk.
+([213](../213-the-input-station.md)) — so there is nothing to walk.
 
 **That is declared undefined rather than solved.** A program is reached
 through its input and output stations, and holding on to anything else
@@ -116,14 +151,14 @@ something exotic knows it is doing something exotic.
    destination, collecting those that name the target. On its own,
    testable without removing anything.
 2. Removal as an operation on the construction surface
-   ([212](212-one-way-to-build-a-program.md)), taking the rewiring lock
+   ([212](../212-one-way-to-build-a-program.md)), taking the rewiring lock
    and performing steps 2 through 4.
 3. The quiescence wait, shared with
    [310](310-boxes-compiled-at-runtime.md)'s box unloading rather than
    built twice — it is the same question asked about a different thing.
 4. Freeing, and the free slot list.
 5. Placement prefers a free slot before growing the array
-   ([211](211-growing-the-station-table.md)).
+   ([211](../211-growing-the-station-table.md)).
 6. A test that a station is removed while values are in flight through
    its neighbours, and nothing tears.
 7. A test that a slot is reused and the new station receives only what
@@ -150,16 +185,16 @@ something exotic knows it is doing something exotic.
 
 ## Related
 
-- [211 — Growing the station table](211-growing-the-station-table.md),
+- [211 — Growing the station table](../211-growing-the-station-table.md),
   which this makes the other half of — a table that grows and shrinks
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
   whose surface gains this operation
-- [214 — Destinations without a lock](completed/214-destinations-without-a-lock.md),
+- [214 — Destinations without a lock](214-destinations-without-a-lock.md),
   whose retire-sweep-free is the same lifetime problem in miniature
 - [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   which designs the quiescence sweep and whose box unloading becomes
   far more useful once a station can be removed
-- [213 — The input station](213-the-input-station.md), the door that
+- [213 — The input station](../213-the-input-station.md), the door that
   outside callers use and the reason they cannot be walked
-- [058 — Guarantees](../docs/058-guarantees.md), where S2 is restated
+- [058 — Guarantees](../../docs/058-guarantees.md), where S2 is restated
   and the interface guarantee is added

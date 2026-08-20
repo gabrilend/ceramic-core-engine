@@ -528,6 +528,10 @@ int map_station_try_start(map_t *m, int station)
     station_t *s = &m->stations[station];
     if (!s->call)
         die("starting a station with no box placed", station);
+    /* Removed and not yet reclaimed: nothing new starts from it
+     * (issue 216). */
+    if (atomic_load_explicit(&s->removed, memory_order_acquire))
+        return 0;
 
     int in_bytes = station_input_bytes(s);
     unsigned char claimed[in_bytes > 0 ? in_bytes : 1];
@@ -554,6 +558,26 @@ int map_deliver_value(map_t *m, int station, int slot, const void *value)
     if (station < 0 || station >= m->n_stations)
         die("delivering to a station outside the table", station);
     station_t *s = &m->stations[station];
+
+    /*
+     * The station may have been removed since this value set out
+     * (issue 216). A worker reads a port's destinations once and then
+     * visits them, so a removal can land between the read and the
+     * visit — the wire it was following is gone, and so is what it
+     * pointed at.
+     *
+     * **The value is discarded, which is what this engine already
+     * does with a value that has nowhere to go.** A port wired
+     * nowhere discards; an unwired comparator outcome discards. This
+     * is the same shape: a value in flight toward something that is
+     * no longer there. Removing a station is a deliberate act by
+     * somebody who knew what was wired into it, and the alternative —
+     * stopping the program — would make every removal a race against
+     * whatever was already moving.
+     */
+    if (atomic_load_explicit(&s->removed, memory_order_acquire) || !s->call)
+        return 0;
+
     if (slot < 0 || slot >= s->n_slots)
         die("delivering to a slot the station does not have", station);
     /* Two ways this is wrong, and they deserve different sentences: a

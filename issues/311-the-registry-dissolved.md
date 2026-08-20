@@ -170,7 +170,7 @@ binary now carries.
   of this and gains both the placement functions and the map compiler
 - [309 — Types compared by width](completed/309-types-by-width.md), which is why
   type names can be dropped from what the engine carries
-- [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
+- [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
   the same generator-compiler-load path at the scale of one function
 - [303 — Registry emission](completed/303-registry-emission.md), the
   table this deletes

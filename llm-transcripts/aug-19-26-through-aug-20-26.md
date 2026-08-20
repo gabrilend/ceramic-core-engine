@@ -1,6 +1,6 @@
 # Conversation Summary: 3ccc0eb0-a576-4361-85ec-79ae4bb357a4
 
-Generated on: 2026-08-20 11:28:31
+Generated on: 2026-08-20 11:41:42
 
 --------------------------------------------------------------------------------
 
@@ -6546,6 +6546,142 @@ is what breaks.
   That mechanism is now needed by **three** things — 214 itself, 216's station
   removal, and this — and should be built once. That makes 214 look like the
   highest-leverage next issue, ahead of the roadmap's suggestion.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 38
+
+Great let's do 214 nexty
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 38
+
+Six users to update. Starting with the representation.
+
+
+Now the helpers, and the six users.
+
+
+Steps 1–3 done. Now the sweep — the part 310 and 216 both need. Let me see
+what the pool exposes.
+
+
+The pool already has worker indices, and the task-run block is exactly the
+window the issue describes. Adding the counters there.
+
+
+Memory corruption. Let me check where the epoch struct landed and how the worker
+index is set.
+
+
+Found it — I sized the epoch array from the raw parameter, but the pool
+decides its own worker count when passed zero. Workers past the first were
+writing off the end.
+
+
+Fixed. Now the sweep itself, which is what makes the scrapyard reclaim rather
+than leak.
+
+
+Now the tests the issue asks for — the sweep observed emptying, and teardown
+racing a sweep.
+
+
+400 rewires, deepest 117 filed, zero left. Let me have a leak checker judge it,
+since that's the real test.
+
+
+Zero leaks, zero errors, 1,761 allocs and 1,761 frees. Let me check the mid-run
+rewire test too.
+
+
+Clean. Now the paperwork — guarantees, info files, and the issue.
+
+
+**214 done.** The last lock is off the delivery path.
+
+
+## What changed
+
+
+A port's destinations were a linked list a rewire could free under a walker's
+feet — so every delivery took the station's mutex, counted, copied every
+`{station, slot}` pair onto its own stack, and released before visiting any of
+them. A lock and a copy proportional to fan-out, **on every value the engine
+moved**.
+
+
+Now they're **one immutable array behind an atomic pointer**. Rewiring builds a
+whole new one and swaps the pointer in a single write. A walker reads it once
+and walks something nobody will ever modify — no lock, no copy, no half-edited
+set.
+
+
+## The scrapyard
+
+
+Each worker keeps an epoch on its own cache line, bumped at the start and end of
+a **whole task**, so it's odd while inside one and even while not. A replaced
+set is filed with a snapshot of every epoch; a later retire sweeps first,
+freeing anything where every worker is either even or has moved on.
+
+
+Nothing waits and nothing spins — an idle worker is asleep and therefore even,
+so it passes without moving, which is what would otherwise deadlock a sweep
+against a quiet pool.
+
+
+**One counter for the whole task, not one per window** — exactly as the issue
+specified, and this is the part that matters beyond 214: a worker is inside a
+*box* earlier in a task than it's inside a *delivery walk*, so the same counter
+answers both questions. **310's box unloading and 216's station removal now have
+their mechanism.**
+
+
+## Proven
+
+
+```
+
+== 076-test-destinations
+
+  a wire came out and the old set was left intact for walkers
+
+  400 rewires under load: deepest 117 filed, 0 left after
+
+  a teardown emptied a scrapyard that still had sets in it
+
+  a rebuild kept wiring order, so the dump still round-trips
+
+```
+
+
+Under valgrind: **1,761 allocations, 1,761 frees, no leaks, no errors** —
+which is what actually judges a scrapyard. The mid-run rewiring test comes out
+the same.
+
+
+## One mistake worth flagging
+
+
+I sized the per-worker epoch array from the worker count the *caller* asked for.
+A pool asked for zero decides its own count — so the array was one slot while
+several workers wrote into it. It surfaced as a segfault inside `pthread_join`,
+freeing a thread control block, hundreds of lines from anything I'd touched.
+Size it by what was settled on, never by what was requested. That's recorded in
+the issue.
+
+
+## What this unblocks
+
+
+**310's step 8** — unloading a late box's shared object — now has its
+mechanism and is no longer blocked. **216's station removal** likewise. Both
+were waiting on exactly this, which is why it was worth doing ahead of the
+roadmap's order.
 
 
 --------------------------------------------------------------------------------

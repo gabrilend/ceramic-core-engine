@@ -53,7 +53,7 @@ every other thread wanting to push waits for the whole copy.
 station that already exists.**
 
 **And a removed station's place is reused before the table grows.**
-[216](216-removing-a-station.md) makes removal possible by removing the
+[216](completed/216-removing-a-station.md) makes removal possible by removing the
 wires to a station before the station, so a freed position holds
 nothing stale and the next station placed can simply take it. That
 makes this issue the *growing* half of a table that also shrinks:

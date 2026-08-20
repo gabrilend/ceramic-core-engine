@@ -258,7 +258,7 @@ rather than drifting into place.
    [704](completed/704-runtime-rewiring.md) applied by all of them.
    Build them over the table as it stands, before it can grow, so the
    surface is proven while the old sizing still works. Removal is
-   [216](216-removing-a-station.md) and lands last, since it needs the
+   [216](completed/216-removing-a-station.md) and lands last, since it needs the
    quiescence sweep the others do not.
 2. The station table starts empty and grows a run at a time
    ([211](211-growing-the-station-table.md)), so adding a station is

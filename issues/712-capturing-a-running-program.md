@@ -109,7 +109,7 @@ program grew code.**
 
 That second case needs the toolchain, and it needs it precisely when
 new code genuinely arrived — which is the rule
-[310](310-boxes-compiled-at-runtime.md) and
+[310](completed/310-boxes-compiled-at-runtime.md) and
 [311d](311d-the-map-becomes-code.md) already set, arrived at
 independently. A capture does not make the toolchain a new dependency;
 it inherits the one that was already there.
@@ -174,7 +174,7 @@ this shape on the way out of a dying program.
   schematic this stands on and does not replace
 - [106 — Stopping on purpose](106-stopping-on-purpose.md), whose
   stop-the-world sequence this reuses with a different ending
-- [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
+- [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
   which is why a captured program may contain code the binary does not
 - [311c — Source rides in the binary](311c-source-rides-in-the-binary.md),
   which already puts every box's text in the artifact

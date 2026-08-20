@@ -220,6 +220,77 @@ static int run(const char *command)
 }
 /* }}} */
 
+/* {{{ static void close_library() */
+static void close_library(void *handle)
+{
+    dlclose(handle);
+}
+/* }}} */
+
+/* {{{ registry_unload_box() */
+int registry_unload_box(map_t *m, const char *name)
+{
+    if (!m || !name || !*name) {
+        fprintf(stderr, "latebox: asked to unload nothing\n");
+        return -1;
+    }
+
+    /* Find the block holding it, and refuse outright if the name
+     * belongs to a box the program was built with — that code is part
+     * of the binary and there is nothing to close. */
+    late_block_t **link = &late_head;
+    late_block_t *found = NULL;
+    for (; *link; link = &(*link)->next) {
+        for (int i = 0; i < (*link)->n_boxes; i++)
+            if (strcmp((*link)->boxes[i].name, name) == 0) {
+                found = *link;
+                break;
+            }
+        if (found)
+            break;
+    }
+    if (!found) {
+        fprintf(stderr, "latebox: '%s' was not added while this program ran, "
+                        "so there is nothing to unload\n", name);
+        return -1;
+    }
+
+    /*
+     * Refused while any station places any box in this block. The
+     * block is the unit that gets closed, so one placed box in it
+     * keeps the whole thing — which is right, because they arrived in
+     * one library and leave in one.
+     */
+    for (int i = 0; i < m->n_stations; i++) {
+        station_t *s = &m->stations[i];
+        if (!s->call)
+            continue;
+        for (int b = 0; b < found->n_boxes; b++)
+            if (s->call == found->boxes[b].shim) {
+                fprintf(stderr,
+                        "latebox: station %d places '%s', so its code cannot "
+                        "be unloaded — remove the station first\n",
+                        i, found->boxes[b].name);
+                return -1;
+            }
+    }
+
+    /*
+     * Unlinked first, so nothing can find it by name from here on and
+     * no station can be placed from it after this point. Then the
+     * library goes to the scrapyard: a worker may be *inside* this
+     * code right now, and the counter that answers that is the same
+     * one a replaced destination set uses (issue 214).
+     */
+    late_total -= found->n_boxes;
+    *link = found->next;
+    void *handle = found->handle;
+    free(found);
+    map_retire(m, handle, close_library);
+    return 0;
+}
+/* }}} */
+
 /* {{{ registry_recover_box() */
 /*
  * Compile a box back into existence from the source it left behind.

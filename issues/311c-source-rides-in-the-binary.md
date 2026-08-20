@@ -50,7 +50,7 @@ compiler folded into placement functions, and the text — all in the
 binary. A program ships as a single file with no tree beside it.
 
 **A box added at runtime has something to be compiled *against*.**
-[310](310-boxes-compiled-at-runtime.md) needs source at runtime, and
+[310](completed/310-boxes-compiled-at-runtime.md) needs source at runtime, and
 this is where the source it already had comes from.
 
 **Type and argument names come back for free.**
@@ -112,7 +112,7 @@ None outstanding.
   which drops the names this brings back
 - [311d — The map becomes code](311d-the-map-becomes-code.md), which
   decides how much source there is to embed
-- [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
+- [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
   which needs source at runtime and now has it
 - [308 — The generator, in C](completed/308-generator-in-c.md), whose parser this
   calls at runtime for argument names

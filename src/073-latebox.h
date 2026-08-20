@@ -28,6 +28,7 @@
 #ifndef SORA_LATEBOX_H
 #define SORA_LATEBOX_H
 
+#include "018-station.h"
 #include "026-registry.h"
 
 /* {{{ registry_compile_source() */
@@ -64,6 +65,36 @@ int registry_compile_source(const char *c_source);
  */
 int               registry_late_count(void);
 const box_info_t *registry_late_box(int i);
+/* }}} */
+
+/* {{{ registry_unload_box() */
+/*
+ * Unload a box added while the program ran, freeing the library its
+ * code came in.
+ *
+ * **Refused while any station in the given map places it.** Unloading
+ * code a station names is exactly the crash this is built to avoid,
+ * and the check is the cheap half of the problem.
+ *
+ * The expensive half is that a worker may be *inside* that code right
+ * now, having picked up a task for it a moment ago. That is answered
+ * by the same per-worker counter the scrapyard uses (issue 214) — the
+ * counter deliberately spans a whole task rather than a delivery
+ * walk, so it answers "might somebody be inside this box" and "might
+ * somebody be inside this station" with one number. The library is
+ * handed to the map's scrapyard and closed once nobody can be in it.
+ *
+ * **What it checks is the map you hand it.** A process running
+ * several maps could have another one placing this box, and nothing
+ * here can see that, because nothing in this engine is process-wide
+ * and there is no list of running maps to consult. Unloading a box
+ * another map places is the caller's to avoid; it is stated rather
+ * than defended, which is the same footing as reaching into a program
+ * by anything other than its input and output stations.
+ *
+ * Returns 0, or -1 with a reason on stderr.
+ */
+int registry_unload_box(map_t *m, const char *name);
 /* }}} */
 
 /* {{{ registry_late_source_dir() */
