@@ -85,6 +85,13 @@ statics, the loader, the dump, and
 [002](../docs/002-stations-and-slots.md), and is worth doing
 deliberately rather than as a side effect of any of these.
 
+**And it is now settled that it happens before the rest of this
+family rather than after** ([215](215-ports-and-slots.md)). The
+children below are written in the correct vocabulary; if the source
+still speaks the old one while they are built, whoever builds them
+translates every noun by hand, which is how the disagreement started.
+So the rename is taken first and these are implemented against it.
+
 ## Current behavior
 
 An input port carries a kind tag and the fields that kind needs, with

@@ -50,6 +50,7 @@
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html" class="here">Phase 2 progress — stations and the push path</a>
@@ -58,6 +59,7 @@
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
 <h2>Issues, completed</h2>
 <a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
 <a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
@@ -172,7 +174,7 @@ its own.</p>
 <tr><td>212 — one way to build a program</td><td>open</td><td>The capstone. Create, configure, wire — legal at any moment, loading as one caller.</td></tr>
 <tr><td>213 — the input station</td><td>open</td><td>The other door: where arguments arrive, and what makes a program composable.</td></tr>
 <tr><td><a href="done-214-destinations-without-a-lock.html">214 — destinations without a lock</a></td><td><strong>complete</strong></td><td>An immutable array published by one atomic write, so a delivery walk takes no lock and copies nothing — the last thing holding a station's mutex on the hot path. The scrapyard reclaims what a rewire replaced, using a per-worker counter that is odd inside a task and even outside it, and that same counter is what issues 310 and 216 need.</td></tr>
-<tr><td><a href="issue-215-ports-and-slots.html">215 — ports and slots</a></td><td>open</td><td>A naming debt paid: the source calls a port a slot and a slot a cell, which is backwards from what every document says. One deliberate pass, reaching a filename.</td></tr>
+<tr><td><a href="issue-215-ports-and-slots.html">215 — ports and slots</a></td><td>open, <strong>goes first</strong></td><td>A naming debt paid: the source calls a port a slot and a slot a cell, which is backwards from what every document says. One deliberate pass, reaching a filename — taken before the rest of the family, so the work still to come is written in the words its own blueprints use.</td></tr>
 <tr><td><a href="done-216-removing-a-station.html">216 — removing a station</a></td><td><strong>complete</strong></td><td>A station comes out and its place is reused. Cutting the wires that name it <em>first</em> is what makes a version tag on every wire unnecessary — the walk is paid once, rarely, instead of on every delivery. A removed place comes free when the sweep says nobody can still be inside a task built from it.</td></tr>
 </table>
 <h2>What the phase established</h2>

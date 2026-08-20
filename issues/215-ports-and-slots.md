@@ -4,6 +4,18 @@ A naming debt, paid. The documents have used one vocabulary since the
 beginning and the source has used another, and the two disagree about
 the two most common nouns in the engine.
 
+**This goes first, ahead of the rest of the port family.** The
+alternative was one deliberate pass over code that had stopped moving,
+which is cheaper on paper and loses on the thing that matters: the
+concurrency line, the port conversion, and the construction surface
+are all about to be written, their blueprints already use the correct
+vocabulary, and somebody implementing them would read one word in an
+issue file and type a different one into the source. **That is exactly
+how this debt was contracted the first time.** The price is that the
+rename moves code four open issues are about to touch, which makes
+their diffs noisier and conflicts with any half-finished branch — paid
+once, and paid before the branches exist rather than after.
+
 ## Current behavior
 
 **The documents are right and the source is wrong.**

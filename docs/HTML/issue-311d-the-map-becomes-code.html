@@ -50,6 +50,7 @@
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -58,6 +59,7 @@
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
 <h2>Issues, completed</h2>
 <a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
 <a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
@@ -142,6 +144,22 @@ removes the last name from a running program. The generator reads a map
 and emits the construction calls it describes, so a map file is a
 <strong>blueprint for the compilation</strong> rather than something a program parses
 while it runs.</p>
+<p>**This waits for <a href="issue-212-one-way-to-build-a-program.html">212</a>, and the
+dependency is deliberately kept hard.** What the generator emits <em>is</em>
+construction calls, so writing it against the placement and wiring
+functions that exist today would mean writing generated code that
+calls things scheduled for deletion, and then retargeting the emitter
+once they go. That is cheaper than it sounds — the output is generated,
+so retargeting is a change to the strings one emitter prints — and it
+was still refused, for two reasons. There would be a period in which
+the project's canonical example of how a program is built is code
+calling an interface the project has decided against, which is a bad
+thing for the most-read generated file to be. And a seam that forwards
+old names to new ones would be indirection existing solely because two
+things landed in an awkward order, which is the kind of layer that
+never gets removed. <strong>The other three children do not wait</strong>; this one
+sits behind the construction surface, and that is accepted as the cost
+of emitting against the final interface only.</p>
 <h2>Current behavior</h2>
 <p>The generator globs the box source directory and emits a shim for every
 function it finds. The build has never seen a map file, so it cannot

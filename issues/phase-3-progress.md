@@ -40,7 +40,7 @@ survives the table being deleted.
 | [311a — boxes addressed by file](311a-boxes-addressed-by-file.md) | open | A map names `file:function`. Bare basenames resolve, paths settle ties, and generated symbols escape punctuation so `math.c` and `math_c` cannot collide. |
 | [311b — placement instead of records](311b-placement-instead-of-records.md) | open | A generated placement function per box writes a station directly, every size a folded constant. Hand placement turns out to be the primitive. |
 | [311c — source rides in the binary](311c-source-rides-in-the-binary.md) | open | Each included box source emitted as a C array, so one file carries code, numbers, and text. |
-| [311d — the map becomes code](311d-the-map-becomes-code.md) | open | The generator turns a map into the construction calls it describes, so no name survives into a running program. The build also learns what to include; the linker discards the rest. |
+| [311d — the map becomes code](311d-the-map-becomes-code.md) | open, **waits on phase 2's capstone** | The generator turns a map into the construction calls it describes, so no name survives into a running program. The build also learns what to include; the linker discards the rest. It emits against the one construction surface only — never against the interface that surface replaces. |
 
 ## What the phase established
 

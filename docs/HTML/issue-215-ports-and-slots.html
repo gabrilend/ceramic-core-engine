@@ -50,6 +50,7 @@
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -58,6 +59,7 @@
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
 <h2>Issues, completed</h2>
 <a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
 <a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
@@ -140,6 +142,17 @@
 <p>A naming debt, paid. The documents have used one vocabulary since the
 beginning and the source has used another, and the two disagree about
 the two most common nouns in the engine.</p>
+<p><strong>This goes first, ahead of the rest of the port family.</strong> The
+alternative was one deliberate pass over code that had stopped moving,
+which is cheaper on paper and loses on the thing that matters: the
+concurrency line, the port conversion, and the construction surface
+are all about to be written, their blueprints already use the correct
+vocabulary, and somebody implementing them would read one word in an
+issue file and type a different one into the source. **That is exactly
+how this debt was contracted the first time.** The price is that the
+rename moves code four open issues are about to touch, which makes
+their diffs noisier and conflicts with any half-finished branch — paid
+once, and paid before the branches exist rather than after.</p>
 <h2>Current behavior</h2>
 <p><strong>The documents are right and the source is wrong.</strong>
 <a href="issue-210-input-port-record.html">210</a> states the vocabulary plainly:</p>

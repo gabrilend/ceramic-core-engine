@@ -6,6 +6,23 @@ and emits the construction calls it describes, so a map file is a
 **blueprint for the compilation** rather than something a program parses
 while it runs.
 
+**This waits for [212](212-one-way-to-build-a-program.md), and the
+dependency is deliberately kept hard.** What the generator emits *is*
+construction calls, so writing it against the placement and wiring
+functions that exist today would mean writing generated code that
+calls things scheduled for deletion, and then retargeting the emitter
+once they go. That is cheaper than it sounds — the output is generated,
+so retargeting is a change to the strings one emitter prints — and it
+was still refused, for two reasons. There would be a period in which
+the project's canonical example of how a program is built is code
+calling an interface the project has decided against, which is a bad
+thing for the most-read generated file to be. And a seam that forwards
+old names to new ones would be indirection existing solely because two
+things landed in an awkward order, which is the kind of layer that
+never gets removed. **The other three children do not wait**; this one
+sits behind the construction surface, and that is accepted as the cost
+of emitting against the final interface only.
+
 ## Current behavior
 
 The generator globs the box source directory and emits a shim for every

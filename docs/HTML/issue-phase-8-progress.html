@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>404 — Gather chains and the cycle check</title>
+<title>Phase 8 progress — the workbench</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -59,7 +59,7 @@
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
-<a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
+<a href="issue-phase-8-progress.html" class="here">Phase 8 progress — the workbench</a>
 <h2>Issues, completed</h2>
 <a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
 <a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
@@ -93,7 +93,7 @@
 <a href="done-401-static-slots.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
-<a href="done-404-gather-chains-and-cycles.html" class="here">404 — Gather chains and the cycle check</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
@@ -138,90 +138,47 @@
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 </nav>
 <main>
-<h1>404 — Gather chains and the cycle check</h1>
-<h2>Current behavior</h2>
-<p><strong>Built, and being removed with the pull path it belongs to</strong> — see
-<a href="impl-056-no-pull-path.html">056</a>. With
-nothing pulled, a gather chain is an ordinary chain of pushes and a
-gather cycle cannot be described, so the forward walk that refused one
-has nothing left to refuse.</p>
-<p>Two findings survive the mechanism. The first is the one this issue
-made almost in passing and which turned out to matter most: **a push
-loop needs a finite companion input to ever stop.** A cycle in the push
-direction stays legal and is still how anything repeats. The second is
-that a cycle is cheapest to refuse when a wire is drawn rather than
-when it is traversed, which is the shape runtime rewiring later reused
-for every rule it applies.</p>
-<p>The remainder describes it as built.</p>
-<p>Built. Chains recurse inline exactly as designed — a three-deep
-chain (a constant source doubled twice into an adder) walks per task
-and its depth is recorded on the map at wiring time, where the cycle
-walk pays for it anyway. Every new gather wire runs the forward walk
-from its proposed source: reaching back to the destination refuses
-the edge naming both stations, so the graph stays acyclic by
-induction and the bare-segfault failure this issue dreads cannot be
-built. Two- and three-station cycles are each proven refused by
-watching a child process die of them. The push direction stays
-unchecked and legal, proven by a counter looping through a ring
-buffer — with a finding the design never mentions: a push loop needs
-a finite companion input (tickets) to ever stop before phase 5's
-comparator exists, and the test pairs its loop with one. The
-one-lock note for runtime rewiring sits as a comment at the check.</p>
-<h2>Intended behavior</h2>
-<p><strong>Gatherers may chain.</strong> A gatherer's slot may itself be gathered, and
-the chain is walked inline during task construction. Depth is a static
-property of a map, so the cost is bounded and knowable rather than
-open-ended.</p>
-<p><strong>A cycle in a gather chain is fatal</strong>, and it is fatal in the worst
-possible way. Gathering is a function call that has not returned yet,
-so a loop recurses until the stack dies — which surfaces as a segfault
-with no message, no line number, and no indication that two boxes in a
-map point at each other. It is the one failure mode that tells the
-programmer nothing at all.</p>
-<p>So cycles are caught when a connection is made, not when it is
-traversed.</p>
-<h2>Why the check is cheap</h2>
-<p>**If the graph is acyclic before an edge is added, any cycle that edge
-creates must run through it.** There is never a reason to scan the
-graph. Start at the new wire's destination, walk forward along gather
-links, and see whether you arrive back at its source.</p>
-<p>Start from an empty map, refuse every edge that closes a loop, and the
-map is acyclic forever by induction. The cost is the length of one
-chain, paid once per connection — a few hundred at load, occasionally
-at runtime once phase 7 allows rewiring.</p>
-<p>The same walk yields the chain's depth for free, which is the
-worst-case inline work a worker will do while assembling a task. Worth
-recording while it is in hand.</p>
-<h2>The check applies only to gather wires</h2>
-<p><strong>A cycle in the push direction is legal and necessary.</strong> Since a box
-cannot remember anything, a loop through a ring buffer is the only way
-to build a counter: the value goes out, comes back around, and arrives
-as the next run's input. A blanket cycle check would forbid the sole
-mechanism the engine has for carrying state.</p>
-<p>The difference is that a push cycle passes through a buffer and the
-call ends. A gather cycle is a call that never returns.</p>
-<h2>Suggested implementation steps</h2>
-<p>1. The forward walk along gather links from a proposed edge's
-   destination, looking for its source.
-2. Call it from the connection path, refusing the edge and naming both
-   stations when it closes a loop.
-3. Record the deepest chain found, for phase 7 to report.
-4. Make sure the check is reachable from the runtime rewiring path in
-   phase 7, and note there that the check and the insertion must happen
-   under one lock — two threads each adding an individually legal edge
-   can produce an illegal pair.
-5. A test of a legal chain several deep, asserting the value arrives
-   and the recorded depth is right.
-6. A test that a two-station cycle is refused, and one that a longer
-   cycle is refused.
-7. A test that a push cycle — a counter looping through a ring buffer —
-   is allowed and counts correctly.</p>
-<h2>Related</h2>
-<ul>
-<li><a href="doc-004-datapath-statics.html">004 — Gathering</a></li>
-<li>Issue 403 — the gathering this bounds</li>
-<li>Issue 704 — runtime rewiring, which reuses this check</li>
-</ul>
+<h1>Phase 8 progress — the workbench</h1>
+<p>Phase 8's goal: tools that stand outside the engine and help somebody
+write a program for it. Everything in the phases beneath makes maps
+run; nothing in them helps anyone compose one except a text editor.</p>
+<p><strong>The phase has not started.</strong> This page exists because every other
+phase has one and the gap kept being rediscovered, not because there
+is progress to report.</p>
+<table>
+<tr><td>Issue</td><td>State</td><td>In one line</td></tr>
+<tr><td><a href="issue-801-browser-workbench.html">801 — the workbench in the browser</a></td><td>open, not started</td><td>A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server.</td></tr>
+</table>
+<h2>What it waits on</h2>
+<p><strong>The map file format, which is about to change twice.</strong> Boxes
+addressed by file (<a href="issue-311a-boxes-addressed-by-file.html">311a</a>) rewrites
+the station line, and the map becoming code
+(<a href="issue-311d-the-map-becomes-code.html">311d</a>) changes what reading a map even
+means. The canvas emits that format exactly, so building it against a
+format with two pending changes means drawing it twice.</p>
+<h2>What is already decided about this phase</h2>
+<p>**The canvas is an alternative to writing a map file by hand, never a
+prerequisite for it.** If the canvas can ever express something the
+format cannot, the format is what needs fixing. This is the constraint
+the whole phase is held to.</p>
+<p><strong>It shares nothing with the demo panels</strong>
+(<a href="issue-713-demos-you-can-steer.html">713</a>), and that was decided rather than
+drifted into. The two draw a similar picture and answer to opposite
+requirements: a canvas for composing a map must treat every station
+alike, and a page explaining one mechanism must be able to draw the
+station it is about larger than the others.</p>
+<p><strong>No box function ever executes in the browser.</strong> What the page
+carries is a model of the <em>scheduling</em> — a box has a duration you dial
+and nothing else, and what travels the wires is a token meaning
+something arrived rather than a value. It shows the shape of a running
+program and cannot show a result. The slideshow
+(<a href="issue-709-slideshow-and-transcripts.html">709</a>) was promised the same
+machinery to draw its screens with.</p>
+<h2>The phase's demo</h2>
+<p>Not yet written as an issue. Phase 8 is the one phase whose panel is
+not a terminal program with a page in front of it, since the thing
+being demonstrated is already a page — which is a difference worth
+thinking about before an issue file commits to an answer.</p>
 
 </main>
 </div></body></html>

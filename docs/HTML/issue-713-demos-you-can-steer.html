@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>713 — The demos you can steer</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
+<a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
+<a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
+<a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
+<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
+<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
+<a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="issue-713-demos-you-can-steer.html" class="here">713 — The demos you can steer</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
+<a href="done-210b-the-port-record.html">210b — The port record</a>
+<a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
+<a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
+<a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-401-static-slots.html">401 — Static input values</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
+<a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
+<a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
+<a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
+<a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
+<a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
+<a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+</nav>
+<main>
+<h1>713 — The demos you can steer</h1>
+<p>The seven phase demos are replaced rather than repaired. What they
+demonstrate is largely right; the <em>shape</em> they demonstrate it in is
+the opposite of what this engine is for.</p>
+<p>A ceramic program is not a batch. It comes up, it stays up, and it
+absorbs change without stopping — a value written from outside, a wire
+cut and redrawn, a station added, a box compiled and placed while the
+workers are busy. Every one of those is built and proven. And the way
+a visitor currently meets them is by pressing space thirty-five times
+while a program does all of it to itself.</p>
+<p><strong>The reader should be the one turning the dial.</strong></p>
+<h2>The note that started this</h2>
+<p>Kept verbatim, because the reasoning in it is the specification:</p>
+<blockquote>Can we remove all the demo files? they kinda suck. Let's make a new</blockquote>
+<blockquote>issue to create new demos. Also, they should be more interactive</blockquote>
+<blockquote>than they currently are - ceramic is a system intended for</blockquote>
+<blockquote>persistent operations, so we should treat the demos as such and give</blockquote>
+<blockquote>the users some buttons and levers to tweak and push and such,</blockquote>
+<blockquote>updating the system while it's running, and demonstrating each of</blockquote>
+<blockquote>the implementation details of the phase that the demo belongs to.</blockquote>
+<h2>Current behavior</h2>
+<p><strong>Deleted.</strong> The first implementation step below has been taken: the
+seven demo programs, the two presenters, the four map files and the
+seven runner scripts are out of the tree. They remain in git history,
+which is the only copy anybody should need — the issue files that
+describe them are untouched in <code>completed/</code> and remain the record of
+what the first generation was and what it proved.</p>
+<p>What stood there until now, so that this is not lost:</p>
+<p>Seven demos, one per finished phase, discovered by the launcher in the
+project root rather than listed by it. Thirty-five scenes across them,
+every one following one shape set by
+<a href="done-707-demos-as-word-problems.html">707</a>: state the problem in
+the engine's own vocabulary, offer an image to hold it by, tabulate
+the correspondence between the two, justify every row of that table,
+measure, and end with a finding. A hundred and forty-two justified
+correspondences. Two presenters, one compiled and one shell, matched
+column for column. Paging rather than printing, so a reader faces one
+scene instead of a transcript. A report mirrored to the shared-memory
+tier on every run. A non-terminal run that says it is one, skips the
+paging and the colour, and plays the scripted version of anything
+live.</p>
+<p>Four of the thirty-five scenes were live panels the reader steered —
+the pool's ring under fan-out, backpressure at a gated station, the
+statics dial turned mid-run, and the map under load. **Those four are
+the seed this issue grows from, and they were the exception.**</p>
+<p>Three of the seven no longer compiled at all. Removing the pull path
+(<a href="done-210a-the-pull-path-removed.html">210a</a>) took the gatherer out
+of the engine, and phase four still asked a port to become one, phase
+six still switched on its tag, and phase seven still repointed one on
+a running map. That is what
+<a href="issue-710-demos-after-the-pull-path.html">710</a> was written to repair, and it
+is superseded here: repairing three programs whose shape is being
+replaced is work that would be thrown away twice.</p>
+<h2>Why paging is the wrong shape</h2>
+<p>A paged demo is <strong>a transcript of something that already happened.</strong>
+The program decides what to do, does it, measures it, and the reader
+advances to the next thing that was decided for them. That shape is
+honest for a measurement — you cannot let somebody steer a benchmark
+and still report a number — and it is exactly wrong for a machine
+whose distinguishing property is that it can be changed while it runs.</p>
+<p>The engine's three most unusual capabilities are all *responses to an
+outside act*:</p>
+<ul>
+<li><strong>A write is an event.</strong> Writing a static runs the ordinary</li>
+<p>  readiness check on the station holding it, which is what turns a
+  chain of stations into a recalculation graph.</p>
+<li><strong>The shape is editable while it runs.</strong> Stations can be added and</li>
+<p>  removed, wires cut and redrawn, ports converted from one source to
+  another, and the table grows without moving anything.</p>
+<li><strong>New code can arrive after the program started.</strong> A box's source</li>
+<p>  compiled, loaded, and placed into a running map, with the pool never
+  stopping.</p>
+</ul>
+<p>None of the three has a subject until somebody outside the program
+acts. A demo that supplies its own acts is demonstrating the mechanism
+with the interesting half removed.</p>
+<h2>Intended behavior</h2>
+<p>**Each phase's demo is a control panel over a live map that does not
+end until the reader quits.** It comes up, the map starts running, and
+the screen stays. Nothing is a transcript; every figure on it is
+current.</p>
+<h3>The engine is a real process; the panel is a page</h3>
+<p><strong>Decided.</strong> A panel is two halves. The lower half is an ordinary
+ceramic program — real workers, a real station table, real mutexes,
+built by the same <code>make</code> as everything else — running a map chosen for
+the phase. The upper half is a page in a browser that draws that
+program and sends the reader's lever movements down to it. They speak
+over a local socket the program opens and the reader's browser
+connects to.</p>
+<p>The alternative was a page carrying the engine compiled to
+WebAssembly, and it fails on the one property this engine exists for:
+WebAssembly runs one thread unless a great deal of extra machinery is
+arranged, so the panel would demonstrate a single-threaded port of a
+machine whose entire claim is that a shape executes itself across every
+core. **A demo that quietly removes the concurrency is worse than no
+demo**, because it teaches something false and looks authoritative
+doing it.</p>
+<p><strong>This does not break the rule that nothing lives on a server.</strong> That
+rule (<a href="issue-801-browser-workbench.html">801</a>) says no account, no upload,
+nothing sent anywhere — it is about work leaving the author's machine,
+not about two programs on one machine talking to each other. The panel
+sends nothing anywhere: the process is started by the reader, listens
+on the loopback interface only, and dies when they quit. What it does
+cost is that a panel is no longer one file you can open — something
+has to be running before the page has anything to draw — and that is a
+packaging question, recorded in
+<a href="impl-057-packaging.html">057</a>'s terms rather
+than waved at.</p>
+<h3>What crosses the wire, and why it needs no new engine surface</h3>
+<p>The most useful thing found while designing this: **both directions of
+the protocol already exist as engine features.**</p>
+<table>
+<tr><td>Direction</td><td>What it is</td><td>Already built as</td></tr>
+<tr><td>Engine → page</td><td>The whole shape: stations, kinds, ports, sources, wires, static values</td><td>The map dump, which already writes the live table as a map file and already round-trips (<a href="done-703-map-dump.html">703</a>)</td></tr>
+<tr><td>Engine → page</td><td>The motion: per-port occupancy, ring depth, worker states, run counts, time spent, growth events</td><td>The statistics and reporting instruments (<a href="done-701-buffer-growth-reporting.html">701</a>, <a href="done-702-station-statistics.html">702</a>)</td></tr>
+<tr><td>Page → engine</td><td>Every lever: add a station, configure a port, draw or cut a wire, convert a port's source</td><td>The construction surface (<a href="issue-212-one-way-to-build-a-program.html">212</a>), which is legal at any moment by design</td></tr>
+<tr><td>Page → engine</td><td>Turn a dial</td><td>Writing a static (<a href="issue-405-statics-mutation.html">405</a>), which is an event and runs the readiness check</td></tr>
+<tr><td>Page → engine</td><td>Type a function and place it</td><td>Boxes compiled while the program runs (<a href="done-310-boxes-compiled-at-runtime.html">310</a>)</td></tr>
+</table>
+<p>So the protocol is a transport, not a new capability, and the panel is
+<strong>a second caller of surfaces that already have one.</strong> That is the
+argument for building it at all: a lever that cannot be expressed as a
+call somebody could already make is a lever demonstrating something
+the engine cannot do.</p>
+<p>It also fixes this issue's position in the order. **A complete panel
+waits on the construction surface**, because half its levers are that
+surface. Phase 1's and phase 2's panels can be built before it against
+what exists today; the rest arrive with it.</p>
+<h3>Seven pages, not one page seven times</h3>
+<p>**Decided: each phase's panel is its own page, drawn for its own
+machinery, sharing nothing with the workbench.** No general-purpose
+canvas, no station-and-wire editor with the phase selected from a
+menu. A generic graph view is the right answer when the subject is *a
+graph*; here the subject is a specific mechanism, and a picture built
+for that mechanism shows it in a way a general one cannot.</p>
+<p>Phase 1's page is a ring of task slots, a row of workers each awake or
+asleep, and a sleeper count — there is no graph on it at all, because
+the pool does not know what a station is and the page should not
+either. Phase 5's page is one comparator with three exits and a
+threshold you drag, drawn large. Phase 2's page is two stations and
+the ports between them, close enough to see individual slots fill.
+**The page is a drawing of the thing being explained, not a viewer
+that happens to be pointed at it.**</p>
+<p>This is also the reason not to reuse the workbench: that canvas exists
+to let somebody lay out a map they are composing, so it must treat
+every station alike and every wire alike. A page that treats every
+station alike cannot make the one station this phase is about bigger
+than the others.</p>
+<h3>Dynamic documentation, which the project has already started</h3>
+<p>The governing idea is not <em>dashboard</em> and not <em>demo program</em>. It is
+<strong>a document that moves and answers back</strong> — the form
+<a href="issue-705-html-documentation.html">705</a> already began, where three
+interactive pieces ride the pages that explain them: the ring buffer
+with a capacity slider showing wrap and unwrap, the readiness check
+firing on the click that fills the last slot, and the iterator dealing
+even counts under an adjustable slow consumer.</p>
+<p>Those three are the seed. What separates a panel from them is that a
+widget models the mechanism in the page's own script, while a panel is
+<strong>wired to a real process</strong> and shows what actually happened. The form
+is the same and the honesty is different, which the pages must say
+plainly wherever both appear.</p>
+<p>So a panel page reads as prose with instruments set into it: the
+explanation of a mechanism, and inside that explanation the mechanism
+itself, running, with the controls in the paragraph that describes
+them rather than gathered into a control bar at the edge. **A reader
+scrolls a panel the way they read a page**, and the thing they are
+reading about is alive next to the sentence about it.</p>
+<h3>What every page must carry, however it is laid out</h3>
+<p>Three things, present on every panel; where they sit is decided per
+page rather than by a template.</p>
+<table>
+<tr><td>Must carry</td><td>Holds</td></tr>
+<tr><td><strong>The machine</strong></td><td>What is actually there right now — whatever this phase's mechanism consists of, drawn to fit. Per-port occupancy, ring depth, worker states, run counts, timings. It redraws on a fixed cadence, not on the reader's action, because a picture that only moves when poked implies the machine only moves when poked.</td></tr>
+<tr><td><strong>The levers</strong></td><td>Every control this phase offers, each showing its current setting rather than only its name. A dial reads as a dial with a value on it. A lever that is unavailable right now says why it is unavailable.</td></tr>
+<tr><td><strong>The log</strong></td><td>What the reader did and what the engine did about it, newest last. <em>You raised the threshold to 40 → traffic moved from the greater branch to the lesser within two deliveries.</em> This is what keeps a panel a demonstration rather than a dashboard: a dashboard shows state, and a demonstration shows consequence.</td></tr>
+</table>
+<h3>The phase's issue list is the panel's checklist</h3>
+<p>**Every mechanism the phase built has at least one lever that
+exercises it or one readout that shows it**, and the panel can say
+which mechanism each of its controls belongs to. This is the contract
+that replaces 707's per-scene story contract, and it is checkable in
+the same way that one was: a phase's completed issues are a list, and
+a panel that covers six of nine is a panel with three gaps that can be
+named.</p>
+<p>Where a mechanism cannot be given a lever — because it is internal,
+like the last sleeper's re-scan — it gets a readout and a way for the
+reader to <em>provoke</em> the condition, which for that example means making
+work arrive at exactly the wrong moment on purpose.</p>
+<h3>Every lever still says what it stands for</h3>
+<p>707's finding survives the change of shape and is the reason this is
+not simply a dashboard: **a control that does not say what it means
+teaches nothing.** A reader who moves a slider and watches a bar move
+has learned that the two are connected, which they already assumed.</p>
+<p>So each lever carries the same three-part sentence a scene's
+correspondence table carried — the engine term, the thing it stands
+for, and <em>why it stands for it</em> — shown when the lever is first
+touched and reachable afterwards. The interface should have no way to
+add a lever without saying what it does to the machine, exactly as the
+old one had no way to name a correspondence without justifying it.</p>
+<h3>What each phase's panel offers</h3>
+<table>
+<tr><td>Phase</td><td>Levers</td><td>What the reader watches happen</td></tr>
+<tr><td>1 — the pool</td><td>Submit a burst; change the arrival rate; hold a worker so it finishes slowly; force the arrival that races the last sleeper; ask for the polite stop</td><td>The ring doubling under a burst, the sleeper count climbing to full, the re-scan catching the work that arrived during the last sleeper's final look, and the difference between the three ways a program ends</td></tr>
+<tr><td>2 — stations and the push path</td><td>Fill one port at a time by hand; set a port's depth; draw and cut wires; add a station; remove one and add another to watch its place reused</td><td>Readiness firing on the <em>last</em> slot filled and not before; the two backlog kinds building for their two different reasons; fan-out costing one copy per destination; a station's place coming back</td></tr>
+<tr><td>3 — the build path</td><td>Type a C function into the panel and compile it into the running program; place it; wire it to something whose width disagrees</td><td>New code entering a program that never stopped, and a refusal that names both stations, the port, both type names and both widths</td></tr>
+<tr><td>4 — configuration</td><td>Turn a dial wired to a static; type a struct constant as brace text; convert a port from one source to another</td><td>One write cascading through a chain of stations as a recalculation, and the value dumped back out as the text that produced it</td></tr>
+<tr><td>5 — routing</td><td>Move a comparator's threshold; unwire one of its three outcomes; change how many ports an iterator deals to</td><td>Traffic moving between branches as the threshold crosses it; an unwired outcome discarding, on purpose; the deal staying exactly even under any crowd</td></tr>
+<tr><td>6 — the map file</td><td>Edit the map text in a pane and reload it; introduce errors on purpose; dump the running map beside what you typed</td><td>Every refusal collected and printed together rather than one per run, and a dump that reads back as a map file</td></tr>
+<tr><td>7 — seeing inside it</td><td>Rewire under load; relieve a bottleneck mid-run by deepening a buffer or adding a parallel station; turn timing instrumentation on and off</td><td>The three backlog diagnoses telling three different stories, and the cost of measuring, measured</td></tr>
+</table>
+<p>Phase 8 will want one too, and it is the phase whose demo is not a
+terminal program. That is left to that phase.</p>
+<h3>The run that nobody connects to</h3>
+<p>**A panel process started with nobody watching plays a recorded
+sequence of lever movements against itself and writes what each one
+did.** No socket is opened, no browser is wanted, and the report that
+comes out is the artifact — which is how the panels stay testable,
+how <code>make test</code> catches one that has stopped working, and how the
+project keeps a written account of what each phase can do for somebody
+reading rather than driving.</p>
+<p>This is the half that keeps the split honest. Every lever must be
+reachable by the recording as well as by a mouse, which means no lever
+can exist that is only a gesture on a page: it has to be a call the
+process can make to itself. **The recording is the specification of
+the protocol**, written first, and the page is a second way to send
+what it already sends. The old demos solved the same problem by
+printing every scene at once and saying in the banner that they were
+doing so, which is the precedent for saying plainly which mode is
+running.</p>
+<p>The recorded sequence is also the answer to *what should I press
+first* — a reader who wants to be shown rather than to explore can ask
+the panel to play the recording on screen, at reading speed, with the
+levers moving by themselves and the log narrating.</p>
+<h2>What is being deleted, and why replacing beats repairing</h2>
+<table>
+<tr><td>Gone</td><td>Was</td></tr>
+<tr><td>Seven demo programs</td><td>One per phase, thirty-five scenes</td></tr>
+<tr><td>Two presenters, compiled and shell</td><td>The layout, paging, colour and report mirroring</td></tr>
+<tr><td>Seven runner scripts</td><td>The per-phase build-and-run front</td></tr>
+<tr><td>Four map files</td><td>Fixtures for the phase 6 demo</td></tr>
+</table>
+<p>Repairing was considered because most of the prose in those files is
+good and every measurement in them is honest. It loses on three
+counts: three of the seven do not compile at all, and their repair is
+a rewrite of the scenes that made them interesting; the presenters are
+built around paging, which is the thing being removed, so they would
+be rewritten rather than reused; and the correspondence-and-measure
+scene shape is a <em>narrative</em> structure, while what replaces it is a
+<em>spatial</em> one, three regions living at once. Carrying prose across is
+cheap and can be done from git history one paragraph at a time.</p>
+<p><strong>The completed issue files stay exactly as they are.</strong> They describe
+the first generation and remain buildable as written, which the house
+rule about recreating the project from its issue files requires. This
+one says what replaced them.</p>
+<h2>What must not be lost</h2>
+<ul>
+<li><strong>The word-problem instinct.</strong> A reader who does not already know</li>
+<p>  what a station is must be able to learn it here. Every lever
+  justifies itself.</p>
+<li><strong>Honest mechanics.</strong> A figure on screen is measured, not animated</li>
+<p>  to look plausible. Where the panel simulates rather than measures,
+  it says so on the panel.</p>
+<li><strong>A run that is not a terminal says it is not a terminal</strong>, rather</li>
+<p>  than pretending, and still produces a report.</p>
+<li><strong>The launcher stays the front door</strong>, and stays discovering rather</li>
+<p>  than listing, so a new panel becomes available by being dropped in.</p>
+<li><strong>One meaning per colour</strong>, consistently across every panel, as the</li>
+<p>  old demos held to.</p>
+</ul>
+<h2>Suggested implementation steps</h2>
+<p>1. **Delete the old demos, the presenters, the map fixtures, and the
+   runner scripts.** *(Done.)* Git history is the copy. The launcher's
+   two empty-state messages were reworded in the same breath: they read
+   *"Nothing has been finished yet"*, which stopped being true seven
+   phases ago and became a falsehood at the project's front door the
+   moment the demos went. It now names what is absent — the panel, not
+   the engine — and points here.
+2. <strong>The lever vocabulary and the recording that drives it</strong>, before
+   any socket or any page exists. A declared set of lever kinds, each
+   one a call the process can make to itself, each carrying the
+   sentence that justifies it; a recorded sequence in a text file; and
+   a runner that plays a recording and writes a report. At the end of
+   this step a panel is a headless program that demonstrates a phase
+   and produces a document, with no browser involved — which is the
+   fallback-free version of every step that follows, because nothing
+   later can add a capability that this cannot already reach.
+3. <strong>The state feed</strong>, as a serializer over the dump and the
+   statistics rather than as anything new: the whole shape plus the
+   motion, in one form a page can draw. Proven by feeding it back
+   through the map reader, which the dump already round-trips.
+4. <strong>The socket and the protocol</strong>: loopback only, one connection at a
+   time, state out and lever movements in, and a refusal that names
+   itself when a lever arrives that this phase's panel does not offer.
+5. <strong>The pages</strong>, one per phase, each drawn for its own machinery and
+   sharing nothing with the workbench canvas. What they <em>do</em> share is
+   the ceramic aesthetic and the documentation set's page furniture,
+   since a panel is a document that moves rather than an application.
+   The interface design for these is its own piece of work and should
+   use the project's HTML design tooling rather than being assembled
+   from whatever the previous page did.
+6. <strong>Phase 2's panel first</strong>, not phase 1's. Stations and the push
+   path are what somebody needs to understand before anything else
+   makes sense, and filling one port at a time to watch readiness fire
+   on the last one is the single clearest thing this engine does.
+7. <strong>Phase 1's panel</strong>, whose hardest part is provoking the
+   last-sleeper race on demand rather than waiting to be lucky.
+8. <strong>Phases 4, 5, 6 and 7</strong>, in that order — each is a straightforward
+   application of the vocabulary once it exists, and each is checked
+   against its phase's issue list for coverage before it is called
+   done. These arrive with the construction surface, since that is
+   what most of their levers are.
+9. <strong>Phase 3's panel last</strong>, because typing a C function into a field
+   and compiling it into the running program is the most demanding
+   piece of interface here and benefits from every lesson the others
+   teach.
+10. <strong>The build runs every recording</strong>, so a panel that has stopped
+    working is caught by <code>make test</code> rather than by somebody opening
+    it.
+11. <strong>Rewrite the launcher's own text</strong> for a front door that starts a
+    process and tells the reader where to point a browser, rather than
+    one that runs a program and pages through it.</p>
+<h2>Open questions</h2>
+<p>1. ~~Terminal or browser?~~ **Answered: a real C process with a
+   browser front, talking over a local socket.** Written into the
+   intended behavior above.
+2. ~~Does this page and the workbench become one page?~~ **Answered:
+   no, and nothing is shared with it.** A canvas for composing a map
+   must treat every station alike; a page explaining one mechanism
+   must not. Written into the intended behavior above.
+3. ~~One panel per phase, or one with a phase selector?~~ **Answered:
+   one page per phase**, each drawn for its own machinery.
+4. **What is the honesty rule when a modelled widget and a live panel
+   sit on the same site?** The documentation set's three interactive
+   pieces model their mechanism in the page's own script; a panel is
+   wired to a process and reports what happened. Both will be on the
+   same site in the same aesthetic, and a reader cannot tell which is
+   which by looking. The old demos had this problem in one program and
+   solved it with a rule — say on the panel where a figure came from —
+   but a site-wide version of that rule does not exist yet.
+5. <strong>Does the launcher script keep its numbered-choice interface</strong>, or
+   does a front door offering live panels want to name them rather
+   than number them?
+6. <strong>Should the completed demo issue files be marked as superseded</strong>,
+   or left untouched? Leaving them silent means somebody rebuilding
+   the project from <code>completed/</code> builds seven paged demos and then
+   deletes them again.
+7. <strong>How much of the old prose comes back?</strong> A hundred and forty-two
+   justified correspondences exist in git history and most of them are
+   still true.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>,</li>
+<p>  whose contract this replaces with a spatial one and whose finding
+  about justification it keeps</p>
+<li><a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>,</li>
+<p>  <strong>superseded</strong> — the three demos it repairs are deleted here</p>
+<li><a href="done-105-phase-1-demo.html">105</a>,</li>
+<p>  <a href="done-208-phase-2-demo.html">208</a>,
+  <a href="done-307-phase-3-demo.html">307</a>,
+  <a href="done-406-phase-4-demo.html">406</a>,
+  <a href="done-505-phase-5-demo.html">505</a>,
+  <a href="done-606-phase-6-demo.html">606</a> and
+  <a href="done-706-phase-7-demo.html">706</a>, the seven this replaces</p>
+<li><a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>,</li>
+<p>  <a href="issue-405-statics-mutation.html">405 — Changing a static while it runs</a> and
+  <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>,
+  the three capabilities that need an outside actor to have a subject</p>
+<li><a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>,</li>
+<p>  whose three interactive pieces are the seed of this and whose
+  aesthetic and page furniture these share — the one thing a panel
+  does that a widget there does not is report a real process</p>
+<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>,</li>
+<p>  deliberately <strong>not</strong> shared with. Its canvas composes a map and must
+  treat every station alike; a panel explains one mechanism and must
+  not. The two look similar from a distance and answer to opposite
+  requirements</p>
+<li><a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>,</li>
+<p>  the third face this project shows on a page, and the one whose
+  honesty rule about drawn-versus-measured this inherits at site scale</p>
+<li><a href="done-703-map-dump.html">703 — The map dump</a>,</li>
+<p>  <a href="done-702-station-statistics.html">702 — Station statistics</a> and
+  <a href="done-701-buffer-growth-reporting.html">701 — Buffer growth reporting</a>,
+  which together are the state feed, already built</p>
+<li><a href="impl-057-packaging.html">057 — Packaging</a>,</li>
+<p>  where a demo that needs a process running before it can be looked at
+  is a cost that belongs</p>
+</ul>
+
+</main>
+</div></body></html>

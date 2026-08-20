@@ -128,6 +128,16 @@ and how its symbol is spelled, and everything else is written against
 that. 311b and 311c are independent of each other. **311d needs both**,
 since it emits calls to placement functions that 311b defines.
 
+**311d additionally waits on
+[212](212-one-way-to-build-a-program.md), and the first three do
+not.** What 311d emits is construction calls, and emitting them
+against an interface the project has decided to replace would make the
+most-read generated file in the project an example of how *not* to
+build a program, for however long the replacement took. The
+alternatives were considered and written down in 311d itself. So this
+family runs in parallel with the construction line for three of its
+four children and joins it for the last.
+
 **There is no fifth child for running a map you were not built for**,
 and the reason is worth keeping: a draft of this family had one, and it
 described a command-line tool wrapping the build. That tool was

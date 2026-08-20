@@ -43,9 +43,18 @@ DEMO_DIR="${DIR}/issues/completed/demos"
 mkdir -p "/tmp/$(basename "${DIR}")"
 mkdir -p "/dev/shm/$(basename "${DIR}")"
 
+# Both empty-state messages below used to read "Nothing has been
+# finished yet", which was true only before phase 1 shipped. Deleting
+# the seven paged demos (issue 713) turned it into a falsehood told at
+# the project's front door: every phase that had a demo still works,
+# and what went missing is the thing that shows the engine off, not the
+# engine. Reworded rather than removed, because somebody arriving here
+# needs to be told which of the two is absent.
 if [[ ! -d "${DEMO_DIR}" ]]; then
     echo "No demos directory at ${DEMO_DIR}"
-    echo "Nothing has been finished yet."
+    echo "The seven paged demos were deleted; their replacements are not"
+    echo "built yet — see issue 713. Every phase that had a demo still"
+    echo "works; what is missing is the panel that shows it off."
     exit 1
 fi
 
@@ -54,7 +63,9 @@ mapfile -t DEMOS < <(find "${DEMO_DIR}" -maxdepth 1 -type f -name 'phase-*' -per
 
 if [[ ${#DEMOS[@]} -eq 0 ]]; then
     echo "No demos found in ${DEMO_DIR}"
-    echo "Nothing has been finished yet."
+    echo "The seven paged demos were deleted; their replacements are not"
+    echo "built yet — see issue 713. Every phase that had a demo still"
+    echo "works; what is missing is the panel that shows it off."
     exit 1
 fi
 

@@ -7,24 +7,51 @@ in the other direction.
 
 ## Current behavior
 
-The engine can turn text into bytes and cannot turn bytes into text.
+**Both directions exist, as runtime walks over the field tables.** The
+opening of this issue used to say the engine could not turn bytes into
+text; that stopped being true when statics moved onto their ports
+([401](completed/401-static-slots.md)), which could not be done without
+building the writer, because deleting the table deleted the original
+strings the dump had been echoing.
 
-The reader exists and is thorough: one routine walking a field table
-and a brace expression together, recursing into nested structs, taking
-every offset from the compiler through the generated `offsetof` tables
-so a padded struct reads correctly, and dying at bind time naming the
-entry and the field for every malformed shape. Nothing needs the
-opposite direction, so nothing does it.
+What stands:
 
-**Where it has been getting away with that** is that a statics entry
-keeps *both* halves: the parsed bytes, and the original string the file
-gave it. So when the dump writes a program back out, it prints the
-string it kept. It is not formatting a value; it is repeating one.
+- **The writer mirrors the reader**, walking the same field table in
+  the same order, recursing into nested structs, taking every offset
+  from the compiler. What comes out is what would go back in.
+- **It is asked for its length and then written**, rather than filling
+  a fixed buffer, because a struct constant has no useful upper bound
+  and a fixed buffer would quietly truncate exactly the values most
+  worth reading.
+- **The floating-point decision is made and its reasoning sits where it
+  lives**: seventeen significant digits for a double, nine for a float,
+  which is what round-trips each. That was step 4 of this issue.
+- **The dump calls it**, so a constant a runtime write changed dumps as
+  what it now *is*. The old table-and-number form printed what the file
+  had said, which was a hole admitted in its own comment.
 
-That stops working the moment a static's value moves onto the port that
-reads it ([401](completed/401-static-slots.md)). There is no table then, no entry,
-and no retained string — only bytes on a port and a field table
-describing their shape. The dump would have nothing to print.
+**What is left is one correctness hole and one change of technique.**
+
+**The hole: there are no escape rules, on either side.** The writer
+emits a string constant as its characters between two quotes, and the
+reader has no notion of a backslash. So a string containing a quote, a
+backslash, or a control character does not round-trip — it produces a
+map file that reads back as something else or fails to parse, and
+nothing anywhere says so. This is not a restructuring; it is a value
+the engine will silently corrupt, and it is the reason this issue
+should not be left sitting.
+
+**The technique: both directions are runtime walks**, and the plan is
+for both to be generated code per struct instead, with the escape
+rules written once in the generator and emitted into both halves so
+they cannot drift. That half of the work belongs beside
+[311b](311b-placement-instead-of-records.md), which is where field
+tables stop being searched by name and start being pointed at — the
+same change of technique arriving for the same reason. Doing it before
+that lands means writing an emitter twice.
+
+So the issue splits cleanly: **fix the escaping now, move the
+generation with the registry work.**
 
 ## Intended behavior
 
@@ -96,25 +123,43 @@ rebuild that would silently change what raw bytes meant.
 
 ## Suggested implementation steps
 
-1. Teach the generator to emit a formatter per registered struct,
+**Taken first, because it is a correctness hole rather than a change
+of technique:**
+
+1. **The escape rules, in both the writer and the reader**: quote,
+   backslash, everything below 0x20 and everything from 0x80 up.
+   Written as one pair of routines with one table between them, so the
+   two cannot disagree about what a backslash introduces. Until the
+   generator emits them (step 5) they are hand-written and shared, and
+   the comment says which of the two arrangements they are in.
+2. **A round-trip test at value scale**, which is the primary test for
+   this issue: for every kind and for the deliberately padded struct,
+   format then read then compare bytes. Include a string holding a
+   quote, a tab, and a byte above 0x7F — the three cases that fail
+   today.
+3. **A round-trip test at program scale**: a dumped program's constants
+   are accepted by the reader unchanged, and the program that comes
+   back is the program that went in.
+
+**Then, with the registry work
+([311b](311b-placement-instead-of-records.md)), because that is when
+field tables stop being walked and start being pointed at:**
+
+4. Teach the generator to emit a formatter per registered struct,
    recursing into nested types by calling the nested type's own
    emitted routine rather than by walking anything.
-2. The escape rules, written once in the generator and emitted into
-   both halves so they cannot drift: quote, backslash, everything
-   below 0x20 and everything from 0x80 up.
-3. A round-trip test as the primary one: for every kind and for the
-   deliberately padded struct, format then read then compare bytes.
-   Include a string holding a quote, a tab, and a byte above 0x7F.
-4. The floating-point decision, made explicitly and left as a comment
-   where it lives — shortest representation that reads back identical,
-   most likely.
-5. Move reading into generated code too, and retire the field-table
+5. Move the escape rules into the generator, emitted into both halves
+   from one description, so they cannot drift apart later.
+6. Move reading into generated code too, and retire the field-table
    walk in the statics reader once nothing calls it.
-6. Point the dump at the formatter, and remove the retained original
-   string from wherever it still lives once nothing reads it.
-7. A test that a dumped program's statics section is accepted by the
-   reader unchanged, which is the round trip at program scale rather
-   than value scale.
+
+**Already done, recorded so nobody does them twice:**
+
+7. ~~The floating-point decision~~ — seventeen significant digits for a
+   double, nine for a float, with the reasoning as a comment beside the
+   code that does it.
+8. ~~Point the dump at the formatter~~, and ~~remove the retained
+   original string~~ — both went with the statics table.
 
 ## Open questions
 

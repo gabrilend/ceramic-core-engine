@@ -28,7 +28,7 @@ scope shrank the most.
 | 405 — statics mutation | **reopened** | The locking survives; the ambient map pointer it needed is what forced one map per process. |
 | 406 — phase 4 demo | **needs rewriting** | Four of its five scenes demonstrate the pull path. |
 | 407 — gathering at pickup | superseded | Designed a better timing for a path that then ceased to exist. |
-| 408 — values back into text | open | The mirror of 402's reader; the dump needs it once statics leave the table. |
+| [408 — values back into text](408-values-back-into-text.md) | open, **partly landed** | The mirror of 402's reader, built with 401 because deleting the statics table deleted the strings the dump was echoing. What remains is a hole and a technique: there are no escape rules on either side, so a string constant holding a quote does not round-trip; and both directions are runtime walks that become generated code with the registry work. |
 
 ## What the phase actually established
 

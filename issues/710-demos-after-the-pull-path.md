@@ -1,5 +1,14 @@
 # 710 — The demos after the pull path
 
+> **Superseded by [713 — the demos you can steer](713-demos-you-can-steer.md).**
+> The three programs this issue repairs were deleted rather than
+> repaired, along with the other four and both presenters. Everything
+> below is kept because it is the only written account of exactly which
+> scenes depended on pulling and what each of them was for — which is
+> what somebody rebuilding those scenes as levers will need, and which
+> would otherwise survive only in git history. The scene-by-scene
+> replacement plan is what stopped applying, not the analysis.
+
 **The window this issue was written to wait for is now open.**
 [210a](completed/210a-the-pull-path-removed.md) removed the pull path,
 so the three demos that call it no longer compile — phase 4 fails on
@@ -25,7 +34,13 @@ same. Phase 7's replacement scene needs only
 
 ## Current behavior
 
-Three of the seven demos have scenes that demonstrate a capability
+**All seven demos are deleted** ([713](713-demos-you-can-steer.md)),
+so none of the three repairs below has a subject any more. The account
+that follows describes what stood in the tree until then, and is worth
+reading by whoever builds phase 4's and phase 6's replacement panels,
+because it is the record of which demonstrations were load-bearing.
+
+Three of the seven demos had scenes that demonstrate a capability
 being removed ([056](../docs/implementation-notes/056-no-pull-path.md)).
 
 **Phase 4 is worst: four of its five scenes.** Frozen versus fresh, the

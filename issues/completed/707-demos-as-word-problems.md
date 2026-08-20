@@ -1,5 +1,10 @@
 # 707 — The demos told as word problems
 
+> **The contract below was replaced, not withdrawn ([713](../713-demos-you-can-steer.md)).**
+> The scene shape it defines went with the paged demos. Its finding did not:
+> a control that does not say what it stands for teaches nothing, and the
+> panels carry that rule per lever exactly as this carried it per scene.
+
 ## Current behavior
 
 Done. All thirty-five scenes across the seven demos follow one shape:

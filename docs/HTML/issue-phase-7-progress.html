@@ -50,6 +50,7 @@
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -58,6 +59,7 @@
 <a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html" class="here">Phase 7 progress — seeing inside it</a>
+<a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
 <h2>Issues, completed</h2>
 <a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
 <a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
@@ -147,13 +149,27 @@ confidence.</p>
 <tr><td>703 — map dump</td><td><strong>extended</strong></td><td>The live table as a map file; needs a bytes-to-text formatter once statics leave the table.</td></tr>
 <tr><td>704 — runtime rewiring</td><td><strong>extended</strong></td><td>Check and change under one lock; the snapshot it added is replaced, and adding a station stops being out of scope.</td></tr>
 <tr><td>705 — HTML documentation</td><td>in progress</td><td>Generator and 78-page site stand; two widgets and deep links remain.</td></tr>
-<tr><td>706 — phase 7 demo</td><td>complete</td><td>Live view, bottleneck relieved mid-run, dump truth, measured measurement.</td></tr>
-<tr><td>707 — demos as word problems</td><td>complete</td><td>All 35 scenes open with a story and report in its units; two presenters own the layout.</td></tr>
+<tr><td>706 — phase 7 demo</td><td>complete, <strong>artifact deleted</strong></td><td>Live view, bottleneck relieved mid-run, dump truth, measured measurement. The program it built is gone; the account of what it proved stands.</td></tr>
+<tr><td>707 — demos as word problems</td><td>complete, <strong>contract replaced</strong></td><td>All 35 scenes open with a story and report in its units; two presenters own the layout. The justification rule survives into the panels; the scene shape does not.</td></tr>
 <tr><td>709 — slideshow and transcripts</td><td>open</td><td>An introduction, and the conversation logs as a book.</td></tr>
-<tr><td><a href="issue-710-demos-after-the-pull-path.html">710 — demos after the pull path</a></td><td>open</td><td>Every scene that showed pulling is rewritten; the launcher reads a list instead of globbing, so run order and reading order stop sharing a channel.</td></tr>
+<tr><td><a href="issue-710-demos-after-the-pull-path.html">710 — demos after the pull path</a></td><td><strong>superseded</strong></td><td>Every scene that showed pulling is rewritten; the launcher reads a list instead of globbing. The three programs it repairs no longer exist — see 713.</td></tr>
 <tr><td><a href="issue-711-the-index-means-reading-order.html">711 — an index means reading order</a></td><td>open, <strong>very low priority</strong></td><td>One meaning per number: where a file sits in the order somebody reads the project, never that two files are about the same thing. Renumbering where the practice drifted, done by a tool that rewrites every reference.</td></tr>
 <tr><td><a href="issue-712-capturing-a-running-program.html">712 — capturing a running program</a></td><td>open</td><td>Not the schematic but the whole thing: drain the pool, write out every value still sitting in a port, and revive it exactly there. Feasible only because a box may not remember anything between calls, so there is no hidden state to miss.</td></tr>
+<tr><td><a href="issue-713-demos-you-can-steer.html">713 — the demos you can steer</a></td><td>open, <strong>in progress</strong></td><td>The paged demos are deleted and replaced by one live control panel per phase: three regions, levers the reader moves, and a log of what the engine did about it.</td></tr>
 </table>
+<p>**The demos were deleted, and the reason is a disagreement about
+shape.** Seven paged demos ran, measured, and ended, and a reader
+advanced through a transcript of decisions somebody else had made.
+This engine's three most unusual capabilities — a write being an
+event, a shape that can be edited while it runs, and code arriving
+after the program started — have no subject until somebody outside the
+program acts. A demo that supplies its own acts demonstrates each of
+them with the interesting half removed. What replaces them stays up
+until the reader quits and hands them the dial.</p>
+<p>Every phase's demo issue therefore now describes an artifact that
+lived and was replaced rather than one sitting in the tree. They are
+left exactly as written: they are the record of the first generation,
+and 713 is where the second is described.</p>
 <p><strong>Growing the station table left this phase.</strong> It was written here as a
 late convenience for a running program; under one construction surface
 it is the mechanism underneath every program's <em>first</em> moment, so it

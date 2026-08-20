@@ -1,5 +1,10 @@
 # 706 — Phase 7 demo: watching it think
 
+> **The program this built was deleted ([713](../713-demos-you-can-steer.md)).**
+> Every word below stands as the record of what the first generation of
+> demos was and what it proved; what replaced it is a live control panel
+> per phase rather than a paged transcript. Nothing here needs rebuilding.
+
 ## Current behavior
 
 **Built, with one scene to replace.**
