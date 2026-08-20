@@ -1,6 +1,6 @@
 # Conversation Summary: 3ccc0eb0-a576-4361-85ec-79ae4bb357a4
 
-Generated on: 2026-08-20 11:41:42
+Generated on: 2026-08-20 11:57:00
 
 --------------------------------------------------------------------------------
 
@@ -6682,6 +6682,147 @@ the issue.
 mechanism and is no longer blocked. **216's station removal** likewise. Both
 were waiting on exactly this, which is why it was worth doing ahead of the
 roadmap's order.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 39
+
+okay let's do 310 step 8 and 216's station removal
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 39
+
+Both need the same quiescence machinery, so let me generalize the scrapyard
+first — it should hold anything, not just destination sets.
+
+
+Generalized and still green. Now station removal.
+
+
+Let me clean up a drafting artifact in there.
+
+
+Now `registry_unload_box`, which the test calls for.
+
+
+An in-flight delivery lands on the removed station. Let me see how delivery
+handles a target with nowhere to go.
+
+
+`t->call` was null — a task built from a station that was removed between the
+readiness check and the build. Let me look at that path.
+
+
+The whole build races removal, not just the call pointer. The station's fields
+must stay readable until the scrapyard says nobody is looking.
+
+
+Correct behaviour — the place isn't free until the sweep runs. Placement must
+refuse it until then, and the test must sweep.
+
+
+The place isn't reclaimed while the pool is busy, so the second removal
+correctly refuses. Let me fix the test's loop.
+
+
+One real bug: items retired **before** the pool existed get a null snapshot and
+are never freed. But nobody can hold those — there were no workers.
+
+
+All green, and clean under valgrind including the `dlopen`/`dlclose`. Now the
+paperwork.
+
+
+Both done and filed. `2b0a32d`.
+
+
+## 216 — removing a station
+
+
+A station comes out of a running program and its place is reused, with **no
+version tag on any wire** and no cost anywhere on the delivery path. Your
+reasoning held exactly: cutting the wires that name it *first* is what makes a
+generation counter unnecessary — a wire lives only as a destination record on
+some station's output port, so one walk finds all of them, and with none left
+there's nothing stale to catch.
+
+
+**Two things came out of building it that the blueprint hadn't seen.**
+
+
+**A removed place is not immediately a free place.** A task is built from a
+station's slot count, return size, and shim *after* the readiness check released
+the mutex — so clearing those at the moment of removal leaves a worker
+assembling a task out of a station emptied underneath it. It surfaced as a jump
+to address zero: a null shim, called. So the record stays whole and a flag says
+"start nothing new here"; the fields go when the sweep says nobody can need
+them, and clearing the shim is what finally frees the place. Placing into an
+unreclaimed place is refused loudly. That's correct rather than awkward — you
+can't reuse something while somebody might still be using it.
+
+
+**A value already in flight toward a removed station is discarded** — the same
+thing this engine already does with a value that has nowhere to go. The
+alternative would make every removal a race against whatever was already moving.
+
+
+## 310 step 8 — unloading
+
+
+A late box can be unloaded, closing its library. Refused while any station in
+the given map places it; the harder half — a worker may be *inside* that code
+right now — goes to the scrapyard on the same counter. **It checks the map you
+hand it**: a process running several maps could have another placing that box,
+and nothing can see that because nothing here is process-wide. Stated rather
+than defended.
+
+
+That capability looked marginal when it was written down — it could only serve
+a box compiled and never placed. Stations being removable is what makes it real.
+
+
+## Verification
+
+
+```
+
+== 077-test-removal
+
+  three wires named a station; removing it cut all three
+
+  a freed place was reused and received only its own wires
+
+  87 removals and 84 placements under load, scrapyard drained
+
+  an unplaced box unloaded while the pool was busy
+
+```
+
+
+Valgrind: **2,736 allocations, 2,736 frees, no leaks, no errors** — including
+a shared library opened and closed.
+
+
+## One correctness fix along the way
+
+
+Items retired *before* the pool existed got a null epoch snapshot and were never
+freeable except at teardown. But nobody can hold those — there were no
+workers, and the item was already replaced before anyone could reach it. They're
+now freed on the first sweep, which also made construction-time wiring stop
+accumulating.
+
+
+## Roadmap
+
+
+Front A now needs **211** (growing the station table) then **212** (the
+construction capstone). Front B's registry family — **311a** onward — is
+clear, since 308, 309 and 310 are all done. Six issues closed this session, plus
+401 and 210b filed.
 
 
 --------------------------------------------------------------------------------
