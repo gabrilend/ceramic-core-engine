@@ -235,7 +235,7 @@ statics
 
 **The table carries no types.** A slot that references an entry knows
 what type it is, because the box function's parameter at that position
-says so, and the box table knows what that is. The text is read into
+says so, and the generator knows what that is. The text is read into
 bytes at the moment a slot claims it, walking the field table the
 generator emitted for that struct.
 
@@ -270,30 +270,39 @@ A dump therefore has no `statics` section. Every constant is written
 out beside the port that holds it, from its bytes — including anything
 a runtime write changed, which the old form could not say.
 
-## What the loader checks
+## What reading a map checks
 
-Load-time failures, all of them fatal and all naming the offending
-station:
+**Reading a map happens in the generator, not in a running program.**
+A map is a blueprint for the compilation: the generator turns it into
+the construction calls it describes, so every failure below stops a
+build while somebody is still looking at the file, rather than stopping
+a program on a stranger's machine. Issue 311d.
 
-- A box function this binary does not carry, named with the file it
-  was expected in and the two ways forward: rebuild, or hand the source
-  to the running program.
+All of these are fatal and all name the offending station:
+
+- A box function no source provides, named with the file it was
+  expected in.
 - A bare file name matching more than one box source, with both paths
   named and the instruction to write one out in full.
 - An arrow to a station or slot that does not exist.
-- A wire whose source return type and destination parameter type
-  differ.
 - More input lines than the box has parameters, or a slot index out of
   range.
 - A comparator whose box returns a type with no compare function.
+
+**A wire whose two ends disagree about width** is the one that cannot
+be settled by reading alone, because the generator knows type *names*
+and only the compiler knows sizes. It is checked when the wire is
+drawn — which for a wire written in a file is during construction, and
+for a wire drawn while the program runs is at that moment. Whether the
+generator should additionally emit a compile-time assertion for the
+wires it can see is an open question in 311d.
 
 Two rules used to sit here and no longer can be stated: a box fanning
 out to both a gatherer and a ring buffer, and a cycle among gather
 wires. With nothing pulled, neither situation is describable. A cycle
 in the push direction stays perfectly legal — it is how anything
 repeats — and needs a finite companion input to ever stop.
-
 ## Related
 
-- [007 — The build path](007-datapath-build.md), which produces the box table this file is read against
+- [007 — The build path](007-datapath-build.md), which is where this file is read and turned into code
 - [009 — Loading](009-datapath-load.md), what happens to this file at startup

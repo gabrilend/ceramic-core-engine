@@ -1,11 +1,14 @@
 # 311 — The registry dissolved
 
-**This is a parent issue.** The registry stops being one global table
-of records compiled in at build time and becomes almost nothing: a
-name and a function pointer per box, with everything else folded into
-generated code where it is used. The change reaches the map file
-format, the generator, the build, and the runtime-compilation path, so
-it divides into children rather than being one ticket.
+**This is a parent issue.** The table that told the engine about every
+box goes away entirely. Not shrinks — goes. A running program holds no
+name, no lookup, and no record of what a box is; it holds stations with
+function pointers in them, and the text that used to be resolved at run
+time is resolved by the generator instead.
+
+The change reaches the map file format, the generator, the build, and
+the runtime-compilation path, so it divides into children rather than
+being one ticket.
 
 ## Current behavior
 
@@ -43,92 +46,89 @@ Those field tables are what let a map file write `in 2 = { 1.5, 2.5,
 3.5 }` into a struct port without a hand-written parser per type, and
 what let the dump turn those bytes back into text.
 
-## The two things that cannot change, and why
+## The one thing that cannot change
 
 **A size cannot be computed at runtime.** `sizeof` is a compile-time
 operator: the compiler evaluates it and burns a literal into the
 machine code. A running program has no types at all — C erases every
 bit of type information during compilation — so there is nothing left
-at runtime for `sizeof` to be applied to. You cannot hand a running
-program the text `vec3` and get 12 back.
+for `sizeof` to be applied to. You cannot hand a running program the
+text `vec3` and get 12 back.
 
 The trick is visible in the generated file's first real line: it
 `#include`s the box source **whole**, so the types become visible to
 the compiler, and only then writes `sizeof a0`. That is why the numbers
 are right, and it happens at build time.
 
-So every size comes from one of exactly two places: a `sizeof`
-expression compiled into the binary, or a compiler invoked at runtime.
-There is no third door, and
-[310](310-boxes-compiled-at-runtime.md) already says so.
+So every size comes from exactly one of two places: a `sizeof`
+expression compiled in, or a compiler invoked at runtime. There is no
+third door.
 
-**A name read from text at runtime needs a lookup.** A map file arrives
-at a binary that has never seen it, carrying text. Turning
-`math.c:add` into a call requires resolving a name at runtime, and
-resolving a name *is* a table — calling it something else does not
-remove it. The only escape would be compiling the map into C so no name
-survives, and maps being data rather than build inputs is what the
-whole project rests on.
+**Everything else in the record was avoidable**, and the rest of this
+family is the avoiding.
 
-**Both of those are load-bearing, and the design below keeps them.**
-What it removes is everything else.
+## The thing that turned out not to be irreducible
 
-## What the registry becomes
+An earlier draft of this issue said a name has to be resolved at run
+time, because a map arrives as text and text has to become a pointer.
+That is only true **if a binary must interpret a map it was not built
+for**, and it does not have to, because a map is not interpreted at
+all.
 
-**One table, two columns.**
+**A map is a blueprint for the compilation.** The generator reads it
+and emits the construction calls directly:
 
 ```c
-static const struct { const char *name; void (*place)(station_t *); }
-boxes[] = {
-    { "math.c:add",      place__math_c__add },
-    { "math.c:multiply", place__math_c__multiply },
-};
-```
-
-Every number moves into the placement function as a compile-time
-constant the compiler folds:
-
-```c
-static void place__math_c__add(station_t *s) {
-    s->call = add__call;
-    s->slots[0].elem_size = sizeof(int);
-    s->slots[1].elem_size = sizeof(int);
-    s->out_size = sizeof(int);
-    s->compare  = int__compare_g;
-    s->slots[0].fields = NULL;          /* a struct port would name one */
+void build_program(map_t *m) {
+    map_place(m, 0, place__math_dot_c__add,   PLAIN);
+    map_place(m, 1, place__io_dot_c__print,   PLAIN);
+    map_wire (m, 0, /*out*/0, /*to*/1, /*port*/0);
+    map_set_static(m, 0, /*port*/1, 5);
 }
 ```
 
-**This is the whole trick and it is worth saying why it works.** The
-registry was never part of the running engine — a station copies what
-it needs at placement and never consults it again; the station header
-is deliberately registry-free and resolves its comparison function
-*at placement*. So the record existed only to be read once, at the one
-moment generated code could just as well do the writing.
+**No name survives into the running program.** The text
+`math.c:add` was consumed by the generator and became a pointer. The
+loader stops being a parser and becomes generated code, which does not
+weaken *one way to build a program* — it calls the same construction
+surface a person would.
 
-**Nothing else needs a name lookup, which is what makes one table
-enough.** A comparison function is written in at placement. A struct's
-field table is reached through the port that was placed, not searched
-for by type name. So exactly one name resolution survives in the whole
-engine, and it has two columns.
+**And editing a running program never needed names either.** Adding a
+station means handing over a placement function; wiring means station
+indices; writing a constant means bytes. The thing you edit while a
+program runs is the in-RAM structure, not the file.
 
-That is small enough that *registry* is the wrong word for it, and the
-word should be retired along with the record. It is a **box table**.
+## Where the compiling happens, which is the only thing that varies
 
-## The four changes
+| case | when the map is compiled | toolchain at run time? |
+|---|---|---|
+| a shipped program | at build time | **no** — it ships as one file |
+| the general runner | when you hand it a map | yes; that is what the tool is |
+| the workbench | it emits a map, the runner compiles it | yes, on the runner's side |
+| a box arriving mid-run | when the source arrives | yes |
+| a capture, re-run | when the artifact is compiled | yes |
+
+**One mechanism — generator, compiler, load — in every row.** No
+configuration, no declaration that switches behaviour, no second code
+path in the engine, and no table anywhere. That rigidity is the point:
+this is the minimal implementation, and a thing that behaves one way is
+worth more than a thing that behaves two ways well.
+
+## The five changes
 
 | issue | what it does |
 |---|---|
-| [311a — Boxes addressed by file](311a-boxes-addressed-by-file.md) | a map names `file:function`; bare basenames resolve, paths settle ties, collisions are fatal |
-| [311b — Placement instead of records](311b-placement-instead-of-records.md) | the generator emits a placement function per box; the table shrinks to two columns |
+| [311a — Boxes addressed by file](311a-boxes-addressed-by-file.md) | a map names `file:function`; basenames resolve, paths settle ties, and generated symbols escape punctuation so no two files collide |
+| [311b — Placement instead of records](311b-placement-instead-of-records.md) | the generator emits a placement function per box; the record and every name the engine carried are deleted |
 | [311c — Source rides in the binary](311c-source-rides-in-the-binary.md) | each box source emitted as a C array, so the binary carries its own text |
-| [311d — The map as a manifest](311d-the-map-as-manifest.md) | the build reads the maps to know what to include; the linker decides what ships |
+| [311d — The map becomes code](311d-the-map-becomes-code.md) | the generator turns a map into construction calls; the build includes only what is named; the linker discards the rest |
+| [311e — Running a map you were not built for](311e-running-an-arbitrary-map.md) | the general runner, which compiles a map rather than interpreting one |
 
-**311a comes first** because the addressing decides what the table's
-key is, and everything else is written against that key. 311b and 311c
-are independent of each other. **311d comes last**, because it is the
-only one that changes what the build does rather than what the
-generator emits.
+**311a comes first** because the addressing decides how a box is named
+and how its symbol is spelled, and everything else is written against
+that. 311b and 311c are independent of each other. **311d needs both**,
+since it emits calls to placement functions that 311b defines. **311e
+is last** and is a program rather than an engine change.
 
 ## What this does not give up
 
@@ -142,27 +142,34 @@ function is provenance, not a type declaration, so the rule that a map
 never carries a type — and therefore can never be the wrong one of two
 disagreeing sources of truth — is intact.
 
-**Argument names are not needed and are not kept.** The engine never
-uses a parameter name, and under
+**Names survive where a person reads them, and nowhere else.** A
+station keeps a pointer to a string literal saying what it was placed
+as, written by its own placement function, so the dump can name it.
+That is not a lookup: nothing searches it, and there is no table it
+points into.
+
+**Argument and type names are not carried at all.** The engine never
+used a parameter name, and under
 [309](309-types-by-width.md) it does not use type names either, only
-widths. Names survive for error messages and the dump, and those can
-re-read them from the source the binary now carries.
+widths. Error messages and the dump read them from the source the
+binary now carries.
 
 ## Related
 
-- [308 — The generator, in C](308-generator-in-c.md), which is what
-  emits all of this and gains the placement functions
+- [308 — The generator, in C](308-generator-in-c.md), which emits all
+  of this and gains both the placement functions and the map compiler
 - [309 — Types compared by width](309-types-by-width.md), which is why
   type names can be dropped from what the engine carries
 - [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
-  whose growable table this shrinks, and which is the path a box takes
-  when a map names one the binary does not carry
+  the same generator-compiler-load path at the scale of one function
 - [303 — Registry emission](completed/303-registry-emission.md), the
-  table this dissolves
+  table this deletes
 - [304 — Struct field tables](completed/304-struct-field-tables.md),
   which stop being searched by name and start being pointed at
 - [212 — One way to build a program](212-one-way-to-build-a-program.md),
-  which made the frozen registry a visible limit
+  whose construction surface the generated code calls
 - [007 — The build path](../docs/007-datapath-build.md) and
   [008 — Map file format](../docs/008-map-file-format.md), both of
   which this rewrites
+- [009 — Loading](../docs/009-datapath-load.md), which describes a
+  runtime parser that stops existing

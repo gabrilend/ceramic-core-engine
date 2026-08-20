@@ -47,13 +47,16 @@
 <a href="issue-311a-boxes-addressed-by-file.html" class="here">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
-<a href="issue-311d-the-map-as-manifest.html">311d — The map as a manifest</a>
+<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
+<a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
+<a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -127,17 +130,17 @@
 <main>
 <h1>311a — Boxes addressed by file</h1>
 <p>First child of <a href="issue-311-the-registry-dissolved.html">311</a>, and first because
-it decides what the box table's key is. Everything else in the family
-is written against that key.</p>
+it decides how a box is named and how its generated symbol is spelled.
+Everything else in the family is written against both.</p>
 <h2>Current behavior</h2>
 <p>A map's station line names a box by a <strong>bare function name</strong>:</p>
 <pre class="code">
 adder add p
 </pre>
-<p><code>add</code> is looked up in the registry, which is one global table holding
-every function the generator found anywhere under the box source
-directory. Two files each defining a function called <code>read</code> are a
-collision nobody declared and nothing detects — the second one to be
+<p><code>add</code> is looked up in the registry at load time, in one global table
+holding every function the generator found anywhere under the box
+source directory. Two files each defining a function called <code>read</code> are
+a collision nobody declared and nothing detects — the second one
 emitted simply wins, or the build breaks with a duplicate-symbol error
 that names a symbol rather than a design mistake.</p>
 <p>Nothing in a map says where a function lives, so nothing in a map tells
@@ -149,11 +152,11 @@ adder math.c:add p
 </pre>
 <p><strong>Provenance belongs in the file a person reads.</strong> A bare name is not
 an address; it is a name in a namespace nobody wrote down. Naming the
-file makes it an address, and it is the same information a reader of
-the map wants anyway when they go looking for what <code>add</code> actually does.</p>
+file makes it an address, and it is the same information a reader wants
+anyway when they go looking for what <code>add</code> actually does.</p>
 <p><strong>A bare file name is tried first; a path settles ties.</strong> <code>math.c</code>
 resolves when exactly one box source anywhere in the tree is called
-that. If two are, the reader refuses and names <strong>both paths</strong>, and the
+that. If two are, resolution refuses and names <strong>both paths</strong>, and the
 author writes one out in full:</p>
 <pre class="code">
 adder src/boxes/math.c:add p
@@ -162,46 +165,74 @@ adder src/boxes/math.c:add p
 a more specific way of saying the same thing, so nobody has to guess
 which form is "the real one" — and an author who prefers paths
 everywhere is not fighting the format.</p>
-<p>The basename-first rule is the one that carries the cost of being
-convenient, and it is worth naming: it means box source basenames are a
-<strong>flat global namespace</strong>, and two files called <code>math.c</code> in different
-directories cannot both be addressed briefly. That matches what the
-project already does — the file index counter runs across the whole
-tree rather than per directory, so a single global ordering of
-filenames is already the model here.</p>
-<p><strong>A collision is fatal at build time</strong>, naming both paths and saying
-which map line asked. It is not a warning and it does not pick one.</p>
+<p>The basename-first rule carries the cost of being convenient, and it is
+worth naming: box source basenames are a <strong>flat global namespace</strong>, and
+two files called <code>math.c</code> in different directories cannot both be
+addressed briefly. That matches what the project already does — the
+file index counter runs across the whole tree rather than per
+directory, so a single global ordering of filenames is already the
+model here.</p>
+<p><strong>A collision is fatal</strong>, naming both paths and saying which map line
+asked. It is not a warning and it does not pick one.</p>
+<p>**Resolution happens when the generator reads the map, not when a
+program runs.** <a href="issue-311d-the-map-becomes-code.html">311d</a> turns a map into
+construction calls, so a name becomes a pointer at generation time and
+no name survives into the running program. Everything in this issue is
+therefore a <em>generation-time</em> rule, and every refusal it describes
+happens while somebody is still looking at the map.</p>
 <p><strong>The dump writes whichever form is unambiguous</strong> — the bare name when
-it resolves uniquely, the full path when it does not. So a dumped map
-always reloads into the program it came from, while staying as readable
-as it can be.</p>
-<h3>A collision that appears while the program runs</h3>
-<p>A box source arriving through
-<a href="issue-310-boxes-compiled-at-runtime.html">310</a> may share a basename with one
-already loaded. That is <strong>allowed</strong>, because refusing it would mean a
-legitimate second <code>math.c</code> could never be brought in.</p>
-<p><strong>Stations already placed are unaffected.</strong> They resolved their names
-when they were placed; a name is resolved once and the result is a
-pointer, not a string consulted again later.</p>
-<p><strong>Bare references to that basename become ambiguous from then on</strong>, and
-the next one refuses with both paths named. So a map that loaded
-yesterday can refuse today — which is a real cost, stated here so it is
-not a surprise, and the fix is one word in the map.</p>
+it resolves uniquely, the full path when it does not — reading the
+string literal each station carries.</p>
+<h2>Escaping, so two files cannot generate one symbol</h2>
+<p>A generated symbol has to be a C identifier, and <code>math.c:add</code> is not
+one. Mangling it naively to <code>math_c__add</code> reintroduces exactly the
+collision this issue exists to remove: **<code>math.c</code> and <code>math_c</code> both
+become <code>math_c</code>**, the linker sees two definitions of one function, and
+the build fails with a message about a symbol rather than about two
+files that should have been named differently.</p>
+<p>**So punctuation is transcribed into words, and the escape character
+escapes itself:**</p>
+<table>
+<tr><td>in a name</td><td>in a symbol</td></tr>
+<tr><td><code>.</code></td><td><code>_dot_</code></td></tr>
+<tr><td><code>_</code></td><td><code>_und_</code></td></tr>
+<tr><td><code>:</code></td><td><code>__</code> (the separator between file and function)</td></tr>
+</table>
+<table>
+<tr><td>file</td><td>symbol prefix</td></tr>
+<tr><td><code>math.c</code></td><td><code>math_dot_c</code></td></tr>
+<tr><td><code>math_c</code></td><td><code>math_und_c</code></td></tr>
+<tr><td><code>math_dot_c</code></td><td><code>math_und_dot_und_c</code></td></tr>
+<tr><td><code>math.dot.c</code></td><td><code>math_dot_dot_dot_c</code></td></tr>
+</table>
+<p><strong>Escaping the escape is what makes it reversible</strong>, and it is the same
+reason percent-encoding has to write <code>%</code> as <code>%25</code>. Without the <code>_und_</code>
+rule the scheme would merely move the collision rather than remove it.
+That last row looks alarming and decodes cleanly, scanning left to
+right: <code>math</code> + <code>_dot_</code> + <code>dot</code> + <code>_dot_</code> + <code>c</code>.</p>
+<p><strong>The scheme's job is uniqueness, not recovery.</strong> Nothing decodes a
+symbol back into a name at runtime — a name a person reads comes from
+the string literal a placement function writes onto its station
+(<a href="issue-311b-placement-instead-of-records.html">311b</a>), because these are
+static functions whose symbol names may not survive a stripped binary
+at all. Two mechanisms, two jobs, neither doing the other's badly.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The reader parses <code>file:function</code> on a station line, and refuses a
-   bare function name with a message saying what to write instead —
-   because the old form loading into <em>something</em> would be worse than it
-   refusing.
-2. Resolution: exact path match first if the name contains a separator,
+<p>1. The map parser — in the generator, which is now its only home —
+   accepts <code>file:function</code> on a station line, and refuses a bare
+   function name with a message saying what to write instead. The old
+   form loading into <em>something</em> would be worse than it refusing.
+2. Resolution: exact path match when the name contains a separator,
    otherwise basename search across the known box sources. One match
    resolves; several refuse and name every candidate.
-3. The build-time collision check, run over the whole box source tree
-   rather than only over what a map mentions, so two <code>math.c</code> files are
-   caught whether or not anyone has referenced them yet.
-4. The same check at runtime when a box source arrives late, marking
-   the basename ambiguous rather than refusing the source.
-5. The dump chooses bare-or-path by asking whether the bare form
-   resolves uniquely right now.
+3. The escaping, as its own small pair of functions with a test that
+   round-trips a list of awkward names — including <code>math.c</code>, <code>math_c</code>,
+   <code>math_dot_c</code>, and a name containing both characters — because a bug
+   here surfaces as a duplicate-symbol error hundreds of lines away.
+4. The collision check run over the whole box source tree rather than
+   only over what a map mentions, so two <code>math.c</code> files are caught
+   whether or not anyone has referenced them yet.
+5. The dump reads each station's name literal and chooses bare-or-path
+   by asking whether the bare form resolves uniquely.
 6. A test that a map naming an ambiguous basename refuses and names
    both paths; and a round-trip test on a program containing two boxes
    whose files share a basename, proving the dump wrote paths where it
@@ -212,10 +243,12 @@ not a surprise, and the fix is one word in the map.</p>
 <ul>
 <li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
 <p>  parent</p>
+<li><a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>,</li>
+<p>  which writes the name literal the dump reads</p>
+<li><a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>, which is</li>
+<p>  where resolution actually happens</p>
 <li><a href="doc-008-map-file-format.html">008 — Map file format</a>, which gains</li>
 <p>  the new station line and the resolution rule</p>
-<li><a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>,</li>
-<p>  where a late-arriving source can create an ambiguity</p>
 <li><a href="done-703-map-dump.html">703 — The map dump</a>, which has to choose</li>
 <p>  a form</p>
 <li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, whose</li>

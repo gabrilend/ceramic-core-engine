@@ -14,6 +14,9 @@ confidence.
 | 706 — phase 7 demo | complete | Live view, bottleneck relieved mid-run, dump truth, measured measurement. |
 | 707 — demos as word problems | complete | All 35 scenes open with a story and report in its units; two presenters own the layout. |
 | 709 — slideshow and transcripts | open | An introduction, and the conversation logs as a book. |
+| [710 — demos after the pull path](710-demos-after-the-pull-path.md) | open | Every scene that showed pulling is rewritten; the launcher reads a list instead of globbing, so run order and reading order stop sharing a channel. |
+| [711 — an index means reading order](711-the-index-means-reading-order.md) | open, **very low priority** | One meaning per number: where a file sits in the order somebody reads the project, never that two files are about the same thing. Renumbering where the practice drifted, done by a tool that rewrites every reference. |
+| [712 — capturing a running program](712-capturing-a-running-program.md) | open | Not the schematic but the whole thing: drain the pool, write out every value still sitting in a port, and revive it exactly there. Feasible only because a box may not remember anything between calls, so there is no hidden state to miss. |
 
 **Growing the station table left this phase.** It was written here as a
 late convenience for a running program; under one construction surface

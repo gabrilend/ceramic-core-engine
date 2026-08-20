@@ -47,13 +47,16 @@
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
-<a href="issue-311d-the-map-as-manifest.html">311d — The map as a manifest</a>
+<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
+<a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html" class="here">710 — The demos after the pull path</a>
+<a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
+<a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -291,20 +294,16 @@ reader care is evidence about the mechanic, not about the story.</p>
   that the alternative — seven fresh numbers at the end of the
   counter — puts phase 1's runner after phase 7's engine work, which
   is the one thing an index is supposed to prevent.</p>
-<p><strong>Open:</strong></p>
+<p><strong>Moved elsewhere:</strong></p>
 <ul>
-<li><strong>The index convention does not visibly do what it is for.</strong> The</li>
-<p>  numbers are supposed to encode a reading order for the whole
-  project, and nothing in the project makes that apparent — a reader
-  meeting <code>033-statics.c</code> beside <code>034-gather.c</code> has no way to learn
-  that the numbers mean "read these in this order" rather than
-  "these were created in this order" or "these are related." The
-  convention is followed carefully and communicates nothing to anyone
-  who was not told about it. Whether the fix is a document that states
-  the rule, a generated reading index that lists every file in order
-  with a line about each, or something the docs site renders, is
-  undecided. Raised while numbering the runners, and larger than they
-  are.</p>
+<li><em>The index convention does not visibly do what it is for.</em> **Split</li>
+<p>  off into <a href="issue-711-the-index-means-reading-order.html">711</a>, which owns it
+  now.<strong> The rule is settled — </strong>an index means where a file sits in
+  the reading order and nothing else**, never that two files are
+  related to each other — and what remains is renumbering wherever the
+  practice drifted from that, plus deciding how the convention gets
+  explained to somebody who was never told. Both are marked very low
+  priority there: nothing is broken and nothing waits on it.</p>
 </ul>
 <h2>Related</h2>
 <ul>

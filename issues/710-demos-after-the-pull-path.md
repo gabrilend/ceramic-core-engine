@@ -188,20 +188,16 @@ reader care is evidence about the mechanic, not about the story.
   counter — puts phase 1's runner after phase 7's engine work, which
   is the one thing an index is supposed to prevent.
 
-**Open:**
+**Moved elsewhere:**
 
-- **The index convention does not visibly do what it is for.** The
-  numbers are supposed to encode a reading order for the whole
-  project, and nothing in the project makes that apparent — a reader
-  meeting `033-statics.c` beside `034-gather.c` has no way to learn
-  that the numbers mean "read these in this order" rather than
-  "these were created in this order" or "these are related." The
-  convention is followed carefully and communicates nothing to anyone
-  who was not told about it. Whether the fix is a document that states
-  the rule, a generated reading index that lists every file in order
-  with a line about each, or something the docs site renders, is
-  undecided. Raised while numbering the runners, and larger than they
-  are.
+- *The index convention does not visibly do what it is for.* **Split
+  off into [711](711-the-index-means-reading-order.md), which owns it
+  now.** The rule is settled — **an index means where a file sits in
+  the reading order and nothing else**, never that two files are
+  related to each other — and what remains is renumbering wherever the
+  practice drifted from that, plus deciding how the convention gets
+  explained to somebody who was never told. Both are marked very low
+  priority there: nothing is broken and nothing waits on it.
 
 ## Related
 

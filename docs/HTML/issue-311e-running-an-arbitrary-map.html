@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>406 — Phase 4 demo: values that are current, not merely correct</title>
+<title>311e — Running a map you were not built for</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -48,7 +48,7 @@
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
+<a href="issue-311e-running-an-arbitrary-map.html" class="here">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -91,7 +91,7 @@
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
-<a href="done-406-phase-4-demo.html" class="here">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
 <a href="done-502-comparator.html">502 — The comparator</a>
@@ -128,99 +128,112 @@
 <a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
 </nav>
 <main>
-<h1>406 — Phase 4 demo: values that are current, not merely correct</h1>
+<h1>311e — Running a map you were not built for</h1>
+<p>Fifth child of <a href="issue-311-the-registry-dissolved.html">311</a>, and a program
+rather than an engine change. A tool that takes any map file and runs
+it — by <strong>compiling</strong> it, never by interpreting it.</p>
+<p>This is what makes the rest of the family survivable. Deleting the
+runtime name table would otherwise cost the ability to open a map you
+did not build, and this is where that ability comes back without a
+table, a parser, or a switch anywhere in the engine.</p>
 <h2>Current behavior</h2>
-<p>**Built, and needing rewriting — four of its five scenes demonstrate a
-capability that is being removed.**</p>
-<p>Frozen versus fresh, the gather tax, the chain three deep, and the
-refused cycle are all about the pull path, which is gone
-(<a href="impl-056-no-pull-path.html">056</a>). The knob
-turned mid-run survives, and it survives as the <em>most</em> interesting
-scene rather than the least, because writing a static is no longer only
-configuration — it runs the readiness check on the station holding it,
-which is what starts a program and what makes a chain of statics
-recalculate.</p>
-<p><strong>What the phase needs to demonstrate instead</strong> is that: a value
-written into a static port propagating down a chain, computed once and
-read by every consumer, with the recalculation visible. And its honest
-counterpart — the same program before and after, showing that a value
-is now as fresh as the last write rather than as fresh as the moment it
-is used, which is the thing given up.</p>
-<p>**One finding here outlives its scene and should be kept in whatever
-replaces it.** The gather tax measurement was wrong the first time, and
-the reason was instructive: gathering happened at task assembly, so
-seeded values paid on the seeding thread, and the timing wrapped only
-the running and measured nothing. *Where a cost lands is not where you
-expect to find it* is a lesson about measuring, not about gathering,
-and it cost a real mistake to learn.</p>
-<p>The remainder describes it as built.</p>
-<p>Built and discoverable from the root launcher. The file read both
-ways sits first: the frozen side keeps reporting 111 after the file
-turns to 999 mid-run while the gathered side follows — the whole
-reason the pull path exists, shown by contrast. The gather tax is
-measured honestly (a static second input against a deliberately
-expensive gathered one, roughly sixty times the per-task cost), with
-a subtlety the measuring itself surfaced: gathering happens at task
-assembly, so seeded values pay on the seeding thread — the first
-timing wrapped only the running and measured nothing. The chain
-scene shows depth three recorded at wiring and the walk's per-task
-cost. The refusal scene captures the engine's cycle message verbatim
-and then, in a second child, the alternative fate: killed by signal
-eleven saying nothing at all. The knob scene bends the output stream
-from 1000 to 5000 at the moment of a mid-run write. Mirrored to the
-shared-memory tier.</p>
-<p>Each scene opens with a story and reports in that story's units beside
-the engine's own, under the standard issue 707 sets: a printed
-timetable beside a departures board, a rate card beside a telephone to
-head office, a question passed along a line of people whose length is
-drawn on a chart, two dictionaries that define each other, and a dial
-on the wall of a working factory. Values are drawn per run from a
-printed seed, except in the byte-comparison scene, where the mechanic
-depends on the exact pair and the demo says so.</p>
+<p>There is no such tool, and there did not need to be: every binary
+carries a registry and a map parser, so any program can load any map
+naming boxes it happens to contain. That capability is being removed by
+<a href="issue-311d-the-map-becomes-code.html">311d</a>, which is what creates the need
+for this.</p>
 <h2>Intended behavior</h2>
-<p>A demo about the direction of flow. It should make one distinction
-obvious: **a pushed value was true once; a gathered value is true
-now.**</p>
-<p><strong>What it should show, in order of how convincing it is:</strong></p>
-<p><strong>The same file read both ways, side by side.</strong> Two identical
-sub-graphs, one fed by a pushed read at startup, one by a gatherer.
-Change the file while both run. The pushed side keeps reporting what it
-saw at the beginning; the gathered side follows the file. This is the
-entire reason the pull path exists and it is best shown by contrast.</p>
-<p><strong>Gather cost as a tax on delivery.</strong> A gatherer that takes a
-measurable amount of time, wired into a station that runs many
-thousands of times. Report the delivering worker's time split between
-its own work and gathering. This is what "once per task assembled"
-costs, and seeing it is what stops someone putting a network call
-behind a gatherer.</p>
-<p><strong>Chain depth.</strong> A chain several gatherers deep. Report the depth
-recorded at load and the measured inline time per task, so the two can
-be compared.</p>
-<p><strong>A refused cycle.</strong> Attempt to wire two gatherers into each other and
-show the connection refused, naming both stations. Then show what the
-same map would have done without the check — a stack overflow with no
-message — so the reader understands what was traded for the walk.</p>
-<p><strong>A threshold turned while it runs.</strong> Alter a statics entry mid-run and
-show the routing change from that moment. Best paired with a running
-count of which way values went, so the change is visible as a bend in
-the numbers rather than a claim.</p>
-<p><strong>Reuse from earlier phases.</strong> Same pool, same stations, same
-generator. Report the occupancy figure again so all four demos can be
-read against each other.</p>
+<p><strong>Hand it a map; it compiles the map and runs the result.</strong></p>
+<pre class="code">
+soramech-run foo.map
+</pre>
+<p>1. Run the generator over <code>foo.map</code> and the box sources it names —
+   exactly what a build does.
+2. Compile the result, including <code>build_program</code> with its direct
+   pointers and no names.
+3. Load that object and call the function.
+4. Run it.</p>
+<p><strong>No lookup happens anywhere</strong>, because the generator resolved every
+name while generating. This is the same generator-compiler-load path
+that <a href="issue-310-boxes-compiled-at-runtime.html">310</a> uses for a single box,
+with a whole program's worth of scope instead of one function.</p>
+<p><strong>The runner is not a mode of the engine.</strong> It is a program that
+invokes the generator, the way <code>make</code> invokes GCC. Nothing in the
+engine branches on whether it is being run this way, and no binary
+declares anything to opt in or out. There is one shape of program; this
+is a tool that produces one.</p>
+<p><strong>It needs a toolchain, and that is what it is</strong> — the way running a
+Python script needs Python. Not a flag, not a configuration, just the
+nature of a tool whose job is turning a file into a program.</p>
+<h3>The workbench feeds it</h3>
+<p><a href="issue-801-browser-workbench.html">801</a> draws a graph and emits a map file. It
+has never run anything and was never going to; its own note says the
+page *"doesn't run the map files, it simply helps generate them."* So
+the workbench and this tool are two halves of one story: one produces a
+map, the other turns it into a running program.</p>
+<h3>Duplicated boxes, and why they are harmless</h3>
+<p>If the runner's own binary already contains <code>math.c</code> and the map it is
+handed also names <code>math.c:add</code>, the newly generated object contains
+<strong>another copy</strong> — its own shim, its own placement function, its own
+compiled code. Reaching into the runner's existing symbols instead
+would need every symbol exported, which
+<a href="issue-311-the-registry-dissolved.html">311</a> rejected.</p>
+<p>**Two copies of one box are indistinguishable, and the reason is the
+rule the whole engine rests on.** A box may not remember anything
+between calls, so two compilations of one pure function produce the
+same output for the same input and have no state that could diverge.
+Duplicated code is not duplicated state. The widths agree because it is
+the same compiler on the same machine, and nothing anywhere compares
+placement-function pointers for identity — the dump names a station by
+the string its placement function wrote.</p>
+<p>This is the third time the no-memory rule has paid for something it was
+not written for, after making a program capturable and making a box
+freely relocatable.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Build the demo maps with the construction calls from issue 207,
-   extended by 401 and 403.
-2. Have the file-changing and statics-turning happen visibly as the
-   demo runs, not before it starts.
-3. Report every number by measuring it.
-4. Write results to <code>tmp/shared-memory/</code> alongside the screen.
-5. Confirm the root launcher finds it.</p>
+<p>1. The tool: a command taking a map path, invoking the generator,
+   compiling, loading, and calling <code>build_program</code>. Failures name the
+   compiler's own output rather than summarising it.
+2. Compiled artifacts go to the RAM-backed build tier, treated like
+   logs — written as they happen, gone at reboot.
+3. A test that a map run this way and the same map compiled into a
+   binary produce identical dumps, which is the proof the two paths
+   really are one mechanism.
+4. A test that a map naming a box no source provides fails during
+   generation, naming the map line, rather than at any later point.</p>
+<h2>Open questions</h2>
+<ul>
+<li>**Does the runner cache compiled artifacts, keyed by the map and the</li>
+<p>  sources it names?** Without caching, running the same map twice
+  compiles it twice, which is wasteful but never wrong. With caching,
+  something has to decide when a cached artifact is stale, and that is
+  a second thing that can be wrong. Given that this is a development
+  tool rather than a hot path, starting without a cache and adding one
+  only if the wait becomes annoying is probably right — but it should
+  be a decision rather than an omission.</p>
+<li><strong>May the runner be handed several maps at once?</strong> The original</li>
+<p>  question was whether a <em>program</em> could declare several maps and carry
+  the union of their boxes, and that dissolved with the table — there
+  is no union to carry. What remains is whether this tool runs several
+  maps in one process, which the engine already permits, since nothing
+  in it is process-wide and several maps cannot see each other. That is
+  a question about the tool's command line rather than about the
+  engine.</p>
+</ul>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-004-datapath-statics.html">004 — Statics and recalculation</a>,</li>
-<p>  which describes what this demo now has to show instead</p>
-<li>Issues 401 through 405 — everything being demonstrated</li>
-<li>Issue 307 — the phase 3 demo this builds on</li>
+<li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
+<p>  parent</p>
+<li><a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>, whose</li>
+<p>  emission this performs at run time</p>
+<li><a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>,</li>
+<p>  the same mechanism at the scale of one function</p>
+<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which</li>
+<p>  produces the maps this consumes</p>
+<li><a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>,</li>
+<p>  whose artifact is re-run through this path</p>
+<li><a href="impl-057-packaging.html">057 — Packaging</a>,</li>
+<p>  where the difference between a shipped program and a development tool
+  is what decides who needs a compiler</p>
 </ul>
 
 </main>

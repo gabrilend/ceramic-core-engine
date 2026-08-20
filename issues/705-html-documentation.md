@@ -32,6 +32,15 @@ currently reaches the site only because a hand-written pass was
 added for it, which is the wrong shape: the next subdirectory will
 be missed the same way.
 
+**And the generator never removes anything.** Renaming a document
+leaves its old page sitting in the output directory, reachable by its
+old URL, with stale content and stale links, because the generator only
+ever writes. Found by renaming an issue: the previous page survived the
+rename and had to be deleted by hand. The build should sweep pages
+whose source no longer exists, for the same reason it should walk
+directories rather than list them — anything the generator does not do
+automatically is something somebody has to remember, and they will not.
+
 ## Intended behavior
 
 A generated, cross-linked HTML documentation set at `docs/HTML/`, with

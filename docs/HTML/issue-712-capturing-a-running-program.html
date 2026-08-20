@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>311c — Source rides in the binary</title>
+<title>712 — Capturing a running program</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -46,7 +46,7 @@
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
-<a href="issue-311c-source-rides-in-the-binary.html" class="here">311c — Source rides in the binary</a>
+<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
@@ -56,7 +56,7 @@
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
-<a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="issue-712-capturing-a-running-program.html" class="here">712 — Capturing a running program</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -128,105 +128,169 @@
 <a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
 </nav>
 <main>
-<h1>311c — Source rides in the binary</h1>
-<p>Third child of <a href="issue-311-the-registry-dissolved.html">311</a>. Every box source
-the build includes is also emitted as text, so the compiled program
-carries the C it was made from.</p>
+<h1>712 — Capturing a running program</h1>
+<p>A program can be put down and picked up again: stopped where it stands,
+written out whole, and restarted with every value back where it was.</p>
+<p>This is not an extension of the dump. The dump produces a <strong>schematic</strong>
+— what the program is shaped like — and this produces an <strong>image</strong>, in
+the sense Smalltalk and Emacs use the word: a program frozen and
+revived rather than described and rebuilt.</p>
 <h2>Current behavior</h2>
-<p>The generated file <code>#include</code>s each box source <strong>whole</strong>, so the
-compiler can see the types and inline each box into its shim. The text
-is therefore already read, already present at the moment of generation,
-and then thrown away — it survives only as compiled code.</p>
-<p>So a running program cannot say what its boxes look like, and a program
-handed to somebody else is a binary that needs a source tree beside it
-before it can do anything with new code.</p>
+<p><strong>The dump writes the shape and nothing else.</strong> It walks the live
+station table — never any remembered file text — and writes stations,
+box names, kinds, wiring, and the constants sitting on ports. The map
+file format document says so plainly: *it is a schematic, not a save
+file; it does not hold data that persists between runs.*</p>
+<p><strong>What is therefore lost when a program ends:</strong></p>
+<ul>
+<li>every value sitting in a ring buffer, which is all the work in flight</li>
+<li>every task already built and waiting in the pool</li>
+<li>each iterator's cursor — the station header calls it *the one memory</li>
+<p>  a station keeps*</p>
+<li>the statistics counters</li>
+</ul>
+<p>So a program that has been running for an hour and has half its work
+queued up can be described, and cannot be resumed.</p>
+<h2>Why this engine can do what most cannot</h2>
+<p>The usual obstacle to capturing a running program is <strong>hidden state</strong>:
+data scattered through static variables, open handles, buffers nobody
+registered, all of it invisible to any walk of the program's own
+structures.</p>
+<p><strong>This engine forbids exactly that.</strong> The first of its three nouns says
+a box <em>is not permitted to remember anything between calls</em>. There is
+no hidden state to miss, by construction — everything a program is
+lives in the graph, and the graph is already walkable, because the dump
+already walks it.</p>
+<p>That rule was written for other reasons entirely. It turns out to be
+what makes this feasible, and that is worth recording: **the constraint
+that made boxes simple is the same one that makes a program
+serializable.**</p>
 <h2>Intended behavior</h2>
-<p><strong>Each included box source is emitted a second time, as data.</strong></p>
+<p><strong>Capture is drain-then-walk, with a bound.</strong></p>
+<p>1. Stop building new tasks. The pool's brake already exists.
+2. Let every task already running finish and deliver its result into
+   whatever ports it feeds.
+3. Wait for the pool to go quiet.
+4. <strong>If it does not go quiet, capture anyway</strong>, and say what did not
+   finish.
+5. Walk everything: graph, constants, buffer contents, cursors.</p>
+<p><strong>Draining rather than freezing is what keeps this tractable.</strong> A task
+in flight is a shape nothing else in the format describes — a copy of
+its inputs, detached from the buffers they came from, plus which box
+was about to run. Letting it land first means the captured state is
+only ever <em>values sitting in ports</em>, which is bytes and a port index.</p>
+<p>**But a program that cannot drain is exactly when a capture is worth
+most**, so the wait is bounded rather than unconditional. Past the
+bound, the artifact is written with a header saying it is incomplete,
+naming every station still busy:</p>
 <pre class="code">
-<span class="kw">static</span> <span class="kw">const</span> <span class="kw">char</span> src__math_c[] =
-    <span class="st">"int add(int a, int b)\n"</span>
-    <span class="st">"{\n"</span>
-    <span class="st">"    return a + b;\n"</span>
-    <span class="st">"}\n"</span>;
+# INCOMPLETE CAPTURE
+# 2 tasks were still running and did not finish:
+#   parser  (station 7)
+#   hasher  (station 12)
+# Their input values are lost and their results were never
+# delivered. Everything below is otherwise accurate.
 </pre>
-<p>A small table maps a box source's path to its text, the same way the
-box table maps a name to a placement.</p>
-<p><strong>The method is chosen for being unremarkable.</strong> Three ways exist to
-put bytes in a binary and this is the plainest:</p>
-<table>
-<tr><td>approach</td><td>how</td><td>why not</td></tr>
-<tr><td><strong>a C array in the generated file</strong></td><td>it is just more generated C</td><td><strong>chosen</strong> — portable, no post-build step, nothing new to learn</td></tr>
-<tr><td>a named ELF section</td><td><code>objcopy --add-section</code> after linking</td><td>smaller loaded image, but ELF-only and a build step that runs after the link</td></tr>
-<tr><td>appended past the last segment</td><td>length trailer at end of file, found via <code>/proc/self/exe</code></td><td>works anywhere, but finding your own executable is the fragile part — <code>/proc</code> is Linux-specific and <code>argv[0]</code> lies</td></tr>
-</table>
-<p>The generator already reads each source in order to <code>#include</code> it, so
-emitting the same text as a string array is a few more lines in a pass
-that is already running.</p>
-<h2>What it buys</h2>
-<p><strong>One file is the whole system.</strong> Compiled code, the numbers the
-compiler folded into placement functions, and the text — all in the
-binary. A program ships as a single file with no tree beside it.</p>
-<p>*<em>A box added at runtime has something to be compiled </em>against*.**
-<a href="issue-310-boxes-compiled-at-runtime.html">310</a> needs source at runtime, and
-this is where the source it already had comes from.</p>
-<p><strong>Type and argument names come back for free.</strong>
-<a href="issue-311b-placement-instead-of-records.html">311b</a> drops every name string
-the engine was carrying, because the engine never used one. Error
-messages and the dump do, and they read them here.</p>
-<p><strong>And the names cannot be stale.</strong> The embedded text is *by
-definition* the text that was compiled. Somebody editing <code>math.c</code> on
-disk after the build changes nothing the binary can see, which is
-correct — the running code is the old code. This retires a check that
-was designed and then found unnecessary: an earlier draft recorded each
-source's modification time at placement so a debug report could warn
-that names might not match. With the source embedded there is nothing
-to warn about.</p>
-<p>**The one case where source can still drift is a box added at
-runtime**, whose source is live rather than embedded. Those already
-save their own text to the RAM-backed directory the moment they are
-created, treated exactly like a log. A report should say so **only when
-it has drifted** — an unchanged source produces no line at all, because
-a reassurance printed every time is noise that teaches a reader to skip
-the section.</p>
-<h2>The cost, stated</h2>
-<p>The text sits in the loaded image, so a program's binary grows by
-roughly the size of its box sources. That is small next to what those
-sources compile to, and it only counts the sources a map actually needs
-once <a href="issue-311d-the-map-becomes-code.html">311d</a> lands. If it ever stops being
-small, the move that keeps this decision is the ELF section above —
-same data, out of the loaded image, at the price of portability.</p>
+<p><strong>The incompleteness is stated, never inferred.</strong> A reviving program
+that met an incomplete artifact silently would be a program quietly
+missing work somebody computed. This is the same rule the engine
+applies everywhere: a fallback is a warning and a warning is an error,
+so the artifact says what it lost and the revival says it out loud.</p>
+<h3>The map file learns to carry queued values</h3>
+<p>A port that is a ring buffer with values waiting needs a form. The
+format already has <code>in 1 = 5</code> for a constant sitting on a port; queued
+values are the same idea, several deep and in order.</p>
+<p>This is the one genuinely new piece of format vocabulary the whole
+issue needs, and it should look like what it is — a port holding a
+queue rather than a port holding a setting.</p>
+<h3>Data file, or a new binary</h3>
+<p>**Both, and which one is not a preference — it follows from whether the
+program grew code.**</p>
+<ul>
+<li><strong>No boxes were added while it ran</strong> → the artifact is a **data</li>
+<p>  file**, and the same binary reloads it. No compiler is involved at
+  any point. This is the common case and it is the one that should be
+  fast and unremarkable.</p>
+<li><strong>Boxes were added while it ran</strong> → their C has to be compiled in for</li>
+<p>  the artifact to stand alone, so the capture produces <strong>a new binary</strong>
+  with those functions built in like any other box, their source
+  embedded beside the rest.</p>
+</ul>
+<p>That second case needs the toolchain, and it needs it precisely when
+new code genuinely arrived — which is the rule
+<a href="issue-310-boxes-compiled-at-runtime.html">310</a> and
+<a href="issue-311d-the-map-becomes-code.html">311d</a> already set, arrived at
+independently. A capture does not make the toolchain a new dependency;
+it inherits the one that was already there.</p>
+<h3>A report rides along</h3>
+<p>Separate from the artifact and meant for a person: what the buffers
+held and how deep, which stations had run how many times, which box
+functions were added or changed while it ran, and what did not drain.
+The counters and buffer depths that
+<a href="done-701-buffer-growth-reporting.html">701</a> and
+<a href="done-702-station-statistics.html">702</a> already gather are most of
+it, and <a href="issue-106-stopping-on-purpose.html">106</a> already writes something of
+this shape on the way out of a dying program.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The generator emits a string array per included source, and a table
-   from path to text.
-2. An accessor: given a box source path, hand back its text. Given a
-   box name and a parameter index, hand back that parameter's name by
-   parsing the text — which is the generator's own declaration parser,
-   which <a href="issue-308-generator-in-c.html">308</a> is making callable at runtime
-   anyway.
-3. The debug report uses it, printing argument names by index, and
-   saying nothing at all about sources that have not moved.
-4. The modification-time check designed for that report is not built;
-   this issue is why.
-5. A test that the embedded text for a source matches the file it was
-   generated from, byte for byte, at build time.</p>
+<p>1. The drain: stop building tasks, wait for quiet, with the bound and
+   the list of what was still busy. Most of this is
+   <a href="issue-106-stopping-on-purpose.html">106</a>'s sequence with a different ending.
+2. The map format's queued-value form, in the reader and the writer
+   together.
+3. Capture of buffer contents and iterator cursors, appended to what
+   the dump already writes.
+4. Revival: a load that fills ports rather than leaving them empty, and
+   that refuses loudly on an artifact marked incomplete unless the
+   caller says it accepts one.
+5. A round trip with values in flight: run a program until its buffers
+   are deep, capture, revive, and prove the second run produces exactly
+   what the first would have.
+6. The binary-producing path, for a program that added boxes: their
+   source compiled in like any other box, and a test that the revived
+   binary needs no toolchain of its own.
+7. The report, drawn from counters that already exist.</p>
 <h2>Open questions</h2>
-<p>None outstanding.</p>
+<ul>
+<li><strong>How is the drain's bound expressed?</strong> A clock is the obvious answer</li>
+<p>  and this project has refused one before — the reasoning that keeps a
+  timeout out of the shutdown path applies with equal force here, since
+  any number is wrong on a faster machine and wrong differently on a
+  slower one. A count of idle sweeps, or a number of times the pool was
+  observed unchanged, may be the honest form. Undecided.</p>
+<li><strong>Are the statistics counters restored or reset?</strong> A revived program</li>
+<p>  that reports a million runs has not run a million times in this
+  process, and a revived program reporting zero has thrown away the
+  history the capture existed to keep. It may want both numbers,
+  which means the report gains a column rather than the engine gaining
+  a decision.</p>
+<li>**Does a revived program keep its identity for the transcripts and</li>
+<p>  the demos?** Two programs revived from one artifact are the same
+  program twice, and nothing currently says whether that matters.</p>
+<li><strong>What does an incomplete artifact do to the round-trip guarantee?</strong></li>
+<p>  Capture, revive, capture is not expected to produce identical text
+  when the first capture lost work, and the property should be stated
+  as holding only for complete captures rather than quietly failing for
+  the other kind.</p>
+</ul>
 <h2>Related</h2>
 <ul>
-<li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
-<p>  parent</p>
-<li><a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>,</li>
-<p>  which drops the names this brings back</p>
-<li><a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>, which</li>
-<p>  decides how much source there is to embed</p>
+<li><a href="done-703-map-dump.html">703 — Dumping the loaded map</a>, the</li>
+<p>  schematic this stands on and does not replace</p>
+<li><a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>, whose</li>
+<p>  stop-the-world sequence this reuses with a different ending</p>
 <li><a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>,</li>
-<p>  which needs source at runtime and now has it</p>
-<li><a href="issue-308-generator-in-c.html">308 — The generator, in C</a>, whose parser this</li>
-<p>  calls at runtime for argument names</p>
-<li><a href="impl-057-packaging.html">057 — Packaging</a>,</li>
-<p>  where shipping one file rather than a tree is the point</p>
-<li><a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>, whose report</li>
-<p>  gains the argument names and the elision rule</p>
+<p>  which is why a captured program may contain code the binary does not</p>
+<li><a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,</li>
+<p>  which already puts every box's text in the artifact</p>
+<li><a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>, whose</li>
+<p>  rule about when a toolchain is needed this inherits exactly</p>
+<li><a href="done-701-buffer-growth-reporting.html">701 — Buffer growth reporting</a></li>
+<p>  and <a href="done-702-station-statistics.html">702 — Station statistics</a>,
+  which already gather what the report needs</p>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, which gains</li>
+<p>  the queued-value form</p>
+<li><a href="doc-058-guarantees.html">058 — Guarantees</a>, where the round trip</li>
+<p>  is promised and will need qualifying</p>
 </ul>
 
 </main>

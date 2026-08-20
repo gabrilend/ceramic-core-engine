@@ -174,7 +174,7 @@ would eventually disagree with the first about what a box is.
   script that builds the dependencies from source into a local place,
   written once the system is finished rather than designed around now.
 
-  **[311d](311d-the-map-as-manifest.md) narrows when that bites.** A
+  **[311d](311d-the-map-becomes-code.md) narrows when that bites.** A
   program whose map names only boxes the binary already carries never
   invokes a compiler at all and ships as one file. The toolchain is
   required precisely when new code is genuinely arriving, which is the

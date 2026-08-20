@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>406 — Phase 4 demo: values that are current, not merely correct</title>
+<title>311d — The map becomes code</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -47,7 +47,7 @@
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
-<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
+<a href="issue-311d-the-map-becomes-code.html" class="here">311d — The map becomes code</a>
 <a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
@@ -91,7 +91,7 @@
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
-<a href="done-406-phase-4-demo.html" class="here">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
 <a href="done-502-comparator.html">502 — The comparator</a>
@@ -128,99 +128,148 @@
 <a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
 </nav>
 <main>
-<h1>406 — Phase 4 demo: values that are current, not merely correct</h1>
+<h1>311d — The map becomes code</h1>
+<p>Fourth child of <a href="issue-311-the-registry-dissolved.html">311</a>, and the one that
+removes the last name from a running program. The generator reads a map
+and emits the construction calls it describes, so a map file is a
+<strong>blueprint for the compilation</strong> rather than something a program parses
+while it runs.</p>
 <h2>Current behavior</h2>
-<p>**Built, and needing rewriting — four of its five scenes demonstrate a
-capability that is being removed.**</p>
-<p>Frozen versus fresh, the gather tax, the chain three deep, and the
-refused cycle are all about the pull path, which is gone
-(<a href="impl-056-no-pull-path.html">056</a>). The knob
-turned mid-run survives, and it survives as the <em>most</em> interesting
-scene rather than the least, because writing a static is no longer only
-configuration — it runs the readiness check on the station holding it,
-which is what starts a program and what makes a chain of statics
-recalculate.</p>
-<p><strong>What the phase needs to demonstrate instead</strong> is that: a value
-written into a static port propagating down a chain, computed once and
-read by every consumer, with the recalculation visible. And its honest
-counterpart — the same program before and after, showing that a value
-is now as fresh as the last write rather than as fresh as the moment it
-is used, which is the thing given up.</p>
-<p>**One finding here outlives its scene and should be kept in whatever
-replaces it.** The gather tax measurement was wrong the first time, and
-the reason was instructive: gathering happened at task assembly, so
-seeded values paid on the seeding thread, and the timing wrapped only
-the running and measured nothing. *Where a cost lands is not where you
-expect to find it* is a lesson about measuring, not about gathering,
-and it cost a real mistake to learn.</p>
-<p>The remainder describes it as built.</p>
-<p>Built and discoverable from the root launcher. The file read both
-ways sits first: the frozen side keeps reporting 111 after the file
-turns to 999 mid-run while the gathered side follows — the whole
-reason the pull path exists, shown by contrast. The gather tax is
-measured honestly (a static second input against a deliberately
-expensive gathered one, roughly sixty times the per-task cost), with
-a subtlety the measuring itself surfaced: gathering happens at task
-assembly, so seeded values pay on the seeding thread — the first
-timing wrapped only the running and measured nothing. The chain
-scene shows depth three recorded at wiring and the walk's per-task
-cost. The refusal scene captures the engine's cycle message verbatim
-and then, in a second child, the alternative fate: killed by signal
-eleven saying nothing at all. The knob scene bends the output stream
-from 1000 to 5000 at the moment of a mid-run write. Mirrored to the
-shared-memory tier.</p>
-<p>Each scene opens with a story and reports in that story's units beside
-the engine's own, under the standard issue 707 sets: a printed
-timetable beside a departures board, a rate card beside a telephone to
-head office, a question passed along a line of people whose length is
-drawn on a chart, two dictionaries that define each other, and a dial
-on the wall of a working factory. Values are drawn per run from a
-printed seed, except in the byte-comparison scene, where the mechanic
-depends on the exact pair and the demo says so.</p>
+<p>The generator globs the box source directory and emits a shim for every
+function it finds. The build has never seen a map file, so it cannot
+know which of those a program uses, and it compiles in all of them.</p>
+<p>At run time a loader reads the map as text, resolves each box name
+against the registry, and calls the construction surface. So a program
+carries a parser, a table, and every box anyone ever wrote — and nothing
+checks that a name in a map corresponds to anything at all until that
+loader runs, on somebody else's machine.</p>
 <h2>Intended behavior</h2>
-<p>A demo about the direction of flow. It should make one distinction
-obvious: **a pushed value was true once; a gathered value is true
-now.**</p>
-<p><strong>What it should show, in order of how convincing it is:</strong></p>
-<p><strong>The same file read both ways, side by side.</strong> Two identical
-sub-graphs, one fed by a pushed read at startup, one by a gatherer.
-Change the file while both run. The pushed side keeps reporting what it
-saw at the beginning; the gathered side follows the file. This is the
-entire reason the pull path exists and it is best shown by contrast.</p>
-<p><strong>Gather cost as a tax on delivery.</strong> A gatherer that takes a
-measurable amount of time, wired into a station that runs many
-thousands of times. Report the delivering worker's time split between
-its own work and gathering. This is what "once per task assembled"
-costs, and seeing it is what stops someone putting a network call
-behind a gatherer.</p>
-<p><strong>Chain depth.</strong> A chain several gatherers deep. Report the depth
-recorded at load and the measured inline time per task, so the two can
-be compared.</p>
-<p><strong>A refused cycle.</strong> Attempt to wire two gatherers into each other and
-show the connection refused, naming both stations. Then show what the
-same map would have done without the check — a stack overflow with no
-message — so the reader understands what was traded for the walk.</p>
-<p><strong>A threshold turned while it runs.</strong> Alter a statics entry mid-run and
-show the routing change from that moment. Best paired with a running
-count of which way values went, so the change is visible as a bend in
-the numbers rather than a claim.</p>
-<p><strong>Reuse from earlier phases.</strong> Same pool, same stations, same
-generator. Report the occupancy figure again so all four demos can be
-read against each other.</p>
+<p><strong>A map is compiled into a function that builds it.</strong></p>
+<pre class="code">
+<span class="kw">void</span> build_program(map_t *m) {
+    map_place(m, 0, place__math_dot_c__add,   PLAIN);
+    map_place(m, 1, place__io_dot_c__print,   PLAIN);
+    map_wire (m, 0, <span class="cm">/*out*/</span>0, <span class="cm">/*to*/</span>1, <span class="cm">/*port*/</span>0);
+    map_set_static(m, 0, <span class="cm">/*port*/</span>1, 5);
+}
+</pre>
+<p><strong>No name survives.</strong> The text <code>math.c:add</code> was consumed by the
+generator and became a pointer. The station names, the box names, the
+port numbers, the constants — all of it resolved while somebody could
+still read an error message about it.</p>
+<p>*<em>This does not weaken </em>one way to build a program*.** The generated
+function calls the same construction surface a person calling C would,
+so loading a map and building one by hand stop being two paths that
+must agree and become one path with two authors. The loader stops being
+a parser and becomes generated code.</p>
+<p><strong>And the map file loses nothing it had.</strong> It is still text somebody
+writes by hand, still the thing a person reads to understand a program,
+still what the dump produces. What changes is only what consumes it.</p>
+<h3>Editing, which is where the distinction earns itself</h3>
+<p>Two acts that look similar and are not:</p>
+<ul>
+<li><strong>Editing the map file</strong> → an incremental rebuild of the parts that</li>
+<p>  changed. Splitting the generated material per box source is what
+  makes it incremental rather than whole.</p>
+<li><strong>Editing the running program's structures</strong> — adding a station that</li>
+<p>  places a box already present, moving a wire, writing a constant —
+  → <strong>no compilation at all.</strong> These are pointers and indices in RAM,
+  and no name was ever involved.</p>
+</ul>
+<p>So the compiler enters only when new <em>code</em> appears, which is the rule
+everywhere else in this engine.</p>
+<h3>What the build includes</h3>
+<p><strong>The maps a program declares are also a manifest.</strong> Having read them
+to emit the construction calls, the generator knows exactly which box
+sources the program needs. It includes those files whole and emits
+shims <strong>only</strong> for the functions the maps name. A program using three
+boxes out of five hundred no longer carries five hundred shims.</p>
+<p><strong>The linker decides what actually ships.</strong> Built with
+<code>-ffunction-sections -fdata-sections -Wl,--gc-sections</code>, every function
+lands in its own section and the linker discards every section nothing
+reaches — computing exact reachability through includes, through
+hand-written <code>extern</code> declarations, and through function pointers taken
+by name. That is every case a source parser would get wrong, and it
+costs nothing but build time.</p>
+<p>**Following <code>#include</code> directives instead would be a heuristic with a
+hole in it**, worth naming so nobody re-proposes it: linking resolves
+<em>symbols</em>, not includes, so a file may call a function it never
+included a header for by declaring it by hand.</p>
+<p><strong>This spends build time to save binary size, deliberately.</strong> You still
+compile five hundred files; you ship three.</p>
+<h3>The build checks every box reference</h3>
+<p>Naming a function that does not exist, naming a file that does not
+exist, or naming a bare basename that matches two files with no path
+given — all of it fails at build time, on the author's machine, naming
+the map line. None of that was checkable before, because the build had
+never seen a map.</p>
+<h3>When the toolchain is needed, which now follows rather than being stipulated</h3>
+<ul>
+<li><strong>A shipped program</strong> compiled from its own map → **no compiler at</li>
+<p>  run time, ever.** One file, source text included, runs on a machine
+  with no toolchain on it.</p>
+<li><strong>A map the binary was not built for</strong> → compiled when it arrives,</li>
+<p>  which is <a href="issue-311e-running-an-arbitrary-map.html">311e</a>'s path.</p>
+<li><strong>A box arriving mid-run</strong> → compiled when the source arrives, which</li>
+<p>  is <a href="issue-310-boxes-compiled-at-runtime.html">310</a>'s path.</p>
+</ul>
+<p>The last two are the same mechanism at different scale, and both are
+the compiler being needed exactly when new code genuinely arrives.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Build the demo maps with the construction calls from issue 207,
-   extended by 401 and 403.
-2. Have the file-changing and statics-turning happen visibly as the
-   demo runs, not before it starts.
-3. Report every number by measuring it.
-4. Write results to <code>tmp/shared-memory/</code> alongside the screen.
-5. Confirm the root launcher finds it.</p>
+<p>1. The generator learns to read a map file. The parser moves out of the
+   engine and into the generator, which is now its only home.
+2. Emission of <code>build_program</code>: places, wires, constants, in an order
+   that satisfies the construction surface's own rules.
+3. Map files join the Makefile's dependency list, so editing one
+   regenerates. Splitting generated material per box source is what
+   makes it incremental.
+4. The build-time reference check: every <code>file:function</code> in every named
+   map exists, is unambiguous, and has the parameter count the station
+   line implies.
+5. The generator emits shims only for named functions, and includes
+   only named sources.
+6. Linker garbage collection turned on, and a test that a binary built
+   from a three-box map does not contain a fourth box's code.
+7. The engine's runtime map parser deleted, and
+   <a href="doc-009-datapath-load.html">009</a> rewritten around what replaced
+   it.
+8. A test that a program built from a compiled map and the same program
+   built by hand-written construction calls produce identical dumps.</p>
+<h2>Open questions</h2>
+<ul>
+<li><strong>Can the build now check wires, and should it?</strong> The generator sees</li>
+<p>  both ends of every wire a map draws. It still cannot compute a size —
+  only the compiler can — but it can emit a <code>_Static_assert</code> comparing
+  the two <code>sizeof</code> expressions, which makes the <em>compiler</em> do the
+  comparison and fails the build with the map line in the message. That
+  would move a whole class of error from run time to build time. Wires
+  drawn at run time would still need the existing check, so this adds a
+  second checker rather than replacing one — which is either welcome
+  redundancy or two things that can disagree, and that is the part to
+  decide.</p>
+</ul>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-004-datapath-statics.html">004 — Statics and recalculation</a>,</li>
-<p>  which describes what this demo now has to show instead</p>
-<li>Issues 401 through 405 — everything being demonstrated</li>
-<li>Issue 307 — the phase 3 demo this builds on</li>
+<li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
+<p>  parent</p>
+<li><a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>,</li>
+<p>  whose resolution rules this applies</p>
+<li><a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>,</li>
+<p>  whose functions this calls</p>
+<li><a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,</li>
+<p>  whose embedded text shrinks to what a map actually needs</p>
+<li><a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>,</li>
+<p>  the same emission performed at run time</p>
+<li><a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>,</li>
+<p>  the same path at the scale of one function</p>
+<li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
+<p>  the construction surface the generated code calls</p>
+<li><a href="done-602-loader-first-pass.html">602 — The loader, first pass</a></li>
+<p>  and <a href="done-603-loader-second-pass.html">603 — The loader, second pass</a>,
+  which move into the generator</p>
+<li><a href="doc-007-datapath-build.html">007 — The build path</a> and</li>
+<p>  <a href="doc-009-datapath-load.html">009 — Loading</a>, both of which this
+  rewrites</p>
 </ul>
 
 </main>

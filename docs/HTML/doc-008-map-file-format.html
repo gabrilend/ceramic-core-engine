@@ -47,13 +47,16 @@
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
-<a href="issue-311d-the-map-as-manifest.html">311d — The map as a manifest</a>
+<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
+<a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
+<a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -318,7 +321,7 @@ statics
 </pre>
 <p><strong>The table carries no types.</strong> A slot that references an entry knows
 what type it is, because the box function's parameter at that position
-says so, and the box table knows what that is. The text is read into
+says so, and the generator knows what that is. The text is read into
 bytes at the moment a slot claims it, walking the field table the
 generator emitted for that struct.</p>
 <p>This is the same reason the wiring carries no types: if the table said
@@ -347,22 +350,30 @@ appears nowhere in the shape of the map.</p>
 <p>A dump therefore has no <code>statics</code> section. Every constant is written
 out beside the port that holds it, from its bytes — including anything
 a runtime write changed, which the old form could not say.</p>
-<h2>What the loader checks</h2>
-<p>Load-time failures, all of them fatal and all naming the offending
-station:</p>
+<h2>What reading a map checks</h2>
+<p><strong>Reading a map happens in the generator, not in a running program.</strong>
+A map is a blueprint for the compilation: the generator turns it into
+the construction calls it describes, so every failure below stops a
+build while somebody is still looking at the file, rather than stopping
+a program on a stranger's machine. Issue 311d.</p>
+<p>All of these are fatal and all name the offending station:</p>
 <ul>
-<li>A box function this binary does not carry, named with the file it</li>
-<p>  was expected in and the two ways forward: rebuild, or hand the source
-  to the running program.</p>
+<li>A box function no source provides, named with the file it was</li>
+<p>  expected in.</p>
 <li>A bare file name matching more than one box source, with both paths</li>
 <p>  named and the instruction to write one out in full.</p>
 <li>An arrow to a station or slot that does not exist.</li>
-<li>A wire whose source return type and destination parameter type</li>
-<p>  differ.</p>
 <li>More input lines than the box has parameters, or a slot index out of</li>
 <p>  range.</p>
 <li>A comparator whose box returns a type with no compare function.</li>
 </ul>
+<p><strong>A wire whose two ends disagree about width</strong> is the one that cannot
+be settled by reading alone, because the generator knows type <em>names</em>
+and only the compiler knows sizes. It is checked when the wire is
+drawn — which for a wire written in a file is during construction, and
+for a wire drawn while the program runs is at that moment. Whether the
+generator should additionally emit a compile-time assertion for the
+wires it can see is an open question in 311d.</p>
 <p>Two rules used to sit here and no longer can be stated: a box fanning
 out to both a gatherer and a ring buffer, and a cycle among gather
 wires. With nothing pulled, neither situation is describable. A cycle
@@ -370,7 +381,7 @@ in the push direction stays perfectly legal — it is how anything
 repeats — and needs a finite companion input to ever stop.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-007-datapath-build.html">007 — The build path</a>, which produces the box table this file is read against</li>
+<li><a href="doc-007-datapath-build.html">007 — The build path</a>, which is where this file is read and turned into code</li>
 <li><a href="doc-009-datapath-load.html">009 — Loading</a>, what happens to this file at startup</li>
 </ul>
 

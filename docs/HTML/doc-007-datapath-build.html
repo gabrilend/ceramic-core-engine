@@ -47,13 +47,16 @@
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
-<a href="issue-311d-the-map-as-manifest.html">311d — The map as a manifest</a>
+<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
+<a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
+<a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -195,21 +198,29 @@ project dropped when it dropped the language bridge.</p>
 Rejected in favour of a build-time script, because a generator is one
 generalized program that parses things rather than a macro expanded
 per box, and it leaves no macros in the source to read around later.</p>
-<h2>The box table</h2>
-<p>The map file says <code>"math.c:add"</code> as text. Something has to turn that
-into a function pointer. That something is a table compiled into the
-binary, and it has <strong>two columns</strong>: the name as it appears in a map,
-and a pointer to a generated <strong>placement function</strong>.</p>
+<h2>No table at all</h2>
+<p>The map file says <code>"math.c:add"</code> as text, and something has to turn
+that into a function pointer. <strong>The generator does, while generating.</strong></p>
+<p>A map is a blueprint for the compilation rather than something a
+program parses while it runs, so the generator reads it and emits the
+construction calls it describes:</p>
 <pre class="code">
-<span class="kw">static</span> <span class="kw">const</span> <span class="kw">struct</span> { <span class="kw">const</span> <span class="kw">char</span> *name; <span class="kw">void</span> (*place)(station_t *); }
-boxes[] = {
-    { <span class="st">"math.c:add"</span>, place__math_c__add },
-};
+<span class="kw">void</span> build_program(map_t *m) {
+    map_place(m, 0, place__math_dot_c__add,   PLAIN);
+    map_place(m, 1, place__io_dot_c__print,   PLAIN);
+    map_wire (m, 0, <span class="cm">/*out*/</span>0, <span class="cm">/*to*/</span>1, <span class="cm">/*port*/</span>0);
+    map_set_static(m, 0, <span class="cm">/*port*/</span>1, 5);
+}
 </pre>
-<p><strong>Everything else lives inside the placement function</strong>, as constants
-the compiler folded:</p>
+<p><strong>No name survives into the running program</strong>, so there is nothing to
+look a name up in. The loader stops being a parser and becomes
+generated code — which does not weaken <em>one way to build a program</em>,
+since it calls the same construction surface a person would.</p>
+<p><strong>Each box gets a placement function</strong>, and every number it writes is a
+constant the compiler folded:</p>
 <pre class="code">
-<span class="kw">static</span> <span class="kw">void</span> place__math_c__add(station_t *s) {
+<span class="kw">static</span> <span class="kw">void</span> place__math_dot_c__add(station_t *s) {
+    s-&gt;box_name = <span class="st">"math.c:add"</span>;      <span class="cm">/* a literal, for the dump */</span>
     s-&gt;call     = add__call;
     s-&gt;slots[0].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
     s-&gt;slots[1].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
@@ -217,36 +228,46 @@ the compiler folded:</p>
     s-&gt;compare  = int__compare_g;
 }
 </pre>
-<p><strong>Why a name has to be resolved at runtime at all.</strong> A map arrives at a
-binary that has never seen it, carrying text. Resolving a name <em>is</em> a
-table, and calling it something else would not remove it. The only
-escape would be compiling the map into C so no name survives — and
-maps being data rather than build inputs is the thing this project
-rests on. So one lookup stays, and it is as small as a lookup gets.</p>
-<p><strong>Why nothing else needs one.</strong> A station copies what it needs at
-placement and never consults a table again; the station header is
-deliberately free of any reference to this one, which is why a
+<p><strong>Why nothing else needs a lookup either.</strong> A station copies what it
+needs at placement and never consults anything again; the station
+header is deliberately free of any reference to a table, which is why a
 comparator resolves its comparison <em>at placement</em> rather than on the
 delivery path. A struct port's field table is written onto the port by
 the placement function, so reading <code>{ 1.5, 2.5, 3.5 }</code> out of a map
-follows a pointer rather than searching by type name.</p>
-<p><strong>The table used to be a record per box</strong> — parameter arrays, type-name
+follows a pointer rather than searching by type name. And the name a
+station reports is a string literal its own placement function wrote,
+not an index into anything.</p>
+<p><strong>There used to be a record per box</strong> — parameter arrays, type-name
 strings, the exact task allocation size, a backwards lookup from shim
-pointer to name — and every field of it was read once, at placement,
-by code that generated code could just as well have written. Issue 311
-is that change.</p>
+pointer to name — and every field of it was read once, at placement, by
+code that generated code could just as well have written. Issue 311 is
+that change.</p>
+<h3>Generated symbols escape punctuation, so two files cannot collide</h3>
+<p><code>math.c:add</code> is not a C identifier. Mangling it naively to
+<code>math_c__add</code> would make **<code>math.c</code> and <code>math_c</code> produce the same
+symbol**, and the linker would fail with a message about a duplicate
+symbol rather than about two files that should have been named
+differently.</p>
+<p>So punctuation is transcribed, and the escape character escapes itself:
+<code>.</code> becomes <code>_dot_</code>, <code>_</code> becomes <code>_und_</code>, and the colon becomes a
+double underscore. <code>math.c</code> gives <code>math_dot_c</code>; <code>math_c</code> gives
+<code>math_und_c</code>. Escaping the escape is what makes the scheme injective,
+for the same reason percent-encoding has to write <code>%</code> as <code>%25</code>.</p>
+<p>Nothing decodes a symbol back into a name — a name a person reads comes
+from the string literal, because these are static functions whose
+symbol names may not survive a stripped binary at all.</p>
 <h3>The useful property it keeps: the map file never mentions a type</h3>
-<p>The loader knows the source box's return type and the destination
+<p>The generator knows the source box's return type and the destination
 box's parameter type, both derived from the actual C that will
-actually run. It checks the wire itself. If the map also declared
-types, there would be two sources of truth that could disagree, and
-the map would always be the one that was wrong.</p>
+actually run. If the map also declared types, there would be two
+sources of truth that could disagree, and the map would always be the
+one that was wrong.</p>
 <p>Naming the <em>file</em> beside the function is provenance, not a type
 declaration, so this still holds.</p>
 <p>The same numbers size every ring buffer cell, so a port's cells are
 exactly <code>sizeof</code> the parameter they feed and a write is a <code>memcpy</code> with
 no allocation.</p>
-<h3>Sizes cannot be computed at runtime, which is why any of this exists</h3>
+<h3>Sizes cannot be computed at runtime, which is the one irreducible thing</h3>
 <p><code>sizeof</code> is a <strong>compile-time</strong> operator. The compiler evaluates it and
 burns a literal into the machine code. A running program has no types
 at all — C erases every bit of type information during compilation — so
@@ -257,14 +278,14 @@ running program the text <code>vec3</code> and get 12 back.</p>
 the compiler, and only then writes <code>sizeof a0</code>.</p>
 <p>So every size comes from exactly one of two places: a <code>sizeof</code>
 expression compiled in, or a compiler invoked at runtime. There is no
-third door, and that is why a program that only places boxes it was
-built with needs no toolchain, while one that brings in new code does.</p>
+third door — and it is the only thing about the old registry that could
+not be avoided.</p>
 <h2>What the build includes</h2>
-<p><strong>The maps a program declares are a manifest.</strong> The build reads them to
-learn which box sources the program needs, includes those files whole,
-and emits shims <strong>only</strong> for the functions the maps name. A program
-using three boxes out of five hundred no longer carries five hundred
-shims.</p>
+<p><strong>A map is also a manifest.</strong> Having read it to emit the construction
+calls, the generator knows exactly which box sources the program needs.
+It includes those files whole and emits shims <strong>only</strong> for the
+functions the map names. A program using three boxes out of five
+hundred no longer carries five hundred shims.</p>
 <p><strong>The linker decides what actually ships.</strong> Built with
 <code>-ffunction-sections -fdata-sections -Wl,--gc-sections</code>, every function
 lands in its own section and the linker discards every section nothing
@@ -293,11 +314,10 @@ has since changed on disk.</p>
 designated as box sources:</p>
 <ul>
 <li><strong>Function declarations</strong> — name, return type, parameter types in</li>
-<p>  order. These become shims, placement functions, and box table rows.</p>
+<p>  order. These become shims and placement functions.</p>
 <li><strong>Struct definitions</strong> — field names, types, and order. These give</li>
-<p>  every value type a size, and a field table that lets the loader read
-  a struct constant out of a map's statics table without a parser per
-  type.</p>
+<p>  every value type a size, and a field table that lets a struct
+  constant be read out of a map without a parser per type.</p>
 <li><strong>Compare functions</strong>, found by the <code>__compare</code> suffix. These are</li>
 <p>  what a comparator calls. The primitives get theirs generated; a
   struct supplies its own.</p>
@@ -334,7 +354,8 @@ last place that trace still exists.</p>
 <ul>
 <li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>, which stores the shim pointer</li>
 <li><a href="doc-008-map-file-format.html">008 — Map file format</a>, the other half</li>
-<li><a href="doc-009-datapath-load.html">009 — Loading</a>, where the box table is consulted</li>
+<li><a href="doc-009-datapath-load.html">009 — Loading</a>, which describes a runtime parser</li>
+<p>  that this replaces with generated code</p>
 </ul>
 
 </main>

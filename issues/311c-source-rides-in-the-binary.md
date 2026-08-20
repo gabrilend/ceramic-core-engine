@@ -80,7 +80,7 @@ the section.
 The text sits in the loaded image, so a program's binary grows by
 roughly the size of its box sources. That is small next to what those
 sources compile to, and it only counts the sources a map actually needs
-once [311d](311d-the-map-as-manifest.md) lands. If it ever stops being
+once [311d](311d-the-map-becomes-code.md) lands. If it ever stops being
 small, the move that keeps this decision is the ELF section above —
 same data, out of the loaded image, at the price of portability.
 
@@ -110,7 +110,7 @@ None outstanding.
   parent
 - [311b — Placement instead of records](311b-placement-instead-of-records.md),
   which drops the names this brings back
-- [311d — The map as a manifest](311d-the-map-as-manifest.md), which
+- [311d — The map becomes code](311d-the-map-becomes-code.md), which
   decides how much source there is to embed
 - [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   which needs source at runtime and now has it

@@ -13,15 +13,16 @@ being compared by name and start being compared by width, so a box
 compiled later cannot silently disagree about a struct; and then a
 box's source can be handed to a running program.
 
-**And then the table itself mostly goes away.** Issue 311 asks what the
-registry is actually for and finds two answers that survive — a size
-can only be computed by a compiler, and a name arriving as text has to
-be resolved at runtime — and nothing else. The record per box becomes a
-generated placement function holding folded constants; the table
-becomes a name and a pointer; the box source rides along in the binary
-as text; and the map file becomes a build input, so a program carries
-only the boxes it names and the build can finally check that they
-exist.
+**And then the table goes away entirely.** Issue 311 asks what the
+registry is actually for and finds exactly one answer that survives: a
+size can only be computed by a compiler. Everything else was avoidable.
+The record per box becomes a generated placement function holding
+folded constants; the box source rides along in the binary as text;
+and the map file stops being something a program parses and becomes a
+blueprint the generator turns into construction calls, so **no name
+survives into a running program at all**. What is left is a tool that
+runs an unfamiliar map by compiling it, which is how that capability
+survives the table being deleted.
 
 | Issue | State | In one line |
 |---|---|---|
@@ -35,11 +36,12 @@ exist.
 | 308 — the generator, in C | open | Removes LuaJIT from the build path, and makes the parser callable at runtime. |
 | 309 — types compared by shape | open | Four ints are four ints; identical layouts wire together, identical names do not. |
 | 310 — boxes compiled at runtime | open | Source in, shim out, registry row added — needs both of the above. |
-| [311 — the registry dissolved](311-the-registry-dissolved.md) | open | **Parent.** The table stops being a record per box and becomes a name and a pointer; everything else folds into generated code. |
-| [311a — boxes addressed by file](311a-boxes-addressed-by-file.md) | open | A map names `file:function`. Bare basenames resolve, paths settle ties, collisions are fatal at build time. |
+| [311 — the registry dissolved](311-the-registry-dissolved.md) | open | **Parent.** The table goes away entirely — not shrinks, goes. A running program holds no name and no lookup, because the generator resolves every name while generating. |
+| [311a — boxes addressed by file](311a-boxes-addressed-by-file.md) | open | A map names `file:function`. Bare basenames resolve, paths settle ties, and generated symbols escape punctuation so `math.c` and `math_c` cannot collide. |
 | [311b — placement instead of records](311b-placement-instead-of-records.md) | open | A generated placement function per box writes a station directly, every size a folded constant. Hand placement turns out to be the primitive. |
 | [311c — source rides in the binary](311c-source-rides-in-the-binary.md) | open | Each included box source emitted as a C array, so one file carries code, numbers, and text. |
-| [311d — the map as a manifest](311d-the-map-as-manifest.md) | open | The build reads the maps to know what to include; the linker garbage-collects the rest; box references get checked at build time. |
+| [311d — the map becomes code](311d-the-map-becomes-code.md) | open | The generator turns a map into the construction calls it describes, so no name survives into a running program. The build also learns what to include; the linker discards the rest. |
+| [311e — running an arbitrary map](311e-running-an-arbitrary-map.md) | open | A tool that runs any map by compiling it rather than interpreting it — which is how opening a map you did not build survives the table being deleted. |
 
 ## What the phase established
 

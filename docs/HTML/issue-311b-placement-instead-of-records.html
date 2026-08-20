@@ -47,13 +47,16 @@
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html" class="here">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
-<a href="issue-311d-the-map-as-manifest.html">311d — The map as a manifest</a>
+<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
+<a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
+<a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -129,7 +132,8 @@
 <p>Second child of <a href="issue-311-the-registry-dissolved.html">311</a>. The generator
 stops emitting a record per box and emits a <strong>function</strong> per box that
 writes a station directly. Everything the record held becomes a
-compile-time constant inside it.</p>
+compile-time constant inside it, and the table the records lived in is
+deleted rather than shrunk.</p>
 <h2>Current behavior</h2>
 <p>The generator emits a <code>box_info_t</code> per box: name, shim pointer,
 parameter count, an array of parameter type names and sizes, a return
@@ -148,7 +152,8 @@ issue rests on.</p>
 <h2>Intended behavior</h2>
 <p><strong>One placement function per box, emitted by the generator.</strong></p>
 <pre class="code">
-<span class="kw">static</span> <span class="kw">void</span> place__math_c__add(station_t *s) {
+<span class="kw">static</span> <span class="kw">void</span> place__math_dot_c__add(station_t *s) {
+    s-&gt;box_name = <span class="st">"math.c:add"</span>;      <span class="cm">/* a literal, for the dump */</span>
     s-&gt;call     = add__call;
     s-&gt;slots[0].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
     s-&gt;slots[1].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
@@ -161,47 +166,49 @@ issue rests on.</p>
 computes every size and the generator still never guesses. The numbers
 move from a table into a function and the compiler folds them into
 immediates. They are not stored anywhere at all.</p>
-<p><strong>The table shrinks to two columns.</strong></p>
-<pre class="code">
-<span class="kw">static</span> <span class="kw">const</span> <span class="kw">struct</span> { <span class="kw">const</span> <span class="kw">char</span> *name; <span class="kw">void</span> (*place)(station_t *); }
-boxes[] = { { <span class="st">"math.c:add"</span>, place__math_c__add }, ... };
-</pre>
-<p>That is the one name lookup left in the engine, and it survives because
-a map file arrives as text and text has to be resolved. Everything else
-is reached without a name.</p>
+<p><strong>There is no table.</strong> An earlier draft of this issue kept a two-column
+one — a name and a placement pointer — for resolving text at run time.
+<a href="issue-311d-the-map-becomes-code.html">311d</a> removes the need by having the
+generator emit the calls, so a placement function is reached by *being
+called*, never by being found.</p>
+<p>**A station carries the name it was placed as, and that is not a
+lookup.** The literal is written by the placement function itself, so
+the dump reads a field rather than searching anything. It costs a
+pointer per station; the string is read-only data the compiler was
+going to emit either way, nothing is allocated, and nothing is freed.</p>
 <p><strong>A struct port's field table is pointed at, not searched for.</strong> Today
 a struct constant in a map is read by finding the struct's field table
 by type name. The placement function knows the type concretely, so it
-writes the pointer onto the port, and the reader follows it. The
-by-name struct lookup goes away with the by-name box record.</p>
-<p><strong>What is deleted:</strong> the box record type, the parameter arrays, every
-type-name string the engine carried, the stored task size, the
-by-name struct search, and the backwards lookup from a shim pointer to
-a box name — the dump can ask the station which placement made it, or
-carry the name it was placed with, rather than searching a table
-backwards.</p>
-<p><strong>Type names survive only where a person reads them.</strong> Error messages
-and the dump want to say <code>vec3</code> rather than <code>12 bytes</code>. Those can read
-the name out of the source the binary now carries
-(<a href="issue-311c-source-rides-in-the-binary.html">311c</a>), which is the exact text
-that was compiled, so a name reported is never a name from a source
-that has since changed.</p>
-<p><strong>Argument names are not carried either.</strong> The engine never used one.
-A debug report that wants them re-reads the embedded source by
-parameter index.</p>
+writes the pointer onto the port and the reader follows it. The by-name
+struct search goes away with the by-name box record.</p>
+<p><strong>What is deleted:</strong> the box record type, the whole table of them, the
+parameter arrays, every type-name string the engine carried, the stored
+task size, the by-name struct search, and the backwards lookup from a
+shim pointer to a box name — the station knows its own name now.</p>
+<p><strong>Type and argument names are not carried.</strong> The engine never used a
+parameter name, and under <a href="issue-309-types-by-width.html">309</a> it does not use
+type names either, only widths. Error messages and the dump read them
+out of the source the binary carries
+(<a href="issue-311c-source-rides-in-the-binary.html">311c</a>) — which is the exact text
+that was compiled, so a name reported can never come from a source that
+has since changed on disk.</p>
 <h2>What this does to hand placement</h2>
 <p><a href="issue-210g-one-way-to-build-a-station.html">210g</a> asks whether placing a
 station by hand — stating shapes directly instead of naming a box —
 survives. <strong>It does, and this issue is what makes the answer easy.</strong></p>
 <p>A placement function <em>is</em> hand placement, written by the generator
-instead of by a person. By-name placement is a table lookup that finds
-one and calls it. So there are not two doors into the engine; there is
-one door with a typed front and a raw back, and the front is built out
-of the back.</p>
+instead of by a person. So there are not two doors into the engine;
+there is one door, and by-name placement was only ever a way of finding
+which generated hand-placement to call — a way that
+<a href="issue-311d-the-map-becomes-code.html">311d</a> now performs at generation time.</p>
 <p>That means phase 2's station-table tests keep placing stations without
-constructing a registry — they call the raw form directly, which is
-what they were always doing — and a test of the station table stays a
-test of only the station table.</p>
+constructing any table, which is what they were always doing, and a
+test of the station table stays a test of only the station table.</p>
+<p>**A station placed directly, with no name given, has nothing for the
+dump to write on its station line.** The placement functions the
+generator emits always write one. A test that places by hand and gives
+none is a program that cannot be dumped faithfully — which is honest,
+since nothing on disk describes it either.</p>
 <h2>Suggested implementation steps</h2>
 <p>1. The generator emits a placement function per box, alongside the
    record, with the record still authoritative. Nothing changes
@@ -209,26 +216,20 @@ test of only the station table.</p>
 2. A test that placing by record and placing by function produce
    identical stations, field for field. This is the proof the
    translation is faithful, and it is cheap while both exist.
-3. Placement by name routes through the function; the record stops
-   being read.
-4. Struct field tables written onto ports at placement, and the by-name
+3. Placement routes through the function; the record stops being read.
+4. The name literal written onto the station, and the dump's backwards
+   shim-to-name lookup deleted.
+5. Struct field tables written onto ports at placement, and the by-name
    struct search deleted.
-5. The record type, the parameter arrays, the type-name strings, and
-   the stored task size deleted. The table becomes two columns.
-6. The dump's shim-to-name lookup replaced by the station carrying what
-   it was placed as.
-7. The word <em>registry</em> replaced by <em>box table</em> wherever it appears, in
-   source and in documents, since the thing it named no longer exists.</p>
+6. The record type, the table, the parameter arrays, the type-name
+   strings, and the stored task size deleted.
+7. The word <em>registry</em> removed from source and documents, since the
+   thing it named no longer exists in any form.</p>
 <h2>Open questions</h2>
-<ul>
-<li>The dump needs to name the box a station was placed as. Carrying the</li>
-<p>  string on the station is one pointer per station and is simplest;
-  carrying the table index is smaller and needs the table to be
-  ordered stably, which it is at build time and is not once
-  <a href="issue-310-boxes-compiled-at-runtime.html">310</a> appends rows at runtime. The
-  index is probably right anyway, since a row is never removed, but it
-  should be decided rather than assumed.</p>
-</ul>
+<p>None outstanding. The one this issue carried — whether a station should
+remember its box by row number, by name string, or by a backwards scan
+— dissolved when the table did. There is no row to number and nothing
+to scan; the placement function writes the name and the dump reads it.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
@@ -236,6 +237,8 @@ test of only the station table.</p>
 <li><a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,</li>
 <p>  which is where type and argument names go once the engine stops
   carrying them</p>
+<li><a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>, which</li>
+<p>  calls these functions and is why no table is needed to find them</p>
 <li><a href="done-303-registry-emission.html">303 — Registry emission</a>, the</li>
 <p>  emission this replaces</p>
 <li><a href="done-304-struct-field-tables.html">304 — Struct field tables</a>,</li>

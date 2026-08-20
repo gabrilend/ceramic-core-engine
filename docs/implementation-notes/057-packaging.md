@@ -261,7 +261,7 @@ thing: **the compiler invocation lives in one place in the source**, so
 adding a second is a local edit.
 
 **And the toolchain is not a tax on every program.** Since
-[311d](../../issues/311d-the-map-as-manifest.md) makes a map a build
+[311d](../../issues/311d-the-map-becomes-code.md) makes a map a build
 input, a program whose map names only boxes the binary already carries
 never invokes a compiler at all — it ships as one file, source text
 included, and runs on a machine with no toolchain on it. The compiler
