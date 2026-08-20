@@ -48,7 +48,7 @@ particular rule in the list.
 **And the message is the deliverable.** *"head → wrong.1: box returns
 int, slot takes double"* names both stations, the port, and both types.
 It is the standard that shape-based comparison
-([309](309-types-by-width.md)) has to meet or beat when type names stop
+([309](completed/309-types-by-width.md)) has to meet or beat when type names stop
 being what a wire is checked against.
 
 Notes for the phase: parser and loader are separate files, read versus

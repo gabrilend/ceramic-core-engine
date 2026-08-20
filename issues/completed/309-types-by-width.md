@@ -10,50 +10,50 @@ exist and are needed elsewhere.
 
 ## Current behavior
 
-Every type check in the engine is a string comparison.
+**Done.** A wire is legal when the two sides count the same number of
+bytes. The check is one integer against another, at both places a wire
+is checked: the loader, when a map file draws one, and the rewiring
+surface, when a running program does.
 
-The generator emits, for each box, the text of each parameter's type and
-the text of its return type, and the registry carries them. When the
-loader checks a wire it compares those two strings; when they differ it
-refuses, and the message reads *"head → wrong.1: box returns int, slot
-takes double"*. The names ride along **for the error message** — the
-sizes are what the engine actually runs on, and four bytes against four
-bytes is not a sentence anybody can act on.
+**What it buys, and the reason for the change.** Two structs with
+identical layouts and different names now connect. Before, a box
+producing three floats called `triple` could not feed a box taking
+three floats called `vec3`, even though the bytes are indistinguishable
+and delivery would copy them correctly — an author's only options were
+to rename one, or to write a box that took one and returned the other
+and did nothing. Both structs live in the box source and exist for the
+test, deliberately: the thing being proven is that the *engine* stopped
+caring about the name, so the shapes have to be real types the
+generator saw.
 
-Underneath that, the generator already emits something far better and
-nothing consults it. Every struct in the box sources gets a field table:
-per field a name, an offset, a size, and a kind — signed, unsigned,
-floating, fixed string, or a nested struct pointing into the same table
-— with every offset an `offsetof` expression and every size a `sizeof`,
-so the compiler computes all of it and the deliberately padded case with
-its seven-byte hole reads correctly. **The engine knows the exact shape
-of every value it moves and decides compatibility by comparing labels.**
+**Type names still ride along, in the message and nowhere else**, and
+both widths ride along beside them:
 
-Two consequences, one already biting and one about to.
+```
+box returns int (4 bytes), slot takes double (8 bytes)
+```
 
-**Identical shapes with different names cannot be wired.** A box
-producing a struct of four integers called `vec4` cannot feed a box
-taking a struct of four integers called `stats`, even though the bytes
-are indistinguishable and the delivery path would copy them correctly.
-The author's options are to rename one, or to write a box that takes
-one and returns the other and does nothing.
+*"box returns vec4, slot takes stats"* does not tell a person why those
+disagree. Four bytes against eight does.
 
-**Different shapes with the same name pass the check and corrupt.** Two
-structs both called `vec3`, compiled separately with different field
-layouts, compare equal by name. Today that requires one build to
-disagree with itself, so it is theoretical. It stops being theoretical
-the moment a box can be compiled at runtime and loaded into a running
-program — which is the direction the workbench and the runtime
-construction surface both point.
+**The field tables were left where they are.** Nothing here consults
+them, and two other things do: the reader that turns brace text into
+bytes, and the writer that turns bytes back into text.
 
-**Only the first of those two is fixed here.** Width comparison lets
-identical layouts wire and does nothing about disagreeing ones — it
-widens the hole rather than closing it, since same-width types of every
-kind now pass. That is a deliberate trade and the reasoning is below;
-what it leaves behind belongs to
-[310](310-boxes-compiled-at-runtime.md), where a box arriving with its
-own idea of a struct is no longer theoretical at all.
+**What it widens rather than closes**, recorded in
+[058](../../docs/058-guarantees.md) as its own non-guarantee: two types
+of the same width and different layouts now wire without complaint. A
+struct of four integers connects to a struct of two integers and a
+double. That is the accepted cost, and it is sharpest where a value is
+a **handle** — a wrong wire between two data types produces a wrong
+number, which is visible and local, while a wrong wire into a port
+expecting a map handle produces a call through whatever those bytes
+were, and every pointer is the same width as every other pointer and
+as a `double`.
 
+Shape comparison would close it honestly. It is designed in full below
+and the tables it needs have been emitted since phase 3, consulted by
+nothing the whole time.
 ## Intended behavior
 
 **Two types are compatible when they are the same number of bytes, and
@@ -97,7 +97,7 @@ will wire, putting every field in the wrong place. **The delivery path
 is a memory copy and it will copy whatever it is told to.**
 
 This is the same bargain the rest of the engine makes, extended one
-step further. [058](../docs/058-guarantees.md) already sells order,
+step further. [058](../../docs/058-guarantees.md) already sells order,
 timing, and pairing; this sells the last thing standing between a value
 and a wire that fits it. What is bought is that nothing anybody wrote
 in C has to be adjusted to fit through.
@@ -121,7 +121,7 @@ the same `sizeof` the compiler computes for every other box, so it asks
 nothing the type system cannot answer. Two same-width structs with
 different layouts already wire at build time — that is the accepted
 cost here — and a box compiled later makes it likelier without making
-it different. [310](310-boxes-compiled-at-runtime.md) records the same
+it different. [310](../310-boxes-compiled-at-runtime.md) records the same
 correction from its own side.
 
 The design is kept because if anybody ever wants layout disagreements
@@ -137,7 +137,7 @@ visible, local, and eventually noticed.
 
 **It stops being mild when the value is a pointer the engine will call
 through.** Once a program can build another program
-([212](212-one-way-to-build-a-program.md)), the surface's operations
+([212](../212-one-way-to-build-a-program.md)), the surface's operations
 exist as boxes, and their inputs are handles: a map handle, a placement
 function, a compiled box. On a 64-bit machine every one of those is
 **eight bytes** — and so is a `double`, a `long`, a file offset, and a
@@ -174,14 +174,14 @@ than a discovery somebody has.
    together and deliver byte-identical values, which is the capability
    this adds and the reason for the change.
 4. A test that two types of different width are refused, naming both.
-5. Record the interchangeability in [058](../docs/058-guarantees.md) as
+5. Record the interchangeability in [058](../../docs/058-guarantees.md) as
    a stated non-guarantee, in its own words rather than folded into the
    value-independence one — this is a different fact, about a wire
    rather than about a value.
 6. Leave the field tables where they are. Nothing here consults them,
    and two other things do: the reader that turns brace text into bytes
-   ([402](completed/402-struct-constants.md)) and the writer that will
-   turn bytes back into text ([408](408-values-back-into-text.md)).
+   ([402](402-struct-constants.md)) and the writer that will
+   turn bytes back into text ([408](../408-values-back-into-text.md)).
 
 ## Open questions
 
@@ -200,17 +200,17 @@ than a discovery somebody has.
 
 ## Related
 
-- [304 — Struct field tables](completed/304-struct-field-tables.md),
+- [304 — Struct field tables](304-struct-field-tables.md),
   which already emits everything this needs and has never been asked
-- [303 — The registry](completed/303-registry-emission.md), where the
+- [303 — The registry](303-registry-emission.md), where the
   type names live and where a shape would sit beside them
-- [603 — The loader, second pass](completed/603-loader-second-pass.md),
+- [603 — The loader, second pass](603-loader-second-pass.md),
   whose wire check this replaces and whose error message this improves
-- [502 — The comparator](completed/502-comparator.md), whose
+- [502 — The comparator](502-comparator.md), whose
   return-type check is the other caller
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
   where a wire drawn at runtime meets the same check
-- [801 — The workbench in the browser](801-browser-workbench.md), which
+- [801 — The workbench in the browser](../801-browser-workbench.md), which
   loads box sources the running program never compiled
-- [058 — Guarantees](../docs/058-guarantees.md), where the
+- [058 — Guarantees](../../docs/058-guarantees.md), where the
   interchangeability belongs as a non-guarantee

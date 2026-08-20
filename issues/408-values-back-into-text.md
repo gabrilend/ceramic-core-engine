@@ -40,7 +40,7 @@ concretely.
 
 **What the field table is left doing.** It keeps names and sizes,
 which is what the registry's own description routine and the
-width-based type comparison of [309](309-types-by-width.md) ask of it.
+width-based type comparison of [309](completed/309-types-by-width.md) ask of it.
 Nothing walks it to read or write a value any more; the two callers
 that do so today are the statics reader, which is being replaced, and
 the registry's describe-yourself printout, which only wants names.

@@ -160,7 +160,7 @@ points into.
 
 **Argument and type names are not carried at all.** The engine never
 used a parameter name, and under
-[309](309-types-by-width.md) it does not use type names either, only
+[309](completed/309-types-by-width.md) it does not use type names either, only
 widths. Error messages and the dump read them from the source the
 binary now carries.
 
@@ -168,7 +168,7 @@ binary now carries.
 
 - [308 — The generator, in C](completed/308-generator-in-c.md), which emits all
   of this and gains both the placement functions and the map compiler
-- [309 — Types compared by width](309-types-by-width.md), which is why
+- [309 — Types compared by width](completed/309-types-by-width.md), which is why
   type names can be dropped from what the engine carries
 - [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   the same generator-compiler-load path at the scale of one function

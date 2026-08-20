@@ -42,7 +42,6 @@
 <a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="issue-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="issue-216-removing-a-station.html">216 — Removing a station</a>
-<a href="issue-309-types-by-width.html" class="here">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
@@ -88,6 +87,7 @@
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="done-309-types-by-width.html" class="here">309 — Types compared by width, not by name</a>
 <a href="done-401-static-slots.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
@@ -143,43 +143,43 @@ below under what was considered, because the reasoning is worth more
 than the mechanism was and because the field tables it would have used
 exist and are needed elsewhere.</p>
 <h2>Current behavior</h2>
-<p>Every type check in the engine is a string comparison.</p>
-<p>The generator emits, for each box, the text of each parameter's type and
-the text of its return type, and the registry carries them. When the
-loader checks a wire it compares those two strings; when they differ it
-refuses, and the message reads *"head → wrong.1: box returns int, slot
-takes double"*. The names ride along <strong>for the error message</strong> — the
-sizes are what the engine actually runs on, and four bytes against four
-bytes is not a sentence anybody can act on.</p>
-<p>Underneath that, the generator already emits something far better and
-nothing consults it. Every struct in the box sources gets a field table:
-per field a name, an offset, a size, and a kind — signed, unsigned,
-floating, fixed string, or a nested struct pointing into the same table
-— with every offset an <code>offsetof</code> expression and every size a <code>sizeof</code>,
-so the compiler computes all of it and the deliberately padded case with
-its seven-byte hole reads correctly. **The engine knows the exact shape
-of every value it moves and decides compatibility by comparing labels.**</p>
-<p>Two consequences, one already biting and one about to.</p>
-<p><strong>Identical shapes with different names cannot be wired.</strong> A box
-producing a struct of four integers called <code>vec4</code> cannot feed a box
-taking a struct of four integers called <code>stats</code>, even though the bytes
-are indistinguishable and the delivery path would copy them correctly.
-The author's options are to rename one, or to write a box that takes
-one and returns the other and does nothing.</p>
-<p><strong>Different shapes with the same name pass the check and corrupt.</strong> Two
-structs both called <code>vec3</code>, compiled separately with different field
-layouts, compare equal by name. Today that requires one build to
-disagree with itself, so it is theoretical. It stops being theoretical
-the moment a box can be compiled at runtime and loaded into a running
-program — which is the direction the workbench and the runtime
-construction surface both point.</p>
-<p><strong>Only the first of those two is fixed here.</strong> Width comparison lets
-identical layouts wire and does nothing about disagreeing ones — it
-widens the hole rather than closing it, since same-width types of every
-kind now pass. That is a deliberate trade and the reasoning is below;
-what it leaves behind belongs to
-<a href="issue-310-boxes-compiled-at-runtime.html">310</a>, where a box arriving with its
-own idea of a struct is no longer theoretical at all.</p>
+<p><strong>Done.</strong> A wire is legal when the two sides count the same number of
+bytes. The check is one integer against another, at both places a wire
+is checked: the loader, when a map file draws one, and the rewiring
+surface, when a running program does.</p>
+<p><strong>What it buys, and the reason for the change.</strong> Two structs with
+identical layouts and different names now connect. Before, a box
+producing three floats called <code>triple</code> could not feed a box taking
+three floats called <code>vec3</code>, even though the bytes are indistinguishable
+and delivery would copy them correctly — an author's only options were
+to rename one, or to write a box that took one and returned the other
+and did nothing. Both structs live in the box source and exist for the
+test, deliberately: the thing being proven is that the <em>engine</em> stopped
+caring about the name, so the shapes have to be real types the
+generator saw.</p>
+<p><strong>Type names still ride along, in the message and nowhere else</strong>, and
+both widths ride along beside them:</p>
+<pre class="code">
+box returns <span class="kw">int</span> (4 bytes), slot takes <span class="kw">double</span> (8 bytes)
+</pre>
+<p>*"box returns vec4, slot takes stats"* does not tell a person why those
+disagree. Four bytes against eight does.</p>
+<p><strong>The field tables were left where they are.</strong> Nothing here consults
+them, and two other things do: the reader that turns brace text into
+bytes, and the writer that turns bytes back into text.</p>
+<p><strong>What it widens rather than closes</strong>, recorded in
+<a href="doc-058-guarantees.html">058</a> as its own non-guarantee: two types
+of the same width and different layouts now wire without complaint. A
+struct of four integers connects to a struct of two integers and a
+double. That is the accepted cost, and it is sharpest where a value is
+a <strong>handle</strong> — a wrong wire between two data types produces a wrong
+number, which is visible and local, while a wrong wire into a port
+expecting a map handle produces a call through whatever those bytes
+were, and every pointer is the same width as every other pointer and
+as a <code>double</code>.</p>
+<p>Shape comparison would close it honestly. It is designed in full below
+and the tables it needs have been emitted since phase 3, consulted by
+nothing the whole time.</p>
 <h2>Intended behavior</h2>
 <p>**Two types are compatible when they are the same number of bytes, and
 nothing else is consulted.**</p>

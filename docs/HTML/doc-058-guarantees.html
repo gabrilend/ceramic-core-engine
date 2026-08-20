@@ -42,7 +42,6 @@
 <a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="issue-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="issue-216-removing-a-station.html">216 — Removing a station</a>
-<a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
@@ -88,6 +87,7 @@
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-401-static-slots.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
@@ -298,6 +298,33 @@ for and what removing them cost.</p>
 <p>---</p>
 <h2>Not guaranteed — and worth knowing</h2>
 <p>These are the places where somebody could reasonably expect a guarantee
+and not get one. Naming them is the same work as naming the guarantees.</p>
+<p>**A wire is checked by width, not by shape, and never by name (issue
+309).** Two types of the same size connect regardless of what is
+inside them: a struct of four integers wires into a struct of two
+integers and a double, and delivery copies the bytes exactly as asked.</p>
+<p>That is a deliberate trade with a real gain on one side. Under name
+comparison, two structs with <strong>identical</strong> layouts and different names
+could not be connected at all — an author's only options were to
+rename one or to write a box that took one and returned the other and
+did nothing. Under width comparison they connect, which is the
+capability this bought, and so do types that merely happen to be the
+same size, which is what it cost.</p>
+<p><strong>The hole widens rather than closing</strong> as boxes start arriving
+compiled at runtime, since two separately written sources are likelier
+to disagree about a struct than one build is with itself. It is the
+same failure either way and it was already on the books. Shape
+comparison — matching kind, size and offset field by field — would
+close it honestly, is fully designed in issue 309, and the field
+tables it needs have been emitted since phase 3 and consulted by
+nothing. It was not taken because comparing one integer against
+another is what a wire check should cost.</p>
+<p><strong>Where it bites hardest is a value that is a handle.</strong> A wrong wire
+between two data types produces a wrong number, which is visible and
+local. A wrong wire into a port expecting a map handle or a function
+pointer produces a call through whatever those bytes were. Every
+pointer is the same width as every other pointer, and as a <code>double</code>,
+and as a file offset.
 and not get one. Naming them is the same work as naming the guarantees.</p>
 <p>**One process-wide variable is left, and it is the last load's
 timings.** A second load overwrites the first's breakdown, which

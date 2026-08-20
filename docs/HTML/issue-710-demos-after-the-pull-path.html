@@ -42,7 +42,6 @@
 <a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="issue-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="issue-216-removing-a-station.html">216 — Removing a station</a>
-<a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
@@ -88,6 +87,7 @@
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-401-static-slots.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
@@ -154,7 +154,7 @@ which needs the statics work (<a href="done-401-static-slots.html">401</a>,
 <a href="issue-405-statics-mutation.html">405</a>) standing on the port record
 (<a href="issue-210b-the-port-record.html">210b</a>). Phase 6's substitution needs the
 same. Phase 7's replacement scene needs only
-<a href="issue-309-types-by-width.html">309</a>, and could go first.</p>
+<a href="done-309-types-by-width.html">309</a>, and could go first.</p>
 <h2>Current behavior</h2>
 <p>Three of the seven demos have scenes that demonstrate a capability
 being removed (<a href="impl-056-no-pull-path.html">056</a>).</p>
@@ -215,7 +215,7 @@ exercises statics-with-writes where it exercised gatherers.</p>
 <h3>Phase 7, a different illegal edit</h3>
 <p>Keep the scene; change what is refused. A wire whose types do not match
 is the natural candidate, and under
-<a href="issue-309-types-by-width.html">309</a> it reads better than a cycle ever did: the
+<a href="done-309-types-by-width.html">309</a> it reads better than a cycle ever did: the
 message can name the first field where two layouts diverge rather than
 only reporting that two names differ.</p>
 <h3>What must not be lost</h3>
@@ -234,7 +234,7 @@ ends with a finding. A scene that cannot be given a story that makes a
 reader care is evidence about the mechanic, not about the story.</p>
 <h2>Suggested implementation steps</h2>
 <p>1. Phase 7's scene first, since it needs only
-   <a href="issue-309-types-by-width.html">309</a> and restores one of the three broken
+   <a href="done-309-types-by-width.html">309</a> and restores one of the three broken
    demos immediately. Then wait for the statics work — phases 4 and 6
    demonstrate a mechanism that does not exist yet.
 2. Phase 4 end to end, since it is effectively a new demo rather than
@@ -323,7 +323,7 @@ reader care is evidence about the mechanic, not about the story.</p>
 <p>  the contract every new scene is held to</p>
 <li><a href="doc-004-datapath-statics.html">004 — Statics and recalculation</a>,</li>
 <p>  the mechanism phase 4 now demonstrates</p>
-<li><a href="issue-309-types-by-width.html">309 — Types compared by width</a>, which gives</li>
+<li><a href="done-309-types-by-width.html">309 — Types compared by width</a>, which gives</li>
 <p>  phase 7's refusal a better message than the one it replaces</p>
 </ul>
 

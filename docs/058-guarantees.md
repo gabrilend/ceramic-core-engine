@@ -196,6 +196,37 @@ for and what removing them cost.
 These are the places where somebody could reasonably expect a guarantee
 and not get one. Naming them is the same work as naming the guarantees.
 
+**A wire is checked by width, not by shape, and never by name (issue
+309).** Two types of the same size connect regardless of what is
+inside them: a struct of four integers wires into a struct of two
+integers and a double, and delivery copies the bytes exactly as asked.
+
+That is a deliberate trade with a real gain on one side. Under name
+comparison, two structs with **identical** layouts and different names
+could not be connected at all — an author's only options were to
+rename one or to write a box that took one and returned the other and
+did nothing. Under width comparison they connect, which is the
+capability this bought, and so do types that merely happen to be the
+same size, which is what it cost.
+
+**The hole widens rather than closing** as boxes start arriving
+compiled at runtime, since two separately written sources are likelier
+to disagree about a struct than one build is with itself. It is the
+same failure either way and it was already on the books. Shape
+comparison — matching kind, size and offset field by field — would
+close it honestly, is fully designed in issue 309, and the field
+tables it needs have been emitted since phase 3 and consulted by
+nothing. It was not taken because comparing one integer against
+another is what a wire check should cost.
+
+**Where it bites hardest is a value that is a handle.** A wrong wire
+between two data types produces a wrong number, which is visible and
+local. A wrong wire into a port expecting a map handle or a function
+pointer produces a call through whatever those bytes were. Every
+pointer is the same width as every other pointer, and as a `double`,
+and as a file offset.
+and not get one. Naming them is the same work as naming the guarantees.
+
 **One process-wide variable is left, and it is the last load's
 timings.** A second load overwrites the first's breakdown, which
 matters to nobody except somebody loading two maps and then asking how

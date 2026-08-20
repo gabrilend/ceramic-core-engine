@@ -70,7 +70,7 @@ task size, the by-name struct search, and the backwards lookup from a
 shim pointer to a box name — the station knows its own name now.
 
 **Type and argument names are not carried.** The engine never used a
-parameter name, and under [309](309-types-by-width.md) it does not use
+parameter name, and under [309](completed/309-types-by-width.md) it does not use
 type names either, only widths. Error messages and the dump read them
 out of the source the binary carries
 ([311c](311c-source-rides-in-the-binary.md)) — which is the exact text

@@ -249,3 +249,41 @@ int vec3__compare(vec3 a, vec3 b)
     return (ma > mb) - (ma < mb);
 }
 /* }}} */
+
+/* A struct laid out exactly like vec3 and named something else, for
+ * issue 309: three floats, same order, same widths, same offsets. It
+ * exists so a test can prove that a wire between two identical shapes
+ * under different names now connects — which it could not while wires
+ * were checked by comparing type names, and which forced an author to
+ * rename one or to write a box that took one and returned the other
+ * and did nothing. */
+typedef struct {
+    float a;
+    float b;
+    float c;
+} triple;
+
+/* {{{ as_triple() */
+/*
+ * Produces a triple, so a station running this can be wired into a
+ * station taking a vec3. Nothing converts: the point is that no
+ * conversion is needed, because the bytes are already right.
+ */
+triple as_triple(float a, float b, float c)
+{
+    triple t;
+    t.a = a;
+    t.b = b;
+    t.c = c;
+    return t;
+}
+/* }}} */
+
+/* {{{ triple_sum() */
+/* Takes a triple and adds it up, so a vec3 arriving here can be seen
+ * to have arrived intact. */
+float triple_sum(triple t)
+{
+    return t.a + t.b + t.c;
+}
+/* }}} */

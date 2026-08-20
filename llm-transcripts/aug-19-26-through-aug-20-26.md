@@ -1,6 +1,6 @@
 # Conversation Summary: 3ccc0eb0-a576-4361-85ec-79ae4bb357a4
 
-Generated on: 2026-08-20 10:29:11
+Generated on: 2026-08-20 10:52:17
 
 --------------------------------------------------------------------------------
 
@@ -6033,6 +6033,231 @@ and nothing is broken.
 Want me to file this as a document? It'd sit beside the existing roadmap, which
 describes the phases as clusters of functionality rather than an order of work
 — this is the other view, and the two don't conflict.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 35
+
+okay can you add 401 and 308 to your todo list and then work on them until
+they're done?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 35
+
+Let me read 401 completely before touching anything.
+
+
+**401 says "Done."** Its current-behavior section opens with it. Let me verify
+against the code rather than take the file's word.
+
+
+**401 is already built.** All seven of the tests it specifies exist and pass:
+
+
+```
+
+== 035-test-statics
+
+  a static fed 50 runs without ever being consumed
+
+  an all-static station is never woken by delivery
+
+  brace text became bytes identical to a compiled initializer
+
+  four malformed statics each died where they were given
+
+  4000 claims raced a writer through the station's own mutex: zero torn, last write visible
+
+  two ports given one value are independent afterwards
+
+  two maps ran side by side and did not see each other
+
+```
+
+
+The port record carries `constant`, `constant_string`, `constant_set`; the
+header says outright *"There was a statics table here and it is gone (issue
+401)"*; and the bytes-to-text formatter exists as `slot_constant_text`. The one
+thing its file lists as not done — an arrow delivering into a static port —
+it explicitly assigns to 405.
+
+
+So it's finished work sitting in the wrong directory. Let me complete the
+paperwork.
+
+
+401 being done clears a blocker that two other issues still describe as active.
+Let me fix those.
+
+
+401 filed. Now 308 — the generator in C. Let me read it and size the job.
+
+
+683 lines of Lua to translate. Let me get the full context — the build, the
+layout, and the generator itself.
+
+
+Now the generator itself. Reading it in full.
+
+
+Now the existing generator tests, since they're the specification for parity.
+
+
+I have the full picture. Let me check the index counter and start building.
+
+
+Counter is stale — `tests/063` and `064` exist. Bumping and starting at 065.
+
+
+Now a test for the support machinery, before anything builds on it.
+
+
+Support machinery holds. Now the parser.
+
+
+Now the emitter, matching the Lua output exactly.
+
+
+Now main, and then a parity check against the Lua generator.
+
+
+Compiles clean. Now the parity check against the Lua generator.
+
+
+Both modes byte-identical. Now the error-conduct tests, which are the harder
+specification.
+
+
+All conduct cases pass. Now let me compare refusal messages across a batch of
+malformed sources.
+
+
+Only two differences, both improvements: exit code 65 instead of 1 (matching the
+project's own code table), and the unterminated-comment error now names the file
+instead of `(input):0`. Now the build wiring.
+
+
+Two seam errors. Fixing.
+
+
+Now update the CLI test to drive the C generator, and add the parity test.
+
+
+Clean build, all tests pass, byte-identical output. Now the paperwork. Let me
+check the info-file format first.
+
+
+All tests pass. Now the issue paperwork — 308's current behavior.
+
+
+Now the second commit — retiring the deprecated script and the parity test
+that guarded it.
+
+
+One orphan page from the generator's removal — the gap I recorded in 705. Let
+me sweep for any others.
+
+
+More orphans than my check caught — from this session's renames. Cleanest fix
+is to regenerate the whole set.
+
+
+Both issues are done and filed. Five commits.
+
+
+## 401 — statics on the port
+
+
+**It was already built.** The port record carries `constant`, `constant_string`,
+`constant_set`; the station header says outright *"There was a statics table
+here and it is gone"*; and all seven tests the issue specifies pass. It was
+finished work sitting in the wrong directory.
+
+
+What it had bought, now recorded as complete: two ports given the same file
+entry are strangers afterwards (they used to share bytes shaped by whichever
+bound first, so two ports of different types could each read one value their own
+way); everything one invocation reads is true at one instant (a constant used to
+be fetched after the station's lock was released, behind a second lock that
+couldn't nest inside the first); and a process can hold several running programs
+that can't see each other, which the shared table had made impossible.
+
+
+**It was also blocking half the port family**, and two issues still described
+that blocker as live. Cleared. The deadlock is worth keeping: two pieces each
+waited for the other to provide the room, and it broke when somebody noticed
+that *whoever deletes a thing is the one who has to know what replaces it* —
+so the deleter built the storage it spends rather than waiting to be handed it.
+
+
+## 308 — the generator in C
+
+
+**Built, proven, and the Lua script retired.** 683 lines of Lua became four C
+files:
+
+
+| file | what |
+
+|---|---|
+
+| `065/066-gentext` | arena, growable string, growable array, string helpers |
+
+| `067/068-genparse` | comment blanking, declaration parsing, validation |
+
+| `069-genemit` | comparisons, shims, field tables, the registry |
+
+| `070-generate` | the front door |
+
+
+**Parity was proven byte for byte, not asserted:** 259 lines of emitted registry
+identical apart from the line naming which generator wrote it, describe mode
+identical, and thirteen malformed sources each refused by both with *the same
+message*. The comparison test said in its own header that it couldn't outlive
+what it compared against, and went with it — the Lua script stayed one commit
+under a deprecated name so it appears in the record once as deliberately put
+down.
+
+
+**Two behaviours changed, both improvements:** failure now reports *which kind*
+of failure using the project's own exit codes rather than a bare 1, and an
+unterminated block comment finally names its file instead of reporting
+`(input):0`.
+
+
+**The issue's prediction held** — parsing was the small half. The floor
+underneath it is the bulk, and it got its own test because a crack there
+surfaces as garbled C hundreds of lines away.
+
+
+One piece worth knowing: a function's name is found by scanning **backwards**
+from the last `)` to its match, because a name can sit directly against a star
+with nothing between — `char *sneaky` — and no single split expresses that.
+The Lua version had already given up and done it by hand for the same reason.
+
+
+**LuaJIT is off the build path.** Building this engine now needs a C compiler
+and nothing else. Regenerating the HTML documentation still needs LuaJIT, which
+is deliberately out of scope — project housekeeping, not the road a consumer
+walks — and that distinction is now stated in the Makefile header, the
+packaging note, and the generator's info file.
+
+
+## One thing I found along the way
+
+
+Six generated pages had outlived their sources — two from long-retired files,
+four from this session's renames — reachable at their old addresses with stale
+text and stale links. The site generator only ever writes and has never removed
+anything. I swept them by regenerating the whole set from empty, and the
+underlying gap is recorded in the HTML documentation issue.
+
+
+Clean build from scratch: 17 test binaries plus the CLI conduct suite, all
+passing.
 
 
 --------------------------------------------------------------------------------

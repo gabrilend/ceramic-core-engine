@@ -21,7 +21,7 @@ which needs the statics work ([401](completed/401-static-slots.md),
 [405](405-statics-mutation.md)) standing on the port record
 ([210b](210b-the-port-record.md)). Phase 6's substitution needs the
 same. Phase 7's replacement scene needs only
-[309](309-types-by-width.md), and could go first.
+[309](completed/309-types-by-width.md), and could go first.
 
 ## Current behavior
 
@@ -96,7 +96,7 @@ exercises statics-with-writes where it exercised gatherers.
 
 Keep the scene; change what is refused. A wire whose types do not match
 is the natural candidate, and under
-[309](309-types-by-width.md) it reads better than a cycle ever did: the
+[309](completed/309-types-by-width.md) it reads better than a cycle ever did: the
 message can name the first field where two layouts diverge rather than
 only reporting that two names differ.
 
@@ -120,7 +120,7 @@ reader care is evidence about the mechanic, not about the story.
 ## Suggested implementation steps
 
 1. Phase 7's scene first, since it needs only
-   [309](309-types-by-width.md) and restores one of the three broken
+   [309](completed/309-types-by-width.md) and restores one of the three broken
    demos immediately. Then wait for the statics work — phases 4 and 6
    demonstrate a mechanism that does not exist yet.
 2. Phase 4 end to end, since it is effectively a new demo rather than
@@ -211,5 +211,5 @@ reader care is evidence about the mechanic, not about the story.
   the contract every new scene is held to
 - [004 — Statics and recalculation](../docs/004-datapath-statics.md),
   the mechanism phase 4 now demonstrates
-- [309 — Types compared by width](309-types-by-width.md), which gives
+- [309 — Types compared by width](completed/309-types-by-width.md), which gives
   phase 7's refusal a better message than the one it replaces

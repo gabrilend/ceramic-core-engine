@@ -88,15 +88,27 @@ int map_rewire_connect(map_t *m, int from_station, int port,
         pthread_mutex_unlock(&m->rewire_mutex);
         return refuse(message);
     }
-    if (from->slots && to->slots && dest->type_name) {
-        const char *from_type = NULL;
-        const box_info_t *b = registry_find(registry_box_name_for_shim(from->call));
-        if (b)
-            from_type = b->return_type;
-        if (from_type && strcmp(from_type, dest->type_name) != 0) {
+    /*
+     * The wire check, by **width** rather than by type name (issue
+     * 309). Identical layouts under different names now wire, which
+     * is the capability this buys; same-width types of different
+     * layouts also wire, which is the accepted cost, stated as a
+     * non-guarantee in 058.
+     *
+     * The names still ride along in the message, because "4 bytes
+     * against 4 bytes" is not a sentence anybody can act on — and
+     * both widths ride along beside them, because "box returns vec4,
+     * slot takes stats" does not say why those disagree.
+     */
+    if (from->slots && to->slots) {
+        const box_info_t *b =
+            registry_find(registry_box_name_for_shim(from->call));
+        if (b && b->return_size != dest->elem_size) {
             char message[192];
             snprintf(message, sizeof message,
-                     "box returns %s, slot takes %s", from_type, dest->type_name);
+                     "box returns %s (%d bytes), slot takes %s (%d bytes)",
+                     b->return_type, b->return_size,
+                     dest->type_name ? dest->type_name : "?", dest->elem_size);
             pthread_mutex_unlock(&m->rewire_mutex);
             return refuse(message);
         }

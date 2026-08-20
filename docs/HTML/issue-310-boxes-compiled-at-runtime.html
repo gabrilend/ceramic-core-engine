@@ -42,7 +42,6 @@
 <a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="issue-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="issue-216-removing-a-station.html">216 — Removing a station</a>
-<a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html" class="here">310 — Boxes compiled while the program runs</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
@@ -88,6 +87,7 @@
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-401-static-slots.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
@@ -218,7 +218,7 @@ ready yet is a station that is not ready yet, which is a state it
 already has a word for.</p>
 <p>**A box arriving late needs to report the width of each input and of
 its output, and that is the whole of what the type system asks of it.**
-Under <a href="issue-309-types-by-width.html">309</a> a wire is legal when the two sides
+Under <a href="done-309-types-by-width.html">309</a> a wire is legal when the two sides
 count the same number of bytes, and those numbers come from the same
 place they always came from: a <code>sizeof</code> the compiler computed while
 compiling this box. So a runtime box supplies exactly what a build-time
@@ -252,7 +252,7 @@ would eventually disagree with the first about what a box is.</p>
 3. Adding a registry row: name, shim, per-parameter widths, return
    width, task size, and a comparison if there is one. Nothing about
    the new box's types is checked against the program's, because
-   <a href="issue-309-types-by-width.html">309</a> checks widths when a wire is drawn and
+   <a href="done-309-types-by-width.html">309</a> checks widths when a wire is drawn and
    there is nothing earlier worth asking.
 4. A test that a box written after the program started is placed,
    wired, and delivers values byte-identically.
@@ -354,7 +354,7 @@ would eventually disagree with the first about what a box is.</p>
 <ul>
 <li><a href="done-308-generator-in-c.html">308 — The generator, in C</a>, which is what</li>
 <p>  makes the parser callable at runtime rather than only at build time</p>
-<li><a href="issue-309-types-by-width.html">309 — Types compared by width</a>, a hard</li>
+<li><a href="done-309-types-by-width.html">309 — Types compared by width</a>, a hard</li>
 <p>  prerequisite — by-name comparison makes this corrupt silently</p>
 <li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, which</li>
 <p>  shrinks the table this makes growable to a name and a pointer, and

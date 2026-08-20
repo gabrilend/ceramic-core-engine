@@ -180,8 +180,8 @@ static void test_every_refusal(void)
         "head seven p\n"
         "  out 0 - wrong.1\n"
         "wrong mix p\n",
-        "box returns int, slot takes double",
-        "a type-mismatched wire was accepted");
+        "box returns int (4 bytes), slot takes double (8 bytes)",
+        "a wire between different widths was accepted");
 
     expect_death_saying(
         "head seven p\n"

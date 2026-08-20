@@ -144,24 +144,42 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
 /* {{{ type_check_wire() */
 /*
  * The wire check (issue 603), at the first moment both ends are
- * known. Type names, not sizes: "4 bytes versus 4 bytes" is not a
- * message. Typedef transparency is inherited from the registry —
- * two names for int would already read "int" there — and
- * distinguishing wrapped types any further is deliberately not done.
+ * known.
+ *
+ * **Widths, not names** (issue 309). It compared the two type name
+ * strings until then, which meant a box producing four integers
+ * called `vec4` could not feed a box taking four integers called
+ * `stats` even though the bytes are indistinguishable and delivery
+ * would copy them correctly — the author's only options were to
+ * rename one or to write a box that took one and returned the other
+ * and did nothing.
+ *
+ * The names still ride along, in the message and nowhere else,
+ * because "4 bytes against 4 bytes" is not a sentence anybody can act
+ * on. Both widths are reported beside them, because "box returns
+ * vec4, slot takes stats" does not say *why* those disagree and
+ * "16 bytes against 12" does.
+ *
+ * What this widens rather than closes: two types of the same width
+ * and different layouts now wire without complaint. That is the
+ * accepted cost, and it is stated as a non-guarantee in 058.
  */
 static void type_check_wire(map_description_t *d, int line,
                             const char *from_name, const box_info_t *from_box,
                             const char *to_name, int to_slot,
-                            const char *to_type)
+                            const char *to_type, int to_size)
 {
-    if (strcmp(from_box->return_type, to_type) != 0) {
+    if (from_box->return_size != to_size) {
         fprintf(stderr,
-                "map %s:%d: %s -> %s.%d: box returns %s, slot takes %s\n",
+                "map %s:%d: %s -> %s.%d: box returns %s (%d bytes), "
+                "slot takes %s (%d bytes)\n",
                 d->path, line, from_name, to_name, to_slot,
-                from_box->return_type, to_type);
+                from_box->return_type, from_box->return_size,
+                to_type ? to_type : "?", to_size);
         abort();
     }
 }
+/* }}} */
 /* }}} */
 
 /* {{{ second_pass() */
@@ -198,7 +216,8 @@ static void second_pass(map_t *m, map_description_t *d, name_table_t *names)
             }
             type_check_wire(d, out->line, s->name, from_box,
                             out->dest_station, out->dest_slot,
-                            dest_station->slots[out->dest_slot].type_name);
+                            dest_station->slots[out->dest_slot].type_name,
+                            dest_station->slots[out->dest_slot].elem_size);
             map_connect(m, index, out->port, dest, out->dest_slot);
         }
     }

@@ -102,7 +102,7 @@ already has a word for.
 
 **A box arriving late needs to report the width of each input and of
 its output, and that is the whole of what the type system asks of it.**
-Under [309](309-types-by-width.md) a wire is legal when the two sides
+Under [309](completed/309-types-by-width.md) a wire is legal when the two sides
 count the same number of bytes, and those numbers come from the same
 place they always came from: a `sizeof` the compiler computed while
 compiling this box. So a runtime box supplies exactly what a build-time
@@ -141,7 +141,7 @@ would eventually disagree with the first about what a box is.
 3. Adding a registry row: name, shim, per-parameter widths, return
    width, task size, and a comparison if there is one. Nothing about
    the new box's types is checked against the program's, because
-   [309](309-types-by-width.md) checks widths when a wire is drawn and
+   [309](completed/309-types-by-width.md) checks widths when a wire is drawn and
    there is nothing earlier worth asking.
 4. A test that a box written after the program started is placed,
    wired, and delivers values byte-identically.
@@ -250,7 +250,7 @@ would eventually disagree with the first about what a box is.
 
 - [308 — The generator, in C](completed/308-generator-in-c.md), which is what
   makes the parser callable at runtime rather than only at build time
-- [309 — Types compared by width](309-types-by-width.md), a hard
+- [309 — Types compared by width](completed/309-types-by-width.md), a hard
   prerequisite — by-name comparison makes this corrupt silently
 - [311 — The registry dissolved](311-the-registry-dissolved.md), which
   shrinks the table this makes growable to a name and a pointer, and
