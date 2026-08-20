@@ -70,11 +70,14 @@ values on ports and no entry numbers to point back at.
 
 **Still ahead:**
 
-- The map file has no form for an unconfigured port. The dump writes
-  one as a comment saying the format cannot spell it, which keeps the
-  dump honest at the cost of the round trip: a half-built program is
-  currently one of the things a dump cannot promise to reload.
-- No form for a starting depth either, though the call exists.
+- The map file has no form for an unconfigured port **built**, though
+  the spelling is now decided: a bare dash, `in 2 -`. Until the reader
+  learns it, the dump writes one as a comment saying the format cannot
+  spell it, which keeps the dump honest at the cost of the round trip —
+  a half-built program is currently one of the things a dump cannot
+  promise to reload.
+- No form for a starting depth built either, though the call exists and
+  the spelling is decided: `x64` after the source.
 
 ## Intended behavior
 
@@ -166,27 +169,42 @@ as a null the caller tests for.
 
 ## Open questions
 
-- What does an unconfigured port look like in the file? It has to be a
-  line, because the format writes only exceptions and *unconfigured*
-  is one — but the natural spellings all read like a value rather than
-  like an absence, and the reader should not have to guess whether
-  somebody meant it.
+**Answered:**
 
-  **The obstacle is cleared and the question is now answerable.** It
-  could not be settled while the `in` line's other forms were in flux;
-  they have settled. A port's source is now written one of two ways,
-  `$0` fetching text from the statics section and `= 5` carrying it on
-  the line, and an absent form has to be visibly neither. The three
-  candidates were a bare dash, the word *none*, and a question mark.
+- *What does an unconfigured port look like in the file?* **A bare
+  dash.** `in 2 -` is a port whose source has not been given yet.
 
-  A bare dash reads best against the forms that now exist — no value
-  in this format is ever a lone dash, and the dash already means
-  "wire" on an out line, so `in 2 -` reads as a wire that is not there
-  yet. But it is one character and somebody has to live with it, so it
-  is asked rather than assumed.
+  The three candidates were a bare dash, the word *none*, and a
+  question mark. The dash wins on what the format already says
+  elsewhere: no value in this format is ever a lone dash, so it cannot
+  be read as one, and the dash already means *wire* on an out line — so
+  `in 2 -` reads as a wire that is not there yet rather than as a value
+  nobody can name. The word *none* would have been unmistakable to a
+  stranger and was the runner-up; it lost because it can collide with a
+  future type or box called `none`, and because every other exception
+  this format writes is punctuation rather than a word.
 
-  A starting depth wants a spelling at the same time, since it is the
-  third thing an `in` line could say about a port.
+  Omitting the line was considered and refused for the reason the dump
+  exists. A port with no line would be indistinguishable from a port
+  nobody had thought about, and the dump's whole value is that it says
+  what is actually there.
+
+- *And a starting depth?* **`x64`, written after the source.** So
+  `in 0 $0 x64` is a port reading statics entry zero whose ring starts
+  with room for sixty-four values instead of ten. It reads as *sixty-
+  four of them*, the way a parts list writes a quantity.
+
+  **A depth may appear beside any of the three source forms, including
+  the dash**, because depth and source are independent — every port
+  owns ring cells whatever its tag currently says, which is the
+  standing buffer this issue is built on. `in 1 - x256` is a port with
+  no source yet and room for two hundred and fifty-six values when it
+  gets one.
+
+  A star was briefly accepted as a second spelling and then withdrawn.
+  One spelling, read and written, matching the engine's habit of having
+  exactly one way to say a thing; the reader refuses `*64` rather than
+  quietly taking it.
 
 ## Related
 

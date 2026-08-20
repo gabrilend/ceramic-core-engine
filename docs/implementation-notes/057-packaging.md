@@ -243,6 +243,32 @@ test run rather than being discovered by whoever tries to use it.
 
 ## Decisions that have to be made first
 
+**0. Which compiler, and when one is needed at all — settled.** The
+engine requires **GCC**, and it is the same GCC that built the binary:
+the build records which compiler it used and every runtime compile
+invokes that one. That gives a program exactly one answer to `sizeof`
+by construction rather than by checking, which is the property that
+matters when a box compiled later has to wire into a box compiled
+earlier.
+
+Clang and Windows are deliberately deferred. Clang runs on Windows in
+two modes and needs the platform toolchain for headers and libraries
+either way, so choosing it would relocate the dependency rather than
+remove it; and loading compiled code on Windows is `LoadLibrary` and
+`GetProcAddress` rather than `dlopen`, which is work that has nothing
+to do with compiler choice. What is owed to the deferral is one cheap
+thing: **the compiler invocation lives in one place in the source**, so
+adding a second is a local edit.
+
+**And the toolchain is not a tax on every program.** Since
+[311d](../../issues/311d-the-map-as-manifest.md) makes a map a build
+input, a program whose map names only boxes the binary already carries
+never invokes a compiler at all — it ships as one file, source text
+included, and runs on a machine with no toolchain on it. The compiler
+is required precisely when new code is genuinely arriving, which is
+[310](../../issues/310-boxes-compiled-at-runtime.md)'s path and the
+only case where anyone would expect otherwise.
+
 **1. What happens on an error — settled.** An installable handler,
 called with the message immediately before the engine dies. The host
 gets to log it, flush its own state, and know what happened. **The

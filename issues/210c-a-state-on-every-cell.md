@@ -63,7 +63,7 @@ computed position is the only one it has.
 
 So the reader has to stop computing a position and start looking for a
 ready cell. That is exactly
-[210d](210d-the-claim-takes-no-lock.md)'s scan, and it is needed
+[210d](210d-the-copies-leave-the-lock.md)'s scan, and it is needed
 *before* the lock comes off the copy rather than after. The
 distinction that issue draws — a position must be exact and is
 therefore computed, a hint may be wrong and therefore is not — is what
@@ -137,7 +137,7 @@ then start removing the thing that was covering for it.
    avoid needing one is the wrong way round. The scaffolding's own
    race was the first thing that shape produced.
 3. **The scan comes first**, from
-   [210d](210d-the-claim-takes-no-lock.md), for the reason set out
+   [210d](210d-the-copies-leave-the-lock.md), for the reason set out
    above: a reserved-but-unpublished cell is indistinguishable from a
    full one to anything that computes a position, so the reader has to
    look rather than calculate before either copy can leave the lock.
@@ -153,11 +153,14 @@ then start removing the thing that was covering for it.
 
 ## What this issue does not do
 
-The claim still walks under the station's mutex here; only the copying
-leaves. Making the claim itself lockless is
-[210d](210d-the-claim-takes-no-lock.md), and it is separate because
-the rollback and the ordering rule that make it safe are their own
-argument.
+The claim still walks under the station's mutex here, and it always
+will; what leaves is the copying. Narrowing the mutex to cover only
+the cell states, and moving both value copies outside it, is
+[210d](210d-the-copies-leave-the-lock.md). It is separate because the
+protection that replaces the lock is a different argument entirely:
+not exclusion, but ownership — a cell in *reserved* or *claimed*
+belongs to exactly one worker, and bytes nobody else may touch need no
+lock around them.
 
 ## The baseline, taken
 
@@ -203,7 +206,7 @@ None outstanding. The baseline question above is answered.
 - [210 — What an input port is](210-input-port-record.md), the parent
 - [210b — The port record](210b-the-port-record.md), which this needs
   for the cells to live on
-- [210d — The claim takes no lock](210d-the-claim-takes-no-lock.md),
+- [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md),
   which is only expressible once cells carry their own states
 - [210e — Growth adds a page](210e-growth-adds-a-page.md), which needs
   occupancy to stop being implied by indices

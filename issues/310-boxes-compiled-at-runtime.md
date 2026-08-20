@@ -45,12 +45,60 @@ computes every one of them and the generator never guesses. So the
 signature supplies the paperwork and a compiler supplies the numbers.
 There is no version of this that skips the compiler.
 
-**The registry becomes a growable table.** It is indexed by name when a
-station is placed and by row afterward, so it takes the same paging
+**The box table becomes a growable table.** It is indexed by name when
+a station is placed and by row afterward, so it takes the same paging
 shape as everything else that grows: add a block, never move what is
 already there, and readers resolving a row are never disturbed. That is
 the fourth or fifth use of the same pattern in this engine, and by now
 it should be a shared piece rather than a fifth hand-rolled one.
+
+[311](311-the-registry-dissolved.md) shrinks that table to two columns
+— a name and a placement function — which makes growing it cheaper than
+this issue assumed and changes nothing about the shape.
+
+### Which compiler, and at what setting
+
+**One compiler per program, and it is the compiler that built the
+binary.** The build records which one; every runtime compile invokes
+that same one. So there is exactly one answer to `sizeof` in a given
+program **by construction** — not checked, not mitigated, structurally
+impossible to violate.
+
+**That is GCC, for now.** Not because it is best but because deciding
+between compilers is work nobody needs yet. Clang, and Windows, are
+deferred; what is owed to that deferral is one thing only, and it is
+cheap: **the invocation lives in one place in the source**, so adding a
+second is a local edit rather than a hunt. That is not an abstraction —
+there is nothing yet to abstract over — it is just not scattering the
+word `gcc` across three files.
+
+**Runtime compiles use low optimization; the build uses high.**
+Optimization level cannot change struct layout — layout is fixed by the
+platform ABI, and `-O0` and `-O2` are the same compiler emitting the
+same offsets — so this varies compile speed freely with no risk at all
+to the sizes. Build time is allowed to be slow. Runtime compilation is
+not.
+
+**A second compiler was considered and refused, and the refusal is
+worth keeping.** TinyCC, as `libtcc`, compiles C in-process — no
+subprocess, no shared object, no `dlopen`, roughly an order of
+magnitude faster on small inputs — and it is built for exactly this.
+What it costs is a second answer to `sizeof`. For standard types there
+would be no disagreement, since struct layout is ABI rather than
+compiler; the divergence lives in bitfields, `long double`, packed
+attributes, and extensions TinyCC does not implement, where the usual
+outcome is a refusal to compile rather than a wrong number. The width
+check would catch the remainder. It was still refused, because *one
+answer by construction* is a better property than *two answers and a
+net*, and because `-O0` recovers most of the speed for free.
+
+**If runtime latency still hurts, the move that keeps this decision is
+to take the compile off the critical path** — hand the source over,
+return immediately, let the station go live when the compile finishes.
+The engine is already asynchronous by construction: a box that is not
+ready yet is a station that is not ready yet, which is a state it
+already has a word for.
+
 
 **A box arriving late needs to report the width of each input and of
 its output, and that is the whole of what the type system asks of it.**
@@ -85,7 +133,7 @@ would eventually disagree with the first about what a box is.
 
 ## Suggested implementation steps
 
-1. The registry as a growable table, paged, with lookup and placement
+1. The box table as a growable table, paged, with lookup and placement
    reading it safely while it grows.
 2. Compile-and-load as a deliberate call: take source, produce a shared
    library in the RAM-backed build tier, load it, resolve the shim.
@@ -119,14 +167,32 @@ would eventually disagree with the first about what a box is.
 
 **Answered:**
 
-- *Where does the compiler come from?* **Assume it is there.** The
-  engine calls a C compiler at runtime and does not negotiate about it.
-  What answers the packaging concern is an install script that builds
-  the dependencies from source into a local place, written once the
-  system is finished rather than designed around now — so the
-  dependency is real, acknowledged, and handled by installation rather
-  than by making the engine tiptoe. Compiling boxes late is not a
-  capability worth crippling to spare a deployment one package.
+- *Where does the compiler come from?* **Assume it is there — but only
+  when it is actually needed, which is rarer than this issue first
+  assumed.** The engine calls a C compiler at runtime and does not
+  negotiate about it. What answers the packaging concern is an install
+  script that builds the dependencies from source into a local place,
+  written once the system is finished rather than designed around now.
+
+  **[311d](311d-the-map-as-manifest.md) narrows when that bites.** A
+  program whose map names only boxes the binary already carries never
+  invokes a compiler at all and ships as one file. The toolchain is
+  required precisely when new code is genuinely arriving, which is the
+  only time anyone could reasonably expect otherwise. So the dependency
+  stopped being a tax on every program and became the price of one
+  capability.
+
+- *Which compiler, and is a fast in-process one worth a second answer
+  to `sizeof`?* **GCC, the same one that built the binary, at low
+  optimization; and no.** Written up under *Which compiler, and at what
+  setting* above, including why TinyCC was refused despite being built
+  for exactly this, and why varying the optimization level is free
+  where varying the compiler is not.
+
+  Discovery, if the engine ever has to find a compiler rather than
+  being told, must **say what it picked** — *no compiler recorded;
+  using `/usr/bin/gcc`* — because silently falling through a list is
+  the shape of fallback this project treats as an error.
 
 - *Can a loaded box ever be unloaded?* **Yes, by retire, sweep, free —
   the mechanism [214](214-destinations-without-a-lock.md) builds for
@@ -182,6 +248,9 @@ would eventually disagree with the first about what a box is.
   makes the parser callable at runtime rather than only at build time
 - [309 — Types compared by width](309-types-by-width.md), a hard
   prerequisite — by-name comparison makes this corrupt silently
+- [311 — The registry dissolved](311-the-registry-dissolved.md), which
+  shrinks the table this makes growable to a name and a pointer, and
+  narrows when a toolchain is needed at all
 - [303 — The registry](completed/303-registry-emission.md), the table
   this makes growable
 - [306 — Build integration](completed/306-build-integration.md), whose

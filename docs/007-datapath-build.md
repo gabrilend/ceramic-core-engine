@@ -90,29 +90,120 @@ Rejected in favour of a build-time script, because a generator is one
 generalized program that parses things rather than a macro expanded
 per box, and it leaves no macros in the source to read around later.
 
-## The registry
+## The box table
 
-The map file says `"add"` as text. Something has to turn that into a
-function pointer. The generator emits a table, compiled into the
-binary, holding for each box:
+The map file says `"math.c:add"` as text. Something has to turn that
+into a function pointer. That something is a table compiled into the
+binary, and it has **two columns**: the name as it appears in a map,
+and a pointer to a generated **placement function**.
 
-- its name, as it appears in a map
-- its shim pointer
-- the type and `sizeof` of each parameter, in order
-- the type and `sizeof` of its return value
+```c
+static const struct { const char *name; void (*place)(station_t *); }
+boxes[] = {
+    { "math.c:add", place__math_c__add },
+};
+```
 
-This table is the joint between the two halves of the program, and it
-has a useful property: **the map file never has to mention a type.**
+**Everything else lives inside the placement function**, as constants
+the compiler folded:
+
+```c
+static void place__math_c__add(station_t *s) {
+    s->call     = add__call;
+    s->slots[0].elem_size = sizeof(int);
+    s->slots[1].elem_size = sizeof(int);
+    s->out_size = sizeof(int);
+    s->compare  = int__compare_g;
+}
+```
+
+**Why a name has to be resolved at runtime at all.** A map arrives at a
+binary that has never seen it, carrying text. Resolving a name *is* a
+table, and calling it something else would not remove it. The only
+escape would be compiling the map into C so no name survives — and
+maps being data rather than build inputs is the thing this project
+rests on. So one lookup stays, and it is as small as a lookup gets.
+
+**Why nothing else needs one.** A station copies what it needs at
+placement and never consults a table again; the station header is
+deliberately free of any reference to this one, which is why a
+comparator resolves its comparison *at placement* rather than on the
+delivery path. A struct port's field table is written onto the port by
+the placement function, so reading `{ 1.5, 2.5, 3.5 }` out of a map
+follows a pointer rather than searching by type name.
+
+**The table used to be a record per box** — parameter arrays, type-name
+strings, the exact task allocation size, a backwards lookup from shim
+pointer to name — and every field of it was read once, at placement,
+by code that generated code could just as well have written. Issue 311
+is that change.
+
+### The useful property it keeps: the map file never mentions a type
 
 The loader knows the source box's return type and the destination
-box's parameter type, both from the registry, both derived from the
-actual C that will actually run. It checks the wire itself. If the map
-also declared types, there would be two sources of truth that could
-disagree, and the map would always be the one that was wrong.
+box's parameter type, both derived from the actual C that will
+actually run. It checks the wire itself. If the map also declared
+types, there would be two sources of truth that could disagree, and
+the map would always be the one that was wrong.
 
-The same table sizes every ring buffer cell, so a slot's cells are
+Naming the *file* beside the function is provenance, not a type
+declaration, so this still holds.
+
+The same numbers size every ring buffer cell, so a port's cells are
 exactly `sizeof` the parameter they feed and a write is a `memcpy` with
 no allocation.
+
+### Sizes cannot be computed at runtime, which is why any of this exists
+
+`sizeof` is a **compile-time** operator. The compiler evaluates it and
+burns a literal into the machine code. A running program has no types
+at all — C erases every bit of type information during compilation — so
+there is nothing left for `sizeof` to be applied to. You cannot hand a
+running program the text `vec3` and get 12 back.
+
+The trick is visible in the generated file's first real line: it
+`#include`s the box source **whole**, so the types become visible to
+the compiler, and only then writes `sizeof a0`.
+
+So every size comes from exactly one of two places: a `sizeof`
+expression compiled in, or a compiler invoked at runtime. There is no
+third door, and that is why a program that only places boxes it was
+built with needs no toolchain, while one that brings in new code does.
+
+## What the build includes
+
+**The maps a program declares are a manifest.** The build reads them to
+learn which box sources the program needs, includes those files whole,
+and emits shims **only** for the functions the maps name. A program
+using three boxes out of five hundred no longer carries five hundred
+shims.
+
+**The linker decides what actually ships.** Built with
+`-ffunction-sections -fdata-sections -Wl,--gc-sections`, every function
+lands in its own section and the linker discards every section nothing
+reaches — computing exact reachability through includes, through
+hand-written `extern` declarations, and through function pointers taken
+by name. That is every case a source parser would get wrong, and it
+costs nothing but build time.
+
+**Following `#include` directives instead would be a heuristic with a
+hole in it**, worth naming so nobody re-proposes it: linking resolves
+*symbols*, not includes, so a file may call a function it never
+included a header for by declaring it by hand.
+
+**And the build now checks every box reference.** A map naming a
+function that does not exist, a file that does not exist, or a bare
+basename matching two files with no path given — all of it fails at
+build time, on the author's machine, naming the map line. Wire checking
+does not move; it depends on how stations are actually connected and
+stays at load. What moves is *"you named a box that isn't there."*
+
+**Each included source is also emitted as text**, as a C string array,
+so the binary carries the C it was made from. That is where error
+messages and the dump get type and argument names, now that the engine
+carries none — and because the embedded text is by definition the text
+that was compiled, a name reported can never come from a source that
+has since changed on disk.
 
 ## What the generator parses
 
@@ -120,7 +211,7 @@ It does not need to understand C. It needs to recognize, in files
 designated as box sources:
 
 - **Function declarations** — name, return type, parameter types in
-  order. These become shims and registry entries.
+  order. These become shims, placement functions, and box table rows.
 - **Struct definitions** — field names, types, and order. These give
   every value type a size, and a field table that lets the loader read
   a struct constant out of a map's statics table without a parser per
@@ -137,14 +228,21 @@ the compiler enforces every type inside it.
 
 The wiring is protected by nothing, because after compilation there is
 no type information left to check against. That is why the check moves
-to the registry and happens when the map loads. It is the last place
-the information still exists.
+to load time: the sizes the compiler folded into the placement
+functions are the last surviving trace of the types, and load is the
+last place that trace still exists.
 
 ## Limitations, stated plainly
 
-- **The build cannot check a wire**, because the map is not a build
-  input. All wire checking is load-time. This is the price of maps
-  being data rather than code, and it was chosen deliberately.
+- **The build checks that a named box exists; whether it checks a
+  *wire* is now an open question rather than a settled no.** It used to
+  be a flat no, because the map was not a build input. Now that it is,
+  the generator knows both ends of every wire a map draws — and while
+  it still cannot compute a size, it can emit a `_Static_assert` that
+  makes the compiler compare them. That would move a class of error
+  from load to build for every wire written in a file. Wires drawn at
+  runtime still need the load-time check, so both would exist. Issue
+  311d carries the question.
 - **Typedefs are transparent.** `typedef int meters` and
   `typedef int seconds` are the same type and will connect happily.
   Distinguishing them means wrapping each in its own struct, which is
@@ -157,4 +255,4 @@ the information still exists.
 
 - [002 — Stations and slots](002-stations-and-slots.md), which stores the shim pointer
 - [008 — Map file format](008-map-file-format.md), the other half
-- [009 — Loading](009-datapath-load.md), where the registry is consulted
+- [009 — Loading](009-datapath-load.md), where the box table is consulted

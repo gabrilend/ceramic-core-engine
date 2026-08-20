@@ -21,27 +21,28 @@ statics
   2 = "config.txt"
   3 = { 5, 2.0, { 0, 0, 0 }, "hey there", 2 }
 
-adder add p
+adder math.c:add p
   in 1 $0
   out 0 - printer.0
   out 0 - logger.0
 
-depth measure c
+depth compare.c:measure c
   in 1 $1
   out 0 - shallow.0
   out 1 - exact.0
   out 2 - deep.0
 
-split spread i
+split route.c:spread i
   out 0 - poet.0
   out 1 - mailer.0
 
-reader read_config p
-  in 0 $2
+reader io.c:read_config p
+  in 0 $2 x64
   out 0 - config.0
 
-config load p
+config io.c:load p
   in 0 $3
+  in 1 -
 ```
 
 ## Comments
@@ -58,11 +59,40 @@ Three words: the station's name, the box function it places, and its
 kind.
 
 ```
-adder add p
+adder math.c:add p
 ```
 
-`adder` is this placement. `add` is the C function, looked up in the
-registry. `p`, `c`, or `i` is plain, comparator, or iterator.
+`adder` is this placement. `math.c:add` is the C function — the file
+it lives in, a colon, and its name. `p`, `c`, or `i` is plain,
+comparator, or iterator.
+
+**The file is named because a bare function name is not an address.**
+Two box sources may each define a function called `read`, and a map
+saying only `read` would be trusting a global namespace nobody
+declared. Naming the file makes provenance visible in the file a
+person reads, and it is what lets the build know which sources a
+program actually needs rather than compiling in every box it can find.
+
+**A bare file name is tried first; a path settles ties.** `math.c`
+resolves if exactly one box source anywhere in the tree is called
+that. If two are, the reader refuses and names both paths, and the
+author writes one of them out in full:
+
+```
+adder src/boxes/math.c:add p
+```
+
+Both forms are legal at any time; the path is not a fallback but a
+more specific way of saying the same thing. **The dump writes whichever
+is unambiguous** — the bare name when it resolves uniquely, the full
+path when it does not — so a dumped map always reloads into the
+program it came from while staying as readable as it can be.
+
+A collision that appears *while the program runs*, because a box
+source arriving late shares a basename with one already loaded, does
+not disturb stations already placed: those resolved their names when
+they were placed. It makes bare references to that name ambiguous from
+then on, and the next one refuses with both paths named.
 
 Names rather than numbers, because a map is read by people and because
 it makes an error message legible: *"adder → printer.0: box returns
@@ -77,13 +107,14 @@ letter of redundancy buys an error instead of a wrong answer.
 
 ## Input lines
 
-**A port is a ring buffer unless a line says otherwise.** There are two
-ways for a line to say otherwise, and both carry the port index:
+**A port is a ring buffer unless a line says otherwise.** There are
+three ways for a line to say otherwise, and all carry the port index:
 
 ```
 in 1 $0        port 1 holds the value written at statics entry 0
 in 1 = 5       port 1 holds 5
 in 2 = { 1.5, 2.5, 3.5 }       and a struct is written the same way
+in 3 -         port 3 has no source yet
 ```
 
 So `split` above has no input lines at all — every port is an ordinary
@@ -92,11 +123,11 @@ ring buffer and there is nothing to say about them.
 Port indices match the box function's parameter order, so the loader
 can check that no line names a port the function does not have.
 
-**The two forms differ only in where the text comes from.** `$0` fetches
-it from the statics section, which is notation for writing a value once
-and pointing several ports at it; `=` carries it on the line. Either
-way the text is parsed into that port's own storage, at that port's own
-type, and nothing is retained afterwards.
+**The first two forms differ only in where the text comes from.** `$0`
+fetches it from the statics section, which is notation for writing a
+value once and pointing several ports at it; `=` carries it on the
+line. Either way the text is parsed into that port's own storage, at
+that port's own type, and nothing is retained afterwards.
 
 The `=` matches the statics section's own `N = value`, so a value is
 spelled the same way wherever it is written. It is the form **the dump
@@ -108,13 +139,20 @@ wrote.
 The `$` is there because `in 1 0` reading as "static entry zero" is not
 something anyone will guess a year from now.
 
-**A second exception is coming: a port with no source at all.** A
-station can be created before it is wired, so a port may be
-unconfigured — a state, not a value, in which the station simply never
-becomes ready. The dump writes those out rather than omitting them,
-because the dump's value is that it says what is actually there, and a
-half-built program should dump to a faithful record of a half-built
-program. So the format needs a form for it. Issue 210b.
+**The third form is a port with no source at all.** A station can be
+created before it is wired, so a port may be unconfigured — a state,
+not a value, in which the station simply never becomes ready. The dump
+writes those out rather than omitting them, because the dump's value is
+that it says what is actually there, and a half-built program should
+dump to a faithful record of a half-built program.
+
+**It is a bare dash, and the dash was chosen over the alternatives on
+what this format already says elsewhere.** No value here is ever a lone
+dash, so it cannot be read as one; and the dash already means *wire* on
+an out line, so `in 3 -` reads as a wire that is not there yet. The
+word *none* was the runner-up and lost because it can collide with a
+future type or box called `none`, and because every other exception
+this format writes is punctuation rather than a word. Issue 210b.
 
 **There used to be a second form** — `in 0 reader`, meaning this port
 pulls its value from the station named `reader` when it is needed. The
@@ -131,16 +169,35 @@ something its author did not write. This matters more than it looks:
 the two forms differ by one character, and the wrong one would have
 loaded and run.
 
-Ring buffers carry no capacity, because they grow on their own.
+### A starting depth, which any of the three may carry
 
-That is becoming *no capacity is required*. Issue 210b gives every port
-a buffer of ten values at instantiation and lets a port be told a
-different starting depth — in this file or as an argument to the call
-that creates the station — with growth still covering any figure that
-turns out wrong. What the rule above was keeping out of the file was a
-*required* tuning number that an author had to get right; an optional
-hint that costs nothing to omit is a different thing, and this section
-will say so once it lands.
+Every port's ring buffer starts with room for ten values and grows when
+it needs to. A port may be told to start deeper, written after the
+source as a count:
+
+```
+in 0 $0 x64      reads statics entry 0, room for 64 to begin with
+in 1 - x256      no source yet, room for 256 when it gets one
+in 2 = 5         a constant, and the default ten cells
+```
+
+It reads as *sixty-four of them*, the way a parts list writes a
+quantity. Only `x` is accepted; a star was briefly allowed as a second
+spelling and withdrawn, because one way to say a thing is the habit
+everywhere else in this engine.
+
+**A depth may sit beside any source form, including the dash**, because
+the two are independent: every port owns ring cells whatever its tag
+currently says. That standing buffer is what makes changing a port's
+source a field write rather than an allocation, and it is decided in
+issue 210b.
+
+**It is a hint and never a requirement.** Growth covers any figure that
+turns out wrong, so nobody has to be right, and omitting it costs
+nothing but a slightly slower start on a port that turns out to run
+deep. What the old *ring buffers carry no capacity* rule was keeping
+out of this file was a **required** tuning number an author had to get
+right; an optional one they may supply is a different thing.
 
 ## Output lines
 
@@ -178,7 +235,7 @@ statics
 
 **The table carries no types.** A slot that references an entry knows
 what type it is, because the box function's parameter at that position
-says so, and the registry knows what that is. The text is read into
+says so, and the box table knows what that is. The text is read into
 bytes at the moment a slot claims it, walking the field table the
 generator emitted for that struct.
 
@@ -218,7 +275,11 @@ a runtime write changed, which the old form could not say.
 Load-time failures, all of them fatal and all naming the offending
 station:
 
-- A box function not in the registry.
+- A box function this binary does not carry, named with the file it
+  was expected in and the two ways forward: rebuild, or hand the source
+  to the running program.
+- A bare file name matching more than one box source, with both paths
+  named and the instruction to write one out in full.
 - An arrow to a station or slot that does not exist.
 - A wire whose source return type and destination parameter type
   differ.
@@ -234,5 +295,5 @@ repeats — and needs a finite companion input to ever stop.
 
 ## Related
 
-- [007 — The build path](007-datapath-build.md), which produces the registry this file is read against
+- [007 — The build path](007-datapath-build.md), which produces the box table this file is read against
 - [009 — Loading](009-datapath-load.md), what happens to this file at startup

@@ -58,27 +58,33 @@ present them together. [212](212-one-way-to-build-a-program.md) owns
 that policy and overturns the one rewiring chose; this issue supplies
 the surface it applies to.
 
-**The configuration-time check for an unconfigured port.** A
-non-optional parameter left facing a *none* port is a configuration
-error, and it should be caught at configuration time — which names the
-station and the port while a person is still there to read it —
-rather than on the first task built minutes into a run. This is
-separate from [210h](210h-optional-parameters.md) and comes first: the
-check exists before there is any way to declare a parameter exempt
-from it.
+**The configuration-time check for an unconfigured port.** A parameter
+left facing a *none* port is a configuration error, and it should be
+caught at configuration time — which names the station and the port
+while a person is still there to read it — rather than on the first
+task built minutes into a run.
+
+**The check has no exceptions and never will.**
+[210h](completed/210h-optional-parameters.md) proposed one — a
+parameter a box declares it can do without — and was refused, because
+it would have been the only exemption to the rule that a station runs
+when every one of its slots holds a value. So the check here is
+unqualified: a port with no source is an error, full stop.
 
 ## Suggested implementation steps
 
-1. Give hand placement the registry's type names, or establish that
-   every caller can place by name and remove it. Decide by looking at
-   the callers, not in the abstract.
+1. Hand placement stays and becomes the primitive: a generated
+   placement function per box writes a station directly, and by-name
+   placement is a table lookup that finds one and calls it. Built in
+   [311b](311b-placement-instead-of-records.md); this issue is its
+   caller rather than its author.
 2. One port-configuration operation, with the existing static-binding
    and tag-conversion calls becoming cases of it.
 3. The loader becomes its first caller, losing whatever it does today
    that the surface does not offer.
 4. Runtime editing becomes its second caller.
-5. The configuration-time check for a *none* port feeding a
-   non-optional parameter.
+5. The configuration-time check for a *none* port, unqualified — every
+   parameter needs a source, with no exemption.
 6. A test that a station with an unconfigured port never becomes
    ready, and becomes ready the moment that port is given a source.
 7. A test that a program read from a file and one built by calling the
@@ -86,12 +92,32 @@ from it.
 
 ## Open questions
 
-- Whether hand placement survives at all depends on what its callers
-  need, and the tests that use it are phase 2's, which were written to
-  prove the station layer without a registry existing. If they can all
-  place by name, removing it is better than teaching it — but a test
-  that must construct a registry to test the station table is a test
-  that has stopped testing only the station table.
+**Answered:**
+
+- *Does hand placement survive at all, or does everything place by
+  name?* **It survives, and it turns out to be the primitive rather
+  than the alternative.**
+
+  The question looked like a choice between two doors into the engine
+  and it is not.
+  [311b](311b-placement-instead-of-records.md) has the generator emit a
+  **placement function** per box — a function that writes a station's
+  shim pointer, slot sizes, return size, and comparison directly, with
+  every number a `sizeof` the compiler folded. A placement function
+  *is* hand placement, written by the generator instead of by a person.
+  By-name placement is a two-column table lookup that finds one and
+  calls it.
+
+  So there is one door with a typed front and a raw back, and the front
+  is built out of the back. "One way to build a station" stays true;
+  what it has is one construction path reachable two ways, rather than
+  two paths that must be kept in agreement.
+
+  **And phase 2's tests keep testing only the station table.** They
+  call the raw form, which is what they were always doing, and never
+  construct a box table to do it. The worry that a station-table test
+  would have to drag in a neighbouring subsystem — and thereby start
+  failing for two reasons — does not arise.
 
 ## Related
 
@@ -100,8 +126,8 @@ from it.
   this checks for
 - [210f — Changing what a port is](210f-changing-what-a-port-is.md),
   whose conversion becomes a case of this surface
-- [210h — Optional parameters](210h-optional-parameters.md), which
-  gives a parameter a way to be exempt from the check added here
+- [210h — Optional parameters](completed/210h-optional-parameters.md),
+  refused, which is what leaves the check added here unqualified
 - [212 — One way to build a program](212-one-way-to-build-a-program.md),
   which stands on this and owns the refusal policy
 - [207 — Hand-built maps](completed/207-hand-built-maps.md), the second

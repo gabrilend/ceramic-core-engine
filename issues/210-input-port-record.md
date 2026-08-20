@@ -21,15 +21,15 @@ whole family.
 | [210a — The pull path removed](completed/210a-the-pull-path-removed.md) | the gatherer kind and everything reading it, taken out | — |
 | [210b — The port record](210b-the-port-record.md) | both storages, the three-value tag, cells allocated at instantiation | 210a |
 | [210c — A state on every cell](210c-a-state-on-every-cell.md) | the four-state per-cell machine, then the copies moved out of the lock | 210b |
-| [210d — The claim takes no lock](210d-the-claim-takes-no-lock.md) | ascending port order, claim-or-roll-back, the bookmark scan | 210c |
+| [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md) | the mutex narrowed to the cell states, the value copies moved outside it | 210c |
 | [210e — Growth adds a page](210e-growth-adds-a-page.md) | a ring buffer that grows by appending, copying nothing | 210d |
 | [210f — Changing what a port is](210f-changing-what-a-port-is.md) | conversion between tags as one operation, cells left alone | 210b |
 | [210g — One way to build a station](210g-one-way-to-build-a-station.md) | a single construction and configuration surface | 210b, 210f |
-| [210h — Optional parameters](210h-optional-parameters.md) | a parameter a box declares it can do without | 210g |
+| [210h — Optional parameters](completed/210h-optional-parameters.md) | refused — the record of why a parameter cannot be optional | 210g |
 
 The order is real rather than tidy. **210c through 210e must land in
 that sequence**, because each removes the reason the next one was
-hard: per-cell states are what make a lockless claim expressible, and
+hard: per-cell states are what let the value copies leave the lock, and
 a claim that scans rather than computes a position is what makes
 growth-by-appending safe. **210f and 210g branch off 210b** and can
 be built while the concurrency line is in progress.
@@ -111,14 +111,33 @@ is ever handed to a box — and it is what lets a program be assembled
 from nothing, a station coming into existence with every port unset and
 becoming runnable as its ports are given sources one at a time.
 
-### What is left for the station's mutex
+### What the station's mutex covers
 
-Four things, all rare and all structural: growing a ring buffer,
-rewiring, writing a static, and changing a port's tag. Nothing on the
-hot path. It stays **inside the station record**, because shelves keep
-station records still, so a mutex inside one never moves — the separate
-paged array of locks that was considered would buy nothing and would
-pack unrelated stations' locks into shared cache lines.
+**The cell states of every port on that station, and nothing else.**
+Not the value bytes, not the destinations, not the station record at
+large. One lock per station rather than one per port, so anyone
+claiming holds exactly one lock and there is no lock ordering anywhere
+to get wrong.
+
+It stays **inside the station record**, because shelves keep station
+records still, so a mutex inside one never moves — the separate paged
+array of locks that was considered would buy nothing and would pack
+unrelated stations' locks into shared cache lines.
+
+**What takes it:** the four rare structural operations — growing a ring
+buffer, rewiring, writing a static, and changing a port's tag — and the
+claim, which is not rare at all. The claim is on the hot path and that
+is accepted, because it needs several cells at once and nothing
+composes several atomic operations into one. What is *not* under it is
+the expensive part: both value copies happen outside, protected by the
+fact that a cell in *reserved* or *claimed* belongs to exactly one
+worker. See [210d](210d-the-copies-leave-the-lock.md), which also
+records why the lock-free claim that was planned here was abandoned.
+
+**A delivering writer takes it not at all.** Writing a value touches
+one cell, and one cell is already atomic with a single compare-and-swap.
+So deliveries into a station never serialize; only task construction
+does.
 
 ### A static lives on the port, and writing one is an event
 
@@ -158,7 +177,7 @@ The statics work proper belongs to [401](401-static-slots.md) and
   a measurement ever shows that fixed cost mattering, the cheap move is
   the second option, publishing progress every so often rather than
   every time, and nothing above has to change for it. Belongs to
-  [210d](210d-the-claim-takes-no-lock.md).
+  [210d](210d-the-copies-leave-the-lock.md).
 
 - *A writer that dies mid-copy leaves a cell reserved forever — should
   that be detected, reclaimed, or reported?* None of the three, because

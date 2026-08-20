@@ -6,12 +6,22 @@ to call it by name is derived from the C itself.
 
 **What is being added is a change of when, not of what.** The generator
 runs at build time and produces a fixed table, so the set of boxes a
-program can place is frozen before it starts. Three open issues loosen
+program can place is frozen before it starts. The open issues loosen
 that in order: the generator becomes a C program rather than a Lua
 script, so it can be called by something other than a build; types stop
-being compared by name and start being compared by shape, so a box
+being compared by name and start being compared by width, so a box
 compiled later cannot silently disagree about a struct; and then a
 box's source can be handed to a running program.
+
+**And then the table itself mostly goes away.** Issue 311 asks what the
+registry is actually for and finds two answers that survive — a size
+can only be computed by a compiler, and a name arriving as text has to
+be resolved at runtime — and nothing else. The record per box becomes a
+generated placement function holding folded constants; the table
+becomes a name and a pointer; the box source rides along in the binary
+as text; and the map file becomes a build input, so a program carries
+only the boxes it names and the build can finally check that they
+exist.
 
 | Issue | State | In one line |
 |---|---|---|
@@ -25,6 +35,11 @@ box's source can be handed to a running program.
 | 308 — the generator, in C | open | Removes LuaJIT from the build path, and makes the parser callable at runtime. |
 | 309 — types compared by shape | open | Four ints are four ints; identical layouts wire together, identical names do not. |
 | 310 — boxes compiled at runtime | open | Source in, shim out, registry row added — needs both of the above. |
+| [311 — the registry dissolved](311-the-registry-dissolved.md) | open | **Parent.** The table stops being a record per box and becomes a name and a pointer; everything else folds into generated code. |
+| [311a — boxes addressed by file](311a-boxes-addressed-by-file.md) | open | A map names `file:function`. Bare basenames resolve, paths settle ties, collisions are fatal at build time. |
+| [311b — placement instead of records](311b-placement-instead-of-records.md) | open | A generated placement function per box writes a station directly, every size a folded constant. Hand placement turns out to be the primitive. |
+| [311c — source rides in the binary](311c-source-rides-in-the-binary.md) | open | Each included box source emitted as a C array, so one file carries code, numbers, and text. |
+| [311d — the map as a manifest](311d-the-map-as-manifest.md) | open | The build reads the maps to know what to include; the linker garbage-collects the rest; box references get checked at build time. |
 
 ## What the phase established
 

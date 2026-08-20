@@ -32,11 +32,10 @@
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
 <a href="issue-210b-the-port-record.html">210b — The port record</a>
 <a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
-<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
-<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -44,6 +43,11 @@
 <a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html" class="here">310 — Boxes compiled while the program runs</a>
+<a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
+<a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
+<a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
+<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
+<a href="issue-311d-the-map-as-manifest.html">311d — The map as a manifest</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -73,6 +77,7 @@
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
+<a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -156,12 +161,52 @@ engine actually runs on, and the standing rule is that the compiler
 computes every one of them and the generator never guesses. So the
 signature supplies the paperwork and a compiler supplies the numbers.
 There is no version of this that skips the compiler.</p>
-<p><strong>The registry becomes a growable table.</strong> It is indexed by name when a
-station is placed and by row afterward, so it takes the same paging
+<p><strong>The box table becomes a growable table.</strong> It is indexed by name when
+a station is placed and by row afterward, so it takes the same paging
 shape as everything else that grows: add a block, never move what is
 already there, and readers resolving a row are never disturbed. That is
 the fourth or fifth use of the same pattern in this engine, and by now
 it should be a shared piece rather than a fifth hand-rolled one.</p>
+<p><a href="issue-311-the-registry-dissolved.html">311</a> shrinks that table to two columns
+— a name and a placement function — which makes growing it cheaper than
+this issue assumed and changes nothing about the shape.</p>
+<h3>Which compiler, and at what setting</h3>
+<p>**One compiler per program, and it is the compiler that built the
+binary.** The build records which one; every runtime compile invokes
+that same one. So there is exactly one answer to <code>sizeof</code> in a given
+program <strong>by construction</strong> — not checked, not mitigated, structurally
+impossible to violate.</p>
+<p><strong>That is GCC, for now.</strong> Not because it is best but because deciding
+between compilers is work nobody needs yet. Clang, and Windows, are
+deferred; what is owed to that deferral is one thing only, and it is
+cheap: <strong>the invocation lives in one place in the source</strong>, so adding a
+second is a local edit rather than a hunt. That is not an abstraction —
+there is nothing yet to abstract over — it is just not scattering the
+word <code>gcc</code> across three files.</p>
+<p><strong>Runtime compiles use low optimization; the build uses high.</strong>
+Optimization level cannot change struct layout — layout is fixed by the
+platform ABI, and <code>-O0</code> and <code>-O2</code> are the same compiler emitting the
+same offsets — so this varies compile speed freely with no risk at all
+to the sizes. Build time is allowed to be slow. Runtime compilation is
+not.</p>
+<p>**A second compiler was considered and refused, and the refusal is
+worth keeping.** TinyCC, as <code>libtcc</code>, compiles C in-process — no
+subprocess, no shared object, no <code>dlopen</code>, roughly an order of
+magnitude faster on small inputs — and it is built for exactly this.
+What it costs is a second answer to <code>sizeof</code>. For standard types there
+would be no disagreement, since struct layout is ABI rather than
+compiler; the divergence lives in bitfields, <code>long double</code>, packed
+attributes, and extensions TinyCC does not implement, where the usual
+outcome is a refusal to compile rather than a wrong number. The width
+check would catch the remainder. It was still refused, because *one
+answer by construction* is a better property than *two answers and a
+net*, and because <code>-O0</code> recovers most of the speed for free.</p>
+<p>**If runtime latency still hurts, the move that keeps this decision is
+to take the compile off the critical path** — hand the source over,
+return immediately, let the station go live when the compile finishes.
+The engine is already asynchronous by construction: a box that is not
+ready yet is a station that is not ready yet, which is a state it
+already has a word for.</p>
 <p>**A box arriving late needs to report the width of each input and of
 its output, and that is the whole of what the type system asks of it.**
 Under <a href="issue-309-types-by-width.html">309</a> a wire is legal when the two sides
@@ -190,7 +235,7 @@ tool; as a C program it is something the engine can call, and it is the
 same parser either way — which is the point, because a second parser
 would eventually disagree with the first about what a box is.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The registry as a growable table, paged, with lookup and placement
+<p>1. The box table as a growable table, paged, with lookup and placement
    reading it safely while it grows.
 2. Compile-and-load as a deliberate call: take source, produce a shared
    library in the RAM-backed build tier, load it, resolve the shim.
@@ -222,15 +267,32 @@ would eventually disagree with the first about what a box is.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>
-<li><em>Where does the compiler come from?</em> <strong>Assume it is there.</strong> The</li>
-<p>  engine calls a C compiler at runtime and does not negotiate about it.
-  What answers the packaging concern is an install script that builds
-  the dependencies from source into a local place, written once the
-  system is finished rather than designed around now — so the
-  dependency is real, acknowledged, and handled by installation rather
-  than by making the engine tiptoe. Compiling boxes late is not a
-  capability worth crippling to spare a deployment one package.</p>
+<li><em>Where does the compiler come from?</em> **Assume it is there — but only</li>
+<p>  when it is actually needed, which is rarer than this issue first
+  assumed.** The engine calls a C compiler at runtime and does not
+  negotiate about it. What answers the packaging concern is an install
+  script that builds the dependencies from source into a local place,
+  written once the system is finished rather than designed around now.</p>
 </ul>
+<p>  <strong><a href="issue-311d-the-map-as-manifest.html">311d</a> narrows when that bites.</strong> A
+  program whose map names only boxes the binary already carries never
+  invokes a compiler at all and ships as one file. The toolchain is
+  required precisely when new code is genuinely arriving, which is the
+  only time anyone could reasonably expect otherwise. So the dependency
+  stopped being a tax on every program and became the price of one
+  capability.</p>
+<ul>
+<li>*Which compiler, and is a fast in-process one worth a second answer</li>
+<p>  to <code>sizeof</code>?* **GCC, the same one that built the binary, at low
+  optimization; and no.** Written up under *Which compiler, and at what
+  setting* above, including why TinyCC was refused despite being built
+  for exactly this, and why varying the optimization level is free
+  where varying the compiler is not.</p>
+</ul>
+<p>  Discovery, if the engine ever has to find a compiler rather than
+  being told, must <strong>say what it picked</strong> — *no compiler recorded;
+  using <code>/usr/bin/gcc</code>* — because silently falling through a list is
+  the shape of fallback this project treats as an error.</p>
 <ul>
 <li><em>Can a loaded box ever be unloaded?</em> **Yes, by retire, sweep, free —</li>
 <p>  the mechanism <a href="issue-214-destinations-without-a-lock.html">214</a> builds for
@@ -282,6 +344,9 @@ would eventually disagree with the first about what a box is.</p>
 <p>  makes the parser callable at runtime rather than only at build time</p>
 <li><a href="issue-309-types-by-width.html">309 — Types compared by width</a>, a hard</li>
 <p>  prerequisite — by-name comparison makes this corrupt silently</p>
+<li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, which</li>
+<p>  shrinks the table this makes growable to a name and a pointer, and
+  narrows when a toolchain is needed at all</p>
 <li><a href="done-303-registry-emission.html">303 — The registry</a>, the table</li>
 <p>  this makes growable</p>
 <li><a href="done-306-build-integration.html">306 — Build integration</a>, whose</li>

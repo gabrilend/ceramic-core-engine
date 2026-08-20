@@ -59,7 +59,7 @@ late.
 That "slightly late" is the honest cost and should be said plainly: a
 port turned into a static and back may deliver a value that arrived
 before the conversion, after values that arrived after it. Given that
-[210d](210d-the-claim-takes-no-lock.md) already gives up arrival order
+[210d](210d-the-copies-leave-the-lock.md) already gives up arrival order
 as a guarantee, this costs nothing that was still being promised — but
 it is a second reason for the same non-guarantee, and a reader
 deserves to know it is not only rollback that opens gaps.

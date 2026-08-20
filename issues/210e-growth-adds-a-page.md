@@ -17,11 +17,16 @@ Publish first and then copy, and readers see an empty buffer while it
 fills. Neither order is safe.
 
 What actually made it safe was that nothing else could happen at all
-during the copy, because the mutex was held for the whole of it — and
-after [210d](210d-the-claim-takes-no-lock.md) there is no such mutex
-on that path any more. So this is not merely an improvement; **the
-existing growth stops being correct** once the claim goes lockless,
-and the two cannot be separated by very long.
+during the copy, because the station's mutex was held for the whole of
+it — and after
+[210d](210d-the-copies-leave-the-lock.md) that is no longer true. The
+lock still exists, but it covers only the cell states: a worker copying
+bytes out of a cell it has claimed holds **no lock at all**, because a
+claimed cell belongs to it alone and needs no exclusion from anybody.
+Relocating that cell underneath it is exactly the thing that
+protection does not cover. So this is not merely an improvement;
+**the existing growth stops being correct** once the copies leave the
+lock, and the two cannot be separated by very long.
 
 ## Intended behavior
 
@@ -103,7 +108,7 @@ than a single number, and the report should say the sum.
 ## Related
 
 - [210 — What an input port is](210-input-port-record.md), the parent
-- [210d — The claim takes no lock](210d-the-claim-takes-no-lock.md),
+- [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md),
   which must land first, and which this must follow closely because it
   is what makes the existing growth unsafe
 - [203 — Slot buffer growth](completed/203-slot-buffer-growth.md), the

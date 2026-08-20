@@ -32,11 +32,10 @@
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
 <a href="issue-210b-the-port-record.html">210b — The port record</a>
 <a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
-<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html" class="here">210g — One way to build a station</a>
-<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -44,6 +43,11 @@
 <a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
+<a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
+<a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
+<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
+<a href="issue-311d-the-map-as-manifest.html">311d — The map as a manifest</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -73,6 +77,7 @@
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
+<a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -167,38 +172,59 @@ because the loader's rule is to collect every failure in a file and
 present them together. <a href="issue-212-one-way-to-build-a-program.html">212</a> owns
 that policy and overturns the one rewiring chose; this issue supplies
 the surface it applies to.</p>
-<p><strong>The configuration-time check for an unconfigured port.</strong> A
-non-optional parameter left facing a <em>none</em> port is a configuration
-error, and it should be caught at configuration time — which names the
-station and the port while a person is still there to read it —
-rather than on the first task built minutes into a run. This is
-separate from <a href="issue-210h-optional-parameters.html">210h</a> and comes first: the
-check exists before there is any way to declare a parameter exempt
-from it.</p>
+<p><strong>The configuration-time check for an unconfigured port.</strong> A parameter
+left facing a <em>none</em> port is a configuration error, and it should be
+caught at configuration time — which names the station and the port
+while a person is still there to read it — rather than on the first
+task built minutes into a run.</p>
+<p><strong>The check has no exceptions and never will.</strong>
+<a href="done-210h-optional-parameters.html">210h</a> proposed one — a
+parameter a box declares it can do without — and was refused, because
+it would have been the only exemption to the rule that a station runs
+when every one of its slots holds a value. So the check here is
+unqualified: a port with no source is an error, full stop.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Give hand placement the registry's type names, or establish that
-   every caller can place by name and remove it. Decide by looking at
-   the callers, not in the abstract.
+<p>1. Hand placement stays and becomes the primitive: a generated
+   placement function per box writes a station directly, and by-name
+   placement is a table lookup that finds one and calls it. Built in
+   <a href="issue-311b-placement-instead-of-records.html">311b</a>; this issue is its
+   caller rather than its author.
 2. One port-configuration operation, with the existing static-binding
    and tag-conversion calls becoming cases of it.
 3. The loader becomes its first caller, losing whatever it does today
    that the surface does not offer.
 4. Runtime editing becomes its second caller.
-5. The configuration-time check for a <em>none</em> port feeding a
-   non-optional parameter.
+5. The configuration-time check for a <em>none</em> port, unqualified — every
+   parameter needs a source, with no exemption.
 6. A test that a station with an unconfigured port never becomes
    ready, and becomes ready the moment that port is given a source.
 7. A test that a program read from a file and one built by calling the
    configuration surface directly produce identical dumps.</p>
 <h2>Open questions</h2>
+<p><strong>Answered:</strong></p>
 <ul>
-<li>Whether hand placement survives at all depends on what its callers</li>
-<p>  need, and the tests that use it are phase 2's, which were written to
-  prove the station layer without a registry existing. If they can all
-  place by name, removing it is better than teaching it — but a test
-  that must construct a registry to test the station table is a test
-  that has stopped testing only the station table.</p>
+<li>*Does hand placement survive at all, or does everything place by</li>
+<p>  name?* **It survives, and it turns out to be the primitive rather
+  than the alternative.**</p>
 </ul>
+<p>  The question looked like a choice between two doors into the engine
+  and it is not.
+  <a href="issue-311b-placement-instead-of-records.html">311b</a> has the generator emit a
+  <strong>placement function</strong> per box — a function that writes a station's
+  shim pointer, slot sizes, return size, and comparison directly, with
+  every number a <code>sizeof</code> the compiler folded. A placement function
+  <em>is</em> hand placement, written by the generator instead of by a person.
+  By-name placement is a two-column table lookup that finds one and
+  calls it.</p>
+<p>  So there is one door with a typed front and a raw back, and the front
+  is built out of the back. "One way to build a station" stays true;
+  what it has is one construction path reachable two ways, rather than
+  two paths that must be kept in agreement.</p>
+<p>  <strong>And phase 2's tests keep testing only the station table.</strong> They
+  call the raw form, which is what they were always doing, and never
+  construct a box table to do it. The worry that a station-table test
+  would have to drag in a neighbouring subsystem — and thereby start
+  failing for two reasons — does not arise.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the parent</li>
@@ -206,8 +232,8 @@ from it.</p>
 <p>  this checks for</p>
 <li><a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>,</li>
 <p>  whose conversion becomes a case of this surface</p>
-<li><a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>, which</li>
-<p>  gives a parameter a way to be exempt from the check added here</p>
+<li><a href="done-210h-optional-parameters.html">210h — Optional parameters</a>,</li>
+<p>  refused, which is what leaves the check added here unqualified</p>
 <li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
 <p>  which stands on this and owns the refusal policy</p>
 <li><a href="done-207-hand-built-maps.html">207 — Hand-built maps</a>, the second</li>

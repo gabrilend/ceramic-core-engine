@@ -28,11 +28,11 @@ its own.
 | 210a — the pull path removed | **complete** | The gatherer kind and everything reading it, taken out. Every box now runs on a worker that picked it up. |
 | 210b — the port record | open | Both storages, the three-value tag, cells allocated for every port at instantiation. |
 | 210c — a state on every cell | open | Four states, one atomic swap each; then the copies leave the lock, write side first. |
-| 210d — the claim takes no lock | open | Ascending port order, roll back on the first empty, scan from a hint that may be wrong. |
-| 210e — growth adds a page | open | Append rather than copy — which the lockless claim makes necessary, not merely nicer. |
+| [210d — the copies leave the lock](210d-the-copies-leave-the-lock.md) | open | The mutex narrows to the cell states; the value copies move outside it, protected by the fact that a claimed cell belongs to exactly one worker. Check-all-then-flip-all, so no roll-back path exists. |
+| 210e — growth adds a page | open | Append rather than copy — which a claim that scans rather than computing a position makes necessary, not merely nicer. |
 | 210f — changing what a port is | open | A field write, with waiting values left where they sit rather than freed. |
 | 210g — one way to build a station | open | One configuration surface; a hand-built program and a loaded one dump identically. |
-| 210h — optional parameters | open | A parameter a box declares it can do without, carried as a wrapper rather than a sentinel. |
+| [210h — optional parameters](completed/210h-optional-parameters.md) | refused | Refused: it would have been the only exemption to the rule that a station runs when every slot holds a value. The record of why, and where the case it reached for actually belongs. |
 | 211 — growing the station table | open | Shelves: grow by adding, so nothing already placed ever moves. |
 | 212 — one way to build a program | open | The capstone. Create, configure, wire — legal at any moment, loading as one caller. |
 | 213 — the input station | open | The other door: where arguments arrive, and what makes a program composable. |

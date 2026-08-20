@@ -32,11 +32,10 @@
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
 <a href="issue-210b-the-port-record.html">210b — The port record</a>
 <a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
-<a href="issue-210d-the-claim-takes-no-lock.html">210d — The claim takes no lock</a>
+<a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
-<a href="issue-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
@@ -44,6 +43,11 @@
 <a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
+<a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
+<a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
+<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
+<a href="issue-311d-the-map-as-manifest.html">311d — The map as a manifest</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -73,6 +77,7 @@
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
+<a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -139,27 +144,28 @@ statics
   2 = <span class="st">"config.txt"</span>
   3 = { 5, 2.0, { 0, 0, 0 }, <span class="st">"hey there"</span>, 2 }
 
-adder add p
+adder math.c:add p
   in 1 $0
   out 0 - printer.0
   out 0 - logger.0
 
-depth measure c
+depth compare.c:measure c
   in 1 $1
   out 0 - shallow.0
   out 1 - exact.0
   out 2 - deep.0
 
-split spread i
+split route.c:spread i
   out 0 - poet.0
   out 1 - mailer.0
 
-reader read_config p
-  in 0 $2
+reader io.c:read_config p
+  in 0 $2 x64
   out 0 - config.0
 
-config load p
+config io.c:load p
   in 0 $3
+  in 1 -
 </pre>
 <h2>Comments</h2>
 <p>A <code>#</code> starts a comment that runs to the end of the line. Added in
@@ -171,10 +177,34 @@ way to carry them.</p>
 <p>Three words: the station's name, the box function it places, and its
 kind.</p>
 <pre class="code">
-adder add p
+adder math.c:add p
 </pre>
-<p><code>adder</code> is this placement. <code>add</code> is the C function, looked up in the
-registry. <code>p</code>, <code>c</code>, or <code>i</code> is plain, comparator, or iterator.</p>
+<p><code>adder</code> is this placement. <code>math.c:add</code> is the C function — the file
+it lives in, a colon, and its name. <code>p</code>, <code>c</code>, or <code>i</code> is plain,
+comparator, or iterator.</p>
+<p><strong>The file is named because a bare function name is not an address.</strong>
+Two box sources may each define a function called <code>read</code>, and a map
+saying only <code>read</code> would be trusting a global namespace nobody
+declared. Naming the file makes provenance visible in the file a
+person reads, and it is what lets the build know which sources a
+program actually needs rather than compiling in every box it can find.</p>
+<p><strong>A bare file name is tried first; a path settles ties.</strong> <code>math.c</code>
+resolves if exactly one box source anywhere in the tree is called
+that. If two are, the reader refuses and names both paths, and the
+author writes one of them out in full:</p>
+<pre class="code">
+adder src/boxes/math.c:add p
+</pre>
+<p>Both forms are legal at any time; the path is not a fallback but a
+more specific way of saying the same thing. **The dump writes whichever
+is unambiguous** — the bare name when it resolves uniquely, the full
+path when it does not — so a dumped map always reloads into the
+program it came from while staying as readable as it can be.</p>
+<p>A collision that appears <em>while the program runs</em>, because a box
+source arriving late shares a basename with one already loaded, does
+not disturb stations already placed: those resolved their names when
+they were placed. It makes bare references to that name ambiguous from
+then on, and the next one refuses with both paths named.</p>
 <p>Names rather than numbers, because a map is read by people and because
 it makes an error message legible: *"adder → printer.0: box returns
 int, slot takes float."* The names cost one lookup table that is
@@ -185,22 +215,23 @@ parameters — but that means forgetting the threshold line silently
 demotes a comparator to a plain box that routes everything one way. One
 letter of redundancy buys an error instead of a wrong answer.</p>
 <h2>Input lines</h2>
-<p><strong>A port is a ring buffer unless a line says otherwise.</strong> There are two
-ways for a line to say otherwise, and both carry the port index:</p>
+<p><strong>A port is a ring buffer unless a line says otherwise.</strong> There are
+three ways for a line to say otherwise, and all carry the port index:</p>
 <pre class="code">
 in 1 $0        port 1 holds the value written at statics entry 0
 in 1 = 5       port 1 holds 5
 in 2 = { 1.5, 2.5, 3.5 }       and a <span class="kw">struct</span> is written the same way
+in 3 -         port 3 has no source yet
 </pre>
 <p>So <code>split</code> above has no input lines at all — every port is an ordinary
 ring buffer and there is nothing to say about them.</p>
 <p>Port indices match the box function's parameter order, so the loader
 can check that no line names a port the function does not have.</p>
-<p><strong>The two forms differ only in where the text comes from.</strong> <code>$0</code> fetches
-it from the statics section, which is notation for writing a value once
-and pointing several ports at it; <code>=</code> carries it on the line. Either
-way the text is parsed into that port's own storage, at that port's own
-type, and nothing is retained afterwards.</p>
+<p><strong>The first two forms differ only in where the text comes from.</strong> <code>$0</code>
+fetches it from the statics section, which is notation for writing a
+value once and pointing several ports at it; <code>=</code> carries it on the
+line. Either way the text is parsed into that port's own storage, at
+that port's own type, and nothing is retained afterwards.</p>
 <p>The <code>=</code> matches the statics section's own <code>N = value</code>, so a value is
 spelled the same way wherever it is written. It is the form **the dump
 writes**, because a dump has values sitting on ports and no entry
@@ -209,13 +240,19 @@ would be notation the engine made up rather than something a person
 wrote.</p>
 <p>The <code>$</code> is there because <code>in 1 0</code> reading as "static entry zero" is not
 something anyone will guess a year from now.</p>
-<p><strong>A second exception is coming: a port with no source at all.</strong> A
-station can be created before it is wired, so a port may be
-unconfigured — a state, not a value, in which the station simply never
-becomes ready. The dump writes those out rather than omitting them,
-because the dump's value is that it says what is actually there, and a
-half-built program should dump to a faithful record of a half-built
-program. So the format needs a form for it. Issue 210b.</p>
+<p><strong>The third form is a port with no source at all.</strong> A station can be
+created before it is wired, so a port may be unconfigured — a state,
+not a value, in which the station simply never becomes ready. The dump
+writes those out rather than omitting them, because the dump's value is
+that it says what is actually there, and a half-built program should
+dump to a faithful record of a half-built program.</p>
+<p>**It is a bare dash, and the dash was chosen over the alternatives on
+what this format already says elsewhere.** No value here is ever a lone
+dash, so it cannot be read as one; and the dash already means <em>wire</em> on
+an out line, so <code>in 3 -</code> reads as a wire that is not there yet. The
+word <em>none</em> was the runner-up and lost because it can collide with a
+future type or box called <code>none</code>, and because every other exception
+this format writes is punctuation rather than a word. Issue 210b.</p>
 <p><strong>There used to be a second form</strong> — <code>in 0 reader</code>, meaning this port
 pulls its value from the station named <code>reader</code> when it is needed. The
 pull path is gone, and with it that line. A station whose value another
@@ -229,15 +266,30 @@ an old map stops with an explanation rather than loading into
 something its author did not write. This matters more than it looks:
 the two forms differ by one character, and the wrong one would have
 loaded and run.</p>
-<p>Ring buffers carry no capacity, because they grow on their own.</p>
-<p>That is becoming <em>no capacity is required</em>. Issue 210b gives every port
-a buffer of ten values at instantiation and lets a port be told a
-different starting depth — in this file or as an argument to the call
-that creates the station — with growth still covering any figure that
-turns out wrong. What the rule above was keeping out of the file was a
-<em>required</em> tuning number that an author had to get right; an optional
-hint that costs nothing to omit is a different thing, and this section
-will say so once it lands.</p>
+<h3>A starting depth, which any of the three may carry</h3>
+<p>Every port's ring buffer starts with room for ten values and grows when
+it needs to. A port may be told to start deeper, written after the
+source as a count:</p>
+<pre class="code">
+in 0 $0 x64      reads statics entry 0, room <span class="kw">for</span> 64 to begin with
+in 1 - x256      no source yet, room <span class="kw">for</span> 256 when it gets one
+in 2 = 5         a constant, and the default ten cells
+</pre>
+<p>It reads as <em>sixty-four of them</em>, the way a parts list writes a
+quantity. Only <code>x</code> is accepted; a star was briefly allowed as a second
+spelling and withdrawn, because one way to say a thing is the habit
+everywhere else in this engine.</p>
+<p><strong>A depth may sit beside any source form, including the dash</strong>, because
+the two are independent: every port owns ring cells whatever its tag
+currently says. That standing buffer is what makes changing a port's
+source a field write rather than an allocation, and it is decided in
+issue 210b.</p>
+<p><strong>It is a hint and never a requirement.</strong> Growth covers any figure that
+turns out wrong, so nobody has to be right, and omitting it costs
+nothing but a slightly slower start on a port that turns out to run
+deep. What the old <em>ring buffers carry no capacity</em> rule was keeping
+out of this file was a <strong>required</strong> tuning number an author had to get
+right; an optional one they may supply is a different thing.</p>
 <h2>Output lines</h2>
 <pre class="code">
 out 0 - printer.0
@@ -266,7 +318,7 @@ statics
 </pre>
 <p><strong>The table carries no types.</strong> A slot that references an entry knows
 what type it is, because the box function's parameter at that position
-says so, and the registry knows what that is. The text is read into
+says so, and the box table knows what that is. The text is read into
 bytes at the moment a slot claims it, walking the field table the
 generator emitted for that struct.</p>
 <p>This is the same reason the wiring carries no types: if the table said
@@ -299,7 +351,11 @@ a runtime write changed, which the old form could not say.</p>
 <p>Load-time failures, all of them fatal and all naming the offending
 station:</p>
 <ul>
-<li>A box function not in the registry.</li>
+<li>A box function this binary does not carry, named with the file it</li>
+<p>  was expected in and the two ways forward: rebuild, or hand the source
+  to the running program.</p>
+<li>A bare file name matching more than one box source, with both paths</li>
+<p>  named and the instruction to write one out in full.</p>
 <li>An arrow to a station or slot that does not exist.</li>
 <li>A wire whose source return type and destination parameter type</li>
 <p>  differ.</p>
@@ -314,7 +370,7 @@ in the push direction stays perfectly legal — it is how anything
 repeats — and needs a finite companion input to ever stop.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-007-datapath-build.html">007 — The build path</a>, which produces the registry this file is read against</li>
+<li><a href="doc-007-datapath-build.html">007 — The build path</a>, which produces the box table this file is read against</li>
 <li><a href="doc-009-datapath-load.html">009 — Loading</a>, what happens to this file at startup</li>
 </ul>
 

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>311b — Placement instead of records</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-slots.html">002 — Stations and slots</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
+<a href="issue-209-map-output-collection.html">209 — The output station</a>
+<a href="issue-210-input-port-record.html">210 — What an input port is</a>
+<a href="issue-210b-the-port-record.html">210b — The port record</a>
+<a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
+<a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
+<a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
+<a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
+<a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
+<a href="issue-311b-placement-instead-of-records.html" class="here">311b — Placement instead of records</a>
+<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
+<a href="issue-311d-the-map-as-manifest.html">311d — The map as a manifest</a>
+<a href="issue-401-static-slots.html">401 — Static input values</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-slots.html">202 — Ring-buffer input slots</a>
+<a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
+<a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-018-station-h.html">018-station.h — stations, slots, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+</nav>
+<main>
+<h1>311b — Placement instead of records</h1>
+<p>Second child of <a href="issue-311-the-registry-dissolved.html">311</a>. The generator
+stops emitting a record per box and emits a <strong>function</strong> per box that
+writes a station directly. Everything the record held becomes a
+compile-time constant inside it.</p>
+<h2>Current behavior</h2>
+<p>The generator emits a <code>box_info_t</code> per box: name, shim pointer,
+parameter count, an array of parameter type names and sizes, a return
+type name and size, the exact task allocation size, and a comparison
+function pointer. Placing a station reads that record and copies the
+parts a station keeps.</p>
+<p>The record is read <strong>once</strong>, at placement, and never again. Nothing in
+the running engine consults it: a station holds its own shim pointer,
+its own slot sizes, its own return size, and its own comparison
+function, and the station header is deliberately kept free of any
+registry reference so that resolving a comparison happens at placement
+rather than on the delivery path.</p>
+<p>**So the record exists only to be read at the one moment generated code
+could just as well do the writing.** That is the whole observation this
+issue rests on.</p>
+<h2>Intended behavior</h2>
+<p><strong>One placement function per box, emitted by the generator.</strong></p>
+<pre class="code">
+<span class="kw">static</span> <span class="kw">void</span> place__math_c__add(station_t *s) {
+    s-&gt;call     = add__call;
+    s-&gt;slots[0].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
+    s-&gt;slots[1].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
+    s-&gt;out_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
+    s-&gt;compare  = int__compare_g;
+}
+</pre>
+<p>Every number is a <code>sizeof</code> expression, so **guarantee
+<a href="doc-058-guarantees.html">C1</a> is untouched** — the compiler still
+computes every size and the generator still never guesses. The numbers
+move from a table into a function and the compiler folds them into
+immediates. They are not stored anywhere at all.</p>
+<p><strong>The table shrinks to two columns.</strong></p>
+<pre class="code">
+<span class="kw">static</span> <span class="kw">const</span> <span class="kw">struct</span> { <span class="kw">const</span> <span class="kw">char</span> *name; <span class="kw">void</span> (*place)(station_t *); }
+boxes[] = { { <span class="st">"math.c:add"</span>, place__math_c__add }, ... };
+</pre>
+<p>That is the one name lookup left in the engine, and it survives because
+a map file arrives as text and text has to be resolved. Everything else
+is reached without a name.</p>
+<p><strong>A struct port's field table is pointed at, not searched for.</strong> Today
+a struct constant in a map is read by finding the struct's field table
+by type name. The placement function knows the type concretely, so it
+writes the pointer onto the port, and the reader follows it. The
+by-name struct lookup goes away with the by-name box record.</p>
+<p><strong>What is deleted:</strong> the box record type, the parameter arrays, every
+type-name string the engine carried, the stored task size, the
+by-name struct search, and the backwards lookup from a shim pointer to
+a box name — the dump can ask the station which placement made it, or
+carry the name it was placed with, rather than searching a table
+backwards.</p>
+<p><strong>Type names survive only where a person reads them.</strong> Error messages
+and the dump want to say <code>vec3</code> rather than <code>12 bytes</code>. Those can read
+the name out of the source the binary now carries
+(<a href="issue-311c-source-rides-in-the-binary.html">311c</a>), which is the exact text
+that was compiled, so a name reported is never a name from a source
+that has since changed.</p>
+<p><strong>Argument names are not carried either.</strong> The engine never used one.
+A debug report that wants them re-reads the embedded source by
+parameter index.</p>
+<h2>What this does to hand placement</h2>
+<p><a href="issue-210g-one-way-to-build-a-station.html">210g</a> asks whether placing a
+station by hand — stating shapes directly instead of naming a box —
+survives. <strong>It does, and this issue is what makes the answer easy.</strong></p>
+<p>A placement function <em>is</em> hand placement, written by the generator
+instead of by a person. By-name placement is a table lookup that finds
+one and calls it. So there are not two doors into the engine; there is
+one door with a typed front and a raw back, and the front is built out
+of the back.</p>
+<p>That means phase 2's station-table tests keep placing stations without
+constructing a registry — they call the raw form directly, which is
+what they were always doing — and a test of the station table stays a
+test of only the station table.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. The generator emits a placement function per box, alongside the
+   record, with the record still authoritative. Nothing changes
+   behaviour yet; the two can be compared.
+2. A test that placing by record and placing by function produce
+   identical stations, field for field. This is the proof the
+   translation is faithful, and it is cheap while both exist.
+3. Placement by name routes through the function; the record stops
+   being read.
+4. Struct field tables written onto ports at placement, and the by-name
+   struct search deleted.
+5. The record type, the parameter arrays, the type-name strings, and
+   the stored task size deleted. The table becomes two columns.
+6. The dump's shim-to-name lookup replaced by the station carrying what
+   it was placed as.
+7. The word <em>registry</em> replaced by <em>box table</em> wherever it appears, in
+   source and in documents, since the thing it named no longer exists.</p>
+<h2>Open questions</h2>
+<ul>
+<li>The dump needs to name the box a station was placed as. Carrying the</li>
+<p>  string on the station is one pointer per station and is simplest;
+  carrying the table index is smaller and needs the table to be
+  ordered stably, which it is at build time and is not once
+  <a href="issue-310-boxes-compiled-at-runtime.html">310</a> appends rows at runtime. The
+  index is probably right anyway, since a row is never removed, but it
+  should be decided rather than assumed.</p>
+</ul>
+<h2>Related</h2>
+<ul>
+<li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
+<p>  parent</p>
+<li><a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,</li>
+<p>  which is where type and argument names go once the engine stops
+  carrying them</p>
+<li><a href="done-303-registry-emission.html">303 — Registry emission</a>, the</li>
+<p>  emission this replaces</p>
+<li><a href="done-304-struct-field-tables.html">304 — Struct field tables</a>,</li>
+<p>  which stop being searched and start being pointed at</p>
+<li><a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>,</li>
+<p>  whose open question about hand placement this answers</p>
+<li><a href="issue-308-generator-in-c.html">308 — The generator, in C</a>, which does the</li>
+<p>  emitting</p>
+</ul>
+
+</main>
+</div></body></html>
