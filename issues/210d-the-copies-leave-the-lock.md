@@ -235,7 +235,7 @@ partial claim while another interleaves.
 - [210c — A state on every slot](210c-a-state-on-every-slot.md), which
   must land first — the ownership meaning of *reserved* and *claimed*
   is the whole reason the copies can leave the lock
-- [210e — Growth adds a page](210e-growth-adds-a-page.md), which is
+- [210e — Growth adds a page](completed/210e-growth-adds-a-page.md), which is
   only safe because nothing here computes a location from the capacity
 - [204 — The readiness check](completed/204-readiness-check.md), the
   walk this changes

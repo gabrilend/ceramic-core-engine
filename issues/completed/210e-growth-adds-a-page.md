@@ -6,8 +6,63 @@ premise that made growing a buffer hard; this one collects.
 
 ## Current behavior
 
-A ring buffer grows by allocating a larger array, copying the values
-across, unwrapping them so the oldest sits at index zero, and freeing
+**Done, and taken before [210d](210d-the-copies-leave-the-lock.md)
+rather than after it.** The family's stated order is 210c → 210d →
+210e, and for the first half that is right: the scan is what makes
+paging possible, and the scan is 210d's third step. But the *second*
+half of 210d — the value copies leaving the lock — depends on this
+issue rather than the other way round, and building it first would
+have meant knowingly shipping a window in which a claimer copies bytes
+outside the lock while a grower reallocates the storage underneath it.
+
+This issue said as much already, in the paragraph below about the
+existing growth stopping being correct, and added that "the two cannot
+be separated by very long". They do not need to be separated at all:
+**taken in this order there is no window, only a step that has to come
+first.** The dependency is not between the two issues but between two
+halves of one of them, which is the kind of thing a family only finds
+out when somebody tries to build it.
+
+What now stands:
+
+- **A port's slots live in a list of equal-sized pages.** Growth
+  appends one; nothing already there moves. The first page is
+  allocated at placement by the same call, because giving a port its
+  first page and growing it are the same act.
+- **The page size is the starting depth**, so a program that knows it
+  needs depth raises that number and gets large pages everywhere,
+  rather than a long chain of small ones.
+- **The scan resolves a page once and then follows links** — one
+  pointer hop per page boundary and plain arithmetic in between.
+  Resolving an ordinal per candidate would have made a sweep quadratic
+  in the number of pages, so the state transition gained a form that
+  takes an address rather than an ordinal, which is what the scan
+  already holds.
+- **The buffer report speaks pages**, and its shout threshold moved
+  from four to sixteen — the same backlog restated in the new units,
+  since four doublings meant sixteen times the starting depth and
+  sixteen equal pages mean seventeen times it. Left at four it would
+  have fired whenever a consumer was briefly slow, and a warning that
+  cries wolf costs more than it is worth.
+- **A test drives the failure the old growth actually produced.** Nine
+  hundred distinct values pile onto one port of a two-port station
+  until it is a hundred and twenty-nine pages deep, then drain while
+  the other side opens; every value must come out exactly once, which
+  is a statement about losing and doubling at the same time. A second
+  scene checks the arithmetic directly, since a page boundary is where
+  it goes wrong and a concurrency test would only catch that by luck.
+
+**The measurement is unchanged and that is not evidence of anything.**
+The fan-in apparatus sets a starting depth large enough that its ports
+never grow, so paging is not on the path it measures — a port with one
+page scans exactly as it did before. What this issue costs is a page
+walk on a port deep enough to have several, and the apparatus
+deliberately has none.
+
+### What it replaced
+
+A ring buffer grew by allocating a larger array, copying the values
+across, unwrapping them so the oldest sat at index zero, and freeing
 the old storage — all under the station's mutex.
 
 **It has an ordering problem with no correct answer.** Copy the values

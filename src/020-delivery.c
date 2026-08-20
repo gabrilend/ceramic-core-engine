@@ -101,14 +101,40 @@ static int in_port_scan(in_port_t *sl, int *hint, int from, int to)
     if (start < 0 || start >= sl->capacity)
         start = 0;
 
-    for (int i = 0; i < sl->capacity; i++) {
-        int c = start + i;
-        if (c >= sl->capacity)
-            c -= sl->capacity;
-        if (in_port_slot_move(sl, c, from, to)) {
+    /*
+     * The pages are walked rather than indexed (issue 210e). Resolving
+     * a slot's ordinal to a page costs a walk down the list, so doing
+     * it per candidate would make a sweep quadratic in the number of
+     * pages. It is done **once**, here, and the sweep then follows
+     * `next` — one pointer hop per page boundary and plain pointer
+     * arithmetic in between, which is what the old single array did
+     * everywhere.
+     */
+    int page = start / sl->page_slots;
+    int off  = start % sl->page_slots;
+    in_port_page_t *pg = sl->pages;
+    for (int i = 0; i < page && pg; i++)
+        pg = pg->next;
+
+    for (int i = 0; i < sl->capacity && pg; i++) {
+        void *slot = pg->slots + (size_t)off * (size_t)sl->stride;
+        if (slot_move_at(slot, sl->elem_size, from, to)) {
+            int c = page * sl->page_slots + off;
             int next = c + 1;
             *hint = next >= sl->capacity ? 0 : next;
             return c;
+        }
+        /* Forward one slot, crossing to the next page at its end and
+         * back to the first page at the last one's — the wrap that
+         * makes this a ring. */
+        if (++off == sl->page_slots) {
+            off = 0;
+            pg = pg->next;
+            page++;
+            if (!pg) {
+                pg = sl->pages;
+                page = 0;
+            }
         }
     }
     return -1;
@@ -117,72 +143,40 @@ static int in_port_scan(in_port_t *sl, int *hint, int from, int to)
 
 /* {{{ in_port_grow_locked() */
 /*
- * Double the slots (issue 203). Only the storage the port points at
- * is reallocated — never the port, never the station — so every wire
- * and every in-flight value is untouched.
+ * One more page of slots on the end (issue 210e). Nothing is copied
+ * and no existing slot moves, so there is no window to get right.
+ *
+ * **This replaced a copy-and-unwrap that had an ordering problem with
+ * no correct answer**, and the shape of that problem is worth keeping
+ * because it is what paging buys. Growing by allocating a larger
+ * array meant carrying the live values across. Copy first and then
+ * publish, and a value popped from the old array during the copy
+ * exists in both places and is delivered twice; publish first and
+ * then copy, and readers see an empty buffer while it fills. Neither
+ * order is safe on its own. What made it safe was that nothing else
+ * could happen at all during the copy, because the station's mutex
+ * was held for the whole of it.
+ *
+ * That protection is exactly what issue 210d spends: once a claimer
+ * copies its bytes outside the lock, "nothing else is happening" stops
+ * being true, and relocating a slot underneath a worker that owns it
+ * is the one thing slot ownership does not cover. So the copy had to
+ * go rather than be ordered correctly — **removing the copy removes
+ * the requirement rather than satisfying it.**
+ *
+ * Growth still takes the station's mutex, as one of the rare
+ * structural operations, so that two threads meeting a full buffer
+ * add one page between them rather than one each.
  */
 static void in_port_grow_locked(in_port_t *sl)
 {
-    int new_capacity = sl->capacity * 2;
-    /* Zeroed, so every slot past the ones carried over is empty
-     * (issue 210c). The carried-over ones are published ready below. */
-    unsigned char *fresh = calloc((size_t)new_capacity, (size_t)sl->stride);
-    if (!fresh) {
-        fprintf(stderr, "delivery: ring buffer growth to %d slots failed\n",
-                new_capacity);
-        abort();
-    }
-
-    /* Value by value rather than in one or two block copies, and each
-     * one taken out of the old array before it is put into the new.
-     *
-     * The old slots carry their states interleaved with their bytes,
-     * and the states are not what should be carried across — the
-     * fresh run is being *built* rather than moved, so each surviving
-     * value is written into an empty slot and published as ready,
-     * exactly as an ordinary arrival would be. Copying the bytes
-     * wholesale would bring the old states with them.
-     *
-     * Claiming each slot on the way out is what identifies which ones
-     * held a value: only a ready slot will move, so the walk finds
-     * every value and nothing else. It also means the old array is
-     * left correctly emptied rather than merely abandoned, which
-     * costs nothing here and would be a real bug if this ever ran
-     * with anything else looking.
-     *
-     * Nothing else can be happening during this: the station's mutex
-     * is held for the whole of a growth. Issue 210e removes both the
-     * copying and the need for that.
-     */
-    int placed = 0;
-    for (int c = 0; c < sl->capacity; c++) {
-        if (!in_port_slot_move(sl, c, SLOT_READY, SLOT_CLAIMED))
-            continue;
-        unsigned char *dst = fresh + (size_t)placed * (size_t)sl->stride;
-        memcpy(dst, in_port_slot(sl, c), (size_t)sl->elem_size);
-        dst[sl->elem_size] = SLOT_READY;
-        placed++;
-    }
-    if (placed != sl->held) {
-        fprintf(stderr, "delivery: growth found %d values in a port holding "
-                        "%d — the count and the slots disagree\n",
-                placed, (int)sl->held);
-        abort();
-    }
-
-    free(sl->storage);
-    sl->storage = fresh;
-    sl->capacity = new_capacity;
-    /* Values sit at the front of the fresh run and space follows
-     * them, so a reader should start at the front and a writer just
-     * past the values. Both are only hints; being wrong would cost a
-     * sweep, not a mistake. */
-    sl->read_hint = 0;
-    sl->write_hint = placed;
+    in_port_add_page(sl);
+    /* A writer looking for space should start where the space now is.
+     * Only a hint: being wrong costs a sweep, not a mistake. */
+    sl->write_hint = sl->capacity - sl->page_slots;
     sl->growths++;
 }
 /* }}} */
-
 /* {{{ in_port_write_locked() */
 static void in_port_write_locked(in_port_t *sl, const void *value)
 {

@@ -17,7 +17,7 @@ its own.
 |---|---|---|
 | 201 — station table | **extended** | Flat array of fixed-size records; growing it means shelves, because a station holds its mutex. |
 | 202 — ring-buffer slots | **extended** | Exact-size slots stay; the two indices go, and with them the copy that growth needs. |
-| 203 — slot buffer growth | **extended** | Doubling with unwrap becomes adding a page, once nothing computes a position from the capacity. |
+| [203 — port buffer growth](completed/203-port-buffer-growth.md) | **replaced** | Doubling with unwrap became adding a page, once nothing computed a position from the capacity. The copy it was built around could not be made safe once the value copies leave the lock, so it had to stop existing rather than be ordered correctly. |
 | 204 — readiness check | **extended** | Same check, second caller: writing a static reaches it too. The mutex around the claim goes. |
 | 205 — delivery walk | **extended** | Loses the gather step and the destination snapshot; gains a destination that is a boundary. |
 | 206 — task struct | complete | One exact-size allocation: shim, station, port, input copies, output. |
@@ -28,8 +28,8 @@ its own.
 | 210a — the pull path removed | **complete** | The gatherer kind and everything reading it, taken out. Every box now runs on a worker that picked it up. |
 | [210b — the port record](completed/210b-the-port-record.md) | **complete** | Both storages on every port, the three-value tag, slots allocated at instantiation whatever the port is currently for — which is what makes changing a port's source a field write. The map file learned the two forms it owed: a bare dash for a port with no source, and `x64` before the source for a starting depth, so a half-built program round-trips.
 | 210c — a state on every slot | open | Four states, one atomic swap each; then the copies leave the lock, write side first. |
-| [210d — the copies leave the lock](210d-the-copies-leave-the-lock.md) | open | The mutex narrows to the slot states; the value copies move outside it, protected by the fact that a claimed slot belongs to exactly one worker. Check-all-then-flip-all, so no roll-back path exists. |
-| 210e — growth adds a page | open | Append rather than copy — which a claim that scans rather than computing a position makes necessary, not merely nicer. |
+| [210d — the copies leave the lock](210d-the-copies-leave-the-lock.md) | **half done** | Its scan landed and enabled 210e; its copies wait on 210e and are what remains. The mutex narrows to the slot states; the value copies move outside it, protected by the fact that a claimed slot belongs to exactly one worker. Check-all-then-flip-all, so no roll-back path exists. |
+| [210e — growth adds a page](completed/210e-growth-adds-a-page.md) | **complete** | Append rather than copy, in equal-sized pages, so no slot that already exists ever moves. Taken *before* 210d's copies rather than after, because that is the order with no window in it — the dependency turned out to run between two halves of 210d rather than between two issues. |
 | 210f — changing what a port is | open | A field write, with waiting values left where they sit rather than freed. |
 | 210g — one way to build a station | open | One configuration surface; a hand-built program and a loaded one dump identically. |
 | [210h — optional parameters](completed/210h-optional-parameters.md) | refused | Refused: it would have been the only exemption to the rule that a station runs when every slot holds a value. The record of why, and where the case it reached for actually belongs. |
@@ -49,9 +49,19 @@ is load-bearing in a way its issue could only half-see at the time —
 a station holds its own mutex, and a mutex is identified by where it
 lives, so moving one strands every thread parked on it.
 
-**Only the storage a port points at is ever reallocated.** Never the
-port, never the station. That is what lets a buffer grow while every
-wire and every value in flight survives untouched.
+**Only the storage a port points at was ever reallocated** — never the
+port, never the station — which is what let a buffer grow while every
+wire and every value in flight survived untouched.
+
+**And then nothing was reallocated at all.** A buffer grows by adding
+a page of slots to a list, so no slot that already exists ever moves
+(210e). The stronger statement had to be reached rather than merely
+preferred: a worker copying a value out of a slot it has claimed holds
+no lock, because a claimed slot belongs to it alone, and moving that
+slot underneath it is the one thing that ownership does not protect
+against. Reallocation was safe only while the station's mutex covered
+the whole copy. **The copy could not be given a correct ordering; it
+had to stop existing.**
 
 **User code must never run under a station's mutex.** One slow box
 would freeze every thread delivering into that station. This is why the

@@ -80,15 +80,103 @@ static int slot_stride(int elem_size)
 }
 /* }}} */
 
-/* {{{ in_port_slot() */
-void *in_port_slot(const in_port_t *sl, int index)
+/* {{{ in_port_page_at() */
+/*
+ * The page holding a given page number, counted from the first.
+ *
+ * A walk down a short list, and the cost paging charges (issue 210e).
+ * It is bounded by how many pages a port has, which is one until a
+ * consumer falls behind its producer — and a port deep enough for
+ * this walk to matter is one phase 7's buffer report is already
+ * shouting about, so the long chain is a symptom of a problem the
+ * engine is supposed to be complaining about rather than absorbing.
+ *
+ * The scan does not use this per candidate. It resolves a page once
+ * and then follows `next`, which is what keeps a sweep to one pointer
+ * hop per page boundary instead of a walk per slot.
+ */
+static in_port_page_t *in_port_page_at(const in_port_t *sl, int page)
 {
-    return (unsigned char *)sl->storage + (size_t)index * (size_t)sl->stride;
+    in_port_page_t *pg = sl->pages;
+    while (page-- > 0 && pg)
+        pg = pg->next;
+    return pg;
 }
 /* }}} */
 
-/* {{{ in_port_slot_move() */
-int in_port_slot_move(const in_port_t *sl, int index, int from, int to)
+/* {{{ in_port_slot() */
+void *in_port_slot(const in_port_t *sl, int index)
+{
+    in_port_page_t *pg = in_port_page_at(sl, index / sl->page_slots);
+    if (!pg) {
+        /* An ordinal past the last page means the caller computed a
+         * position the port does not have. Nothing should be able to:
+         * the scan bounds itself by the capacity, and the capacity is
+         * the sum of the pages. Stopping is right because continuing
+         * would read whatever follows the list. */
+        fprintf(stderr, "station: slot %d asked for on a port that has "
+                        "%d\n", index, sl->capacity);
+        abort();
+    }
+    return pg->slots + (size_t)(index % sl->page_slots) * (size_t)sl->stride;
+}
+/* }}} */
+
+/* {{{ in_port_add_page() */
+/*
+ * One more page on the end. Used both to give a port its first page
+ * and to grow it, because they are the same act (issue 210e) — which
+ * is the shape the station table already uses one level up.
+ */
+in_port_page_t *in_port_add_page(in_port_t *sl)
+{
+    /* Zeroed rather than merely allocated, because a slot's state is
+     * part of it and empty is zero (issue 210c) — a fresh page has to
+     * be a page of *empty* slots, or the first reader to reach it
+     * would find whatever the allocator left behind and believe it. */
+    in_port_page_t *pg = calloc(1, sizeof *pg
+                                + (size_t)sl->page_slots * (size_t)sl->stride);
+    if (!pg) fail("out of memory for a page of a ring buffer");
+
+    if (!sl->pages) {
+        sl->pages = pg;
+    } else {
+        in_port_page_t *last = sl->pages;
+        while (last->next)
+            last = last->next;
+        last->next = pg;
+    }
+    sl->capacity += sl->page_slots;
+    return pg;
+}
+/* }}} */
+
+/* {{{ in_port_free_pages() */
+void in_port_free_pages(in_port_t *sl)
+{
+    in_port_page_t *pg = sl->pages;
+    while (pg) {
+        in_port_page_t *next = pg->next;
+        free(pg);
+        pg = next;
+    }
+    sl->pages = NULL;
+    sl->capacity = 0;
+}
+/* }}} */
+
+/* {{{ slot_move_at() */
+/*
+ * The state machine, on a slot the caller has already located.
+ *
+ * Split out from the index-taking form because the scan walks pages
+ * and therefore already holds the address (issue 210e). Going back
+ * through an ordinal would make it resolve a page per candidate,
+ * turning a sweep into a walk down the page list for every slot it
+ * looks at — quadratic in the number of pages, on the hot path,
+ * to recompute something it just had.
+ */
+int slot_move_at(void *slot, int elem_size, int from, int to)
 {
     /* The state sits immediately after the value bytes. Reached
      * through a byte pointer and an explicit offset rather than a
@@ -96,7 +184,7 @@ int in_port_slot_move(const in_port_t *sl, int index, int from, int to)
      * port exists — the value in the middle of it is as wide as the
      * parameter this port feeds. */
     _Atomic unsigned char *state = (_Atomic unsigned char *)
-        ((unsigned char *)in_port_slot(sl, index) + sl->elem_size);
+        ((unsigned char *)slot + elem_size);
 
     unsigned char expected = (unsigned char)from;
     /* Acquire-release on success: a reader that wins ready-to-claimed
@@ -108,6 +196,17 @@ int in_port_slot_move(const in_port_t *sl, int index, int from, int to)
     return atomic_compare_exchange_strong_explicit(
         state, &expected, (unsigned char)to,
         memory_order_acq_rel, memory_order_acquire);
+}
+/* }}} */
+
+/* {{{ in_port_slot_move() */
+/*
+ * The same transition, named by ordinal rather than by address, for
+ * every caller that has an index in hand and no page to walk from.
+ */
+int in_port_slot_move(const in_port_t *sl, int index, int from, int to)
+{
+    return slot_move_at(in_port_slot(sl, index), sl->elem_size, from, to);
 }
 /* }}} */
 
@@ -267,15 +366,14 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
          * (issue 210b). */
         sl->kind = IN_PORT_RING;
         sl->elem_size = elem_sizes[i];
-        sl->capacity = IN_PORT_DEFAULT_CAPACITY;
         sl->stride = slot_stride(sl->elem_size);
-        /* Zeroed rather than merely allocated, because a slot's state
-         * is part of it now and empty is zero (issue 210c) — a fresh
-         * run of slots has to be a fresh run of *empty* slots, or the
-         * first reader to look would find whatever the allocator left
-         * behind and believe it. */
-        sl->storage = calloc((size_t)sl->capacity, (size_t)sl->stride);
-        if (!sl->storage) fail("out of memory for a ring buffer");
+        /* The first page, which is the same act as growing (issue
+         * 210e): a port with one page and a port with nine differ
+         * only in how many times this has happened. */
+        sl->pages = NULL;
+        sl->capacity = 0;
+        sl->page_slots = IN_PORT_DEFAULT_CAPACITY;
+        in_port_add_page(sl);
         sl->read_hint = 0;
         sl->write_hint = 0;
         sl->held = 0;
@@ -315,15 +413,19 @@ void map_in_port_start_depth(map_t *m, int station, int port, int slots)
         fail("setting the starting depth of a port that already holds values "
              "— this is a starting depth, and the start has been and gone");
 
-    /* Allocate before freeing, so a failure here leaves the port with
-     * the buffer it already had rather than with none. Growth is what
-     * covers a depth that turns out wrong, so there is nothing to
-     * copy: the port is empty, which is what the check above proved. */
-    void *fresh = calloc((size_t)slots, (size_t)sl->stride);
-    if (!fresh) fail("out of memory resizing a ring buffer to its starting depth");
-    free(sl->storage);
-    sl->storage = fresh;
-    sl->capacity = slots;
+    /* The starting depth sets the **page size**, not merely the first
+     * page's size (issue 210e). Every page a port ever adds is this
+     * big, so asking for deep buffers gets large pages everywhere
+     * rather than a long chain of small ones — the same lever pointed
+     * at the same problem, which is what keeps the page walk short
+     * for a program that knew it would need depth.
+     *
+     * The port is empty, which the check above proved, so there is
+     * nothing to carry across: drop the pages it has and give it one
+     * of the new size. */
+    in_port_free_pages(sl);
+    sl->page_slots = slots;
+    in_port_add_page(sl);
     sl->read_hint = 0;
     sl->write_hint = 0;
 }
@@ -738,7 +840,7 @@ void map_destroy(map_t *m)
             continue;
         }
         for (int j = 0; j < s->n_in_ports; j++) {
-            free(s->in_ports[j].storage);
+            in_port_free_pages(&s->in_ports[j]);
             /* Both storages, because a port carries both whatever it
              * was being used for (issue 401). */
             in_port_constant_free(&s->in_ports[j]);

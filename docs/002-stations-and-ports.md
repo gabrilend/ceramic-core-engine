@@ -48,10 +48,12 @@ uniform and the array stays indexable.
 | out_ports | pointer to a linked list | The output ports. One node for a plain box, three for a comparator, however many an iterator has. |
 | cursor | `int` | Which output port an iterator sends to next. Unused by the other kinds. |
 
-The station never moves. Its buffers can grow, but they grow by
-reallocating the buffer storage the port points at, not by reallocating
-the station. This is why a wire can hold a station index forever and
-never need fixing up.
+The station never moves. Its buffers can grow, but they grow by adding
+a page of slots to the port, not by touching the station — and not by
+moving any slot that already exists. This is why a wire can hold a
+station index forever and never need fixing up, and why a worker
+copying a value out of a slot it has claimed can do so holding no lock
+at all.
 
 ## The kinds of input port
 
@@ -78,8 +80,9 @@ from it.
 |---|---|---|
 | kind | `unsigned char` | Ring buffer, static, or no source yet. There was another, a gatherer, and [056](implementation-notes/056-no-pull-path.md) is where it went. |
 | elem_size | `int` | Bytes per value. Copied from the registry at load; equals `sizeof` the box function's parameter type. |
-| storage | `void *` | The slots. Allocated whatever the kind and never freed until the map is, so changing what a port is costs no allocation and loses nothing that was waiting. |
-| capacity | `int` | How many slots. Ten unless the port was told otherwise. |
+| pages | pointer to a list | The slots, in equal-sized pages. Allocated whatever the kind and never freed until the map is, so changing what a port is costs no allocation and loses nothing that was waiting. Growth appends a page; nothing already there moves. |
+| page_slots | `int` | Slots per page, the same for every page of this port. It is the starting depth, so asking for a deep buffer gives large pages rather than many small ones. |
+| capacity | `int` | How many slots in total, across every page. Ten unless the port was told otherwise. |
 | stride | `int` | Bytes from one slot to the next: a value, its state, and enough padding to keep the next value aligned. |
 | read_hint, write_hint | `int` | Where a reader and a writer each start looking. Hints, not positions — a stale one costs a longer search and nothing else. |
 | held | `int`, atomic | How many slots are ready right now. Maintained rather than counted, because readiness asks on every delivery. |
@@ -154,32 +157,45 @@ handed to a box.
 
 ## Ring buffer growth
 
-A ring buffer should never be full. If the writing index would land on
-the reading index, the buffer grows: still holding the station's mutex,
-the storage is reallocated to twice the size, the wrapped-around
-portion is copied up so the contents read contiguously again, and the
-two indices are corrected.
+A ring buffer should never be full. When a writer looks for an empty
+slot and nothing answers, the buffer grows: still holding the station's
+mutex, **one more page of slots is added to the end of a short list.**
+Nothing is copied and no slot that already exists moves.
 
-**The copy is the part that is going.** It exists because the two
-indices are positions taken modulo the capacity — change the capacity
-and every existing value is suddenly at a different index, so they have
-to be physically moved back into order. Once slots carry their own
-state and a reader scans instead of computing, nothing derives a
-location from the capacity, and a buffer can grow by **adding a page**
-of slots to a short list. No copy, no existing slot moves, and the
-ordering hazard the copy has to be careful about — publish before
-copying and readers see an empty buffer; copy before publishing and a
-value taken during the copy is delivered twice — stops existing rather
-than being handled.
+Every page holds the same number of slots, so turning a slot's ordinal
+into a page and an offset is a divide and a remainder. Pages that each
+doubled the last would have made that a walk down the list comparing
+ranges, and the scan does it on every step while growth happens rarely
+— so the cheap operation belongs on the side that repeats. The page
+size is the port's starting depth, which means a program that knows it
+needs deep buffers raises that number and gets large pages everywhere
+rather than a long chain of small ones.
 
-This is safe without any further care because the growth reallocates
-the *storage* the port points at, not the station. Every wire in the
-program refers to the station by index, and every value in flight is a
-copy inside a task struct. Nothing holds a pointer into the buffer.
+**It used to double and copy, and the copy could not be made safe.**
+The two indices were positions taken modulo the capacity, so changing
+the capacity put every existing value at a different index and they had
+to be physically moved back into order. That copy had an ordering
+hazard with no correct answer: publish before copying and readers see
+an empty buffer while it fills; copy before publishing and a value
+taken during the copy is delivered twice. What made it safe was that
+the station's mutex was held for the whole of it, so nothing else could
+happen at all.
 
-Growth is O(number of values held) but amortized to nothing, and it
-happens at most a couple dozen times in a process lifetime. A buffer
-that keeps growing is a signal worth logging: it means one input side
+That protection is exactly what the next step in this line spends.
+Once a worker copies a claimed value out **without holding the lock** —
+which it may, because a claimed slot belongs to it alone — "nothing
+else is happening" stops being true, and moving that slot underneath
+its owner is the one thing ownership does not protect. So the copy did
+not need a better ordering. It needed to stop existing.
+
+Nothing else needs care, because a page is added to the port rather
+than to the station. Every wire refers to a station by index, every
+value in flight is a copy inside a task struct, and a port's pages are
+never reordered or freed while the map lives.
+
+Growth costs one allocation and nothing else — there is no work
+proportional to what the buffer holds any more. A buffer that keeps
+growing is a signal worth logging: it means one input side
 of a station is being fed faster than its sibling ports, and memory
 is absorbing the imbalance while values wait for their partners.
 

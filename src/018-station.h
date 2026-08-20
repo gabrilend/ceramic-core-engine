@@ -165,10 +165,46 @@ enum station_kind {
  * which is what makes changing what a port is a field write in both
  * directions rather than only one.
  */
+/*
+ * One page of a port's ring buffer (issue 210e).
+ *
+ * A buffer grows by adding one of these to the end of a short list,
+ * never by copying, so **no slot that already exists ever moves**.
+ * That is not a tidiness argument. A worker copying bytes out of a
+ * slot it has claimed holds no lock — a claimed slot belongs to it
+ * alone and needs no exclusion from anybody — and relocating that
+ * slot underneath it is precisely the thing that ownership does not
+ * protect against. Copy-and-unwrap growth was safe only while the
+ * station's mutex covered the whole copy, and it stops being safe the
+ * moment the value copies leave that lock (issue 210d).
+ *
+ * Every page holds the same number of slots, so turning a slot's
+ * ordinal into a page and an offset is a divide and a remainder.
+ * Pages that each doubled the last would have made that a walk down
+ * the list comparing ranges; the scan does this on every step and
+ * growth happens rarely, so the cheap operation belongs on the side
+ * that repeats.
+ */
+typedef struct in_port_page {
+    struct in_port_page *next;
+    /* page_slots × stride bytes: value, state, padding, repeating. */
+    unsigned char        slots[];
+} in_port_page_t;
+
 typedef struct in_port {
     unsigned char kind;
     int   elem_size;
-    void *storage;
+    /* The pages, oldest first. The first is allocated when the
+     * station is placed; growth appends. Never reordered, never
+     * freed until the map is. */
+    in_port_page_t *pages;
+    /* Slots per page — the same for every page of this port, and the
+     * same number the first page was given, so a program that wants
+     * deep buffers raises its starting depth and gets large pages
+     * everywhere rather than a long chain of small ones. */
+    int   page_slots;
+    /* Total slots across every page. A sum rather than a single
+     * allocation's size, which is what the buffer report speaks. */
     int   capacity;
     /* Bytes from one slot to the next: the value's own size, plus its
      * state, rounded up so every value keeps the alignment its type
@@ -189,11 +225,12 @@ typedef struct in_port {
      * longer scan and nothing else, so nothing has to be excluded to
      * keep it true, because there is nothing about it that must be.
      *
-     * They are ordinals into the port's slots rather than pointers,
-     * because storage is the one thing in this design that gets
-     * reallocated — a saved pointer means something else afterwards,
-     * while an ordinal keeps meaning what it meant. Same reason a
-     * wire is a pair of integers rather than an address.
+     * They are ordinals into the port's slots rather than pointers.
+     * Under paging a pointer into a page would in fact stay valid,
+     * since pages never move (issue 210e) — but an ordinal survives
+     * being read while another thread appends a page, and it is the
+     * same shape the scan already needs to bound itself by. Same
+     * reason a wire is a pair of integers rather than an address.
      */
     int   read_hint;
     int   write_hint;
@@ -878,6 +915,32 @@ void map_in_port_static_write(map_t *m, int station, int port,
  */
 void *in_port_slot(const in_port_t *sl, int index);
 int   in_port_slot_move(const in_port_t *sl, int index, int from, int to);
+
+/*
+ * The same transition on a slot the caller has already located.
+ * The scan walks pages and therefore holds the address already; going
+ * back through an ordinal would make it resolve a page per candidate,
+ * which is a walk down the page list for every slot it looks at
+ * (issue 210e).
+ */
+int   slot_move_at(void *slot, int elem_size, int from, int to);
+/* }}} */
+
+/* {{{ in_port_add_page() / in_port_free_pages() — issue 210e */
+/*
+ * Growing a ring buffer, and the one act that gives it its first page
+ * as well — they are the same thing, which is what paging buys.
+ * `in_port_add_page` appends one page of `page_slots` slots, all
+ * empty, and adds them to the capacity; nothing already there moves.
+ * Callers hold the station's mutex, so two threads meeting a full
+ * buffer add one page between them rather than one each.
+ *
+ * `in_port_free_pages` drops the whole list, for teardown and for the
+ * one moment a port's page size legitimately changes — its starting
+ * depth, which may only be set while the port is empty.
+ */
+in_port_page_t *in_port_add_page(in_port_t *sl);
+void            in_port_free_pages(in_port_t *sl);
 /* }}} */
 
 /* {{{ in_port_kind_name() — issue 210b */

@@ -43,17 +43,29 @@ than a branch per case:
   on the way out: plain returns its only port; comparator and
   iterator rows fail loudly until phase 5 fills them.
 
-## Growth (issue 203)
+## Growth (issues 203, 210e)
 
-Doubles the storage a port points at — never the port, never the
-station. Every value is claimed out of the old slots and republished
-into the front of the new ones, one at a time rather than in a block
-copy: a slot carries its state interleaved with its bytes, and the
-fresh run is being *built* rather than moved, so carrying the old
-states across would be wrong. Claiming on the way out is also what
-identifies which slots held anything, since only a ready slot will
-move. Counted per port, high water tracked on every write, both for
-phase 7 to report.
+**Adds one page of slots to the end of a list.** Nothing is copied and
+no slot that already exists moves, so there is no window to get right.
+Growth still takes the station's mutex, as one of the rare structural
+operations, so two threads meeting a full buffer add one page between
+them rather than one each. Counted per port, high water tracked on
+every write, both for phase 7 to report — and the count now means
+*pages added beyond the first* rather than doublings, which is why the
+report says pages.
+
+**It used to double and copy, and that could not be made safe.** The
+live values had to be carried across: copy first and then publish, and
+a value taken from the old array mid-copy exists in both places and is
+delivered twice; publish first and then copy, and a reader sees an
+empty buffer while it fills. Neither order works on its own. What made
+it safe was that the station's mutex was held for the whole copy, so
+nothing else could happen at all — and that is precisely the
+protection issue 210d spends when the value copies leave the lock. A
+worker copying out of a slot it has claimed holds no lock, because a
+claimed slot belongs to it alone, and relocating that slot underneath
+it is the one thing ownership does not cover. So the copy had to stop
+existing rather than be ordered correctly.
 
 **The walk takes no lock and copies nothing** (issue 214). A port's
 destinations are one immutable array behind a pointer; reading that

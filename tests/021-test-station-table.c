@@ -70,7 +70,8 @@ int main(void)
         exit(1);
     }
     int recovered;
-    memcpy(&recovered, map_station(m, 2)->in_ports[0].storage, sizeof recovered);
+    memcpy(&recovered, in_port_slot(&map_station(m, 2)->in_ports[0], 0),
+           sizeof recovered);
     if (recovered != 777) {
         fprintf(stderr, "the neighbour's value was disturbed: %d\n", recovered);
         exit(1);

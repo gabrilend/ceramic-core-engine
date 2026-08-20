@@ -13,8 +13,9 @@ buffers grow.
 |---|---|---|
 | kind | `unsigned char` | Ring buffer (0), static (1), or no source yet (2). Stored, never inferred. |
 | elem_size | `int` | Bytes per value; exactly the parameter's size. |
-| storage | `void *` | The ring's slots. Allocated at placement whatever the kind, and never freed until the map is. Reallocated on growth; the port itself never moves. |
-| capacity | `int` | Slots allocated, all of them usable. Starts at ten unless the port was told otherwise. |
+| pages | `in_port_page_t *` | The ring's slots, in a list of equal-sized pages. The first is allocated at placement whatever the kind; growth appends. **Nothing already there ever moves**, which is what lets a worker copy out of a slot it owns while holding no lock. Never freed until the map is. |
+| page_slots | `int` | Slots per page, the same for every page of this port, and the same number the first page was given. Raising a port's starting depth therefore makes every page large rather than making a long chain of small ones. |
+| capacity | `int` | Total slots across every page, all of them usable. Starts at ten unless the port was told otherwise. A sum rather than one allocation's size, which is what the buffer report speaks. |
 | stride | `int` | Bytes from one slot to the next: a value, its state, and padding to keep the next value aligned. |
 | read_hint, write_hint | `int` | Where a reader and a writer each start looking. Hints, not positions. |
 | held | `int`, atomic | Slots ready right now. |

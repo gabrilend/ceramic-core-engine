@@ -223,7 +223,7 @@ static void reclaim_station(void *p)
         port = next;
     }
     for (int i = 0; i < r->n_in_ports; i++) {
-        free(r->in_ports[i].storage);
+        in_port_free_pages(&r->in_ports[i]);
         in_port_constant_free(&r->in_ports[i]);
     }
     free(r->in_ports);

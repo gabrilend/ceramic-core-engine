@@ -32,7 +32,6 @@
 <a href="issue-210-input-port-record.html">210 — What an input port is</a>
 <a href="issue-210c-a-state-on-every-slot.html" class="here">210c — A state on every slot</a>
 <a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
-<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
@@ -75,6 +74,7 @@
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
+<a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
@@ -300,7 +300,7 @@ buffer depth, the ports grew thirteen times each during the run. Every
 growth allocates a new array and copies every value across *under the
 same mutex being measured*, and that copy is proportional to the
 element size — so the large-value figure was substantially a
-measurement of growth. Growth is <a href="issue-210e-growth-adds-a-page.html">210e</a>'s
+measurement of growth. Growth is <a href="done-210e-growth-adds-a-page.html">210e</a>'s
 problem. A baseline containing it would have made this issue look like
 it achieved less than it did, because moving the delivery copy out of
 the lock leaves the growth copy inside it. The ports are now sized
@@ -318,7 +318,7 @@ measurement 210e will want.</p>
 <p>  for the slots to live on</p>
 <li><a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>,</li>
 <p>  which is only expressible once slots carry their own states</p>
-<li><a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>, which needs</li>
+<li><a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>, which needs</li>
 <p>  occupancy to stop being implied by indices</p>
 <li><a href="done-202-ring-buffer-ports.html">202 — Ring buffer slots</a>, whose</li>
 <p>  head-and-tail exclusivity this replaces</p>

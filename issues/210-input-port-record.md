@@ -22,17 +22,34 @@ whole family.
 | [210b — The port record](completed/210b-the-port-record.md) | both storages, the three-value tag, slots allocated at instantiation | 210a |
 | [210c — A state on every slot](210c-a-state-on-every-slot.md) | the four-state per-slot machine, then the copies moved out of the lock | 210b |
 | [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md) | the mutex narrowed to the slot states, the value copies moved outside it | 210c |
-| [210e — Growth adds a page](210e-growth-adds-a-page.md) | a ring buffer that grows by appending, copying nothing | 210d |
+| [210e — Growth adds a page](completed/210e-growth-adds-a-page.md) | **complete** — a ring buffer that grows by appending, copying nothing | 210d's scan, and it precedes 210d's copies |
 | [210f — Changing what a port is](210f-changing-what-a-port-is.md) | conversion between tags as one operation, slots left alone | 210b |
 | [210g — One way to build a station](210g-one-way-to-build-a-station.md) | a single construction and configuration surface | 210b, 210f |
 | [210h — Optional parameters](completed/210h-optional-parameters.md) | refused — the record of why a parameter cannot be optional | 210g |
 
-The order is real rather than tidy. **210c through 210e must land in
-that sequence**, because each removes the reason the next one was
-hard: per-slot states are what let the value copies leave the lock, and
-a claim that scans rather than computes a position is what makes
-growth-by-appending safe. **210f and 210g branch off 210b** and can
-be built while the concurrency line is in progress.
+The order is real rather than tidy, and **building it corrected it.**
+The sequence was written as 210c → 210d → 210e, each removing the
+reason the next was hard. The first link holds: per-slot states are
+what let the value copies leave the lock. The second does not, and the
+reason is that 210d is two things.
+
+**210d's scan comes before 210e; 210d's copies come after it.** A
+claim that scans rather than computing a position is what makes
+growth-by-appending possible, so the scan is a prerequisite for 210e.
+But the value copies leaving the lock are only *safe* once growth has
+stopped relocating slots — a worker copying out of a claimed slot
+holds no lock, and moving that slot underneath it is the one thing
+ownership does not cover. Taken in the written order there is a window
+where the engine has a real race; taken in this one there is no window
+at all, only a step that has to come first.
+
+So the concurrency line is: **210c → 210d's scan → 210e → 210d's
+copies.** The dependency was never between two issues; it was between
+two halves of one of them, which is the kind of thing a family finds
+out when somebody tries to build it.
+
+**210f and 210g branch off 210b** and can be built while the
+concurrency line is in progress.
 
 ## The statics blocker, which is cleared
 
@@ -92,9 +109,18 @@ The word *cell* is gone from the project entirely.
 
 ## Current behavior
 
-An input port carries a kind tag and the fields that kind needs, with
-the fields for the other kind sitting unused: storage, capacity, and
-two indices for a ring buffer; a table entry number for a static.
+An input port carries a kind tag and both storages at once, with
+whichever the tag does not name sitting idle: a list of slot pages, a
+page size, a total capacity and two hints for a ring buffer; the
+constant's own bytes for a static.
+
+Head and tail are gone, replaced by hints and a maintained count of
+ready slots; every slot carries its own state; and growth appends a
+page rather than reallocating. What is left of this family's design is
+the claim's copies moving outside the lock
+([210d](210d-the-copies-leave-the-lock.md)), the conversion between
+tags ([210f](210f-changing-what-a-port-is.md)), and the construction
+surface ([210g](210g-one-way-to-build-a-station.md)).
 
 **210a is done: the gatherer is gone**, along with the pull module,
 the inline execution of a box during task assembly, the cycle walk,

@@ -47,7 +47,7 @@ number, name it once, move on.
 Anywhere addressed by a stable integer index. In minimal-soramech that
 turned out to be almost everything: the station table, the pool's task
 queue, the per-station locks, the registry once boxes can be compiled
-at runtime, and eventually a port's ring buffer slots.
+at runtime, and — as of issue 210e — a port's ring buffer slots.
 
 **The condition is that the index arithmetic must not depend on the
 total size.** A ring buffer looked like an exception for exactly this
@@ -58,6 +58,17 @@ an exception the moment its slots started carrying their own state and
 readers scanned for a usable one instead of computing where it must be.
 The moment nothing computes a position from the size, nothing cares
 that the size changed.
+
+**And it turned out to be a correctness requirement rather than a
+tidiness one.** The ring buffer's copy-and-unwrap growth was safe only
+while the station's mutex covered the whole copy, so that nothing else
+could be happening. The next issue in that line spends exactly that
+protection — a worker copying bytes out of a slot it has claimed holds
+no lock, because a claimed slot belongs to it alone. Relocating that
+slot underneath it is the one thing ownership does not cover. So the
+copy could not be *ordered* correctly; it had to stop existing.
+Removing a copy removes the requirement rather than satisfying it,
+which is the sharpest form this pattern takes.
 
 ## The rule underneath it
 

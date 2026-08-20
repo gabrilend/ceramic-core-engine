@@ -21,11 +21,21 @@
 #include <string.h>
 #include <unistd.h>
 
-/* Growth past this many doublings at shutdown is shouted, per the
+/* Growth past this many *pages* at shutdown is shouted, per the
  * project's rule that a warning is an error nobody has decided
  * about yet. Reported by the diagnostics, not documented as a
- * constant anywhere else — this is where the number lives. */
-#define GROWTH_SHOUT_THRESHOLD 4
+ * constant anywhere else — this is where the number lives.
+ *
+ * **It was four doublings and is now sixteen pages, which is the same
+ * backlog said in the new units** (issue 210e). Four doublings meant a
+ * port sixteen times its starting depth; sixteen equal pages mean a
+ * port seventeen times it. Leaving the number at four would have
+ * turned a warning about a runaway producer into one that fires the
+ * moment a consumer is briefly slow, and a warning that cries wolf is
+ * one people learn to scroll past — which costs more than the warning
+ * was ever worth.
+ */
+#define GROWTH_SHOUT_THRESHOLD 16
 
 /* {{{ station_label() */
 static const char *station_label(map_t *m, int i, char *fallback, size_t n)
@@ -51,8 +61,16 @@ void map_report_buffers(map_t *m, FILE *out)
             if (sl->growths == 0 && sl->high_water <= 1)
                 continue;
             char fallback[32];
+            /* "Pages" rather than "times", because growth stopped
+             * doubling and started appending (issue 210e). The two
+             * numbers now say different things than they used to: the
+             * count is how many pages were added beyond the first,
+             * and the depth is a sum across all of them rather than
+             * one allocation's size. Saying *pages* is what stops a
+             * reader converting the count into a doubling in their
+             * head and getting a wildly wrong idea of the backlog. */
             fprintf(out,
-                    "  %s.%d: grew %d time%s to %d slots, high water %d\n",
+                    "  %s.%d: grew %d page%s to %d slots, high water %d\n",
                     station_label(m, i, fallback, sizeof fallback), j,
                     sl->growths, sl->growths == 1 ? "" : "s",
                     sl->capacity, sl->high_water);
@@ -243,7 +261,7 @@ void map_report_shutdown(map_t *m)
             if (sl->kind == IN_PORT_RING && sl->growths >= GROWTH_SHOUT_THRESHOLD) {
                 char fallback[32];
                 fprintf(stderr,
-                        "observe: %s.%d grew %d times (to %d slots, high water "
+                        "observe: %s.%d grew %d pages (to %d slots, high water "
                         "%d) — a producer outran a sibling input the whole "
                         "run; memory absorbed it, and someone should decide\n",
                         station_label(m, i, fallback, sizeof fallback), j,
