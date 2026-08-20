@@ -34,10 +34,27 @@ static char kind_letter(unsigned char kind)
 /* {{{ map_dump() */
 void map_dump(map_t *m, FILE *out)
 {
-    if (!m->station_names) {
+    /*
+     * **Every station needs a name**, because a station line begins
+     * with one and a file that begins a line with nothing does not
+     * read back.
+     *
+     * This used to ask whether the map had *any* names, which was the
+     * same question while reading a file was the only way to build a
+     * program — the loader named all of them or none. A program built
+     * by calling the construction surface can be named a station at a
+     * time, and can have a station added after the rest were named
+     * (issue 212), so the question is now asked per station.
+     */
+    for (int i = 0; i < m->n_stations; i++) {
+        if (!map_station(m, i)->call)
+            continue;   /* an empty place is not a station */
+        if (i < m->n_named && m->station_names && m->station_names[i])
+            continue;
         fprintf(stderr,
-                "dump: this map was built by hand and has no names — only a "
-                "loaded map can be written back as a file\n");
+                "dump: station %d has no name — a station line begins with "
+                "one, so this program cannot be written as a file that reads "
+                "back\n", i);
         abort();
     }
 
@@ -138,7 +155,12 @@ void map_dump(map_t *m, FILE *out)
                  * saying — and a non-default depth is an exception, so
                  * it gets a line of its own rather than a comment. */
                 if (depth[0])
-                    fprintf(out, "  in %d %s-   # buffer, %s, %d bytes\n",
+                    /* The depth alone, with no source after it. It
+                     * used to write a dash here, which reads back as
+                     * a port with *no source* — so a program with a
+                     * deepened buffer could be written down and not
+                     * read in again. */
+                    fprintf(out, "  in %d %s  # buffer, %s, %d bytes\n",
                             j, depth, sl->type_name ? sl->type_name : "?",
                             sl->elem_size);
                 else

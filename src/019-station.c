@@ -671,6 +671,60 @@ static void station_label_into(map_t *m, int i, char *out, size_t room)
 }
 /* }}} */
 
+/* {{{ map_name_station() */
+/*
+ * **What to call a station** (issue 212), which is the sixth thing
+ * construction has to be able to say.
+ *
+ * The engine never reads these — every wire is an index, and that is
+ * deliberate. They exist so a program can be *written back out* as a
+ * file that reads in again, and so a person watching a live view sees
+ * something other than numbers. A program with no names still runs
+ * perfectly; it simply cannot be described on disk.
+ *
+ * It had to become an operation rather than staying a thing only the
+ * loader did. The loader used to copy every name onto the map in one
+ * go once its own lookup table had served, which works exactly while
+ * the only way to build a program is to read a file. A program built
+ * by calling this surface would otherwise dump as a row of indices —
+ * and then a file-built program and a surface-built one could not be
+ * compared, which is the proof that there is one construction path
+ * rather than two that agree by coincidence.
+ *
+ * The array grows with the table, because stations are added one at a
+ * time now rather than counted in advance.
+ */
+const char *map_name_station(map_t *m, int station, const char *name)
+{
+    static _Thread_local char said[192];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said, "station %d is outside the table",
+                 station);
+        return said;
+    }
+    if (!name || !*name)
+        return "a station's name cannot be empty";
+
+    if (m->n_named < m->n_stations) {
+        char **grown = realloc(m->station_names,
+                               (size_t)m->n_stations * sizeof *grown);
+        if (!grown)
+            return "out of memory naming a station";
+        for (int i = m->n_named; i < m->n_stations; i++)
+            grown[i] = NULL;
+        m->station_names = grown;
+        m->n_named = m->n_stations;
+    }
+
+    free(m->station_names[station]);
+    m->station_names[station] = strdup(name);
+    if (!m->station_names[station])
+        return "out of memory naming a station";
+    return NULL;
+}
+/* }}} */
+
 /* {{{ map_bring_up() */
 const char *map_bring_up(map_t *m)
 {
@@ -1176,7 +1230,10 @@ void map_destroy(map_t *m)
         pool_destroy(m->pool);
     map_report_shutdown(m);
     if (m->station_names) {
-        for (int i = 0; i < m->n_stations; i++)
+        /* Over what the array actually holds, not over the station
+         * count: stations are added one at a time and the names grow
+         * behind them, so the two are not always equal (issue 212). */
+        for (int i = 0; i < m->n_named; i++)
             free(m->station_names[i]);
         free(m->station_names);
     }

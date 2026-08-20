@@ -607,6 +607,10 @@ typedef struct map {
      * loader's throwaway lookup table and this are different things:
      * that one resolved arrows and died; this one is for speaking. */
     char **station_names;
+    /* How many of them the array has room for, which is not always
+     * the station count: stations are added one at a time now, so the
+     * names grow behind them (issue 212). */
+    int    n_named;
 
     /* The rewiring lock (issue 704): edge validation and list
      * mutation are one operation under it, never two. */
@@ -852,6 +856,19 @@ const char *map_check_sources(map_t *m);
  * is worse than one that refuses.
  */
 const char *map_bring_up(map_t *m);
+/* }}} */
+
+/* {{{ map_name_station() — issue 212 */
+/*
+ * What to call a station. NULL when taken, or a sentence saying why
+ * not.
+ *
+ * The engine never reads these — every wire is an index. They are for
+ * writing a program back out as a file that reads in again, and for a
+ * person watching a live view. A program with no names runs perfectly
+ * well; it just cannot be described on disk.
+ */
+const char *map_name_station(map_t *m, int station, const char *name);
 /* }}} */
 
 /* {{{ map_connect() — issues 201, 205, 207 */

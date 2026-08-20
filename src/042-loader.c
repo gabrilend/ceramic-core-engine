@@ -150,6 +150,14 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
                 continue;
             }
 
+            /* A depth and nothing else: the line said how deep, which
+             * is already done above, and said nothing about the
+             * source — so the port stays the buffer it was placed as.
+             * There is nothing further to do, and doing nothing is
+             * the whole of this case. */
+            if (!in->is_static && !in->text)
+                continue;
+
             /* The other two forms end here, with text going into this
              * port at this port's own type (issue 401). The `statics`
              * section is notation and nothing more: its text is copied
@@ -300,10 +308,11 @@ map_t *map_load_file(const char *path, int n_workers)
      * messages out of that table, and stops being fine the moment
      * somebody else does the complaining.
      */
-    m->station_names = calloc((size_t)m->n_stations, sizeof *m->station_names);
-    if (m->station_names)
-        for (int i = 0; i < m->n_stations; i++)
-            m->station_names[i] = strdup(names.by_index[i]->name);
+    for (int i = 0; i < m->n_stations; i++) {
+        const char *no = map_name_station(m, i, names.by_index[i]->name);
+        if (no)
+            die_load(path, 0, NULL, no);
+    }
     double t4 = stamp();
 
     /* The pool exists before the seed so the seed has somewhere to

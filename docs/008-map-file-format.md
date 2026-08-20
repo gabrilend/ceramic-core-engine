@@ -181,7 +181,21 @@ in 0 x64 $0      reads statics entry 0, room for 64 to begin with
 in 1 x256 -      no source yet, room for 256 when it gets one
 in 2 x8 = 5      a constant, and eight slots standing idle behind it
 in 3 = 5         a constant, and the default ten
+in 4 x64         a buffer, fed by arrows, 64 deep
 ```
+
+**The last of those — a depth with nothing after it — says only how
+deep.** The port's source is the default, arrows, so there is nothing
+else for the line to say.
+
+It had to exist, and the reason is worth keeping because it is a
+round-trip failure of the kind that is easy to build and hard to
+notice. The dump wrote a deepened buffer as `x64 -`, and a bare dash
+means a port with **no source at all**. Two different things were
+spelled the same way, so a program with a deepened buffer could be
+written down and could not be read back — it returned with that port
+unwired, and any arrow into it was then refused. The refusal was at
+least loud; what it named was the wrong thing entirely.
 
 It reads as *sixty-four of them*, the way a parts list writes a
 quantity. Only `x` is accepted; a star was briefly allowed as a second

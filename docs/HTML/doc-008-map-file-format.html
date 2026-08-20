@@ -290,7 +290,19 @@ in 0 x64 $0      reads statics entry 0, room <span class="kw">for</span> 64 to b
 in 1 x256 -      no source yet, room <span class="kw">for</span> 256 when it gets one
 in 2 x8 = 5      a constant, and eight slots standing idle behind it
 in 3 = 5         a constant, and the default ten
+in 4 x64         a buffer, fed by arrows, 64 deep
 </pre>
+<p>**The last of those — a depth with nothing after it — says only how
+deep.** The port's source is the default, arrows, so there is nothing
+else for the line to say.</p>
+<p>It had to exist, and the reason is worth keeping because it is a
+round-trip failure of the kind that is easy to build and hard to
+notice. The dump wrote a deepened buffer as <code>x64 -</code>, and a bare dash
+means a port with <strong>no source at all</strong>. Two different things were
+spelled the same way, so a program with a deepened buffer could be
+written down and could not be read back — it returned with that port
+unwired, and any arrow into it was then refused. The refusal was at
+least loud; what it named was the wrong thing entirely.</p>
 <p>It reads as <em>sixty-four of them</em>, the way a parts list writes a
 quantity. Only <code>x</code> is accepted; a star was briefly allowed as a second
 spelling and withdrawn, because one way to say a thing is the habit

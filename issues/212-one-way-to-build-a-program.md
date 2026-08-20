@@ -80,10 +80,32 @@ outcome of bringing up a program that has already been brought up. So
 the pass reports what it started and the loader decides that zero, on
 a file, is a refusal.
 
-Still to come: the wire operations joining the same surface, box
-wrappers so a map can perform these operations, and the test that a
-program read from a file and one built by calling the surface produce
-identical dumps.
+**And the two paths are proven to be one.** A program is written to
+disk and loaded; the same program is built by calling the surface; both
+are dumped and the text compared byte for byte. Not equivalent — the
+same. Comparing dumps is the cheapest such proof available, because
+the dump walks the live station table and writes what is actually
+there, so two identical dumps are two identical tables including the
+things a hand-written comparison would forget to check.
+
+Naming a station became an operation to make that possible. It was a
+thing only the loader did, in one sweep once its own lookup table had
+served, which works exactly while reading a file is the only way to
+build a program. A program built by calling the surface would
+otherwise dump as a row of indices and could not be compared to
+anything.
+
+**Writing that proof found a round-trip bug**, which is what a proof
+of this kind is for. The dump wrote a deepened buffer as a depth
+followed by a dash — and a bare dash means a port with *no source*.
+Two different things spelled the same way: such a program could be
+written down and not read back, returning with that port unwired and
+any arrow into it refused. The format gained a form for it, a depth
+with nothing after it, and a test now asserts the two stay different
+things across a round trip.
+
+Still to come: the wire operations joining the same surface, and box
+wrappers so a map can perform these operations on another map.
 
 ## Intended behavior
 
@@ -325,12 +347,11 @@ rather than drifting into place.
    a station, draw a wire, write a constant, each a plain C function
    taking values and returning one. This is what lets a program build
    another program without anything being added to the engine.
-8. A test that a program read from a file and a program built by
-   calling the surface directly produce identical dumps. This is the
-   proof that there is one construction path rather than two that agree
-   by coincidence, and it is the cheapest such proof available because
-   [703](completed/703-map-dump.md) already writes a program back out
-   by walking the live table.
+8. **Done**, and it earned its keep immediately by finding a
+   round-trip bug: a deepened buffer and a port with no source were
+   spelled the same way in the file format, so the first could be
+   written down and not read back. Naming a station had to become an
+   operation for the test to be writable at all.
 9. A test that a station added to a running program, then configured,
    then wired, receives values and produces them — and that everything
    already running is undisturbed across all three steps.

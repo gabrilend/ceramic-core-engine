@@ -144,10 +144,12 @@ static void handle_in(parse_state_t *st, const char *rest)
                       "a starting depth must be at least one slot");
         after_port = after_ref;
         after_ref = next_word(after_port, ref, sizeof ref);
-        if (!ref[0])
-            die_parse(st->path, st->line,
-                      "a starting depth with no source after it — say where "
-                      "the port's values come from, or '-' for not yet");
+        /* Nothing after the depth is legal and means **a buffer this
+         * deep**: the source is the default, so the only thing the
+         * line says is how deep to start. It used to be refused,
+         * which left the dump with no way to write a deepened buffer
+         * except `x64 -` — and that reads back as a port with no
+         * source, so the program could not be reloaded. */
     }
 
     /* Three forms, and the first character tells them apart.
@@ -201,11 +203,28 @@ static void handle_in(parse_state_t *st, const char *rest)
                       "unexpected trailing words on an 'in' line — a dash "
                       "means this port has no source, so nothing follows it");
         in->is_none = 1;
+    } else if (!ref[0] && in->depth > 0) {
+        /*
+         * A depth and nothing else: **a buffer this deep**, fed by
+         * arrows like any buffer. The port's source is the default, so
+         * the only thing this line is saying is how deep to start.
+         *
+         * It exists because the dump needed to write one. A deepened
+         * buffer used to come out as `x64 -`, and a bare dash means a
+         * port with *no source* — so such a program could be written
+         * down and not read back, and an arrow into that port was
+         * refused on the way in. Two different things were spelled the
+         * same way, which is the one thing a round trip cannot
+         * survive.
+         */
+        in->is_none = 0;
+        in->is_static = 0;
+        in->text = NULL;
     } else {
         die_parse(st->path, st->line,
-                  "expected '$entry', '= value', or '-'; a bare station name "
-                  "here meant 'gather from that station', and there is no "
-                  "pull path any more");
+                  "expected '$entry', '= value', '-', or a depth alone; a "
+                  "bare station name here meant 'gather from that station', "
+                  "and there is no pull path any more");
     }
 
     desc_input_t **tail = &st->current->inputs;

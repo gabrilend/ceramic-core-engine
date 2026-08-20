@@ -56,7 +56,15 @@ typedef struct desc_input {
      * the line did not say. It sits before the source because the
      * inline value form runs to the end of the line, so nothing can
      * follow it, and one rule for all three forms beats a rule with
-     * an exception in it. */
+     * an exception in it.
+     *
+     * **A depth with nothing after it says "a buffer this deep"**,
+     * and that form had to exist. The dump wrote a deepened buffer as
+     * `x64 -`, which reads back as a port with *no source* — so a
+     * program with a deepened buffer could be written out and could
+     * not be read in again, and any arrow into that port was refused
+     * on the way back. Two different things were being spelled the
+     * same way. */
     int   depth;
     int   line;
     struct desc_input *next;
