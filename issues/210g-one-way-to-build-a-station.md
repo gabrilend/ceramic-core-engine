@@ -6,9 +6,42 @@ it.
 
 ## Current behavior
 
-**Blocked on [311b](311b-placement-instead-of-records.md), and the
-block is step 1.** Everything else in this family is finished; this is
-the one child left, and it cannot be finished first.
+**Unblocked, and half built.** The generator now emits a placement
+function per box and by-name placement calls one
+([311b](311b-placement-instead-of-records.md)), so hand placement is
+the primitive and there are no longer two contracts that can express
+different programs.
+
+What now stands:
+
+- **One operation says where a port's values come from**: a station, a
+  port, a source, and — when the source is a value — the value itself
+  as text. Binding a constant, taking a source away, and giving a port
+  back to the arrows were three calls with three shapes; they are
+  cases of this one. Text is what distinguishes the two ways to become
+  a constant: given some, the port takes that value; given none, it
+  returns to the value it held before.
+- **It returns a refusal rather than stopping**, so a caller reading a
+  file can collect every mistake and present them together. One thing
+  still stops the program — text that does not parse — and moving that
+  onto the return path belongs with the refusal policy rather than
+  being half done here.
+- **The completeness check, unqualified.** Every parameter needs
+  somewhere to get a value, every missing one is named, and they are
+  counted so a long list never reads as a short one. It names the
+  station by the name a map file gave it, or by its index when nothing
+  did — a program built by calling this surface has no names, and a
+  complaint saying "?" is one nobody can act on.
+
+**What is left is the callers.** The loader becoming the first of them
+and runtime editing the second is where reading a file stops being a
+privileged path, and that is
+[212](212-one-way-to-build-a-program.md)'s work rather than this
+issue's — as is the test that a program read from a file and one built
+by calling this surface dump identically, which cannot be written
+until the loader is a caller.
+
+### What stood before
 
 The reason is written into step 1 already but is easy to read past:
 hand placement becoming the primitive means *a generated placement
@@ -106,13 +139,16 @@ unqualified: a port with no source is an error, full stop.
    placement is a table lookup that finds one and calls it. Built in
    [311b](311b-placement-instead-of-records.md); this issue is its
    caller rather than its author.
-2. One port-configuration operation, with the existing static-binding
-   and tag-conversion calls becoming cases of it.
+2. **Done.** One port-configuration operation, with tag conversion
+   becoming a case of it and constant-binding reached through it.
 3. The loader becomes its first caller, losing whatever it does today
    that the surface does not offer.
 4. Runtime editing becomes its second caller.
-5. The configuration-time check for a *none* port, unqualified — every
-   parameter needs a source, with no exemption.
+5. **Done.** Every parameter needs a source, every missing one named
+   and counted, with no exemption. Asked when a program is called
+   finished rather than while it is being assembled, because a port
+   without a source is the ordinary state of a station nobody has
+   finished wiring.
 6. **Done**, with the readiness tests: a station with an unconfigured
    port never becomes ready, and becomes ready the moment that port is
    given a source, with the values waiting at its other ports intact.

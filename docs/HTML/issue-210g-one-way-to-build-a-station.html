@@ -144,9 +144,40 @@
 made a port describable; this makes there be exactly one way to say
 it.</p>
 <h2>Current behavior</h2>
-<p>**Blocked on <a href="issue-311b-placement-instead-of-records.html">311b</a>, and the
-block is step 1.** Everything else in this family is finished; this is
-the one child left, and it cannot be finished first.</p>
+<p><strong>Unblocked, and half built.</strong> The generator now emits a placement
+function per box and by-name placement calls one
+(<a href="issue-311b-placement-instead-of-records.html">311b</a>), so hand placement is
+the primitive and there are no longer two contracts that can express
+different programs.</p>
+<p>What now stands:</p>
+<ul>
+<li><strong>One operation says where a port's values come from</strong>: a station, a</li>
+<p>  port, a source, and — when the source is a value — the value itself
+  as text. Binding a constant, taking a source away, and giving a port
+  back to the arrows were three calls with three shapes; they are
+  cases of this one. Text is what distinguishes the two ways to become
+  a constant: given some, the port takes that value; given none, it
+  returns to the value it held before.</p>
+<li><strong>It returns a refusal rather than stopping</strong>, so a caller reading a</li>
+<p>  file can collect every mistake and present them together. One thing
+  still stops the program — text that does not parse — and moving that
+  onto the return path belongs with the refusal policy rather than
+  being half done here.</p>
+<li><strong>The completeness check, unqualified.</strong> Every parameter needs</li>
+<p>  somewhere to get a value, every missing one is named, and they are
+  counted so a long list never reads as a short one. It names the
+  station by the name a map file gave it, or by its index when nothing
+  did — a program built by calling this surface has no names, and a
+  complaint saying "?" is one nobody can act on.</p>
+</ul>
+<p><strong>What is left is the callers.</strong> The loader becoming the first of them
+and runtime editing the second is where reading a file stops being a
+privileged path, and that is
+<a href="issue-212-one-way-to-build-a-program.html">212</a>'s work rather than this
+issue's — as is the test that a program read from a file and one built
+by calling this surface dump identically, which cannot be written
+until the loader is a caller.</p>
+<h3>What stood before</h3>
 <p>The reason is written into step 1 already but is easy to read past:
 hand placement becoming the primitive means *a generated placement
 function per box*, and that is the generator's work rather than this
@@ -225,13 +256,16 @@ unqualified: a port with no source is an error, full stop.</p>
    placement is a table lookup that finds one and calls it. Built in
    <a href="issue-311b-placement-instead-of-records.html">311b</a>; this issue is its
    caller rather than its author.
-2. One port-configuration operation, with the existing static-binding
-   and tag-conversion calls becoming cases of it.
+2. <strong>Done.</strong> One port-configuration operation, with tag conversion
+   becoming a case of it and constant-binding reached through it.
 3. The loader becomes its first caller, losing whatever it does today
    that the surface does not offer.
 4. Runtime editing becomes its second caller.
-5. The configuration-time check for a <em>none</em> port, unqualified — every
-   parameter needs a source, with no exemption.
+5. <strong>Done.</strong> Every parameter needs a source, every missing one named
+   and counted, with no exemption. Asked when a program is called
+   finished rather than while it is being assembled, because a port
+   without a source is the ordinary state of a station nobody has
+   finished wiring.
 6. <strong>Done</strong>, with the readiness tests: a station with an unconfigured
    port never becomes ready, and becomes ready the moment that port is
    given a source, with the values waiting at its other ports intact.

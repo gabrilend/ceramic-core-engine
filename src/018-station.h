@@ -763,6 +763,56 @@ void map_in_port_start_depth(map_t *m, int station, int port, int slots);
 void map_in_port_convert(map_t *m, int station, int port, int kind);
 /* }}} */
 
+/* {{{ map_configure_port() — issue 210g */
+/*
+ * **Where a port's values come from**, as one operation: a station, a
+ * port, a source, and — when the source is a value — the value
+ * itself, written as text.
+ *
+ * `source` is one of the port kinds. Given text, a port becoming a
+ * constant takes that value; given none, it returns to the value it
+ * held before, which a constant surviving conversion is what makes
+ * possible. A port with no source at all is *IN_PORT_NONE*, and a
+ * station holding one can never be ready.
+ *
+ * **Returns NULL when it took, or a sentence saying why not.** The
+ * refusal travels upward instead of stopping the program, so a caller
+ * reading a file can collect every mistake in it and present them
+ * together rather than one per run. The string is valid until this
+ * thread's next refusal.
+ *
+ * Binding, converting and taking a source away were three calls with
+ * three shapes; they are cases of this one now. There is one
+ * description of what it means to give a port a source, and it is
+ * executable — which is what lets reading a file be a sequence of
+ * ordinary operations rather than a privileged path.
+ */
+const char *map_configure_port(map_t *m, int station, int port,
+                               int source, const char *text);
+/* }}} */
+
+/* {{{ map_check_sources() — issue 210g */
+/*
+ * Every parameter that has nowhere to get a value, collected into one
+ * sentence. NULL when every port on every station has a source.
+ *
+ * A port without one is the ordinary state of a station somebody has
+ * not finished wiring, so this is not asked while a program is being
+ * assembled — it is asked at the moment somebody says it is finished.
+ * Asking then is what lets the complaint name the station and the
+ * port while the person who mis-wired them is still there; a station
+ * with an unsourced port otherwise just never runs, and a program
+ * that quietly does less than it was asked to is a bad way to learn
+ * about a typo.
+ *
+ * **No exceptions.** A parameter a box could do without was proposed
+ * and refused (issue 210h), because it would have been the only
+ * exemption to the rule that a station runs when every one of its
+ * slots holds a value.
+ */
+const char *map_check_sources(map_t *m);
+/* }}} */
+
 /* {{{ map_connect() — issues 201, 205, 207 */
 /*
  * Wire: from a station's output port to a destination station's port.

@@ -435,6 +435,76 @@ static void test_cycling_a_tag_under_load(void)
 }
 /* }}} */
 
+/* {{{ test_every_parameter_needs_a_source */
+/*
+ * The check that a finished program has no parameter left facing
+ * nothing (issue 210g).
+ *
+ * A port with no source is the ordinary state of a station somebody
+ * has not finished wiring, so this is not an error while a program is
+ * being assembled — it is an error the moment somebody says the
+ * program is finished. Catching it then is what lets the complaint
+ * name the station and the port. Left uncaught, the station simply
+ * never becomes ready, and a program that quietly does less than it
+ * was asked to is a bad way to learn about a typo.
+ *
+ * **Every one of them, not the first.** Somebody fixing a new program
+ * wants the whole list.
+ */
+static void test_every_parameter_needs_a_source(void)
+{
+    map_t *m = map_create(2);
+    map_place_box(m, 0, "add", STATION_PLAIN);
+    map_place_box(m, 1, "add", STATION_PLAIN);
+
+    /* Fully wired by default: every port starts expecting arrows. */
+    if (map_check_sources(m) != NULL) {
+        fprintf(stderr, "a freshly placed program was called incomplete: %s\n",
+                map_check_sources(m));
+        exit(1);
+    }
+
+    /* Two ports on two different stations, so the answer has to name
+     * both rather than stopping at the first. */
+    map_in_port_convert(m, 0, 1, IN_PORT_NONE);
+    map_in_port_convert(m, 1, 0, IN_PORT_NONE);
+
+    const char *said = map_check_sources(m);
+    if (!said) {
+        fprintf(stderr, "two unsourced ports went unnoticed\n");
+        exit(1);
+    }
+    if (!strstr(said, "0.1") || !strstr(said, "1.0")) {
+        fprintf(stderr, "the complaint did not name both ports: %s\n", said);
+        exit(1);
+    }
+    if (!strstr(said, "2 ports")) {
+        fprintf(stderr, "the complaint did not count them: %s\n", said);
+        exit(1);
+    }
+
+    /* Giving one back a source leaves the other still named. */
+    map_in_port_convert(m, 0, 1, IN_PORT_RING);
+    said = map_check_sources(m);
+    if (!said || strstr(said, "0.1")) {
+        fprintf(stderr, "a port given a source was still complained about: "
+                        "%s\n", said ? said : "(nothing)");
+        exit(1);
+    }
+
+    /* And giving the last one back leaves nothing to say. */
+    map_in_port_convert(m, 1, 0, IN_PORT_RING);
+    if (map_check_sources(m) != NULL) {
+        fprintf(stderr, "a fully wired program was still called incomplete\n");
+        exit(1);
+    }
+
+    map_destroy(m);
+    printf("  every parameter needs a source; two missing were both named "
+           "and counted\n");
+}
+/* }}} */
+
 int main(void)
 {
     test_every_arrival_order();
@@ -442,5 +512,6 @@ int main(void)
     test_unconfigured_port_never_ready();
     test_values_survive_a_round_trip_through_static();
     test_cycling_a_tag_under_load();
+    test_every_parameter_needs_a_source();
     return 0;
 }

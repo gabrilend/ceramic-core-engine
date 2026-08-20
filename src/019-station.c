@@ -486,34 +486,173 @@ void map_in_port_start_depth(map_t *m, int station, int port, int slots)
 /* {{{ map_in_port_convert() */
 void map_in_port_convert(map_t *m, int station, int port, int kind)
 {
-    if (station < 0 || station >= m->n_stations)
-        fail("converting a port on a station outside the table");
+    /* A case of the one configuration operation (issue 210g), kept as
+     * a name because "convert this port" is what callers already say.
+     * Passing no text means *the value it had before*, which is why
+     * becoming a static again works and becoming one for the first
+     * time is refused here. */
+    const char *no = map_configure_port(m, station, port, kind, NULL);
+    if (no)
+        fail(no);
+}
+/* }}} */
+
+/* {{{ map_configure_port() */
+/*
+ * **The one operation that says where a port's values come from**
+ * (issue 210g): a station, a port, a source, and — when the source is
+ * a value — the value itself, written as text.
+ *
+ * Binding a constant, taking a source away, and giving a port back to
+ * the arrows were three calls with three shapes, some dying on
+ * refusal and some returning a code, and the difference between them
+ * was history rather than meaning. They are one thing now and the
+ * other two are cases of it. What that buys is not tidiness: it is
+ * that there is one description of what it means to give a port a
+ * source, and it is executable — the loader calls it while reading a
+ * file, and a debugger or a workbench calls the same one on a running
+ * program.
+ *
+ * **Text distinguishes the two ways to become a constant.** Given
+ * text, the port takes that value. Given none, it goes back to the
+ * value it held before, which is legitimate because a constant
+ * survives being converted away exactly as waiting values do (issue
+ * 210f) — and which is refused when there is no such value, because
+ * the tag would then be in effect over storage nobody ever wrote.
+ *
+ * **Returns a refusal rather than stopping the program**, so that a
+ * caller reading a file can collect every mistake in it and present
+ * them together instead of one per run. That is the policy issue 212
+ * settles and this is the surface it applies to.
+ *
+ * One thing still stops the program: text that does not parse. The
+ * reader dies where the malformed value is, naming the station, the
+ * port and the field, and moving that onto this return path belongs
+ * with the rest of the refusal policy rather than being half done
+ * here.
+ */
+const char *map_configure_port(map_t *m, int station, int port,
+                               int source, const char *text)
+{
+    /* Per thread, because two threads may be editing two different
+     * maps and a shared buffer would let one overwrite the other's
+     * complaint. Valid until this thread's next refusal. */
+    static _Thread_local char said[192];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said,
+                 "station %d is outside the table", station);
+        return said;
+    }
     station_t *s = map_station(m, station);
-    if (port < 0 || port >= s->n_in_ports)
-        fail("converting a port the box does not have");
-    if (kind < 0 || kind >= IN_PORT_KIND_COUNT)
-        fail("converting a port to a kind that does not exist");
+    if (port < 0 || port >= s->n_in_ports) {
+        snprintf(said, sizeof said,
+                 "station %d has no port %d — it has %d",
+                 station, port, s->n_in_ports);
+        return said;
+    }
+    if (source < 0 || source >= IN_PORT_KIND_COUNT) {
+        snprintf(said, sizeof said,
+                 "there is no such source for a port");
+        return said;
+    }
 
-    /* Becoming a static again is legitimate and is why the constant
-     * survives being converted away (issue 210f): a port that goes
-     * static, buffer, static reads the value it read before. Becoming
-     * one for the first time is not, because the tag would be in
-     * effect over storage nobody has written — and that is a
-     * different thing from *none*, which is honest about having no
-     * source at all. */
-    if (kind == IN_PORT_STATIC && !s->in_ports[port].constant_set)
-        fail("this port has never held a constant, so there is no value for "
-             "it to go back to — give it one as text first");
+    if (source == IN_PORT_STATIC) {
+        if (text) {
+            /* Binding parses the text and sets the tag together, so a
+             * value that will not parse never leaves the port in a
+             * state that claims to hold one. */
+            map_in_port_static_text(m, station, port, text);
+            return NULL;
+        }
+        if (!s->in_ports[port].constant_set) {
+            snprintf(said, sizeof said,
+                     "station %d port %d has never held a value, so there is "
+                     "none to go back to — give it one as text",
+                     station, port);
+            return said;
+        }
+    }
 
-    /* Under the station's mutex, as one of the four rare structural
-     * operations (issue 210), so no readiness walk sees a port
-     * mid-change. Nothing is freed and nothing is cleared: the whole
-     * of the change is the tag, which is the entire point — see the
-     * header for why the storage staying put is what makes this
-     * cheap and what makes it lossless. */
+    /* Under the station's mutex, as one of the rare structural
+     * operations, so no readiness walk sees a port mid-change.
+     * Nothing is freed and nothing is cleared: the whole of the change
+     * is the tag, which is what makes it cheap and lossless. */
     pthread_mutex_lock(&s->mutex);
-    s->in_ports[port].kind = (unsigned char)kind;
+    s->in_ports[port].kind = (unsigned char)source;
     pthread_mutex_unlock(&s->mutex);
+    return NULL;
+}
+/* }}} */
+
+/* {{{ map_check_sources() */
+/*
+ * **Every parameter needs somewhere to get a value** (issue 210g).
+ *
+ * A port with no source is not an error while a program is being
+ * assembled — it is the ordinary state of a station that exists
+ * before anybody has finished wiring it, and being able to exist that
+ * way is what lets a program be built a piece at a time. It becomes
+ * an error at the moment somebody says the program is finished.
+ *
+ * Caught here rather than at the first task, because here it can name
+ * the station and the port while the person who mis-wired them is
+ * still looking. A station whose port has no source simply never
+ * becomes ready, which is correct behaviour and a terrible way to
+ * find out: the symptom is a program that runs and quietly does less
+ * than it was asked to.
+ *
+ * **Every one of them, collected**, rather than the first — somebody
+ * fixing a new program wants the whole list, not one per run. The
+ * count is reported even when the list is trimmed, so a long one
+ * never reads as a short one.
+ *
+ * **The check has no exceptions and never will.** A parameter a box
+ * could do without was proposed and refused (issue 210h), because it
+ * would have been the only exemption to the rule that a station runs
+ * when every one of its slots holds a value. So this is unqualified:
+ * a port with no source is an error, full stop.
+ */
+const char *map_check_sources(map_t *m)
+{
+    static _Thread_local char said[512];
+    int used = 0, found = 0;
+
+    for (int i = 0; i < m->n_stations; i++) {
+        station_t *s = map_station(m, i);
+        /* An empty place in the table is not a station (issue 216). */
+        if (!s->call)
+            continue;
+        for (int j = 0; j < s->n_in_ports; j++) {
+            if (atomic_load_explicit(&s->in_ports[j].kind,
+                                     memory_order_relaxed) != IN_PORT_NONE)
+                continue;
+            found++;
+            if (used < (int)sizeof said - 64) {
+                /* The name a map file gave it, or its index when
+                 * nothing gave it one — a program built by calling
+                 * this surface has no names, and a complaint that
+                 * says "?" about it is a complaint nobody can act
+                 * on. Both spellings read the same way: which
+                 * station, then which port. */
+                char who[64];
+                if (m->station_names && m->station_names[i])
+                    snprintf(who, sizeof who, "%s", m->station_names[i]);
+                else
+                    snprintf(who, sizeof who, "%d", i);
+                used += snprintf(said + used, sizeof said - (size_t)used,
+                                 "%s%s.%d has no source",
+                                 used ? "; " : "", who, j);
+            }
+        }
+    }
+
+    if (!found)
+        return NULL;
+    if (found > 1 && used < (int)sizeof said - 32)
+        snprintf(said + used, sizeof said - (size_t)used,
+                 " (%d ports in all)", found);
+    return said;
 }
 /* }}} */
 
