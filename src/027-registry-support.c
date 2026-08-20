@@ -24,9 +24,10 @@
  * lookups need them: everything else reaches a box through the row it
  * was already handed.
  */
-const box_info_t *registry_late_find(const char *name);
-const char       *registry_late_name_for_shim(task_call_t shim);
-const box_info_t *registry_recover_box(const char *name);
+const box_info_t  *registry_late_find(const char *name);
+const char        *registry_late_name_for_shim(task_call_t shim);
+const box_info_t  *registry_recover_box(const char *name);
+const box_place_t *registry_late_place_find(const char *name);
 
 /* {{{ registry_find() */
 /*
@@ -43,6 +44,27 @@ const box_info_t *registry_find(const char *name)
         if (strcmp(registry_boxes[i].name, name) == 0)
             return &registry_boxes[i];
     return registry_late_find(name);
+}
+/* }}} */
+
+/* {{{ box_place_find() */
+/*
+ * Which generated placement function writes this box's station
+ * (issue 311b). Compiled-in rows first, then anything that arrived
+ * after the program started.
+ *
+ * **This is the whole of by-name placement.** A placement function is
+ * hand placement written by the generator, so naming a box is only a
+ * way of finding which one to call — and once the generator reads
+ * maps itself it emits the call directly and this lookup stops
+ * existing (issue 311d).
+ */
+const box_place_t *box_place_find(const char *name)
+{
+    for (int i = 0; i < registry_n_places; i++)
+        if (strcmp(registry_places[i].name, name) == 0)
+            return &registry_places[i];
+    return registry_late_place_find(name);
 }
 /* }}} */
 
@@ -169,29 +191,40 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
         abort();
     }
 
-    int n = b->n_params + extra;
-    int sizes[n > 0 ? n : 1];
-    for (int i = 0; i < b->n_params; i++)
-        sizes[i] = b->params[i].size;
-    if (extra)
-        sizes[b->n_params] = b->return_size;
-
-    map_place(m, station, b->shim, kind, n, sizes, b->return_size);
-
-    /* Registry placement knows what hand placement cannot: the type
-     * each port feeds, as text. This is what lets a static entry's
-     * text become bytes of the right shape (issue 401), and what the
-     * wire checker will compare in phase 6. The comparator's extra
-     * port is typed to the return value, since that is what it will
-     * be compared against. */
-    station_t *s = map_station(m, station);
-    for (int i = 0; i < b->n_params; i++)
-        s->in_ports[i].type_name = b->params[i].type_name;
-    if (extra) {
-        s->in_ports[b->n_params].type_name = b->return_type;
-        /* Resolved once, here, so the delivery path compares with a
-         * call rather than a lookup (issue 503). */
-        s->compare = b->compare;
+    /*
+     * **The station is written by the generated placement function**
+     * (issue 311b), not from the record above. Every number in it is a
+     * `sizeof` the compiler folded into an immediate, so the sizes are
+     * not read from anywhere at run time — they were computed while
+     * the box was being compiled and never stored.
+     *
+     * The record is still consulted for the two comparator refusals
+     * above, because they want a sentence naming the return type. The
+     * placement function carries its own copies of both refusals for
+     * the same reason, which is why routing through it loses nothing:
+     * this path checks first only because it can say the box's name
+     * the way the map wrote it.
+     */
+    const box_place_t *bp = box_place_find(box_name);
+    if (!bp) {
+        fprintf(stderr,
+                "map: '%s' has a record but no placement function — the "
+                "generator emitted one without the other\n", box_name);
+        abort();
     }
+    bp->place(m, station, kind);
+
+    /*
+     * The type each port feeds, the comparator's extra port, and the
+     * comparison function are all written by the placement function
+     * too — they used to be copied out of the record here, and that
+     * was the last thing this path did with it.
+     *
+     * Type names are what let a static's text become bytes of the
+     * right shape and what the wire checker reports; the comparison is
+     * resolved at placement so the delivery path compares through a
+     * pointer the station holds rather than looking anything up per
+     * value. None of that changed. Only who writes it did.
+     */
 }
 /* }}} */

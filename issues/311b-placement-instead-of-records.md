@@ -8,6 +8,60 @@ deleted rather than shrunk.
 
 ## Current behavior
 
+**Placement now runs through generated functions; the deletions
+wait.** Steps 1 to 3 are done and the record is no longer read to
+build a station.
+
+What stands:
+
+- **A placement function per box**, emitted by the generator, writing
+  the shim, the slot sizes, the return size, the type names, the
+  comparator's extra port and the comparison — with every number a
+  `sizeof` the compiler folds into an immediate. Nothing is stored;
+  the numbers were computed while the box was compiled.
+- **The two comparator refusals are inside it**, so a box that returns
+  nothing or has no comparison is refused wherever it is placed from,
+  not only through the by-name door.
+- **Placing by name is a lookup that finds one and calls it**, which
+  is what makes hand placement the primitive rather than the
+  alternative. A box compiled while the program runs carries its own
+  placement rows and is found the same way.
+- **A test places every box both ways and compares field for field**,
+  including as a comparator wherever a box can be one. Sixteen boxes,
+  twelve of them comparators, identical.
+
+**Two things the plan did not see**, both found by building it:
+
+**Generated code that builds stations needs the engine's symbols to be
+exported.** A box compiled while the program runs arrives as a shared
+object and is opened at run time; its placement function calls
+straight into the station layer, and a shared object cannot see a
+symbol the host executable did not publish. This never came up while
+generated code held only shims, because a shim calls the box and the
+box is inside the object with it. It appeared the moment generated
+code started *building stations*, which is the whole point of a
+placement function. Anyone linking a program with this engine inherits
+the requirement, and it belongs with the packaging story.
+
+**A symbol built from a path has to be built from a path that means
+the same thing everywhere.** The generator is handed absolute paths by
+the build, so the first symbols it emitted carried the whole location
+of the machine that built them — enormous, and different on every
+machine, which makes two generated files impossible to compare. The
+generator now takes the project root and shortens against it. A box
+compiled at run time has no project root to be relative to and keeps
+its own path, which is already unique.
+
+**What the remaining steps wait for.** Deleting the record, the table
+and the type-name strings needs there to be no by-name lookup at run
+time at all, and that is [311d](311d-the-map-becomes-code.md)'s doing
+— it emits the calls, so a placement function is reached by being
+called rather than by being found. Until then the record is still
+consulted for the two comparator refusals that want to name a return
+type, and the table is what by-name placement searches.
+
+### What the record still is
+
 The generator emits a `box_info_t` per box: name, shim pointer,
 parameter count, an array of parameter type names and sizes, a return
 type name and size, the exact task allocation size, and a comparison
@@ -101,21 +155,25 @@ since nothing on disk describes it either.
 
 ## Suggested implementation steps
 
-1. The generator emits a placement function per box, alongside the
-   record, with the record still authoritative. Nothing changes
-   behaviour yet; the two can be compared.
-2. A test that placing by record and placing by function produce
-   identical stations, field for field. This is the proof the
-   translation is faithful, and it is cheap while both exist.
-3. Placement routes through the function; the record stops being read.
+1. **Done.** The generator emits a placement function per box,
+   alongside the record. One correction to the plan: they cannot be
+   emitted with *nothing* referring to them, because a build with
+   warnings as errors rejects a function nobody calls — so the table
+   that by-name placement needs anyway arrived in the same step.
+2. **Done.** Every box placed both ways and compared field for field,
+   as a plain station and as a comparator wherever it can be one.
+3. **Done.** Placement routes through the function; the record is no
+   longer read to build a station.
 4. The name literal written onto the station, and the dump's backwards
    shim-to-name lookup deleted.
 5. Struct field tables written onto ports at placement, and the by-name
    struct search deleted.
 6. The record type, the table, the parameter arrays, the type-name
-   strings, and the stored task size deleted.
+   strings, and the stored task size deleted. **Waits on
+   [311d](311d-the-map-becomes-code.md)**: while a running program
+   still resolves a name, something has to be searched.
 7. The word *registry* removed from source and documents, since the
-   thing it named no longer exists in any form.
+   thing it named no longer exists in any form. Waits on the same.
 
 ## Open questions
 

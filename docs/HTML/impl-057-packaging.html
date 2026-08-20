@@ -151,6 +151,24 @@ common English names currently escape into whatever links them, that
 every error takes the host process down with it, and that two global
 variables mean there can only ever be one map.</p>
 <p>---</p>
+<h2>The link line gained a flag, and it is not optional</h2>
+<p>A program built with this engine must be linked so that the engine's
+own symbols appear in the executable's dynamic table — <code>-rdynamic</code> on
+the usual toolchains.</p>
+<p><strong>Why it is not a detail.</strong> A box compiled while the program runs
+arrives as a shared object and is opened at run time. The generator
+emits, alongside its call site, a <strong>placement function</strong> that builds
+the station: it calls straight into the station layer. A shared object
+cannot see a symbol the host executable did not publish, so without
+the flag such a box loads and then fails to resolve, naming a function
+in the engine rather than anything about the box.</p>
+<p>It was not needed while generated code held only shims, because a shim
+calls the box and the box is inside the object with it. It became
+needed the moment generated code started building stations, which is
+the point of a placement function (issue 311b).</p>
+<p>So the distance between this engine and somebody else's machine grew
+by one linker flag, and the flag is the kind that is easy to omit and
+produces a failure that points somewhere else entirely.</p>
 <h2>First, what kind of library this is</h2>
 <p>This is the thing that decides everything else, so it goes first.</p>
 <p>A normal C library is a runtime artifact: you link it, you call it. This

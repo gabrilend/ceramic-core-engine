@@ -79,6 +79,12 @@ typedef struct late_block {
     struct late_block *next;
     const box_info_t  *boxes;
     int                n_boxes;
+    /* The placement functions this object brought with it (issue
+     * 311b). A box compiled while the program runs has to be
+     * placeable the same way as one compiled into it, which means the
+     * same generated function doing the writing. */
+    const box_place_t *places;
+    int                n_places;
     void              *handle;
 } late_block_t;
 
@@ -131,6 +137,25 @@ const box_info_t *registry_late_box(int i)
             return &b->boxes[remaining - 1];
         remaining -= b->n_boxes;
     }
+    return NULL;
+}
+/* }}} */
+
+/* {{{ registry_late_place_find() */
+/*
+ * The placement function for a box that arrived after the program
+ * started. Newest first, for the same reason the box lookup is: a
+ * name added twice resolves to the newer one, and the older code is
+ * still loaded and still callable by anything already placed.
+ */
+const box_place_t *registry_late_place_find(const char *name);
+
+const box_place_t *registry_late_place_find(const char *name)
+{
+    for (late_block_t *b = late_head; b; b = b->next)
+        for (int i = 0; i < b->n_places; i++)
+            if (strcmp(b->places[i].name, name) == 0)
+                return &b->places[i];
     return NULL;
 }
 /* }}} */
@@ -443,6 +468,23 @@ int registry_compile_source(const char *c_source)
     block->boxes   = boxes;
     block->n_boxes = *count;
     block->handle  = handle;
+
+    /* The placement rows, from the same object by the same means. A
+     * generator that emitted boxes always emits these beside them, so
+     * their absence is the generator having produced something
+     * unexpected rather than an older object being tolerated. */
+    const box_place_t *places = dlsym(handle, "registry_places");
+    const int *n_places = dlsym(handle, "registry_n_places");
+    if (!places || !n_places) {
+        fprintf(stderr, "latebox: %s defines boxes but no placement "
+                        "functions — the generator emitted something "
+                        "unexpected\n", lib_path);
+        free(block);
+        dlclose(handle);
+        return -1;
+    }
+    block->places   = places;
+    block->n_places = *n_places;
 
     /* Published last, and by one write, so a reader walking the list
      * either sees this block complete or does not see it at all. */

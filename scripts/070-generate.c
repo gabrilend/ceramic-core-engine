@@ -47,7 +47,7 @@
 #include <string.h>
 
 void ge_emit(const description_t *d, const char **sources, int n_sources,
-             const char *out_path);
+             const char *out_path, const char *root);
 
 /* {{{ static void usage() */
 static void usage(void)
@@ -67,8 +67,26 @@ int main(int argc, char **argv)
     int describe_only = strcmp(argv[1], "--describe") == 0;
     const char *out_path = describe_only ? NULL : argv[1];
 
-    const char **sources = (const char **)&argv[2];
-    int n_sources = argc - 2;
+    /*
+     * The project root, so that a box's path can be shortened before
+     * it becomes part of a generated symbol (issue 311a). Without it
+     * the symbol carries the absolute path of whatever machine ran
+     * the build, which is both enormous and different on every
+     * machine — a generated file that differs by where it was built
+     * is one nobody can compare against another.
+     *
+     * Optional: a box compiled while a program runs has no project
+     * root to be relative to, and its path is already unique.
+     */
+    const char *root = NULL;
+    const char *sources[argc > 2 ? argc - 2 : 1];
+    int n_sources = 0;
+    for (int i = 2; i < argc; i++) {
+        if (strncmp(argv[i], "--root=", 7) == 0)
+            root = argv[i] + 7;
+        else
+            sources[n_sources++] = argv[i];
+    }
 
     if (n_sources <= 0)
         usage();
@@ -82,7 +100,7 @@ int main(int argc, char **argv)
     if (describe_only)
         gp_describe(&d);
     else
-        ge_emit(&d, sources, n_sources, out_path);
+        ge_emit(&d, sources, n_sources, out_path, root);
 
     gp_free(&d);
     return 0;

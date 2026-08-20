@@ -84,6 +84,39 @@ typedef struct box_info {
 } box_info_t;
 /* }}} */
 
+/* {{{ struct box_place — issue 311b */
+/*
+ * One box's **placement function**, and the two names it answers to.
+ *
+ * The generator emits a function per box that writes a station
+ * directly — the shim, the slot sizes, the return size, the type
+ * names, the comparison — with every number a `sizeof` the compiler
+ * folds into an immediate. A placement function *is* hand placement,
+ * written by the generator instead of by a person, which is why there
+ * are not two doors into the engine: placing by name is only a way of
+ * finding which generated hand-placement to call.
+ *
+ * **This table is temporary and says so.** Once the generator reads
+ * maps itself it emits the calls, and a placement function is reached
+ * by being called rather than by being found (issue 311d). Both names
+ * are carried meanwhile: the bare function name, which is what map
+ * files say today, and the file-and-function address, which is what
+ * they will say.
+ */
+typedef struct box_place {
+    const char *name;      /* the bare function name, as maps say today */
+    const char *address;   /* file:function, as maps will say */
+    void      (*place)(map_t *m, int station, int kind);
+} box_place_t;
+
+extern const box_place_t    registry_places[];
+extern const int            registry_n_places;
+
+/* Which placement function writes this box's station. Compiled-in
+ * rows first, then anything compiled after the program started. */
+const box_place_t *box_place_find(const char *name);
+/* }}} */
+
 /* The generated data. Defined in src/generated/registry.c, which the
  * generator rewrites on every build where a box source changed. */
 extern const box_info_t     registry_boxes[];

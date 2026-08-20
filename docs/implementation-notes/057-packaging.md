@@ -14,6 +14,29 @@ variables mean there can only ever be one map.
 
 ---
 
+## The link line gained a flag, and it is not optional
+
+A program built with this engine must be linked so that the engine's
+own symbols appear in the executable's dynamic table — `-rdynamic` on
+the usual toolchains.
+
+**Why it is not a detail.** A box compiled while the program runs
+arrives as a shared object and is opened at run time. The generator
+emits, alongside its call site, a **placement function** that builds
+the station: it calls straight into the station layer. A shared object
+cannot see a symbol the host executable did not publish, so without
+the flag such a box loads and then fails to resolve, naming a function
+in the engine rather than anything about the box.
+
+It was not needed while generated code held only shims, because a shim
+calls the box and the box is inside the object with it. It became
+needed the moment generated code started building stations, which is
+the point of a placement function (issue 311b).
+
+So the distance between this engine and somebody else's machine grew
+by one linker flag, and the flag is the kind that is easy to omit and
+produces a failure that points somewhere else entirely.
+
 ## First, what kind of library this is
 
 This is the thing that decides everything else, so it goes first.

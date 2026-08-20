@@ -79,7 +79,7 @@ $(GENERATOR): $(GEN_SRC) | $(BUILD)
 $(GENERATED): $(BOX_SRC) $(GENERATOR)
 	mkdir -p $(DIR)/src/generated
 
-	$(GENERATOR) $(GENERATED) $(BOX_SRC)
+	$(GENERATOR) $(GENERATED) --root=$(DIR) $(BOX_SRC)
 # Everything the engine is made of: the pool from libs/, the station
 # layer and what follows from src/, and the generated registry.
 # Discovered by wildcard so a new engine file enrolls itself.
@@ -119,8 +119,20 @@ ramdirs:
 $(BUILD): | ramdirs
 	mkdir -p $(BUILD)
 
+# -rdynamic puts the engine's own symbols in the executable's dynamic
+# table, which a box compiled while the program runs needs (issues 310,
+# 311b). Such a box arrives as a shared object and is dlopened; its
+# generated placement function calls straight into the station layer,
+# and a shared object cannot see a symbol the host did not export.
+#
+# It was not needed while generated code only held shims — a shim
+# calls the box, and the box is inside the shared object with it. It
+# became needed the moment generated code started *building stations*,
+# which is the whole point of a placement function. Anyone linking a
+# program with this engine inherits the same requirement, which
+# belongs with the rest of the packaging story.
 $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) | $(BUILD)
-	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC)
+	$(CC) $(CFLAGS) -rdynamic -o $@ $< $(ENGINE_SRC)
 
 # The generator's own unit test links the generator's pieces rather
 # than the engine: it is testing the build tool, not the thing the

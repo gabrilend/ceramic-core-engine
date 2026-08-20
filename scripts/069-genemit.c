@@ -292,12 +292,164 @@ static void emit_registry(buf_t *w, const description_t *d,
 }
 /* }}} */
 
+/* {{{ static const char *path_within() */
+/*
+ * A box's path, shortened against the project root, so that a symbol
+ * does not carry the absolute path of whatever machine ran the build.
+ * A generated file that differs by *where* it was built is one nobody
+ * can compare against another.
+ *
+ * Returns the whole path when there is no root or it does not match,
+ * which is the case for a box compiled while a program runs: it has
+ * no project root to be relative to, and its path is already unique.
+ */
+static const char *path_within(const char *file, const char *root)
+{
+    if (!root || !*root)
+        return file;
+    size_t n = strlen(root);
+    if (strncmp(file, root, n) == 0 && file[n] == '/')
+        return file + n + 1;
+    return file;
+}
+/* }}} */
+
+/* {{{ static void emit_placements() */
+/*
+ * One **placement function** per box (issue 311b), emitted beside the
+ * record rather than instead of it, so the two can be compared before
+ * either is trusted.
+ *
+ * The observation this rests on: a box's record is read exactly once,
+ * at placement, and never again. A station keeps its own shim, its own
+ * slot sizes, its own return size and its own comparison, and the
+ * station header is deliberately free of any reference back. So the
+ * record exists only to be read at the one moment generated code could
+ * just as well do the writing — and generated code writing it turns
+ * every number into an expression the compiler folds into an
+ * immediate, stored nowhere at all.
+ *
+ * **A placement function is hand placement, written by the generator
+ * instead of by a person.** That is why there are not two doors into
+ * the engine: placing by name is only a way of finding which generated
+ * hand-placement to call.
+ *
+ * Every size stays a `sizeof`, so the compiler still computes every
+ * number and the generator still never guesses one — the rule the
+ * whole engine rests on is untouched by moving where they live.
+ */
+static void emit_placements(buf_t *w, const description_t *d,
+                            const char **compare_of, arena_t *a,
+                            const char *root)
+{
+    for (int i = 0; i < d->boxes.n; i++) {
+        const box_t *b = vec_at(&d->boxes, i);
+        int is_void = strcmp(b->ret, "void") == 0;
+        const char *file = path_within(b->file, root);
+        char *sym = gt_box_symbol(a, file, b->name);
+
+        buf_line(w, "/* places %s:%s */", file, b->name);
+        buf_line(w, "static void %s__place(map_t *m, int station, int kind)",
+                 sym);
+        buf_line(w, "{");
+
+        /* A comparator carries one extra port holding the value to
+         * compare against, typed to the box's return value because
+         * that is what it will be compared with. Both refusals say
+         * which of the two reasons applies — "cannot be a comparator"
+         * alone would leave the author guessing which fix to make. */
+        if (is_void) {
+            buf_line(w, "    if (kind == STATION_COMPARATOR) {");
+            buf_line(w, "        fprintf(stderr, \"map: '%s:%s' cannot be a \"",
+                     file, b->name);
+            buf_line(w, "                \"comparator — it returns nothing, so \"");
+            buf_line(w, "                \"there is nothing to compare\\n\");");
+            buf_line(w, "        abort();");
+            buf_line(w, "    }");
+        } else if (!compare_of[i]) {
+            buf_line(w, "    if (kind == STATION_COMPARATOR) {");
+            buf_line(w, "        fprintf(stderr, \"map: '%s:%s' cannot be a \"",
+                     file, b->name);
+            buf_line(w, "                \"comparator — its return type '%s' has \"",
+                     b->ret);
+            buf_line(w, "                \"no compare function; write \"");
+            buf_line(w, "                \"%s__compare in a box source\\n\");",
+                     b->ret);
+            buf_line(w, "        abort();");
+            buf_line(w, "    }");
+        }
+
+        buf_line(w, "    int extra = (kind == STATION_COMPARATOR) ? 1 : 0;");
+        /* The threshold slot is always in the array and counted only
+         * when it is wanted, which also keeps the array from being
+         * zero-length for a box that takes no parameters — something C
+         * does not allow. */
+        buf_addstr(w, "    int sizes[] = {");
+        for (int j = 0; j < b->n_params; j++)
+            buf_addf(w, " (int)sizeof(%s),", b->params[j].type);
+        buf_addf(w, " (int)sizeof(%s) };", is_void ? "int" : b->ret);
+        buf_line(w, "");
+
+        char ret_size[128];
+        if (is_void)
+            snprintf(ret_size, sizeof ret_size, "0");
+        else
+            snprintf(ret_size, sizeof ret_size, "(int)sizeof(%s)", b->ret);
+
+        buf_line(w, "    map_place(m, station, %s__call, kind, %d + extra,",
+                 b->name, b->n_params);
+        buf_line(w, "              sizes, %s);", ret_size);
+        buf_line(w, "");
+        buf_line(w, "    station_t *s = map_station(m, station);");
+        buf_line(w, "    (void)s;");
+        for (int j = 0; j < b->n_params; j++)
+            buf_line(w, "    s->in_ports[%d].type_name = \"%s\";",
+                     j, b->params[j].type);
+        if (!is_void && compare_of[i]) {
+            buf_line(w, "    if (extra) {");
+            buf_line(w, "        s->in_ports[%d].type_name = \"%s\";",
+                     b->n_params, b->ret);
+            /* Resolved once, here, so the delivery path compares
+             * through a pointer the station already holds rather than
+             * looking anything up per value. */
+            buf_line(w, "        s->compare = %s;", compare_of[i]);
+            buf_line(w, "    }");
+        }
+        buf_line(w, "}");
+        buf_line(w, "");
+    }
+
+    /*
+     * The two-column table that finds one of these by the name a map
+     * writes. Temporary by design: once the generator reads maps
+     * itself it emits the *calls*, and a placement function is reached
+     * by being called rather than by being found (issue 311d). Until
+     * then this is what by-name placement looks one up in — and it is
+     * what keeps every emitted function referenced, which a build with
+     * warnings as errors requires.
+     */
+    buf_line(w, "const box_place_t registry_places[] = {");
+    for (int i = 0; i < d->boxes.n; i++) {
+        const box_t *b = vec_at(&d->boxes, i);
+        const char *file = path_within(b->file, root);
+        char *sym = gt_box_symbol(a, file, b->name);
+        buf_line(w, "    { \"%s\", \"%s:%s\", %s__place },",
+                 b->name, file, b->name, sym);
+    }
+    if (d->boxes.n == 0)
+        buf_line(w, "    { NULL, NULL, NULL },");
+    buf_line(w, "};");
+    buf_line(w, "const int registry_n_places = %d;", d->boxes.n);
+    buf_line(w, "");
+}
+/* }}} */
+
 /* {{{ ge_emit() */
 void ge_emit(const description_t *d, const char **sources, int n_sources,
-             const char *out_path);
+             const char *out_path, const char *root);
 
 void ge_emit(const description_t *d, const char **sources, int n_sources,
-             const char *out_path)
+             const char *out_path, const char *root)
 {
     buf_t w;
     buf_init(&w);
@@ -309,6 +461,11 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
     buf_line(&w, "#include <string.h>");
     buf_line(&w, "#include <time.h>");
     buf_line(&w, "#include \"026-registry.h\"");
+    /* The placement functions call the station layer directly, which
+     * is the point of them (issue 311b). */
+    buf_line(&w, "#include \"018-station.h\"");
+    buf_line(&w, "#include <stdio.h>");
+    buf_line(&w, "#include <stdlib.h>");
     buf_line(&w, "#include \"049-observe.h\"");
     buf_line(&w, "");
     buf_line(&w, "/* The box sources, included whole: their types become visible, and");
@@ -328,6 +485,9 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
     emit_shims(&w, d);
     emit_structs(&w, d);
     emit_registry(&w, d, compare_of);
+    /* Emitted beside the record rather than instead of it, so the two
+     * can be compared before either is trusted (issue 311b). */
+    emit_placements(&w, d, compare_of, d->arena, root);
 
     free(compare_of);
 
