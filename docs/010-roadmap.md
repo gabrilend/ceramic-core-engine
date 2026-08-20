@@ -178,9 +178,9 @@ the page reads locally, parsed by the build's own generator compiled to
 WebAssembly so the page and the build cannot disagree about what a box
 is. Nothing is stored on a server.
 
-Depends on phase 6 for the format it emits, phase 3 for the parser it
-borrows, and specifically on the generator being a standalone C program
-rather than a Lua script.
+Depends on phase 6 for the format it emits and phase 3 for the parser
+it borrows — which is now a standalone C program, so the page and the
+build can share one implementation rather than two that must agree.
 
 The constraint the whole phase is held to: you can also write a map in
 a text editor. The canvas is an alternative to writing the file by

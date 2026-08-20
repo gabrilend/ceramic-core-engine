@@ -127,26 +127,72 @@
 <a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+<a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
+<a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
+<a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
+<a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
+<a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
+<a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 </nav>
 <main>
 <h1>308 — The generator, in C</h1>
 <h2>Current behavior</h2>
-<p>The generator is a Lua script run by LuaJIT. It reads the box sources,
-parses their function declarations, and emits one C file holding a shim
-per box, a record per box, a field table per struct, and a three-way
-comparison per comparable type. The build runs it before compiling
-anything, and rebuilds its output whenever a box source or the generator
-itself is newer.</p>
-<p>This works, and it is the reason a map file can say a box's name in text
-and reach a compiled C function. It also means **anyone who builds a
-program with this engine must have LuaJIT installed**, even though
-nothing Lua runs once the program is running. The engine is C; the road
-to compiling it is not.</p>
-<p>That is acceptable for a project that only builds itself. It is not
-acceptable for something handed to other people, which is what
-<a href="impl-057-packaging.html">057</a> describes: a
-consumer's build inherits our tooling choices, and every inherited
-dependency is a reason their build fails on a machine we never saw.</p>
+<p>**Built and in use. One step remains: the Lua generator is renamed to
+mark it deprecated and is removed in the next commit, along with the
+parity test that compares against it.**</p>
+<p>The generator is a standalone C program — <code>scripts/070-generate.c</code> and
+the three pieces under it — compiled by the build before it is run. It
+depends on nothing the engine provides, so the build compiles it,
+runs it, and compiles everything else. **A program built with this
+engine now needs a C compiler and nothing else.**</p>
+<p><strong>Parity is proven rather than asserted.</strong> Both generators were run
+over the same sources and their output compared byte for byte:</p>
+<ul>
+<li>259 lines of emitted registry, identical apart from the first line,</li>
+<p>  which names the generator that wrote it and is meant to differ</p>
+<li>describe mode, identical</li>
+<li>thirteen malformed sources, each refused by both with **the same</li>
+<p>  message**</p>
+</ul>
+<p>That comparison lives in <code>tests/072-test-generator-parity.sh</code> and is
+deliberately temporary — it cannot outlive the thing it compares
+against, and it says so in its own header.</p>
+<p><strong>Two behaviours changed, both deliberately, both improvements:</strong></p>
+<ul>
+<li><strong>The exit code.</strong> The Lua generator exited 1 for everything. The C</li>
+<p>  one uses the project's own codes (issue 106): 65 for a malformed
+  source, 71 for a resource it cannot get. The command-line test only
+  ever checked for non-zero, so nothing depended on the old value.</p>
+<li><strong>An unterminated block comment now names its file.</strong> The Lua</li>
+<p>  version reported <code>(input):0</code> for that one case, because the routine
+  that blanks comments had not been told which file it was reading.</p>
+</ul>
+<p><strong>What the translation actually cost</strong>, since the issue predicted it:
+the parsing is the small half. The support machinery underneath — an
+arena, a string that grows, an array that grows, and the handful of
+string operations Lua supplies for free — is <code>065-gentext.h</code> and
+<code>066-gentext.c</code>, and it has its own test, because everything above it
+assumes it is correct and a bug in it surfaces as garbled C hundreds
+of lines away.</p>
+<p><strong>One piece of the parser is worth knowing about.</strong> A function header
+is recognized by scanning <strong>backwards</strong> from the last <code>)</code> to its
+match, rather than by a pattern. The name may follow a star with no
+space — <code>char *sneaky</code> — which no single split can express, and the
+Lua version had already resorted to splitting it by hand for the same
+reason.</p>
+<p>**Out of scope and still true: the HTML documentation generator stays
+in Lua.** It is project tooling, not on the path a consumer walks, and
+the distinction is now stated in the Makefile's own header, in the
+packaging note, and in the front door's info file: building the engine
+needs a C compiler; regenerating our documentation needs LuaJIT.</p>
+<p><strong>Why it mattered</strong>, kept because it is the reason the work was done:
+a consumer's build inherits our tooling choices, and every inherited
+dependency is a reason their build fails on a machine we never saw.
+Depending on an interpreter that nothing at run time ever used was
+acceptable for a project that only builds itself and not for anything
+handed to other people —
+<a href="impl-057-packaging.html">057</a> is where that was
+first measured.</p>
 <h2>Intended behavior</h2>
 <p><strong>A program built with this engine needs a C compiler and nothing else.</strong></p>
 <p>The generator becomes a small, standalone C program with no dependency

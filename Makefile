@@ -13,6 +13,12 @@
 #
 # The project root is derived from this file's own location, so make
 # works from any directory.
+#
+# What it needs: a C compiler, and nothing else, for everything on the
+# path from sources to running tests — the generator is itself C
+# (issue 308). Regenerating the HTML documentation additionally needs
+# LuaJIT, which is project tooling rather than part of the build path
+# a consumer walks.
 
 DIR   := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILD := $(DIR)/tmp/build
@@ -40,14 +46,26 @@ CFLAGS += -I$(DIR)/libs -I$(DIR)/src
 # any box source or the generator itself is newer. A failing
 # generator writes nothing into place, so a build can never compile
 # against yesterday's registry.
+#
+# The generator is C (issue 308), compiled here before it is run. It
+# depends on nothing the engine provides, so there is no bootstrap
+# problem: compile it, run it, compile everything else. It used to be
+# a LuaJIT script, which meant anyone building a program with this
+# engine inherited an interpreter dependency that nothing at run time
+# ever used.
 BOX_SRC   := $(wildcard $(DIR)/src/boxes/*.c)
-GENERATOR := $(DIR)/scripts/028-generate.lua
+GEN_SRC   := $(wildcard $(DIR)/scripts/*.c)
+GEN_LIB   := $(filter-out $(DIR)/scripts/070-generate.c,$(GEN_SRC))
+GENERATOR := $(BUILD)/generate
 GENERATED := $(DIR)/src/generated/registry.c
+
+$(GENERATOR): $(GEN_SRC) | $(BUILD)
+	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $(GEN_SRC)
 
 $(GENERATED): $(BOX_SRC) $(GENERATOR)
 	mkdir -p $(DIR)/src/generated
-	luajit $(GENERATOR) $(GENERATED) $(BOX_SRC)
 
+	$(GENERATOR) $(GENERATED) $(BOX_SRC)
 # Everything the engine is made of: the pool from libs/, the station
 # layer and what follows from src/, and the generated registry.
 # Discovered by wildcard so a new engine file enrolls itself.
@@ -56,8 +74,8 @@ ENGINE_SRC := $(wildcard $(DIR)/libs/*.c) $(wildcard $(DIR)/src/*.c) $(GENERATED
 # What the parser saw, for diagnosing a build problem by looking at
 # the description rather than the emission.
 .PHONY: describe
-describe:
-	luajit $(GENERATOR) --describe $(BOX_SRC)
+describe: $(GENERATOR)
+	$(GENERATOR) --describe $(BOX_SRC)
 
 # The HTML documentation set (issue 705): generated from the markdown,
 # never maintained beside it. Regenerated on demand and as part of a
@@ -89,6 +107,13 @@ $(BUILD): | ramdirs
 
 $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC)
+
+# The generator's own unit test links the generator's pieces rather
+# than the engine: it is testing the build tool, not the thing the
+# tool builds. An explicit rule beats the pattern rule above, so this
+# one file compiles differently without excluding it from the sweep.
+$(BUILD)/071-test-gentext: $(DIR)/tests/071-test-gentext.c $(GEN_LIB) | $(BUILD)
+	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $< $(GEN_LIB)
 
 # Shell-driven tests sit beside the compiled ones — the generator's
 # command-line conduct is proven from the shell.

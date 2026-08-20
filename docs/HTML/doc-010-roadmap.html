@@ -127,6 +127,12 @@
 <a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+<a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
+<a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
+<a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
+<a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
+<a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
+<a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 </nav>
 <main>
 <h1>010 — Roadmap</h1>
@@ -257,9 +263,9 @@ functions it used. Boxes come from a bundled drawer or from a C file
 the page reads locally, parsed by the build's own generator compiled to
 WebAssembly so the page and the build cannot disagree about what a box
 is. Nothing is stored on a server.</p>
-<p>Depends on phase 6 for the format it emits, phase 3 for the parser it
-borrows, and specifically on the generator being a standalone C program
-rather than a Lua script.</p>
+<p>Depends on phase 6 for the format it emits and phase 3 for the parser
+it borrows — which is now a standalone C program, so the page and the
+build can share one implementation rather than two that must agree.</p>
 <p>The constraint the whole phase is held to: you can also write a map in
 a text editor. The canvas is an alternative to writing the file by
 hand, never a prerequisite for it. If the canvas can ever express

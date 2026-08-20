@@ -41,10 +41,19 @@ generator, and a build rule that ties them together** — closer in shape
 to a parser generator than to a math library. Any packaging that ships
 only the compiled half ships something nobody can use.
 
-A consequence worth stating plainly: **the consumer's build depends on
-LuaJIT**, because the generator is a Lua script. That is not removable
-without rewriting the generator in the language of the host build, and
-it should be declared loudly rather than discovered.
+A consequence that used to be stated here plainly, and no longer
+applies: **the consumer's build once depended on LuaJIT**, because the
+generator was a Lua script. Issue 308 rewrote it in C. A consumer's
+build now needs a **C compiler and nothing else** — it compiles the
+generator, runs it over its own box sources, and compiles the result.
+The generator depends on nothing the engine provides, so there is no
+bootstrap problem: it can be built before anything else exists.
+
+Regenerating **this project's own HTML documentation** still needs
+LuaJIT. That is deliberately out of scope: it is project tooling and
+not on the path a consumer walks to build a program. The distinction
+belongs wherever the dependency is declared — building the engine
+needs a C compiler; regenerating our documentation needs LuaJIT.
 
 ---
 

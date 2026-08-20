@@ -2,24 +2,68 @@
 
 ## Current behavior
 
-The generator is a Lua script run by LuaJIT. It reads the box sources,
-parses their function declarations, and emits one C file holding a shim
-per box, a record per box, a field table per struct, and a three-way
-comparison per comparable type. The build runs it before compiling
-anything, and rebuilds its output whenever a box source or the generator
-itself is newer.
+**Built and in use. One step remains: the Lua generator is renamed to
+mark it deprecated and is removed in the next commit, along with the
+parity test that compares against it.**
 
-This works, and it is the reason a map file can say a box's name in text
-and reach a compiled C function. It also means **anyone who builds a
-program with this engine must have LuaJIT installed**, even though
-nothing Lua runs once the program is running. The engine is C; the road
-to compiling it is not.
+The generator is a standalone C program — `scripts/070-generate.c` and
+the three pieces under it — compiled by the build before it is run. It
+depends on nothing the engine provides, so the build compiles it,
+runs it, and compiles everything else. **A program built with this
+engine now needs a C compiler and nothing else.**
 
-That is acceptable for a project that only builds itself. It is not
-acceptable for something handed to other people, which is what
-[057](../docs/implementation-notes/057-packaging.md) describes: a
-consumer's build inherits our tooling choices, and every inherited
+**Parity is proven rather than asserted.** Both generators were run
+over the same sources and their output compared byte for byte:
+
+- 259 lines of emitted registry, identical apart from the first line,
+  which names the generator that wrote it and is meant to differ
+- describe mode, identical
+- thirteen malformed sources, each refused by both with **the same
+  message**
+
+That comparison lives in `tests/072-test-generator-parity.sh` and is
+deliberately temporary — it cannot outlive the thing it compares
+against, and it says so in its own header.
+
+**Two behaviours changed, both deliberately, both improvements:**
+
+- **The exit code.** The Lua generator exited 1 for everything. The C
+  one uses the project's own codes (issue 106): 65 for a malformed
+  source, 71 for a resource it cannot get. The command-line test only
+  ever checked for non-zero, so nothing depended on the old value.
+- **An unterminated block comment now names its file.** The Lua
+  version reported `(input):0` for that one case, because the routine
+  that blanks comments had not been told which file it was reading.
+
+**What the translation actually cost**, since the issue predicted it:
+the parsing is the small half. The support machinery underneath — an
+arena, a string that grows, an array that grows, and the handful of
+string operations Lua supplies for free — is `065-gentext.h` and
+`066-gentext.c`, and it has its own test, because everything above it
+assumes it is correct and a bug in it surfaces as garbled C hundreds
+of lines away.
+
+**One piece of the parser is worth knowing about.** A function header
+is recognized by scanning **backwards** from the last `)` to its
+match, rather than by a pattern. The name may follow a star with no
+space — `char *sneaky` — which no single split can express, and the
+Lua version had already resorted to splitting it by hand for the same
+reason.
+
+**Out of scope and still true: the HTML documentation generator stays
+in Lua.** It is project tooling, not on the path a consumer walks, and
+the distinction is now stated in the Makefile's own header, in the
+packaging note, and in the front door's info file: building the engine
+needs a C compiler; regenerating our documentation needs LuaJIT.
+
+**Why it mattered**, kept because it is the reason the work was done:
+a consumer's build inherits our tooling choices, and every inherited
 dependency is a reason their build fails on a machine we never saw.
+Depending on an interpreter that nothing at run time ever used was
+acceptable for a project that only builds itself and not for anything
+handed to other people —
+[057](../docs/implementation-notes/057-packaging.md) is where that was
+first measured.
 
 ## Intended behavior
 

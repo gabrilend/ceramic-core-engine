@@ -20,7 +20,11 @@ if [[ $# -ge 1 && -d "$1" ]]; then
     DIR="$1"
 fi
 
-GENERATOR="${DIR}/scripts/028-generate.lua"
+GENERATOR="${DIR}/tmp/build/generate"
+if [[ ! -x "${GENERATOR}" ]]; then
+    echo "generator cli test: ${GENERATOR} is not built; run make first" >&2
+    exit 1
+fi
 WORK="/tmp/$(basename "${DIR}")/generator-cli-test"
 rm -rf "${WORK}"
 mkdir -p "${WORK}"
@@ -57,7 +61,7 @@ pair bundle(int a, double b)
 }
 EOF
 
-luajit "${GENERATOR}" "${WORK}/out.c" "${WORK}/good.c" \
+"${GENERATOR}" "${WORK}/out.c" "${WORK}/good.c" \
     || fail "a healthy source was refused"
 grep -q '"widen"' "${WORK}/out.c" || fail "widen missing from emission"
 grep -q '"bundle"' "${WORK}/out.c" || fail "bundle missing from emission"
@@ -65,7 +69,7 @@ grep -q '"sneaky"' "${WORK}/out.c" && fail "a static helper leaked into the regi
 echo "  braces in strings, helpers, and multi-type boxes all handled"
 
 # --- describe mode reports what was seen ---------------------------
-DESCRIBED="$(luajit "${GENERATOR}" --describe "${WORK}/good.c")"
+DESCRIBED="$("${GENERATOR}" --describe "${WORK}/good.c")"
 echo "${DESCRIBED}" | grep -q "box widen" || fail "describe mode lost a box"
 echo "${DESCRIBED}" | grep -q "struct pair" || fail "describe mode lost a struct"
 echo "  describe mode shows the parser's findings"
@@ -81,7 +85,7 @@ stretch(
     return (long)a + b;
 }
 EOF
-luajit "${GENERATOR}" "${WORK}/out2.c" "${WORK}/multiline.c" \
+"${GENERATOR}" "${WORK}/out2.c" "${WORK}/multiline.c" \
     || fail "a multi-line declaration was refused"
 grep -q '"stretch"' "${WORK}/out2.c" || fail "stretch missing"
 echo "  declarations spanning lines parse"
@@ -93,7 +97,7 @@ typedef struct {
 } sloppy;
 EOF
 set +e
-MESSAGE="$(luajit "${GENERATOR}" "${WORK}/out3.c" "${WORK}/bad.c" 2>&1)"
+MESSAGE="$("${GENERATOR}" "${WORK}/out3.c" "${WORK}/bad.c" 2>&1)"
 STATUS=$?
 set -e
 [[ ${STATUS} -ne 0 ]] || fail "comma fields were accepted"
@@ -112,7 +116,7 @@ int follow_up(int x)
     return x * 2;
 }
 EOF
-luajit "${GENERATOR}" "${WORK}/out.c" "${WORK}/good.c" \
+"${GENERATOR}" "${WORK}/out.c" "${WORK}/good.c" \
     || fail "regeneration after an edit failed"
 grep -q '"follow_up"' "${WORK}/out.c" || fail "the edit did not reach the registry"
 echo "  an edited source regenerates into an updated registry"

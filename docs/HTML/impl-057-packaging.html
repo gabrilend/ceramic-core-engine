@@ -127,6 +127,12 @@
 <a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
+<a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
+<a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
+<a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
+<a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
+<a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
+<a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 </nav>
 <main>
 <h1>057 — Packaging the engine as a library</h1>
@@ -162,10 +168,18 @@ code and could be a static archive tomorrow.</p>
 generator, and a build rule that ties them together** — closer in shape
 to a parser generator than to a math library. Any packaging that ships
 only the compiled half ships something nobody can use.</p>
-<p>A consequence worth stating plainly: **the consumer's build depends on
-LuaJIT**, because the generator is a Lua script. That is not removable
-without rewriting the generator in the language of the host build, and
-it should be declared loudly rather than discovered.</p>
+<p>A consequence that used to be stated here plainly, and no longer
+applies: <strong>the consumer's build once depended on LuaJIT</strong>, because the
+generator was a Lua script. Issue 308 rewrote it in C. A consumer's
+build now needs a <strong>C compiler and nothing else</strong> — it compiles the
+generator, runs it over its own box sources, and compiles the result.
+The generator depends on nothing the engine provides, so there is no
+bootstrap problem: it can be built before anything else exists.</p>
+<p>Regenerating <strong>this project's own HTML documentation</strong> still needs
+LuaJIT. That is deliberately out of scope: it is project tooling and
+not on the path a consumer walks to build a program. The distinction
+belongs wherever the dependency is declared — building the engine
+needs a C compiler; regenerating our documentation needs LuaJIT.</p>
 <p>---</p>
 <h2>What a consumer's build has to do</h2>
 <p>Three steps, in this order, every build:</p>
