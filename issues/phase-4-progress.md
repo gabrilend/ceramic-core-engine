@@ -21,7 +21,7 @@ scope shrank the most.
 
 | Issue | State | In one line |
 |---|---|---|
-| 401 — static values | **reopened** | Built and correct; the value is moving off a shared table and onto the port that reads it. |
+| [401 — static values](completed/401-static-slots.md) | **complete** | The value lives on the port that reads it and the shared table is gone. Claiming happens under the station's own mutex beside the ring pops, so an invocation's inputs are all true at one instant; two ports given one file entry are independent afterwards; and two maps run in one process without seeing each other, which the table had made impossible. |
 | 402 — struct constants | complete | One reader walks field tables and brace text; malformed is fatal at bind. |
 | 403 — gatherer slots | **being removed** | Built and proven; the whole capability goes with the pull path. |
 | 404 — chains and cycles | **being removed** | Goes with it; the push-loop finding outlives the mechanism. |

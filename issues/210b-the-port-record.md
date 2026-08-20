@@ -5,7 +5,7 @@ child stands on: what a port *is*, once there are two live kinds and a
 third state meaning nobody has said yet.
 
 **The statics block is cleared.** This issue was blocked in half on
-[401](401-static-slots.md) and [405](405-statics-mutation.md): a port
+[401](completed/401-static-slots.md) and [405](405-statics-mutation.md): a port
 could not be given room for a value that lived in a global register,
 and the map file's `$n` form named a table the design had decided to
 delete.
@@ -61,7 +61,7 @@ sits idle — which is what makes changing what a port is a field write
 in both directions rather than only one. The claim table's static row
 was a null meaning "resolved later, outside the mutex", and it is an
 ordinary function now; the caller has stopped testing a function
-pointer for truth. [401](401-static-slots.md) did both.
+pointer for truth. [401](completed/401-static-slots.md) did both.
 
 **The map file gained a form for a value, which was half of what was
 owed.** `in 1 = 5` carries a constant on the line, matching the statics
@@ -145,27 +145,36 @@ as a null the caller tests for.
 
 ## Suggested implementation steps
 
+**401 is done, so nothing here is blocked any more.** Where a step
+below says a piece waited on it, that wait is over; the notes are kept
+because they say which pieces are built and which are not.
+
 1. The record itself: both storages, the three-value tag, and
    accessors that read the live one so nothing outside reaches past
-   the tag to a field that may not be in effect. *The ring storage and
-   the tag are built; the static storage waits on 401.*
+   the tag to a field that may not be in effect. **Built** — the ring
+   storage and the tag by this issue, the static storage by
+   [401](completed/401-static-slots.md), which built the room it spends
+   rather than waiting to be handed it.
 2. Cells allocated at station instantiation for every port, ten deep
    from one named constant, sized from the registry.
 3. The per-port starting capacity: a form in the map file, an argument
    on the creation call, and ten when neither says otherwise. *The
-   argument is built; the file form waits, because it shares a line
-   with the static form 401 is redesigning.*
-4. Both dispatch tables gain their rows. The claim table's null
-   becomes a named function; the caller stops testing a function
-   pointer for truth. *The none rows are built. The static row's null
-   waits on 401, which changes what it would say: today it means
-   "resolved outside the mutex," and 401 moves that claim inside.*
+   argument is built; the file form is not.* It shares a line with the
+   static form, which 401 has now settled, so the spelling is decided
+   too: `x64` after the source.
+4. Both dispatch tables gain their rows. The claim table's null becomes
+   a named function; the caller stops testing a function pointer for
+   truth. **Built, both of them** — the *none* rows here, and the
+   static row by 401, which moved the claim inside the station's mutex
+   and so changed what that row says from "resolved outside the lock"
+   to an ordinary copy.
 5. The *none* tag as a readiness answer, with a test that a station
    holding one never becomes ready no matter what arrives at its other
    ports.
-6. The map file form for an unconfigured port, in the reader and the
-   dump together, with a round-trip test on a deliberately half-built
-   program. *Waits on 401 with step 3, and for the same reason.*
+6. The map file form for an unconfigured port — a bare dash — in the
+   reader and the dump together, with a round-trip test on a
+   deliberately half-built program. Lands with step 3, since they share
+   a line.
 
 ## Open questions
 

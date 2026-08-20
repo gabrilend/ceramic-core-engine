@@ -22,7 +22,7 @@ gave it. So when the dump writes a program back out, it prints the
 string it kept. It is not formatting a value; it is repeating one.
 
 That stops working the moment a static's value moves onto the port that
-reads it ([401](401-static-slots.md)). There is no table then, no entry,
+reads it ([401](completed/401-static-slots.md)). There is no table then, no entry,
 and no retained string — only bytes on a port and a field table
 describing their shape. The dump would have nothing to print.
 
@@ -153,7 +153,7 @@ rebuild that would silently change what raw bytes meant.
   follows
 - [304 — Struct field tables](completed/304-struct-field-tables.md),
   which emits the offsets and kinds both directions read
-- [401 — Static input values](401-static-slots.md), which creates the
+- [401 — Static input values](completed/401-static-slots.md), which creates the
   need by removing the retained text
 - [703 — The map dump](completed/703-map-dump.md), the first caller
 - [209 — The output station](209-map-output-collection.md), where a

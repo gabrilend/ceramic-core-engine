@@ -44,7 +44,7 @@ write has nowhere to live until the value is on a port. The two are one
 piece of work and were attempted as one.
 
 **Not done:** an arrow delivering into a static port, which
-[004](../docs/004-datapath-statics.md) describes and which is still
+[004](../../docs/004-datapath-statics.md) describes and which is still
 refused at load time and fatal at delivery. The write call it needs
 exists and takes the right lock; what is left is teaching delivery to
 call it and removing the load-time check. It belongs to 405.
@@ -99,7 +99,7 @@ would silently change what raw bytes meant.
 by the type of whichever port binds it first, so two ports of different
 types may point at one entry and each read those same bytes their own
 way — a footgun that currently exists as a warning in
-[008](../docs/008-map-file-format.md) that a reader has to know about.
+[008](../../docs/008-map-file-format.md) that a reader has to know about.
 Once each port parses the file's text into its own storage at its own
 type, there is nothing shared for two ports to disagree about. The rule
 does not get better documented; it stops being a rule.
@@ -112,7 +112,7 @@ in its wiring — which is the same argument that moves them onto ports.
 ## Suggested implementation steps
 
 1. ~~Take the port's own storage from
-   [210b](210b-the-port-record.md), which provides it — this issue
+   [210b](../210b-the-port-record.md), which provides it — this issue
    spends that room rather than building it~~ — **inverted, and the
    inversion is the useful record here.** 210b was blocked on this
    issue instead: a port cannot be given room for a value that lives
@@ -129,7 +129,7 @@ in its wiring — which is the same argument that moves them onto ports.
 3. Have the reader copy from the file's numbered entries into each
    binding port as it goes, retaining nothing afterward — one call on
    the construction surface per bound port, the same call a debugger
-   would make ([212](212-one-way-to-build-a-program.md)).
+   would make ([212](../212-one-way-to-build-a-program.md)).
 4. Remove the table, its mutex, and its teardown from the map.
 5. The bytes-to-text formatter, walking a field table the way the
    reader does in the other direction, with the dump as its first
@@ -147,8 +147,8 @@ in its wiring — which is the same argument that moves them onto ports.
 - Issue 405 — changing a static value while the program runs, which
   moves with it
 - Issue 402 — struct constants, whose parsing is unaffected
-- [002 — Stations and slots](../docs/002-stations-and-slots.md)
-- [008 — Map file format](../docs/008-map-file-format.md), where the
+- [002 — Stations and slots](../../docs/002-stations-and-slots.md)
+- [008 — Map file format](../../docs/008-map-file-format.md), where the
   `statics` section becomes explicitly a notation for initial values
-- [058 — Guarantees](../docs/058-guarantees.md), where the consistency
+- [058 — Guarantees](../../docs/058-guarantees.md), where the consistency
   window this narrows is recorded

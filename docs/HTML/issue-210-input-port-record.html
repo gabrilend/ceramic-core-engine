@@ -50,7 +50,6 @@
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
@@ -89,6 +88,7 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
@@ -160,28 +160,33 @@ hard: per-cell states are what let the value copies leave the lock, and
 a claim that scans rather than computes a position is what makes
 growth-by-appending safe. <strong>210f and 210g branch off 210b</strong> and can
 be built while the concurrency line is in progress.</p>
-<h2>The statics blocker, which the table above does not show</h2>
-<p>Half of this family waits on <a href="issue-401-static-slots.html">401</a> and
+<h2>The statics blocker, which is cleared</h2>
+<p>**<a href="done-401-static-slots.html">401</a> is done and this family is no
+longer cut in two.** The record below is kept because the deadlock it
+describes was real and the way out of it is the useful part.</p>
+<p>Half of this family waited on 401 and
 <a href="issue-405-statics-mutation.html">405</a>, which are not children of this issue
 and were expected to stand on it rather than the reverse.</p>
-<p>The reason is one sentence: **a port cannot be given room for a static
-while a global register still owns the bytes.** 210b would be building
-a place for a value that lives somewhere else, and the map file's <code>$n</code>
-form — the only way anything is bound today — names a numbered table
-the design has already decided to delete. Every step in this family
-that touches a static inherits that: 210b's static storage and both
-map-file forms, 210f's conversion to and from static, 210g's
+<p>The reason was one sentence: **a port cannot be given room for a static
+while a global register still owns the bytes.** 210b would have been
+building a place for a value that lived somewhere else, and the map
+file's <code>$n</code> form — the only way anything was bound — named a numbered
+table the design had already decided to delete. Every step in this
+family that touches a static inherited that: 210b's static storage and
+both map-file forms, 210f's conversion to and from static, 210g's
 construction surface, and the dump's account of any of it.</p>
-<p><strong>This cuts the family in two along a seam that was already there.</strong>
-The ring-buffer line — 210b's cells and <em>none</em> tag, then the
-concurrency work of 210c, 210d, and 210e — touches no static at any
-point and is unaffected. The static line waits.</p>
-<p><strong>It also runs against 401's own first step</strong>, which reads *take the
-port's own storage from 210b, which provides it*. Both cannot be
-second. The proposal on the table is that 401 build the port-side
-storage it spends, since whoever deletes the table is the one who has
-to know what replaces it; that is recorded as an open question in
-<a href="issue-210b-the-port-record.html">210b</a> rather than decided here.</p>
+<p><strong>And it ran against 401's own first step</strong>, which read *take the
+port's own storage from 210b, which provides it*. Both could not be
+second.</p>
+<p><strong>The way out was to notice who has to know.</strong> Whoever deletes the
+table is the one who has to know what replaces it, so 401 built the
+port-side storage it spends — a byte buffer beside the cells, allocated
+at placement, plus the characters a string constant points at — rather
+than waiting to be handed one. 210b's static half unblocked the moment
+that existed.</p>
+<p>So the seam this section described is gone: the ring-buffer line and
+the static line are one line again, and everything left in this family
+is unblocked.</p>
 <h2>Vocabulary, since this issue is about the record itself</h2>
 <ul>
 <li><strong>A port</strong> is the standing interface for one input of one station:</li>
@@ -259,7 +264,7 @@ recalculation graph, and construction's own writes are what start a
 program. A write cannot make something run that could not run anyway,
 because the check it triggers is the ordinary one and an empty ring
 port still answers no.</p>
-<p>The statics work proper belongs to <a href="issue-401-static-slots.html">401</a> and
+<p>The statics work proper belongs to <a href="done-401-static-slots.html">401</a> and
 <a href="issue-405-statics-mutation.html">405</a>, which stand on 210b's record.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
@@ -311,7 +316,7 @@ port still answers no.</p>
 <ul>
 <li><a href="done-202-ring-buffer-slots.html">202 — Ring buffer slots</a>, whose</li>
 <p>  storage this keeps and whose exclusivity it drops</p>
-<li><a href="issue-401-static-slots.html">401 — Static input values</a>, whose value moves</li>
+<li><a href="done-401-static-slots.html">401 — Static input values</a>, whose value moves</li>
 <p>  onto the port here</p>
 <li><a href="issue-405-statics-mutation.html">405 — Changing a static while it runs</a>,</li>
 <p>  which becomes one case of changing a port</p>

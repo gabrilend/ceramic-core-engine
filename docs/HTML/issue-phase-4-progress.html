@@ -50,7 +50,6 @@
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
@@ -89,6 +88,7 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
@@ -148,7 +148,7 @@ the thing that starts a program.</p>
 scope shrank the most.</p>
 <table>
 <tr><td>Issue</td><td>State</td><td>In one line</td></tr>
-<tr><td>401 — static values</td><td><strong>reopened</strong></td><td>Built and correct; the value is moving off a shared table and onto the port that reads it.</td></tr>
+<tr><td><a href="done-401-static-slots.html">401 — static values</a></td><td><strong>complete</strong></td><td>The value lives on the port that reads it and the shared table is gone. Claiming happens under the station's own mutex beside the ring pops, so an invocation's inputs are all true at one instant; two ports given one file entry are independent afterwards; and two maps run in one process without seeing each other, which the table had made impossible.</td></tr>
 <tr><td>402 — struct constants</td><td>complete</td><td>One reader walks field tables and brace text; malformed is fatal at bind.</td></tr>
 <tr><td>403 — gatherer slots</td><td><strong>being removed</strong></td><td>Built and proven; the whole capability goes with the pull path.</td></tr>
 <tr><td>404 — chains and cycles</td><td><strong>being removed</strong></td><td>Goes with it; the push-loop finding outlives the mechanism.</td></tr>

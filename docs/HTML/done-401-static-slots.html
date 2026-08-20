@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>307 — Phase 3 demo: writing a box is writing a function</title>
+<title>401 — Static input values</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -87,8 +87,8 @@
 <a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
-<a href="done-307-phase-3-demo.html" class="here">307 — Phase 3 demo: writing a box is writing a function</a>
-<a href="done-401-static-slots.html">401 — Static input values</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html" class="here">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
@@ -129,70 +129,140 @@
 <a href="info-028-generate-lua.html">028-generate.lua — the generator, from outside</a>
 </nav>
 <main>
-<h1>307 — Phase 3 demo: writing a box is writing a function</h1>
+<h1>401 — Static input values</h1>
 <h2>Current behavior</h2>
-<p>Built, shell-driven so the rebuild steps are visible, working on a
-scratch copy of the box sources so the project is never touched. The
-scenes, in order: one ordinary function appended to a box source
-appears in the registry with real types and sizes and not a single
-other edit; the add function printed beside the call site the
-generator wrote for it; the registry printed whole and then laid
-beside the compiler's own sizeof answers, column for column
-identical; ints, floats, structs by value, a nested struct with a
-string, and a wide unsigned all flowing through the one call site
-byte-perfect, with each box's exact task size listed; the occupancy
-figure re-measured for the series; and a box whose return type
-changes out from under its registry, shown regenerating — with the
-no-partial-output guarantee meaning a shim casting to yesterday's
-type cannot exist. Mirrored to the shared-memory tier.</p>
-<p>Seven scenes now, each opening with a story and reporting in that
-story's units, under the standard issue 707 sets: a library whose
-catalogue is printed by walking the shelves, a translator nobody
-briefed, a parts book written by reading the machine, two surveyors
-measuring one field by different methods, a loading door that never
-inspects its freight, the same track with a new engine under the
-bonnet, and a passport photograph that no longer matches the face. The
-shell half and the compiled half speak through matching presenters and
-share one report — the compiled half joins the document rather than
-starting its own — so the seams do not show.</p>
+<p><strong>Done.</strong> A static value belongs to the input port that reads it, and
+the table is gone.</p>
+<p>Binding is one call naming a station, a port, and text; it parses at
+the port's own registry type into the port's own storage. The parse
+happens into scratch and is installed under the station's mutex, so a
+malformed value never half-overwrites a working one and no concurrent
+claim sees a value mid-parse. Claiming is a copy under the station's
+mutex beside the ring pops — the claim dispatch table's static row was
+a null meaning "resolved later, outside the lock", and it is now an
+ordinary function, which is the last of the two holes issue 210b set
+out to close.</p>
+<p>The old behaviors survive and are still proven: a station running fifty
+times off one constant driven only by its buffer side, an all-static
+station that delivery can never wake, brace text becoming bytes
+identical to a compiled initializer, and four malformed constants each
+dying where they were given. Binding still requires the port to know
+its type, which only registry placement provides.</p>
+<p><strong>Three things came out with the table</strong>, and each is now a test.</p>
+<ul>
+<li>Two ports written from one file entry are independent afterwards:</li>
+<p>  writing one does not disturb the other. Under the table both read the
+  same bytes, shaped by whichever bound first, so two ports of
+  different types could read one value each their own way. That hazard
+  stopped being expressible rather than being better documented.</p>
+<li>An invocation's inputs are all claimed in one window. A static used</li>
+<p>  to be read after the station's mutex was released, because its value
+  lived behind a second lock that could not nest inside the first — so
+  a box reading two statics could get values that were never
+  simultaneously true. That was a stated non-guarantee and is now
+  guarantee T3.</p>
+<li>Two maps run in one process and do not see each other. Carried by</li>
+<p>  issue 405, which the next section explains could not be separated.</p>
+</ul>
+<p><strong>Issue 405 landed with this one and had to.</strong> Removing the table
+breaks the runtime write, which addressed an entry number in it; the
+write has nowhere to live until the value is on a port. The two are one
+piece of work and were attempted as one.</p>
+<p><strong>Not done:</strong> an arrow delivering into a static port, which
+<a href="doc-004-datapath-statics.html">004</a> describes and which is still
+refused at load time and fatal at delivery. The write call it needs
+exists and takes the right lock; what is left is teaching delivery to
+call it and removing the load-time check. It belongs to 405.</p>
 <h2>Intended behavior</h2>
-<p>A demo about the seam between the two halves of a program. It should
-make one thing obvious: **the only thing an author writes is ordinary
-C, and everything the engine needs was derived from it.**</p>
-<p><strong>What it should show, in order of how convincing it is:</strong></p>
-<p><strong>A box added live.</strong> Write a new function into a box source, rerun the
-build, and show it appearing in the registry with its real types and
-sizes — without a single other edit anywhere. This is the claim of the
-whole phase and it is worth showing rather than asserting.</p>
-<p><strong>The registry, printed.</strong> Every box, its parameter types and sizes,
-its return type, its task size. Alongside it, the same sizes obtained
-from <code>sizeof</code> in compiled code, so the two columns can be compared.
-They should be identical, and showing them side by side is the proof
-that nothing was hand-typed.</p>
-<p><strong>A generated shim, next to the function it wraps.</strong> Both printed. This
-is the one place where showing the code is the point, because the
-reader's question is exactly "what did it write for me."</p>
-<p><strong>Type coverage.</strong> The same map run with boxes taking and returning
-integers, floating-point numbers, structs by value, nested structs, and
-nothing at all — all through one call site in the engine. Report each
-one's task size and confirm the values arrive byte-identical.</p>
-<p><strong>A stale-registry attempt.</strong> Change a box's return type, rebuild, and
-show the build catching it rather than producing a shim that casts to
-the old type. The failure is the feature.</p>
-<p><strong>Reuse from earlier phases.</strong> All of it runs on phase 1's pool and
-phase 2's stations, unchanged. Report the same occupancy figure phase 2
-reported, so the two demos can be read against each other.</p>
+<p><strong>A static value belongs to the input port that reads it.</strong></p>
+<p>A station is one instantiation of a box, wired its own way. Its input
+ports are its own — one may be fed by a wire from upstream, another may
+hold a value that is simply always there, a third may pull from a
+gatherer. Which of those a port is, and what it holds, is a property of
+that port on that station and of nothing else.</p>
+<p><strong>Nothing is shared, so nothing needs a table.</strong> Binding a port to an
+entry in the map file's <code>statics</code> section copies that value into the
+port. From that moment the entry has done its job; the running map holds
+no statics table at all.</p>
+<p><strong>Claiming happens under the station's own mutex</strong>, alongside the
+buffered values, in the same window rather than after it. This is
+strictly better than what exists: one lock instead of two, and the
+static half of an input set becomes as mutually consistent as the
+buffered half already is.</p>
+<p><strong>A static port is always full and is never consumed.</strong> Both properties
+survive unchanged — they are the reason the kind exists, and the
+readiness dispatch keeps the row that answers "yes" without looking.</p>
+<p><strong>Sharing, when it is wanted, is drawn.</strong> One station holds the value;
+everyone who needs it gathers from it. This costs a station and gains
+visibility: a constant that five stations read appears in the wiring as
+five wires rather than as five references to a number that appears
+nowhere in the shape of the map.</p>
+<p><strong>Something has to be able to turn bytes back into text.</strong> The statics
+table today keeps both the parsed bytes <em>and</em> the original string the
+file gave it, and the dump writes that string back out. Once a value
+lives on the port with no table and no retained text, the dump has
+nothing to print — so it needs a formatter that walks a field table and
+produces text, which is the exact mirror of the reader that walks a
+field table and produces bytes.</p>
+<p>That reader exists; the writer does not, and nothing has needed it
+before. It is one piece of work with more than one caller: the dump,
+anything showing a value to a person, and eventually a program's
+results, which are text for the same reason a static is — text
+resolves its layout when it is read, so it survives a rebuild that
+would silently change what raw bytes meant.</p>
+<p><strong>A hazard stops being expressible.</strong> Today an entry's bytes are shaped
+by the type of whichever port binds it first, so two ports of different
+types may point at one entry and each read those same bytes their own
+way — a footgun that currently exists as a warning in
+<a href="doc-008-map-file-format.html">008</a> that a reader has to know about.
+Once each port parses the file's text into its own storage at its own
+type, there is nothing shared for two ports to disagree about. The rule
+does not get better documented; it stops being a rule.</p>
+<p><strong>Statics remain slightly discouraged.</strong> They are how a comparator gets
+a fixed threshold and how a read box gets a path. A map carrying a great
+deal of its behavior in constants is a map whose behavior is not visible
+in its wiring — which is the same argument that moves them onto ports.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Drive the demo from a shell script so the rebuild step is visible as
-   it happens.
-2. Report every number by measuring it.
-3. Write results to <code>tmp/shared-memory/</code> alongside the screen output.
-4. Confirm the root launcher finds it.</p>
+<p>1. ~~Take the port's own storage from
+   <a href="issue-210b-the-port-record.html">210b</a>, which provides it — this issue
+   spends that room rather than building it~~ — **inverted, and the
+   inversion is the useful record here.** 210b was blocked on this
+   issue instead: a port cannot be given room for a value that lives
+   somewhere else, and the map file's <code>$n</code> form names a table this
+   issue deletes. Both could not be second. Whoever removes the table
+   is the one who has to know what replaces it, so this issue builds
+   the port-side storage it spends — a byte buffer beside the cells,
+   allocated at placement, plus the characters a string constant points
+   at. 210b's static half unblocked the moment it existed.
+2. Move the claim into the readiness walk, under the station's mutex,
+   beside the ring-buffer pop. The claim dispatch table's static row
+   stops being an absence and becomes an ordinary copy, which is one
+   of the two nulls that record replaces.
+3. Have the reader copy from the file's numbered entries into each
+   binding port as it goes, retaining nothing afterward — one call on
+   the construction surface per bound port, the same call a debugger
+   would make (<a href="issue-212-one-way-to-build-a-program.html">212</a>).
+4. Remove the table, its mutex, and its teardown from the map.
+5. The bytes-to-text formatter, walking a field table the way the
+   reader does in the other direction, with the dump as its first
+   caller — because the moment step 4 lands, the dump has no retained
+   string to print.
+5. A test that two ports bound to one file entry are genuinely
+   independent afterwards — writing one does not disturb the other,
+   which is the observable difference from today.
+6. A test that the existing behaviors survive: a station driven only by
+   its buffer side reads the same static value every run, and an
+   all-static station is never woken by delivery.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-007-datapath-build.html">007 — The build path</a></li>
-<li>Issues 301 through 306 — everything being demonstrated</li>
-<li>Issue 208 — the phase 2 demo this builds on</li>
+<li>Issue 405 — changing a static value while the program runs, which</li>
+<p>  moves with it</p>
+<li>Issue 402 — struct constants, whose parsing is unaffected</li>
+<li><a href="doc-002-stations-and-slots.html">002 — Stations and slots</a></li>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, where the</li>
+<p>  <code>statics</code> section becomes explicitly a notation for initial values</p>
+<li><a href="doc-058-guarantees.html">058 — Guarantees</a>, where the consistency</li>
+<p>  window this narrows is recorded</p>
 </ul>
 
 </main>

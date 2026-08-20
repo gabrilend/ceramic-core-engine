@@ -34,32 +34,39 @@ a claim that scans rather than computes a position is what makes
 growth-by-appending safe. **210f and 210g branch off 210b** and can
 be built while the concurrency line is in progress.
 
-## The statics blocker, which the table above does not show
+## The statics blocker, which is cleared
 
-Half of this family waits on [401](401-static-slots.md) and
+**[401](completed/401-static-slots.md) is done and this family is no
+longer cut in two.** The record below is kept because the deadlock it
+describes was real and the way out of it is the useful part.
+
+Half of this family waited on 401 and
 [405](405-statics-mutation.md), which are not children of this issue
 and were expected to stand on it rather than the reverse.
 
-The reason is one sentence: **a port cannot be given room for a static
-while a global register still owns the bytes.** 210b would be building
-a place for a value that lives somewhere else, and the map file's `$n`
-form — the only way anything is bound today — names a numbered table
-the design has already decided to delete. Every step in this family
-that touches a static inherits that: 210b's static storage and both
-map-file forms, 210f's conversion to and from static, 210g's
+The reason was one sentence: **a port cannot be given room for a static
+while a global register still owns the bytes.** 210b would have been
+building a place for a value that lived somewhere else, and the map
+file's `$n` form — the only way anything was bound — named a numbered
+table the design had already decided to delete. Every step in this
+family that touches a static inherited that: 210b's static storage and
+both map-file forms, 210f's conversion to and from static, 210g's
 construction surface, and the dump's account of any of it.
 
-**This cuts the family in two along a seam that was already there.**
-The ring-buffer line — 210b's cells and *none* tag, then the
-concurrency work of 210c, 210d, and 210e — touches no static at any
-point and is unaffected. The static line waits.
+**And it ran against 401's own first step**, which read *take the
+port's own storage from 210b, which provides it*. Both could not be
+second.
 
-**It also runs against 401's own first step**, which reads *take the
-port's own storage from 210b, which provides it*. Both cannot be
-second. The proposal on the table is that 401 build the port-side
-storage it spends, since whoever deletes the table is the one who has
-to know what replaces it; that is recorded as an open question in
-[210b](210b-the-port-record.md) rather than decided here.
+**The way out was to notice who has to know.** Whoever deletes the
+table is the one who has to know what replaces it, so 401 built the
+port-side storage it spends — a byte buffer beside the cells, allocated
+at placement, plus the characters a string constant points at — rather
+than waiting to be handed one. 210b's static half unblocked the moment
+that existed.
+
+So the seam this section described is gone: the ring-buffer line and
+the static line are one line again, and everything left in this family
+is unblocked.
 
 ## Vocabulary, since this issue is about the record itself
 
@@ -155,7 +162,7 @@ program. A write cannot make something run that could not run anyway,
 because the check it triggers is the ordinary one and an empty ring
 port still answers no.
 
-The statics work proper belongs to [401](401-static-slots.md) and
+The statics work proper belongs to [401](completed/401-static-slots.md) and
 [405](405-statics-mutation.md), which stand on 210b's record.
 
 ## Open questions
@@ -210,7 +217,7 @@ The statics work proper belongs to [401](401-static-slots.md) and
 
 - [202 — Ring buffer slots](completed/202-ring-buffer-slots.md), whose
   storage this keeps and whose exclusivity it drops
-- [401 — Static input values](401-static-slots.md), whose value moves
+- [401 — Static input values](completed/401-static-slots.md), whose value moves
   onto the port here
 - [405 — Changing a static while it runs](405-statics-mutation.md),
   which becomes one case of changing a port

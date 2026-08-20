@@ -1,6 +1,6 @@
 # Conversation Summary: 3ccc0eb0-a576-4361-85ec-79ae4bb357a4
 
-Generated on: 2026-08-20 10:13:52
+Generated on: 2026-08-20 10:29:11
 
 --------------------------------------------------------------------------------
 
@@ -5743,6 +5743,296 @@ already isn't hot. Worth deciding rather than leaving.
 
 Shall I write all of this up — the naming debt paid, the deletion sequence,
 the guarantee restated, the outside-caller gap, and the leak inventory?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 33
+
+  A caller outside the map. The input station accepts deliveries from outside
+  — several callers into one program input — and the engine
+
+  deliberately does not remember who called. So if you delete an input station
+  while an outside caller still holds a reference to it, nothing
+
+  in step 2 finds that caller, because it isn't a wire.
+
+
+
+let's just say that it's undefined behavior if you do something like this. We
+should have a guarantee that maps with sub-maps can only interface with one
+another through their input and output ports, unless you do something weird and
+break the engine to pass pointers and such. Then you can write down everything
+except the memory leaks - let's circle back to those.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 33
+
+Clear. Writing it all up now, leaving the leaks for you.
+
+
+Now the guarantees page — S2 restated, and the interface guarantee added.
+
+
+Now the issues that assert stations can't be removed.
+
+
+Now 211 and 212 — the table gains a shrink, and the surface gains an
+operation.
+
+
+Let me fix that block cleanly.
+
+
+Now the phase 2 progress page and a build check.
+
+
+Written and committed as `39d86a4`. Tests pass, 115 pages, zero unresolved
+references.
+
+
+## What landed
+
+
+**Two new blueprints in phase 2:**
+
+
+- **215 — ports and slots.** The naming debt, scheduled. Your definition is
+  what every document already says; it's the C that's backwards. The mapping:
+  what the code calls `slots` on a station are its **input ports**, what it
+  calls `ports` are its **output ports**, and what it calls a *cell* inside a
+  ring buffer is the actual **slot**. So the true sentence *"a port has many
+  slots"* currently can't be said without contradicting the code. One correction
+  to your guess — the shim isn't in an output port, it's a field on the
+  station, because a station places one box and a box has one shim. Output ports
+  carry only where the result goes. The rename reaches the header, delivery,
+  statics, the loader, the dump, the error messages, and the filename
+  `002-stations-and-slots.md`.
+
+
+- **216 — removing a station.** The sequence you described, written out: take
+  the rewiring lock, walk every station's output ports to find every wire naming
+  the target, cut them, cut its own outgoing wires, wait until no worker is
+  inside it, free it, mark the slot free. Station records are fixed-size on
+  purpose — confirmed in the source — so any free slot fits any station, and
+  your "walk until we find one large enough" isn't needed.
+
+
+**Why no version tag is needed**, recorded in full: a generation counter exists
+to catch a wire written *before* a slot changed hands. Cutting the wires first
+makes such a wire impossible, so there's nothing to catch — saving four bytes
+per wire and a comparison on every delivery, forever, in exchange for a walk
+during a rare operation.
+
+
+**Guarantee S2 replaced, and it got stronger.** Was: *a wire written down today
+is valid forever*, held by never removing anything. Now: **a wire never names a
+station that is not there**, held by removal removing the wires first.
+
+
+**Guarantee S7 added:** *a program is reached only through its input and output
+stations.* Anything else held across a boundary — a station index, a pointer
+into buffers — is undefined. That's what makes the wire walk sufficient, since
+a wire lives on an output port and can be found while an outside caller cannot.
+
+
+**Three issues updated to match:** the growth issue becomes the growing half of
+a table that also shrinks and prefers a free slot before adding a shelf; the
+construction surface goes from four operations to five; and the
+runtime-compilation issue's reasoning about unloading boxes gets much stronger
+— it had assumed a station could never be removed, so unloading only ever
+served a box that was compiled and never placed. Both also share their hardest
+step, the wait until no worker is inside the thing being freed, which should be
+built once.
+
+
+## Left for you
+
+
+The memory leak inventory. I surveyed seven candidates and the one I'd put first
+isn't station slots — it's **ring buffers that grow and never shrink**. A slot
+is a fixed hundred-odd bytes; a port that grew to absorb one bad afternoon holds
+that memory permanently, and there are as many rings as there are input ports.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 34
+
+okay can you give me a roadmap for the issue files?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 34
+
+Let me verify the blockers before I draw it.
+
+
+Thirty-two open files, two of which are parents with no work of their own.
+Here's the shape.
+
+
+## Two fronts that don't block each other
+
+
+```
+
+FRONT A — the port and the station          FRONT B — the build path
+
+
+  401 statics on the port                     308 generator, in C
+
+       │                                           │
+
+       ▼                                           ▼
+
+  210b the port record ──┐                    309 types by width
+
+       │                 │                         │
+
+       ▼                 ▼                         ▼
+
+  210c cell states    210f converting         310 boxes at runtime
+
+       │                 │                         │
+
+       ▼                 │                         ▼
+
+  210d copies leave      │                    311a addressed by file
+
+       │  the lock       │                         │
+
+       ▼                 │                    ┌────┴────┐
+
+  210e growth adds ──────┤                    ▼         ▼
+
+       a page            │                  311b      311c
+
+                         ▼                  placement  source in
+
+                    210g build a station     │         the binary
+
+                         │                   └────┬────┘
+
+                         ▼                        ▼
+
+                    211 grow the table       311d the map becomes code
+
+                         │
+
+                         ▼
+
+                    212 build a program
+
+                         │
+
+                         ▼
+
+                    216 remove a station ◄──── needs 310's quiescence sweep
+
+```
+
+
+**Front A's real head is 401** — statics moving onto the port. Half the port
+family waits on it, because a port can't be given room for a constant while a
+global register still owns the bytes. The ring-buffer half (`210b`'s cells, then
+`210c`→`210d`→`210e`) is *unblocked today* and touches no static at any
+point.
+
+
+**Front B's head is 308** — the generator in C. Everything downstream needs
+the parser callable outside a build.
+
+
+## What is ready to start right now
+
+
+| issue | why it's free |
+
+|---|---|
+
+| **401 — statics on the port** | nothing blocks it, and it unblocks the most |
+
+| **308 — the generator, in C** | nothing blocks it, and it heads the whole build front |
+
+| **309 — types by width** | independent; a hard prerequisite for 310 |
+
+| **210b (ring half)** | the cells and the *none* tag need no static |
+
+| **214 — destinations without a lock** | independent of everything |
+
+| **211 — growing the station table** | independent |
+
+| **213 / 209 — the input and output stations** | independent; they're what make a map a box |
+
+| **106 — stopping on purpose** | independent, and 712 later needs its drain |
+
+| **705 — the HTML set** | independent; 709 and 801 both wait on it |
+
+| **710 — demos after the pull path** | the pull path is already gone |
+
+
+## The convergence, and what it unlocks
+
+
+`212` and `311d` are the two capstones, and together they are the thing this
+project is for: **212** makes a program constructible while it runs, **311d**
+makes a map into code with no name lookup anywhere. After both:
+
+
+- `216` — removing a station (also needs 310's sweep)
+
+- `712` — capturing a running program (also needs 106's drain)
+
+- `801` — the workbench, which emits maps that 311d compiles
+
+
+## Three scheduling notes worth having
+
+
+**215 (the renaming) has a window, and it's now or much later.** It touches the
+station header, delivery, statics, the loader, the dump, and a filename. Doing
+it *before* `210b` means every issue after uses the right words. Doing it
+*during* the port family means renaming records that are simultaneously being
+restructured — pure churn. If it doesn't go first, it should wait until after
+`210e`.
+
+
+**Two cross-front dependencies are easy to miss:** `216` needs the per-worker
+quiescence counter that `310` designs, and `712` needs the drain that `106`
+designs. Neither is in its own front. Both should be built once and shared
+rather than twice.
+
+
+**711 is marked very low priority and should stay there.** Nothing waits on it
+and nothing is broken.
+
+
+## If I were picking an order
+
+
+1. **401**, because it unblocks the most and is currently the single biggest
+   jam.
+
+2. **308**, in parallel — different files, different front, no contention.
+
+3. **210b** complete, then **210f**, then **210g** — the port family closing.
+
+4. **309** → **310**, which delivers the quiescence sweep 216 needs.
+
+5. **211** → **212** — the construction capstone.
+
+6. **311a** → **311b**/**311c** → **311d** — the build capstone.
+
+7. **216**, **712**, then presentation: **705** → **709**/**801**.
+
+
+Want me to file this as a document? It'd sit beside the existing roadmap, which
+describes the phases as clusters of functionality rather than an order of work
+— this is the other view, and the two don't conflict.
 
 
 --------------------------------------------------------------------------------

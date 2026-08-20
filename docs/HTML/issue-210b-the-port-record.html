@@ -50,7 +50,6 @@
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
@@ -89,6 +88,7 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-401-static-slots.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
@@ -134,7 +134,7 @@
 child stands on: what a port <em>is</em>, once there are two live kinds and a
 third state meaning nobody has said yet.</p>
 <p><strong>The statics block is cleared.</strong> This issue was blocked in half on
-<a href="issue-401-static-slots.html">401</a> and <a href="issue-405-statics-mutation.html">405</a>: a port
+<a href="done-401-static-slots.html">401</a> and <a href="issue-405-statics-mutation.html">405</a>: a port
 could not be given room for a value that lived in a global register,
 and the map file's <code>$n</code> form named a table the design had decided to
 delete.</p>
@@ -181,7 +181,7 @@ sits idle — which is what makes changing what a port is a field write
 in both directions rather than only one. The claim table's static row
 was a null meaning "resolved later, outside the mutex", and it is an
 ordinary function now; the caller has stopped testing a function
-pointer for truth. <a href="issue-401-static-slots.html">401</a> did both.</p>
+pointer for truth. <a href="done-401-static-slots.html">401</a> did both.</p>
 <p>**The map file gained a form for a value, which was half of what was
 owed.** <code>in 1 = 5</code> carries a constant on the line, matching the statics
 section's own <code>N = value</code>, and it is what the dump writes — a dump has
@@ -252,27 +252,35 @@ The static row keeps meaning "resolved during task construction,
 outside the mutex" — but as a named function that says so rather than
 as a null the caller tests for.</p>
 <h2>Suggested implementation steps</h2>
+<p><strong>401 is done, so nothing here is blocked any more.</strong> Where a step
+below says a piece waited on it, that wait is over; the notes are kept
+because they say which pieces are built and which are not.</p>
 <p>1. The record itself: both storages, the three-value tag, and
    accessors that read the live one so nothing outside reaches past
-   the tag to a field that may not be in effect. *The ring storage and
-   the tag are built; the static storage waits on 401.*
+   the tag to a field that may not be in effect. <strong>Built</strong> — the ring
+   storage and the tag by this issue, the static storage by
+   <a href="done-401-static-slots.html">401</a>, which built the room it spends
+   rather than waiting to be handed it.
 2. Cells allocated at station instantiation for every port, ten deep
    from one named constant, sized from the registry.
 3. The per-port starting capacity: a form in the map file, an argument
    on the creation call, and ten when neither says otherwise. *The
-   argument is built; the file form waits, because it shares a line
-   with the static form 401 is redesigning.*
-4. Both dispatch tables gain their rows. The claim table's null
-   becomes a named function; the caller stops testing a function
-   pointer for truth. *The none rows are built. The static row's null
-   waits on 401, which changes what it would say: today it means
-   "resolved outside the mutex," and 401 moves that claim inside.*
+   argument is built; the file form is not.* It shares a line with the
+   static form, which 401 has now settled, so the spelling is decided
+   too: <code>x64</code> after the source.
+4. Both dispatch tables gain their rows. The claim table's null becomes
+   a named function; the caller stops testing a function pointer for
+   truth. <strong>Built, both of them</strong> — the <em>none</em> rows here, and the
+   static row by 401, which moved the claim inside the station's mutex
+   and so changed what that row says from "resolved outside the lock"
+   to an ordinary copy.
 5. The <em>none</em> tag as a readiness answer, with a test that a station
    holding one never becomes ready no matter what arrives at its other
    ports.
-6. The map file form for an unconfigured port, in the reader and the
-   dump together, with a round-trip test on a deliberately half-built
-   program. <em>Waits on 401 with step 3, and for the same reason.</em></p>
+6. The map file form for an unconfigured port — a bare dash — in the
+   reader and the dump together, with a round-trip test on a
+   deliberately half-built program. Lands with step 3, since they share
+   a line.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>

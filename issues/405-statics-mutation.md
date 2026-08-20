@@ -2,7 +2,7 @@
 
 ## Current behavior
 
-**Mostly done**, and it landed with [401](401-static-slots.md) because
+**Mostly done**, and it landed with [401](completed/401-static-slots.md) because
 it could not be separated: removing the table breaks a write addressed
 by entry number, and the write has nowhere to live until the value is
 on a port.
