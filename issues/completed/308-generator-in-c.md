@@ -2,28 +2,24 @@
 
 ## Current behavior
 
-**Built and in use. One step remains: the Lua generator is renamed to
-mark it deprecated and is removed in the next commit, along with the
-parity test that compares against it.**
+**Done.** The generator is a standalone C program —
+`scripts/070-generate.c` and the three pieces under it — compiled by
+the build before it is run. It depends on nothing the engine provides,
+so the build compiles it, runs it, and compiles everything else.
+**A program built with this engine needs a C compiler and nothing
+else.**
 
-The generator is a standalone C program — `scripts/070-generate.c` and
-the three pieces under it — compiled by the build before it is run. It
-depends on nothing the engine provides, so the build compiles it,
-runs it, and compiles everything else. **A program built with this
-engine now needs a C compiler and nothing else.**
-
-**Parity is proven rather than asserted.** Both generators were run
-over the same sources and their output compared byte for byte:
-
-- 259 lines of emitted registry, identical apart from the first line,
-  which names the generator that wrote it and is meant to differ
-- describe mode, identical
-- thirteen malformed sources, each refused by both with **the same
-  message**
-
-That comparison lives in `tests/072-test-generator-parity.sh` and is
-deliberately temporary — it cannot outlive the thing it compares
-against, and it says so in its own header.
+**Parity was proven rather than asserted, and then retired.** Both
+generators were run over the same sources and their output compared
+byte for byte: 259 lines of emitted registry identical apart from the
+first line, which names the generator that wrote it; describe mode
+identical; and thirteen malformed sources each refused by both with
+**the same message**. The comparison lived in
+`tests/072-test-generator-parity.sh`, said in its own header that it
+could not outlive the thing it compared against, and went with it —
+the Lua generator was renamed to mark it deprecated for one commit and
+removed in the next, so it appears in the record once as something
+deliberately put down.
 
 **Two behaviours changed, both deliberately, both improvements:**
 
@@ -62,9 +58,8 @@ dependency is a reason their build fails on a machine we never saw.
 Depending on an interpreter that nothing at run time ever used was
 acceptable for a project that only builds itself and not for anything
 handed to other people —
-[057](../docs/implementation-notes/057-packaging.md) is where that was
-first measured.
-
+[057](../../docs/implementation-notes/057-packaging.md) is where that
+was first measured.
 ## Intended behavior
 
 **A program built with this engine needs a C compiler and nothing else.**
@@ -135,16 +130,16 @@ needs LuaJIT.
 
 ## Related
 
-- [301 — Box source parser](completed/301-box-source-parser.md), whose
+- [301 — Box source parser](301-box-source-parser.md), whose
   accepted grammar this must match exactly
-- [302 — Shim emission](completed/302-shim-emission.md),
-  [303 — Registry emission](completed/303-registry-emission.md),
-  [304 — Struct field tables](completed/304-struct-field-tables.md),
-  [305 — Compare functions](completed/305-compare-functions.md) — the
+- [302 — Shim emission](302-shim-emission.md),
+  [303 — Registry emission](303-registry-emission.md),
+  [304 — Struct field tables](304-struct-field-tables.md),
+  [305 — Compare functions](305-compare-functions.md) — the
   four kinds of output, unchanged
-- [306 — Build integration](completed/306-build-integration.md), which
+- [306 — Build integration](306-build-integration.md), which
   gains a compile stage ahead of the generate stage
-- [007 — The build path](../docs/007-datapath-build.md), the document
+- [007 — The build path](../../docs/007-datapath-build.md), the document
   this must keep true
-- [057 — Packaging](../docs/implementation-notes/057-packaging.md),
+- [057 — Packaging](../../docs/implementation-notes/057-packaging.md),
   where the dependency was named as an obstacle

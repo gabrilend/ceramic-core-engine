@@ -130,7 +130,7 @@ the compiler being needed exactly when new code genuinely arrives.
    a program that runs other programs needs a box that reads one
    ([212](212-one-way-to-build-a-program.md)), so the parsing functions
    move out of the engine and into a box source. The generator, which
-   is becoming a C program in [308](308-generator-in-c.md), links the
+   is becoming a C program in [308](completed/308-generator-in-c.md), links the
    same implementation. One parser, two callers, and neither of them
    the engine.
 8. [009](../docs/009-datapath-load.md) rewritten around what replaced

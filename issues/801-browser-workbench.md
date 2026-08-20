@@ -27,7 +27,7 @@ is any good happens later, somewhere else:
   direction.
 
 And using the engine at all means having its source, its build, and —
-until [308](308-generator-in-c.md) lands — LuaJIT.
+until [308](completed/308-generator-in-c.md) lands — LuaJIT.
 [057](../docs/implementation-notes/057-packaging.md) is about that
 distance: every inherited dependency is a reason somebody else's build
 fails on a machine we never saw.
@@ -454,7 +454,7 @@ can validate without asking the author to declare types.
 
 - [008 — Map file format](../docs/008-map-file-format.md), what the
   canvas emits, exactly
-- [308 — The generator, in C](308-generator-in-c.md), which was this
+- [308 — The generator, in C](completed/308-generator-in-c.md), which was this
   issue's dependency while the page still read C, and is now only
   relevant to the packaging distance named above
 - [604 — Load-time validation](completed/604-load-time-validation.md),

@@ -125,7 +125,7 @@ name to be found by, a shim to call, and — if its return type is
 orderable — a comparison, for a comparator to use.
 
 **The generator has to be reachable at runtime**, which is what
-[308](308-generator-in-c.md) delivers by making it a standalone C
+[308](completed/308-generator-in-c.md) delivers by making it a standalone C
 program with no dependency on the engine. As a Lua script it is a build
 tool; as a C program it is something the engine can call, and it is the
 same parser either way — which is the point, because a second parser
@@ -248,7 +248,7 @@ would eventually disagree with the first about what a box is.
 
 ## Related
 
-- [308 — The generator, in C](308-generator-in-c.md), which is what
+- [308 — The generator, in C](completed/308-generator-in-c.md), which is what
   makes the parser callable at runtime rather than only at build time
 - [309 — Types compared by width](309-types-by-width.md), a hard
   prerequisite — by-name comparison makes this corrupt silently

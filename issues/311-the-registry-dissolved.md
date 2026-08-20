@@ -166,7 +166,7 @@ binary now carries.
 
 ## Related
 
-- [308 — The generator, in C](308-generator-in-c.md), which emits all
+- [308 — The generator, in C](completed/308-generator-in-c.md), which emits all
   of this and gains both the placement functions and the map compiler
 - [309 — Types compared by width](309-types-by-width.md), which is why
   type names can be dropped from what the engine carries

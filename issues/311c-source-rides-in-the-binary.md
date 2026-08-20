@@ -91,7 +91,7 @@ same data, out of the loaded image, at the price of portability.
 2. An accessor: given a box source path, hand back its text. Given a
    box name and a parameter index, hand back that parameter's name by
    parsing the text — which is the generator's own declaration parser,
-   which [308](308-generator-in-c.md) is making callable at runtime
+   which [308](completed/308-generator-in-c.md) is making callable at runtime
    anyway.
 3. The debug report uses it, printing argument names by index, and
    saying nothing at all about sources that have not moved.
@@ -114,7 +114,7 @@ None outstanding.
   decides how much source there is to embed
 - [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   which needs source at runtime and now has it
-- [308 — The generator, in C](308-generator-in-c.md), whose parser this
+- [308 — The generator, in C](completed/308-generator-in-c.md), whose parser this
   calls at runtime for argument names
 - [057 — Packaging](../docs/implementation-notes/057-packaging.md),
   where shipping one file rather than a tree is the point

@@ -139,5 +139,5 @@ to scan; the placement function writes the name and the dump reads it.
   which stop being searched and start being pointed at
 - [210g — One way to build a station](210g-one-way-to-build-a-station.md),
   whose open question about hand placement this answers
-- [308 — The generator, in C](308-generator-in-c.md), which does the
+- [308 — The generator, in C](completed/308-generator-in-c.md), which does the
   emitting

@@ -33,7 +33,7 @@ survives the table being deleted.
 | 305 — compare functions | complete | Primitives generated, author orderings wrapped, availability in the registry. |
 | 306 — build integration | complete | Boxes discovered, registry regenerated on change, failure emits nothing. |
 | 307 — phase 3 demo | complete | A box added live, the registry against sizeof, every shape through one call site. |
-| 308 — the generator, in C | open | Removes LuaJIT from the build path, and makes the parser callable at runtime. |
+| [308 — the generator, in C](completed/308-generator-in-c.md) | **complete** | LuaJIT is off the build path: a program built with this engine needs a C compiler and nothing else. Parity with the retired script was proven byte for byte — 259 lines of registry and thirteen refusal messages — and the comparison retired with the thing it compared against. |
 | 309 — types compared by shape | open | Four ints are four ints; identical layouts wire together, identical names do not. |
 | 310 — boxes compiled at runtime | open | Source in, shim out, registry row added — needs both of the above. |
 | [311 — the registry dissolved](311-the-registry-dissolved.md) | open | **Parent.** The table goes away entirely — not shrinks, goes. A running program holds no name and no lookup, because the generator resolves every name while generating. |

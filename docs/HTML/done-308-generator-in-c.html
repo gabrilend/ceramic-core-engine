@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>210e — Growth adds a page</title>
+<title>308 — The generator, in C</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -33,7 +33,7 @@
 <a href="issue-210b-the-port-record.html">210b — The port record</a>
 <a href="issue-210c-a-state-on-every-cell.html">210c — A state on every cell</a>
 <a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
-<a href="issue-210e-growth-adds-a-page.html" class="here">210e — Growth adds a page</a>
+<a href="issue-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
@@ -87,7 +87,7 @@
 <a href="done-305-compare-functions.html">305 — Compare functions</a>
 <a href="done-306-build-integration.html">306 — Build integration</a>
 <a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
-<a href="done-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="done-308-generator-in-c.html" class="here">308 — The generator, in C</a>
 <a href="done-401-static-slots.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-slots.html">403 — Gatherer slots and inline gathering</a>
@@ -134,110 +134,135 @@
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 </nav>
 <main>
-<h1>210e — Growth adds a page</h1>
-<p>Fifth child of <a href="issue-210-input-port-record.html">210</a>, and the one that gets
-easy rather than being made easy. Two children earlier removed the
-premise that made growing a buffer hard; this one collects.</p>
+<h1>308 — The generator, in C</h1>
 <h2>Current behavior</h2>
-<p>A ring buffer grows by allocating a larger array, copying the values
-across, unwrapping them so the oldest sits at index zero, and freeing
-the old storage — all under the station's mutex.</p>
-<p><strong>It has an ordering problem with no correct answer.</strong> Copy the values
-across and then publish, and a value popped from the old storage
-during the copy exists in both places and gets delivered twice.
-Publish first and then copy, and readers see an empty buffer while it
-fills. Neither order is safe.</p>
-<p>What actually made it safe was that nothing else could happen at all
-during the copy, because the station's mutex was held for the whole of
-it — and after
-<a href="issue-210d-the-copies-leave-the-lock.html">210d</a> that is no longer true. The
-lock still exists, but it covers only the cell states: a worker copying
-bytes out of a cell it has claimed holds <strong>no lock at all</strong>, because a
-claimed cell belongs to it alone and needs no exclusion from anybody.
-Relocating that cell underneath it is exactly the thing that
-protection does not cover. So this is not merely an improvement;
-<strong>the existing growth stops being correct</strong> once the copies leave the
-lock, and the two cannot be separated by very long.</p>
-<h2>Intended behavior</h2>
-<p>**A ring buffer grows by allocating another page of cells and adding
-it to a short list.** The same shape the station table uses, for the
-same reason. Nothing is copied, no existing cell moves, and there is
-no window to get right.</p>
-<p>Because nothing computes a location from the capacity, changing the
-capacity disturbs nothing. That sentence is the whole issue. A reader
-scanning from a hint does not care how many cells exist or where they
-live; it walks what is there. Adding cells is therefore a matter of
-making them findable, not of rearranging anything.</p>
-<p><strong>With nothing copied, there is nothing to protect.</strong> The real
-requirement was never an ordering between copy and publish — it was
-that nothing else happen during the copy. Removing the copy removes
-the requirement rather than satisfying it.</p>
-<p><strong>Growth stays under the station's mutex</strong>, as one of the four rare
-structural operations, because two threads noticing a full buffer at
-the same moment should add one page rather than two. That is
-contention on a rare event, which is what a mutex is good at.</p>
-<p><strong>The growth story stays readable.</strong> How many times a port has grown
-and the deepest its backlog reached are what phase 7's buffer report
-speaks, and they are how a person learns that one input side is
-outpacing its siblings. Paging changes how growth happens, not that it
-is worth reporting — but "capacity" becomes a sum across pages rather
-than a single number, and the report should say the sum.</p>
-<h2>Suggested implementation steps</h2>
-<p>1. The page list on the port: a first page allocated at instantiation
-   as <a href="issue-210b-the-port-record.html">210b</a> already does, and a link for
-   the rest.
-2. The scan walks pages rather than one array. This is where the cost
-   of paging lands and it should be looked at honestly: a scan that
-   crosses a page boundary follows a pointer, where before it
-   incremented an index.
-3. Growth appends a page under the station's mutex, checking after the
-   lock is taken that another thread has not already grown it.
-4. Retire the copy-and-unwrap path.
-5. The buffer report's capacity becomes the sum across pages, and its
-   growth count keeps meaning how many pages exist beyond the first.
-6. A test that grows a port deep while readers and writers are both
-   working it, asserting no value is lost and none is delivered twice
-   — which is exactly the failure the old ordering problem produced.</p>
-<h2>Open questions</h2>
-<p><strong>Answered:</strong></p>
+<p><strong>Done.</strong> The generator is a standalone C program —
+<code>scripts/070-generate.c</code> and the three pieces under it — compiled by
+the build before it is run. It depends on nothing the engine provides,
+so the build compiles it, runs it, and compiles everything else.
+**A program built with this engine needs a C compiler and nothing
+else.**</p>
+<p><strong>Parity was proven rather than asserted, and then retired.</strong> Both
+generators were run over the same sources and their output compared
+byte for byte: 259 lines of emitted registry identical apart from the
+first line, which names the generator that wrote it; describe mode
+identical; and thirteen malformed sources each refused by both with
+<strong>the same message</strong>. The comparison lived in
+<code>tests/072-test-generator-parity.sh</code>, said in its own header that it
+could not outlive the thing it compared against, and went with it —
+the Lua generator was renamed to mark it deprecated for one commit and
+removed in the next, so it appears in the record once as something
+deliberately put down.</p>
+<p><strong>Two behaviours changed, both deliberately, both improvements:</strong></p>
 <ul>
-<li>*Every page after the first could be the same size as the first, or</li>
-<p>  each could be larger than the last.* <strong>Every page is the same size.</strong>
-  Turning a cell's ordinal position into a page and an offset is then a
-  divide and a remainder — arithmetic the scan does on every step,
-  where growing pages would have made it a walk down the list
-  comparing ranges. The scan is the hot path here and the growth is
-  not, so the cheap operation belongs on the side that repeats.</p>
+<li><strong>The exit code.</strong> The Lua generator exited 1 for everything. The C</li>
+<p>  one uses the project's own codes (issue 106): 65 for a malformed
+  source, 71 for a resource it cannot get. The command-line test only
+  ever checked for non-zero, so nothing depended on the old value.</p>
+<li><strong>An unterminated block comment now names its file.</strong> The Lua</li>
+<p>  version reported <code>(input):0</code> for that one case, because the routine
+  that blanks comments had not been told which file it was reading.</p>
 </ul>
-<p>  The old buffer doubled, and losing that is the real cost: a backlog
-  ten thousand deep is a thousand pages rather than ten, and a scan
-  crossing all of it follows a thousand pointers. That is accepted
-  with two things in mind. The first is that a port that deep is
-  already a report phase 7 shouts about — one input side outpacing its
-  siblings — so the long list is a symptom of a problem the engine is
-  supposed to be complaining about rather than quietly absorbing. The
-  second is that the page size is the same named constant the first
-  page uses, so a program that genuinely wants deep buffers raises the
-  starting depth and gets large pages everywhere, which is the same
-  lever pointed at the same problem.</p>
-<p>  If a measurement ever shows the walk mattering, the move that keeps
-  this decision is a page-lookup array beside the list — an index into
-  pages rather than a chain through them — which restores constant-time
-  addressing without making the pages unequal.</p>
+<p><strong>What the translation actually cost</strong>, since the issue predicted it:
+the parsing is the small half. The support machinery underneath — an
+arena, a string that grows, an array that grows, and the handful of
+string operations Lua supplies for free — is <code>065-gentext.h</code> and
+<code>066-gentext.c</code>, and it has its own test, because everything above it
+assumes it is correct and a bug in it surfaces as garbled C hundreds
+of lines away.</p>
+<p><strong>One piece of the parser is worth knowing about.</strong> A function header
+is recognized by scanning <strong>backwards</strong> from the last <code>)</code> to its
+match, rather than by a pattern. The name may follow a star with no
+space — <code>char *sneaky</code> — which no single split can express, and the
+Lua version had already resorted to splitting it by hand for the same
+reason.</p>
+<p>**Out of scope and still true: the HTML documentation generator stays
+in Lua.** It is project tooling, not on the path a consumer walks, and
+the distinction is now stated in the Makefile's own header, in the
+packaging note, and in the front door's info file: building the engine
+needs a C compiler; regenerating our documentation needs LuaJIT.</p>
+<p><strong>Why it mattered</strong>, kept because it is the reason the work was done:
+a consumer's build inherits our tooling choices, and every inherited
+dependency is a reason their build fails on a machine we never saw.
+Depending on an interpreter that nothing at run time ever used was
+acceptable for a project that only builds itself and not for anything
+handed to other people —
+<a href="impl-057-packaging.html">057</a> is where that
+was first measured.</p>
+<h2>Intended behavior</h2>
+<p><strong>A program built with this engine needs a C compiler and nothing else.</strong></p>
+<p>The generator becomes a small, standalone C program with no dependency
+on the engine it feeds — it reads C source as text and writes C source
+as text, so it can be compiled by the same compiler that will compile
+its output, before anything else in the build exists.</p>
+<p>There is no bootstrap problem to solve, because the generator does not
+depend on anything it generates. The build gains one stage: compile the
+generator, run it, compile everything else. A consumer's build does the
+same, with their own box sources.</p>
+<p><strong>Behavior is unchanged.</strong> This is a translation, not a redesign. The
+emitted file should be equivalent to what the Lua generator emits from
+the same input, the describe mode should report the same findings, and
+a malformed source should still stop the build naming the file — a
+generator that writes nothing on failure is the guarantee that keeps a
+build from compiling against a stale registry, and it survives intact.</p>
+<p><strong>What the translation costs.</strong> Lua supplied growable strings, hash
+lookup, and pattern matching; C supplies none of these. The honest
+majority of this work is not parsing — it is the few hundred lines of
+support underneath it: a growable output buffer, an arena so nothing
+has to be freed individually, and a string scanner. Writing those
+deliberately, as their own readable pieces, is the difference between a
+translation and a thicket.</p>
+<p><strong>Out of scope: the documentation generator.</strong> The HTML site generator
+stays in Lua. It is project tooling, not on the path a consumer walks to
+build a program, and a documentation build that needs LuaJIT costs an
+outside consumer nothing. This issue is about the build path only, and
+the distinction should be stated wherever the dependency is declared:
+building the engine needs a C compiler; regenerating our documentation
+needs LuaJIT.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. <strong>Support machinery first, as its own readable unit.</strong> The growable
+   byte buffer, the arena, and the string scanner. Each with a test,
+   because everything above them assumes they are correct and a bug
+   here surfaces as garbled C hundreds of lines away.
+2. <strong>The declaration parser</strong>, matching what the existing parser
+   accepts — return type, name, parameters with types, declarations
+   spanning several lines, braces inside string literals, helper
+   functions that are not boxes. The existing generator's test suite
+   already names these cases; they are the specification.
+3. <strong>The describe mode</strong>, before any emission. It prints what the parser
+   found, which makes every later step debuggable by reading the
+   parser's findings rather than the emitted C.
+4. <strong>Emission</strong>, in the order the existing generator emits: comparison
+   functions, shims, box records, struct field tables. Every size and
+   offset stays a <code>sizeof</code> or <code>offsetof</code> expression — the compiler
+   computes them, and the generator must continue never to guess.
+5. <strong>Parity, held by a test.</strong> Run both generators over the same box
+   sources and compare their output. This test is deliberately
+   temporary: it cannot outlive the Lua generator it compares against.
+6. <strong>Build integration.</strong> The generator compiles into the RAM-backed
+   build tier like everything else, and its output is rebuilt when a box
+   source, or the generator's own source, is newer.
+7. <strong>Retire the Lua generator</strong> once parity holds, along with the parity
+   test. Per the project's convention it is renamed to mark it deprecated
+   for one commit before removal, so it appears in the record once as a
+   thing that was deliberately retired rather than vanishing.
+8. <strong>Declare the dependency where a consumer will read it</strong> — building
+   needs a C compiler; nothing else.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the parent</li>
-<li><a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>,</li>
-<p>  which must land first, and which this must follow closely because it
-  is what makes the existing growth unsafe</p>
-<li><a href="done-203-slot-buffer-growth.html">203 — Slot buffer growth</a>, the</li>
-<p>  copy-and-unwrap this retires, and whose premise the parent removes
-  rather than fixes</p>
-<li><a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>,</li>
-<p>  the same paging shape one level up, and the place its reasoning is
-  written out in full</p>
-<li><a href="done-701-buffer-growth-reporting.html">701 — Buffer growth reporting</a>,</li>
-<p>  which speaks the numbers this changes the meaning of</p>
+<li><a href="done-301-box-source-parser.html">301 — Box source parser</a>, whose</li>
+<p>  accepted grammar this must match exactly</p>
+<li><a href="done-302-shim-emission.html">302 — Shim emission</a>,</li>
+<p>  <a href="done-303-registry-emission.html">303 — Registry emission</a>,
+  <a href="done-304-struct-field-tables.html">304 — Struct field tables</a>,
+  <a href="done-305-compare-functions.html">305 — Compare functions</a> — the
+  four kinds of output, unchanged</p>
+<li><a href="done-306-build-integration.html">306 — Build integration</a>, which</li>
+<p>  gains a compile stage ahead of the generate stage</p>
+<li><a href="doc-007-datapath-build.html">007 — The build path</a>, the document</li>
+<p>  this must keep true</p>
+<li><a href="impl-057-packaging.html">057 — Packaging</a>,</li>
+<p>  where the dependency was named as an obstacle</p>
 </ul>
 
 </main>
