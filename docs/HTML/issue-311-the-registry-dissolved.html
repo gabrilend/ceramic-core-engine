@@ -48,7 +48,6 @@
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -212,8 +211,8 @@ program runs is the in-RAM structure, not the file.</p>
 <table>
 <tr><td>case</td><td>when the map is compiled</td><td>toolchain at run time?</td></tr>
 <tr><td>a shipped program</td><td>at build time</td><td><strong>no</strong> — it ships as one file</td></tr>
-<tr><td>the general runner</td><td>when you hand it a map</td><td>yes; that is what the tool is</td></tr>
-<tr><td>the workbench</td><td>it emits a map, the runner compiles it</td><td>yes, on the runner's side</td></tr>
+<tr><td>a program that runs other programs</td><td>when it is handed a map</td><td>yes</td></tr>
+<tr><td>the workbench</td><td>it emits a map; whoever runs it compiles it</td><td>yes, on that side</td></tr>
 <tr><td>a box arriving mid-run</td><td>when the source arrives</td><td>yes</td></tr>
 <tr><td>a capture, re-run</td><td>when the artifact is compiled</td><td>yes</td></tr>
 </table>
@@ -222,20 +221,29 @@ configuration, no declaration that switches behaviour, no second code
 path in the engine, and no table anywhere. That rigidity is the point:
 this is the minimal implementation, and a thing that behaves one way is
 worth more than a thing that behaves two ways well.</p>
-<h2>The five changes</h2>
+<h2>The four changes</h2>
 <table>
 <tr><td>issue</td><td>what it does</td></tr>
 <tr><td><a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a></td><td>a map names <code>file:function</code>; basenames resolve, paths settle ties, and generated symbols escape punctuation so no two files collide</td></tr>
 <tr><td><a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a></td><td>the generator emits a placement function per box; the record and every name the engine carried are deleted</td></tr>
 <tr><td><a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a></td><td>each box source emitted as a C array, so the binary carries its own text</td></tr>
 <tr><td><a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a></td><td>the generator turns a map into construction calls; the build includes only what is named; the linker discards the rest</td></tr>
-<tr><td><a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a></td><td>the general runner, which compiles a map rather than interpreting one</td></tr>
 </table>
 <p><strong>311a comes first</strong> because the addressing decides how a box is named
 and how its symbol is spelled, and everything else is written against
 that. 311b and 311c are independent of each other. <strong>311d needs both</strong>,
-since it emits calls to placement functions that 311b defines. **311e
-is last** and is a program rather than an engine change.</p>
+since it emits calls to placement functions that 311b defines.</p>
+<p><strong>There is no fifth child for running a map you were not built for</strong>,
+and the reason is worth keeping: a draft of this family had one, and it
+described a command-line tool wrapping the build. That tool was
+unnecessary twice over. Compiling a map is what <code>make</code> already does, so
+the tool was a shell script; and more importantly, **a program that
+runs other programs is a map**, not a tool. It reads a description,
+compiles what the description names, starts a fresh map, and feeds it
+through its input station — using the construction surface as boxes,
+which is what this engine is for. See
+<a href="issue-212-one-way-to-build-a-program.html">212</a>, where composing and starting
+are separated.</p>
 <h2>What this does not give up</h2>
 <p><strong>Guarantee <a href="doc-058-guarantees.html">C1</a> survives untouched</strong> —
 every size and offset is still computed by the C compiler, never by the

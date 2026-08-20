@@ -128,6 +128,38 @@ The design is kept because if anybody ever wants layout disagreements
 caught, it is written and the tables it needs have been emitted since
 phase 3, unconsulted the entire time.
 
+### The accepted cost is sharpest where a value is a handle
+
+Two same-width structs with different layouts wire without complaint,
+and that is stated above as the price. It is a mild price when the
+values are **data**: a wrong wire produces a wrong number, which is
+visible, local, and eventually noticed.
+
+**It stops being mild when the value is a pointer the engine will call
+through.** Once a program can build another program
+([212](212-one-way-to-build-a-program.md)), the surface's operations
+exist as boxes, and their inputs are handles: a map handle, a placement
+function, a compiled box. On a 64-bit machine every one of those is
+**eight bytes** — and so is a `double`, a `long`, a file offset, and a
+pointer to something else entirely.
+
+So a wire delivering *any* eight-byte value into a box expecting a map
+handle is legal by this issue's own rule, and the failure is not a
+wrong number. It is a call through whatever was in those bytes.
+
+**Nothing here is proposed as a fix yet**, because the cheap answer —
+wrapping each handle kind in a struct of a deliberately distinctive
+size — buys the distinction back by making the type system lie about
+sizes, and that is worse than the thing it prevents. Shape comparison
+would catch it honestly, and the design for shape comparison is written
+below and its field tables have existed since phase 3.
+
+What this section is for is that the cost was accepted while all values
+were data, and self-modifying programs change what it costs without
+changing what it is. That should be a decision somebody makes rather
+than a discovery somebody has.
+
+
 ## Suggested implementation steps
 
 1. The wire check compares the two sizes instead of the two name

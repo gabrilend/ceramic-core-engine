@@ -41,7 +41,6 @@ survives the table being deleted.
 | [311b — placement instead of records](311b-placement-instead-of-records.md) | open | A generated placement function per box writes a station directly, every size a folded constant. Hand placement turns out to be the primitive. |
 | [311c — source rides in the binary](311c-source-rides-in-the-binary.md) | open | Each included box source emitted as a C array, so one file carries code, numbers, and text. |
 | [311d — the map becomes code](311d-the-map-becomes-code.md) | open | The generator turns a map into the construction calls it describes, so no name survives into a running program. The build also learns what to include; the linker discards the rest. |
-| [311e — running an arbitrary map](311e-running-an-arbitrary-map.md) | open | A tool that runs any map by compiling it rather than interpreting it — which is how opening a map you did not build survives the table being deleted. |
 
 ## What the phase established
 

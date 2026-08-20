@@ -1,6 +1,6 @@
 # Conversation Summary: 3ccc0eb0-a576-4361-85ec-79ae4bb357a4
 
-Generated on: 2026-08-19 19:11:51
+Generated on: 2026-08-20 09:43:09
 
 --------------------------------------------------------------------------------
 
@@ -4261,6 +4261,553 @@ the corrected design rather than the stale one.
 
 
 Want me to go ahead?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 22
+
+Yeah sounds good
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 22
+
+Rewriting the registry family to match. Starting with the parent.
+
+
+Now 311a gains the escaping scheme, and its resolution moves to generation time.
+
+
+Now 311d becomes "the map becomes code," and a new 311e covers the runner.
+
+
+Now the build-path document, which still describes a two-column table.
+
+
+A stale page was left behind by the rename — the site generator doesn't clean
+orphans. Removing it and recording the gap.
+
+
+Committed as `215907c`. Now question three, which changed shape with the
+redesign.
+
+
+## Question three: letting the compiler check the wires
+
+
+A **wire** is legal when both ends count the same number of bytes — the source
+box's return width against the destination parameter's width. Today that's
+checked when the wire is drawn, at run time, and a mismatch kills the program.
+
+
+Now that a map compiles into construction calls, the generator sees both ends of
+every wire in the file. It still can't *compute* a size — only the compiler
+can — but it can emit an assertion that makes the compiler do the comparison:
+
+
+```c
+
+_Static_assert(sizeof(int) == sizeof(int),
+
+               "foo.map:12  adder.0 -> printer.0: widths differ");
+
+```
+
+
+**One correction to how I posed this before.** I said it risks two checkers that
+could disagree. They can't — both compare the same `sizeof`-derived numbers,
+one at compile time on the type expressions and one at run time on the values
+those expressions produced. The real cost is just more generated code.
+
+
+The wires drawn *while a program runs* still need the run-time check, since
+nothing saw them at build. So this adds a build-time gate in front of an
+existing one rather than replacing it.
+
+
+**[Asked the user]**
+
+
+*Q1 — Build-time checks:* Should the generator emit compile-time assertions
+for what it can see in a map?
+
+- Everything the compiler could check — Not just wires — every type-shaped
+  claim a map makes. A comparator's threshold slot against its box's return
+  type, a constant's shape against the port it lands on, anything else where the
+  generator knows two type names that must agree. Whatever the compiler can
+  settle, it settles, and the message names the map line.
+
+- Wires only — The narrowest useful version: one assertion per wire, nothing
+  else. Catches the mistake people actually make — connecting two boxes that
+  do not fit — without the generator growing opinions about everything else a
+  map says.
+
+- Nothing; startup is soon enough — A bad wire in a file already kills the
+  program the moment the generated construction runs, which is the first thing
+  that happens — loud, immediate, and naming the wire. Adding a build gate
+  buys minutes, not correctness, and costs generated lines forever.
+
+→ *(no answer recorded)*
+
+
+Clear — the build's concern is which functions to compile in, not whether the
+graph is complete. Recording that.
+
+
+Recorded. Now the last one.
+
+
+## Question four: the runner and repeated compiles
+
+
+The original version of this — *may a program declare several maps and carry
+the union of their boxes* — dissolved when the table did. There's no union to
+carry; a program is its own map, compiled.
+
+
+What's left is about the **general runner**, the tool that takes any map and
+compiles it. Two things are undecided there, and the sharper one is what happens
+when you hand it the same map twice.
+
+
+Handing it `foo.map` runs the generator, the compiler, and a load — hundreds
+of milliseconds. Run the same unchanged map ten times in a row and that happens
+ten times. Since this is a development tool you'd sit in front of while
+iterating, the wait is the thing you'd feel.
+
+
+The catch with fixing it: anything that reuses a previous compile has to decide
+when the previous one is stale — which means tracking the map, every box
+source it named, and the compiler itself. That's a second thing that can be
+wrong, and being wrong means silently running code you already edited.
+
+
+**[Asked the user]**
+
+
+*Q1 — Runner caching:* Should the general runner reuse a previous compile when
+you hand it the same map again?
+
+- No cache — Every run compiles from scratch. Nothing to invalidate, nothing
+  to go stale, no way to silently run code you already changed. Costs the
+  compile every single time, including the run where you changed nothing.
+
+- Cache keyed by content — Hash the map and every box source it names, plus
+  the compiler's own identity. Same hash means the previous artifact is reused.
+  Cannot go stale on a changed file, because a changed file changes the hash —
+  it is the content that is the key, not a timestamp.
+
+- Cache, and say when it is used — As above, but the runner prints that it
+  reused an artifact and what it was keyed on. Turns an invisible optimization
+  into a visible fact, which is the house rule about never letting a shortcut be
+  silent. Costs a line of output on every run.
+
+→ *(no answer recorded)*
+
+
+What would you like to clarify?
+
+
+Guesses at what might be off:
+
+
+- **Whether this is the right last question.** You asked for four, and the
+  fourth was *may a program declare several maps* — which I decided had
+  dissolved and substituted this in its place. That substitution was my call,
+  not yours. If you'd rather I put the original question to you, or something
+  else that's still nagging, say so.
+
+
+- **Whether caching is a decision or an implementation detail.** It's a
+  development tool's start-up time. You've said elsewhere that build time is
+  allowed to be slow and only runtime compilation shouldn't be. A runner's
+  compile sits awkwardly between those two — it's a build, but you're waiting
+  on it — and I may be inventing a fork where "just don't cache it, we'll see
+  if it's annoying" is the whole answer.
+
+
+- **Whether it collides with incremental compilation.** You said earlier that
+  editing a map means an incremental rebuild of the parts that changed. That
+  already implies some notion of what's stale, so the runner may just inherit
+  whatever mechanism does that rather than needing a cache design of its own.
+
+
+- **Whether the RAM tier already answers it.** Compiled artifacts go to the
+  shared-memory directory, which empties at reboot. So there's a natural
+  lifetime already — the question might only be whether anything looks in
+  there before compiling, rather than whether a cache exists.
+
+
+What's on your mind?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 23
+
+okay we're gonna need more context here. Tell me exactly what you mean by
+"general runner" and "workshop" so we can be sure to note whether or not they're
+possible.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 23
+
+I've been saying "workbench" — issue 801, *The workbench in the browser*. If
+you meant something else by "workshop," tell me and I'll redirect. Here's
+exactly what each one is.
+
+
+## The workbench
+
+
+**A page in the documentation site. It draws graphs and writes map files. That
+is all it does.**
+
+
+Concretely, from the blueprint and the note that started it:
+
+
+- A canvas where you place box stations, drag them around, and draw wires
+  between them.
+
+- You type a box's name — and now, its file — and fill in constant values on
+  ports.
+
+- A button downloads a map file.
+
+- **It never runs anything.** Your own note is explicit: *"The canvas we're
+  creating doesn't run the map files, it simply helps generate them."*
+
+- It holds no C, reads no C, and compiles nothing. The phase was deliberately
+  narrowed to that: *the workbench is for layout*.
+
+- Nothing goes to a server; drawings live in browser storage, several on a
+  shelf.
+
+- The only compiled-to-WebAssembly piece is the map file **writer**, because
+  that is the one thing the page could get subtly wrong.
+
+- It admits in a sentence beside the download button that it checks the shape of
+  the graph and not the types, because it cannot see the C.
+
+
+**Is it possible? Yes, and nothing we decided touches it.** It never needed a
+registry and never ran a map. One small consequence: since a station line now
+says `math.c:add`, the canvas needs a file field beside the function name —
+which the originating note already anticipated.
+
+
+## The general runner
+
+
+**I invented this three exchanges ago.** It is not in any earlier blueprint and
+was not something you asked for. I proposed it to answer a problem I had
+created: once there's no name table, how do you open a map you weren't built
+for?
+
+
+What I meant by it:
+
+
+```
+
+$ soramech-run foo.map
+
+```
+
+
+...which runs the generator over that map and the box sources it names, compiles
+the result, loads it, and runs it.
+
+
+**And having now written that down, I think I over-dignified it.** Compare:
+
+
+```
+
+$ soramech-run foo.map
+
+$ make MAP=foo.map && ./foo
+
+```
+
+
+Those are the same thing. The "general runner" is a convenience wrapper around
+the build you already have. It isn't a new kind of program, it isn't a mode of
+the engine, and it probably isn't an issue file — it's a line in the Makefile
+or a small script.
+
+
+**Is it possible? Yes, trivially, because it already is `make`.**
+
+
+## Which collapses my question four
+
+
+I was asking whether the runner should cache compiled artifacts and how it would
+decide when a cache is stale. **`make` already does that** — dependency
+tracking is the whole of what make is. If the runner is a wrapper around the
+build, it inherits incremental rebuild for free and there is no cache to design,
+no staleness rule to get wrong, and nothing to decide.
+
+
+So question four dissolves, the same way question two did.
+
+
+## What I'd do about it
+
+
+Fold 311e back down. The capability — *run a map the binary wasn't built for*
+— is real and is worth stating, but it belongs as a short section in the
+map-becomes-code issue saying "this is what `make` already does, invoked later,"
+rather than as a separate blueprint describing a tool that doesn't need to
+exist.
+
+
+Unless you want a real command with its own name and behaviour, in which case it
+stays and I'd want to know what it should do that `make` doesn't.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 24
+
+Okay uh... the binary contains the map. The map is just a collection of boxes. A
+box could contain a map. So, we could have recursive maps with maps inside them,
+because maps are boxes and boxes can be included in maps. To run a map the
+binary wasn't built for, we would treat it like any other C function - collect
+the functions and such that the newly added (at runtime I'm assuming is what
+you're wondering?) and compile them in, then connect the wires and make it work.
+Right? What am I missing? A "general runner" is just a map that dynamically
+re-wires itself and adds new functions at runtime, which is exactly what we're
+trying to implement.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 24
+
+You're right, and this collapses it properly. Let me confirm the pieces and then
+say what I think you're missing.
+
+
+You're not missing anything. The pieces are all already there, and I'd built a
+tool to do a job the engine was designed to do itself.
+
+
+## Confirming the chain
+
+
+- **A map is usable as a box** — the input and output station issues exist
+  precisely for this, and one of them says a parent *"wires from a sub-program's
+  output port exactly as it would wire from any station."*
+
+- **Composition needs no mechanism** — no "finished" to detect, no per-program
+  task counting, and **one thread pool serves every program**, already decided.
+
+- **A program can grow while it runs** — stations, ports, and wires, at any
+  moment.
+
+- **A box's C can be handed to a running program** and compiled in.
+
+- **A box may reach a map**, since the handle travels as a value on a wire.
+
+
+So a "general runner" is a map containing about five boxes:
+
+
+| box | takes | returns |
+
+|---|---|---|
+
+| read a map file | text | a description of stations and wires |
+
+| compile a box source | C text | a placement function |
+
+| add a station | map handle, placement function | a station index |
+
+| draw a wire | map handle, four indices | an acknowledgement |
+
+| write a constant | map handle, station, port, bytes | an acknowledgement |
+
+
+Wire those together and you have a program that runs other programs. It needs no
+tool, no mode, and nothing added to the engine. **311e should be deleted**, not
+folded — it described a wrapper around a capability that is the point of the
+system.
+
+
+## Three things that follow, which I should write down
+
+
+**The map parser doesn't disappear — it becomes a box.** I wrote into the
+map-becomes-code issue that *"the engine's runtime map parser is deleted."*
+That's still right about the *engine*: nothing in the runtime parses maps. But a
+runner-map needs a parsing box, so the parser moves from engine code into a box
+source. Same functions, different home — and the generator, which is becoming
+a C program anyway, can link the same implementation. One parser, two callers,
+neither of them the engine.
+
+
+**The construction surface needs box wrappers.** Add-a-station, draw-a-wire, and
+write-a-constant are C calls today. For a map to perform them they have to be
+boxes: plain functions taking values and returning one. That's a small addition
+to the construction issue rather than a new design.
+
+
+**And here's the one real hazard, which I don't think you've hit yet.** Under
+comparison-by-width, a wire is legal when both ends count the same number of
+bytes. A map handle is a pointer — eight bytes. A placement function is a
+pointer — eight bytes. A station index is four. So **any eight-byte value
+wires happily into "add a station" where a map handle was meant**, including a
+completely unrelated pointer, and the failure is a crash rather than a refusal.
+
+
+That's the accepted cost of width comparison pointed at something much sharper
+than usual: the existing statement of it is *"two structs of the same width and
+different layouts already wire without complaint."* True, and mild when the
+values are data. Less mild when the value is a pointer the engine is about to
+call through. Worth deciding deliberately — wrapping each handle kind in a
+struct of a distinctive size would buy the distinction back — rather than
+discovering it the first time somebody miswires a self-modifying map.
+
+
+## One thing I want to verify rather than assert
+
+
+When a station places a map-as-a-box, do that sub-program's stations live in the
+parent's station table or in their own? I've read the fragments that say
+composition works and the pool is shared, but not the part that says where the
+stations sit — and it matters for how a runner adds stations to a map it is
+running rather than to itself.
+
+
+Want me to go find that, then write up the three items and delete 311e?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 25
+
+  When a station places a map-as-a-box, do that sub-program's stations live in
+  the parent's station table or in their own? I've read the
+
+  fragments that say composition works and the pool is shared, but not the part
+  that says where the stations sit — and it matters for how a
+
+  runner adds stations to a map it is running rather than to itself.
+
+
+
+I thought we don't have station tables anymore? We're trying to eliminate global
+state.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 25
+
+Let me check the source rather than argue from memory.
+
+
+Confirmed, and I need to separate two things I let blur together.
+
+
+## The registry was global. The station table never was.
+
+
+Here's the map record from the source:
+
+
+```c
+
+typedef struct map {
+
+    station_t *stations;
+
+    int        n_stations;
+
+    pool_t    *pool;
+
+    ...
+
+    pthread_mutex_t rewire_mutex;
+
+    ...
+
+};
+
+```
+
+
+The stations live **inside a map**, reached only through a map handle. Nothing
+about them is process-wide. The source is emphatic on exactly this point — the
+comments there say reaching a map from inside a box *"requires a process-wide
+map pointer, and a process-wide map pointer means a process can only ever run
+one map,"* and that such a pointer *"deserves the suspicion a global"* gets.
+
+
+So:
+
+
+| | scope | status |
+
+|---|---|---|
+
+| the registry | one per **process**, shared by everything | being deleted — this is 311 |
+
+| a station table | one per **map**, a field inside it | stays; it is what a map *is* |
+
+
+Deleting a map's stations would be deleting the map. What we're eliminating is
+the global, and the station table isn't one.
+
+
+## And that answers my own question
+
+
+I can derive it rather than go hunting. **A wire is an index** — a station
+number and a port number, valid forever, never a pointer. An index is only
+meaningful inside one station table. So if a parent wires into a sub-program's
+input station *"exactly as it would wire from any station,"* that input station
+has to be in the parent's table.
+
+
+**So composition merges.** A map containing a map produces **one** station table
+with both sets of stations in it, joined at the input and output stations that
+mark the seam. Maps-inside-maps is real recursion, resolved entirely when the
+graph is built, costing nothing at run time. Which fits everything else here.
+
+
+## Which splits "running another map" into two different acts
+
+
+- **Compose it** — merge its stations into the map you're already in, wire
+  across the seam. One map, one station table, full wiring, no isolation. A
+  crash or a wedge is yours too.
+
+- **Start it separately** — a fresh map, its own station table, its own rewire
+  lock, sharing the pool. You can't wire to it, because indices don't cross
+  maps. You reach it the way anything outside does: by delivering into its input
+  station, which the input-station design already allows — *"several callers
+  delivering to one program input is several arrows into one port."*
+
+
+**A runner almost certainly wants the second.** It should be able to run a
+broken map without becoming broken, and the input and output stations are
+exactly the door for talking to something you didn't merge with.
+
+
+That's a genuine distinction I hadn't drawn, and it's the thing worth writing
+down out of this whole detour — more than the tool I invented.
+
+
+Shall I write up those two acts, the parser becoming a box, the construction
+surface needing box wrappers, and the pointer-width hazard — and delete 311e?
 
 
 --------------------------------------------------------------------------------

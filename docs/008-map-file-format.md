@@ -289,13 +289,19 @@ All of these are fatal and all name the offending station:
   range.
 - A comparator whose box returns a type with no compare function.
 
-**A wire whose two ends disagree about width** is the one that cannot
-be settled by reading alone, because the generator knows type *names*
-and only the compiler knows sizes. It is checked when the wire is
-drawn — which for a wire written in a file is during construction, and
-for a wire drawn while the program runs is at that moment. Whether the
-generator should additionally emit a compile-time assertion for the
-wires it can see is an open question in 311d.
+**A wire whose two ends disagree about width is not checked here at
+all, and that is deliberate.** Reading a map is how the build learns
+which functions to compile in, and nothing more. Whether the shape
+those functions are wired into is finished is a run-time question and
+has to stay one, because **a half-wired map is a legitimate map** —
+`in 2 -` is an ordinary state, and a program assembled one arrow at a
+time is exactly what the construction surface exists to allow. A
+reader that refused an unfinished map would refuse the program
+somebody is in the middle of writing.
+
+So a wire is checked **when it is drawn**: at startup for the ones a
+map wrote, and at the moment of the edit for the ones a running
+program draws. Same check, both times.
 
 Two rules used to sit here and no longer can be stated: a box fanning
 out to both a gatherer and a ring buffer, and a cycle among gather

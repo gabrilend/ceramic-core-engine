@@ -256,15 +256,20 @@ last place that trace still exists.
 
 ## Limitations, stated plainly
 
-- **The build checks that a named box exists; whether it checks a
-  *wire* is now an open question rather than a settled no.** It used to
-  be a flat no, because the map was not a build input. Now that it is,
-  the generator knows both ends of every wire a map draws — and while
-  it still cannot compute a size, it can emit a `_Static_assert` that
-  makes the compiler compare them. That would move a class of error
-  from load to build for every wire written in a file. Wires drawn at
-  runtime still need the load-time check, so both would exist. Issue
-  311d carries the question.
+- **The build checks that a named box exists. It does not check a
+  wire, and deliberately does not.** The generator could &mdash; it sees
+  both ends of every wire a map draws, and a `_Static_assert` would
+  make the compiler compare their widths. What decides against it is
+  what a map is for at build time: the build reads a map to learn
+  **which functions to compile in**, and nothing more. Whether the
+  shape they are wired into is complete or correct is a run-time
+  question, and it has to stay one, because **a half-wired map is a
+  legitimate map** &mdash; a port with no source is an ordinary state, and
+  a program assembled one arrow at a time is the thing the
+  construction surface exists to allow. A build that refused an
+  unfinished map would refuse exactly the program somebody is in the
+  middle of writing. Wires are checked when drawn: at startup for the
+  ones a map wrote, at the moment of the edit for the rest.
 - **Typedefs are transparent.** `typedef int meters` and
   `typedef int seconds` are the same type and will connect happily.
   Distinguishing them means wrapping each in its own struct, which is

@@ -48,7 +48,6 @@
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -167,7 +166,6 @@ survives the table being deleted.</p>
 <tr><td><a href="issue-311b-placement-instead-of-records.html">311b — placement instead of records</a></td><td>open</td><td>A generated placement function per box writes a station directly, every size a folded constant. Hand placement turns out to be the primitive.</td></tr>
 <tr><td><a href="issue-311c-source-rides-in-the-binary.html">311c — source rides in the binary</a></td><td>open</td><td>Each included box source emitted as a C array, so one file carries code, numbers, and text.</td></tr>
 <tr><td><a href="issue-311d-the-map-becomes-code.html">311d — the map becomes code</a></td><td>open</td><td>The generator turns a map into the construction calls it describes, so no name survives into a running program. The build also learns what to include; the linker discards the rest.</td></tr>
-<tr><td><a href="issue-311e-running-an-arbitrary-map.html">311e — running an arbitrary map</a></td><td>open</td><td>A tool that runs any map by compiling it rather than interpreting it — which is how opening a map you did not build survives the table being deleted.</td></tr>
 </table>
 <h2>What the phase established</h2>
 <p>**Every size and offset is a <code>sizeof</code> or <code>offsetof</code> expression the

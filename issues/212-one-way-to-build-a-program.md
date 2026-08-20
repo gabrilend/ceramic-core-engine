@@ -82,6 +82,67 @@ becomes one way among several to drive the surface. Reading a file,
 editing a running program, and composing a sub-program become the same
 calls arriving from different places.
 
+### Composing and starting are two different acts
+
+A program can bring another program into itself, or set one going
+beside itself, and these are not variations of one thing. **The
+difference falls out of what a wire is.**
+
+**A wire is an index** — a station number and a port number, valid
+forever, never a pointer. An index is only meaningful inside one
+station table, and a station table lives inside a map. So two stations
+can be wired together exactly when they sit in the same map, and never
+otherwise.
+
+**Composing merges.** A map that contains another map produces **one**
+station table holding both sets of stations, joined at the input and
+output stations that mark the seam. A parent wires across that seam
+like it wires anything else, because after the merge there is no seam
+to cross — there are stations with indices, the way there always were.
+
+So maps-inside-maps is real recursion and it is **resolved entirely
+when the graph is built**. It costs nothing at run time: no boundary to
+check, no per-program bookkeeping, no dispatch that asks which program
+a station belongs to. The nesting is a fact about how the graph was
+described, not about how it runs.
+
+**Starting is separate.** A fresh map has its own station table, its
+own rewiring lock, and its own everything except the pool, which is
+shared because nothing about finishing requires knowing which program
+a task came from. **You cannot wire to it**, because indices do not
+cross maps. You reach it the way anything outside reaches a program:
+by delivering into its input station, which
+[213](213-the-input-station.md) already allows without qualification —
+several callers delivering to one program input is several arrows into
+one port, and the engine deliberately does not remember who called.
+
+**Which one you want follows from whether you want isolation.**
+
+| | composed | started |
+|---|---|---|
+| station table | shared with the parent | its own |
+| wiring across | ordinary wires | not possible |
+| talking across | not needed; it is one graph | deliver into the input station |
+| a wedge or a fatal edit in the child | takes the parent with it | does not |
+
+**A program that runs other programs wants the second**, and that is
+the whole of what such a thing is. It reads a description, compiles
+what the description names, starts a fresh map, adds stations to *that*
+map, and feeds it through its input station — never merging, so a
+program it runs can be as broken as it likes.
+
+There is no tool to build for this and no mode to add. A program that
+runs other programs **is a map**, whose boxes happen to be: read a
+description, compile a source, add a station, draw a wire, write a
+constant. The last three are this issue's own operations, which
+therefore need to exist as boxes and not only as C calls — a plain
+function taking values and returning one, like everything else.
+
+**And a box may reach a map, since a map handle travels as a value on
+a wire.** That is what retiring the old prohibition bought: the handle
+is given to a box the way any value is given, so nothing process-wide
+comes back and several maps still cannot see each other.
+
 **Adding anything to a program is one procedure with three steps, and
 it is the same procedure whether the program is starting or already
 running.**
@@ -212,18 +273,26 @@ rather than drifting into place.
    the surface, stopping at the first refusal and naming the file and
    the line. The two-pass structure survives only as "resolve names
    after every station exists," not as two kinds of pass.
-6. Retire hand placement, either by giving it the registry type names
-   it lacks or by deleting it and giving the test harness another way
-   to reach its counters.
-7. A test that a program read from a file and a program built by
+6. Hand placement stays and becomes the primitive — a generated
+   placement function per box writes a station directly, and placing by
+   name is that function being called. Built in
+   [311b](311b-placement-instead-of-records.md).
+7. **Box wrappers for the operations**, so a map can perform them: add
+   a station, draw a wire, write a constant, each a plain C function
+   taking values and returning one. This is what lets a program build
+   another program without anything being added to the engine.
+8. A test that a program read from a file and a program built by
    calling the surface directly produce identical dumps. This is the
    proof that there is one construction path rather than two that agree
    by coincidence, and it is the cheapest such proof available because
    [703](completed/703-map-dump.md) already writes a program back out
    by walking the live table.
-8. A test that a station added to a running program, then configured,
+9. A test that a station added to a running program, then configured,
    then wired, receives values and produces them — and that everything
    already running is undisturbed across all three steps.
+10. A test that a map starts a second map, feeds it through its input
+    station, reads its result, and survives that second map dying — the
+    proof that starting is genuinely separate from composing.
 
 ## Open questions
 

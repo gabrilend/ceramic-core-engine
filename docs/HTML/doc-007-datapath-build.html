@@ -48,7 +48,6 @@
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-311e-running-an-arbitrary-map.html">311e — Running a map you were not built for</a>
 <a href="issue-401-static-slots.html">401 — Static input values</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -333,15 +332,20 @@ functions are the last surviving trace of the types, and load is the
 last place that trace still exists.</p>
 <h2>Limitations, stated plainly</h2>
 <ul>
-<li>**The build checks that a named box exists; whether it checks a</li>
-<p>  <em>wire</em> is now an open question rather than a settled no.** It used to
-  be a flat no, because the map was not a build input. Now that it is,
-  the generator knows both ends of every wire a map draws — and while
-  it still cannot compute a size, it can emit a <code>_Static_assert</code> that
-  makes the compiler compare them. That would move a class of error
-  from load to build for every wire written in a file. Wires drawn at
-  runtime still need the load-time check, so both would exist. Issue
-  311d carries the question.</p>
+<li>**The build checks that a named box exists. It does not check a</li>
+<p>  wire, and deliberately does not.** The generator could &amp;mdash; it sees
+  both ends of every wire a map draws, and a <code>_Static_assert</code> would
+  make the compiler compare their widths. What decides against it is
+  what a map is for at build time: the build reads a map to learn
+  <strong>which functions to compile in</strong>, and nothing more. Whether the
+  shape they are wired into is complete or correct is a run-time
+  question, and it has to stay one, because **a half-wired map is a
+  legitimate map** &amp;mdash; a port with no source is an ordinary state, and
+  a program assembled one arrow at a time is the thing the
+  construction surface exists to allow. A build that refused an
+  unfinished map would refuse exactly the program somebody is in the
+  middle of writing. Wires are checked when drawn: at startup for the
+  ones a map wrote, at the moment of the edit for the rest.</p>
 <li><strong>Typedefs are transparent.</strong> <code>typedef int meters</code> and</li>
 <p>  <code>typedef int seconds</code> are the same type and will connect happily.
   Distinguishing them means wrapping each in its own struct, which is

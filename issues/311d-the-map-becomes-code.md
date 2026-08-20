@@ -98,8 +98,11 @@ never seen a map.
 - **A shipped program** compiled from its own map → **no compiler at
   run time, ever.** One file, source text included, runs on a machine
   with no toolchain on it.
-- **A map the binary was not built for** → compiled when it arrives,
-  which is [311e](311e-running-an-arbitrary-map.md)'s path.
+- **A map the binary was not built for** → compiled when it arrives, by
+  a program that runs other programs. That is not a tool and not a mode:
+  it is a map whose boxes read a description, compile what it names,
+  start a fresh map, and feed it through its input station. See
+  [212](212-one-way-to-build-a-program.md).
 - **A box arriving mid-run** → compiled when the source arrives, which
   is [310](310-boxes-compiled-at-runtime.md)'s path.
 
@@ -122,24 +125,50 @@ the compiler being needed exactly when new code genuinely arrives.
    only named sources.
 6. Linker garbage collection turned on, and a test that a binary built
    from a three-box map does not contain a fourth box's code.
-7. The engine's runtime map parser deleted, and
-   [009](../docs/009-datapath-load.md) rewritten around what replaced
+7. The engine's runtime map parser deleted — **and the parser itself
+   kept, as a box.** Nothing in the *engine* parses maps any more, but
+   a program that runs other programs needs a box that reads one
+   ([212](212-one-way-to-build-a-program.md)), so the parsing functions
+   move out of the engine and into a box source. The generator, which
+   is becoming a C program in [308](308-generator-in-c.md), links the
+   same implementation. One parser, two callers, and neither of them
+   the engine.
+8. [009](../docs/009-datapath-load.md) rewritten around what replaced
    it.
-8. A test that a program built from a compiled map and the same program
+9. A test that a program built from a compiled map and the same program
    built by hand-written construction calls produce identical dumps.
 
 ## Open questions
 
-- **Can the build now check wires, and should it?** The generator sees
-  both ends of every wire a map draws. It still cannot compute a size —
-  only the compiler can — but it can emit a `_Static_assert` comparing
-  the two `sizeof` expressions, which makes the *compiler* do the
-  comparison and fails the build with the map line in the message. That
-  would move a whole class of error from run time to build time. Wires
-  drawn at run time would still need the existing check, so this adds a
-  second checker rather than replacing one — which is either welcome
-  redundancy or two things that can disagree, and that is the part to
-  decide.
+**Answered:**
+
+- *Can the build now check wires, and should it?* **It could, and it
+  does not. Wires are a run-time concern, checked when a wire is drawn
+  — at startup for the ones a map wrote, and at the moment of the edit
+  for the ones a running program draws.**
+
+  The generator sees both ends of every wire in a file and could emit a
+  `_Static_assert` comparing the two `sizeof` expressions, failing the
+  build with the map line named. Nothing about that is unsound; both
+  checks compare the same compiler-computed numbers by different
+  routes, so they could not disagree.
+
+  **What decides against it is what a map is for at build time.** The
+  build reads a map to learn **which functions to compile in**. That is
+  its whole business with the file. Whether the shape those functions
+  are wired into is complete, or correct, or finished at all is not a
+  build-time question — and it must not become one, because **a map
+  with incomplete wiring is a legitimate map.** A port with no source
+  yet is written `in 2 -` and is an ordinary state; a station that can
+  never become ready is not an error; a program assembled from nothing
+  and wired one arrow at a time is the thing
+  [212](212-one-way-to-build-a-program.md) exists to allow.
+
+  A build that refused a half-wired map would be refusing exactly the
+  program somebody is in the middle of writing. So the generator stays
+  incurious about shape: it resolves names, it emits calls, and it
+  leaves every judgement about whether the graph makes sense to the
+  moment the graph is actually built.
 
 ## Related
 
@@ -151,12 +180,11 @@ the compiler being needed exactly when new code genuinely arrives.
   whose functions this calls
 - [311c — Source rides in the binary](311c-source-rides-in-the-binary.md),
   whose embedded text shrinks to what a map actually needs
-- [311e — Running a map you were not built for](311e-running-an-arbitrary-map.md),
-  the same emission performed at run time
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+  where composing and starting are separated, and where a program that
+  runs other programs turns out to be a map rather than a tool
 - [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   the same path at the scale of one function
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
-  the construction surface the generated code calls
 - [602 — The loader, first pass](completed/602-loader-first-pass.md)
   and [603 — The loader, second pass](completed/603-loader-second-pass.md),
   which move into the generator

@@ -103,8 +103,8 @@ program runs is the in-RAM structure, not the file.
 | case | when the map is compiled | toolchain at run time? |
 |---|---|---|
 | a shipped program | at build time | **no** — it ships as one file |
-| the general runner | when you hand it a map | yes; that is what the tool is |
-| the workbench | it emits a map, the runner compiles it | yes, on the runner's side |
+| a program that runs other programs | when it is handed a map | yes |
+| the workbench | it emits a map; whoever runs it compiles it | yes, on that side |
 | a box arriving mid-run | when the source arrives | yes |
 | a capture, re-run | when the artifact is compiled | yes |
 
@@ -114,7 +114,7 @@ path in the engine, and no table anywhere. That rigidity is the point:
 this is the minimal implementation, and a thing that behaves one way is
 worth more than a thing that behaves two ways well.
 
-## The five changes
+## The four changes
 
 | issue | what it does |
 |---|---|
@@ -122,13 +122,23 @@ worth more than a thing that behaves two ways well.
 | [311b — Placement instead of records](311b-placement-instead-of-records.md) | the generator emits a placement function per box; the record and every name the engine carried are deleted |
 | [311c — Source rides in the binary](311c-source-rides-in-the-binary.md) | each box source emitted as a C array, so the binary carries its own text |
 | [311d — The map becomes code](311d-the-map-becomes-code.md) | the generator turns a map into construction calls; the build includes only what is named; the linker discards the rest |
-| [311e — Running a map you were not built for](311e-running-an-arbitrary-map.md) | the general runner, which compiles a map rather than interpreting one |
 
 **311a comes first** because the addressing decides how a box is named
 and how its symbol is spelled, and everything else is written against
 that. 311b and 311c are independent of each other. **311d needs both**,
-since it emits calls to placement functions that 311b defines. **311e
-is last** and is a program rather than an engine change.
+since it emits calls to placement functions that 311b defines.
+
+**There is no fifth child for running a map you were not built for**,
+and the reason is worth keeping: a draft of this family had one, and it
+described a command-line tool wrapping the build. That tool was
+unnecessary twice over. Compiling a map is what `make` already does, so
+the tool was a shell script; and more importantly, **a program that
+runs other programs is a map**, not a tool. It reads a description,
+compiles what the description names, starts a fresh map, and feeds it
+through its input station — using the construction surface as boxes,
+which is what this engine is for. See
+[212](212-one-way-to-build-a-program.md), where composing and starting
+are separated.
 
 ## What this does not give up
 
