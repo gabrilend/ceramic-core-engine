@@ -1,6 +1,6 @@
 # Conversation Summary: 3ccc0eb0-a576-4361-85ec-79ae4bb357a4
 
-Generated on: 2026-08-20 11:57:00
+Generated on: 2026-08-20 13:09:52
 
 --------------------------------------------------------------------------------
 
@@ -6823,6 +6823,198 @@ Front A now needs **211** (growing the station table) then **212** (the
 construction capstone). Front B's registry family — **311a** onward — is
 clear, since 308, 309 and 310 are all done. Six issues closed this session, plus
 401 and 210b filed.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 40
+
+okay let's do all our git commits and then do 211
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 40
+
+All the work is committed — only the transcripts are outstanding, and this
+session's grew substantially. Per the project rule those are mine to commit.
+
+
+Tree is clean, ten commits this session. Now 211 — growing the station table.
+
+
+Well-specified, and steps 8–9 are explicitly deferred. Let me see how wide the
+refactor is.
+
+
+74 sites, mostly mechanical. Let me see the shapes they take.
+
+
+All 74 sites rewritten. Now the shelved representation behind that accessor.
+
+
+`map_create` asks for N *places*; `map_add_station` hands back the first
+unfilled one, which is the same one each time until it's filled. Let me have
+creation reserve directly.
+
+
+All green on shelves. Now the tests the issue asks for — growth mid-run, and
+concurrent adds.
+
+
+Let me fix two sloppy lines in that test.
+
+
+4 shelves, nothing moved, no leaks. Step 5 remains — the loader should start
+empty and add one at a time.
+
+
+Step 5 done, proven by every existing test. Let me take the measurement step 1
+asks for.
+
+
+Within the noise band — no visible cost from the shift-and-mask. Let me check
+for stale claims about the flat array.
+
+
+**211 done.** Tree clean, twelve commits this session.
+
+
+## What changed
+
+
+The table was one run of records, allocated once and never resized — because
+resizing moves every record, and each holds its own mutex, which is identified
+by nothing but where it lives. Move one and anybody parked on it waits at an
+address that will never be unlocked.
+
+
+It's **shelves** now: a short array of pointers, each to a fixed run of 64
+records. Growing means one more run and one more pointer written into the array.
+The only thing ever copied is the array of *addresses* — no locks in it, the
+same copy the pool's ring already does. Indexing is one shift and one mask.
+
+
+**A removed place is taken before the table grows**, so a program that adds and
+removes forever settles at a size instead of climbing.
+
+
+**Reading a map file is now that same growth** — one station per line, instead
+of counting lines and allocating once. That's the step that proves the
+mechanism, since every existing test loads a program.
+
+
+## The measurement the issue asked for
+
+
+Step 1 wanted the delivery path measured before and after, because the
+shift-and-mask lands on it. Across several runs the 200-byte figure wanders
+between roughly **870 and 1410 ns** — a wider spread than the change could
+account for. It sits inside the noise. A visible cost would have been a finding;
+its absence is the other kind, and it's recorded as one rather than assumed.
+
+
+## One distinction the plan hadn't drawn
+
+
+A place nobody filled and a place somebody emptied look identical — both are a
+record with no shim. So asking for somewhere to put one thing, twice, without
+filling it in between, correctly hands back the same place twice. Right for what
+*asking* means, wrong for what *reserving* means. Creation reserves directly;
+only growth reuses. That surfaced as `map_create(3)` producing a one-station
+table.
+
+
+## The hand-raising ring is not built
+
+
+Per the issue's own answered question, and the reason is the better half of your
+original note: **before building machinery to let people contribute during a
+long exclusive operation, ask whether the operation can stop being long.**
+Adding a shelf is one allocation and one pointer write. There's no long stretch
+to interrupt. The pattern stays in `strategems/raise-your-hand.md` with the
+lesson that displaced it.
+
+
+## Proven
+
+
+```
+
+== 078-test-growth
+
+  grew across 4 shelves; nothing already placed moved
+
+  a station added mid-run took values; the old one lost none
+
+  160 asks with nothing filled returned 1 distinct places
+
+  200 places asked for and filled, none handed twice
+
+```
+
+
+Valgrind: 1,544 allocations, 1,544 frees, no leaks, no errors.
+
+
+## Next
+
+
+**212 — one way to build a program** is the phase 2 capstone and now has
+everything under it: the port record, the construction operations, the growable
+table, and removal. Its five operations become the only way structure is
+created, and the seed sweep stops being a phase — which is also what unblocks
+the wholly-unwired program that 210b's round-trip test had to work around.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 41
+
+okay. Any git commits to do?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 41
+
+Just the transcripts — the tool regenerated them after my last transcript
+commit. Let me see what actually grew.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 42
+
+
+--------------------------------------------------------------------------------
+
+### User Request 43
+
+okay thanks
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 43
+
+Stopping there. Current state:
+
+
+**All the work is committed** — twelve commits this session, ending at
+`0b4b140`. Tests pass, docs build with zero unresolved references.
+
+
+**Still uncommitted:** the ten transcript files. One of them
+(`aug-19-26-through-aug-20-26.md`) grew by about 150 lines of this session's
+conversation; the other nine carry a fresh timestamp from the same regeneration
+and nothing else. They're staged for whenever you want them — the same pattern
+as the `4942748` commit earlier.
+
+
+Session summary: **401, 308, 309, 210b, 310, 214, 216, 211** all completed and
+filed, with 216 and 310 unblocked by 214's per-worker epoch mechanism landing
+first.
 
 
 --------------------------------------------------------------------------------

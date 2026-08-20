@@ -99,7 +99,7 @@ static in_port_page_t *in_port_page_at(const in_port_t *sl, int page)
 {
     in_port_page_t *pg = sl->pages;
     while (page-- > 0 && pg)
-        pg = pg->next;
+        pg = atomic_load_explicit(&pg->next, memory_order_acquire);
     return pg;
 }
 /* }}} */
@@ -142,11 +142,22 @@ in_port_page_t *in_port_add_page(in_port_t *sl)
         sl->pages = pg;
     } else {
         in_port_page_t *last = sl->pages;
-        while (last->next)
-            last = last->next;
-        last->next = pg;
+        in_port_page_t *next;
+        while ((next = atomic_load_explicit(&last->next,
+                                            memory_order_relaxed)) != NULL)
+            last = next;
+        /* Release, so a scanner that follows this link sees a page of
+         * fully-zeroed slots rather than whatever calloc had not yet
+         * made visible. Only growth ever writes a link, and growth
+         * holds the station's mutex, so this is the one writer. */
+        atomic_store_explicit(&last->next, pg, memory_order_release);
     }
-    sl->capacity += sl->page_slots;
+    /* **After** the page is linked, never before.** Seeing the larger
+     * capacity is what tells a scanner the slots exist; publishing the
+     * number first would invite a sweep into slots that are not
+     * reachable yet. */
+    atomic_fetch_add_explicit(&sl->capacity, sl->page_slots,
+                              memory_order_release);
     return pg;
 }
 /* }}} */
@@ -156,12 +167,13 @@ void in_port_free_pages(in_port_t *sl)
 {
     in_port_page_t *pg = sl->pages;
     while (pg) {
-        in_port_page_t *next = pg->next;
+        in_port_page_t *next = atomic_load_explicit(&pg->next,
+                                                    memory_order_relaxed);
         free(pg);
         pg = next;
     }
     sl->pages = NULL;
-    sl->capacity = 0;
+    atomic_store_explicit(&sl->capacity, 0, memory_order_relaxed);
 }
 /* }}} */
 
@@ -196,6 +208,46 @@ int slot_move_at(void *slot, int elem_size, int from, int to)
     return atomic_compare_exchange_strong_explicit(
         state, &expected, (unsigned char)to,
         memory_order_acq_rel, memory_order_acquire);
+}
+/* }}} */
+
+/* {{{ slot_state_at() / slot_take_at() */
+/*
+ * The claim side's transition, without a compare-and-swap (issue
+ * 210d, step 6).
+ *
+ * **A ready slot has exactly one possible mover, and under the
+ * station's mutex that mover is us.** Other claimers are excluded by
+ * the lock. A writer never touches a ready slot: it moves a slot
+ * empty → reserved → ready, and its search for an empty one
+ * compare-and-swaps from *empty*, which simply fails against a ready
+ * slot without writing anything. So nothing can change this byte
+ * between reading it and writing it, and a read-modify-write would be
+ * paying for an exclusion that the lock has already bought.
+ *
+ * That matters because the *search* asks this question of every
+ * candidate it walks past. A compare-and-swap per candidate is what
+ * made small values measurably slower when the scan replaced index
+ * arithmetic; a load per candidate does not.
+ *
+ * The acquire is still needed and is the whole reason these are not
+ * plain memory accesses: it is what makes the writer's copied bytes
+ * visible to the worker that takes the slot from ready.
+ */
+int slot_state_at(const void *slot, int elem_size)
+{
+    const _Atomic unsigned char *state = (const _Atomic unsigned char *)
+        ((const unsigned char *)slot + elem_size);
+    return atomic_load_explicit(state, memory_order_acquire);
+}
+
+void slot_set_at(void *slot, int elem_size, int to)
+{
+    _Atomic unsigned char *state = (_Atomic unsigned char *)
+        ((unsigned char *)slot + elem_size);
+    /* Release, so that whoever next acquires this slot sees everything
+     * this thread did to its bytes beforehand. */
+    atomic_store_explicit(state, (unsigned char)to, memory_order_release);
 }
 /* }}} */
 

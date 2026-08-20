@@ -8,13 +8,24 @@
  * task in the pool. Nothing polls, nothing scans: the act of
  * finishing is the act of scheduling.
  *
- * How it does it, in general terms: each delivery takes exactly one
- * station's mutex, writes one value, and asks one question — is this
- * station now complete? The contended section is a handful of memory
- * copies and index arithmetic; task allocation happens after the lock
- * is dropped. Values are claimed (copied out) before the lock
- * releases, which is the entire reason two invocations of one station
- * can run at once without meeting.
+ * How it does it, in general terms: a delivery writes one value into
+ * a port and then asks one question — is this station now complete?
+ *
+ * **Almost none of that is under a lock.** Writing takes no lock at
+ * all: reserving a slot is one compare-and-swap and the copy that
+ * follows goes into bytes the writer owns. The station's mutex covers
+ * exactly one thing, the walk that checks every port for a ready slot
+ * and then takes one from each — a scan and a state write per port,
+ * with no bytes moving. The copies out, the task allocation and the
+ * push all happen after it is dropped.
+ *
+ * What protects the values, then, is not exclusion but **ownership**:
+ * a slot in *reserved* or *claimed* belongs to exactly one worker and
+ * no other worker may touch it, which is written into the slot state
+ * table itself. Bytes nobody else may touch need no lock around them.
+ * That is the entire reason two invocations of one station can run at
+ * once without meeting, and why several workers can copy out of one
+ * station while another holds the lock doing its flips.
  *
  * Built across issues 202–206; routing grew in phase 5 at the
  * dispatch row marked for it. A second row was marked for the pull
@@ -95,10 +106,20 @@ static void die(const char *what, int station)
  * search with different names, and the ways they differ — which
  * transition, which hint — are arguments rather than logic.
  */
-static int in_port_scan(in_port_t *sl, int *hint, int from, int to)
+static int in_port_scan(in_port_t *sl, int *hint, int from, int to,
+                        void **found, int exclusive)
 {
+    /*
+     * The capacity is read **once**, and that is what bounds the
+     * sweep. Growth can raise it while this runs; a scanner that kept
+     * re-reading a number another thread keeps raising could be made
+     * to walk further every time it looked. Reading it once means the
+     * worst case is a sweep that misses slots which appeared a moment
+     * ago, and the next sweep finds them.
+     */
+    int cap = atomic_load_explicit(&sl->capacity, memory_order_acquire);
     int start = *hint;
-    if (start < 0 || start >= sl->capacity)
+    if (start < 0 || start >= cap)
         start = 0;
 
     /*
@@ -116,12 +137,41 @@ static int in_port_scan(in_port_t *sl, int *hint, int from, int to)
     for (int i = 0; i < page && pg; i++)
         pg = pg->next;
 
-    for (int i = 0; i < sl->capacity && pg; i++) {
+    for (int i = 0; i < cap && pg; i++) {
         void *slot = pg->slots + (size_t)off * (size_t)sl->stride;
-        if (slot_move_at(slot, sl->elem_size, from, to)) {
+        /*
+         * Two ways to ask, and which one is right is a property of the
+         * caller rather than of the slot (issue 210d, step 6).
+         *
+         * A claimer runs under the station's mutex and is looking for
+         * a *ready* slot. Nothing else can move one: other claimers
+         * are excluded by the lock, and a writer only ever
+         * compare-and-swaps from *empty*, which fails against a ready
+         * slot without writing. So a load is enough, and only the slot
+         * it actually takes is written to.
+         *
+         * A writer holds no lock and is looking for an *empty* slot,
+         * where it genuinely races other writers. That one has to be a
+         * compare-and-swap, because the loser must be told it lost.
+         *
+         * The difference matters because this question is asked of
+         * every candidate walked past, not only of the one taken.
+         */
+        int got = exclusive
+            ? (slot_state_at(slot, sl->elem_size) == from
+               && (slot_set_at(slot, sl->elem_size, to), 1))
+            : slot_move_at(slot, sl->elem_size, from, to);
+        if (got) {
             int c = page * sl->page_slots + off;
             int next = c + 1;
-            *hint = next >= sl->capacity ? 0 : next;
+            *hint = next >= cap ? 0 : next;
+            /* The address, handed back because the sweep already has
+             * it. A caller that took an ordinal and then asked for the
+             * slot again would walk the page list a second time to
+             * recompute something this loop was holding (issue 210e).
+             */
+            if (found)
+                *found = slot;
             return c;
         }
         /* Forward one slot, crossing to the next page at its end and
@@ -129,7 +179,7 @@ static int in_port_scan(in_port_t *sl, int *hint, int from, int to)
          * makes this a ring. */
         if (++off == sl->page_slots) {
             off = 0;
-            pg = pg->next;
+            pg = atomic_load_explicit(&pg->next, memory_order_acquire);
             page++;
             if (!pg) {
                 pg = sl->pages;
@@ -178,7 +228,7 @@ static void in_port_grow_locked(in_port_t *sl)
 }
 /* }}} */
 /* {{{ in_port_write_locked() */
-static void in_port_write_locked(in_port_t *sl, const void *value)
+static void in_port_write(station_t *s, in_port_t *sl, const void *value)
 {
     /* Look for somewhere to put it, and grow only if there is
      * genuinely nowhere (issue 210d). This used to grow when the tail
@@ -187,67 +237,132 @@ static void in_port_write_locked(in_port_t *sl, const void *value)
      * rather than full. Asking the slots directly needs no spare and
      * no arithmetic: a full buffer is one where nothing answers.
      */
-    int c = in_port_scan(sl, &sl->write_hint, SLOT_EMPTY, SLOT_RESERVED);
+    void *slot = NULL;
+    int c = in_port_scan(sl, &sl->write_hint, SLOT_EMPTY, SLOT_RESERVED,
+                         &slot, 0);
     if (c < 0) {
-        in_port_grow_locked(sl);
-        c = in_port_scan(sl, &sl->write_hint, SLOT_EMPTY, SLOT_RESERVED);
+        /* Nowhere to put it, so the port has to grow — and growth is
+         * the one part of a write that takes the station's mutex, so
+         * that two threads meeting a full buffer add one page between
+         * them rather than one each.
+         *
+         * The scan is tried **again** after the lock is taken, before
+         * growing. Another thread may have grown it while this one was
+         * waiting, and adding a second page on top of the first would
+         * be a buffer that doubles every time two writers are unlucky
+         * together. */
+        pthread_mutex_lock(&s->mutex);
+        c = in_port_scan(sl, &sl->write_hint, SLOT_EMPTY, SLOT_RESERVED,
+                         &slot, 0);
+        if (c < 0) {
+            in_port_grow_locked(sl);
+            c = in_port_scan(sl, &sl->write_hint,
+                             SLOT_EMPTY, SLOT_RESERVED, &slot, 0);
+        }
+        pthread_mutex_unlock(&s->mutex);
         if (c < 0) {
             fprintf(stderr, "delivery: a port with no free slot immediately "
-                            "after growing to %d slots\n", sl->capacity);
+                            "after growing to %d slots\n",
+                    atomic_load(&sl->capacity));
             abort();
         }
     }
 
-    /* The state machine, running for real (issue 210c) — while the
-     * station's mutex still covers the copy, which is deliberate.
-     * Building the states first and removing the lock afterwards
-     * means a bug here shows up as a refused transition rather than
-     * as a torn value.
+    /* **The copy happens with no lock held** (issue 210d). The scan
+     * moved this slot to *reserved*, which means it belongs to this
+     * thread and no other thread may touch its value — so the bytes
+     * need no exclusion from anybody. Publishing it cannot fail for
+     * any reason but somebody having touched a slot that was this
+     * thread's alone, which is an engine bug worth stopping for.
      *
-     * The scan already won this slot, so publishing it cannot fail
-     * for any reason but somebody else having touched a slot that was
-     * this thread's alone — an engine bug, and worth stopping for
-     * rather than papering over. */
-    memcpy(in_port_slot(sl, c), value, (size_t)sl->elem_size);
-    if (!in_port_slot_move(sl, c, SLOT_RESERVED, SLOT_READY)) {
+     * The release on that transition is what makes these bytes
+     * visible to whoever later takes the slot from *ready*. */
+    memcpy(slot, value, (size_t)sl->elem_size);
+    if (!slot_move_at(slot, sl->elem_size, SLOT_RESERVED, SLOT_READY)) {
         fprintf(stderr, "delivery: publishing a slot this thread had "
                         "reserved, and somebody else had moved it\n");
         abort();
     }
 
-    int held = ++sl->held;
+    /* **Counted after it is published, never before.** A claimer asks
+     * this number whether the port holds anything and then goes
+     * looking; a count raised before the value was visible would send
+     * it to find nothing, which the claim treats as an engine bug
+     * rather than a lost race. Raising it afterwards can only mean a
+     * claimer looked a moment too early and did not fire — and the
+     * writer's own readiness check, which happens next, covers that. */
+    int held = atomic_fetch_add_explicit(&sl->held, 1,
+                                         memory_order_acq_rel) + 1;
+
+    /* A diagnostic, and now a racy one: two writers can read the same
+     * high-water mark and both write it back. The number can therefore
+     * under-report by a little under contention. That is accepted
+     * rather than fixed, because making it exact would put a
+     * read-modify-write on the delivery path to sharpen a figure whose
+     * only job is to tell a person that one input side is outpacing
+     * its siblings — and it will still say so. */
     if (held > sl->high_water)
         sl->high_water = held;
 }
 /* }}} */
 
-/* {{{ in_port_pop_locked() */
+/* {{{ in_port_take_locked() */
 /*
- * The mirror of the write: find a ready slot, copy out, release it.
- * Returns whether it got one — which under the mutex it always will,
- * because the readiness walk asked first, but which becomes a real
- * answer the moment the lock comes off and the claim walk has to be
- * able to roll back.
+ * Take a ready slot, and take **only** the slot (issue 210d). The
+ * value stays where it is; what changes is who owns it.
  *
- * The reader is finished with the slot the moment the copy lands in
- * the caller's buffer — the box does not run until a worker picks the
- * task up later, reading from the task and holding no slot at all.
- * That is why nothing that can die is ever inside this window.
+ * This is the half of a claim that has to be under the station's
+ * mutex, and it is deliberately the cheap half: a scan and one state
+ * write per port. No bytes move here. The copying happens afterwards,
+ * outside the lock, in `in_port_release`.
+ *
+ * **What makes that safe is ownership rather than exclusion.** A slot
+ * in *claimed* belongs to exactly one worker and no other worker may
+ * touch its value — which is written into the state table itself, not
+ * asserted here. Bytes nobody else may touch need no lock around them.
+ *
+ * Returns whether it got one. Under the mutex, with the readiness
+ * walk having already answered for this port, it always will: no
+ * other claimer can be inside, and a writer only ever *adds*
+ * availability. A no here is therefore an engine bug rather than a
+ * lost race, which is why the caller stops rather than retrying.
  */
-static int in_port_pop_locked(in_port_t *sl, void *into)
+static int in_port_take_locked(in_port_t *sl, void **taken)
 {
-    int c = in_port_scan(sl, &sl->read_hint, SLOT_READY, SLOT_CLAIMED);
+    int c = in_port_scan(sl, &sl->read_hint, SLOT_READY, SLOT_CLAIMED,
+                         taken, 1);
     if (c < 0)
         return 0;
+    sl->held--;
+    return 1;
+}
+/* }}} */
 
-    memcpy(into, in_port_slot(sl, c), (size_t)sl->elem_size);
-    if (!in_port_slot_move(sl, c, SLOT_CLAIMED, SLOT_EMPTY)) {
+/* {{{ in_port_release() */
+/*
+ * The other half, and the expensive one: copy the value out of a slot
+ * this worker owns and hand the slot back empty. **Called with no lock
+ * held at all.**
+ *
+ * That is where this whole line of work pays. A two-hundred-byte
+ * struct per port used to be copied inside the station's mutex, so
+ * every worker delivering into that station waited behind it; now
+ * several workers copy out of one station at the same moment while a
+ * different worker holds the lock doing its flips.
+ *
+ * The worker is finished with the slot the moment the copy lands in
+ * its buffer. The box does not run until somebody picks the task up
+ * later, reading from the task and holding no slot at all — which is
+ * why no user code is ever inside this window either.
+ */
+static void in_port_release(in_port_t *sl, void *slot, void *into)
+{
+    memcpy(into, slot, (size_t)sl->elem_size);
+    if (!slot_move_at(slot, sl->elem_size, SLOT_CLAIMED, SLOT_EMPTY)) {
         fprintf(stderr, "delivery: releasing a slot this thread had claimed, "
                         "and somebody else had moved it\n");
         abort();
     }
-    sl->held--;
-    return 1;
 }
 /* }}} */
 
@@ -309,23 +424,45 @@ static int (*const in_port_filled[IN_PORT_KIND_COUNT])(const in_port_t *) = {
  * hand the hot path to whoever wrote the slowest box. Nothing is
  * gathered now (issue 210), so what remains is only lock ordering.
  */
-static void ring_claim(in_port_t *sl, void *into)
+static void ring_claim(in_port_t *sl, void *into, void **taken)
 {
     /* Under the mutex the readiness walk has already established that
-     * this port holds something and nobody can have taken it since,
-     * so a scan that comes back empty-handed means the count and the
-     * slots disagree. That stops being an engine bug and becomes an
-     * ordinary lost race when the lock comes off, at which point this
-     * row grows the roll-back that issue 210d designs. */
-    if (!in_port_pop_locked(sl, into)) {
+     * this port holds something, and nothing can have taken it since:
+     * other claimers are excluded by the lock, and a writer only ever
+     * *adds* availability — it moves a slot empty → reserved → ready
+     * and never touches a ready one. So a scan that comes back
+     * empty-handed means the count and the slots disagree, which is an
+     * engine bug rather than a lost race.
+     *
+     * **There is no roll-back path here, and there is not meant to
+     * be.** An earlier design claimed slots one at a time without the
+     * lock and undid them when a later port came up empty, which
+     * needed an ordering rule to keep two workers from each holding
+     * half a claim forever. Checking every port *before* flipping any
+     * of them makes that whole situation unreachable: either all the
+     * ports answer and the claim succeeds outright, or one does not
+     * and nothing was ever taken. */
+    if (!in_port_take_locked(sl, taken)) {
         fprintf(stderr, "delivery: a port that answered ready had no ready "
                         "slot when asked for one\n");
         abort();
     }
+    (void)into;
 }
 
-static void static_claim_locked(in_port_t *sl, void *into)
+static void static_claim_locked(in_port_t *sl, void *into, void **taken)
 {
+    /* Nothing is taken, so nothing is released afterwards: a static is
+     * peeked, never consumed. **And the copy stays under the lock**,
+     * which is the one place issue 210d's argument does not reach. A
+     * claimed ring slot belongs to one worker, and that ownership is
+     * what lets its bytes be copied without exclusion; a static
+     * belongs to nobody in particular, so the only thing standing
+     * between a claim and a concurrent write to the same constant is
+     * this mutex. Moving this copy outside it would reintroduce
+     * exactly the torn read that putting the value on the port was
+     * meant to make impossible. */
+    *taken = NULL;
     /* A copy, under the station's mutex, beside the ring pops (issue
      * 401). It used to be resolved later, during task construction and
      * outside this lock, and the reason was lock ordering: the value
@@ -345,8 +482,9 @@ static void static_claim_locked(in_port_t *sl, void *into)
     memcpy(into, sl->constant, (size_t)sl->elem_size);
 }
 
-static void none_claim(in_port_t *sl, void *into)
+static void none_claim(in_port_t *sl, void *into, void **taken)
 {
+    (void)taken;
     /* Unreachable, and saying so out loud is the point. The walk above
      * this one asks every port whether it is filled before it claims
      * from any of them, and an unconfigured port answers no — so
@@ -368,7 +506,7 @@ static void none_claim(in_port_t *sl, void *into)
  * encoded is gone with the statics table, so the hole is gone with it.
  */
 static void (*const in_port_claim_locked[IN_PORT_KIND_COUNT])
-                   (in_port_t *, void *) = {
+                   (in_port_t *, void *, void **) = {
     [IN_PORT_RING]   = ring_claim,
     [IN_PORT_STATIC] = static_claim_locked,
     [IN_PORT_NONE]   = none_claim,
@@ -397,8 +535,22 @@ static int station_input_bytes(const station_t *s)
  * buffer — copied out and the head advanced, so no other thread can
  * claim the same ones. Returns whether a task became due.
  */
-static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed)
+static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed,
+                                          void **taken)
 {
+    /*
+     * **Check all, then flip all** (issue 210d), and the order is the
+     * whole safety argument. Nothing can take a ready slot away
+     * between the two walks: other claimers are excluded by this
+     * mutex, and a writer only ever adds availability — it moves a
+     * slot empty → reserved → ready and never touches a ready one. So
+     * either every port answers and the claim succeeds outright, or
+     * one does not and nothing was ever taken.
+     *
+     * That is what makes a roll-back path unnecessary rather than
+     * merely unused, and it is why livelock here is unreachable rather
+     * than prevented.
+     */
     for (int i = 0; i < s->n_in_ports; i++) {
         in_port_t *sl = &s->in_ports[i];
         if (!in_port_filled[sl->kind](sl))
@@ -411,11 +563,43 @@ static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed)
         /* Every kind, unconditionally. The caller used to test the
          * function pointer here because the static row was null; there
          * is no null now, so the dispatch is a call rather than a call
-         * guarded by a question about the table's own shape. */
-        in_port_claim_locked[sl->kind](sl, claimed + offset);
+         * guarded by a question about the table's own shape.
+         *
+         * A ring port records the slot it took and copies nothing; a
+         * static copies here, under the lock, and records nothing.
+         * The two are different because only one of them is owned. */
+        in_port_claim_locked[sl->kind](sl, claimed + offset, &taken[i]);
         offset += sl->elem_size;
     }
     return 1;
+}
+/* }}} */
+
+/* {{{ station_release_claimed() */
+/*
+ * The copies, and the release, with **no lock held** (issue 210d).
+ *
+ * Runs after the caller has dropped the station's mutex. Each slot
+ * named here is in *claimed*, which means it belongs to this worker
+ * and no other worker may touch its value — so the bytes need no
+ * exclusion, and several workers can be doing this on one station at
+ * the same moment while another holds the lock doing its flips.
+ *
+ * Statics are absent from this walk by construction: they recorded no
+ * slot, because they were peeked rather than taken, and their bytes
+ * were copied under the lock where the only protection they have
+ * lives.
+ */
+static void station_release_claimed(station_t *s, unsigned char *claimed,
+                                    void **taken)
+{
+    int offset = 0;
+    for (int i = 0; i < s->n_in_ports; i++) {
+        in_port_t *sl = &s->in_ports[i];
+        if (taken[i])
+            in_port_release(sl, taken[i], claimed + offset);
+        offset += sl->elem_size;
+    }
 }
 /* }}} */
 
@@ -516,7 +700,8 @@ task_t *task_build(map_t *m, int station_index,
  * the check it triggers is this one: an empty ring port still answers
  * no, and the engine will not invent a value for it.
  */
-int map_station_try_start(map_t *m, int station)
+int map_station_start_after(map_t *m, int station,
+                            void (*while_locked)(void *), void *ctx)
 {
     if (station < 0 || station >= m->n_stations)
         die("starting a station outside the table", station);
@@ -530,20 +715,45 @@ int map_station_try_start(map_t *m, int station)
 
     int in_bytes = station_input_bytes(s);
     unsigned char claimed[in_bytes > 0 ? in_bytes : 1];
+    void *taken[s->n_in_ports > 0 ? s->n_in_ports : 1];
     int port = 0;
 
     pthread_mutex_lock(&s->mutex);
-    int due = station_ready_and_claim_locked(s, claimed);
+    /*
+     * Whatever the caller wanted done *inside* this hold, done here.
+     *
+     * There is exactly one such caller and it is writing a static
+     * (issue 210d, step 7). A write to a static and the readiness
+     * check it triggers both want this mutex, and doing them as two
+     * acquisitions would leave a gap between the value changing and
+     * the question being asked. Handing the work in rather than
+     * exporting a locked variant is what keeps every acquisition of a
+     * station's mutex inside this file, where the discipline can be
+     * read in one place.
+     */
+    if (while_locked)
+        while_locked(ctx);
+    int due = station_ready_and_claim_locked(s, claimed, taken);
     if (due && s->kind == STATION_ITERATOR && s->n_out_ports > 0) {
         port = s->cursor;
         s->cursor = (s->cursor + 1) % s->n_out_ports;
     }
     pthread_mutex_unlock(&s->mutex);
 
-    if (due)
+    if (due) {
+        /* Outside the lock: the copies, then the task (issue 210d). */
+        station_release_claimed(s, claimed, taken);
         pool_push(m->pool, task_build(m, station, in_bytes > 0 ? claimed : NULL,
                                       port));
+    }
     return due;
+}
+/* }}} */
+
+/* {{{ map_station_try_start() */
+int map_station_try_start(map_t *m, int station)
+{
+    return map_station_start_after(m, station, NULL, NULL);
 }
 /* }}} */
 
@@ -599,12 +809,18 @@ int map_deliver_value(map_t *m, int station, int port, const void *value)
     unsigned char claimed[in_bytes > 0 ? in_bytes : 1];
 
     int out_port = 0;
+    void *taken[s->n_in_ports > 0 ? s->n_in_ports : 1];
+
+    /* **The write takes no lock** (issue 210d). Reserving a slot is a
+     * single compare-and-swap and the copy that follows goes into
+     * bytes this thread owns, so deliveries into one station never
+     * serialize against each other — only task construction does. */
+    in_port_write(s, &s->in_ports[port], value);
 
     STATS_MARK(wait_start);
     pthread_mutex_lock(&s->mutex);
     STATS_CHARGE(s->mutex_wait_ns, wait_start);
-    in_port_write_locked(&s->in_ports[port], value);
-    int due = station_ready_and_claim_locked(s, claimed);
+    int due = station_ready_and_claim_locked(s, claimed, taken);
     if (due && s->kind == STATION_ITERATOR && s->n_out_ports > 0) {
         /* The one memory a station keeps, touched at the one moment
          * only one thread can be looking (issue 504): this task
@@ -615,8 +831,11 @@ int map_deliver_value(map_t *m, int station, int port, const void *value)
     }
     pthread_mutex_unlock(&s->mutex);
 
-    if (due)
+    if (due) {
+        /* Outside the lock: the copies, then the task (issue 210d). */
+        station_release_claimed(s, claimed, taken);
         pool_push(m->pool, task_build(m, station, claimed, out_port));
+    }
     return due;
 }
 /* }}} */

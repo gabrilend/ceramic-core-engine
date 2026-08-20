@@ -40,14 +40,23 @@ afterwards. A port that is a static all its life carries slots it
 never uses; that is paid once, at startup.
 
 **A slot says what is happening to it**: nothing here, a writer is
-filling me, the bytes have landed, a reader is emptying me. Every move
-between those names the state it starts from and is one atomic swap,
-so two threads can never own one slot and a move out of a state a slot
-is not in is refused. That is the mutual exclusion, per slot rather
+filling me, the bytes have landed, a reader is emptying me. Two threads
+can never own one slot. That is the mutual exclusion, per slot rather
 than per port, and it is what lets a reader *look* for a usable slot
-instead of computing where one must be — which in turn is what lets
-the copying leave the station's lock, and what will let a buffer grow
-by adding a page rather than copying.
+instead of computing where one must be — which in turn is what let the
+copying leave the station's lock, and what lets a buffer grow by adding
+a page rather than copying.
+
+**Only one of the four moves is a compare-and-swap**, and knowing which
+is the point. Empty → reserved is where two writers genuinely race for
+the same slot, so the loser must be told it lost. The other three have
+exactly one possible mover: an owner moving a slot it holds, or a
+claimer under the station's mutex taking a ready one, which nothing
+else can touch. Those are a load and a store, with acquire and release
+ordering so the bytes travel with the state. The distinction is not
+cosmetic — the claim's search asks this of every candidate it walks
+past, so a read-modify-write per candidate was measurable where a load
+is not.
 
 Slots are never cleared when released. Every write covers the full
 element size, so a stale value is always completely overwritten; the

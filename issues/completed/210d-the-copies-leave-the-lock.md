@@ -11,6 +11,43 @@ and because a lock-free claim is a thing somebody will reach for again.
 
 ## Current behavior
 
+**Done.** The station's mutex now covers the slot states and nothing
+else. A delivering writer takes no lock at all; the claim's copies
+happen after the lock is dropped; and the per-candidate
+compare-and-swap is gone from the side where the lock already
+excludes.
+
+**What it measured**, on the fan-in apparatus, six runs either side.
+Large values (two hundred bytes, four ports) fell from about 1180 ns
+per delivery to about 620. Small values (four bytes, the control) fell
+from about 470 to about 400 — which was the number to watch, because
+the scan had pushed it *up* from its original figure and the question
+was whether this brought it back below rather than merely back to it.
+It did. The ratio between the two runs fell from 2.69 to about 1.5,
+and that ratio is the point: it is the copy's share of a delivery, and
+it shrank because the copy now happens in parallel rather than in
+turn.
+
+**One part of the design was found to have an exception.** The plan
+said both copies leave the lock. A **static's** copy cannot, and the
+reason is exactly the reason the others can: *reserved* and *claimed*
+mean one worker owns a slot, and ownership is what makes bytes safe
+without exclusion. A static is peeked rather than taken, so nothing
+owns it, and the station's mutex is the only thing standing between a
+claim reading that constant and somebody writing it. Moving it out
+would have reintroduced precisely the torn read that putting the value
+on the port was meant to make impossible — the one issue 401 tests
+four thousand times. So the static copy stays inside the hold, and the
+ownership argument is now stated as what it is: a claim about slots,
+not about values.
+
+**And one step turned out to belong to its sibling.** The value copies
+are only safe once growth has stopped relocating slots, so
+[210e](completed/210e-growth-adds-a-page.md) was built first. See the
+parent for the corrected order.
+
+### What stood before
+
 **The scan is built and the positions are gone.** Head and tail have
 been replaced by two hints — one for a reader, one for a writer — and
 by a maintained count of ready slots. Each search starts where its hint
@@ -208,18 +245,20 @@ to promise.
    fifth on the other. Only the third was the retired promise.
 3. **Done.** The scan: a bookmark per port, read once, sweep forward,
    wrap, stop where it started.
-4. The claim becomes check-all-then-flip-all under one hold, with no
-   roll-back path built. The claim already reports whether it found
-   anything, which is the answer the check needs.
-5. The mutex's scope narrowed to the slot states, and both copies moved
-   outside it — the write copy first, then the claim copy — with slot
-   ownership as the only thing protecting the bytes.
-6. The per-candidate compare-and-swap reduced to a plain write wherever
-   the lock already excludes, keeping the atomic transition only where
-   a writer and a claimer genuinely meet.
-7. The static-write path and the readiness check made one hold rather
-   than two acquisitions.
-8. Re-measure the fan-in apparatus against the figure recorded above.
+4. **Done.** The claim is check-all-then-flip-all under one hold, with
+   no roll-back path built.
+5. **Done, with one exception.** The mutex covers the slot states; the
+   write copy and the claim copies happen outside it, protected by
+   ownership. A static's copy stays inside, because nothing owns a
+   static — see above.
+6. **Done.** The per-candidate compare-and-swap became a load wherever
+   the lock already excludes. The atomic transition remains exactly
+   where two writers race for the same empty slot.
+7. **Done.** Writing a static and the readiness check it triggers are
+   one hold. The work is handed to the delivery path to perform inside
+   its own lock rather than a locked variant being exported, so every
+   acquisition of a station's mutex stays in one file.
+8. **Done**, and recorded above.
 
 ## Open questions
 

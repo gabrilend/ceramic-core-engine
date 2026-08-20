@@ -602,6 +602,25 @@ void map_in_port_static_text(map_t *m, int station, int port, const char *text)
 }
 /* }}} */
 
+/* {{{ static_write_under_lock() */
+/*
+ * The copy itself, as something the delivery path can be asked to do
+ * while it holds the station's mutex (issue 210d). It exists as a
+ * separate function only because that is how the work is handed over.
+ */
+typedef struct {
+    in_port_t  *port;
+    const void *bytes;
+    int         size;
+} static_write_t;
+
+static void static_write_under_lock(void *ctx)
+{
+    static_write_t *j = ctx;
+    memcpy(j->port->constant, j->bytes, (size_t)j->size);
+}
+/* }}} */
+
 /* {{{ map_in_port_static_write() */
 void map_in_port_static_write(map_t *m, int station, int port,
                            const void *bytes, int size)
@@ -620,19 +639,28 @@ void map_in_port_static_write(map_t *m, int station, int port,
     if (size != sl->elem_size)
         die_static(&w, "writing a value of the wrong size for this port");
 
-    /* Held for the length of one copy, and it is the station's own
-     * mutex — the one the claim already takes. A struct half-
-     * overwritten while a claim is copying it would yield fields from
-     * two different worlds, which for anything wider than a machine
-     * word is not theoretical. */
-    pthread_mutex_lock(&s->mutex);
-    memcpy(sl->constant, bytes, (size_t)size);
-    pthread_mutex_unlock(&s->mutex);
-
-    /* Writing does not consume anything, so a station that could
-     * already run runs again — which is how a value computed once
-     * propagates through everything downstream of it. */
-    if (m->pool)
-        map_station_try_start(m, station);
+    /* The copy happens under the station's own mutex — the one the
+     * claim already takes. A struct half-overwritten while a claim is
+     * copying it would yield fields from two different worlds, which
+     * for anything wider than a machine word is not theoretical.
+     *
+     * **And it happens inside the same hold as the readiness check**
+     * (issue 210d). Writing does not consume anything, so a station
+     * that could already run runs again — which is how a value
+     * computed once propagates through everything downstream of it.
+     * Doing the copy and the check as two acquisitions would leave a
+     * gap between the value changing and the question being asked, so
+     * the copy is handed to the check to perform.
+     *
+     * Without a pool there is nothing to start, and the copy still has
+     * to happen — a map being built is written into before it runs. */
+    static_write_t job = { sl, bytes, size };
+    if (m->pool) {
+        map_station_start_after(m, station, static_write_under_lock, &job);
+    } else {
+        pthread_mutex_lock(&s->mutex);
+        static_write_under_lock(&job);
+        pthread_mutex_unlock(&s->mutex);
+    }
 }
 /* }}} */

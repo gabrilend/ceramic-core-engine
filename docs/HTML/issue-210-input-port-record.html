@@ -30,8 +30,6 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-210-input-port-record.html" class="here">210 — What an input port is</a>
-<a href="issue-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
-<a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
 <a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
@@ -74,6 +72,8 @@
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
+<a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
+<a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
@@ -157,8 +157,8 @@ whole family.</p>
 <tr><td>issue</td><td>what it builds</td><td>depends on</td></tr>
 <tr><td><a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a></td><td>the gatherer kind and everything reading it, taken out</td><td>—</td></tr>
 <tr><td><a href="done-210b-the-port-record.html">210b — The port record</a></td><td>both storages, the three-value tag, slots allocated at instantiation</td><td>210a</td></tr>
-<tr><td><a href="issue-210c-a-state-on-every-slot.html">210c — A state on every slot</a></td><td>the four-state per-slot machine, then the copies moved out of the lock</td><td>210b</td></tr>
-<tr><td><a href="issue-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a></td><td>the mutex narrowed to the slot states, the value copies moved outside it</td><td>210c</td></tr>
+<tr><td><a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a></td><td><strong>complete</strong> — the four-state per-slot machine</td><td>210b</td></tr>
+<tr><td><a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a></td><td><strong>complete</strong> — the mutex narrowed to the slot states, the value copies moved outside it</td><td>210c, and its second half needs 210e</td></tr>
 <tr><td><a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a></td><td><strong>complete</strong> — a ring buffer that grows by appending, copying nothing</td><td>210d's scan, and it precedes 210d's copies</td></tr>
 <tr><td><a href="issue-210f-changing-what-a-port-is.html">210f — Changing what a port is</a></td><td>conversion between tags as one operation, slots left alone</td><td>210b</td></tr>
 <tr><td><a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a></td><td>a single construction and configuration surface</td><td>210b, 210f</td></tr>
@@ -237,12 +237,14 @@ whichever the tag does not name sitting idle: a list of slot pages, a
 page size, a total capacity and two hints for a ring buffer; the
 constant's own bytes for a static.</p>
 <p>Head and tail are gone, replaced by hints and a maintained count of
-ready slots; every slot carries its own state; and growth appends a
-page rather than reallocating. What is left of this family's design is
-the claim's copies moving outside the lock
-(<a href="issue-210d-the-copies-leave-the-lock.html">210d</a>), the conversion between
-tags (<a href="issue-210f-changing-what-a-port-is.html">210f</a>), and the construction
-surface (<a href="issue-210g-one-way-to-build-a-station.html">210g</a>).</p>
+ready slots; every slot carries its own state; growth appends a page
+rather than reallocating; and the station's mutex covers the slot
+states and nothing else, with every value copy happening outside it.</p>
+<p><strong>The concurrency line is finished.</strong> What is left of this family is
+the conversion between tags
+(<a href="issue-210f-changing-what-a-port-is.html">210f</a>) and the construction surface
+(<a href="issue-210g-one-way-to-build-a-station.html">210g</a>), both of which branch off
+the port record rather than off the concurrency work.</p>
 <p><strong>210a is done: the gatherer is gone</strong>, along with the pull module,
 the inline execution of a box during task assembly, the cycle walk,
 the runtime gather-repoint operation, the gather timing charged to
@@ -281,7 +283,7 @@ is accepted, because it needs several slots at once and nothing
 composes several atomic operations into one. What is <em>not</em> under it is
 the expensive part: both value copies happen outside, protected by the
 fact that a slot in <em>reserved</em> or <em>claimed</em> belongs to exactly one
-worker. See <a href="issue-210d-the-copies-leave-the-lock.html">210d</a>, which also
+worker. See <a href="done-210d-the-copies-leave-the-lock.html">210d</a>, which also
 records why the lock-free claim that was planned here was abandoned.</p>
 <p><strong>A delivering writer takes it not at all.</strong> Writing a value touches
 one slot, and one slot is already atomic with a single compare-and-swap.
@@ -320,7 +322,7 @@ port still answers no.</p>
   a measurement ever shows that fixed cost mattering, the cheap move is
   the second option, publishing progress every so often rather than
   every time, and nothing above has to change for it. Belongs to
-  <a href="issue-210d-the-copies-leave-the-lock.html">210d</a>.</p>
+  <a href="done-210d-the-copies-leave-the-lock.html">210d</a>.</p>
 </ul>
 <ul>
 <li>*A writer that dies mid-copy leaves a slot reserved forever — should</li>

@@ -97,10 +97,22 @@ enum in_port_kind {
  *
  * **This is the mutual exclusion, per slot rather than per port.** A
  * writer must not write while anyone reads or writes; a reader must
- * not read while anyone writes; and the state says so. Every
- * transition is a single compare-and-swap, so two threads can never
- * own one slot — the loser of a race is told it lost and goes
- * elsewhere.
+ * not read while anyone writes; and the state says so. Two threads can
+ * never own one slot.
+ *
+ * **Only one transition is a compare-and-swap**, and knowing which is
+ * worth more than assuming all of them are (issue 210d). Empty →
+ * reserved is where two writers genuinely race for the same slot, so
+ * the loser has to be told it lost. The other three have exactly one
+ * possible mover: reserved → ready and claimed → empty are done by
+ * the worker that owns the slot, and ready → claimed is done under
+ * the station's mutex, which excludes the only other thing that could
+ * want it. Those are an ordinary load and an ordinary store, with
+ * acquire and release ordering so the bytes travel with the state.
+ *
+ * That distinction is not a micro-optimisation. The claim's *search*
+ * asks this question of every candidate it walks past, so a
+ * read-modify-write per candidate was measurable where a load is not.
  *
  * A slot's occupancy used to be *implied* by the head and tail
  * indices, and that is why the station's mutex had to cover the copy:
@@ -138,14 +150,14 @@ enum station_kind {
     STATION_KIND_COUNT
 };
 
-/* {{{ struct in_port */
+/* {{{ struct in_port_page / struct in_port */
 /*
  * One input port. Which fields are *in effect* depends on the kind: a
- * ring buffer reads storage/capacity/head/tail, a static reads
- * static_id, and an unconfigured port reads neither. elem_size
- * matters to all three — slots are exactly the size of the parameter
- * this port feeds, which is what makes a write a memcpy with no
- * allocation on the hot path.
+ * ring buffer reads the pages, the page size, the capacity and the two
+ * hints; a static reads its constant; an unconfigured port reads
+ * neither. elem_size matters to all three — slots are exactly the size
+ * of the parameter this port feeds, which is what makes a write a
+ * memcpy with no allocation on the hot path.
  *
  * The `source` field went with the gatherer (issue 210): it held the
  * upstream station a port pulled from, and nothing pulls now.
@@ -186,9 +198,18 @@ enum station_kind {
  * that repeats.
  */
 typedef struct in_port_page {
-    struct in_port_page *next;
+    /*
+     * Atomic because a delivering writer walks this list holding no
+     * lock while a grower may be appending to it (issue 210d). Growth
+     * publishes a page by storing it here with release, and bumps the
+     * capacity only afterwards — so a scanner that sees the larger
+     * capacity is guaranteed to find the page, and one that sees the
+     * old capacity simply does not use the new slots yet. Neither is
+     * wrong; the second is merely a sweep too early.
+     */
+    _Atomic(struct in_port_page *) next;
     /* page_slots × stride bytes: value, state, padding, repeating. */
-    unsigned char        slots[];
+    unsigned char                 slots[];
 } in_port_page_t;
 
 typedef struct in_port {
@@ -204,8 +225,14 @@ typedef struct in_port {
      * everywhere rather than a long chain of small ones. */
     int   page_slots;
     /* Total slots across every page. A sum rather than a single
-     * allocation's size, which is what the buffer report speaks. */
-    int   capacity;
+     * allocation's size, which is what the buffer report speaks.
+     *
+     * Atomic, and written **after** the page it counts is linked, so
+     * that seeing it is proof the slots exist. A scan snapshots it
+     * once rather than re-reading it, which is what bounds the sweep:
+     * a reader that kept re-reading a number another thread keeps
+     * raising could be made to walk forever. */
+    _Atomic int capacity;
     /* Bytes from one slot to the next: the value's own size, plus its
      * state, rounded up so every value keeps the alignment its type
      * needs (issue 210c). Computed once at allocation, because the
@@ -807,6 +834,21 @@ int map_in_port_depth(map_t *m, int station, int port);
  * it.
  */
 int map_station_try_start(map_t *m, int station);
+
+/*
+ * The same thing, with a piece of work done inside the station's hold
+ * before the check runs (issue 210d).
+ *
+ * There is one caller and it is writing a static. A write and the
+ * readiness check it triggers both want the station's mutex, and two
+ * acquisitions would leave a gap between the value changing and the
+ * question being asked. Handing the work in rather than exporting a
+ * lock-already-held variant keeps every acquisition of a station's
+ * mutex inside the delivery file, where the discipline is written
+ * down once.
+ */
+int map_station_start_after(map_t *m, int station,
+                            void (*while_locked)(void *), void *ctx);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
@@ -924,6 +966,19 @@ int   in_port_slot_move(const in_port_t *sl, int index, int from, int to);
  * (issue 210e).
  */
 int   slot_move_at(void *slot, int elem_size, int from, int to);
+
+/*
+ * Reading a slot's state, and setting it without a compare-and-swap.
+ *
+ * Only for transitions whose mover is already unique: a claimer under
+ * the station's mutex taking a *ready* slot (other claimers excluded
+ * by the lock, and a writer never touches a ready one), or an owner
+ * moving a slot it holds in *reserved* or *claimed*. Everywhere else —
+ * which means a writer racing another writer for an empty slot — the
+ * compare-and-swap above is what makes the loser go elsewhere.
+ */
+int   slot_state_at(const void *slot, int elem_size);
+void  slot_set_at(void *slot, int elem_size, int to);
 /* }}} */
 
 /* {{{ in_port_add_page() / in_port_free_pages() — issue 210e */

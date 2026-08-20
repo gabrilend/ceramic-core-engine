@@ -27,8 +27,8 @@ its own.
 | 210 — what an input port is | **parent, in progress** | The record all three input kinds share, designed once — now two kinds plus unconfigured. Split into eight children; see below. |
 | 210a — the pull path removed | **complete** | The gatherer kind and everything reading it, taken out. Every box now runs on a worker that picked it up. |
 | [210b — the port record](completed/210b-the-port-record.md) | **complete** | Both storages on every port, the three-value tag, slots allocated at instantiation whatever the port is currently for — which is what makes changing a port's source a field write. The map file learned the two forms it owed: a bare dash for a port with no source, and `x64` before the source for a starting depth, so a half-built program round-trips.
-| 210c — a state on every slot | open | Four states, one atomic swap each; then the copies leave the lock, write side first. |
-| [210d — the copies leave the lock](210d-the-copies-leave-the-lock.md) | **half done** | Its scan landed and enabled 210e; its copies wait on 210e and are what remains. The mutex narrows to the slot states; the value copies move outside it, protected by the fact that a claimed slot belongs to exactly one worker. Check-all-then-flip-all, so no roll-back path exists. |
+| [210c — a state on every slot](completed/210c-a-state-on-every-slot.md) | **complete** | Four states on every slot, and only one of them a compare-and-swap once it was clear which transitions have a single possible mover. Built first and exercised while the old locking still made a bug in it harmless, which is why nothing tore when the lock came off. |
+| [210d — the copies leave the lock](completed/210d-the-copies-leave-the-lock.md) | **complete** | The mutex covers the slot states and nothing else; a delivering writer takes no lock at all; the copies happen either side of the hold, protected by the fact that a reserved or claimed slot belongs to exactly one worker. Check-all-then-flip-all, so no roll-back path exists. Large values fell from about 1180 ns a delivery to about 620. |
 | [210e — growth adds a page](completed/210e-growth-adds-a-page.md) | **complete** | Append rather than copy, in equal-sized pages, so no slot that already exists ever moves. Taken *before* 210d's copies rather than after, because that is the order with no window in it — the dependency turned out to run between two halves of 210d rather than between two issues. |
 | 210f — changing what a port is | open | A field write, with waiting values left where they sit rather than freed. |
 | 210g — one way to build a station | open | One configuration surface; a hand-built program and a loaded one dump identically. |
@@ -67,6 +67,27 @@ had to stop existing.**
 would freeze every thread delivering into that station. This is why the
 claim dispatch table had rows it deliberately left empty, and the
 reasoning outlived the rows.
+
+**And then neither does any copying.** The mutex ended up covering the
+slot states and nothing else: a search and one state write per port,
+with no bytes moving inside it at all (210d). What protects the values
+instead is **ownership rather than exclusion** — a slot in *reserved*
+or *claimed* belongs to exactly one worker, and bytes nobody else may
+touch need no lock around them. A delivering writer takes no lock
+whatsoever, because writing touches one slot and one slot is already
+atomic.
+
+The phase's own account of this had said the values were *copied out*
+before the lock released, and that the copying was what made two
+invocations of one station safe. It was not: the exclusive claim was.
+Once that was seen, the copy could move outside and the guarantee did
+not change, because it had never rested on the copy.
+
+**A static is the exception, and it is the exception for the same
+reason the rule works.** Ownership is a claim about slots. A static is
+peeked rather than taken, so nothing owns it, and the mutex is the only
+thing between a claim reading that constant and somebody writing it —
+so that one copy stays inside the hold.
 
 **And now no user code runs anywhere but on a worker that picked up a
 task.** 210a removed the pull path, which was the engine's one named

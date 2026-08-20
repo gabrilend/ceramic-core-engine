@@ -42,7 +42,20 @@ four-byte integer port goes from four bytes per slot to eight; a
 two-hundred-byte struct port goes to two hundred and eight. The
 overhead is proportionally large exactly where it is absolutely small.
 
-**What is left.** Both copies are still under the mutex.
+**Nothing is left, and this issue closes with
+[210d](210d-the-copies-leave-the-lock.md).** Both copies are now
+outside the mutex — the write's because a reserved slot belongs to its
+writer, the claim's because a claimed slot belongs to its claimer. The
+one exception is a static's copy, which stays inside the lock because
+nothing owns a static; that is recorded in 210d, where the ownership
+argument lives.
+
+**The machine did its job in the way this issue hoped.** It was built
+first and exercised for real while the old locking still guaranteed a
+bug in it could not matter, so that a wrong transition would show up
+as a refused move rather than as a torn value. Nothing refused. When
+the lock came off, the states were already proven and what changed was
+only who was allowed to skip the compare-and-swap.
 
 ## What steps 3 and 4 turned out to need
 
@@ -136,20 +149,21 @@ then start removing the thing that was covering for it.
    building a correct barrier to test a mechanism whose purpose is to
    avoid needing one is the wrong way round. The scaffolding's own
    race was the first thing that shape produced.
-3. **The scan comes first**, from
+3. **Done.** The scan, from
    [210d](210d-the-copies-leave-the-lock.md), for the reason set out
    above: a reserved-but-unpublished slot is indistinguishable from a
    full one to anything that computes a position, so the reader has to
    look rather than calculate before either copy can leave the lock.
-4. Move the **write** copy out of the lock. A deliverer takes a slot
-   to reserved, copies outside, then publishes as ready.
-5. Move the **read** copy out of the lock. A claimer takes a slot to
-   claimed, copies outside, then releases as empty.
-6. Measure the delivery path at each of those two steps against a wide
-   fan-in with large values — which is where the win is supposed to be
-   and the only place it will show. A measurement on small values will
-   show nothing and would be evidence of nothing. The apparatus and
-   the baseline both exist; see above.
+4. **Done** (in 210d). The **write** copy is outside the lock: a
+   deliverer takes a slot to reserved, copies outside, then publishes
+   as ready — and takes no lock at all unless the port must grow.
+5. **Done** (in 210d). The **read** copy is outside the lock: a
+   claimer takes a slot to claimed under the mutex, then copies and
+   releases with nothing held.
+6. **Done.** Measured on the wide fan-in with large values, where the
+   win was supposed to be, and against the small-value control, where
+   it was not. Both moved and the large one moved much further; the
+   figures are in 210d.
 
 ## What this issue does not do
 

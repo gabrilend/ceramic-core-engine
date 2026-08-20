@@ -26,21 +26,30 @@ worker, before it goes back for more work. That is acceptable: each
 delivery may unblock a station, so the worker is spending its time
 manufacturing parallelism for everyone else.
 
-**3. For each destination, take that station's mutex.**
+**3. Write the value into the port, taking no lock.** Search for an
+empty slot, starting where this port's write hint points and sweeping
+forward until it wraps back to where it began; take the first one that
+will move from empty to reserved, `memcpy` `elem_size` bytes into it,
+and publish it as ready. If the sweep finds nothing the buffer is
+genuinely full and grows first, which *is* one of the rare operations
+that takes the mutex — see [002](002-stations-and-ports.md).
 
-**4. Write the value into the port.** Search for an empty slot,
-starting where this port's write hint points and sweeping forward until
-it wraps back to where it began; take the first one that will move from
-empty to reserved, `memcpy` `elem_size` bytes into it, and publish it
-as ready. If the sweep finds nothing the buffer is genuinely full and
-grows first — see [002](002-stations-and-ports.md).
+**Nothing is excluded here and nothing needs to be.** Reserving a slot
+is a single compare-and-swap, so two writers reaching for the same one
+cannot both win; and once a slot says *reserved*, it belongs to that
+writer alone and its bytes are nobody else's business. Deliveries into
+one station therefore never serialize against each other. Only task
+construction does.
 
 The hint is read once and the sweep is bounded by it: at most every
 slot the port has, exactly one time each. Re-reading a hint that other
 workers keep pushing forward would let a searcher chase it, and a
 search that can be outrun is a search with no bound.
 
-**5. Run the readiness check, still holding the mutex.** Walk every
+**4. Take the station's mutex.** This is the only lock a delivery
+takes, and what it covers is the slot *states* — never the value bytes.
+
+**5. Run the readiness check.** Walk every
 port on this station and ask whether it holds a value. A ring buffer
 holds one if its count of ready slots is above zero. A static always
 does, because its value is simply there and reading it does not consume
@@ -58,21 +67,41 @@ If any port is empty, release the mutex and move to the next
 destination. Nothing more happens; the value sits in the buffer waiting
 for its siblings.
 
-**6. If every port is occupied, claim one value from each.** Ring
-buffer ports are popped — the same sweep as step 4 run the other way,
-looking for a ready slot and taking it to claimed, then copying the
-value out and releasing the slot as empty. Taking the slot is what
-makes the value spoken for: no other thread can claim it, because a
-slot moves out of ready exactly once. Which value a port yields is not
-promised to be the oldest, and [058](058-guarantees.md) says why. If the
-station is an iterator, its cursor advances now and the port it landed
-on is recorded, so that two tasks assembled moments apart go to
+**6. If every port is occupied, take one slot from each — and copy
+nothing.** The same sweep as step 3 run the other way, looking for a
+ready slot and moving it to claimed. That is all that happens under the
+lock: a search and one state write per port. Taking the slot is what
+makes the value spoken for, since a slot moves out of ready exactly
+once. Which value a port yields is not promised to be the oldest, and
+[058](058-guarantees.md) says why.
+
+**Check every port before taking from any of them**, and the order is
+the whole safety argument. Nothing can remove a ready slot in between:
+other claimers are excluded by this mutex, and a writer only ever
+*adds* availability. So either every port answers and the claim
+succeeds outright, or one does not and nothing was ever taken — which
+is why there is no undo path here, and why two workers cannot end up
+each holding half a claim.
+
+A static is the exception in both directions: it is peeked rather than
+taken, and its bytes are copied **here**, inside the lock. Nothing owns
+a static, so the mutex is the only thing standing between this copy and
+somebody writing that constant.
+
+If the station is an iterator, its cursor advances now and the port it
+landed on is recorded, so that two tasks assembled moments apart go to
 different ports.
 
-**7. Release the mutex.** This is the end of the contended section, and
-it is deliberately short: a few `memcpy`s and some index arithmetic. As
-soon as it is released, other threads can deliver into this station
-again.
+**7. Release the mutex.** The contended section is over, and it
+contained no `memcpy` at all.
+
+**7a. Copy the claimed values out, and release the slots.** With no
+lock held. Each slot is in *claimed*, which means it belongs to this
+worker and no other worker may touch its value, so the copy needs no
+exclusion from anybody — several workers can be doing this on one
+station at the same moment while another holds the lock doing its
+takes. This is where the expense of a delivery lives, a two-hundred-byte
+struct per port, and it now runs fully in parallel.
 
 **8. Build the task struct.** Allocated fresh, sized exactly for this
 box — the generator knows it needs, say, two ints in and one int out.
@@ -90,14 +119,23 @@ destination.
 When every destination has been handled, the worker frees its own task
 struct and goes back to the pool for another.
 
-## Why the values are claimed before the mutex is released
+## Why the values are spoken for before the mutex is released
 
-Steps 6 and 7 are the reason two invocations of the same station can
-run at once without interfering. By the time the mutex is released, the
-values belonging to this invocation have been copied out of the station
-entirely and into a task struct that nothing else can see. A second
-thread arriving immediately afterward finds different values, builds a
+Step 6 is the reason two invocations of the same station can run at
+once without interfering. By the time the mutex is released, the slots
+belonging to this invocation have been moved to *claimed*, which means
+they belong to this worker and nothing else may touch them. A second
+thread arriving immediately afterward finds different slots, builds a
 different task, and the two never meet.
+
+**Note what that sentence does not say.** It used to say the values had
+been *copied out* before the lock was released, and the copying was
+doing none of the work — the exclusive claim was. Once a slot says
+claimed, its bytes are private property, and private property does not
+need a lock around it. So the copy moved outside, where it runs in
+parallel across every worker doing the same thing to the same station,
+and the guarantee is unchanged because it never rested on the copy in
+the first place.
 
 This is also why a box may not remember anything. The station is
 guarded, but the box function runs long after the mutex was dropped,

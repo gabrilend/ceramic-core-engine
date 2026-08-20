@@ -2,13 +2,25 @@
  * 063-test-fan-in-cost.c — what one delivery costs when a station has
  * many input ports and the values are large.
  *
- * What this is: the baseline issue 210c asks for before it changes
- * anything. That issue moves the value-copying out of the station's
- * mutex in two steps and wants to know whether each step helped; a
- * number taken afterwards would be a claim rather than a finding, and
- * phase 4 already learned once that a cost measured in the wrong
- * place measures nothing. So this file exists to be run before, run
- * again after each step, and compared against itself.
+ * What this is: the measurement the lock came off against. Issue 210c
+ * took the baseline before anything changed and issue 210d moved the
+ * value-copying out of the station's mutex; a number taken only
+ * afterwards would be a claim rather than a finding, and phase 4
+ * already learned once that a cost measured in the wrong place
+ * measures nothing. So this file exists to be run before, run again
+ * after each step, and compared against itself.
+ *
+ * What it has said so far, on one machine and worth re-taking on any
+ * other. The baseline, before the scan: large values around eight
+ * hundred nanoseconds a delivery. After the scan replaced index
+ * arithmetic, small values got about half again slower — a
+ * compare-and-swap per candidate walked past, which is the cost the
+ * scan charges. After the copies left the lock and that per-candidate
+ * swap became a load, large values came down to roughly six hundred
+ * and small values below where they started. The ratio between the
+ * two runs fell from about 2.7 to about 1.5, which is the copy's
+ * share of a delivery shrinking because it now happens in parallel
+ * rather than in turn.
  *
  * How it does it, in general terms: one station that is a sink — so
  * nothing downstream can pollute the reading — with several ring
@@ -18,12 +30,12 @@
  * the number of deliveries, is the number.
  *
  * Two runs, and the pairing is the point. The **large** run carries a
- * two-hundred-byte struct, which is the case 210c is trying to
- * improve: a station three arrows fan into holds its lock for six
+ * two-hundred-byte struct, which is the case this line of work is
+ * trying to improve: a station three arrows fan into holds its lock for six
  * hundred bytes of copying while everyone else waits. The **small**
- * run carries a four-byte integer and is the control — it is expected
- * to barely move when 210c lands, because a copy that small was never
- * what anybody was waiting for. If a future run shows both numbers
+ * run carries a four-byte integer and is the control — a copy that
+ * small was never what anybody was waiting for, so it is expected to
+ * move much less. If a future run shows both numbers
  * improving equally, the improvement is not the one that was designed
  * and something else changed.
  *
@@ -174,17 +186,25 @@ static double measure(const char *label, task_call_t shim, int elem_size)
      * value across, under the very mutex being measured, with the copy
      * proportional to the element size. So the large-value number was
      * partly a measurement of *growth* rather than of the per-delivery
-     * copy, and growth is issue 210e's problem, not issue 210c's.
+     * copy, and growth was a separate issue's problem (210e).
      *
-     * A baseline that includes it would understate 210c: moving the
-     * delivery copy out of the lock leaves the growth copy inside it,
-     * so the improvement would look smaller than it was for a reason
-     * that has nothing to do with the change. Sizing the ports past
-     * what the run can fill takes growth out of the picture entirely
-     * and leaves exactly the cost 210c is aiming at.
+     * A baseline that included it would have understated the change:
+     * moving the delivery copy out of the lock leaves the growth copy
+     * inside it, so the improvement would have looked smaller than it
+     * was for a reason having nothing to do with it. Sizing the ports
+     * past what the run can fill takes growth out of the picture and
+     * leaves exactly the cost this measures.
      *
-     * One spare slot means a buffer holds one less than its depth, and
-     * a producer can be a full run ahead of its slowest sibling. */
+     * **It also means this number says nothing about paging.** A port
+     * that never grows has one page, and a one-page scan walks the
+     * same way the single array did. What paging costs is a pointer
+     * hop per page boundary on a port deep enough to have several, and
+     * this apparatus deliberately has none — so a flat reading across
+     * that change is the absence of evidence rather than evidence of
+     * absence.
+     *
+     * The extra couple of slots are slack, so a producer can run a
+     * little ahead of its slowest sibling without ever filling up. */
     for (int i = 0; i < PORTS; i++)
         map_in_port_start_depth(m, 0, i, VALUES_PER_PORT + 2);
 
@@ -246,7 +266,7 @@ int main(void)
 
     printf("  %d ports, %d values each, %d threads contending\n",
            PORTS, VALUES_PER_PORT, PORTS);
-    printf("    %3zu-byte values: %6.1f ns per delivery   <- the one 210c moves\n",
+    printf("    %3zu-byte values: %6.1f ns per delivery   <- the one that moved\n",
            sizeof(bulk_t), large);
     printf("    %3zu-byte values: %6.1f ns per delivery   <- the control\n",
            sizeof(int), small);
