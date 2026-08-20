@@ -42,6 +42,28 @@ static int refuse(const char *what)
 }
 /* }}} */
 
+/* {{{ said() */
+/*
+ * A refusal that travels upward instead of being printed where it
+ * happened (issue 212). The caller decides what to do with it —
+ * collect it with the others in a file, hand it to a control surface,
+ * or stop the program.
+ *
+ * Per thread, because two threads may be editing two different maps
+ * and a shared buffer would let one overwrite the other's complaint.
+ * Valid until this thread's next refusal.
+ */
+static const char *said(const char *what)
+{
+    /* Wide enough for the longest refusal below, which names a
+     * station, a port and a kind. A message that arrived
+     * truncated would be one somebody had to guess the end of. */
+    static _Thread_local char kept[256];
+    snprintf(kept, sizeof kept, "%s", what);
+    return kept;
+}
+/* }}} */
+
 /* {{{ station_kind_out_port_limit() */
 static int station_kind_out_port_limit(unsigned char kind)
 {
@@ -52,9 +74,28 @@ static int station_kind_out_port_limit(unsigned char kind)
 }
 /* }}} */
 
-/* {{{ map_rewire_connect() */
-int map_rewire_connect(map_t *m, int from_station, int port,
-                       int to_station, int to_port)
+/* {{{ map_wire() */
+/*
+ * **Draw a wire, at any moment** (issue 212) — while a program is
+ * being assembled, or on a running one with workers in flight. There
+ * is one implementation and it applies every rule, because the rules
+ * were never about *when*: a sink has nothing to wire from whether or
+ * not the pool has started, and a destination that is not a buffer
+ * has nowhere to put a value either way.
+ *
+ * There used to be two. Construction had its own, which checked less
+ * — it did not ask whether the destination was a buffer, and it did
+ * not check the widths — and stopped the program when refused;
+ * runtime editing had another, which checked everything and printed.
+ * Two sets of rules that were supposed to agree, and one of them
+ * quietly weaker, is how a program becomes buildable from a file and
+ * unbuildable by hand.
+ *
+ * Returns NULL when the wire was drawn, or a sentence saying why not.
+ * The string is valid until this thread's next refusal.
+ */
+const char *map_wire(map_t *m, int from_station, int port,
+                     int to_station, int to_port)
 {
     pthread_mutex_lock(&m->rewire_mutex);
 
@@ -62,31 +103,52 @@ int map_rewire_connect(map_t *m, int from_station, int port,
     if (from_station < 0 || from_station >= m->n_stations
         || to_station < 0 || to_station >= m->n_stations) {
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("a station index outside the table");
+        return said("a station index outside the table");
     }
     station_t *from = map_station(m, from_station);
     station_t *to = map_station(m, to_station);
+    /* Only construction used to ask this, and it is the one rule the
+     * runtime path was missing rather than the other way round: an
+     * empty place in the table has no ports to wire and no size to
+     * check against, so every question below it would be asked of
+     * nothing. */
+    if (!from->call || !to->call) {
+        pthread_mutex_unlock(&m->rewire_mutex);
+        return said("wiring a station that has no box placed yet — place, "
+                    "then wire");
+    }
     if (from->out_size == 0) {
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("wiring from a sink — nothing comes out of it");
+        return said("wiring from a sink — nothing comes out of it");
     }
     int limit = station_kind_out_port_limit(from->kind);
     if (port < 0 || (limit > 0 && port >= limit)) {
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("a port index beyond what this station kind can mean");
+        return said("a port index beyond what this station kind can mean");
     }
     if (to_port < 0 || to_port >= to->n_in_ports) {
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("a destination port the box does not have");
+        return said("a destination port the box does not have");
     }
     in_port_t *dest = &to->in_ports[to_port];
     if (dest->kind != IN_PORT_RING) {
-        char message[192];
+        /* Named by station and port, because "the destination port"
+         * is not something anybody can go and look at. The whole-map
+         * check said it this way and this refusal now arrives first,
+         * so it had better say as much. */
+        char who[64];
+        if (m->station_names && to_station < m->n_named
+            && m->station_names[to_station])
+            snprintf(who, sizeof who, "%s", m->station_names[to_station]);
+        else
+            snprintf(who, sizeof who, "%d", to_station);
+        char message[224];
         snprintf(message, sizeof message,
-                 "the destination port is %s, not a buffer — the value would "
-                 "have nowhere to go", in_port_kind_name(dest->kind));
+                 "an arrow lands on %s.%d, but that port is %s, not a buffer "
+                 "— the value would have nowhere to go",
+                 who, to_port, in_port_kind_name(dest->kind));
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse(message);
+        return said(message);
     }
     /*
      * The wire check, by **width** rather than by type name (issue
@@ -136,7 +198,7 @@ int map_rewire_connect(map_t *m, int from_station, int port,
                      b ? b->return_type : "?", from->out_size,
                      dest->type_name ? dest->type_name : "?", dest->elem_size);
             pthread_mutex_unlock(&m->rewire_mutex);
-            return refuse(message);
+            return said(message);
         }
     }
 
@@ -149,7 +211,7 @@ int map_rewire_connect(map_t *m, int from_station, int port,
         if (!fresh) {
             pthread_mutex_unlock(&from->mutex);
             pthread_mutex_unlock(&m->rewire_mutex);
-            return refuse("out of memory for a port");
+            return said("out of memory for a port");
         }
         out_port_t **link = &from->out_ports;
         while (*link)
@@ -172,7 +234,22 @@ int map_rewire_connect(map_t *m, int from_station, int port,
     map_retire(m, old, free);
 
     pthread_mutex_unlock(&m->rewire_mutex);
-    return 0;
+    return NULL;
+}
+/* }}} */
+
+/* {{{ map_rewire_connect() */
+/*
+ * The same operation, for a caller that wants the refusal printed and
+ * a code back. Kept because that is what live editing's callers
+ * already expect; what changed is that it is a face on one
+ * implementation rather than a second implementation.
+ */
+int map_rewire_connect(map_t *m, int from_station, int port,
+                       int to_station, int to_port)
+{
+    const char *no = map_wire(m, from_station, port, to_station, to_port);
+    return no ? refuse(no) : 0;
 }
 /* }}} */
 

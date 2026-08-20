@@ -104,8 +104,33 @@ any arrow into it refused. The format gained a form for it, a depth
 with nothing after it, and a test now asserts the two stay different
 things across a round trip.
 
-Still to come: the wire operations joining the same surface, and box
-wrappers so a map can perform these operations on another map.
+**And wiring is one operation now, applying one set of rules.** There
+used to be two: construction had its own and live editing had another,
+and they were supposed to agree. They did not — **construction's was
+the weaker**, and by exactly two rules. It never asked whether the
+destination was a buffer, and it never compared the widths. So a
+program built by hand could contain a wire that the same program read
+from a file would have been refused, which is the precise shape of
+fault having two paths produces: not a crash, a *capability
+difference* nobody wrote down.
+
+The rules were never about *when*. A sink has nothing to wire from
+whether or not the pool has started, and a destination that is not a
+buffer has nowhere to put a value either way. So there is one
+implementation, taking the rewiring lock at any moment, and three
+faces on it differing only in what a caller wants done with a refusal:
+one returns it, one prints it and returns a code, one stops the
+program.
+
+Moving the buffer check earlier changed where a familiar refusal comes
+from — it now arrives as the wire is drawn rather than when the whole
+program is checked — so it had to learn to name the station and the
+port, which the whole-map version did and the per-edge version did
+not. A refusal that says "the destination port" names nothing anybody
+can go and look at.
+
+Still to come: box wrappers, so a map can perform these operations on
+another map.
 
 ## Intended behavior
 
@@ -308,13 +333,19 @@ rather than drifting into place.
 
 ## Suggested implementation steps
 
-1. The five operations, defined as the only way structure is created,
-   with the per-edge rules from
-   [704](completed/704-runtime-rewiring.md) applied by all of them.
-   Build them over the table as it stands, before it can grow, so the
-   surface is proven while the old sizing still works. Removal is
-   [216](completed/216-removing-a-station.md) and lands last, since it needs the
-   quiescence sweep the others do not.
+1. **Done but for removal.** Creating a program, adding a station,
+   naming one, configuring a port and wiring are one surface, and
+   every one of them applies the same rules and returns a refusal
+   rather than choosing its own way to complain. Removal already
+   exists ([216](completed/216-removing-a-station.md)) and keeps its
+   own shape for now, since it needs the quiescence sweep the others
+   do not.
+
+   The finding: the two wiring paths were **not** equivalent.
+   Construction's was missing two of live editing's rules, so a
+   program built by hand could hold a wire a file could not. That is
+   what having two paths produces — not a crash, a capability
+   difference nobody wrote down.
 2. The station table starts empty and grows a run at a time
    ([211](completed/211-growing-the-station-table.md)), so adding a station is
    the ordinary path taken once per station at startup rather than a

@@ -871,6 +871,24 @@ const char *map_bring_up(map_t *m);
 const char *map_name_station(map_t *m, int station, const char *name);
 /* }}} */
 
+/* {{{ map_wire() — issue 212 */
+/*
+ * Draw a wire from a station's output port to another station's input
+ * port, **at any moment** — while a program is being assembled or on
+ * a running one with workers in flight. NULL when drawn, or a
+ * sentence saying why not.
+ *
+ * There is one implementation and it applies every rule, because the
+ * rules were never about *when*. Construction and live editing used
+ * to have one each, and construction's was quietly the weaker: it
+ * never asked whether the destination was a buffer and never compared
+ * the widths, so a program could be built by hand that the same
+ * program read from a file would have been refused.
+ */
+const char *map_wire(map_t *m, int from_station, int port,
+                     int to_station, int to_port);
+/* }}} */
+
 /* {{{ map_connect() — issues 201, 205, 207 */
 /*
  * Wire: from a station's output port to a destination station's port.

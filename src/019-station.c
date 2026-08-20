@@ -1112,63 +1112,20 @@ void map_scrap_free_all(map_t *m)
 void map_connect(map_t *m, int from_station, int port,
                  int to_station, int to_port)
 {
-    if (from_station < 0 || from_station >= m->n_stations)
-        fail("connecting from a station outside the table");
-    if (to_station < 0 || to_station >= m->n_stations)
-        fail("connecting to a station outside the table");
-
-    station_t *from = map_station(m, from_station);
-    station_t *to = map_station(m, to_station);
-    if (!from->call || !to->call)
-        fail("connecting a station that has no box placed yet — place, then connect");
-    if (to_port < 0 || to_port >= to->n_in_ports)
-        fail("connecting to a port the destination box does not have");
-    if (from->out_size == 0)
-        fail("connecting from a sink — a box that returns nothing has no output to wire");
-    if (port < 0)
-        fail("a port index cannot be negative");
-
-    /* How many exits a station may have is its kind's business
-     * (issue 501): a plain box has exactly one; a comparator exactly
-     * three, indexed less/equal/greater; an iterator as many as the
-     * map draws. For the kinds where an index carries meaning,
-     * wiring only some outcomes is legitimate — sending everything
-     * below a threshold somewhere and discarding the rest — so
-     * intermediate ports are created empty rather than refused. An
-     * empty port discards, which is exactly what an unwired outcome
-     * should do. A dispatch-by-kind table, not a chain. */
-    static const int out_port_limit[STATION_KIND_COUNT] = {
-        [STATION_PLAIN]      = 1,
-        [STATION_COMPARATOR] = 3,
-        [STATION_ITERATOR]   = 0,   /* zero meaning: no limit */
-    };
-    int limit = out_port_limit[from->kind];
-    if (limit > 0 && port >= limit)
-        fail("a port index beyond what this station kind can mean — a plain "
-             "box has one exit, a comparator three");
-
-    while (from->n_out_ports <= port) {
-        out_port_t *fresh = calloc(1, sizeof *fresh);
-        if (!fresh) fail("out of memory for a port");
-        out_port_t **link = &from->out_ports;
-        while (*link)
-            link = &(*link)->next;
-        *link = fresh;
-        from->n_out_ports++;
-    }
-    out_port_t *p = station_out_port(from, port);
-
     /*
-     * A whole new set, published by one write, with the old one filed
-     * rather than freed (issue 214). This is construction rather than
-     * rewiring — nothing is walking yet — but it goes through the same
-     * path anyway, so there is one way a port's destinations change
-     * rather than two that must agree.
+     * A face on the one wiring operation (issue 212), for a caller
+     * that wants a refusal to stop the program.
+     *
+     * This used to be a second implementation with its own rules, and
+     * they were quietly *weaker*: it never asked whether the
+     * destination was a buffer, and it never compared the widths. So
+     * a program could be built by hand that the same program read
+     * from a file would have been refused — two sets of rules meant
+     * to agree, with one of them missing two.
      */
-    dest_set_t *old = out_port_dests(p);
-    dest_set_t *fresh = dest_set_build(old, to_station, to_port, -1, -1);
-    atomic_store_explicit(&p->dests, fresh, memory_order_release);
-    map_retire(m, old, free);
+    const char *no = map_wire(m, from_station, port, to_station, to_port);
+    if (no)
+        fail(no);
 }
 /* }}} */
 
