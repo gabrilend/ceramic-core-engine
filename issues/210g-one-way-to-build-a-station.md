@@ -26,12 +26,31 @@ What now stands:
   still stops the program — text that does not parse — and moving that
   onto the return path belongs with the refusal policy rather than
   being half done here.
-- **The completeness check, unqualified.** Every parameter needs
-  somewhere to get a value, every missing one is named, and they are
-  counted so a long list never reads as a short one. It names the
-  station by the name a map file gave it, or by its index when nothing
-  did — a program built by calling this surface has no names, and a
-  complaint saying "?" is one nobody can act on.
+- **The completeness report.** Every parameter that has nowhere to get
+  a value is named and they are counted, so a long list never reads as
+  a short one. It names the station by the name a map file gave it, or
+  by its index when nothing did — a program built by calling this
+  surface has no names, and a complaint saying "?" is one nobody can
+  act on.
+
+**It is a report and not a refusal, and this issue asked for the
+opposite.** Step 5 below wanted a port with no source to be a
+configuration error, full stop. Two later decisions overturned that
+and they are right.
+[210b](completed/210b-the-port-record.md) taught the map file to
+*spell* a port with no source, so that a half-built program could be
+written down and read back — and there is a test that reloads one.
+[212](212-one-way-to-build-a-program.md) says plainly that a station
+may hold such a port indefinitely, because that is what makes "add a
+station now, wire it in a moment" an ordinary sequence rather than a
+window of invalidity.
+
+Refusing it would make the thing this whole surface exists for
+impossible to express. And nothing breaks: such a station never
+becomes ready, which is the same outcome as a buffered input nothing
+feeds — already a warning, for the same reason. So it is a warning,
+and a loud one, because a station that silently never runs is the
+hardest fault to notice from outside.
 
 **What is left is the callers.** The loader becoming the first of them
 and runtime editing the second is where reading a file stops being a
@@ -144,11 +163,13 @@ unqualified: a port with no source is an error, full stop.
 3. The loader becomes its first caller, losing whatever it does today
    that the surface does not offer.
 4. Runtime editing becomes its second caller.
-5. **Done.** Every parameter needs a source, every missing one named
-   and counted, with no exemption. Asked when a program is called
-   finished rather than while it is being assembled, because a port
-   without a source is the ordinary state of a station nobody has
-   finished wiring.
+5. **Done, and inverted.** Every parameter that has nowhere to get a
+   value is named and counted — but reported rather than refused, for
+   the reasons above. The *unqualified* half of this step survives
+   exactly: there is no exemption, no parameter a box may declare it
+   can do without ([210h](completed/210h-optional-parameters.md)), and
+   every one of them is reported. What changed is the consequence, not
+   the coverage.
 6. **Done**, with the readiness tests: a station with an unconfigured
    port never becomes ready, and becomes ready the moment that port is
    given a source, with the values waiting at its other ports intact.

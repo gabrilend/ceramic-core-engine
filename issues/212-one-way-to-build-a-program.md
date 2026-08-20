@@ -52,6 +52,39 @@ and the workers are parked until the sequence finishes. Nothing outside
 the loader can be in that state, which is why nothing outside the
 loader can build a program.
 
+## Current behavior, in progress
+
+**The whole-program pass is out of the loader**, which is the step
+that ends *still loading* as a state only one mechanism could be in.
+
+A caller now assembles a program by whatever route and then says it is
+finished: the checks run, everything that can start without waiting
+for an arrival is started, and a complaint naming every fault comes
+back if anything is wrong. **Nothing is started when anything is
+wrong**, because a program that runs half of what it was asked to is
+worse than one that refuses. Reading a file is one caller of that,
+with no privileges — it parses, places, wires, and then asks for the
+program to be brought up like anybody else would.
+
+**It is repeatable, and that is the point rather than a convenience.**
+A station added to a running program is checked and started by the
+next call; one already started is not started twice, which needs a
+mark on the station, without which bringing a grown program up again
+would hand every input-less station a second run nobody asked for.
+
+**Where a policy belongs became clearer by moving it.** The old sweep
+refused a program in which nothing could start. That is right for a
+*file somebody asked to be run* — it would do nothing at all — and
+wrong for a repeatable pass, where starting nothing is the ordinary
+outcome of bringing up a program that has already been brought up. So
+the pass reports what it started and the loader decides that zero, on
+a file, is a refusal.
+
+Still to come: the wire operations joining the same surface, box
+wrappers so a map can perform these operations, and the test that a
+program read from a file and one built by calling the surface produce
+identical dumps.
+
 ## Intended behavior
 
 **There is one surface, and it has five operations: create an empty
@@ -268,9 +301,18 @@ rather than drifting into place.
    [210](210-input-port-record.md), including binding a static — which
    is the operation hand placement could never perform, and the reason
    there were two paths.
-4. Split the whole-program checks and the seed out of the loader into
-   one pass a caller invokes, repeatable, seeding only what it has not
-   already seeded.
+4. **Done.** The whole-program checks and the seed are one pass a
+   caller invokes, repeatable, seeding only what it has not already
+   seeded — with a mark per station, so a second bring-up does not
+   re-run what the first started.
+
+   One thing had to be resolved rather than implemented: this issue
+   and [210g](210g-one-way-to-build-a-station.md) disagreed about a
+   port with no source. That issue wanted it fatal; this one says a
+   station may hold one indefinitely, and
+   [210b](completed/210b-the-port-record.md) made the map file able to
+   spell one so a half-built program round-trips. The later two win,
+   and the check reports rather than refuses.
 5. Reduce the loader to a reader: each line of text becomes one call on
    the surface, stopping at the first refusal and naming the file and
    the line. The two-pass structure survives only as "resolve names

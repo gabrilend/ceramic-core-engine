@@ -18,8 +18,8 @@ editing a running one stopped being two things.
 | 601 — map file parser | **losing a form, keeping its shape** | Reads and never constructs — which is exactly what lets the loader shrink to a reader. |
 | 602 — loader first pass | **becoming a caller** | Stations from the registry; the "still loading" state disappears with the pre-sized table. |
 | 603 — loader second pass | **becoming an ordering** | Resolve names after every station exists — permanent reason, temporary machinery. |
-| 604 — load-time validation | **losing two rules** | Both were about a pull path; the whole-program remainder becomes a report, not a refusal. |
-| 605 — the seed sweep | **removed entirely** | Nothing replaced it: construction's own writes are what start a program. |
+| 604 — load-time validation | **moved out of the loader** | Both were about a pull path; the whole-program remainder becomes a report, not a refusal. |
+| 605 — the seed sweep | **moved, not removed** | Nothing replaced it: construction's own writes are what start a program. |
 | 606 — phase 6 demo | complete | One binary, three programs; edits followed; every refusal shown; everything at once. |
 
 ## What the phase established, and what survived being widened

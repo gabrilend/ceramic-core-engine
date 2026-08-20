@@ -656,6 +656,163 @@ const char *map_check_sources(map_t *m)
 }
 /* }}} */
 
+/* {{{ static void station_label_into() */
+/*
+ * The name a map file gave a station, or its index when nothing gave
+ * it one. A program built by calling the surface has no names, and a
+ * complaint that says "?" about it is one nobody can act on.
+ */
+static void station_label_into(map_t *m, int i, char *out, size_t room)
+{
+    if (m->station_names && m->station_names[i])
+        snprintf(out, room, "%s", m->station_names[i]);
+    else
+        snprintf(out, room, "%d", i);
+}
+/* }}} */
+
+/* {{{ map_bring_up() */
+const char *map_bring_up(map_t *m)
+{
+    static _Thread_local char said[768];
+    int used = 0, faults = 0;
+
+    /*
+     * **A port with no source is said out loud and is not a fault**,
+     * and which of those it is took resolving between two issues that
+     * disagreed.
+     *
+     * Issue 210g asked for it to be a configuration error, caught
+     * while somebody is still looking rather than on the first task
+     * built minutes into a run. Issue 210b then made a port with no
+     * source a state the map file can *spell*, so that a half-built
+     * program could be written down and read back — and this issue
+     * says plainly that a station may hold such a port indefinitely,
+     * because that is what lets a program be assembled from nothing
+     * and wired one arrow at a time.
+     *
+     * The later two win, and they are right: nothing breaks. Such a
+     * station simply never becomes ready, which is the same outcome
+     * as a buffered input nothing feeds. Refusing it would make
+     * "add a station now, wire it in a moment" impossible to express,
+     * which is the sequence this whole surface exists to make
+     * ordinary.
+     *
+     * So it is a warning, and a loud one, because a station that
+     * silently never runs is the hardest thing to notice from
+     * outside.
+     */
+    const char *unsourced = map_check_sources(m);
+    if (unsourced)
+        fprintf(stderr, "map: WARNING: %s — %s will not run until %s\n",
+                unsourced,
+                strchr(unsourced, ';') ? "those stations" : "that station",
+                strchr(unsourced, ';') ? "they are finished"
+                                       : "it is finished");
+
+    for (int i = 0; i < m->n_stations; i++) {
+        station_t *s = map_station(m, i);
+        if (!s->call)
+            continue;   /* an empty place is not a station (issue 216) */
+
+        char who[64];
+        station_label_into(m, i, who, sizeof who);
+
+        /* Which of this station's ports does an arrow land on? Sized
+         * to its real port count, because a fixed cap here would be a
+         * silent hole in the checking. */
+        int landed_on[s->n_in_ports > 0 ? s->n_in_ports : 1];
+        memset(landed_on, 0, sizeof landed_on);
+        for (int k = 0; k < m->n_stations; k++) {
+            station_t *other = map_station(m, k);
+            for (out_port_t *p = other->out_ports; p; p = p->next) {
+                dest_set_t *set = out_port_dests(p);
+                for (int di = 0; set && di < set->n; di++)
+                    if (set->items[di].station == i
+                        && set->items[di].port < s->n_in_ports)
+                        landed_on[set->items[di].port] = 1;
+            }
+        }
+
+        int has_ring = 0, any_arrow = 0;
+        for (int j = 0; j < s->n_in_ports; j++) {
+            if (atomic_load_explicit(&s->in_ports[j].kind,
+                                     memory_order_relaxed) == IN_PORT_RING)
+                has_ring = 1;
+            any_arrow |= landed_on[j];
+        }
+
+        /* An arrow landing on a port that is not a buffer would have
+         * nowhere to put its value. The complaint names which of the
+         * other two it found, because the fixes differ: a constant
+         * wants the arrow removed or the constant unbound, while a
+         * port with no source wants finishing. */
+        for (int j = 0; j < s->n_in_ports; j++) {
+            unsigned char k = atomic_load_explicit(&s->in_ports[j].kind,
+                                                   memory_order_relaxed);
+            if (landed_on[j] && k != IN_PORT_RING) {
+                faults++;
+                if (used < (int)sizeof said - 128)
+                    used += snprintf(said + used, sizeof said - (size_t)used,
+                                     "%san arrow lands on %s.%d, but that "
+                                     "port is %s, not a buffer",
+                                     used ? "; " : "", who, j,
+                                     in_port_kind_name(k));
+            }
+        }
+
+        /* Buffered inputs nothing feeds. Loud but not a fault: a
+         * program under construction has these, and so does one fed
+         * from outside by a test or a control surface. Silently never
+         * running is the hardest thing to notice from outside, which
+         * is why it is said at all. */
+        if (has_ring && !any_arrow)
+            fprintf(stderr,
+                    "map: WARNING: station %s has buffered inputs that no "
+                    "arrow feeds — unless something outside delivers into "
+                    "it, it will never run\n", who);
+    }
+
+    if (faults) {
+        if (used < (int)sizeof said - 48)
+            snprintf(said + used, sizeof said - (size_t)used,
+                     " — nothing was started");
+        return said;
+    }
+
+    /*
+     * The one place anything walks the station table looking for
+     * work. From here on every station is reached by index, through a
+     * wire; the engine never scans, and this is the single exception.
+     *
+     * Every station with no buffered input can run now, because
+     * nothing has to arrive first. A station with an unfinished port
+     * is skipped rather than refused — the check above already
+     * refused it, so reaching here means there are none.
+     */
+    for (int i = 0; i < m->n_stations; i++) {
+        station_t *s = map_station(m, i);
+        if (!s->call || s->seeded)
+            continue;
+
+        int has_ring = 0;
+        for (int j = 0; j < s->n_in_ports; j++)
+            if (atomic_load_explicit(&s->in_ports[j].kind,
+                                     memory_order_relaxed) == IN_PORT_RING)
+                has_ring = 1;
+        if (has_ring)
+            continue;
+
+        /* Through the same door delivery uses — one way a task comes
+         * into existence, not two. */
+        s->seeded = 1;
+        if (map_station_try_start(m, i))
+            m->seeded++;
+    }
+    return NULL;
+}
+/* }}} */
+
 /* {{{ in_port_kind_name() */
 const char *in_port_kind_name(unsigned char kind)
 {

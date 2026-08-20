@@ -490,6 +490,20 @@ typedef struct station {
      */
     const char     *box_name;
 
+    /*
+     * Whether this station has already been set going by a
+     * bring-up (issue 212).
+     *
+     * The pass that starts a program is **repeatable**: a station
+     * added to a running program is checked and started by the next
+     * call, and one that was started before is not started twice.
+     * Without the mark, bringing a grown program up again would give
+     * every no-input station a second run for no reason anybody asked
+     * for — which is the sort of thing that looks like a scheduling
+     * bug for a week.
+     */
+    unsigned char   seeded;
+
 
     /* Comparator only: the three-way compare for the box's return
      * type, resolved from the registry at placement so the delivery
@@ -811,6 +825,33 @@ const char *map_configure_port(map_t *m, int station, int port,
  * slots holds a value.
  */
 const char *map_check_sources(map_t *m);
+/* }}} */
+
+/* {{{ map_bring_up() — issue 212 */
+/*
+ * **Declare a program finished, check the whole of it, and set going
+ * whatever can run without waiting for an arrival.**
+ *
+ * This is the pass that used to live inside reading a file, which is
+ * what made reading a file a privileged act: it validated and seeded
+ * in a phase nothing else could enter, and there was a state called
+ * *still loading* that only the loader could be in. There is no such
+ * state now. A caller assembles a program by whatever route — reading
+ * a file, calling the surface, or both — and then says it is
+ * finished.
+ *
+ * **Repeatable.** A station added to a running program is checked and
+ * started by the next call; a station already started is not started
+ * again. That is what makes "add a station now, wire it in a moment,
+ * bring it up" an ordinary sequence rather than a window of
+ * invalidity.
+ *
+ * Returns NULL when the program was sound, or a collected complaint
+ * naming every fault found. **Nothing is started when anything is
+ * wrong**, because a program that runs half of what it was asked to
+ * is worse than one that refuses.
+ */
+const char *map_bring_up(map_t *m);
 /* }}} */
 
 /* {{{ map_connect() — issues 201, 205, 207 */

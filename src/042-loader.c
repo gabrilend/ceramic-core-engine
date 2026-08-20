@@ -264,165 +264,6 @@ static void second_pass(map_t *m, map_description_t *d, name_table_t *names)
 }
 /* }}} */
 
-/* {{{ whole_map_validation() */
-/*
- * The checks only the finished map can answer (issue 604). Failures
- * are collected and printed together; one abort at the end.
- *
- * Three of these checks went with the pull path (issue 210), and it
- * is worth naming what they were so nobody reintroduces them looking
- * for lost rigour: a gathered-from station could not have ring
- * inputs, because gathering ran inline and could not wait for a value
- * to arrive; a station could not be both pushed into and gathered
- * from, because that is neither one discipline nor the other; and
- * gather cycles were refused edge by edge as wires were drawn, since
- * a gather cycle was a call that never returned. None of the three
- * describes anything that can happen now.
- */
-static void whole_map_validation(map_t *m, map_description_t *d,
-                                 name_table_t *names)
-{
-    int failures = 0;
-
-    for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
-        const char *name = names->by_index[i]->name;
-
-        int has_ring = 0;
-        for (int j = 0; j < s->n_in_ports; j++)
-            if (s->in_ports[j].kind == IN_PORT_RING)
-                has_ring = 1;
-
-        /* Which ports does an arrow land on? Sized to the station's
-         * real port count — a fixed cap here would be a silent hole
-         * in the checking. */
-        int pushed_into[s->n_in_ports > 0 ? s->n_in_ports : 1];
-        memset(pushed_into, 0, sizeof pushed_into);
-        for (int k = 0; k < m->n_stations; k++) {
-            station_t *other = map_station(m, k);
-            for (out_port_t *p = other->out_ports; p; p = p->next) {
-                dest_set_t *set = out_port_dests(p);
-                for (int di = 0; set && di < set->n; di++)
-                    if (set->items[di].station == i
-                        && set->items[di].port < s->n_in_ports)
-                        pushed_into[set->items[di].port] = 1;
-            }
-        }
-        int any_push = 0;
-        for (int j = 0; j < s->n_in_ports; j++)
-            any_push |= pushed_into[j];
-
-        /* An arrow landing on a port that is not a buffer would have
-         * nowhere to put its value. The message names which of the
-         * other two it found, because the fixes differ: a static wants
-         * the arrow removed or the static unbound, while an
-         * unconfigured port wants finishing. */
-        for (int j = 0; j < s->n_in_ports; j++) {
-            if (pushed_into[j] && s->in_ports[j].kind != IN_PORT_RING) {
-                fprintf(stderr,
-                        "map %s: an arrow lands on '%s.%d', but that port is "
-                        "%s, not a buffer — the value would have nowhere "
-                        "to go\n",
-                        d->path, name, j, in_port_kind_name(s->in_ports[j].kind));
-                failures++;
-            }
-        }
-
-        /* Unreachable: ring inputs that nothing ever writes to. Loud
-         * but not fatal — a map under construction has these, and
-         * silently-never-running is the hardest thing to notice from
-         * outside (issue 604). */
-        if (has_ring && !any_push) {
-            int externally_fed = 0;
-            /* The seed only reaches bufferless stations, so a ring
-             * station with no arrows can only be fed by a test or a
-             * control surface delivering from outside. Possible, so
-             * this stays a warning. */
-            (void)externally_fed;
-            fprintf(stderr,
-                    "map %s: WARNING: station '%s' has buffered inputs that "
-                    "no arrow feeds — unless something outside delivers into "
-                    "it, it will never run\n",
-                    d->path, name);
-        }
-    }
-
-    if (failures > 0) {
-        fprintf(stderr, "map %s: %d validation failure%s — nothing was run\n",
-                d->path, failures, failures == 1 ? "" : "s");
-        abort();
-    }
-}
-/* }}} */
-
-/* {{{ seed_sweep() */
-/*
- * The one time anything iterates the station table looking for work
- * (issue 605). From here on, every station is reached by index,
- * through a wire — the engine never scans, and this is the single
- * exception, which is why the sweep announces itself.
- *
- * Enqueue every station that has no ring-buffer inputs. Sinks with no
- * inputs qualify — they run once for their effect.
- *
- * There used to be a second condition: a station that was gathered
- * from was skipped, because its value went into a task being
- * assembled rather than into a buffer, and at startup nobody is
- * assembling. With the pull path gone (issue 210) nothing is gathered
- * from.
- *
- * There is a second condition again, and it is a different one. A
- * station with an unconfigured port is skipped, because seeding it
- * would build a task for a port that has no value to put in it
- * (issue 210b). This sweep is the one place in the engine that
- * decides a station may run without consulting the readiness walk —
- * it asks its own question, "could this ever be woken by an arrival?"
- * — which is exactly why it has to be taught separately about every
- * way an answer can be no.
- */
-static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
-{
-    m->seeded = 0;
-    for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
-
-        int has_ring = 0;
-        int has_unconfigured = 0;
-        for (int j = 0; j < s->n_in_ports; j++) {
-            if (s->in_ports[j].kind == IN_PORT_RING)
-                has_ring = 1;
-            if (s->in_ports[j].kind == IN_PORT_NONE)
-                has_unconfigured = 1;
-        }
-        if (has_ring || has_unconfigured)
-            continue;
-
-        /* Through the same door delivery uses — one way a task comes
-         * into existence, not two. It used to build and push directly
-         * with no claim buffer, on the grounds that a station with no
-         * ring ports had nothing to claim; that stopped being true
-         * when a static's value moved onto its port and had to be
-         * claimed like any other (issue 401). Asking the readiness
-         * walk is both correct and less to know.
-         *
-         * The workers are still parked at their gate, which is what
-         * keeps the termination rule's "nothing pushes from outside
-         * after startup" true. */
-        if (!map_station_try_start(m, i))
-            continue;
-        m->seeded++;
-        fprintf(stderr, "map %s: seeded '%s'\n", d->path, names->by_index[i]->name);
-    }
-
-    if (m->seeded == 0) {
-        fprintf(stderr,
-                "map %s: nothing to seed — every station waits for a buffered "
-                "value, so the map cannot ever start\n", d->path);
-        abort();
-    }
-}
-/* }}} */
-
 /* {{{ map_load_file() */
 map_t *map_load_file(const char *path, int n_workers)
 {
@@ -450,14 +291,54 @@ map_t *map_load_file(const char *path, int n_workers)
     double t2 = stamp();
     second_pass(m, d, &names);
     double t3 = stamp();
-    whole_map_validation(m, d, &names);
+
+    /*
+     * The names move onto the map **before** the program is brought
+     * up, because that is what the bring-up complains with. They used
+     * to be copied over at the very end, when the loader's own table
+     * had served — which was fine while the loader printed its own
+     * messages out of that table, and stops being fine the moment
+     * somebody else does the complaining.
+     */
+    m->station_names = calloc((size_t)m->n_stations, sizeof *m->station_names);
+    if (m->station_names)
+        for (int i = 0; i < m->n_stations; i++)
+            m->station_names[i] = strdup(names.by_index[i]->name);
     double t4 = stamp();
 
     /* The pool exists before the seed so the seed has somewhere to
      * push, but its workers stay parked until the caller releases —
      * the seeding window issue 102 built. */
     map_start(m, n_workers);
-    seed_sweep(m, d, &names);
+
+    /*
+     * **Reading a file no longer validates or seeds; it asks for the
+     * program to be brought up, the same as anybody else would**
+     * (issue 212). The checks and the seed were the last thing the
+     * loader could do that nothing else could, and with them moved
+     * there is no state called *still loading* left for it to be in.
+     */
+    const char *no = map_bring_up(m);
+    if (no)
+        die_load(path, 0, NULL, no);
+
+    /*
+     * **Whether starting nothing is a fault is the caller's to say**,
+     * and this caller says yes.
+     *
+     * Bringing a program up is repeatable, so seeding nothing is
+     * perfectly ordinary — a program brought up, grown by one
+     * station, and brought up again seeds nothing the second time and
+     * should not be scolded for it. But a *file* somebody asked to be
+     * run is a different promise: if no station can start without
+     * waiting for a value, and no value can arrive because nothing is
+     * running to send one, then the program does nothing at all, and
+     * saying so is more use than starting it.
+     */
+    if (map_seed_count(m) == 0)
+        die_load(path, 0, NULL,
+                 "nothing to seed — every station waits for a buffered "
+                 "value, so the map cannot ever start");
     double t5 = stamp();
 
     map_load_last_timing.parse = t1 - t0;
@@ -466,13 +347,9 @@ map_t *map_load_file(const char *path, int n_workers)
     map_load_last_timing.validation = t4 - t3;
     map_load_last_timing.seed = t5 - t4;
 
-    /* The loader's lookup table has served — but the names live on,
-     * on the map, for the dump and for anyone watching (issue 703). */
-    m->station_names = calloc((size_t)m->n_stations, sizeof *m->station_names);
-    if (m->station_names)
-        for (int i = 0; i < m->n_stations; i++)
-            m->station_names[i] = strdup(names.by_index[i]->name);
-
+    /* The loader's lookup table has served; the names it carried are
+     * already on the map, where the dump and anyone watching find
+     * them (issue 703). */
     free(names.by_index);
     mapfile_free(d);
     return m;
