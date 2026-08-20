@@ -73,10 +73,23 @@ void map_dump(map_t *m, FILE *out)
     for (int i = 0; i < m->n_stations; i++) {
         station_t *s = map_station(m, i);
         fprintf(out, "\n%s ", m->station_names[i]);
-        /* The box's name is not stored on the station — the shim
-         * pointer is read backwards through the registry. */
+        /*
+         * The station knows its own name (issue 311b): the generated
+         * placement function wrote it as a literal. This used to scan
+         * every box record for one whose call site matched — the
+         * registry read backwards, a linear search to answer a
+         * question the station could just have been told.
+         *
+         * **A station placed by hand with no name given has none**,
+         * and saying so is more honest than inventing a spelling: a
+         * program built that way is not described on disk either, so
+         * there is nothing a station line could truthfully say. The
+         * marker is deliberately not a legal box name, so a dump
+         * carrying one cannot be read back in silence.
+         */
         fprintf(out, "%s %c   # station %d\n",
-                registry_box_name_for_shim(s->call), kind_letter(s->kind), i);
+                s->box_name ? s->box_name : "?placed-by-hand?",
+                kind_letter(s->kind), i);
 
         for (int j = 0; j < s->n_in_ports; j++) {
             in_port_t *sl = &s->in_ports[j];

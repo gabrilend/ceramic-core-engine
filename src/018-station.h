@@ -434,6 +434,52 @@ typedef struct station {
     _Atomic unsigned char removed;
     int             out_size;   /* bytes of the box's return value; 0 means sink */
 
+    /*
+     * The name this station was placed as, written by the generated
+     * placement function as a literal (issue 311b).
+     *
+     * **This is not a lookup and never was worth being one.** The dump
+     * used to find a station's box by scanning every box record for
+     * one whose call site matched — the registry read backwards, which
+     * is a linear search to answer a question the station could simply
+     * have been told the answer to. The literal costs one pointer per
+     * station, the string is read-only data the compiler was going to
+     * emit anyway, nothing is allocated and nothing is freed.
+     *
+     * **Null for a station placed by hand with no name given**, which
+     * is honest rather than awkward: nothing on disk describes such a
+     * program either, so there is nothing for a station line to say.
+     * The dump says so plainly instead of inventing something.
+     *
+     * It carries the bare function name today because that is what a
+     * map file says. When the format learns to carry a box's file as
+     * well (issue 311a), this literal becomes the full address and the
+     * dump follows without changing.
+     */
+    const char     *box_name;
+
+    /*
+     * The spelling of what this box returns, for the one message that
+     * needs it: a refused wire (issue 311b).
+     *
+     * A wire is checked by **width** — the station's own out_size
+     * against the destination port's elem_size — and the name is
+     * carried only so the refusal can say *"box returns int (4 bytes),
+     * port takes double (8 bytes)"* rather than "4 bytes against 8
+     * bytes", which names no fix. It used to be fetched by scanning
+     * every box record for a matching call site and reading the record
+     * it found; the station is simply told instead.
+     *
+     * Null on a hand-placed station, and the message says so, for the
+     * same reason the name above is null there.
+     *
+     * This is one of the last type names the engine carries, and it
+     * goes when the binary carries its own box sources and a message
+     * can read the spelling out of the text that was compiled (issue
+     * 311c).
+     */
+    const char     *out_type_name;
+
     /* Comparator only: the three-way compare for the box's return
      * type, resolved from the registry at placement so the delivery
      * path does a call rather than a lookup (issue 503). */

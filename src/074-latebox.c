@@ -179,19 +179,6 @@ const box_info_t *registry_late_find(const char *name)
 }
 /* }}} */
 
-/* {{{ registry_late_name_for_shim() */
-const char *registry_late_name_for_shim(task_call_t shim);
-
-const char *registry_late_name_for_shim(task_call_t shim)
-{
-    for (late_block_t *b = late_head; b; b = b->next)
-        for (int i = 0; i < b->n_boxes; i++)
-            if (b->boxes[i].shim == shim)
-                return b->boxes[i].name;
-    return NULL;
-}
-/* }}} */
-
 /* {{{ static int ensure_dir() */
 static int ensure_dir(const char *path)
 {

@@ -101,13 +101,16 @@ int map_rewire_connect(map_t *m, int from_station, int port,
      * port takes stats" does not say why those disagree.
      */
     if (from->in_ports && to->in_ports) {
-        const box_info_t *b =
-            registry_find(registry_box_name_for_shim(from->call));
-        if (b && b->return_size != dest->elem_size) {
+        /* The station's own return size, rather than a box record
+         * found by scanning for a matching call site (issue 311b).
+         * The width is what decides; the names ride along so the
+         * refusal names a fix. */
+        if (from->out_size != dest->elem_size) {
             char message[192];
             snprintf(message, sizeof message,
                      "box returns %s (%d bytes), port takes %s (%d bytes)",
-                     b->return_type, b->return_size,
+                     from->out_type_name ? from->out_type_name : "?",
+                     from->out_size,
                      dest->type_name ? dest->type_name : "?", dest->elem_size);
             pthread_mutex_unlock(&m->rewire_mutex);
             return refuse(message);

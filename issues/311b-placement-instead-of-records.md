@@ -15,8 +15,8 @@ build a station.
 What stands:
 
 - **A placement function per box**, emitted by the generator, writing
-  the shim, the slot sizes, the return size, the type names, the
-  comparator's extra port and the comparison — with every number a
+  the shim, the slot sizes, the return size, the type names, the box's
+  own name, the comparator's extra port and the comparison — with every number a
   `sizeof` the compiler folds into an immediate. Nothing is stored;
   the numbers were computed while the box was compiled.
 - **The two comparator refusals are inside it**, so a box that returns
@@ -164,8 +164,18 @@ since nothing on disk describes it either.
    as a plain station and as a comparator wherever it can be one.
 3. **Done.** Placement routes through the function; the record is no
    longer read to build a station.
-4. The name literal written onto the station, and the dump's backwards
-   shim-to-name lookup deleted.
+4. **Done.** The name literal is written onto the station and the
+   backwards shim-to-name lookup is deleted, both halves of it —
+   compiled-in and late.
+
+   It had a second caller the plan did not mention: **the wire check
+   on a live rewire**, which reached through it to a box record for
+   the return size and the return type's spelling. The size was
+   already on the station, and the spelling is now a second literal
+   beside the name. So a refused wire still says *"box returns int (4
+   bytes), port takes double (8 bytes)"* — the width is what decides,
+   and the names ride along because a message naming no fix is not
+   worth printing.
 5. Struct field tables written onto ports at placement, and the by-name
    struct search deleted.
 6. The record type, the table, the parameter arrays, the type-name

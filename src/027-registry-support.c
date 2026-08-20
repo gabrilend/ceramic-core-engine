@@ -25,7 +25,6 @@
  * was already handed.
  */
 const box_info_t  *registry_late_find(const char *name);
-const char        *registry_late_name_for_shim(task_call_t shim);
 const box_info_t  *registry_recover_box(const char *name);
 const box_place_t *registry_late_place_find(const char *name);
 
@@ -75,17 +74,6 @@ const struct_info_t *struct_find(const char *type_name)
         if (strcmp(registry_structs[i].name, type_name) == 0)
             return &registry_structs[i];
     return NULL;
-}
-/* }}} */
-
-/* {{{ registry_box_name_for_shim() */
-const char *registry_box_name_for_shim(task_call_t shim)
-{
-    for (int i = 0; i < registry_n_boxes; i++)
-        if (registry_boxes[i].shim == shim)
-            return registry_boxes[i].name;
-    const char *late = registry_late_name_for_shim(shim);
-    return late ? late : "?unknown-box?";
 }
 /* }}} */
 
