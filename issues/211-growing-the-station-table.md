@@ -52,6 +52,15 @@ every other thread wanting to push waits for the whole copy.
 **Stations are added one at a time, and adding one never moves a
 station that already exists.**
 
+**And a removed station's place is reused before the table grows.**
+[216](216-removing-a-station.md) makes removal possible by removing the
+wires to a station before the station, so a freed position holds
+nothing stale and the next station placed can simply take it. That
+makes this issue the *growing* half of a table that also shrinks:
+placement asks for a free position first and adds a shelf only when
+there is none. A program that adds and removes stations forever
+therefore reaches a steady size rather than climbing.
+
 ### The table stops being one array
 
 A flat array grows by reallocation, and reallocation is what moves the

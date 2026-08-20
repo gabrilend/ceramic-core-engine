@@ -40,6 +40,8 @@
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
+<a href="issue-216-removing-a-station.html">216 — Removing a station</a>
 <a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
@@ -163,6 +165,8 @@ its own.</p>
 <tr><td>212 — one way to build a program</td><td>open</td><td>The capstone. Create, configure, wire — legal at any moment, loading as one caller.</td></tr>
 <tr><td>213 — the input station</td><td>open</td><td>The other door: where arguments arrive, and what makes a program composable.</td></tr>
 <tr><td>214 — destinations without a lock</td><td>open</td><td>An immutable array published by one atomic write; the scrapyard reclaims the old ones.</td></tr>
+<tr><td><a href="issue-215-ports-and-slots.html">215 — ports and slots</a></td><td>open</td><td>A naming debt paid: the source calls a port a slot and a slot a cell, which is backwards from what every document says. One deliberate pass, reaching a filename.</td></tr>
+<tr><td><a href="issue-216-removing-a-station.html">216 — removing a station</a></td><td>open</td><td>A station comes out and its place is reused. Removing the wires that name it first is what makes a version tag on every wire unnecessary — the walk is paid once, rarely, instead of on every delivery.</td></tr>
 </table>
 <h2>What the phase established</h2>
 <p>**A station never moves, and a wire is an index rather than a

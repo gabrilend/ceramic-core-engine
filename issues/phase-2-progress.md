@@ -37,6 +37,8 @@ its own.
 | 212 — one way to build a program | open | The capstone. Create, configure, wire — legal at any moment, loading as one caller. |
 | 213 — the input station | open | The other door: where arguments arrive, and what makes a program composable. |
 | 214 — destinations without a lock | open | An immutable array published by one atomic write; the scrapyard reclaims the old ones. |
+| [215 — ports and slots](215-ports-and-slots.md) | open | A naming debt paid: the source calls a port a slot and a slot a cell, which is backwards from what every document says. One deliberate pass, reaching a filename. |
+| [216 — removing a station](216-removing-a-station.md) | open | A station comes out and its place is reused. Removing the wires that name it first is what makes a version tag on every wire unnecessary — the walk is paid once, rarely, instead of on every delivery. |
 
 ## What the phase established
 

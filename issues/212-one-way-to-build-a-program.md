@@ -54,9 +54,9 @@ loader can build a program.
 
 ## Intended behavior
 
-**There is one surface, and it has four operations: create an empty
-program, add a station, configure an input port, and connect or
-disconnect a wire.**
+**There is one surface, and it has five operations: create an empty
+program, add a station, remove a station, configure an input port, and
+connect or disconnect a wire.**
 
 Every one of them is legal at any moment — while a program is being
 read from a file, or on a running one with workers in flight — because
@@ -253,11 +253,13 @@ rather than drifting into place.
 
 ## Suggested implementation steps
 
-1. The four operations, defined as the only way structure is created,
+1. The five operations, defined as the only way structure is created,
    with the per-edge rules from
    [704](completed/704-runtime-rewiring.md) applied by all of them.
    Build them over the table as it stands, before it can grow, so the
-   surface is proven while the old sizing still works.
+   surface is proven while the old sizing still works. Removal is
+   [216](216-removing-a-station.md) and lands last, since it needs the
+   quiescence sweep the others do not.
 2. The station table starts empty and grows a run at a time
    ([211](211-growing-the-station-table.md)), so adding a station is
    the ordinary path taken once per station at startup rather than a

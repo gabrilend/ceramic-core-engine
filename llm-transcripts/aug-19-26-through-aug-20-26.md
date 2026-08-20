@@ -1,6 +1,6 @@
 # Conversation Summary: 3ccc0eb0-a576-4361-85ec-79ae4bb357a4
 
-Generated on: 2026-08-20 09:43:09
+Generated on: 2026-08-20 10:13:52
 
 --------------------------------------------------------------------------------
 
@@ -4808,6 +4808,941 @@ down out of this whole detour — more than the tool I invented.
 
 Shall I write up those two acts, the parser becoming a box, the construction
 surface needing box wrappers, and the pointer-width hazard — and delete 311e?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 26
+
+yeah ok
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 26
+
+Now the pointer-width hazard, which belongs with the width-comparison decision.
+
+
+Now the parser becoming a box, in the map-becomes-code issue.
+
+
+Done and committed. Three commits from this session.
+
+
+## What the last one landed
+
+
+**311e deleted.** The tool I invented was unnecessary twice: compiling a map is
+what `make` already does, and a program that runs other programs is a map, not a
+tool. The parent issue keeps a short note saying why there's no fifth child, so
+nobody re-proposes it.
+
+
+**Composing and starting, separated** — written into the construction issue.
+The distinction falls out of what a wire is:
+
+
+- **Composing merges.** A wire is a station index and a port index, meaningful
+  only inside one station table. So a map containing a map produces *one* table
+  with both sets of stations, joined at the input and output stations. Recursion
+  is real and resolves entirely when the graph is built — no boundary checks,
+  no per-program bookkeeping, nothing at run time.
+
+- **Starting is separate.** A fresh map, its own station table, its own rewiring
+  lock, sharing the pool. You can't wire to it; you deliver into its input
+  station, which is the door that already exists for anything outside. A program
+  that runs other programs wants this, because it should survive what it runs
+  dying.
+
+
+**The parser becomes a box.** Nothing in the *engine* parses maps, but a
+runner-map needs a box that reads one — so the parsing functions move out of
+the engine into a box source, and the generator links the same implementation.
+One parser, two callers, neither of them the engine.
+
+
+**Box wrappers for the construction surface** — add a station, draw a wire,
+write a constant, each a plain function taking values and returning one. That's
+what lets a map build a map without anything added to the engine.
+
+
+**The handle hazard, named.** Wires are checked by counting bytes. That cost was
+accepted when everything flowing was data — a bad wire gave a wrong number.
+Once programs build programs, some values are pointers the engine calls through,
+and a map handle, a placement function, a `double`, and a file offset are all
+eight bytes. Nothing proposed: the cheap fix would make the type system lie
+about sizes to buy back a distinction, which is worse than the thing it
+prevents. But it's written down in the width-comparison issue as a decision
+waiting rather than a discovery pending.
+
+
+**One correction on terminology.** The registry was global — one per process.
+A station table isn't, and never was: it's a field inside `map_t`, reached only
+through a handle. Deleting it would be deleting the map. I'd blurred the two.
+
+
+## Where the four questions ended
+
+
+| | outcome |
+
+|---|---|
+
+| the numbering | answered — index means reading order only; renumbering filed at very low priority |
+
+| how a station names its box | dissolved — the placement function writes the name literal; no table to index |
+
+| build-time wire checks | answered — no; a half-wired map is legitimate, and the build's business is which functions to compile |
+
+| several maps declared | dissolved — no union to carry; a program is its own map |
+
+
+Everything verified: 113 pages, zero unresolved references, all tests pass.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 27
+
+  The parser becomes a box. Nothing in the engine parses maps, but a runner-map
+  needs a box that reads one — so the parsing functions move
+
+  out of the engine into a box source, and the generator links the same
+  implementation. One parser, two callers, neither of them the engine.
+
+
+can you tell me more about this? background and context and reasoning and such?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 27
+
+Let me pull the actual pieces first — what the parser is today, and what an
+iterator does, since the second bears on the interesting part.
+
+
+Good question to push on — I asserted that more confidently than I'd earned,
+and there's a real unsettled piece inside it.
+
+
+## What the parser is today
+
+
+Two files, with a clean division of labour:
+
+
+- **`041-mapfile.c` — the parser.** Reads text into a *description* and
+  **constructs nothing**. Its own notes put it well: whether the map makes sense
+  is the loader's question; whether it is *well-formed* dies here, with file and
+  line. It handles the keyword dispatch — `in` and `out` attach to whichever
+  station line is open, `statics` opens the numbered section, anything else must
+  be a three-word station line. Duplicate names, trailing words, dangling `in`
+  lines: all refused by name.
+
+- **`042-loader.c` — the loader.** Takes that description and builds. First
+  pass creates every station from the registry; second pass resolves arrows by
+  name, which is *why* there are two passes — forward references. Then
+  whole-map validation, collected and reported together.
+
+
+Both live in the engine and run when a program starts.
+
+
+## Why they were going to be deleted
+
+
+Once the generator reads the map at build time and emits `build_program()` with
+direct pointers, a shipped program never sees map text. The parser and loader
+become dead weight — carried by every binary, used by none.
+
+
+## Why they can't just be deleted
+
+
+Your point about the runner. A program that runs other programs has to read a
+map file at run time. If the only parser lives in the generator, that's
+impossible.
+
+
+## Three possible homes, and why a box wins
+
+
+| home | what it costs |
+
+|---|---|
+
+| **stay in the engine** | every shipped program carries a parser it never calls. Worse, it's a capability present whether or not anyone asked — the exact shape we spent this session removing from the registry. |
+
+| **generator only** | a running program cannot read a map, so a program that runs programs is impossible. |
+
+| **a box** | a program that wants to read maps places a station running it. A program that doesn't, doesn't. |
+
+
+The box wins, and the linker work from the map-becomes-code issue is what makes
+it free: with `--gc-sections`, code nothing reaches is discarded. **A parser
+nobody places is a parser nobody ships.** No flag, no declaration, no
+configuration — the same rigidity you asked for, arrived at by the linker
+rather than by a setting.
+
+
+It also fits the architecture's own shape: the engine is small, capability lives
+in boxes. And it makes the parser testable the way a box is testable — hand it
+text, look at the value that comes out.
+
+
+## Why one implementation
+
+
+Two things need to read map text: the generator, at build time, and this box, at
+run time. If those were separate implementations they would **drift**, and the
+failure mode is nasty — a map the generator accepts and the box refuses, or
+worse, one that both accept and read differently. That's two sources of truth
+about a grammar, which is exactly the disease the "map carries no types" rule
+exists to prevent elsewhere.
+
+
+So: one set of functions, compiled twice. Linked into the generator binary;
+compiled as a box source into whatever program places it. Neither copy is *in*
+the engine.
+
+
+## The part I glossed, which is genuinely open
+
+
+**What shape is the box?** A box is a plain C function taking values and
+returning **one** value, remembering nothing between calls. A map file describes
+an arbitrary number of stations and wires. Those two facts don't obviously fit
+together, and I waved at it.
+
+
+Three shapes, none of them chosen:
+
+
+- **One big box that does everything.** `load_map(map_handle, path) → result`.
+  Reads, parses, compiles what it names, places stations, draws wires — all
+  inside one invocation, returning whether it worked. Legitimate: takes values,
+  returns one, remembers nothing. Big, but boxes are allowed to be big. Costs
+  the graph any visibility into the work.
+
+- **A box returning a description by pointer**, with later boxes consuming it
+  and a final box freeing it. Ownership travels on a wire. But that's a pointer
+  flowing through a system that checks wires by counting bytes — **exactly the
+  hazard I named two commits ago**.
+
+- **Split into several boxes with the iteration in the graph.** Most in keeping
+  with the project. But I need to correct my own instinct here: I was about to
+  suggest an iterator station does this, and it doesn't. An iterator sends each
+  *successive value* down the *next port*, rotating — it's a **spreader**, not
+  a loop over a collection. Pulling N stations out of one file isn't what it
+  does.
+
+
+There's also a wrinkle underneath all three: today's loader creates stations
+*from the registry*, and the registry is being deleted. So a runtime load box
+has to compile the boxes a map names before it can place them — meaning it
+calls the runtime-compilation path, not just the parser.
+
+
+That's the honest state of it. Want me to record the box-shape question in the
+map-becomes-code issue, since I stated it as settled when it isn't?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 28
+
+okay but why is the parser it's own box? is there a use-case for it being
+separate? or could we just have "add_a_box()" as a possible function that can be
+added to a box station and other similars? More abstraction if we can't think of
+other use-cases.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 28
+
+No, there isn't a good use case, and you've caught a real error in how I phrased
+it.
+
+
+## Correcting myself: the parser isn't a box
+
+
+What I said was "the parser becomes a box." That's wrong. The parser is a set of
+C functions that turn text into a description. What should be a box is the
+**loader** — and the parser is just C it calls.
+
+
+So:
+
+
+- **`041-mapfile.c`'s functions** — ordinary C, living in a source file
+  outside the engine. Not a box. Not reachable by a wire.
+
+- **Two things link them**: the generator, at build time, and a box source, at
+  run time.
+
+- **The box is `load_map(map_handle, path) → result`** — reads the file,
+  parses it, compiles whatever boxes it names, places the stations, draws the
+  wires, returns whether it worked.
+
+
+One box, whole job. The parser is an implementation detail inside it, the way
+`memcpy` is an implementation detail inside delivery.
+
+
+## And that kills the hard problem
+
+
+The thing I flagged as unsettled — *what does a parsing box return, given a
+map describes arbitrarily many stations and a box returns one value* — **only
+existed because I'd split it.** A description flowing on a wire needs to be a
+value, which means a pointer, which is the eight-byte hazard, which needs an
+owner, which needs a freeing box. All of that was manufactured by a split nobody
+needed.
+
+
+Inside one box, the description is a local variable. It's built, walked, and
+freed before the box returns. Nothing crosses a wire.
+
+
+## The use cases for separating, and why they're thin
+
+
+I looked for them honestly:
+
+
+- **Validating a map without running it** — a linter. But the build already
+  does this, at build time, where it belongs.
+
+- **Transforming a map** — read one, rename things, write it out. Speculative;
+  nobody has asked.
+
+- **Displaying a map** — a viewer. The dump already produces text, and the
+  workbench draws from its own storage.
+
+
+None of them justify the cost, and the cost is real: every split point is a
+wire, wires here carry pointers, and pointers through a width-checked system are
+the hazard we just wrote down. **More abstraction, as you say** — keep it
+coarse until something demands otherwise.
+
+
+## So the boxes are two independent things
+
+
+| box | for |
+
+|---|---|
+
+| `load_map(handle, path) → result` | "run this file" — the whole job in one invocation |
+
+| `add_station`, `draw_wire`, `write_constant` | "build a graph from values I computed" — the construction surface, wrapped |
+
+
+**Neither needs the other, and neither needs a shared description on a wire.**
+The load box calls the same underlying C functions the construction boxes wrap.
+A program that runs map files places the first; a program that assembles graphs
+from computed values places the others; a program doing both places both.
+
+
+One consequence worth naming: **`load_map` is a slow box.** It compiles, so it
+holds a worker for hundreds of milliseconds. Nothing preempts a box here — it
+runs to completion — so on a machine with several workers that's fine, and on
+a single-worker pool it stalls everything. Worth stating rather than
+discovering.
+
+
+Let me correct the map-becomes-code issue to say this, and record the coarseness
+decision with the reasoning, since the split I described is already committed.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 29
+
+  ┌────────────────────────────────────────┬────────────────────────────────────────────────────────────────────────────┐
+
+  │ box │ for │
+
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────┤
+
+  │ load_map(handle, path) → result │ "run this file" — the whole job in
+  one invocation │
+
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────┤
+
+  │ add_station, draw_wire, write_constant │ "build a graph from values I
+  computed" — the construction surface, wrapped │
+
+  └────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────┘
+
+
+
+are these four functions the only functions in our "standard library"? What's
+the difference between load_map() and add_station()? We'll also need
+"remove_station()"
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 29
+
+Let me check what the construction surface actually is, and what's settled about
+removal.
+
+
+Three separate things there. Let me take them in order, and correct my own table
+first.
+
+
+## The surface is four operations, and I named them badly
+
+
+From the construction issue:
+
+
+> There is one surface, and it has four operations: **create an empty program,
+> add a station, configure an input port, and connect or disconnect a wire.**
+
+
+So my table was wrong twice. `write_constant` isn't its own operation —
+binding a value onto a port *is* configuring that port, alongside making it a
+ring buffer or setting it to no-source-yet. And I omitted "create an empty
+program" and the disconnect half of wiring.
+
+
+## `load_map` and `add_station` aren't peers
+
+
+**The difference is scope, not kind.** `add_station` is one operation on one
+station. `load_map` performs *many* of them — possibly hundreds of adds and
+wires — driven by a file, plus compiling boxes the program doesn't already
+carry.
+
+
+So it's two tiers, not two columns:
+
+
+| tier | what |
+
+|---|---|
+
+| **the surface** | create a program · add a station · configure a port · connect or disconnect a wire |
+
+| **built on it** | `load_map(handle, path)` — read a file, compile what it names, then perform a great many of the four |
+
+
+`load_map` sits above the surface and calls it, the way the generated
+`build_program()` does. It isn't a fifth operation.
+
+
+## `remove_station()` collides with a standing guarantee
+
+
+Guarantee **S2**: *a wire is an index, never a pointer; a wire written down
+today is valid forever* — held by "stations can never be removed or reordered,
+only added." The reason is mechanical: remove station 5 and you either leave a
+**hole** every walk must skip forever, or **renumber** and invalidate every wire
+pointing past 5 at once.
+
+
+But you can have most of what you want without touching that, because
+**disconnecting is already in the surface**:
+
+
+- Set every input port to *none* → the station can never become ready, so it
+  can never run.
+
+- Remove every destination from its output ports → nothing downstream hears
+  from it.
+
+
+That's removal in every observable sense. What's left is **memory** — and the
+machinery for reclaiming it already exists in the destinations-without-a-lock
+issue: mark it retired, sweep until no worker is inside it, then free. Applied
+here, that frees the **buffers** while the slot stays. The slot is a hundred-odd
+bytes; a port's ring cells can be megabytes. So you reclaim nearly everything
+and no index ever moves.
+
+
+So `remove_station(handle, index)` can exist and mean: *disconnect everything,
+retire the buffers, keep the slot.* No guarantee broken.
+
+
+**What real removal would cost**, if you ever want the slot back: a wire becomes
+`(index, generation)` and removing bumps the generation, so a stale wire fails a
+check and is refused loudly instead of silently hitting whatever got put there
+instead. That's four bytes per wire and a comparison **on every delivery** —
+hot-path cost, paid forever, for an operation that happens rarely. I'd not take
+it, but it's the honest price and it should be written down rather than left as
+"impossible."
+
+
+## And no, these aren't a standard library
+
+
+They're the engine's own construction surface exposed as boxes — not a
+convenience library. The distinction matters because a surface has to be
+complete and rigid, while a library is whatever people found useful.
+
+
+**This project has no standard library concept**, and the one time it came up it
+was deliberately cut. Your original workbench note asked for *"some of our own
+functions in a drawer to the side… pretty common ones that interface with some
+of the software that I've made / hardware that I've worked with."* The workbench
+issue records the drawer being removed when the phase narrowed to layout:
+*"There is no drawer, and no upload either."*
+
+
+So whether there should be a standard library — and what would be in it — is
+genuinely unanswered. It's a separate question from this one, and worth its own
+issue if you want it.
+
+
+Shall I record all four of these: the corrected surface, the two tiers,
+`remove_station` as disconnect-and-retire with the generation-counter
+alternative named, and the standard-library question as open?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 30
+
+  Guarantee S2: a wire is an index, never a pointer; a wire written down today
+  is valid forever — held by "stations can never be removed or
+
+  reordered, only added." The reason is mechanical: remove station 5 and you
+  either leave a hole every walk must skip forever, or renumber
+
+  and invalidate every wire pointing past 5 at once.
+
+
+
+um this guarantee is not something we want to keep. We want to be able to fully
+re-configure our programs at runtime. We have more than one way to deal with
+holes in arrays - can you give me a list of possible solutions? If we don't
+remove stations, we will have memory leaks. Not ideal. Can you tell me any other
+possible memory leaks?
+
+
+  What real removal would cost, if you ever want the slot back: a wire becomes
+  (index, generation) and removing bumps the generation, so a
+
+  stale wire fails a check and is refused loudly instead of silently hitting
+  whatever got put there instead. That's four bytes per wire and a
+
+  comparison on every delivery — hot-path cost, paid forever, for an operation
+  that happens rarely. I'd not take it, but it's the honest
+
+  price and it should be written down rather than left as "impossible."
+
+
+
+um, what is "generation" here? why would we need it?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 30
+
+Let me check one thing first, because it changes how bad holes actually are.
+
+
+Checked: nothing walks the station table during delivery. Every `n_stations`
+reference on that path is a **bounds check**; the only full walks are the dump,
+loading, and teardown — all cold. So my "a hole every walk must skip forever"
+was overstated, and that changes the answer.
+
+
+## What "generation" means, and why you'd need one
+
+
+It solves a problem that only exists if you **reuse** slots.
+
+
+Station 5 is removed and its slot goes free. Later a new station is created and
+takes slot 5. Now two kinds of wire point at "station 5": old ones that meant
+the removed station, and new ones that mean the new one. **A wire is just the
+number 5** — the engine cannot tell them apart, so an old wire silently
+delivers into the new station. Not a crash. A wrong answer that looks right.
+
+
+A generation counter is a number on the slot that increments each time the slot
+is reused. A wire stores `(index 5, generation 3)`, and delivery asks: *does
+slot 5 still have generation 3?* If not, this wire is stale, and it's refused
+loudly instead of misdelivering.
+
+
+This is the ABA problem — a thing changed from A to B and back to A, and a
+stale observer can't tell "nothing happened" from "everything happened."
+
+
+**So the generation is the price of reuse, not the price of removal.** Never
+reuse a slot and an index means the same station forever, and there is nothing
+to disambiguate.
+
+
+## Solutions for holes, with what each actually costs
+
+
+| | what it does | hot-path cost | reclaims the slot? |
+
+|---|---|---|---|
+
+| **A. Tombstone** | mark dead, free the buffers, keep the slot forever | **none** | no |
+
+| **B. Reuse after proving it's safe** | at removal, sweep every station's destinations; if nothing points at slot 5, it's free to reuse with no tag | **none** — cost is at removal | yes |
+
+| **C. Generation counters** | reuse freely, tag every wire, check on delivery | one comparison per delivery, forever | yes |
+
+| **D. Compaction at a quiet moment** | drain the pool, shift stations down, rewrite every wire | none while running | yes, all of them |
+
+| **E. Handle indirection** | a wire holds a handle; a table maps handle → slot | a pointer chase per delivery | yes |
+
+
+**B is the interesting one and I don't think it's been considered here.** The
+only things that point at a station are the destination lists on other stations'
+output ports. That's walkable — every station, every output port, every
+destination. It's O(stations × destinations) at removal time, which is a rare
+operation, and it buys slot reuse with **zero** hot-path cost. If any wire still
+points there, you refuse the removal and name the wire, which is more useful
+than silently allowing a dangling reference anyway.
+
+
+**D deserves a mention because you already have the machinery.** The capture
+design drains the pool and waits for quiet. Compaction at that same moment is
+nearly free — nothing is running, so rewriting wires is safe. It's the one
+option that reclaims *everything* including fragmentation.
+
+
+**A is where I'd start**, because it's already almost true and costs nothing:
+the surface can disconnect a station today, and the retire-sweep-free machinery
+frees the buffers. A slot is a hundred-odd bytes; a port's ring can be
+megabytes. Then B or D when the slot leak actually bites.
+
+
+## Other memory leaks I can find
+
+
+Some confirmed from the designs, some I'd want to check in the code:
+
+
+| what | why it accumulates | confidence |
+
+|---|---|---|
+
+| **ring buffer pages** | growth adds a page and nothing ever shrinks. A port that spiked to ten thousand deep stays that deep for the life of the program, holding memory for a burst that ended hours ago. | high — the growth design has no shrink path |
+
+| **station slots** | the one we're discussing | high |
+
+| **retired destination arrays** | rewiring rebuilds the array and files the old one for sweeping. If the sweep never runs — no worker ever exits a delivery walk — the list grows. | high |
+
+| **compiled shared objects** | a box can be unloaded only if no station uses it. Compile a replacement for a placed box and the old code stays mapped forever. | high |
+
+| **box source in the RAM tier** | every runtime-compiled box writes its source there at creation and nothing removes it. Bounded by reboot rather than by the program. | high |
+
+| **station names** | one string per station, held for the dump's benefit, freed only when the map is | high |
+
+| **sub-maps** | a program that starts other maps and never tears them down holds all of them | needs checking — I don't know if map teardown is reachable from a box |
+
+
+The first one may be worse than the station slots, incidentally: a station slot
+is a fixed hundred-odd bytes, but a ring that grew to absorb one bad afternoon
+holds that memory permanently, and there are as many rings as there are input
+ports.
+
+
+Want me to write this up — the guarantee changing, the five options with B and
+D drawn out, and the leak inventory as its own issue?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 31
+
+wait hold on. What array are we even walking here? We don't have a global
+registry anymore remember? so, a wire being an index... into what? a station has
+wires, and those wires are just indexes, but what do those indices refer to?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 31
+
+Right — I've been using "table" for two completely different things. Let me
+draw the actual memory.
+
+
+## The array is a map's own station array
+
+
+```
+
+map_t
+
+  ├─ pool ──────────> (shared with every other map)
+
+  └─ stations ─────>  ┌──────────┬──────────┬──────────┬──────────┐
+
+                      │station 0 │station 1 │station 2 │station 3 │
+
+                      └──────────┴─────┬────┴──────────┴─────▲────┘
+
+                                       │                     │
+
+                         station 1's output port has a       │
+
+                         destination record:                 │
+
+                              { station: 3, slot: 0 }  ──────┘
+
+                                       │
+
+                         meaning: write into
+
+                              stations[3].slots[0]
+
+```
+
+
+From the source, a wire is literally this:
+
+
+```c
+
+typedef struct destination {
+
+    int32_t station;   /* index into map.stations   */
+
+    int32_t slot;      /* which input port of it    */
+
+    struct destination *next;
+
+};
+
+```
+
+
+So when station 1's box returns, delivery reads that record and copies the value
+into `stations[3].slots[0]`. **The index is into `map.stations`** — the array
+of stations that *is* the map. One per map, living inside `map_t`, reached only
+through a map handle.
+
+
+A naming trap worth knowing, since the code says both: **`slots` are a station's
+input ports** and **`ports` are its output ports.** The port record issue calls
+this out as *"a naming debt this family does not pay off."*
+
+
+## And the registry is unrelated
+
+
+| | what it maps | scope | status |
+
+|---|---|---|---|
+
+| **the registry** | a *name* like `math.c:add` → a box's shim and sizes | one per **process** | being deleted — nothing needs it once the generator resolves names |
+
+| **`map.stations`** | an *index* like `3` → a station | one per **map** | stays; deleting it would delete the map |
+
+
+They were never the same mechanism. The registry answered *"what is `add`?"* at
+load time. The station array answers *"where do I put this value?"* on every
+single delivery.
+
+
+## So the removal problem, restated correctly
+
+
+Remove station 2 from a four-station map and you're changing `map.stations`. Two
+choices:
+
+
+- **Leave a hole.** Index 3 is still 3, so that `{3, 0}` destination record
+  still points at the right station. Nothing else breaks. The cost is a dead
+  slot sitting there.
+
+- **Shift everything down.** Station 3 becomes station 2 — and that `{3, 0}`
+  record now points past the end, or at whatever moved into 3. Every destination
+  record in the whole map that names a station above 2 is now wrong, and there
+  is no cheap way to find them all mid-flight.
+
+
+That's the entire difficulty, and it's local to one map. Nothing global is
+involved, and none of it survives or falls with the registry.
+
+
+Does that clear it up? If so I'll write up the five options against this
+picture, and the leak inventory.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 32
+
+  A naming trap worth knowing, since the code says both: slots are a station's
+  input ports and ports are its output ports. The port record
+
+  issue calls this out as "a naming debt this family does not pay off."
+
+
+this is wrong, we should correct this and hold no debts. A port is either an
+input or an output port, and ports hold information about how to store data or
+pass it along - shims live in output ports I think. Input ports hold ring
+buffers. The actual spot where the data is stored is the slot. Please correct
+this. A port might have many slots, for example, ring buffers hold many slots.
+
+
+  So the removal problem, restated correctly
+
+
+  Remove station 2 from a four-station map and you're changing map.stations.
+
+
+why don't we just re-use the map.stations slot for the newly added stations?
+Because old wires might point to it. Can you tell me what the station deleting
+process looks like? Or could look like? Because we want to remove all the wires
+when we do so - if we fully disconnect any wires that are pointing to it, then
+there should be no problem in re-using the map.stations slot. The slot is a
+fixed size, right? Like, a "larger" station wouldn't take more size? Well, even
+if it did, that's okay, because we can just walk map.stations until we find an
+open spot that's large enough to hold the newly added station.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 32
+
+Both good. Taking them in order.
+
+
+## The vocabulary correction
+
+
+You're right, and the documentation already agrees with you — it's the
+**source** that's wrong. The port record issue defines it exactly as you just
+did:
+
+
+> **A port** is the standing interface for one input of one station… **A
+> slot** is one place where one value physically sits — a cell inside a port's
+> ring buffer, or the bytes reserved for one argument inside a task. **The port
+> decides how a value is stored; the slot is where it lands.**
+
+
+And then admits: *"The source calls the port a slot, which is a naming debt this
+family does not pay off."* So the debt is real and it's in the C. Here's what
+paying it means:
+
+
+| code today | what it actually is | should be |
+
+|---|---|---|
+
+| `slot_t *slots` on a station | its **input ports** | ports |
+
+| `port_t *ports` on a station | its **output ports** | ports |
+
+| "cell", inside a ring buffer | one storage spot | **slot** |
+
+| `{station, slot}` in a destination | names an **input port**, not a slot | port |
+
+
+So a station has input ports and output ports, both called ports. An input port
+owns a ring buffer, which holds many **slots**. A task's argument area also
+holds slots. That's your definition exactly.
+
+
+**One correction to your guess: the shim doesn't live in an output port.** It's
+a field on the station itself — `task_call_t call` — which is right, because
+a station places one box and a box has one shim. What output ports carry is
+where the result *goes*: one for a plain box, three for a comparator, as many as
+you wire for an iterator.
+
+
+The rename reaches the station header, delivery, statics, the loader, the dump,
+and a document whose **filename** contains the wrong word —
+`002-stations-and-slots.md`. Worth doing deliberately in one pass, which is
+exactly why it hasn't happened by accident.
+
+
+## Station slots are fixed size
+
+
+Confirmed, and it's deliberate. The source says so: *"Fixed-size on purpose: the
+array of these must stay indexable, and growing a buffer must never move a
+station."* Everything variable — the ports, the buffers, the destination lists
+— is **pointed to**, not stored inline. So every station occupies exactly the
+same bytes and there is no such thing as a larger one. Your fallback of walking
+for a big-enough hole isn't needed; any free slot fits any station.
+
+
+## What deleting a station looks like
+
+
+Your reasoning is right, and it removes the need for a generation counter
+entirely. Here's the sequence:
+
+
+1. **Take the rewiring lock.** Deleting and wiring must not interleave, or
+   someone draws a wire to a station being deleted.
+
+2. **Find every wire pointing at it.** A wire only ever exists as a destination
+   record on some station's output port, so walking every station × every
+   output port × every destination finds all of them. Nothing else in the
+   engine names a station.
+
+3. **Remove those records.** Now nothing can deliver into it.
+
+4. **Remove its own outgoing destinations**, so anything it has already produced
+   goes nowhere.
+
+5. **Wait until no worker is inside it.** This is the only subtle step: a task
+   built from this station may already be running, and when it finishes it will
+   touch this station's counters and output ports; a delivery may be mid-flight
+   into its buffers. The runtime-compilation issue already designs the mechanism
+   — one counter per worker, bumped at the start and end of a whole task,
+   swept until everyone has crossed a boundary.
+
+6. **Free its ports, its buffers, its name.**
+
+7. **Mark the slot free** for the next station.
+
+
+**And that's why no generation counter is needed.** The counter exists to catch
+a *stale* wire — one written before the slot was reused. Step 3 guarantees no
+such wire survives, because removal is what removes them. There is nothing stale
+to catch.
+
+
+The guarantee doesn't get weaker, it gets **sharper**. Today: *a wire written
+down today is valid forever*, held by never removing anything. It becomes: **a
+wire never names a station that isn't there**, held by removal removing the
+wires first. That's a stronger statement and it costs nothing on the delivery
+path.
+
+
+## The one gap I can see
+
+
+A **caller outside the map**. The input station accepts deliveries from outside
+— several callers into one program input — and the engine deliberately does
+not remember who called. So if you delete an input station while an outside
+caller still holds a reference to it, nothing in step 2 finds that caller,
+because it isn't a wire.
+
+
+That's not fatal, and there are two honest answers: don't delete a station that
+outside callers use, or have outside delivery take the rewiring lock and
+re-check that its target still exists. The second costs a lock on a path that
+already isn't hot. Worth deciding rather than leaving.
+
+
+Shall I write all of this up — the naming debt paid, the deletion sequence,
+the guarantee restated, the outside-caller gap, and the leak inventory?
 
 
 --------------------------------------------------------------------------------

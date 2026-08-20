@@ -213,16 +213,20 @@ would eventually disagree with the first about what a box is.
   strictly must; one mechanism instead of two, on a path nothing
   measures.
 
-  And **you can only reach the retire step for a box no station uses.**
-  A station's box cannot be changed and a station cannot be removed
-  ([211](211-growing-the-station-table.md) keeps growth only, because
-  an index is a position and reclaiming one means either a hole every
-  walk must skip or a renumbering that invalidates every wire at once).
-  So unloading serves the box that was compiled and then not placed, or
-  placed nowhere that survived. That is narrower than it sounds useful,
-  and it should be built anyway, because the alternative is code that
-  accumulates forever in a program whose whole point is being edited
-  while it runs.
+  **And unloading turned out to be worth much more than this issue
+  first thought.** The original reasoning ran: a station's box cannot be
+  changed and a station cannot be removed, so unloading serves only the
+  box that was compiled and then never placed — narrow, but worth
+  building anyway, since the alternative is code accumulating forever
+  in a program whose whole point is being edited while it runs.
+
+  [216](216-removing-a-station.md) removes that limit. A station can be
+  taken out, so a box really can stop being used, so unloading reclaims
+  code from programs that reconfigure rather than only from programs
+  that guessed wrong once at startup. **The two share their hardest
+  step**: waiting until no worker is inside the thing being freed,
+  which is one per-worker counter answering the same question about a
+  box and about a station. Build it once.
 
 - *Does a runtime-added box survive a dump and reload?* **Yes, because
   its source is written down when the box is created, not when a dump

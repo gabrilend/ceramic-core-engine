@@ -40,6 +40,8 @@
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="issue-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
+<a href="issue-216-removing-a-station.html">216 — Removing a station</a>
 <a href="issue-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="issue-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="issue-310-boxes-compiled-at-runtime.html" class="here">310 — Boxes compiled while the program runs</a>
@@ -313,16 +315,19 @@ would eventually disagree with the first about what a box is.</p>
   destinations, since an array becomes freeable slightly later than it
   strictly must; one mechanism instead of two, on a path nothing
   measures.</p>
-<p>  And <strong>you can only reach the retire step for a box no station uses.</strong>
-  A station's box cannot be changed and a station cannot be removed
-  (<a href="issue-211-growing-the-station-table.html">211</a> keeps growth only, because
-  an index is a position and reclaiming one means either a hole every
-  walk must skip or a renumbering that invalidates every wire at once).
-  So unloading serves the box that was compiled and then not placed, or
-  placed nowhere that survived. That is narrower than it sounds useful,
-  and it should be built anyway, because the alternative is code that
-  accumulates forever in a program whose whole point is being edited
-  while it runs.</p>
+<p>  **And unloading turned out to be worth much more than this issue
+  first thought.** The original reasoning ran: a station's box cannot be
+  changed and a station cannot be removed, so unloading serves only the
+  box that was compiled and then never placed — narrow, but worth
+  building anyway, since the alternative is code accumulating forever
+  in a program whose whole point is being edited while it runs.</p>
+<p>  <a href="issue-216-removing-a-station.html">216</a> removes that limit. A station can be
+  taken out, so a box really can stop being used, so unloading reclaims
+  code from programs that reconfigure rather than only from programs
+  that guessed wrong once at startup. **The two share their hardest
+  step**: waiting until no worker is inside the thing being freed,
+  which is one per-worker counter answering the same question about a
+  box and about a station. Build it once.</p>
 <ul>
 <li><em>Does a runtime-added box survive a dump and reload?</em> **Yes, because</li>
 <p>  its source is written down when the box is created, not when a dump
