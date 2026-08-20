@@ -80,6 +80,20 @@ void map_dump(map_t *m, FILE *out)
 
         for (int j = 0; j < s->n_slots; j++) {
             slot_t *sl = &s->slots[j];
+
+            /*
+             * A starting depth, written only when it differs from the
+             * default (issue 210b). The format writes exceptions, and
+             * a port at the default depth is not one — saying `x10` on
+             * every line would be noise a reader learns to skip.
+             *
+             * It comes before the source because the inline value form
+             * runs to the end of the line, so nothing can follow it.
+             */
+            char depth[32] = "";
+            if (sl->capacity != SLOT_DEFAULT_CAPACITY)
+                snprintf(depth, sizeof depth, "x%d ", sl->capacity);
+
             switch (sl->kind) {
             case SLOT_STATIC: {
                 /* The value itself, spoken from its bytes rather than
@@ -99,42 +113,42 @@ void map_dump(map_t *m, FILE *out)
                     abort();
                 }
                 slot_constant_text(sl, text, wanted + 1);
-                fprintf(out, "  in %d = %s   # %s, %d bytes\n", j, text,
-                        sl->type_name ? sl->type_name : "?", sl->elem_size);
+                fprintf(out, "  in %d %s= %s   # %s, %d bytes\n", j, depth,
+                        text, sl->type_name ? sl->type_name : "?",
+                        sl->elem_size);
                 free(text);
                 break;
             }
             case SLOT_RING:
-                /* The default; the format writes only exceptions,
-                 * but the derived facts still deserve saying. */
-                fprintf(out, "  # slot %d: buffer, %s, %d bytes, %d cells\n",
-                        j, sl->type_name ? sl->type_name : "?",
-                        sl->elem_size, sl->capacity);
+                /* The default source; the format writes only
+                 * exceptions, but the derived facts still deserve
+                 * saying — and a non-default depth is an exception, so
+                 * it gets a line of its own rather than a comment. */
+                if (depth[0])
+                    fprintf(out, "  in %d %s-   # buffer, %s, %d bytes\n",
+                            j, depth, sl->type_name ? sl->type_name : "?",
+                            sl->elem_size);
+                else
+                    fprintf(out,
+                            "  # slot %d: buffer, %s, %d bytes, %d cells\n",
+                            j, sl->type_name ? sl->type_name : "?",
+                            sl->elem_size, sl->capacity);
                 break;
             case SLOT_NONE:
-                /* An unconfigured port, written as a comment because
-                 * the format has no word for one yet — issue 210b owes
-                 * that word and is blocked on issue 401, which is
-                 * redesigning the line it would share with the static
-                 * form.
+                /*
+                 * A port with no source at all, written as a bare dash
+                 * (issue 210b). It is a state and not a value, so the
+                 * station holding one simply never becomes ready.
                  *
-                 * A comment is the honest placeholder rather than a
-                 * good answer. Omitting the port would be the dump
-                 * quietly lying: the file would load into a program
-                 * with a *buffered* port where this one has none,
-                 * which is a different program that happens to run.
-                 * Saying it in a comment loses the round trip and
-                 * keeps the truth, and losing the round trip is
-                 * visible while a wrong program is not. The test that
-                 * a dump of a dump is the dump still holds, because a
-                 * comment survives being read and written again.
-                 *
-                 * Until the word exists, a half-built program is one
-                 * of the things this file cannot promise to reload. */
-                fprintf(out, "  # slot %d: NO SOURCE — %s, %d bytes; the "
-                             "format cannot yet write this, so reloading "
-                             "this file gives a buffer here instead\n",
-                        j, sl->type_name ? sl->type_name : "?", sl->elem_size);
+                 * This used to be a comment saying the format had no
+                 * word for it, which kept the dump honest at the cost
+                 * of the round trip: a half-built program was one of
+                 * the things a dump could not promise to reload. It
+                 * can now.
+                 */
+                fprintf(out, "  in %d %s-   # no source yet, %s, %d bytes\n",
+                        j, depth, sl->type_name ? sl->type_name : "?",
+                        sl->elem_size);
                 break;
             }
         }

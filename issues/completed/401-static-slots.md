@@ -112,7 +112,7 @@ in its wiring — which is the same argument that moves them onto ports.
 ## Suggested implementation steps
 
 1. ~~Take the port's own storage from
-   [210b](../210b-the-port-record.md), which provides it — this issue
+   [210b](210b-the-port-record.md), which provides it — this issue
    spends that room rather than building it~~ — **inverted, and the
    inversion is the useful record here.** 210b was blocked on this
    issue instead: a port cannot be given room for a value that lives

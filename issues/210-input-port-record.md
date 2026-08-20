@@ -19,7 +19,7 @@ whole family.
 | issue | what it builds | depends on |
 |---|---|---|
 | [210a — The pull path removed](completed/210a-the-pull-path-removed.md) | the gatherer kind and everything reading it, taken out | — |
-| [210b — The port record](210b-the-port-record.md) | both storages, the three-value tag, cells allocated at instantiation | 210a |
+| [210b — The port record](completed/210b-the-port-record.md) | both storages, the three-value tag, cells allocated at instantiation | 210a |
 | [210c — A state on every cell](210c-a-state-on-every-cell.md) | the four-state per-cell machine, then the copies moved out of the lock | 210b |
 | [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md) | the mutex narrowed to the cell states, the value copies moved outside it | 210c |
 | [210e — Growth adds a page](210e-growth-adds-a-page.md) | a ring buffer that grows by appending, copying nothing | 210d |

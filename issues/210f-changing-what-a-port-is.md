@@ -1,7 +1,7 @@
 # 210f — Changing what a port is
 
 Sixth child of [210](210-input-port-record.md). It branches off
-[210b](210b-the-port-record.md) rather than following the concurrency
+[210b](completed/210b-the-port-record.md) rather than following the concurrency
 line, and can be built alongside it.
 
 ## Current behavior
@@ -44,7 +44,7 @@ mechanism is there; the tests are not.
 ## Intended behavior
 
 **Conversion is a field write.** The tag changes; storage does not
-move. [210b](210b-the-port-record.md) is what makes this possible by
+move. [210b](completed/210b-the-port-record.md) is what makes this possible by
 giving every port its cells at instantiation regardless of what the
 port is currently for, so there is never a moment when the storage a
 tag needs is absent.
@@ -115,7 +115,7 @@ destroyed.
 ## Related
 
 - [210 — What an input port is](210-input-port-record.md), the parent
-- [210b — The port record](210b-the-port-record.md), whose standing
+- [210b — The port record](completed/210b-the-port-record.md), whose standing
   buffer is the entire reason this is cheap
 - [210g — One way to build a station](210g-one-way-to-build-a-station.md),
   which offers this operation as part of one surface

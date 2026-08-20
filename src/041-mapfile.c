@@ -87,6 +87,30 @@ typedef struct parse_state {
     int                line;
 } parse_state_t;
 
+/* {{{ parse_depth_word() */
+/*
+ * A starting depth is written `x64` — the letter, then a count. It
+ * reads as "sixty-four of them", the way a parts list writes a
+ * quantity, and only the letter is accepted: a star was briefly a
+ * second spelling and was withdrawn, because one way to say a thing
+ * is the habit everywhere else in this engine.
+ *
+ * Returns 1 and fills *cells when the word is a depth, 0 when it is
+ * something else entirely. A word that starts with 'x' and is not a
+ * depth is not an error here — it is simply not a depth, and whatever
+ * reads the source next will have its own opinion.
+ */
+static int parse_depth_word(const char *word, int *cells)
+{
+    if (word[0] != 'x' || !word[1])
+        return 0;
+    for (const char *p = word + 1; *p; p++)
+        if (*p < '0' || *p > '9')
+            return 0;
+    return parse_number(word + 1, cells);
+}
+/* }}} */
+
 /* {{{ handle_in() */
 static void handle_in(parse_state_t *st, const char *rest)
 {
@@ -102,13 +126,31 @@ static void handle_in(parse_state_t *st, const char *rest)
         die_parse(st->path, st->line, "expected a slot number after 'in'");
     if (!ref[0])
         die_parse(st->path, st->line,
-                  "expected '$entry' or '= value' after the slot number");
+                  "expected '$entry', '= value', or '-' after the slot number");
 
     desc_input_t *in = need(calloc(1, sizeof *in), st->path, st->line);
     in->slot = slot;
     in->line = st->line;
 
-    /* Two forms, and the first character tells them apart.
+    /*
+     * An optional starting depth comes first, because the inline
+     * value form runs to the end of the line and nothing can follow
+     * it. One rule for all three source forms is worth more than a
+     * rule with an exception in it (issue 210b).
+     */
+    if (parse_depth_word(ref, &in->depth)) {
+        if (in->depth <= 0)
+            die_parse(st->path, st->line,
+                      "a starting depth must be at least one cell");
+        after_slot = after_ref;
+        after_ref = next_word(after_slot, ref, sizeof ref);
+        if (!ref[0])
+            die_parse(st->path, st->line,
+                      "a starting depth with no source after it — say where "
+                      "the port's values come from, or '-' for not yet");
+    }
+
+    /* Three forms, and the first character tells them apart.
      *
      * '= value' carries the value on this line. It is what the dump
      * writes, because a dump has values on ports and no entry numbers
@@ -120,7 +162,13 @@ static void handle_in(parse_state_t *st, const char *rest)
      * '$entry' points at the statics section, which is notation
      * resolved while the file is read (issue 401).
      *
-     * A bare station name used to be a third form, meaning "gather
+     * '-' is a port with no source at all: a state rather than a
+     * value, in which the station simply never becomes ready. No
+     * value in this format is ever a lone dash, so it cannot be read
+     * as one, and the dash already means "wire" on an out line — so
+     * this reads as a wire that is not there yet (issue 210b).
+     *
+     * A bare station name used to be a fourth form, meaning "gather
      * from that station". Nothing is gathered now (issue 210), so it
      * is refused rather than quietly reinterpreted — the forms differ
      * by one character, and reading an old file as a new one would run
@@ -145,11 +193,19 @@ static void handle_in(parse_state_t *st, const char *rest)
         in->is_static = 1;
         if (!parse_number(ref + 1, &in->static_id))
             die_parse(st->path, st->line, "expected a number after '$'");
+    } else if (ref[0] == '-' && !ref[1]) {
+        char extra[8];
+        next_word(after_ref, extra, sizeof extra);
+        if (extra[0])
+            die_parse(st->path, st->line,
+                      "unexpected trailing words on an 'in' line — a dash "
+                      "means this port has no source, so nothing follows it");
+        in->is_none = 1;
     } else {
         die_parse(st->path, st->line,
-                  "expected '$entry' or '= value'; a bare station name here "
-                  "meant 'gather from that station', and there is no pull "
-                  "path any more");
+                  "expected '$entry', '= value', or '-'; a bare station name "
+                  "here meant 'gather from that station', and there is no "
+                  "pull path any more");
     }
 
     desc_input_t **tail = &st->current->inputs;

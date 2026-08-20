@@ -122,7 +122,7 @@ unqualified: a port with no source is an error, full stop.
 ## Related
 
 - [210 — What an input port is](210-input-port-record.md), the parent
-- [210b — The port record](210b-the-port-record.md), whose *none* tag
+- [210b — The port record](completed/210b-the-port-record.md), whose *none* tag
   this checks for
 - [210f — Changing what a port is](210f-changing-what-a-port-is.md),
   whose conversion becomes a case of this surface

@@ -26,7 +26,7 @@ its own.
 | 209 — the output station | open | A pass-through naming where results come from; unwired means hold, not discard. |
 | 210 — what an input port is | **parent, in progress** | The record all three input kinds share, designed once — now two kinds plus unconfigured. Split into eight children; see below. |
 | 210a — the pull path removed | **complete** | The gatherer kind and everything reading it, taken out. Every box now runs on a worker that picked it up. |
-| 210b — the port record | open | Both storages, the three-value tag, cells allocated for every port at instantiation. |
+| [210b — the port record](completed/210b-the-port-record.md) | **complete** | Both storages on every port, the three-value tag, cells allocated at instantiation whatever the port is currently for — which is what makes changing a port's source a field write. The map file learned the two forms it owed: a bare dash for a port with no source, and `x64` before the source for a starting depth, so a half-built program round-trips.
 | 210c — a state on every cell | open | Four states, one atomic swap each; then the copies leave the lock, write side first. |
 | [210d — the copies leave the lock](210d-the-copies-leave-the-lock.md) | open | The mutex narrows to the cell states; the value copies move outside it, protected by the fact that a claimed cell belongs to exactly one worker. Check-all-then-flip-all, so no roll-back path exists. |
 | 210e — growth adds a page | open | Append rather than copy — which a claim that scans rather than computing a position makes necessary, not merely nicer. |

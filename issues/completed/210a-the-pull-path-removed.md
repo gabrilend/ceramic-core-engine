@@ -149,7 +149,7 @@ window and cannot open before this lands.
 
 It does not add the *none* tag, allocate cells at instantiation,
 touch the claim, or change how a buffer grows. Those are
-[210b](../210b-the-port-record.md) onward. The port record after this is
+[210b](210b-the-port-record.md) onward. The port record after this is
 the old record minus one kind, which is deliberately a small place to
 stand.
 

@@ -48,6 +48,16 @@ typedef struct desc_input {
     int   is_static;      /* $n rather than an inline value */
     int   static_id;      /* which entry, when is_static */
     char *text;           /* the value as written, when inline */
+    /* A bare dash: this port has no source yet (issue 210b). Not a
+     * value and not a third kind of value — a state, in which the
+     * station simply never becomes ready. */
+    int   is_none;
+    /* A starting depth, written `x64` before the source; zero when
+     * the line did not say. It sits before the source because the
+     * inline value form runs to the end of the line, so nothing can
+     * follow it, and one rule for all three forms beats a rule with
+     * an exception in it. */
+    int   depth;
     int   line;
     struct desc_input *next;
 } desc_input_t;

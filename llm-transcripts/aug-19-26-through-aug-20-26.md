@@ -1,6 +1,6 @@
 # Conversation Summary: 3ccc0eb0-a576-4361-85ec-79ae4bb357a4
 
-Generated on: 2026-08-20 10:52:17
+Generated on: 2026-08-20 11:04:35
 
 --------------------------------------------------------------------------------
 
@@ -6258,6 +6258,136 @@ underlying gap is recorded in the HTML documentation issue.
 
 Clean build from scratch: 17 test binaries plus the CLI conduct suite, all
 passing.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 36
+
+Okay. Next issue?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 36
+
+Per the roadmap, two candidates. Let me size them.
+
+
+**309 it is** — small, well-specified, and a hard prerequisite for
+runtime-compiled boxes. Let me find every place a wire is checked.
+
+
+Two call sites. Let me see how the loader reaches the destination slot.
+
+
+Both sites have what they need. Making the change.
+
+
+Working as intended — the mapfile test expects the old message. Updating it.
+
+
+All pass. Now the tests for the capability this adds — I need two same-shape,
+different-name structs.
+
+
+Now the test that proves the capability.
+
+
+I guessed the API. Let me read the actual interface.
+
+
+Splice cut a function short. Let me look.
+
+
+All passing. Now step 5 — recording the interchangeability as a stated
+non-guarantee.
+
+
+Let me fix that block in one go.
+
+
+Clean. Now the issue paperwork.
+
+
+**309 is done** — types compared by width, not by name.
+
+
+## What changed
+
+
+A wire is legal when both ends count the same number of bytes. That's one
+integer against another, at both places a wire gets checked: `042-loader.c` when
+a map file draws one, and `052-rewire.c` when a running program does.
+
+
+**What it buys** — two structs with identical layouts and different names now
+connect. Before, a box producing three floats called `triple` couldn't feed a
+box taking three floats called `vec3`, even though the bytes are
+indistinguishable. The author's options were to rename one, or write a box that
+took one and returned the other and did nothing.
+
+
+**The message carries names and widths both:**
+
+
+```
+
+box returns int (4 bytes), slot takes double (8 bytes)
+
+```
+
+
+*"box returns vec4, slot takes stats"* doesn't say why those disagree. Four
+against eight does.
+
+
+## Tests
+
+
+`tests/072-test-width-wiring.c`, three parts:
+
+
+- The two structs are byte-identical by the compiler's own account — same
+  size, same offsets, a memcpy across them preserves every field. If that ever
+  stops being true, the wiring below stops being safe and this is where it
+  shows.
+
+- A station producing a `triple` wired into a station taking a `vec3`, run, with
+  both stations' completion counts checked — the wire really carried a value.
+
+- Different widths refused through the runtime rewiring surface, with the
+  message captured and checked for both names and both widths.
+
+
+The two structs live in the box source rather than the test file, deliberately:
+the thing being proven is that the *engine* stopped caring about the name, so
+the shapes have to be real types the generator saw.
+
+
+## Recorded as a non-guarantee
+
+
+Same-width, different-layout types now wire without complaint — a struct of
+four integers connects to a struct of two integers and a double. Written into
+the guarantees page in its own words, including the part that bites hardest: a
+wrong wire between two data types gives a wrong number, which is local and
+noticeable, while a wrong wire into a port expecting a handle gives a call
+through whatever those bytes were — and every pointer is the same width as
+every other pointer, and as a `double`, and as a file offset.
+
+
+Shape comparison would close it honestly, is designed in full in the issue, and
+the field tables it needs have been emitted since phase 3 and consulted by
+nothing. It lost on costing a walk where width costs a comparison.
+
+
+## Roadmap position
+
+
+Front B's next step is **310 — boxes compiled at runtime**, which needed 309
+as a hard prerequisite and which builds the quiescence sweep that 216 also
+needs. Front A's next is **210b**, now fully unblocked.
 
 
 --------------------------------------------------------------------------------

@@ -37,7 +37,7 @@ split route.c:spread i
   out 1 - mailer.0
 
 reader io.c:read_config p
-  in 0 $2 x64
+  in 0 x64 $2
   out 0 - config.0
 
 config io.c:load p
@@ -115,6 +115,7 @@ in 1 $0        port 1 holds the value written at statics entry 0
 in 1 = 5       port 1 holds 5
 in 2 = { 1.5, 2.5, 3.5 }       and a struct is written the same way
 in 3 -         port 3 has no source yet
+in 4 x64 $1    port 4 reads statics entry 1, starting 64 cells deep
 ```
 
 So `split` above has no input lines at all — every port is an ordinary
@@ -172,13 +173,14 @@ loaded and run.
 ### A starting depth, which any of the three may carry
 
 Every port's ring buffer starts with room for ten values and grows when
-it needs to. A port may be told to start deeper, written after the
-source as a count:
+it needs to. A port may be told to start deeper, written **before the
+source** as a count:
 
 ```
-in 0 $0 x64      reads statics entry 0, room for 64 to begin with
-in 1 - x256      no source yet, room for 256 when it gets one
-in 2 = 5         a constant, and the default ten cells
+in 0 x64 $0      reads statics entry 0, room for 64 to begin with
+in 1 x256 -      no source yet, room for 256 when it gets one
+in 2 x8 = 5      a constant, and eight cells standing idle behind it
+in 3 = 5         a constant, and the default ten
 ```
 
 It reads as *sixty-four of them*, the way a parts list writes a
@@ -186,11 +188,23 @@ quantity. Only `x` is accepted; a star was briefly allowed as a second
 spelling and withdrawn, because one way to say a thing is the habit
 everywhere else in this engine.
 
+**Before the source rather than after, and the reason is mechanical.**
+The `= value` form runs to the end of the line, because a struct value
+has spaces in it, so nothing can follow it — a depth written after a
+value would be part of the value. Putting the depth first gives one
+rule that holds for all three forms, and one rule beats a rule with an
+exception in it. This was written the other way round when the spelling
+was chosen and corrected when it was built.
+
 **A depth may sit beside any source form, including the dash**, because
 the two are independent: every port owns ring cells whatever its tag
 currently says. That standing buffer is what makes changing a port's
 source a field write rather than an allocation, and it is decided in
 issue 210b.
+
+**The dump writes one only when it is not the default.** This format
+writes exceptions, and a port at ten cells is not one; `x10` on every
+line would be noise a reader learns to skip past.
 
 **It is a hint and never a requirement.** Growth covers any figure that
 turns out wrong, so nobody has to be right, and omitting it costs

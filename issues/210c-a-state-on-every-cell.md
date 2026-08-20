@@ -204,7 +204,7 @@ None outstanding. The baseline question above is answered.
 ## Related
 
 - [210 — What an input port is](210-input-port-record.md), the parent
-- [210b — The port record](210b-the-port-record.md), which this needs
+- [210b — The port record](completed/210b-the-port-record.md), which this needs
   for the cells to live on
 - [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md),
   which is only expressible once cells carry their own states

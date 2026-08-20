@@ -15,6 +15,7 @@
  * words.
  */
 #include "040-mapfile.h"
+#include "049-observe.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -110,6 +111,106 @@ static void expect_death_saying(const char *map_text, const char *fragment,
 /* }}} */
 
 /* {{{ test_a_program_is_a_text_file() */
+/* {{{ a half-built program round-trips */
+/*
+ * The two forms an `in` line gained in issue 210b: a bare dash for a
+ * port with no source yet, and `x64` before the source for a starting
+ * depth. Both had been decided and neither could be written.
+ *
+ * What this proves is the round trip on a program that **cannot run**.
+ * A station holding an unconfigured port never becomes ready, which is
+ * an ordinary state rather than a fault, and it is what lets a program
+ * be assembled from nothing and wired one arrow at a time. Until the
+ * format could spell it, the dump wrote a comment admitting it could
+ * not — honest, and it lost the round trip, so a half-built program
+ * was the one thing a dump could not promise to reload.
+ */
+static char *slurp_file(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return NULL;
+    static char buf[8192];
+    size_t n = fread(buf, 1, sizeof buf - 1, f);
+    buf[n] = '\0';
+    fclose(f);
+    return buf;
+}
+
+static void test_half_built_round_trips(void)
+{
+    char map_path[512], dump1[512], dump2[512], map_text[1024];
+    snprintf(map_path, sizeof map_path, "%s/half.map", work_dir);
+    snprintf(dump1, sizeof dump1, "%s/half-dump1.map", work_dir);
+    snprintf(dump2, sizeof dump2, "%s/half-dump2.map", work_dir);
+
+    /* `mix` takes an int and a double. Port 0 is left with no source
+     * at all and given a deeper buffer than the default, so both new
+     * forms appear on one line and their interaction shows; port 1
+     * takes an ordinary value. That station can never run, and that is
+     * the point.
+     *
+     * A second station that *can* run rides along, and it has to: the
+     * seed sweep refuses a map where nothing could ever start. A
+     * program mid-assembly looks exactly like this anyway — some of it
+     * working, some of it not yet wired. A program where *nothing* is
+     * wired is still refused at load, which issue 212 changes when it
+     * stops the seed sweep being a phase. */
+    snprintf(map_text, sizeof map_text,
+        "runner add p\n"
+        "  in 0 = 3\n"
+        "  in 1 = 4\n"
+        "\n"
+        "waiting mix p\n"
+        "  in 0 x64 -\n"
+        "  in 1 = 2.5\n");
+    write_text(map_path, map_text);
+
+    map_t *m = map_load_file(map_path, 2);
+
+    check(m->stations[1].slots[0].kind == SLOT_NONE,
+          "a dash left the port with no source");
+    check(m->stations[1].slots[0].capacity == 64,
+          "and the depth before it still sized the cells");
+    check(m->stations[1].slots[1].kind == SLOT_STATIC,
+          "the other port took its value as usual");
+    check(map_seed_count(m) == 1,
+          "only the runnable station was seeded; the half-built one was not");
+
+    FILE *d1 = fopen(dump1, "w");
+    map_dump(m, d1);
+    fclose(d1);
+    pool_release(m->pool);
+    pool_join(m->pool);
+    map_destroy(m);
+
+    /* The dump has to reload into the same program, which is the
+     * whole claim: the file says what is actually there. */
+    map_t *again = map_load_file(dump1, 2);
+    check(again->stations[1].slots[0].kind == SLOT_NONE,
+          "reloading the dump gave a port with no source, not a buffer");
+    check(again->stations[1].slots[0].capacity == 64,
+          "and the depth survived the trip");
+    check(again->stations[1].slots[1].kind == SLOT_STATIC,
+          "and so did the value on the other port");
+
+    FILE *d2 = fopen(dump2, "w");
+    map_dump(again, d2);
+    fclose(d2);
+    pool_release(again->pool);
+    pool_join(again->pool);
+    map_destroy(again);
+
+    char *first = slurp_file(dump1);
+    char first_copy[8192];
+    snprintf(first_copy, sizeof first_copy, "%s", first ? first : "");
+    char *second = slurp_file(dump2);
+    check(second && strcmp(first_copy, second) == 0,
+          "dump of the dump is the dump, for a program that cannot run");
+    printf("  a half-built program was written down and read back\n");
+}
+/* }}} */
+
 static void test_a_program_is_a_text_file(void)
 {
     char result_path[512], map_path[512], map_text[2048];
@@ -250,6 +351,7 @@ int main(void)
         exit(1);
 
     test_a_program_is_a_text_file();
+    test_half_built_round_trips();
     test_every_refusal();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);

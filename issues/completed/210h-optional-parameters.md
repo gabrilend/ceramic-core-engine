@@ -12,7 +12,7 @@ stays. A station is ready only when every port holds a value, and there
 is no way for a box to say that one of its inputs is one it can do
 without.
 
-After [210b](../210b-the-port-record.md) there is a *none* tag, and after
+After [210b](210b-the-port-record.md) there is a *none* tag, and after
 [210g](../210g-one-way-to-build-a-station.md) a port left in it is caught
 at configuration time as an error. **There is no exemption from that
 check**, and this issue is the record of why one was considered and
@@ -119,7 +119,7 @@ dissolved with the feature rather than being answered.
 
 - [210 — What an input port is](../210-input-port-record.md), the parent,
   whose *none* tag this leaves meaning exactly one thing
-- [210b — The port record](../210b-the-port-record.md), whose *none* tag
+- [210b — The port record](210b-the-port-record.md), whose *none* tag
   this would have reinterpreted for one kind of parameter
 - [210g — One way to build a station](../210g-one-way-to-build-a-station.md),
   whose configuration-time check keeps its single unqualified rule

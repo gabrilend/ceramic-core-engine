@@ -110,15 +110,36 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
                              ? ", plus the threshold" : "");
                 die_load(d->path, in->line, s->name, message);
             }
-            /* Both forms of an input line end here, with text going
-             * into this port at this port's own type (issue 401). The
-             * `statics` section is notation and nothing more: its text
-             * is copied into every port that names an entry, and the
-             * entry has then done its job. Two ports naming one entry
-             * end up with two independent values — writing one cannot
-             * disturb the other, and neither can be shaped by the
-             * other's type, which is a hazard that stops being
-             * expressible rather than being better documented. */
+            /*
+             * A starting depth, if the line gave one, before anything
+             * else touches the port — it sizes the cells, and sizing
+             * them after a value has been put in them would be a
+             * reallocation nobody asked for (issue 210b).
+             */
+            if (in->depth > 0)
+                map_slot_start_depth(m, index, in->slot, in->depth);
+
+            /*
+             * A bare dash: this port has no source yet. Nothing is
+             * written into it and nothing is invented for it — the
+             * station simply never becomes ready, which is an
+             * ordinary state rather than a fault. It is what lets a
+             * half-built program be a real program (issue 210b).
+             */
+            if (in->is_none) {
+                map_slot_convert(m, index, in->slot, SLOT_NONE);
+                continue;
+            }
+
+            /* The other two forms end here, with text going into this
+             * port at this port's own type (issue 401). The `statics`
+             * section is notation and nothing more: its text is copied
+             * into every port that names an entry, and the entry has
+             * then done its job. Two ports naming one entry end up
+             * with two independent values — writing one cannot disturb
+             * the other, and neither can be shaped by the other's
+             * type, which is a hazard that stops being expressible
+             * rather than being better documented. */
             const char *text = in->text;
             if (in->is_static) {
                 for (desc_static_t *e = d->statics; e; e = e->next)

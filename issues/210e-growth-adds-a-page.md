@@ -61,7 +61,7 @@ than a single number, and the report should say the sum.
 ## Suggested implementation steps
 
 1. The page list on the port: a first page allocated at instantiation
-   as [210b](210b-the-port-record.md) already does, and a link for
+   as [210b](completed/210b-the-port-record.md) already does, and a link for
    the rest.
 2. The scan walks pages rather than one array. This is where the cost
    of paging lands and it should be looked at honestly: a scan that

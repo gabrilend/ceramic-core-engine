@@ -69,7 +69,7 @@ state it may hold indefinitely: it cannot become ready, so it cannot
 run, and it becomes runnable as its ports are given sources one at a
 time. That is what makes "add a station now, wire it in a moment" an
 ordinary sequence rather than a window of invalidity, and it is why the
-*none* tag on the port record ([210b](210b-the-port-record.md)) is
+*none* tag on the port record ([210b](completed/210b-the-port-record.md)) is
 load-bearing here rather than a curiosity.
 
 **A map is a box.** Once a program declares where its results come from

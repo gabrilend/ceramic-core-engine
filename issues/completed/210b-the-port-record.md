@@ -1,11 +1,11 @@
 # 210b — The port record
 
-Second child of [210](210-input-port-record.md). The shape every other
+Second child of [210](../210-input-port-record.md). The shape every other
 child stands on: what a port *is*, once there are two live kinds and a
 third state meaning nobody has said yet.
 
 **The statics block is cleared.** This issue was blocked in half on
-[401](completed/401-static-slots.md) and [405](405-statics-mutation.md): a port
+[401](401-static-slots.md) and [405](405-statics-mutation.md): a port
 could not be given room for a value that lived in a global register,
 and the map file's `$n` form named a table the design had decided to
 delete.
@@ -45,12 +45,12 @@ a ring buffer again.
 gets ten. This landed as its own call rather than as an argument on
 the call that creates the station — that array would have been null at
 roughly eighty existing call sites across the tests and the phase
-demos, and [210g](210g-one-way-to-build-a-station.md) is about to make
+demos, and [210g](../210g-one-way-to-build-a-station.md) is about to make
 configuring a port a single operation naming a station, a port, and
 what it becomes, which is the shape this already has.
 
 The first thing the depth call was used for was fixing a measurement:
-see [210c](210c-a-state-on-every-cell.md), where the delivery baseline
+see [210c](../210c-a-state-on-every-cell.md), where the delivery baseline
 turned out to be measuring buffer growth until the ports were sized
 past what the run could fill.
 
@@ -61,30 +61,48 @@ sits idle — which is what makes changing what a port is a field write
 in both directions rather than only one. The claim table's static row
 was a null meaning "resolved later, outside the mutex", and it is an
 ordinary function now; the caller has stopped testing a function
-pointer for truth. [401](completed/401-static-slots.md) did both.
+pointer for truth. [401](401-static-slots.md) did both.
 
 **The map file gained a form for a value, which was half of what was
 owed.** `in 1 = 5` carries a constant on the line, matching the statics
 section's own `N = value`, and it is what the dump writes — a dump has
 values on ports and no entry numbers to point back at.
 
-**Still ahead:**
+**The map file can now write both of the things it owed.** A port with
+no source at all is a bare dash, `in 2 -`, and a starting depth is
+`x64` written **before** the source. The reader takes them, the dump
+writes them, and a deliberately half-built program round-trips — which
+it could not while the dump wrote a comment admitting the format had no
+word for one.
 
-- The map file has no form for an unconfigured port **built**, though
-  the spelling is now decided: a bare dash, `in 2 -`. Until the reader
-  learns it, the dump writes one as a comment saying the format cannot
-  spell it, which keeps the dump honest at the cost of the round trip —
-  a half-built program is currently one of the things a dump cannot
-  promise to reload.
-- No form for a starting depth built either, though the call exists and
-  the spelling is decided: `x64` after the source.
+**The depth moved from after the source to before it, during
+implementation.** The `= value` form runs to the end of the line,
+because a struct value has spaces in it, so nothing can follow it: a
+depth written after a value would be part of the value. Before the
+source is one rule that holds for all three forms, and one rule beats a
+rule with an exception in it. The spelling was chosen the other way
+round and corrected here; the documents say the corrected thing.
+
+**The dump writes a depth only when it is not the default**, because
+this format writes exceptions and a port at ten cells is not one. It
+also means a port whose only exception *is* its depth now gets a real
+line rather than a comment — `in 1 x64 -` where a buffered port at the
+default still gets a comment saying what it derived.
+
+**Still ahead, and not this issue's:** a program where *nothing* can
+start is still refused at load by the seed sweep, so the round-trip
+test builds a program that is partly wired rather than wholly unwired.
+That is what a program mid-assembly actually looks like, and the
+wholly-unwired case belongs to
+[212](../212-one-way-to-build-a-program.md), where the seed sweep stops
+being a phase.
 
 ## Intended behavior
 
 **Both storages live on the port; the tag says which is in effect.**
 Ring cells and a static's bytes both have room, exactly one is
 current, and the other sits idle. This is the whole trick that makes
-[210f](210f-changing-what-a-port-is.md) a field write.
+[210f](../210f-changing-what-a-port-is.md) a field write.
 
 **Cells are allocated when the station is instantiated, for every port
 regardless of what that port is currently for.** The element size is
@@ -153,15 +171,13 @@ because they say which pieces are built and which are not.
    accessors that read the live one so nothing outside reaches past
    the tag to a field that may not be in effect. **Built** — the ring
    storage and the tag by this issue, the static storage by
-   [401](completed/401-static-slots.md), which built the room it spends
+   [401](401-static-slots.md), which built the room it spends
    rather than waiting to be handed it.
 2. Cells allocated at station instantiation for every port, ten deep
    from one named constant, sized from the registry.
 3. The per-port starting capacity: a form in the map file, an argument
-   on the creation call, and ten when neither says otherwise. *The
-   argument is built; the file form is not.* It shares a line with the
-   static form, which 401 has now settled, so the spelling is decided
-   too: `x64` after the source.
+   on the creation call, and ten when neither says otherwise.
+   **Built** — `x64` before the source, in the reader and the dump.
 4. Both dispatch tables gain their rows. The claim table's null becomes
    a named function; the caller stops testing a function pointer for
    truth. **Built, both of them** — the *none* rows here, and the
@@ -173,8 +189,8 @@ because they say which pieces are built and which are not.
    ports.
 6. The map file form for an unconfigured port — a bare dash — in the
    reader and the dump together, with a round-trip test on a
-   deliberately half-built program. Lands with step 3, since they share
-   a line.
+   deliberately half-built program. **Built**, and it landed with step
+   3 as expected, since they share a line.
 
 ## Open questions
 
@@ -198,15 +214,24 @@ because they say which pieces are built and which are not.
   nobody had thought about, and the dump's whole value is that it says
   what is actually there.
 
-- *And a starting depth?* **`x64`, written after the source.** So
-  `in 0 $0 x64` is a port reading statics entry zero whose ring starts
+- *And a starting depth?* **`x64`, written before the source.** So
+  `in 0 x64 $0` is a port reading statics entry zero whose ring starts
   with room for sixty-four values instead of ten. It reads as *sixty-
   four of them*, the way a parts list writes a quantity.
+
+  **It was chosen as "after the source" and corrected to "before" when
+  it was built**, which is the useful part of this answer. The
+  `= value` form runs to the end of the line, because a struct value
+  has spaces in it — so nothing can follow it, and a depth written
+  after a value would simply be part of the value. Putting it first
+  gives one rule that holds for all three forms. A rule with an
+  exception in it would have been the alternative, and the exception
+  would have been the form people write most.
 
   **A depth may appear beside any of the three source forms, including
   the dash**, because depth and source are independent — every port
   owns ring cells whatever its tag currently says, which is the
-  standing buffer this issue is built on. `in 1 - x256` is a port with
+  standing buffer this issue is built on. `in 1 x256 -` is a port with
   no source yet and room for two hundred and fifty-six values when it
   gets one.
 
@@ -217,16 +242,16 @@ because they say which pieces are built and which are not.
 
 ## Related
 
-- [210 — What an input port is](210-input-port-record.md), the parent
-- [210a — The pull path removed](completed/210a-the-pull-path-removed.md),
+- [210 — What an input port is](../210-input-port-record.md), the parent
+- [210a — The pull path removed](210a-the-pull-path-removed.md),
   which leaves the record with one fewer kind to carry
-- [210f — Changing what a port is](210f-changing-what-a-port-is.md),
+- [210f — Changing what a port is](../210f-changing-what-a-port-is.md),
   which is only cheap because of the standing buffer decided here
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
   which needs the *none* tag to assemble a program from nothing
-- [202 — Ring buffer slots](completed/202-ring-buffer-slots.md), the
+- [202 — Ring buffer slots](202-ring-buffer-slots.md), the
   storage this keeps
-- [008 — Map file format](../docs/008-map-file-format.md), which names
+- [008 — Map file format](../../docs/008-map-file-format.md), which names
   both the unconfigured form and the optional capacity as owed
-- [703 — The map dump](completed/703-map-dump.md), which must write a
+- [703 — The map dump](703-map-dump.md), which must write a
   half-built program faithfully
