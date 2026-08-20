@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>706 — Phase 7 demo: watching it think</title>
+<title>074-latebox.c — a late box, from inside</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -110,7 +110,7 @@
 <a href="done-702-station-statistics.html">702 — Per-station statistics</a>
 <a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
 <a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
-<a href="done-706-phase-7-demo.html" class="here">706 — Phase 7 demo: watching it think</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
@@ -126,7 +126,7 @@
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
 <a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
-<a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
+<a href="info-074-latebox-c.html" class="here">074-latebox.c — a late box, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
@@ -136,104 +136,38 @@
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 </nav>
 <main>
-<h1>706 — Phase 7 demo: watching it think</h1>
-<h2>Current behavior</h2>
-<p><strong>Built, with one scene to replace.</strong></p>
-<p>The refused rewire attempts an edit that would create a **gather
-cycle**, and gather cycles no longer exist
-(<a href="impl-056-no-pull-path.html">056</a>). The scene
-itself is worth keeping — an edit refused on a running program, with
-the next delivery still flowing, is exactly the thing worth showing —
-so it needs a different illegal edit. A wire whose types do not match
-is the obvious candidate, and under
-<a href="done-309-types-by-width.html">309</a> it gets better rather than worse: the
-message can name the first field where two layouts diverge instead of
-only that two names differ.</p>
-<p><strong>Everything else stands</strong>, including the finding this demo produced
-by accident, which is the most useful thing in it: **a slow box alone
-is not a bottleneck here**, because the pool already runs one station's
-invocations on every core. The reports exist to show who pays, not to
-promise speedups. That is a sentence about what measurement is <em>for</em>,
-and it survives every change to what is being measured.</p>
-<p>The remainder describes it as built.</p>
-<p>Built. The live view draws runs and buffer depths from the station
-table while values flood in. The bottleneck scene finds the hot
-station using only the engine's contention report — box time
-attributed to the cruncher, the spare provably idle — and relieves
-it by moving an iterator port mid-run, load visibly split with
-nothing restarted; it also caught a finding the report keeps: a slow
-box alone is not a bottleneck here, because the pool already runs
-one station's invocations on every core, so the reports exist to
-show who pays rather than to promise speedups. The dump then
-disagrees with the file on disk and is right; the round trip closes
-byte-identically; a refused gather cycle names both stations and the
-next delivery still flows. The driving script builds the demo twice
-and measures the measurement: the same workload with statistics
-compiled out and in, the difference a number rather than a rumour.
-Mirrored to the shared-memory tier.</p>
-<p>Each scene opens with a story and reports in that story's units beside
-the engine's own, under the standard issue 707 sets: a control room
-whose gauges are wired to the machines rather than to the drawings, a
-lane closed by cones, a set of as-built drawings against the
-architect's plan, a translation checked by translating it back, and a
-safety interlock that refuses without stopping the line. Scene six —
-the thermometer that warms the room it measures — belongs to the
-driving script, because neither build can measure the other. The
-demo now says in advance that the loader will warn about the idle
-spare station, so an expected warning does not teach a reader to
-ignore warnings.</p>
-<p>Measuring the instrumentation honestly took three attempts and the two
-failures are recorded in the script. One run of each build reported the
-instrumented one as faster; best-of-five run as two blocks reported the
-same thing more confidently, because whichever build ran second
-inherited a warm cache and a scaled-up processor. Repeating a
-measurement carefully is not the same as taking it fairly. The runs now
-alternate after a discarded warm-up, and the cost lands at a small
-positive figure — with the script still prepared to say plainly that a
-negative result means noise rather than rounding it to zero.</p>
-<h2>Intended behavior</h2>
-<p>The demo about legibility. Every earlier phase demo reported what
-happened; this one shows it happening, and then changes it without
-stopping.</p>
-<p>It should make one thing obvious: <strong>the engine has no hidden state.</strong>
-Everything it is doing can be seen, and most of it can be altered.</p>
-<p><strong>What it should show, in order of how convincing it is:</strong></p>
-<p><strong>A live map.</strong> The loaded graph drawn from the station table — not the
-file — with buffer depths, per-station run counts, and which stations
-are executing right now, redrawn continuously. Feed it enough work to
-saturate the machine and watch where the values pool up.</p>
-<p><strong>Rewiring under load.</strong> With values flowing, change a wire. The
-picture changes, the behaviour changes, nothing is lost, nothing
-restarts. Then dump the map and show the dump reflects the new shape
-rather than the file on disk.</p>
-<p><strong>A bottleneck found rather than guessed.</strong> Build a map with a
-deliberate contention problem, then find it using only the reports:
-mutex wait time pointing at the station, buffer growth pointing at the
-slot behind it. Fix it by rewiring live and show both numbers fall.</p>
-<p><strong>The round trip.</strong> Load a map, dump it, load the dump, dump again,
-show the two dumps identical. Quiet, and it is the proof that the
-picture and the engine agree.</p>
-<p><strong>A refused rewire.</strong> Attempt an edit that would create a gather cycle
-and show it refused with both stations named — the same check from
-issue 404, now protecting a running program instead of a loading one.</p>
-<p><strong>The instrumentation's own cost.</strong> The same map run with statistics
-compiled in and compiled out. Report both throughputs. A measurement
-apparatus whose cost is unmeasured is a rumour.</p>
-<p><strong>Everything, together, one last time.</strong> Every phase's machinery in one
-running map, with the occupancy figure reported alongside the six
-earlier demos' numbers, so the whole sequence can be read as one line.</p>
-<h2>Suggested implementation steps</h2>
-<p>1. Drive the live view from the station table, continuously redrawn.
-2. Make the rewiring interactive if the terminal allows it; scripted
-   with visible pauses if not.
-3. Report every number by measuring it.
-4. Write results to <code>tmp/shared-memory/</code> alongside the screen.
-5. Confirm the root launcher finds it.</p>
-<h2>Related</h2>
-<ul>
-<li>Issues 701 through 705 — everything being demonstrated</li>
-<li>Issue 606 — the phase 6 demo this builds on</li>
-</ul>
+<h1>074-latebox.c — a late box, from inside</h1>
+<p>Interface in <code>073-latebox.h.info.md</code>. Five steps: save the source,
+run the generator, compile a shared object, load it, add its rows.
+Nothing here re-implements any of that — a box added late goes through
+the identical path a box added early did, so there is one way for a box
+to come into existence rather than two that must agree.</p>
+<p><strong>Two RAM tiers, and which goes where is not arbitrary.</strong> Source text
+goes to <code>/dev/shm</code>, the read tier; the compiled library goes to <code>/tmp</code>,
+the execute tier. <code>/dev/shm</code> is commonly mounted so that nothing on it
+may be executed, so a shared object written there compiles fine and
+then fails to load with a message about mapping a segment that says
+nothing about the real cause. Found by putting both in the wrong tier.</p>
+<p><strong>The table grows by adding a block and never moves a row.</strong> The
+generated array is the first block and is const; later rows live in
+blocks of their own, published by one pointer write so a reader either
+sees a block complete or does not see it. Generated rows are searched
+first, so bringing in new code can never shadow a box a map already
+depends on.</p>
+<p><strong>The source is filed twice</strong>: once under a serial number, which is
+what was handed over, and once per box under that box's own name, which
+is how a <strong>later process</strong> finds it. That is what makes a dump taken
+after somebody added code reloadable — <code>registry_recover_box</code> compiles
+it back from the saved source when a name is not found, and says out
+loud that it did, because a fallback nobody was told about is the shape
+this project treats as an error.</p>
+<p><strong>What is deliberately absent: unloading.</strong> A shared object is never
+closed, so a late box stays for the life of the process. Doing it
+safely means waiting until no worker is inside the code being freed —
+the same retire-sweep-free mechanism issues 214 and 216 need — and it
+should be built once and shared rather than three times. Until then
+this leaks a library per compile, bounded by how often somebody adds
+code, and stated rather than hidden.</p>
 
 </main>
 </div></body></html>

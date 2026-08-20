@@ -20,6 +20,11 @@
 #include "040-mapfile.h"
 #include "026-registry.h"
 
+/* A box added while some earlier process ran; see 073-latebox.h. It
+ * is declared here rather than included, because the loader needs one
+ * function from that file and nothing else it offers. */
+const box_info_t *registry_recover_box(const char *name);
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -86,6 +91,14 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
         names->by_index[index] = s;
 
         const box_info_t *b = registry_find(s->box);
+        if (!b) {
+            /* Before giving up: a box added while some earlier
+             * process ran left its source behind under its own name,
+             * and this may be that program's dump being reloaded
+             * (issue 310). Recovery compiles it back and says out
+             * loud that it did. */
+            b = registry_recover_box(s->box);
+        }
         if (!b) {
             /* The most common error a map will ever have; its
              * message should be the best one in the program. */

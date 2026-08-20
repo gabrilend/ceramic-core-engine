@@ -2,24 +2,75 @@
 
 ## Current behavior
 
-Every box a program can ever place is decided before it starts.
+**Built, except for unloading, which is blocked.** A box's C source
+can be handed to a running program and a station can place it. The
+path is the one this issue described and every step of it runs the
+same program the build runs: the generator turns the source into a
+registry source, the compiler turns that into a shared object, the
+dynamic linker loads it, and its rows join the table stations are
+placed from.
 
-The generator reads whatever sits under the box source directory,
-parses the function declarations, and emits one file: a shim per box,
-a record per box holding its name and its parameter and return types
-and sizes, a field table per struct, and a comparison per orderable
-type. That file is compiled in. The registry is a fixed array, and
-looking a box up by name is a walk over it.
+**Which compiler is not incidental.** The build bakes in the one that
+built the binary and this uses that one, so a program has exactly one
+answer to `sizeof` **by construction** rather than by checking. That
+was decided under *Which compiler, and at what setting* below and is
+the reason a second, faster in-process compiler was refused.
 
-So placing a station by the text `"add"` reaches a compiled C function
-— which is the whole trick that lets a text file describe a program.
-And the set of names that trick works for is frozen at build time.
+**The table grows by adding a block and never moves a row.** The
+generated array is the first block and is const; later rows live in
+blocks of their own, published by one pointer write so a reader
+walking the list either sees a block complete or does not see it at
+all. Generated rows are searched first, deliberately: bringing in new
+code can never shadow a box a map already depends on.
 
-Runtime construction ([212](212-one-way-to-build-a-program.md)) makes
-that limit visible. A program can now grow stations, ports, and wires
-while it runs, and every one of those stations must place a box the
-program was compiled with. You can rearrange the furniture but not
-bring in new furniture.
+**Seven things are proven**, in `tests/075-test-latebox.c`:
+
+- a box written after the program started is placed, wired to a box
+  the binary was built with, and delivers
+- its widths came from a compiler rather than from its signature
+- a struct it defines, laid out like one the program already knows and
+  named something the program has never heard, wires and arrives intact
+- a late box of the wrong width is refused by the same rule and the
+  same message a build-time box gets
+- **a late box whose struct disagrees in *layout* at the same width is
+  accepted**, which is written deliberately — see below
+- a source the generator refuses and a source the compiler refuses are
+  both refused here, and neither leaves a row behind
+- a dump taken after a box was added **reloads in a fresh process**
+
+**That fifth one asserts a wrong answer on purpose.** Two structs of
+three floats in different orders have the same width, so the wire is
+legal and the fields arrive transposed. That is the accepted cost of
+[309](completed/309-types-by-width.md)'s width comparison, recorded as
+a non-guarantee, and pinned by a test so nobody later mistakes it for
+an oversight. If shape comparison is ever built, that test is what
+fails, and its failure is the good news.
+
+**The source is filed twice.** Once under a serial number, which is
+what was handed over, and once per box under that box's own name,
+which is how a **later** process finds it. When a name is not found,
+recovery compiles it back from the saved source — and **says out loud
+that it did**, because a fallback nobody was told about is the shape
+this project treats as an error. That is what makes the dump of a
+grown program a real record rather than a description of something
+unreproducible.
+
+**Two RAM tiers, and the reason had to be rediscovered.** Source text
+goes to the read tier and the compiled library to the execute tier,
+because `/dev/shm` is commonly mounted so that nothing on it may be
+executed — so a shared object written there compiles and then fails to
+load, with a message about mapping a segment that says nothing about
+the cause. The project's two-tier rule existed; what it was *for* was
+found by breaking it.
+
+**Not done: unloading, and it is blocked rather than skipped.** A
+shared object is never closed, so a late box stays for the life of the
+process and this leaks a library per compile. Doing it safely means
+waiting until no worker is inside the code being freed, which is the
+retire-sweep-free mechanism
+[214](214-destinations-without-a-lock.md) builds and
+[216](216-removing-a-station.md) also needs. It should be built once
+and shared by all three rather than three times, so it waits for 214.
 
 ## Intended behavior
 

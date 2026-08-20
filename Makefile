@@ -39,6 +39,20 @@ CC     ?= gcc
 CFLAGS := -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread
 CFLAGS += -I$(DIR)/libs -I$(DIR)/src
 
+# Three build-time facts a program needs at run time, and only if it
+# ever brings in new code (issue 310): which compiler built it, where
+# the generator is, and where the headers that generated code includes
+# live. Baked in rather than discovered, because **the compiler that
+# built the binary is the one that must compile anything added to it**
+# — that is what gives a program exactly one answer to sizeof by
+# construction rather than by checking.
+CFLAGS += -DSORA_CC='"$(CC)"'
+CFLAGS += -DSORA_GENERATOR='"$(BUILD)/generate"'
+CFLAGS += -DSORA_INCLUDE='"$(DIR)/src"'
+CFLAGS += -DSORA_INCLUDE_LIBS='"$(DIR)/libs"'
+CFLAGS += -DSORA_RAM_SHARED='"$(RAM_SHARED)"'
+CFLAGS += -DSORA_RAM_EXEC='"$(RAM_EXEC)"'
+
 # The generator (phase 3): box sources are whatever sits in
 # src/boxes/ — discovered, never listed, so a box cannot exist that
 # the generator silently does not see. The registry is derived from

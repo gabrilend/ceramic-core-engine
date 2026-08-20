@@ -17,13 +17,31 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * Rows added while the program runs live next door (issue 310). They
+ * are declared here rather than in a header because only these two
+ * lookups need them: everything else reaches a box through the row it
+ * was already handed.
+ */
+const box_info_t *registry_late_find(const char *name);
+const char       *registry_late_name_for_shim(task_call_t shim);
+const box_info_t *registry_recover_box(const char *name);
+
 /* {{{ registry_find() */
+/*
+ * The generated rows first, then anything compiled in later. That
+ * order is deliberate: a box the program was built with wins over one
+ * added afterwards under the same name, so bringing in new code can
+ * never quietly replace something a map already depends on. Replacing
+ * a name that was never built in works, and shadowing one that was
+ * does not.
+ */
 const box_info_t *registry_find(const char *name)
 {
     for (int i = 0; i < registry_n_boxes; i++)
         if (strcmp(registry_boxes[i].name, name) == 0)
             return &registry_boxes[i];
-    return NULL;
+    return registry_late_find(name);
 }
 /* }}} */
 
@@ -43,7 +61,8 @@ const char *registry_box_name_for_shim(task_call_t shim)
     for (int i = 0; i < registry_n_boxes; i++)
         if (registry_boxes[i].shim == shim)
             return registry_boxes[i].name;
-    return "?unknown-box?";
+    const char *late = registry_late_name_for_shim(shim);
+    return late ? late : "?unknown-box?";
 }
 /* }}} */
 
@@ -83,7 +102,22 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
 {
     const box_info_t *b = registry_find(box_name);
     if (!b) {
-        /* The most common mistake a map will ever contain. */
+        /*
+         * Before giving up: a box added while some *earlier* process
+         * ran left its source behind under its own name, and this may
+         * be that program's dump being reloaded (issue 310). Recovery
+         * compiles it back into existence and says out loud that it
+         * did — a fallback nobody was told about is the shape this
+         * project treats as an error, so this one announces itself
+         * every time.
+         *
+         * When there is no such source, this returns null and the
+         * message below is the ordinary answer for a misspelled name,
+         * which is the most common mistake a map will ever contain.
+         */
+        b = registry_recover_box(box_name);
+    }
+    if (!b) {
         fprintf(stderr,
                 "map: no box named '%s' in the registry — misspelled, or its "
                 "source is not under src/boxes/\n", box_name);
