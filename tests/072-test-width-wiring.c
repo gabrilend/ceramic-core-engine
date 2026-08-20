@@ -92,8 +92,8 @@ static void identical_shapes_wire(void)
     pool_release(m->pool);
     pool_join(m->pool);
 
-    long ran_producer = atomic_load(&m->stations[0].runs);
-    long ran_consumer = atomic_load(&m->stations[1].runs);
+    long ran_producer = atomic_load(&map_station(m, 0)->runs);
+    long ran_consumer = atomic_load(&map_station(m, 1)->runs);
     check(ran_producer == 1, "the producing station ran once");
     check(ran_consumer == 1,
           "the consuming station ran, so the wire really carried a value");

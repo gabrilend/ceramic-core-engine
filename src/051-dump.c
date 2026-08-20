@@ -71,7 +71,7 @@ void map_dump(map_t *m, FILE *out)
      * observable in behaviour, only in notation.
      */
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = &m->stations[i];
+        station_t *s = map_station(m, i);
         fprintf(out, "\n%s ", m->station_names[i]);
         /* The box's name is not stored on the station — the shim
          * pointer is read backwards through the registry. */

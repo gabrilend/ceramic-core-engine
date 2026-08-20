@@ -242,7 +242,7 @@ The refusal policy is stated in eight places that were deliberately
 kept in agreement, and all of them move together:
 
 - [704](completed/704-runtime-rewiring.md), which decided it
-- [211](211-growing-the-station-table.md), which inherits it explicitly
+- [211](completed/211-growing-the-station-table.md), which inherits it explicitly
 - [212](212-one-way-to-build-a-program.md), which now answers it
 - the first-pass report, which books it as a debt
 - the observe interface file and the observe header

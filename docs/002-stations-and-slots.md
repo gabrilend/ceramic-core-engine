@@ -6,19 +6,24 @@ its shape is worth knowing exactly.
 
 ## The station table
 
-Every station in a loaded map lives in one flat array, allocated once
-when the map loads and never resized while the program runs. A station
-is addressed by its position in that array — a 32-bit index, not a
-pointer.
+Every station in a map lives in a **table of shelves**: a short array
+of pointers, each to a fixed run of station records. Station number
+*n* sits at position *n* within shelf *n* divided by the shelf size —
+one shift and one mask, because the shelf size is a power of two. A
+station is addressed by its number forever after, and **nothing
+already placed ever moves**.
 
-**The "never resized" half is going.** Under one construction surface,
-adding a station is the only way one ever comes into existence, so the
-table starts empty and grows as a program is read. It grows by adding a
-**shelf** — another allocation holding a fixed number of stations, with
-a short list of where the shelves are — rather than by reallocating,
-because a station holds its own mutex and a mutex is identified by
-where it lives. Move one and every thread parked on it waits forever at
-an address nobody will unlock. Issue 211.
+That shape exists for one reason: a station holds its own mutex, and a
+mutex is identified by where it lives. A flat array grows by
+reallocating, which would move every record and leave any thread
+parked on a lock waiting at an address nobody unlocks. Growing by
+adding a shelf copies nothing but the short array of addresses.
+
+The table grows one station at a time, and a station removed frees its
+place for the next one — so a program that adds and removes forever
+reaches a steady size rather than climbing. Reading a map file is that
+same growth, one station per line, rather than a separate act that
+counts lines and allocates once.
 
 Indices are used rather than addresses for three reasons. They are half
 the size. They survive being written to a log or dumped to the screen,

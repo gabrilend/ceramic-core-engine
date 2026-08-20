@@ -64,8 +64,8 @@ int map_rewire_connect(map_t *m, int from_station, int port,
         pthread_mutex_unlock(&m->rewire_mutex);
         return refuse("a station index outside the table");
     }
-    station_t *from = &m->stations[from_station];
-    station_t *to = &m->stations[to_station];
+    station_t *from = map_station(m, from_station);
+    station_t *to = map_station(m, to_station);
     if (from->out_size == 0) {
         pthread_mutex_unlock(&m->rewire_mutex);
         return refuse("wiring from a sink — nothing comes out of it");
@@ -159,7 +159,7 @@ int map_rewire_disconnect(map_t *m, int from_station, int port,
         pthread_mutex_unlock(&m->rewire_mutex);
         return refuse("a station index outside the table");
     }
-    station_t *from = &m->stations[from_station];
+    station_t *from = map_station(m, from_station);
 
     pthread_mutex_lock(&from->mutex);
     port_t *p = station_port(from, port);
@@ -255,7 +255,7 @@ int map_remove_station(map_t *m, int station)
         pthread_mutex_unlock(&m->rewire_mutex);
         return refuse("removing a station outside the table");
     }
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     if (!s->call || atomic_load_explicit(&s->removed, memory_order_acquire)) {
         pthread_mutex_unlock(&m->rewire_mutex);
         return refuse("removing a station that is not there");
@@ -280,7 +280,7 @@ int map_remove_station(map_t *m, int station)
      * without a version on every wire.
      */
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *other = &m->stations[i];
+        station_t *other = map_station(m, i);
         if (!other->call)
             continue;
         pthread_mutex_lock(&other->mutex);

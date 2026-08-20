@@ -44,7 +44,7 @@ static int wires_naming(map_t *m, int station)
 {
     int n = 0;
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = &m->stations[i];
+        station_t *s = map_station(m, i);
         if (!s->call)
             continue;
         for (port_t *p = s->ports; p; p = p->next) {
@@ -88,7 +88,7 @@ static void removal_cuts_every_wire_first(void)
     pool_release(m->pool);
     pool_join(m->pool);
     map_scrap_sweep(m);
-    check(m->stations[3].call == NULL,
+    check(map_station(m, 3)->call == NULL,
           "and once nothing could be inside it, the place came free");
 
     map_destroy(m);
@@ -118,14 +118,14 @@ static void the_place_is_reused(void)
     /* The place comes free when nobody can be inside a task built
      * from it. With nothing running yet, one sweep is enough. */
     map_scrap_sweep(m);
-    check(m->stations[1].call == NULL, "and the place came free");
+    check(map_station(m, 1)->call == NULL, "and the place came free");
 
     /* A different box takes the same place. Under a design that
      * reused places without cutting wires first, the old wire would
      * still point here and this station would receive values nobody
      * sent it. */
     map_place_box(m, 1, "keep", STATION_PLAIN);
-    check(m->stations[1].call != NULL, "and a new station took it");
+    check(map_station(m, 1)->call != NULL, "and a new station took it");
 
     map_connect(m, 0, 0, 2, 0);
     int five = 5;
@@ -133,9 +133,9 @@ static void the_place_is_reused(void)
     pool_release(m->pool);
     pool_join(m->pool);
 
-    check(atomic_load(&m->stations[2].runs) == 1,
+    check(atomic_load(&map_station(m, 2)->runs) == 1,
           "the value went where it was wired");
-    check(atomic_load(&m->stations[1].runs) == 0,
+    check(atomic_load(&map_station(m, 1)->runs) == 0,
           "and the reused place received nothing, because no wire named it");
 
     map_destroy(m);
@@ -175,7 +175,7 @@ static void removal_under_load(void)
         map_deliver_value(m, 0, 0, &v);
 
         int victim = 1 + (round % 5);
-        station_t *st = &m->stations[victim];
+        station_t *st = map_station(m, victim);
         if (st->call && !atomic_load(&st->removed)) {
             if (map_remove_station(m, victim) == 0)
                 removed++;

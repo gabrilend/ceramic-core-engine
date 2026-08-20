@@ -168,11 +168,11 @@ static void test_half_built_round_trips(void)
 
     map_t *m = map_load_file(map_path, 2);
 
-    check(m->stations[1].slots[0].kind == SLOT_NONE,
+    check(map_station(m, 1)->slots[0].kind == SLOT_NONE,
           "a dash left the port with no source");
-    check(m->stations[1].slots[0].capacity == 64,
+    check(map_station(m, 1)->slots[0].capacity == 64,
           "and the depth before it still sized the cells");
-    check(m->stations[1].slots[1].kind == SLOT_STATIC,
+    check(map_station(m, 1)->slots[1].kind == SLOT_STATIC,
           "the other port took its value as usual");
     check(map_seed_count(m) == 1,
           "only the runnable station was seeded; the half-built one was not");
@@ -187,11 +187,11 @@ static void test_half_built_round_trips(void)
     /* The dump has to reload into the same program, which is the
      * whole claim: the file says what is actually there. */
     map_t *again = map_load_file(dump1, 2);
-    check(again->stations[1].slots[0].kind == SLOT_NONE,
+    check(map_station(again, 1)->slots[0].kind == SLOT_NONE,
           "reloading the dump gave a port with no source, not a buffer");
-    check(again->stations[1].slots[0].capacity == 64,
+    check(map_station(again, 1)->slots[0].capacity == 64,
           "and the depth survived the trip");
-    check(again->stations[1].slots[1].kind == SLOT_STATIC,
+    check(map_station(again, 1)->slots[1].kind == SLOT_STATIC,
           "and so did the value on the other port");
 
     FILE *d2 = fopen(dump2, "w");

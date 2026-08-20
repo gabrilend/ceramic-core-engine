@@ -174,7 +174,7 @@ static void relay_record__call(task_t *t)
  */
 static void claim_constant(map_t *m, int station, int slot, void *into)
 {
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     slot_t *sl = &s->slots[slot];
     pthread_mutex_lock(&s->mutex);
     memcpy(into, sl->constant, (size_t)sl->elem_size);
@@ -195,7 +195,7 @@ static void test_struct_constant_bytes(void)
     map_place(m, 0, relay_record__call, STATION_PLAIN, 1, one_record, sizeof(record));
     /* Hand placement has no type names, so grant this slot its type
      * the way the loader would: through the registry's name for it. */
-    m->stations[0].slots[0].type_name = "record";
+    map_station(m, 0)->slots[0].type_name = "record";
     map_place(m, 1, check_record__call, STATION_PLAIN, 1, one_record, 0);
     map_connect(m, 0, 0, 1, 0);
 

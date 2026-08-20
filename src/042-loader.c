@@ -88,6 +88,12 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
 {
     int index = 0;
     for (desc_station_t *s = d->stations; s; s = s->next, index++) {
+        /* One place at a time, the same call a running program makes
+         * to add a station (issue 211). The index it hands back is the
+         * one this station will answer to forever. */
+        if (map_add_station(m) != index)
+            die_load(d->path, s->line, s->name,
+                     "the station table handed back an unexpected place");
         names->by_index[index] = s;
 
         const box_info_t *b = registry_find(s->box);
@@ -111,7 +117,7 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
         map_place_box(m, index, s->box, s->kind);
 
         for (desc_input_t *in = s->inputs; in; in = in->next) {
-            station_t *placed = &m->stations[index];
+            station_t *placed = map_station(m, index);
             if (in->slot < 0 || in->slot >= placed->n_slots) {
                 char message[256];
                 snprintf(message, sizeof message,
@@ -238,7 +244,7 @@ static void second_pass(map_t *m, map_description_t *d, name_table_t *names)
                          out->dest_station);
                 die_load(d->path, out->line, s->name, message);
             }
-            station_t *dest_station = &m->stations[dest];
+            station_t *dest_station = map_station(m, dest);
             if (out->dest_slot < 0 || out->dest_slot >= dest_station->n_slots) {
                 char message[256];
                 snprintf(message, sizeof message,
@@ -279,7 +285,7 @@ static void whole_map_validation(map_t *m, map_description_t *d,
     int failures = 0;
 
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = &m->stations[i];
+        station_t *s = map_station(m, i);
         const char *name = names->by_index[i]->name;
 
         int has_ring = 0;
@@ -293,7 +299,7 @@ static void whole_map_validation(map_t *m, map_description_t *d,
         int pushed_into[s->n_slots > 0 ? s->n_slots : 1];
         memset(pushed_into, 0, sizeof pushed_into);
         for (int k = 0; k < m->n_stations; k++) {
-            station_t *other = &m->stations[k];
+            station_t *other = map_station(m, k);
             for (port_t *p = other->ports; p; p = p->next) {
                 dest_set_t *set = port_dests(p);
                 for (int di = 0; set && di < set->n; di++)
@@ -378,7 +384,7 @@ static void seed_sweep(map_t *m, map_description_t *d, name_table_t *names)
 {
     m->seeded = 0;
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = &m->stations[i];
+        station_t *s = map_station(m, i);
 
         int has_ring = 0;
         int has_unconfigured = 0;
@@ -424,7 +430,16 @@ map_t *map_load_file(const char *path, int n_workers)
     map_description_t *d = mapfile_parse(path);
     double t1 = stamp();
 
-    map_t *m = map_create(d->n_stations);
+    /*
+     * An empty table, grown one station at a time as the file is read
+     * (issue 211). It used to count the station lines and allocate
+     * exactly that many, which meant reading a map was a different act
+     * from adding a station to a running program — and under one
+     * construction surface it should not be. This is the step that
+     * proves the mechanism, because every existing test loads a
+     * program.
+     */
+    map_t *m = map_create_empty();
     name_table_t names;
     names.by_index = calloc((size_t)d->n_stations, sizeof *names.by_index);
     if (!names.by_index)

@@ -490,7 +490,7 @@ void map_slot_static_text(map_t *m, int station, int slot, const char *text)
 
     if (station < 0 || station >= m->n_stations)
         die_static(&w, "giving a constant to a station outside the table");
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     if (slot < 0 || slot >= s->n_slots)
         die_static(&w, "giving a constant to a port the box does not have");
     slot_t *sl = &s->slots[slot];
@@ -610,7 +610,7 @@ void map_slot_static_write(map_t *m, int station, int slot,
 
     if (station < 0 || station >= m->n_stations)
         die_static(&w, "writing to a station outside the table");
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     if (slot < 0 || slot >= s->n_slots)
         die_static(&w, "writing to a port the box does not have");
     slot_t *sl = &s->slots[slot];

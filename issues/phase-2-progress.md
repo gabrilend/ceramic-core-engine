@@ -33,7 +33,7 @@ its own.
 | 210f — changing what a port is | open | A field write, with waiting values left where they sit rather than freed. |
 | 210g — one way to build a station | open | One configuration surface; a hand-built program and a loaded one dump identically. |
 | [210h — optional parameters](completed/210h-optional-parameters.md) | refused | Refused: it would have been the only exemption to the rule that a station runs when every slot holds a value. The record of why, and where the case it reached for actually belongs. |
-| 211 — growing the station table | open | Shelves: grow by adding, so nothing already placed ever moves. |
+| [211 — growing the station table](completed/211-growing-the-station-table.md) | **complete** | Shelves: grow by adding one, so nothing already placed ever moves — mutex included, which is the whole reason. A removed place is reused before the table grows, and reading a map file is now that same growth, one station per line. |
 | 212 — one way to build a program | open | The capstone. Create, configure, wire — legal at any moment, loading as one caller. |
 | 213 — the input station | open | The other door: where arguments arrive, and what makes a program composable. |
 | [214 — destinations without a lock](completed/214-destinations-without-a-lock.md) | **complete** | An immutable array published by one atomic write, so a delivery walk takes no lock and copies nothing — the last thing holding a station's mutex on the hot path. The scrapyard reclaims what a rewire replaced, using a per-worker counter that is odd inside a task and even outside it, and that same counter is what issues 310 and 216 need. |

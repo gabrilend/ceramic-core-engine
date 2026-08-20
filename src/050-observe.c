@@ -43,7 +43,7 @@ void map_report_buffers(map_t *m, FILE *out)
     fprintf(out, "buffers:\n");
     int spoke = 0;
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = &m->stations[i];
+        station_t *s = map_station(m, i);
         for (int j = 0; j < s->n_slots; j++) {
             slot_t *sl = &s->slots[j];
             if (sl->kind != SLOT_RING)
@@ -89,24 +89,24 @@ static long station_time(const station_t *s)
 
 static int by_time(const void *a, const void *b)
 {
-    const station_t *sa = &sorting_map->stations[*(const int *)a];
-    const station_t *sb = &sorting_map->stations[*(const int *)b];
+    const station_t *sa = map_station(sorting_map, *(const int *)a);
+    const station_t *sb = map_station(sorting_map, *(const int *)b);
     return (station_time(sb) > station_time(sa))
          - (station_time(sb) < station_time(sa));
 }
 
 static int by_contention(const void *a, const void *b)
 {
-    const station_t *sa = &sorting_map->stations[*(const int *)a];
-    const station_t *sb = &sorting_map->stations[*(const int *)b];
+    const station_t *sa = map_station(sorting_map, *(const int *)a);
+    const station_t *sb = map_station(sorting_map, *(const int *)b);
     return (sb->mutex_wait_ns > sa->mutex_wait_ns)
          - (sb->mutex_wait_ns < sa->mutex_wait_ns);
 }
 
 static int by_count(const void *a, const void *b)
 {
-    const station_t *sa = &sorting_map->stations[*(const int *)a];
-    const station_t *sb = &sorting_map->stations[*(const int *)b];
+    const station_t *sa = map_station(sorting_map, *(const int *)a);
+    const station_t *sb = map_station(sorting_map, *(const int *)b);
     return (sb->runs > sa->runs) - (sb->runs < sa->runs);
 }
 
@@ -138,7 +138,7 @@ void map_report_stations(map_t *m, FILE *out, int order)
 
     for (int rank = 0; rank < m->n_stations; rank++) {
         int i = indices[rank];
-        station_t *s = &m->stations[i];
+        station_t *s = map_station(m, i);
         char fallback[32];
         fprintf(out, "  %-12s runs %-7ld produced %-7ld",
                 station_label(m, i, fallback, sizeof fallback),
@@ -237,7 +237,7 @@ void map_observe_stop(map_t *m)
 void map_report_shutdown(map_t *m)
 {
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = &m->stations[i];
+        station_t *s = map_station(m, i);
         for (int j = 0; j < s->n_slots; j++) {
             slot_t *sl = &s->slots[j];
             if (sl->kind == SLOT_RING && sl->growths >= GROWTH_SHOUT_THRESHOLD) {

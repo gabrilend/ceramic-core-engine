@@ -2,7 +2,7 @@
  * 019-station.c — building and dismantling the station table.
  *
  * What this is: the structural half of the engine. It allocates the
- * flat array of stations, hangs slots and ports off them, and tears
+ * table of stations, hangs slots and ports off them, and tears
  * it all down. Nothing in this file moves a value; motion lives in
  * the delivery file. Data structures here, dataflow there — an error
  * in one is then findable without reading the other.
@@ -111,6 +111,42 @@ int slot_cell_move(const slot_t *sl, int index, int from, int to)
 }
 /* }}} */
 
+/* {{{ static int add_shelf() */
+/*
+ * One more shelf, and its pointer written into the short array that
+ * names them. That array holds addresses rather than mutexes, so
+ * growing it by reallocation is safe — the same kind of copy the
+ * pool's ring already does. No station record is ever copied.
+ */
+static int add_shelf(map_t *m)
+{
+    station_t *shelf = calloc(STATIONS_PER_SHELF, sizeof *shelf);
+    if (!shelf)
+        return -1;
+    station_t **shelves = realloc(m->shelves,
+                                  (size_t)(m->n_shelves + 1) * sizeof *shelves);
+    if (!shelves) {
+        free(shelf);
+        return -1;
+    }
+    shelves[m->n_shelves] = shelf;
+    m->shelves = shelves;
+    m->n_shelves++;
+    return 0;
+}
+/* }}} */
+
+/* {{{ map_create() */
+map_t *map_create_empty(void)
+{
+    map_t *m = calloc(1, sizeof *m);
+    if (!m) fail("out of memory for the map");
+    pthread_mutex_init(&m->rewire_mutex, NULL);
+    pthread_mutex_init(&m->scrap_mutex, NULL);
+    return m;
+}
+/* }}} */
+
 /* {{{ map_create() */
 map_t *map_create(int n_stations)
 {
@@ -120,17 +156,75 @@ map_t *map_create(int n_stations)
     map_t *m = calloc(1, sizeof *m);
     if (!m) fail("out of memory for the map");
 
-    /* The one flat array, allocated once, never resized while the
-     * program runs (issue 201). Stations are addressed by position
-     * in it forever after. */
-    m->stations = calloc((size_t)n_stations, sizeof *m->stations);
-    if (!m->stations) fail("out of memory for the station table");
-    m->n_stations = n_stations;
-
     pthread_mutex_init(&m->rewire_mutex, NULL);
     pthread_mutex_init(&m->scrap_mutex, NULL);
 
+    /*
+     * Shelves enough for what was asked for (issue 211). Asking for a
+     * count up front is now a convenience rather than a commitment:
+     * the table grows a shelf at a time afterwards, and nothing
+     * already placed ever moves.
+     *
+     * Reserved directly rather than by calling map_add_station in a
+     * loop, because that call hands back the first place nobody has
+     * filled — which is the same place every time until somebody
+     * fills it. Reserving N places and filling them is a different
+     * act from asking for somewhere to put one thing.
+     */
+    while (n_stations > m->n_shelves * STATIONS_PER_SHELF)
+        if (add_shelf(m) < 0)
+            fail("out of memory for the station table");
+    atomic_store_explicit(&m->n_stations, n_stations, memory_order_release);
+
     return m;
+}
+/* }}} */
+
+/* {{{ map_add_station() */
+int map_add_station(map_t *m)
+{
+    /* Exclusive, under the lock every other structural change already
+     * takes (issue 704). Two threads each finding the same free place,
+     * or each deciding the shelves are full, would otherwise hand two
+     * callers one index. The hand-raising ring the note asked for is
+     * not built and is moot: adding a shelf is one allocation and one
+     * pointer write, so there is no long stretch for anybody to raise a
+     * hand during. `strategems/raise-your-hand.md` keeps the pattern
+     * and the lesson that displaced it. */
+    pthread_mutex_lock(&m->rewire_mutex);
+
+    /*
+     * A freed place first. Removing a station is what removes the
+     * wires to it (issue 216), so a place whose shim is clear holds
+     * nothing stale and can simply be taken. A program that adds and
+     * removes forever therefore reaches a steady size rather than
+     * climbing.
+     */
+    int count = atomic_load_explicit(&m->n_stations, memory_order_acquire);
+    for (int i = 0; i < count; i++) {
+        station_t *s = map_station(m, i);
+        if (!s->call && !atomic_load_explicit(&s->removed,
+                                              memory_order_acquire)) {
+            pthread_mutex_unlock(&m->rewire_mutex);
+            return i;
+        }
+    }
+
+    if (count >= m->n_shelves * STATIONS_PER_SHELF && add_shelf(m) < 0) {
+        pthread_mutex_unlock(&m->rewire_mutex);
+        return -1;
+    }
+
+    /*
+     * Published last, and by one write. Everything about the record is
+     * already zeroed by the shelf's own allocation, so a reader that
+     * sees this count sees a station that is complete — an empty one,
+     * which is exactly what a station is before anything is placed in
+     * it.
+     */
+    atomic_store_explicit(&m->n_stations, count + 1, memory_order_release);
+    pthread_mutex_unlock(&m->rewire_mutex);
+    return count;
 }
 /* }}} */
 
@@ -145,7 +239,7 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
     if (n_slots < 0)
         fail("a station cannot have a negative number of slots");
 
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     if (s->call)
         fail("placing a box at a station already occupied");
 
@@ -206,7 +300,7 @@ void map_slot_start_depth(map_t *m, int station, int slot, int cells)
 {
     if (station < 0 || station >= m->n_stations)
         fail("setting the starting depth of a port on a station outside the table");
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     if (slot < 0 || slot >= s->n_slots)
         fail("setting the starting depth of a port the box does not have");
     /* One cell is a legitimate depth. It used to take two, because a
@@ -240,7 +334,7 @@ void map_slot_convert(map_t *m, int station, int slot, int kind)
 {
     if (station < 0 || station >= m->n_stations)
         fail("converting a port on a station outside the table");
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     if (slot < 0 || slot >= s->n_slots)
         fail("converting a port the box does not have");
     if (kind < 0 || kind >= SLOT_KIND_COUNT)
@@ -518,8 +612,8 @@ void map_connect(map_t *m, int from_station, int port,
     if (to_station < 0 || to_station >= m->n_stations)
         fail("connecting to a station outside the table");
 
-    station_t *from = &m->stations[from_station];
-    station_t *to = &m->stations[to_station];
+    station_t *from = map_station(m, from_station);
+    station_t *to = map_station(m, to_station);
     if (!from->call || !to->call)
         fail("connecting a station that has no box placed yet — place, then connect");
     if (to_slot < 0 || to_slot >= to->n_slots)
@@ -598,7 +692,7 @@ void map_start(map_t *m, int n_workers)
 /* {{{ map_slot_depth() */
 int map_slot_depth(map_t *m, int station, int slot)
 {
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     if (slot < 0 || slot >= s->n_slots)
         fail("asking the depth of a slot that does not exist");
     slot_t *sl = &s->slots[slot];
@@ -637,9 +731,11 @@ void map_destroy(map_t *m)
     }
 
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = &m->stations[i];
-        if (!s->call)
+        station_t *s = map_station(m, i);
+        if (!s->call) {
+            pthread_mutex_destroy(&s->mutex);
             continue;
+        }
         for (int j = 0; j < s->n_slots; j++) {
             free(s->slots[j].storage);
             /* Both storages, because a port carries both whatever it
@@ -661,7 +757,9 @@ void map_destroy(map_t *m)
     map_scrap_free_all(m);
     pthread_mutex_destroy(&m->scrap_mutex);
     pthread_mutex_destroy(&m->rewire_mutex);
-    free(m->stations);
+    for (int i = 0; i < m->n_shelves; i++)
+        free(m->shelves[i]);
+    free(m->shelves);
     free(m);
 }
 /* }}} */

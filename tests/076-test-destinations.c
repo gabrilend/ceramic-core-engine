@@ -59,7 +59,7 @@ static void a_wire_removed_mid_run(void)
     map_connect(m, 0, 0, 1, 0);
     map_connect(m, 0, 0, 2, 0);
 
-    port_t *p = m->stations[0].ports;
+    port_t *p = map_station(m, 0)->ports;
     dest_set_t *before = port_dests(p);
     check(before && before->n == 2, "two wires make a set of two");
 
@@ -185,7 +185,7 @@ static void the_dump_still_round_trips(void)
     map_connect(m, 0, 0, 2, 0);
     map_connect(m, 0, 0, 3, 0);
 
-    dest_set_t *set = port_dests(m->stations[0].ports);
+    dest_set_t *set = port_dests(map_station(m, 0)->ports);
     check(set && set->n == 3, "three wires drawn");
     check(set->items[0].station == 1 && set->items[1].station == 2
           && set->items[2].station == 3,
@@ -193,7 +193,7 @@ static void the_dump_still_round_trips(void)
 
     map_start(m, 2);
     map_rewire_disconnect(m, 0, 0, 2, 0);
-    set = port_dests(m->stations[0].ports);
+    set = port_dests(map_station(m, 0)->ports);
     check(set && set->n == 2 && set->items[0].station == 1
           && set->items[1].station == 3,
           "removing the middle one leaves the others in their order");

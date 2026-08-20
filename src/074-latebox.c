@@ -262,7 +262,7 @@ int registry_unload_box(map_t *m, const char *name)
      * one library and leave in one.
      */
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = &m->stations[i];
+        station_t *s = map_station(m, i);
         if (!s->call)
             continue;
         for (int b = 0; b < found->n_boxes; b++)

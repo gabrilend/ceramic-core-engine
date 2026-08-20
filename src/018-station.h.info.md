@@ -70,7 +70,14 @@ of maps can run in one process without seeing each other.
 
 ## Functions
 
-**map_create(station count) → map** — the one flat allocation.
+**map_create(station count) → map** — N places reserved up front.
+**map_create_empty() → map** — no places at all, grown one at a time,
+which is what reading a file does now.
+**map_add_station(map) → index** — one more place, reusing a removed
+one before growing. The table is shelves, so growing never moves
+anything already placed.
+**map_station(map, n) → station** — one shift, one mask, one
+dereference.
 
 **map_place(map, station index, shim, kind, slot count, element
 sizes array, output size)** — put a box at a station: one ring-buffer

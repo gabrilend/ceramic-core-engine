@@ -441,7 +441,7 @@ static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed)
 task_t *task_build(map_t *m, int station_index,
                    const unsigned char *claimed, int port)
 {
-    station_t *s = &m->stations[station_index];
+    station_t *s = map_station(m, station_index);
 
     int in_bytes = station_input_bytes(s);
     size_t total = sizeof(task_t)
@@ -525,7 +525,7 @@ int map_station_try_start(map_t *m, int station)
 {
     if (station < 0 || station >= m->n_stations)
         die("starting a station outside the table", station);
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     if (!s->call)
         die("starting a station with no box placed", station);
     /* Removed and not yet reclaimed: nothing new starts from it
@@ -557,7 +557,7 @@ int map_deliver_value(map_t *m, int station, int slot, const void *value)
 {
     if (station < 0 || station >= m->n_stations)
         die("delivering to a station outside the table", station);
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
 
     /*
      * The station may have been removed since this value set out
@@ -692,7 +692,7 @@ static int (*const route_choose[STATION_KIND_COUNT])(station_t *, task_t *) = {
 void map_deliver(void *ctx, task_t *t)
 {
     map_t *m = ctx;
-    station_t *s = &m->stations[t->station];
+    station_t *s = map_station(m, t->station);
 
     s->runs++;
     /* The box's own time, charged onto the task by the shim and moved

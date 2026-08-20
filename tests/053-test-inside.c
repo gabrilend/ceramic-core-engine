@@ -133,9 +133,9 @@ static void test_station_counts(void)
     pool_release(m->pool);
     pool_join(m->pool);
 
-    check(m->stations[0].runs == 1 && m->stations[1].runs == 1
-          && m->stations[2].runs == 1, "each station ran exactly once");
-    check(m->stations[0].produced == 1 && m->stations[1].produced == 1,
+    check(map_station(m, 0)->runs == 1 && map_station(m, 1)->runs == 1
+          && map_station(m, 2)->runs == 1, "each station ran exactly once");
+    check(map_station(m, 0)->produced == 1 && map_station(m, 1)->produced == 1,
           "each producer made one task due downstream");
 
     FILE *out = fopen(report_path, "w");

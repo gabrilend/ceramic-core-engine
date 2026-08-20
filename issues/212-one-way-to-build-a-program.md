@@ -261,7 +261,7 @@ rather than drifting into place.
    [216](completed/216-removing-a-station.md) and lands last, since it needs the
    quiescence sweep the others do not.
 2. The station table starts empty and grows a run at a time
-   ([211](211-growing-the-station-table.md)), so adding a station is
+   ([211](completed/211-growing-the-station-table.md)), so adding a station is
    the ordinary path taken once per station at startup rather than a
    rare event with its own machinery.
 3. Port configuration through the surface, using the record from
@@ -350,7 +350,7 @@ rather than drifting into place.
 
 - [210 — What an input port is](210-input-port-record.md), the record
   the configure operation writes, and where the *none* state comes from
-- [211 — Growing the station table](211-growing-the-station-table.md),
+- [211 — Growing the station table](completed/211-growing-the-station-table.md),
   which makes "add a station" possible at all
 - [704 — Rewiring while it runs](completed/704-runtime-rewiring.md),
   whose per-edge rules and rewiring lock every operation here inherits

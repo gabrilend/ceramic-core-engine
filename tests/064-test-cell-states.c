@@ -66,7 +66,7 @@ static map_t *bare_map(int cells, int elem_size)
 
 static slot_t *first_port(map_t *m)
 {
-    return &m->stations[0].slots[0];
+    return &map_station(m, 0)->slots[0];
 }
 /* }}} */
 

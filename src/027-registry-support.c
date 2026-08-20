@@ -110,7 +110,7 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
      * record.
      */
     if (station >= 0 && station < m->n_stations
-        && atomic_load_explicit(&m->stations[station].removed,
+        && atomic_load_explicit(&map_station(m, station)->removed,
                                 memory_order_acquire)) {
         fprintf(stderr,
                 "map: station %d was removed and is not reclaimed yet — "
@@ -184,7 +184,7 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
      * wire checker will compare in phase 6. The comparator's extra
      * slot is typed to the return value, since that is what it will
      * be compared against. */
-    station_t *s = &m->stations[station];
+    station_t *s = map_station(m, station);
     for (int i = 0; i < b->n_params; i++)
         s->slots[i].type_name = b->params[i].type_name;
     if (extra) {

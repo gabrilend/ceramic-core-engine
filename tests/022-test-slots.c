@@ -135,9 +135,9 @@ int main(void)
         parcel_t p = make_parcel(WARMUP + i);
         map_deliver_value(m, 0, 0, &p);
     }
-    if (m->stations[0].slots[0].growths < 3) {
+    if (map_station(m, 0)->slots[0].growths < 3) {
         fprintf(stderr, "expected several growths from the flood, saw %d\n",
-                m->stations[0].slots[0].growths);
+                map_station(m, 0)->slots[0].growths);
         exit(1);
     }
 
@@ -174,8 +174,8 @@ int main(void)
         }
     }
 
-    int growths = m->stations[0].slots[0].growths;
-    int high_water = m->stations[0].slots[0].high_water;
+    int growths = map_station(m, 0)->slots[0].growths;
+    int high_water = map_station(m, 0)->slots[0].high_water;
     map_destroy(m);
     printf("  %d struct+int pairs, none torn and none lost, across %d "
            "wrapped growths (high water %d)\n", TOTAL, growths, high_water);

@@ -223,7 +223,7 @@ The statics work proper belongs to [401](completed/401-static-slots.md) and
   which becomes one case of changing a port
 - [403 — Gatherer slots](completed/403-gatherer-slots.md), the kind
   210a removed
-- [211 — Growing the station table](211-growing-the-station-table.md),
+- [211 — Growing the station table](completed/211-growing-the-station-table.md),
   the same paging shape one level up
 - [212 — One way to build a program](212-one-way-to-build-a-program.md),
   the surface that configures these

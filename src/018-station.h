@@ -4,7 +4,7 @@
  * What this is: the persistent half of the engine. A station is one
  * placement of a box in a map — it owns the buffers where values wait,
  * the mutex that guards them, and the list of places its output goes.
- * The map is one flat array of stations addressed by index, never by
+ * The map is a table of stations addressed by index, never by
  * pointer, so a wire written down today is valid forever.
  *
  * How it does it, in general terms: everything about a station that
@@ -397,9 +397,53 @@ typedef struct station {
  * has an arrow from it, which costs a station and gains a wire
  * somebody can see.
  */
+/*
+ * How many station records sit on one shelf (issue 211). A power of
+ * two, so turning a station number into a shelf and a position within
+ * it is one shift and one mask rather than a division.
+ *
+ * The number does not have to be guessed well, and that is the point.
+ * Too small and the short array of shelf pointers grows a little more
+ * often — and that array holds addresses, so growing it is safe and
+ * fast. Too large and the last shelf holds some records nobody uses, a
+ * few kilobytes at worst. Nothing is copied either way and no station
+ * ever moves either way.
+ */
+#define STATIONS_PER_SHELF 64
+#define STATION_SHELF_SHIFT 6
+#define STATION_SHELF_MASK  (STATIONS_PER_SHELF - 1)
+
 typedef struct map {
-    station_t *stations;
-    int        n_stations;
+    /*
+     * **The table is shelves, not one array** (issue 211).
+     *
+     * A flat array grows by reallocation, and reallocation moves the
+     * mutexes — a thread parked on one would be waiting at an address
+     * nobody unlocks. A table built out of shelves does not move
+     * anything: growing means allocating one more shelf and writing
+     * its pointer here. Every station already placed stays exactly
+     * where it was, mutex included, so guarantee S1 is kept rather
+     * than argued with.
+     *
+     * The alternative was lifting the mutex out of the station so the
+     * record becomes movable. That trades a shift-and-mask on the
+     * delivery path for a pointer chase on the delivery path, and
+     * breaks the sentence in this header rather than keeping it. It is
+     * written down so the choice reads as a choice.
+     */
+    station_t **shelves;
+    int         n_shelves;
+
+    /*
+     * **Only ever grows, and is published last.** A thread reading a
+     * stale, smaller count does not see the newest station, and that
+     * is harmless: a station nothing is wired to yet cannot be reached
+     * by delivery, and the wire that will reach it is drawn after the
+     * station exists. The one ordering to enforce is that the station
+     * is completely built before the count that reveals it is
+     * published.
+     */
+    _Atomic int n_stations;
     pool_t    *pool;            /* set by map_start; delivery pushes here */
 
     /* How many stations the seed sweep enqueued (issue 605). Zero
@@ -461,8 +505,50 @@ typedef struct map {
 /* ------------------------------------------------------------------ */
 
 /* {{{ map_create() — issue 201 */
-/* One flat allocation of n identical station records, never resized. */
+/* N places reserved up front. The table grows a shelf at a time
+ * afterwards (issue 211), so this is a convenience rather than a
+ * commitment. */
+/* {{{ map_station() — issue 211 */
+/*
+ * Station number n: one shift, one mask, one extra dereference where
+ * a flat array had one add. On the delivery path, which is why the
+ * cost is named rather than assumed away.
+ */
+static inline station_t *map_station(map_t *m, int n)
+{
+    return &m->shelves[n >> STATION_SHELF_SHIFT][n & STATION_SHELF_MASK];
+}
+/* }}} */
+
+/* {{{ map_add_station() — issue 211 */
+/*
+ * Make room for one more station and return its index, adding a shelf
+ * when the current ones are full.
+ *
+ * **A removed station's place is reused before the table grows.** A
+ * freed position holds nothing stale, because removing a station is
+ * what removes the wires to it (issue 216), so the next station placed
+ * can simply take it. That makes a program which adds and removes
+ * forever reach a steady size rather than climbing.
+ *
+ * Returns -1 if it cannot grow.
+ */
+int map_add_station(map_t *m);
+/* }}} */
+
 map_t *map_create(int n_stations);
+
+/* {{{ map_create_empty() — issue 211 */
+/*
+ * A map with no stations at all, grown one at a time afterwards. This
+ * is what reading a file does now, so that reading a map and adding a
+ * station to a running program are the same act rather than two that
+ * must agree. map_create is the same thing with N places reserved up
+ * front, kept because a great many tests know exactly how many they
+ * want.
+ */
+map_t *map_create_empty(void);
+/* }}} */
 /* }}} */
 
 /* {{{ map_place() — issues 201, 202, 207 */

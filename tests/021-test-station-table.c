@@ -34,7 +34,7 @@ int main(void)
     /* Write down where everything lives. */
     station_t *before[STATIONS];
     for (int i = 0; i < STATIONS; i++)
-        before[i] = &m->stations[i];
+        before[i] = map_station(m, i);
 
     /* Leave a fingerprint in station 2's first slot. */
     int fingerprint = 777;
@@ -48,13 +48,13 @@ int main(void)
 
     /* The station table must not have moved a single record. */
     for (int i = 0; i < STATIONS; i++) {
-        if (&m->stations[i] != before[i]) {
+        if (map_station(m, i) != before[i]) {
             fprintf(stderr, "station %d moved when a buffer grew\n", i);
             exit(1);
         }
     }
 
-    slot_t *grown = &m->stations[1].slots[0];
+    slot_t *grown = &map_station(m, 1)->slots[0];
     if (grown->growths < 3) {
         fprintf(stderr, "expected several growths, saw %d\n", grown->growths);
         exit(1);
@@ -70,7 +70,7 @@ int main(void)
         exit(1);
     }
     int recovered;
-    memcpy(&recovered, m->stations[2].slots[0].storage, sizeof recovered);
+    memcpy(&recovered, map_station(m, 2)->slots[0].storage, sizeof recovered);
     if (recovered != 777) {
         fprintf(stderr, "the neighbour's value was disturbed: %d\n", recovered);
         exit(1);

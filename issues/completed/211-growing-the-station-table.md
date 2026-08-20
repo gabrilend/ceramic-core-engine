@@ -2,50 +2,66 @@
 
 ## Current behavior
 
-The number of stations is decided once and never changes.
+**Done.** The table is shelves, it grows one station at a time, and a
+removed station's place is reused before it grows.
 
-A program holds a flat array of station records and a count. The loader
-counts the station lines in the file, makes one allocation of exactly
-that size, and fills it. Every wire is a pair of integers — a station
-index and a slot index — so nothing anywhere holds a station's address,
-and that was chosen deliberately: it is what lets
-[704](completed/704-runtime-rewiring.md) redraw arrows on a running
-program without anything dangling.
+A shelf is one allocation holding sixty-four station records, and the
+table is a short array of pointers to shelves. Station *n* sits at
+position *n* within shelf *n* divided by the shelf size — one shift and
+one mask. Growing means allocating one more shelf and writing its
+pointer, so **nothing already placed is ever copied**, mutex included,
+and guarantee S1 is kept rather than argued with.
 
-But 704 stopped at the arrows and said so plainly:
+**The measurement step 1 asked for.** Indexing costs one shift, one
+mask and one dereference where a flat array had one add, and that lands
+on the delivery path. Measured on the fan-in apparatus across several
+runs, it sits **inside the run-to-run noise** — the 200-byte figure
+moves between roughly 870 and 1410 nanoseconds per delivery from run to
+run, which is a wider spread than the change could account for. A
+visible cost here would have been a finding; its absence is the other
+kind of finding and is worth writing down as one.
 
-> Adding a station is a different problem and is not in scope here.
-> The station table is allocated once at load; growing it means
-> reallocating the array, and while every wire holds an index rather
-> than a pointer — so nothing dangles — every thread reading the table
-> needs to see the new base. That is a real design question and
-> deserves its own issue rather than being smuggled in alongside
-> rewiring.
+**The count is atomic, only grows, and is published last.** A thread
+reading a stale, smaller count does not see the newest station, which
+is harmless: a station nothing is wired to cannot be reached by
+delivery, and the wire that will reach it is drawn after the station
+exists.
 
-This is that issue, and it turned out to be more foundational than that
-paragraph expected. Under one construction surface
-([212](212-one-way-to-build-a-program.md)), *adding a station is the
-only way a station ever comes into existence* — the table starts empty
-and grows during loading exactly as it grows at runtime. This stops
-being a capability a running program gains and becomes the mechanism
-underneath every program's first moment.
+**Adding is exclusive under the rewiring lock**, and the hand-raising
+ring the note asked for is not built. That is the answered question
+below made real: adding a shelf is one allocation and one pointer
+write, so there is no long stretch for anybody to raise a hand during.
+The pattern is kept in `strategems/raise-your-hand.md` with the lesson
+that displaced it — before building machinery to let people contribute
+during a long exclusive operation, ask whether the operation can stop
+being long.
 
-**One invariant stands directly in the way, and it is written down in
-the source.** The station record's own header says the array of them
-must stay indexable and *growing a buffer must never move a station*.
-That is not stylistic. Each station record carries its mutex inside
-itself — the mutex delivery takes on every single value it hands over.
-A mutex is identified by where it lives: a thread blocked on the one at
-the old address is not woken by an unlock at the new one, and copying
-the bytes of a mutex somebody might be holding is not a defined thing
-to do. Reallocating the array moves every station, and therefore moves
-every mutex, and therefore breaks the one lock the whole push path is
-built on.
+**Reading a map file is now the same act as growing a program.** The
+loader starts from an empty table and adds one station per line,
+instead of counting lines and allocating once. That is the step that
+proves the mechanism, because every existing test loads a program.
 
-The other growable list in the engine, the pool's task ring, does not
-have this problem — it holds pointers, so a copy moves addresses rather
-than the things at them. It grows under the queue mutex, which means
-every other thread wanting to push waits for the whole copy.
+**One thing the plan did not distinguish**, found in building it: a
+place nobody has filled and a place somebody emptied look identical,
+because both are a record with no shim. `map_add_station` hands back
+the first unfilled place, so asking twice without filling in between
+gives the same answer twice — which is correct for what it means
+("somewhere to put one thing") and wrong for what map_create wanted
+("N places reserved"). Creation reserves directly; only growth reuses.
+
+**Proven**, in `tests/078-test-growth.c`:
+
+- a table grown across four shelves, with the addresses of stations
+  placed beforehand checked afterwards — **not one of them moved**,
+  which is the entire reason for the shape
+- a station added to a running program, wired in afterwards, receiving
+  values, with the station that was always there losing none of its
+  hundred
+- eight threads asking for places at once, and two hundred places
+  asked for and filled with none ever handed twice
+
+Under a leak checker: 1,544 allocations and 1,544 frees, no leaks and
+no errors.
 
 ## Intended behavior
 
@@ -53,7 +69,7 @@ every other thread wanting to push waits for the whole copy.
 station that already exists.**
 
 **And a removed station's place is reused before the table grows.**
-[216](completed/216-removing-a-station.md) makes removal possible by removing the
+[216](216-removing-a-station.md) makes removal possible by removing the
 wires to a station before the station, so a freed position holds
 nothing stale and the next station placed can simply take it. That
 makes this issue the *growing* half of a table that also shrinks:
@@ -161,7 +177,7 @@ caller cannot describe a station the generator never saw.
 
 **A station is created with its name**, the same as its box and its
 kind. Names already live on the program for the life of the run —
-[703](completed/703-map-dump.md) forced that when it needed to write a
+[703](703-map-dump.md) forced that when it needed to write a
 program back out as text, having found that the design had proudly
 discarded them at load. So there is nothing new to keep; a station
 added at runtime supplies a name the way it supplies everything else,
@@ -174,7 +190,7 @@ delivery ever arrives. Somebody assembling a program may deliberately
 place boxes before wiring them, and under one construction surface that
 is a normal sequence rather than a half-finished load. The loud warning
 this used to produce moves into the whole-program pass in
-[212](212-one-way-to-build-a-program.md), where a caller asks for it
+[212](../212-one-way-to-build-a-program.md), where a caller asks for it
 when a caller wants it.
 
 Refusal follows the decision 704 already made and reasoned: a running
@@ -319,18 +335,18 @@ laid out.
 
 ## Related
 
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
   which makes this the mechanism underneath every program's first
   moment rather than a capability a running one gains
-- [704 — Rewiring while it runs](completed/704-runtime-rewiring.md),
+- [704 — Rewiring while it runs](704-runtime-rewiring.md),
   which named this problem and deliberately left it
-- [201 — The station table](completed/201-station-table.md), which
+- [201 — The station table](201-station-table.md), which
   fixed the record's size and wrote down the invariant this must keep
-- [101 — The task queue ring](completed/101-task-queue-ring.md), the
+- [101 — The task queue ring](101-task-queue-ring.md), the
   other growable list, and the one the hand-raising pattern helps most
-- [703 — The map dump](completed/703-map-dump.md), the cheapest proof
+- [703 — The map dump](703-map-dump.md), the cheapest proof
   that a grown program is a real program
-- [604 — Load-time validation](completed/604-load-time-validation.md),
+- [604 — Load-time validation](604-load-time-validation.md),
   the rules an addition has to satisfy
-- [058 — Guarantees](../docs/058-guarantees.md), which currently says
+- [058 — Guarantees](../../docs/058-guarantees.md), which currently says
   the station count is fixed for the life of a run

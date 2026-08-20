@@ -89,8 +89,8 @@ static void a_late_box_runs(void)
     pool_release(m->pool);
     pool_join(m->pool);
 
-    check(atomic_load(&m->stations[0].runs) == 1, "the new box ran");
-    check(atomic_load(&m->stations[1].runs) == 1,
+    check(atomic_load(&map_station(m, 0)->runs) == 1, "the new box ran");
+    check(atomic_load(&map_station(m, 1)->runs) == 1,
           "and what it produced reached a box the program was built with");
 
     map_destroy(m);
@@ -134,7 +134,7 @@ static void a_struct_crosses_intact(void)
     pool_release(m->pool);
     pool_join(m->pool);
 
-    check(atomic_load(&m->stations[1].runs) == 1,
+    check(atomic_load(&map_station(m, 1)->runs) == 1,
           "a struct compiled minutes ago crossed into one compiled at build");
     map_destroy(m);
     printf("  an unfamiliar struct of the same shape wired and arrived\n");
@@ -342,7 +342,7 @@ static int reload_only(const char *map_path)
         return 1;
     pool_release(m->pool);
     pool_join(m->pool);
-    long ran = atomic_load(&m->stations[1].runs);
+    long ran = atomic_load(&map_station(m, 1)->runs);
     map_destroy(m);
     return ran == 1 ? 0 : 1;
 }

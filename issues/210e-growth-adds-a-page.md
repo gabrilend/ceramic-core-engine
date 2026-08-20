@@ -114,7 +114,7 @@ than a single number, and the report should say the sum.
 - [203 — Slot buffer growth](completed/203-slot-buffer-growth.md), the
   copy-and-unwrap this retires, and whose premise the parent removes
   rather than fixes
-- [211 — Growing the station table](211-growing-the-station-table.md),
+- [211 — Growing the station table](completed/211-growing-the-station-table.md),
   the same paging shape one level up, and the place its reasoning is
   written out in full
 - [701 — Buffer growth reporting](completed/701-buffer-growth-reporting.md),
