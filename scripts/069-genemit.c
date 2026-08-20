@@ -407,8 +407,6 @@ static void emit_placements(buf_t *w, const description_t *d,
          * Bare today because that is what a map file says; it becomes
          * the full address when the format carries one. */
         buf_line(w, "    s->box_name = \"%s\";", b->name);
-        if (!is_void)
-            buf_line(w, "    s->out_type_name = \"%s\";", b->ret);
         for (int j = 0; j < b->n_params; j++)
             buf_line(w, "    s->in_ports[%d].type_name = \"%s\";",
                      j, b->params[j].type);

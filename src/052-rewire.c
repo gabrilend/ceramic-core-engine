@@ -101,16 +101,39 @@ int map_rewire_connect(map_t *m, int from_station, int port,
      * port takes stats" does not say why those disagree.
      */
     if (from->in_ports && to->in_ports) {
-        /* The station's own return size, rather than a box record
-         * found by scanning for a matching call site (issue 311b).
-         * The width is what decides; the names ride along so the
-         * refusal names a fix. */
+        /*
+         * **The width decides, and only the width** (issue 309). Two
+         * boxes may spell one shape differently and mean the same
+         * data, so a wire is legal when both sides count the same
+         * bytes — comparing the names would refuse a connection that
+         * is perfectly sound, which is the whole reason names stopped
+         * being what a wire is checked against.
+         */
         if (from->out_size != dest->elem_size) {
+            /*
+             * The spellings, fetched **here and only here**, because
+             * this is the one place they are wanted: "4 bytes against
+             * 8 bytes" names no fix, while "box returns int, port
+             * takes double" names two.
+             *
+             * A lookup on the refusal path rather than a field on
+             * every station, and the difference matters more than the
+             * few bytes: a type name stored on a station is a type
+             * name the engine *carries*, and carrying them is what
+             * this line of work is removing. A refusal is rare enough
+             * to pay for its own message.
+             *
+             * When the box records go, this reads the spelling out of
+             * the box source the binary carries (issue 311c) — the
+             * exact text that was compiled, so a name reported can
+             * never come from a source that has since changed on disk.
+             */
+            const box_info_t *b = from->box_name
+                                ? registry_find(from->box_name) : NULL;
             char message[192];
             snprintf(message, sizeof message,
                      "box returns %s (%d bytes), port takes %s (%d bytes)",
-                     from->out_type_name ? from->out_type_name : "?",
-                     from->out_size,
+                     b ? b->return_type : "?", from->out_size,
                      dest->type_name ? dest->type_name : "?", dest->elem_size);
             pthread_mutex_unlock(&m->rewire_mutex);
             return refuse(message);

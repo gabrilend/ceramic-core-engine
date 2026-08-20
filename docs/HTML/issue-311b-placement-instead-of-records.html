@@ -284,11 +284,19 @@ since nothing on disk describes it either.</p>
 <p>   It had a second caller the plan did not mention: **the wire check
    on a live rewire**, which reached through it to a box record for
    the return size and the return type's spelling. The size was
-   already on the station, and the spelling is now a second literal
-   beside the name. So a refused wire still says *"box returns int (4
-   bytes), port takes double (8 bytes)"* — the width is what decides,
-   and the names ride along because a message naming no fix is not
-   worth printing.
+   already on the station. The spelling is fetched **on the refusal
+   path only**, so a refused wire still says *"box returns int (4
+   bytes), port takes double (8 bytes)"* rather than four bytes
+   against eight, which names no fix.</p>
+<p>   **The first attempt stored the spelling on every station, and that
+   was wrong.** This issue says plainly that type names are not
+   carried, and 309 is why: two boxes may spell one shape differently
+   and mean the same data, so a wire is legal when both sides count
+   the same bytes. A name kept on a station is a name the engine
+   carries, and carrying them is the thing being removed — paying for
+   it to improve a message that appears only when somebody has already
+   made a mistake is the worst trade available. A refusal is rare
+   enough to pay for its own message.
 5. Struct field tables written onto ports at placement, and the by-name
    struct search deleted.
 6. The record type, the table, the parameter arrays, the type-name

@@ -71,8 +71,8 @@ linked to the station's next port.
 pointers so the table stays indexable and no station ever moves.
 Fields: mutex, call (the shim), kind (plain 0 / comparator 1 /
 iterator 2), box_name (the literal its placement function wrote, null
-when placed by hand), out_type_name (for a refused wire's message),
-in_ports + n_in_ports, out_ports + n_out_ports, cursor
+when placed by hand), in_ports + n_in_ports, out_ports + n_out_ports,
+cursor
 (the iterator's one memory), out_size (`int`, bytes of the return
 value, 0 = sink).
 

@@ -317,10 +317,25 @@ typedef struct in_port {
     char *constant_string;
     int   constant_set;
 
-    /* The type this port feeds, as text from the registry — what
-     * lets a static entry's text become bytes of the right shape.
-     * Null on hand-placed stations, which therefore cannot bind
-     * statics; the loader always places by name (phase 4/6). */
+    /*
+     * The type this port feeds, as text — what lets a static's text
+     * become bytes of the right *shape*. Null on hand-placed stations,
+     * which therefore cannot bind statics.
+     *
+     * **This is not a precedent for carrying type names, and the
+     * difference is worth stating because it is easy to get wrong.**
+     * A wire is checked by width and never by name (issue 309): two
+     * boxes may spell one shape differently and mean the same data, so
+     * comparing names would refuse a sound connection. Nothing here is
+     * ever compared against anything. It is used to *find a layout* —
+     * which field sits at which offset — because turning
+     * `{ 5, 2.0, "hey" }` into bytes needs more than a byte count.
+     *
+     * And it goes: the placement function knows the type concretely,
+     * so it can write the field table's address onto the port and the
+     * reader can follow a pointer instead of searching by name
+     * (issue 311b).
+     */
     const char *type_name;
 
     /* The growth story, written by issue 203 and read by phase 7:
@@ -458,27 +473,6 @@ typedef struct station {
      */
     const char     *box_name;
 
-    /*
-     * The spelling of what this box returns, for the one message that
-     * needs it: a refused wire (issue 311b).
-     *
-     * A wire is checked by **width** — the station's own out_size
-     * against the destination port's elem_size — and the name is
-     * carried only so the refusal can say *"box returns int (4 bytes),
-     * port takes double (8 bytes)"* rather than "4 bytes against 8
-     * bytes", which names no fix. It used to be fetched by scanning
-     * every box record for a matching call site and reading the record
-     * it found; the station is simply told instead.
-     *
-     * Null on a hand-placed station, and the message says so, for the
-     * same reason the name above is null there.
-     *
-     * This is one of the last type names the engine carries, and it
-     * goes when the binary carries its own box sources and a message
-     * can read the spelling out of the text that was compiled (issue
-     * 311c).
-     */
-    const char     *out_type_name;
 
     /* Comparator only: the three-way compare for the box's return
      * type, resolved from the registry at placement so the delivery
