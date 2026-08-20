@@ -263,12 +263,59 @@ typedef struct slot {
 typedef struct destination {
     int32_t station;
     int32_t slot;
-    struct destination *next;
 } destination_t;
 
+/* {{{ dest_set_t */
+/*
+ * A port's destinations, as **one immutable array** (issue 214).
+ *
+ * Nothing ever edits one. Drawing or removing a wire builds a whole
+ * new set and swaps the port's pointer in a single atomic write, so a
+ * walker reads the pointer once and then walks something nobody will
+ * ever modify. That is what takes the station's mutex off the delivery
+ * walk: there is no lock, no copy onto the walker's stack, and no way
+ * to see a half-edited set.
+ *
+ * It replaced a linked list whose nodes a rewire could free under a
+ * walker's feet — which is why the walk used to copy every pair out
+ * under the lock before visiting any of them, on every value the
+ * engine moved.
+ *
+ * An array is also the better shape on its own terms: the destinations
+ * are visited in order, immediately, one after another, and a
+ * contiguous run of pairs is what a processor wants for that.
+ */
+typedef struct dest_set {
+    struct dest_set *retired_next;  /* the scrapyard's link; see below */
+    /*
+     * Every worker's epoch at the moment this set was retired, and how
+     * many workers there were. Null until it is retired.
+     *
+     * A worker whose epoch is now **even** is not inside a task, and a
+     * worker whose epoch **differs from this snapshot** has finished
+     * the task it was in. Either way it cannot still be holding this
+     * set. When every worker passes, the set is freed.
+     */
+    uint64_t        *snapshot;
+    int              n_snapshot;
+    int              n;
+    destination_t    items[];
+} dest_set_t;
+/* }}} */
+
 typedef struct port {
-    destination_t *destinations;
-    struct port   *next;
+    /*
+     * Read without any lock on the hot path, written only while the
+     * rewiring lock is held. Atomic because a reader and a writer
+     * genuinely race here, and because the release on the write is
+     * what makes the set's contents visible to whoever reads the
+     * pointer afterwards.
+     *
+     * Null means a port wired nowhere, which discards — exactly what
+     * an unwired comparator outcome should do.
+     */
+    _Atomic(dest_set_t *) dests;
+    struct port          *next;
 } port_t;
 /* }}} */
 
@@ -360,6 +407,30 @@ typedef struct map {
     /* The rewiring lock (issue 704): edge validation and list
      * mutation are one operation under it, never two. */
     pthread_mutex_t rewire_mutex;
+
+    /*
+     * The scrapyard (issue 214): destination sets a rewire replaced,
+     * kept until nothing can still be walking them.
+     *
+     * **It owns a lock, and not against tearing.** Nothing ever reads
+     * a filed set's contents. The lock is against two hands freeing
+     * the same set, and there are two touchers where only one is
+     * obvious: rewiring sweeps, and teardown empties. Anything that
+     * touches this takes the lock, confirms the set is still filed,
+     * unfiles it, and frees it under that same hold — so a second
+     * arrival simply does not find it.
+     *
+     * The lock is a **leaf**: nothing is acquired while it is held.
+     * Said as a rule rather than left to be inferred, because a
+     * lock-ordering cycle is exactly what somebody builds later
+     * having had no way to know.
+     *
+     * It costs nothing this issue is trying to save. The lock being
+     * removed is the one on the delivery walk; this one is touched
+     * when wiring changes and when the program ends, never between.
+     */
+    pthread_mutex_t scrap_mutex;
+    dest_set_t     *scrap_head;
 
     /* The observer (issue 701): a small reporting thread, not a
      * worker, pushing nothing. */
@@ -466,6 +537,32 @@ void map_slot_convert(map_t *m, int station, int slot, int kind);
  * Ports are created on first use, in index order. Repeat with the
  * same port to fan out.
  */
+/* {{{ port_dests() / dest_set_build() / dest_set_retire() — issue 214 */
+/*
+ * port_dests reads a port's current set. One atomic load, no lock,
+ * and the pointer it returns is to something nobody will modify.
+ * Null means the port is wired nowhere.
+ *
+ * dest_set_build makes a new set from an existing one plus or minus
+ * one wire; it allocates and never edits what it was given.
+ *
+ * dest_set_retire files a replaced set in the map's scrapyard. It
+ * takes the scrap lock and nothing else.
+ */
+dest_set_t *port_dests(const port_t *p);
+/* Frees every filed set no worker can still be inside. Called by
+ * rewiring before it retires another, so a program that rewires
+ * forever does not grow forever. */
+void        map_scrap_sweep(map_t *m);
+/* How many sets are filed right now. For the tests and for a report
+ * that wants to say whether the scrapyard is draining. */
+int         map_scrap_count(map_t *m);
+dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
+                           int add_slot, int drop_station, int drop_slot);
+void        dest_set_retire(map_t *m, dest_set_t *old);
+void        map_scrap_free_all(map_t *m);
+/* }}} */
+
 void map_connect(map_t *m, int from_station, int port,
                  int to_station, int to_slot);
 /* }}} */

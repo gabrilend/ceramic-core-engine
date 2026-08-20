@@ -1,6 +1,6 @@
 # Conversation Summary: 3ccc0eb0-a576-4361-85ec-79ae4bb357a4
 
-Generated on: 2026-08-20 11:04:35
+Generated on: 2026-08-20 11:28:31
 
 --------------------------------------------------------------------------------
 
@@ -6388,6 +6388,164 @@ nothing. It lost on costing a walk where width costs a comparison.
 Front B's next step is **310 — boxes compiled at runtime**, which needed 309
 as a hard prerequisite and which builds the quiescence sweep that 216 also
 needs. Front A's next is **210b**, now fully unblocked.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 37
+
+Okay. Can we add 310 and 210b to the todo list and do them next?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 37
+
+310's last step needs the retire-sweep mechanism from 214, which isn't built.
+Let me check what's actually left in 210b first — it may be the quicker one.
+
+
+**210b is nearly done** — only the two map-file forms remain: the dash for an
+unconfigured port and `x64` for a starting depth. Let me do that first, then
+310. Reading the `in` line parser.
+
+
+The `= value` form runs to end of line, so a depth can't follow it. Let me check
+the slot kinds before deciding the spelling.
+
+
+`x64` can't follow `= value`, since that value runs to end of line. Putting the
+depth **before** the source gives one rule that works for all three forms.
+Implementing that, and I'll flag the change.
+
+
+Now the loader, which has to apply both.
+
+
+All tests pass. Now the dump, so the round trip closes.
+
+
+Round trip still closes. Now the test for the new forms.
+
+
+The seed sweep refuses a program that can't start — which is 212's to change,
+not 210b's. Let me make the test program partly runnable, which is the realistic
+case anyway.
+
+
+All passing. Now the format document and the issue paperwork.
+
+
+210b is complete — every step built, both questions answered. Filing it.
+
+
+**210b done.** Now 310 — boxes compiled at runtime. Let me read the parts I
+haven't.
+
+
+Now let me see how lookup works today, since the table has to grow.
+
+
+Compiles. Now lookup has to walk both.
+
+
+Now the tests — including the one that pins the accepted cost.
+
+
+Needs the libs include path too — the registry header pulls in the pool.
+
+
+`/dev/shm` is mounted noexec — which is exactly why this project has **two**
+RAM tiers. Executable code belongs in the `/tmp` tier; the source text belongs
+in shared memory. I had both in the wrong place.
+
+
+A box written at runtime now runs. Step 7 needs the source findable **by box
+name**, so a fresh process can reload a dump. Implementing that.
+
+
+Now the fresh-process test — a dump reloaded by a program that was never told
+about the box.
+
+
+The dump needs a loaded map, not a hand-built one. Let me load from text first.
+
+
+The loader checks the name itself, before placement. Let me find that check.
+
+
+All seven checks pass. Steps 1–7 done; step 8 (unloading) is blocked on 214.
+Writing the paperwork.
+
+
+Both done. **210b is complete and filed; 310 is built and in progress**, blocked
+on one thing.
+
+
+## 210b — the port record
+
+
+Only two things were left, both in the map file, and both landed:
+
+
+- **`in 2 -`** — a port with no source yet. The dump used to write a comment
+  admitting the format had no word for one, which was honest and lost the round
+  trip: a half-built program was the one thing a dump couldn't promise to
+  reload. It can now.
+
+- **`in 0 x64 $0`** — a starting depth, written only when it isn't the
+  default, since the format writes exceptions and `x10` on every line is noise.
+
+
+**One correction from implementation.** You chose `x64` *after* the source; it
+had to move *before* it. A value written on the line runs to end-of-line —
+struct values have spaces in them — so nothing can follow one, and a depth
+written after a value would silently become part of the value. Before the source
+is one rule for all three forms; the alternative was a rule whose exception was
+the form people write most. Docs and issue both say the corrected thing.
+
+
+The round-trip test builds a program that's *partly* wired, because a program
+where nothing can start is still turned away by the seed sweep — which is
+212's to change, not this issue's. Partly-wired is what a program mid-assembly
+actually looks like anyway.
+
+
+## 310 — boxes compiled at runtime
+
+
+Built: source in, generator, compiler, `dlopen`, rows added. `src/073-latebox.h`
+and `074-latebox.c`, plus the three build facts baked in by the Makefile —
+which compiler, where the generator is, where the headers are.
+
+
+Seven things proven in `tests/075-test-latebox.c`, including **a dump of a grown
+program reloading in a fresh process** — the source is filed under each box's
+own name when the box is created, and a process that was never told the box
+exists compiles it back and says out loud that it did.
+
+
+**One test asserts a wrong answer on purpose:** a late box whose struct
+disagrees in layout at the same width is accepted, and the fields arrive
+transposed. That's 309's stated cost, pinned so whoever finds it later finds a
+decision rather than an oversight. If shape comparison is ever built, that test
+is what breaks.
+
+
+**Two things worth flagging:**
+
+
+- **Your two-tier RAM rule earned itself today.** I put both the source text and
+  the compiled `.so` in `/dev/shm` and got *"failed to map segment from shared
+  object"* — because that tier is mounted noexec. The rule was already written
+  down; what it was *for* had to be rediscovered by breaking it. Text goes to
+  the read tier, executables to the exec tier.
+
+- **310 is not complete.** Unloading is blocked on 214's retire-sweep-free
+  mechanism, so a late box's library is never closed and each compile leaks one.
+  That mechanism is now needed by **three** things — 214 itself, 216's station
+  removal, and this — and should be built once. That makes 214 look like the
+  highest-leverage next issue, ahead of the roadmap's suggestion.
 
 
 --------------------------------------------------------------------------------

@@ -294,10 +294,13 @@ static void whole_map_validation(map_t *m, map_description_t *d,
         memset(pushed_into, 0, sizeof pushed_into);
         for (int k = 0; k < m->n_stations; k++) {
             station_t *other = &m->stations[k];
-            for (port_t *p = other->ports; p; p = p->next)
-                for (destination_t *dst = p->destinations; dst; dst = dst->next)
-                    if (dst->station == i && dst->slot < s->n_slots)
-                        pushed_into[dst->slot] = 1;
+            for (port_t *p = other->ports; p; p = p->next) {
+                dest_set_t *set = port_dests(p);
+                for (int di = 0; set && di < set->n; di++)
+                    if (set->items[di].station == i
+                        && set->items[di].slot < s->n_slots)
+                        pushed_into[set->items[di].slot] = 1;
+            }
         }
         int any_push = 0;
         for (int j = 0; j < s->n_slots; j++)

@@ -54,3 +54,12 @@ states across would be wrong. Claiming on the way out is also what
 identifies which cells held anything, since only a ready cell will
 move. Counted per slot, high water tracked on every write, both for
 phase 7 to report.
+
+**The walk takes no lock and copies nothing** (issue 214). A port's
+destinations are one immutable array behind a pointer; reading that
+pointer once yields something nobody will ever modify, and what a
+rewire replaced is filed rather than freed, so a walker already inside
+a set is not walking freed memory. It used to snapshot the destination
+list onto the walker's own stack under the station's mutex, because a
+rewire could free a node under its feet — a lock acquisition and a copy
+proportional to fan-out on every value the engine moved.

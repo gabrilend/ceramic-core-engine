@@ -12,7 +12,7 @@ rule, because nothing is pulled
 destination-list snapshot goes** — this issue's one acknowledged
 retrofit — replaced by an immutable array published in a single atomic
 write, so the delivery walk takes no lock at all
-([214](../214-destinations-without-a-lock.md)). And **adding a station,
+([214](214-destinations-without-a-lock.md)). And **adding a station,
 which this issue deliberately left out of scope, is now the mechanism
 underneath every program's first moment**
 ([211](../211-growing-the-station-table.md),

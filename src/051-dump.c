@@ -153,11 +153,18 @@ void map_dump(map_t *m, FILE *out)
             }
         }
 
+        /* Written in array order, which is the order the wires were
+         * drawn, so dump -> load -> dump produces the same text
+         * without anybody arranging it (issue 214). Nothing in the
+         * running engine reads that order or means anything by it. */
         int port_index = 0;
-        for (port_t *p = s->ports; p; p = p->next, port_index++)
-            for (destination_t *d = p->destinations; d; d = d->next)
+        for (port_t *p = s->ports; p; p = p->next, port_index++) {
+            dest_set_t *set = port_dests(p);
+            for (int di = 0; set && di < set->n; di++)
                 fprintf(out, "  out %d - %s.%d\n", port_index,
-                        m->station_names[d->station], d->slot);
+                        m->station_names[set->items[di].station],
+                        set->items[di].slot);
+        }
     }
 }
 /* }}} */

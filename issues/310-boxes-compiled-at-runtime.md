@@ -68,7 +68,7 @@ shared object is never closed, so a late box stays for the life of the
 process and this leaks a library per compile. Doing it safely means
 waiting until no worker is inside the code being freed, which is the
 retire-sweep-free mechanism
-[214](214-destinations-without-a-lock.md) builds and
+[214](completed/214-destinations-without-a-lock.md) builds and
 [216](216-removing-a-station.md) also needs. It should be built once
 and shared by all three rather than three times, so it waits for 214.
 
@@ -209,7 +209,7 @@ would eventually disagree with the first about what a box is.
    alone. A test that a dump taken after a runtime box is added reloads
    in a fresh process.
 8. Unloading, on the retire-sweep-free mechanism from
-   [214](214-destinations-without-a-lock.md), with the per-worker
+   [214](completed/214-destinations-without-a-lock.md), with the per-worker
    counter widened to span the whole task rather than the delivery
    walk. A test that a box compiled, never placed, and unloaded frees
    its library while a saturated pool runs.
@@ -246,7 +246,7 @@ would eventually disagree with the first about what a box is.
   the shape of fallback this project treats as an error.
 
 - *Can a loaded box ever be unloaded?* **Yes, by retire, sweep, free —
-  the mechanism [214](214-destinations-without-a-lock.md) builds for
+  the mechanism [214](completed/214-destinations-without-a-lock.md) builds for
   destination arrays**, including the scrapyard's own lock and the rule
   that nothing is acquired while holding it. Unloading a shared library
   out from under a worker running its code is the same lifetime problem

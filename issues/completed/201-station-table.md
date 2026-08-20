@@ -24,7 +24,7 @@ Two other decisions here are load-bearing and unchanged: every
 cross-reference is an **index rather than a pointer**, which is what
 lets the table grow at all, and ports and destinations **append at
 their tails so wiring order is preserved**, which the dump's round trip
-depends on and which [214](../214-destinations-without-a-lock.md) has
+depends on and which [214](214-destinations-without-a-lock.md) has
 to keep when it replaces the destination list with an array.
 
 The remainder describes it as built.

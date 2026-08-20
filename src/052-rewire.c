@@ -132,20 +132,18 @@ int map_rewire_connect(map_t *m, int from_station, int port,
         from->n_ports++;
     }
     port_t *p = station_port(from, port);
-    destination_t *d = calloc(1, sizeof *d);
-    if (!d) {
-        pthread_mutex_unlock(&from->mutex);
-        pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("out of memory for a destination");
-    }
-    d->station = to_station;
-    d->slot = to_slot;
-    d->next = NULL;
-    destination_t **link = &p->destinations;
-    while (*link)
-        link = &(*link)->next;
-    *link = d;
+
+    /*
+     * A whole new set, published by one write (issue 214). Walkers
+     * already inside the old one keep walking it and are not
+     * disturbed; the old set is filed rather than freed, because one
+     * of them may be in it right now.
+     */
+    dest_set_t *old = port_dests(p);
+    dest_set_t *fresh_set = dest_set_build(old, to_station, to_slot, -1, -1);
+    atomic_store_explicit(&p->dests, fresh_set, memory_order_release);
     pthread_mutex_unlock(&from->mutex);
+    dest_set_retire(m, old);
 
     pthread_mutex_unlock(&m->rewire_mutex);
     return 0;
@@ -165,30 +163,31 @@ int map_rewire_disconnect(map_t *m, int from_station, int port,
 
     pthread_mutex_lock(&from->mutex);
     port_t *p = station_port(from, port);
-    destination_t *removed = NULL;
-    if (p) {
-        destination_t **link = &p->destinations;
-        while (*link) {
-            if ((*link)->station == to_station && (*link)->slot == to_slot) {
-                removed = *link;
-                *link = removed->next;
-                break;
-            }
-            link = &(*link)->next;
+    dest_set_t *old = port_dests(p);
+    dest_set_t *fresh_set = NULL;
+    int found = 0;
+    for (int i = 0; old && i < old->n; i++)
+        if (old->items[i].station == to_station
+            && old->items[i].slot == to_slot) {
+            found = 1;
+            break;
         }
+    if (found) {
+        fresh_set = dest_set_build(old, -1, -1, to_station, to_slot);
+        atomic_store_explicit(&p->dests, fresh_set, memory_order_release);
     }
     pthread_mutex_unlock(&from->mutex);
     pthread_mutex_unlock(&m->rewire_mutex);
 
-    if (!removed)
+    if (!found)
         return refuse("no such wire to remove");
 
-    /* Freed only after both locks are gone: delivery snapshots the
-     * list under the station mutex, so nothing can still hold this
-     * node. A value already snapshotted before the removal will be
-     * delivered down the old wire — indistinguishable from having
-     * been delivered a moment earlier, which is fine (issue 704). */
-    free(removed);
+    /* Filed, not freed: a walker may be inside the old set right now
+     * (issue 214). A value already on its way down the removed wire
+     * is delivered, which is indistinguishable from having been
+     * delivered a moment earlier and is fine (issue 704). */
+    dest_set_retire(m, old);
+
     return 0;
 }
 /* }}} */

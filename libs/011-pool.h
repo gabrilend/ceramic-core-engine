@@ -150,6 +150,28 @@ int pool_worker_index(void);
 /* {{{ pool_worker_count() — issue 102 */
 /* How many workers this pool actually has, after defaulting. */
 int pool_worker_count(pool_t *p);
+
+/* {{{ pool_worker_epoch() — issue 214 */
+/*
+ * A worker's epoch: **odd while it is inside a task, even while it is
+ * not.** Bumped once at the start of a whole task and once at the end,
+ * on a cache line nobody else writes, so it costs one uncontended
+ * write per task and no coordination at all.
+ *
+ * It exists so that somebody wanting to free something a worker might
+ * be using — a destination set a rewire replaced, the compiled code of
+ * a box nobody places any more — can find out without asking anyone to
+ * stop. Snapshot every worker's epoch when you retire the thing; later,
+ * a worker whose epoch is now **even**, or **differs from the
+ * snapshot**, cannot still be in the task it was in, and therefore
+ * cannot be holding it.
+ *
+ * Nothing waits and nothing spins. An idle worker is asleep and
+ * therefore even, so it passes without ever having to move — which is
+ * what would otherwise deadlock a sweep against a quiet pool.
+ */
+uint64_t pool_worker_epoch(pool_t *p, int worker);
+/* }}} */
 /* }}} */
 
 /* {{{ pool_queue_stats() — issue 105 */

@@ -154,7 +154,7 @@ something exotic knows it is doing something exotic.
   which this makes the other half of — a table that grows and shrinks
 - [212 — One way to build a program](212-one-way-to-build-a-program.md),
   whose surface gains this operation
-- [214 — Destinations without a lock](214-destinations-without-a-lock.md),
+- [214 — Destinations without a lock](completed/214-destinations-without-a-lock.md),
   whose retire-sweep-free is the same lifetime problem in miniature
 - [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   which designs the quiescence sweep and whose box unloading becomes

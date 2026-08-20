@@ -15,7 +15,7 @@ exception in the engine to *a box only runs when a worker picks it up*.
 copies the destination list into a stack array, and releases — a lock
 and a copy proportional to fan-out on every value the engine moves,
 there because a rewire can free a list node under a walker.
-[214](../214-destinations-without-a-lock.md) makes the list an
+[214](214-destinations-without-a-lock.md) makes the list an
 immutable array published by a single atomic write, so the walk reads
 one pointer and takes no lock at all.
 

@@ -19,8 +19,23 @@ and dismantles; it never moves a value. Its private pieces:
   every refusal that turns somebody away from a port can say which of
   the three it found. "Not a buffer" describes two different
   situations with two different fixes.
-- Ports and destinations are appended at the tails of their lists so
-  indices and fan-out order match the order wires were declared —
-  the loader's round-trip tests depend on that stability.
-- Teardown walks stations, then slots, then ports, then
-  destinations, freeing leaf-first.
+- Ports are appended at the tail of their list so indices match the
+  order wires were declared. **Destinations are not a list at all**
+  (issue 214): a port holds one immutable array behind an atomic
+  pointer, and drawing or removing a wire builds a whole new array and
+  swaps the pointer. `port_dests` reads it with one atomic load and no
+  lock; `dest_set_build` makes the replacement; `dest_set_retire`
+  files what it replaced. New wires are appended within the array, so
+  fan-out order still matches declaration order and the dump still
+  round-trips.
+- **The scrapyard** holds sets a rewire replaced, because a walker may
+  be inside one. `map_scrap_sweep` frees every set no worker can still
+  be inside — a worker whose epoch is even is not in a task, and one
+  whose epoch has moved has left the task it was in. Retiring sweeps
+  first, so a program that rewires forever reclaims as it goes.
+  `map_scrap_free_all` empties the rest at teardown. Both unfile a set
+  and free it under one hold of the scrap lock, so a second toucher
+  does not find it and cannot free it twice; the lock is a leaf and
+  nothing is acquired while it is held.
+- Teardown walks stations, then slots, then ports, freeing leaf-first,
+  and then empties the scrapyard.

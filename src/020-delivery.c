@@ -653,11 +653,17 @@ static int (*const route_choose[STATION_KIND_COUNT])(station_t *, task_t *) = {
  * its output to every destination on it. A port wired nowhere
  * discards, which is what an unwired comparator outcome wants.
  *
- * The destination list is snapshotted under the station's own mutex
- * before any delivering happens, because since phase 7 the list can
- * change while the program runs (issue 704) — a walker holding a
- * node another thread just freed is the alternative. The snapshot
- * costs a short copy; delivering happens outside the lock.
+ * **The walk takes no lock and copies nothing** (issue 214). A port's
+ * destinations are one immutable array; a rewire builds a whole new
+ * one and swaps the pointer, so reading that pointer once yields
+ * something nobody will ever modify. The old set is filed rather than
+ * freed, so a walker already inside one is not walking freed memory.
+ *
+ * It used to snapshot the list onto this walker's stack under the
+ * station's mutex, because a rewire could unlink and free a node
+ * under a walker's feet. That cost a lock acquisition and a copy
+ * proportional to fan-out **on every value the engine moved**, and it
+ * was the last thing holding the station's mutex on the hot path.
  */
 void map_deliver(void *ctx, task_t *t)
 {
@@ -676,23 +682,17 @@ void map_deliver(void *ctx, task_t *t)
 
     int port_index = route_choose[s->kind](s, t);
 
-    pthread_mutex_lock(&s->mutex);
     port_t *port = station_port(s, port_index);
-    int count = 0;
-    for (destination_t *d = port ? port->destinations : NULL; d; d = d->next)
-        count++;
-    destination_t snapshot[count > 0 ? count : 1];
-    int i = 0;
-    for (destination_t *d = port ? port->destinations : NULL; d; d = d->next)
-        snapshot[i++] = *d;
-    pthread_mutex_unlock(&s->mutex);
+    dest_set_t *set = port_dests(port);
+    if (!set)
+        return;
 
     /* A hundred destinations is a hundred lock-write-check cycles by
      * this one worker before it takes more work — acceptable, because
      * each delivery may unblock a station, so this worker is busy
      * manufacturing parallelism for everyone else. */
-    for (i = 0; i < count; i++)
-        s->produced += map_deliver_value(m, snapshot[i].station,
-                                         snapshot[i].slot, t->out);
+    for (int i = 0; i < set->n; i++)
+        s->produced += map_deliver_value(m, set->items[i].station,
+                                         set->items[i].slot, t->out);
 }
 /* }}} */

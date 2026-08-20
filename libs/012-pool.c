@@ -20,6 +20,7 @@
 #include "011-pool.h"
 
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,6 +47,19 @@ typedef struct worker {
 /* }}} */
 
 /* {{{ struct pool */
+/* {{{ struct pool_epoch */
+/*
+ * A worker's epoch, padded to a cache line. Two workers bumping their
+ * own counters must not write the same line, or an uncontended write
+ * becomes a contended one and the whole point of the mechanism — that
+ * it costs nothing — is lost.
+ */
+struct pool_epoch {
+    _Atomic uint64_t v;
+    char pad[64 - sizeof(_Atomic uint64_t)];
+};
+/* }}} */
+
 struct pool {
     /* The ring. `slots` holds pointers out to tasks; capacity is the
      * array length; head is the oldest task, tail the next free cell.
@@ -92,6 +106,15 @@ struct pool {
     int joined;
 
     /* Delivery's seat: called after a task runs, before it is freed. */
+    /*
+     * One epoch per worker, each on its own cache line so two workers
+     * bumping theirs never write the same line (issue 214). Odd while
+     * inside a task, even while not. Sixty-four bits, so a counter
+     * cannot wrap all the way back to a snapshot in any run and read
+     * as unchanged when it is not.
+     */
+    struct pool_epoch *epochs;
+
     pool_finish_t finish;
     void         *finish_ctx;
 
@@ -214,6 +237,15 @@ int pool_worker_index(void)
 }
 /* }}} */
 
+/* {{{ pool_worker_epoch() */
+uint64_t pool_worker_epoch(pool_t *p, int worker)
+{
+    if (!p || !p->epochs || worker < 0 || worker >= p->n_workers)
+        return 0;
+    return atomic_load_explicit(&p->epochs[worker].v, memory_order_acquire);
+}
+/* }}} */
+
 /* {{{ worker_main() */
 /*
  * The run loop (issues 102, 103, 104). The shape is one big loop
@@ -261,10 +293,40 @@ static void *worker_main(void *arg)
             p->head = (p->head + 1) % p->capacity;
             pthread_mutex_unlock(&p->mutex);
 
+            /*
+             * The epoch, bumped around **the whole task** rather than
+             * around any one part of it (issue 214). Odd means this
+             * worker is inside a task; even means it is not.
+             *
+             * One counter for the whole task rather than one per
+             * window is deliberate. Two things want to know whether a
+             * worker might be inside something: reclaiming a
+             * destination set a rewire replaced, and unloading the
+             * compiled code of a box nobody places any more. A worker
+             * is inside a box earlier in a task than it is inside a
+             * delivery walk, so a counter spanning the whole task
+             * answers both. Destination sets become freeable slightly
+             * later than they strictly must, which costs nothing
+             * anybody measures, and there is one mechanism instead of
+             * two that drift apart.
+             *
+             * It is a relaxed store to a line nobody else writes, so
+             * it costs one uncontended write per task and no
+             * coordination whatsoever.
+             */
+            _Atomic uint64_t *epoch = &p->epochs[this_worker_index].v;
+            atomic_store_explicit(epoch,
+                atomic_load_explicit(epoch, memory_order_relaxed) + 1,
+                memory_order_release);
+
             t->call(t);
             if (p->finish)
                 p->finish(p->finish_ctx, t);
             free(t);
+
+            atomic_store_explicit(epoch,
+                atomic_load_explicit(epoch, memory_order_relaxed) + 1,
+                memory_order_release);
 
             pthread_mutex_lock(&p->mutex);
             continue;
@@ -362,6 +424,16 @@ pool_t *pool_create(int n_workers, pool_finish_t finish, void *finish_ctx)
     p->finish_ctx = finish_ctx;
 
     p->n_workers = decide_worker_count(n_workers);
+    /* Sized from the count the pool actually settled on, not from
+     * what the caller asked for — zero means "decide for me", and an
+     * array sized from the request would be one slot while N workers
+     * wrote into it. */
+    p->epochs = calloc((size_t)p->n_workers, sizeof *p->epochs);
+    if (!p->epochs) {
+        fprintf(stderr, "pool: out of memory for the worker epochs\n");
+        exit(71);
+    }
+
     p->workers = calloc((size_t)p->n_workers, sizeof *p->workers);
     if (!p->workers) {
         fprintf(stderr, "pool: worker table allocation failed\n");
@@ -465,6 +537,7 @@ void pool_destroy(pool_t *p)
     pthread_cond_destroy(&p->wake);
     pthread_cond_destroy(&p->start_gate);
     free(p->workers);
+    free(p->epochs);
     free(p->slots);
     free(p);
 }

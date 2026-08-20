@@ -128,6 +128,7 @@ map_t *map_create(int n_stations)
     m->n_stations = n_stations;
 
     pthread_mutex_init(&m->rewire_mutex, NULL);
+    pthread_mutex_init(&m->scrap_mutex, NULL);
 
     return m;
 }
@@ -296,6 +297,195 @@ port_t *station_port(station_t *s, int index)
 }
 /* }}} */
 
+/* {{{ port_dests() */
+dest_set_t *port_dests(const port_t *p)
+{
+    if (!p)
+        return NULL;
+    /* Acquire, so everything the writer put in the set before
+     * publishing the pointer is visible to whoever follows it. */
+    return atomic_load_explicit(&p->dests, memory_order_acquire);
+}
+/* }}} */
+
+/* {{{ dest_set_build() */
+/*
+ * A new set from an old one, plus one wire or minus one. Never edits
+ * what it was given — that set may have walkers inside it right now,
+ * and the whole design rests on nothing it holds ever changing.
+ *
+ * Passing -1 as a station means "add nothing" or "drop nothing". A
+ * drop removes **one** matching pair, not every match, because a wire
+ * drawn twice is two wires and removing one should leave the other.
+ */
+dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
+                           int add_slot, int drop_station, int drop_slot)
+{
+    int old_n = from ? from->n : 0;
+    int n = old_n + (add_station >= 0 ? 1 : 0);
+    dest_set_t *set = calloc(1, sizeof *set + (size_t)(n > 0 ? n : 1)
+                                              * sizeof(destination_t));
+    if (!set)
+        fail("out of memory for a destination set");
+
+    int out = 0;
+    int dropped = 0;
+    for (int i = 0; i < old_n; i++) {
+        if (!dropped && drop_station >= 0
+            && from->items[i].station == drop_station
+            && from->items[i].slot == drop_slot) {
+            dropped = 1;
+            continue;
+        }
+        set->items[out++] = from->items[i];
+    }
+    if (add_station >= 0) {
+        /* Appended, so fan-out visits destinations in the order the
+         * wires were drawn. Nothing in the engine depends on that
+         * order — a delivery visits all of them and the order values
+         * arrive elsewhere was never promised — but the dump writes
+         * them in array order, so keeping it means dump, load, dump
+         * produces the same text without anybody arranging it. */
+        set->items[out].station = add_station;
+        set->items[out].slot = add_slot;
+        out++;
+    }
+    set->n = out;
+    return set;
+}
+/* }}} */
+
+/* {{{ static int nobody_can_hold() */
+/*
+ * True when no worker can still be inside the task it was in when
+ * this set was retired.
+ *
+ * A worker passes on either of two grounds: its epoch is **even**, so
+ * it is not inside a task at all; or its epoch **differs** from the
+ * snapshot, so whatever task it was in has ended. An idle worker is
+ * asleep and therefore even, and passes without having to move —
+ * which is what would otherwise deadlock a sweep against a quiet
+ * pool. Nothing waits and nothing spins.
+ *
+ * Sixty-four bits, so a counter cannot wrap all the way back to its
+ * snapshot in any run this engine will ever have and read as
+ * unchanged when it is not.
+ */
+static int nobody_can_hold(map_t *m, const dest_set_t *set)
+{
+    if (!set->snapshot)
+        return 0;
+    for (int i = 0; i < set->n_snapshot; i++) {
+        uint64_t now = pool_worker_epoch(m->pool, i);
+        if ((now % 2) == 0)
+            continue;                       /* not in a task */
+        if (now != set->snapshot[i])
+            continue;                       /* a different task since */
+        return 0;                           /* might be inside this one */
+    }
+    return 1;
+}
+/* }}} */
+
+/* {{{ map_scrap_sweep() */
+void map_scrap_sweep(map_t *m)
+{
+    pthread_mutex_lock(&m->scrap_mutex);
+    dest_set_t **link = &m->scrap_head;
+    while (*link) {
+        dest_set_t *set = *link;
+        if (nobody_can_hold(m, set)) {
+            /* Unfiled first, freed under the same hold: a second
+             * toucher arriving afterwards does not find it, so there
+             * is nothing for it to free twice. That is the whole of
+             * what this lock is for. */
+            *link = set->retired_next;
+            free(set->snapshot);
+            free(set);
+        } else {
+            link = &set->retired_next;
+        }
+    }
+    pthread_mutex_unlock(&m->scrap_mutex);
+}
+/* }}} */
+
+/* {{{ dest_set_retire() */
+void dest_set_retire(map_t *m, dest_set_t *old)
+{
+    if (!old)
+        return;
+
+    /* Sweep before filing, so a program that rewires forever reclaims
+     * as it goes rather than growing forever. Doing it here rather
+     * than on a timer means the work happens exactly where the need
+     * is created and nowhere else. */
+    map_scrap_sweep(m);
+
+    int workers = m->pool ? pool_worker_count(m->pool) : 0;
+    uint64_t *snapshot = NULL;
+    if (workers > 0) {
+        snapshot = calloc((size_t)workers, sizeof *snapshot);
+        if (!snapshot)
+            fail("out of memory retiring a destination set");
+        for (int i = 0; i < workers; i++)
+            snapshot[i] = pool_worker_epoch(m->pool, i);
+    }
+
+    pthread_mutex_lock(&m->scrap_mutex);
+    old->snapshot = snapshot;
+    old->n_snapshot = workers;
+    old->retired_next = m->scrap_head;
+    m->scrap_head = old;
+    pthread_mutex_unlock(&m->scrap_mutex);
+
+    /*
+     * A map with no pool has no workers and therefore nothing that
+     * could be inside anything — but it also has no epochs to
+     * snapshot, so nobody_can_hold refuses on the null snapshot and
+     * these sets simply wait for teardown. That is the construction
+     * case, where a handful of sets is nothing, and it keeps the test
+     * for "can this be freed" from having a second shape.
+     */
+}
+/* }}} */
+
+/* {{{ map_scrap_count() */
+int map_scrap_count(map_t *m)
+{
+    pthread_mutex_lock(&m->scrap_mutex);
+    int n = 0;
+    for (dest_set_t *set = m->scrap_head; set; set = set->retired_next)
+        n++;
+    pthread_mutex_unlock(&m->scrap_mutex);
+    return n;
+}
+/* }}} */
+
+/* {{{ map_scrap_free_all() */
+/*
+ * Empties the scrapyard. Called at teardown, when every worker has
+ * been collected and nothing can be walking anything.
+ *
+ * Unfiles under the lock and frees under the same hold, so a second
+ * toucher arriving does not find it and cannot free it twice — which
+ * is the entire reason this lock exists.
+ */
+void map_scrap_free_all(map_t *m)
+{
+    pthread_mutex_lock(&m->scrap_mutex);
+    dest_set_t *set = m->scrap_head;
+    m->scrap_head = NULL;
+    while (set) {
+        dest_set_t *next = set->retired_next;
+        free(set->snapshot);
+        free(set);
+        set = next;
+    }
+    pthread_mutex_unlock(&m->scrap_mutex);
+}
+/* }}} */
+
 /* {{{ map_connect() */
 void map_connect(map_t *m, int from_station, int port,
                  int to_station, int to_slot)
@@ -346,18 +536,17 @@ void map_connect(map_t *m, int from_station, int port,
     }
     port_t *p = station_port(from, port);
 
-    destination_t *d = calloc(1, sizeof *d);
-    if (!d) fail("out of memory for a destination");
-    d->station = to_station;
-    d->slot = to_slot;
-    d->next = NULL;
-
-    /* Append at the tail: fan-out delivers in the order the wires
-     * were drawn, which the loader tests rely on being stable. */
-    destination_t **link = &p->destinations;
-    while (*link)
-        link = &(*link)->next;
-    *link = d;
+    /*
+     * A whole new set, published by one write, with the old one filed
+     * rather than freed (issue 214). This is construction rather than
+     * rewiring — nothing is walking yet — but it goes through the same
+     * path anyway, so there is one way a port's destinations change
+     * rather than two that must agree.
+     */
+    dest_set_t *old = port_dests(p);
+    dest_set_t *fresh = dest_set_build(old, to_station, to_slot, -1, -1);
+    atomic_store_explicit(&p->dests, fresh, memory_order_release);
+    dest_set_retire(m, old);
 }
 /* }}} */
 
@@ -437,18 +626,17 @@ void map_destroy(map_t *m)
         free(s->slots);
         port_t *p = s->ports;
         while (p) {
-            destination_t *d = p->destinations;
-            while (d) {
-                destination_t *next = d->next;
-                free(d);
-                d = next;
-            }
+            free(port_dests(p));
             port_t *next = p->next;
             free(p);
             p = next;
         }
         pthread_mutex_destroy(&s->mutex);
     }
+    /* Everything a rewire replaced and left filed. By now the pool is
+     * gone, so nothing can be walking any of it (issue 214). */
+    map_scrap_free_all(m);
+    pthread_mutex_destroy(&m->scrap_mutex);
     pthread_mutex_destroy(&m->rewire_mutex);
     free(m->stations);
     free(m);

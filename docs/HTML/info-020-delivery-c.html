@@ -38,7 +38,6 @@
 <a href="issue-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
-<a href="issue-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="issue-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="issue-216-removing-a-station.html">216 — Removing a station</a>
 <a href="issue-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
@@ -79,6 +78,7 @@
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
+<a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -185,6 +185,14 @@ states across would be wrong. Claiming on the way out is also what
 identifies which cells held anything, since only a ready cell will
 move. Counted per slot, high water tracked on every write, both for
 phase 7 to report.</p>
+<p><strong>The walk takes no lock and copies nothing</strong> (issue 214). A port's
+destinations are one immutable array behind a pointer; reading that
+pointer once yields something nobody will ever modify, and what a
+rewire replaced is filed rather than freed, so a walker already inside
+a set is not walking freed memory. It used to snapshot the destination
+list onto the walker's own stack under the station's mutex, because a
+rewire could free a node under its feet — a lock acquisition and a copy
+proportional to fan-out on every value the engine moved.</p>
 
 </main>
 </div></body></html>

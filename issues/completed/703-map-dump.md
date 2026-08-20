@@ -20,7 +20,7 @@ with **no source at all** has to be writable, since a station can exist
 before it is wired and the dump's whole value is that it says what is
 actually there; and destination order now comes from an array rather
 than a list's append order
-([214](../214-destinations-without-a-lock.md)), which the round trip
+([214](214-destinations-without-a-lock.md)), which the round trip
 depends on and which that change has to preserve deliberately.
 
 **What this issue proved is the property everything else is checked

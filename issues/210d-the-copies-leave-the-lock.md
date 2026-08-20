@@ -239,7 +239,7 @@ partial claim while another interleaves.
   only safe because nothing here computes a location from the capacity
 - [204 — The readiness check](completed/204-readiness-check.md), the
   walk this changes
-- [214 — Destinations without a lock](214-destinations-without-a-lock.md),
+- [214 — Destinations without a lock](completed/214-destinations-without-a-lock.md),
   the output side, which does remove its lock — the asymmetry is that a
   delivery walk reads one pointer and a claim needs N cells at once
 - [058 — Guarantees](../docs/058-guarantees.md), where the lost arrival
