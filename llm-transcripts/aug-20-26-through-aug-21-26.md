@@ -1,6 +1,6 @@
 # Conversation Summary: 55f347f4-2832-4363-ab6b-50a0c7b42395
 
-Generated on: 2026-08-20 17:13:08
+Generated on: 2026-08-20 17:32:22
 
 --------------------------------------------------------------------------------
 
@@ -2643,6 +2643,88 @@ station itself, which isn't built.
 So the next genuinely available work is **the input station** — where a
 program's arguments arrive — and its sibling, the output station, which is
 startable now and is what the input one stands on.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 16
+
+Great, let's keep working.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 16
+
+Next: the output station — where a program's results come from. It's what the
+input station stands on. Let me read it.
+
+
+Large issue; let me take the mechanism first — the designation, holding rather
+than discarding, and the calls that drain. Here's where a value is discarded
+today:
+
+
+The station has no index field — let me pass what the message needs:
+
+
+Now the three operations — designating a station, asking how many results
+wait, and taking one:
+
+
+Now the test — including that an *un*designated station still discards, since
+that's the rule this designation is an exception to:
+
+
+Committed, clean, all tests pass. **A program can now say where its results come
+from.**
+
+
+The gap wasn't mechanical — a box could always print or append to a file. What
+was missing was a **name**: no station was designated as the place results come
+from, so a program meant to sit inside another had nowhere for a parent to wire
+from, and somebody reading a program couldn't tell which station was the point
+of it.
+
+
+A designated station stays entirely ordinary — same shape, same readiness
+check, running whatever box it was given. **The designation adds exactly one
+rule**: when its output port is wired nowhere, values are held instead of
+dropped. Two calls take them out — how many wait, and take the oldest — and
+both exist because a caller asked to drain results can't write that loop with
+only one of them.
+
+
+**Oldest first, and that's worth noting given earlier work:** this is the one
+ordering the engine can still honestly promise. A single station produced them
+all in sequence, unlike values leaving a port, where order stopped meaning
+anything when the scan replaced the head index.
+
+
+**A station whose box returns nothing is refused as an output** rather than
+accepted and useless — it has no output port to wire from and nothing to hold,
+so whoever asked has almost certainly named the wrong station.
+
+
+**The pile-up is shouted from the first doubling**, and that's deliberate. There
+are now three kinds of backlog and they're three different diagnoses: an input
+backing up means the sides feed at different rates; the task queue backing up
+means the workers are behind; both are performance signals that can wait for the
+teardown report. Results backing up means *nobody is collecting them at all* —
+a program computing into somewhere nobody is looking — and waiting until
+shutdown to mention that wastes the entire run.
+
+
+**The test asserts both directions, and the second earns its place:** an
+undesignated station runs, produces, and drops what it made. That's the rule
+this designation is an exception to, and a test checking only the holding half
+wouldn't have shown the exception to be narrow.
+
+
+What remains on it: the map file syntax for the designation and the dump
+carrying it, the load-time check that what's wired in type-checks, and a program
+used as a box inside another — that last one needs **the input station**, the
+same design pointed the other way, which is now the next available piece.
 
 
 --------------------------------------------------------------------------------

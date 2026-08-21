@@ -983,7 +983,7 @@ void map_deliver(void *ctx, task_t *t)
          * results are the one thing discarding makes meaningless —
          * a program that computed them and dropped them did nothing.
          */
-        if (s->is_output)
+        if (s->door == DOOR_OUT)
             station_hold_result(m, t->station, s, t->out);
         return;
     }

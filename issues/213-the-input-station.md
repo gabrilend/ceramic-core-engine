@@ -6,6 +6,48 @@ They are one design and it is worth reading them together.
 
 ## Current behavior
 
+**A program has a surface.** A station can be declared as the entrance
+— the ports the outside is allowed to deliver to — and delivering from
+outside refuses any station that is not one.
+
+**That refusal is the whole of it.** Underneath, delivering an
+argument is the ordinary delivery down an ordinary wire; nothing was
+added to the delivery path. What changed is *who may use it*. A caller
+reaching an interior station is reaching inside, and the point of the
+declaration is that reaching inside stops being possible by accident.
+A surface nobody has to respect is not a surface.
+
+**One mark, two directions**, shared with
+[209](209-map-output-collection.md), because the two are one design
+seen from either side. A station is neither door, or one of them.
+Being both is refused: a program whose entrance is its exit is
+somebody having named the wrong station.
+
+**The size is checked here and only here.** Inside the graph a wire
+was checked when it was drawn; from outside there is no wire, so this
+is the only moment anything can be.
+
+**A declared entrance stopped triggering a false alarm.** The
+whole-program pass warns about a station whose buffered inputs no
+arrow feeds, and that warning has always ended *"unless something
+outside delivers into it"*. A declared entrance is precisely such a
+station, so the sentence's own escape clause became checkable — and
+warning about it would be telling somebody that the thing they just
+declared might not happen.
+
+**What the test would not assert.** Results are held oldest-first, so
+they come out in the order they *arrived* at the output station —
+which is not the order the arguments went in. Three values fed to a
+program with two workers are in flight at once, and which finishes
+first is a schedule. The test checks the set and says why, because
+asserting the sequence would be asserting the scheduler.
+
+Still to come: the map file syntax for both declarations, deriving a
+port's type from what it feeds, the command-line path, and one program
+used as a box inside another.
+
+### What stood before
+
 A program has no declared entry.
 
 Values get into a running program in exactly one way that anybody
@@ -148,17 +190,21 @@ want to.
 
 1. Box file syntax for declaring which station is the input, alongside
    the output declaration, and reader support for both.
-2. **The designation, not a new station kind** — shared with
-   [209](209-map-output-collection.md), since the two differ only in
-   which side the boundary is on. An ordinary station carries a mark
-   saying it is a door and which way it faces. The only genuinely new
-   mechanism either issue needs is a station that runs no box, which is
-   the ordinary shape with one input, one output, and nothing in
-   between.
+2. **Done.** One mark on an ordinary station saying it is a door and
+   which way it faces, shared with
+   [209](209-map-output-collection.md).
+
+   The station that runs no box was **not** built and turned out not
+   to be needed: a door that shapes nothing is a station running an
+   identity box, which is an ordinary function somebody was going to
+   write anyway rather than a new kind of station. That keeps the
+   count of things this engine has at what it was.
 3. Deriving each input port's type from what it feeds, and refusing a
    port whose destinations disagree.
-4. Delivery from outside: a call naming a program, a port, and a value,
-   with the same per-wire type check every other delivery gets.
+4. **Done.** A call naming a program, a station, a port and a value,
+   refusing any station that is not a declared entrance and checking
+   the size — which is the only moment it can be checked, there being
+   no wire to have checked it when it was drawn.
 5. The command-line path, reusing the statics text reader, with a test
    passing a struct argument in brace syntax.
 6. A test that one program is used as a box inside another — wired to

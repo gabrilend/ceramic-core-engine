@@ -771,7 +771,119 @@ const char *map_designate_output(map_t *m, int station)
                  "the source of", station);
         return said;
     }
-    s->is_output = 1;
+    s->door = DOOR_OUT;
+    return NULL;
+}
+/* }}} */
+
+/* {{{ map_designate_input() */
+/*
+ * **Say that this station is where the outside delivers** (issue
+ * 213), which is the other door and the same design.
+ *
+ * Without it, a value gets into a running program exactly one way:
+ * somebody holding the program calls the delivery entry naming a
+ * station and a port. That works and it is what every test does, and
+ * it means **the caller has to know the program's insides**. Rename
+ * an interior station and every caller breaks. That is not
+ * encapsulation — the program has no surface, only internals that
+ * happen to be reachable.
+ *
+ * The mark says which ports the outside is allowed to deliver to.
+ * Everything after that is an ordinary delivery down an ordinary
+ * wire, which is why this needs no new mechanism in the delivery
+ * path at all.
+ *
+ * **One output port, so one station per argument group.** A box
+ * returns one value, so a station has one output port, so a program
+ * taking several unrelated arguments has several input stations. The
+ * alternative wants a C function returning several values, and faking
+ * it with a struct something downstream takes apart means a function
+ * written to satisfy the engine — which is the thing this design will
+ * not ask anybody for.
+ *
+ * Fan-out is a different thing and was always free: one input
+ * station's output port may feed as many interior stations as it is
+ * wired to.
+ */
+const char *map_designate_input(map_t *m, int station)
+{
+    static _Thread_local char said[192];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said, "station %d is outside the table",
+                 station);
+        return said;
+    }
+    station_t *s = map_station(m, station);
+    if (!s->call) {
+        snprintf(said, sizeof said,
+                 "station %d has no box placed — place, then designate",
+                 station);
+        return said;
+    }
+    if (s->door == DOOR_OUT) {
+        /* A program whose entrance is its exit is not a program with
+         * two doors; it is somebody having designated the wrong
+         * station. Refused rather than quietly overwritten. */
+        snprintf(said, sizeof said,
+                 "station %d is already where results come from — a station "
+                 "cannot be both doors", station);
+        return said;
+    }
+    s->door = DOOR_IN;
+    return NULL;
+}
+/* }}} */
+
+/* {{{ map_deliver_argument() */
+/*
+ * **Deliver a value from outside the program** (issue 213).
+ *
+ * The difference between this and the ordinary delivery entry is not
+ * mechanical — underneath it is the same call — it is *who may use
+ * it*. This one refuses any station that is not a declared door, and
+ * that refusal is the whole of what gives a program a surface. A
+ * caller reaching an interior station is reaching inside, and the
+ * point of the designation is that reaching inside stops being
+ * possible by accident.
+ *
+ * The size is checked against the port, because a caller from outside
+ * is exactly the caller least likely to be right about it — inside
+ * the graph a wire was checked when it was drawn, and here there is
+ * no wire, so this is the only moment.
+ */
+const char *map_deliver_argument(map_t *m, int station, int port,
+                                 const void *value, int size)
+{
+    static _Thread_local char said[224];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said, "station %d is outside the table",
+                 station);
+        return said;
+    }
+    station_t *s = map_station(m, station);
+    if (s->door != DOOR_IN) {
+        snprintf(said, sizeof said,
+                 "station %d is not a declared entrance — the outside may "
+                 "only deliver to a program's input stations", station);
+        return said;
+    }
+    if (port < 0 || port >= s->n_in_ports) {
+        snprintf(said, sizeof said,
+                 "station %d has no port %d — it has %d",
+                 station, port, s->n_in_ports);
+        return said;
+    }
+    if (size != s->in_ports[port].elem_size) {
+        snprintf(said, sizeof said,
+                 "that port takes %d bytes and %d were offered",
+                 s->in_ports[port].elem_size, size);
+        return said;
+    }
+
+    map_deliver_value(m, station, port, value);
     return NULL;
 }
 /* }}} */
@@ -927,7 +1039,22 @@ const char *map_bring_up(map_t *m)
          * from outside by a test or a control surface. Silently never
          * running is the hardest thing to notice from outside, which
          * is why it is said at all. */
-        if (has_ring && !any_arrow)
+        /*
+         * Buffered inputs nothing feeds. Loud but not a fault: a
+         * program under construction has these, and so does one fed
+         * from outside. Silently never running is the hardest thing
+         * to notice from outside, which is why it is said at all.
+         *
+         * **A declared entrance is exempt, and that is not a special
+         * case being carved out — it is the warning's own escape
+         * clause becoming checkable.** The sentence has always ended
+         * "unless something outside delivers into it"; a station
+         * marked as a door is precisely one that something outside
+         * delivers into (issue 213). Warning about it would be
+         * telling somebody that the thing they just declared might
+         * not happen.
+         */
+        if (has_ring && !any_arrow && s->door != DOOR_IN)
             fprintf(stderr,
                     "map: WARNING: station %s has buffered inputs that no "
                     "arrow feeds — unless something outside delivers into "

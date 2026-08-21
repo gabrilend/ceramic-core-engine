@@ -143,6 +143,16 @@ enum slot_state {
  * routing dispatch). Identical in every respect except which output
  * port a returned value goes down.
  */
+/*
+ * Which way a door faces (issues 209, 213). Not a station kind: a
+ * door is an ordinary station of any kind, carrying a mark.
+ */
+enum station_door {
+    DOOR_NONE = 0,   /* an interior station, which is most of them */
+    DOOR_IN   = 1,   /* the outside may deliver here */
+    DOOR_OUT  = 2,   /* results wait here to be taken */
+};
+
 enum station_kind {
     STATION_PLAIN      = 0,
     STATION_COMPARATOR = 1,
@@ -505,23 +515,32 @@ typedef struct station {
     unsigned char   seeded;
 
     /*
-     * **Designated as a place a program's results come from** (issue
-     * 209).
+     * **Whether this station is a door, and which way it faces**
+     * (issues 209, 213).
      *
-     * It is not a different kind of station and runs whatever box it
-     * was placed with, or none. What the designation adds is exactly
-     * one rule: when its output port is wired nowhere, the values are
-     * **held** instead of discarded.
+     * One mark rather than two flags, because the two are one design
+     * seen from either side: a program's inputs are the ports the
+     * outside is allowed to deliver to, and its outputs are the ports
+     * a parent may wire from. A station is neither, or one, and being
+     * both would mean a program whose entrance is its exit.
      *
-     * Discarding is right for every other port and wrong for this
-     * one. An unwired comparator branch is the ordinary case — a
-     * program sends everything below a threshold somewhere and means
-     * to drop the rest — so a port wired to nothing throws its value
-     * away on purpose. But a program's own results are the one thing
-     * that discarding makes meaningless: a program that computed them
-     * and dropped them did nothing.
+     * A door is an **ordinary station** and runs whatever box it was
+     * placed with — same shape, same readiness check. The mark adds
+     * one rule on each side.
+     *
+     * Facing out: when its output port is wired nowhere, values are
+     * **held** instead of discarded. Discarding is right for every
+     * other port and wrong for this one — an unwired comparator
+     * branch is the ordinary case, but a program that computed its
+     * results and dropped them did nothing.
+     *
+     * Facing in: it is the only station the outside may deliver to.
+     * That is what gives a program a surface rather than internals
+     * that happen to be reachable, and it is why a parent can wire to
+     * a sub-program without knowing what anything inside it is
+     * called.
      */
-    unsigned char   is_output;
+    unsigned char   door;
 
     /*
      * The results waiting to be taken, when nobody is wired to this
@@ -918,6 +937,35 @@ const char *map_bring_up(map_t *m);
  * asked to drain results cannot write the loop with only one of them.
  */
 const char *map_designate_output(map_t *m, int station);
+
+/*
+ * The other door: the station the outside is allowed to deliver to.
+ *
+ * Without it a caller reaches a program by naming one of its interior
+ * stations, which means knowing what they are called — rename one and
+ * every caller breaks. The mark is what turns internals that happen
+ * to be reachable into a surface, and it is what lets a parent wire
+ * to a sub-program without knowing anything inside it.
+ *
+ * A station cannot be both doors; being both would mean a program
+ * whose entrance is its exit, and asking for it is almost certainly a
+ * mis-named station.
+ */
+const char *map_designate_input(map_t *m, int station);
+
+/*
+ * Deliver into a program from outside it. NULL when taken, or a
+ * sentence saying why not.
+ *
+ * Underneath it is the ordinary delivery. What differs is who may use
+ * it: this refuses any station that is not a declared entrance, and
+ * that refusal is the whole of what gives a program a surface. The
+ * size is checked here because a caller from outside is the one least
+ * likely to be right about it — inside the graph a wire was checked
+ * when it was drawn, and here there is no wire.
+ */
+const char *map_deliver_argument(map_t *m, int station, int port,
+                                 const void *value, int size);
 int map_output_waiting(map_t *m, int station);
 int map_output_take(map_t *m, int station, void *into, int size);
 /* }}} */
