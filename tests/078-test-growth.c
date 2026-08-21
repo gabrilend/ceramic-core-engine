@@ -115,7 +115,7 @@ static void a_station_added_mid_run(void)
     int fresh = map_add_station(m);
     check(fresh >= 2, "a new place came from beyond what was allocated");
     map_place_box(m, fresh, "keep", STATION_PLAIN);
-    check(map_rewire_connect(m, 0, 0, fresh, 0) == 0,
+    check(map_wire(m, 0, 0, fresh, 0) == NULL,
           "and a wire reached it");
 
     for (int i = 0; i < 50; i++) {

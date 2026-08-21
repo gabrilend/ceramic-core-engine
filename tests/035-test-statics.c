@@ -55,8 +55,26 @@ static void expect_death(void (*scenario)(void), const char *what)
     }
     int status = 0;
     waitpid(pid, &status, 0);
-    if (!WIFSIGNALED(status)) {
+    /*
+     * **Exit 70, or a signal.** Malformed constant text now ends the
+     * program with the code meaning the calling code was wrong rather
+     * than aborting (issue 106), which is what lets a caller tell a
+     * fault it can correct and retry from one it cannot. A signal is
+     * still accepted, because a few deaths further down have not been
+     * moved onto a code yet and this helper's job is to prove the
+     * value was refused rather than to police how.
+     */
+    int refused = WIFSIGNALED(status)
+               || (WIFEXITED(status) && WEXITSTATUS(status) != 0);
+    if (!refused) {
         fprintf(stderr, "statics test failed: %s — the child survived\n", what);
+        exit(1);
+    }
+    if (WIFEXITED(status) && WEXITSTATUS(status) != 70) {
+        fprintf(stderr, "statics test failed: %s — refused, but with exit "
+                        "code %d rather than 70, which is the code meaning "
+                        "the calling code was wrong\n",
+                what, WEXITSTATUS(status));
         exit(1);
     }
 }

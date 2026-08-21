@@ -66,3 +66,39 @@ defaulting.
 **pool_queue_stats(pool, out capacity, out high water, out growths)**
 — the queue's measurements, for demos and diagnostics. Any out
 pointer may be null.
+
+## Stopping on purpose (issue 106)
+
+**pool_signal_when_finished(pool, signal)** — raise this signal, once,
+when the pool decides by itself that the work has run out. The thread
+that wants to know a program is over is usually also waiting to be
+*told* to stop, and one waiting point woken for two reasons is simpler
+than two waits that have to be combined; so the end of the work
+arrives as one more signal, told apart by its number.
+
+It is raised at the process rather than at a thread, which needs no
+thread identity recorded and lands wherever somebody is waiting.
+**Asking after the fact still gets an answer**: if the pool has
+already finished, the signal is raised at the moment of asking. A
+short program can run out of work between being released and anybody
+sitting down to wait, and without that a waiter would wait forever.
+
+Opt-in, and it has to be: most signals kill a process by default, so a
+pool that raised one unasked would end every program that did not
+expect it.
+
+**pool_stop(pool)** — stop starting new things, which is what halting
+honestly means here. A worker inside a box finishes that box, because
+there is no safe way to interrupt executing C; a worker looking for
+work finds the flag and returns. Whatever is queued stays queued and
+is never run, which tearing down afterwards reports rather than hides.
+
+**pool_queued(pool) → int** — how many tasks are waiting right now.
+
+**pool_worker_station(pool, worker) → int** — which station that
+worker is inside, or -1. A number the pool ferries and never
+interprets, like the one on the task it came from — and **a number
+rather than the task's address** on purpose. A report written while a
+lock is held by something that will never release it must not
+dereference anything: a stale integer is a wrong answer, while a stale
+pointer is a crash inside the thing that exists to explain a crash.

@@ -189,6 +189,46 @@ int pool_worker_count(pool_t *p);
  */
 uint64_t pool_worker_epoch(pool_t *p, int worker);
 /* }}} */
+
+/* {{{ stopping on purpose — issue 106 */
+/*
+ * **pool_signal_when_finished(pool, signal)** — raise this signal,
+ * once, when the pool decides by itself that the work has run out.
+ *
+ * The thread that wants to know a program is over is usually also
+ * waiting to be *told* to stop, and one waiting point woken for two
+ * reasons is simpler than two waits that have to be combined. So the
+ * end of the work arrives as one more signal, told apart from the
+ * others by its number.
+ *
+ * It is raised at the process rather than at a thread, which needs no
+ * thread identity to be recorded and lands wherever somebody is
+ * waiting. Opt-in, and it has to be: most signals kill a process by
+ * default, so a pool that raised one unasked would end every program
+ * that did not expect it.
+ *
+ * **pool_stop(pool)** — stop starting new things, which is what
+ * halting honestly means. A worker inside a box finishes that box,
+ * because there is no safe way to interrupt executing C; a worker
+ * looking for work finds the flag and returns. Whatever is queued
+ * stays queued and is never run, which tearing down afterwards
+ * reports rather than hides.
+ *
+ * **pool_queued(pool)** — how many tasks are waiting right now.
+ *
+ * **pool_worker_station(pool, worker)** — which station that worker
+ * is inside, or -1. A number the pool ferries and never interprets,
+ * like the one on the task it came from, and **a number rather than
+ * the task's address** on purpose: a report written while a lock is
+ * held by something that will never release it must not dereference
+ * anything. A stale integer is a wrong answer; a stale pointer is a
+ * crash inside the thing that exists to explain a crash.
+ */
+void pool_signal_when_finished(pool_t *p, int signo);
+void pool_stop(pool_t *p);
+int  pool_queued(pool_t *p);
+int  pool_worker_station(pool_t *p, int worker);
+/* }}} */
 /* }}} */
 
 /* {{{ pool_queue_stats() — issue 105 */

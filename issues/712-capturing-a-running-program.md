@@ -122,14 +122,14 @@ functions were added or changed while it ran, and what did not drain.
 The counters and buffer depths that
 [701](completed/701-buffer-growth-reporting.md) and
 [702](completed/702-station-statistics.md) already gather are most of
-it, and [106](106-stopping-on-purpose.md) already writes something of
+it, and [106](completed/106-stopping-on-purpose.md) already writes something of
 this shape on the way out of a dying program.
 
 ## Suggested implementation steps
 
 1. The drain: stop building tasks, wait for quiet, with the bound and
    the list of what was still busy. Most of this is
-   [106](106-stopping-on-purpose.md)'s sequence with a different ending.
+   [106](completed/106-stopping-on-purpose.md)'s sequence with a different ending.
 2. The map format's queued-value form, in the reader and the writer
    together.
 3. Capture of buffer contents and iterator cursors, appended to what
@@ -172,7 +172,7 @@ this shape on the way out of a dying program.
 
 - [703 — Dumping the loaded map](completed/703-map-dump.md), the
   schematic this stands on and does not replace
-- [106 — Stopping on purpose](106-stopping-on-purpose.md), whose
+- [106 — Stopping on purpose](completed/106-stopping-on-purpose.md), whose
   stop-the-world sequence this reuses with a different ending
 - [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
   which is why a captured program may contain code the binary does not

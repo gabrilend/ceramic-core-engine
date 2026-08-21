@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>091-stopping.h — the ways a program ends, from outside</title>
+<link rel="stylesheet" href="style.css">
+</head><body><div class="wrap">
+<nav>
+<h2>minimal soramech</h2>
+<h2>The documents</h2>
+<a href="doc-000-table-of-contents.html">000 — Table of contents</a>
+<a href="doc-001-overview.html">001 — Overview</a>
+<a href="doc-002-stations-and-ports.html">002 — Stations and ports</a>
+<a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
+<a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
+<a href="doc-005-routing.html">005 — Routing</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
+<a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
+<a href="doc-008-map-file-format.html">008 — Map file format</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
+<a href="doc-010-roadmap.html">010 — Roadmap</a>
+<a href="doc-058-guarantees.html">058 — Guarantees</a>
+<h2>Implementation notes</h2>
+<a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
+<a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
+<a href="impl-README.html">Implementation notes</a>
+<h2>The beginning</h2>
+<a href="vision.html">vision (sealed)</a>
+<h2>Notes</h2>
+<a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
+<h2>Issues, open</h2>
+<a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
+<a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
+<a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
+<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
+<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
+<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
+<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
+<a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
+<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
+<a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
+<a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
+<a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
+<a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
+<a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
+<a href="issue-phase-4-progress.html">Phase 4 progress — configuration</a>
+<a href="issue-phase-5-progress.html">Phase 5 progress — routing kinds</a>
+<a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
+<a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
+<a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
+<h2>Issues, completed</h2>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
+<a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
+<a href="done-201-station-table.html">201 — The station table</a>
+<a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
+<a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
+<a href="done-205-delivery-walk.html">205 — The delivery walk</a>
+<a href="done-206-task-struct.html">206 — The task struct</a>
+<a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-210-input-port-record.html">210 — What an input port is</a>
+<a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
+<a href="done-210b-the-port-record.html">210b — The port record</a>
+<a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
+<a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
+<a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
+<a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
+<a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
+<a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
+<a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
+<a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-301-box-source-parser.html">301 — The box-source parser</a>
+<a href="done-302-shim-emission.html">302 — Shim emission</a>
+<a href="done-303-registry-emission.html">303 — The registry</a>
+<a href="done-304-struct-field-tables.html">304 — Struct field tables</a>
+<a href="done-305-compare-functions.html">305 — Compare functions</a>
+<a href="done-306-build-integration.html">306 — Build integration</a>
+<a href="done-307-phase-3-demo.html">307 — Phase 3 demo: writing a box is writing a function</a>
+<a href="done-308-generator-in-c.html">308 — The generator, in C</a>
+<a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
+<a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-401-static-ports.html">401 — Static input values</a>
+<a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
+<a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
+<a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
+<a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
+<a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
+<a href="done-504-iterator.html">504 — The iterator</a>
+<a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
+<a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
+<a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
+<a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
+<a href="done-605-the-seed-sweep.html">605 — The seed sweep</a>
+<a href="done-606-phase-6-demo.html">606 — Phase 6 demo: the capstone</a>
+<a href="done-701-buffer-growth-reporting.html">701 — Reporting buffer growth</a>
+<a href="done-702-station-statistics.html">702 — Per-station statistics</a>
+<a href="done-703-map-dump.html">703 — Dumping the loaded map</a>
+<a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
+<a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
+<a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<h2>Interfaces</h2>
+<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
+<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
+<a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
+<a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
+<a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
+<a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
+<a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
+<a href="info-088-complete-issue-lua.html">088-complete-issue.lua — finishing an issue, from outside</a>
+<a href="info-089-repair-doc-links-lua.html">089-repair-doc-links.lua — making the record walkable, from outside</a>
+<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
+<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
+<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
+<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
+<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-050-observe-c.html">050-observe.c — the engine saying out loud what it already knew</a>
+<a href="info-051-dump-c.html">051-dump.c — writing a running program back out as a file</a>
+<a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
+<a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
+<a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
+<a href="info-091-stopping-h.html" class="here">091-stopping.h — the ways a program ends, from outside</a>
+<a href="info-092-stopping-c.html">092-stopping.c — the ways a program ends, from inside</a>
+<a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
+<a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
+</nav>
+<main>
+<h1>091-stopping.h — the ways a program ends, from outside</h1>
+<p>Running out of work is the happy ending and belongs elsewhere: the
+last worker to fall asleep looks once more, finds nothing, and stops
+everyone. This is every other way — a program <strong>told</strong> to stop, and a
+program that found an instruction it refuses to continue past.</p>
+<h2>The one idea</h2>
+<p><strong>No handler is installed anywhere.</strong> The three signals are blocked in
+every thread, and the thread that started the program waits for one to
+arrive as an ordinary value.</p>
+<p>That removes the hardest constraint in the whole design. A signal
+handler may call almost nothing; a thread that woke up holding a
+number may call anything at all — take locks, format text, walk the
+station table. The restriction was the difficult part and it turned
+out to be avoidable rather than manageable.</p>
+<p>The pool's own ending arrives at that same waiting point as one more
+signal. **One place to wait, woken for two reasons, told apart by
+which number came back.**</p>
+<p>There is exactly one exception, and it is described under the second
+interrupt below.</p>
+<h2>Functions</h2>
+<table>
+<tr><td>Function</td><td>Takes</td><td>Gives</td><td>Does</td></tr>
+<tr><td><code>sora_prepare</code></td><td>where the report should go, or NULL for the RAM tier</td><td>—</td><td>Blocks the three signals and opens the report's destination. <strong>Before any thread exists</strong>, because a thread inherits the mask of whoever made it — which is what makes "every thread" true without visiting any of them.</td></tr>
+<tr><td><code>sora_report_path</code></td><td>—</td><td>the path</td><td>Where a report will be written.</td></tr>
+<tr><td><code>sora_wait</code></td><td>a program</td><td>the exit code</td><td>Waits for the program to end, however it ends. The pool must already be released.</td></tr>
+<tr><td><code>sora_stop_now</code></td><td>a program (or NULL), an exit code, a reason</td><td>never returns</td><td>An invalid operation ending the program, having first said everything it can.</td></tr>
+</table>
+<p>**The report's destination is opened during preparation, not while
+dying.** It lives on a filesystem a reboot empties, so it may be
+absent, and creating it on a failure path means a system call that can
+fail for reasons a dying program can do nothing about. A descriptor is
+an integer, and writing to an integer is the one file operation
+available on every path here — including the one forbidden to take a
+lock.</p>
+<h2>The three signals</h2>
+<p>They form a progression, and the ordering is the design: each needs
+less cooperation from the program than the one before it, and each is
+the right answer for a program in worse condition than the last.</p>
+<table>
+<tr><td></td><td>polite shutdown</td><td>interrupt</td><td>quit</td></tr>
+<tr><td>who sends it</td><td>a service manager</td><td>a person at a terminal</td><td>a person who wants evidence</td></tr>
+<tr><td>what it means</td><td>wind down, there is time</td><td>stop, and tell me why</td><td>stop now, leave the body</td></tr>
+<tr><td>diagnostics</td><td>none</td><td>everything</td><td>only what needs no lock</td></tr>
+<tr><td>waits for running boxes</td><td>yes</td><td>no</td><td>no</td></tr>
+<tr><td>how it ends</td><td>zero, by the existing rule</td><td>130, explicitly</td><td>aborts, leaving a core</td></tr>
+</table>
+<p><strong>The polite path adds no mechanism at all</strong>, which is the argument
+for it. It shuts the one door the outside can push work through and
+goes back to waiting, so the program ends exactly the way it would
+have ended on its own. It writes nothing, because a supervisor
+stopping a healthy program does not want a report it did not request.</p>
+<p><strong>It borrows a clock rather than inventing one.</strong> On a wedged program
+this path never completes, which is correct: whatever sent the signal
+already has a timer and will escalate to the uncatchable kill. That
+supervisor's clock is the only one in the system that knows how long
+is too long for this deployment, and a guess made here is wrong on a
+slow machine and wrong differently on a fast one.</p>
+<p><strong>The interrupt gathers on the waiting thread itself</strong>, not as a task
+somebody hopes gets scheduled. That is what lets it work on a program
+whose every worker is wedged — the queue guarantees nothing to
+anybody, and the one piece of work that must happen cannot be the one
+piece of work standing in line.</p>
+<p><strong>A second interrupt is the one place a handler exists.</strong> A thread
+that is gathering is not asking for signals, so a second interrupt
+would sit pending until the gather finished — and the gather is
+exactly the thing that may never finish, because it takes a station's
+mutex and the reason somebody is pressing the key twice may be that a
+mutex is held by something that will never release it. So for the
+length of the gather, and only then, that one signal is unblocked with
+a handler that calls <code>_exit</code> and nothing else.</p>
+<p><strong>The quit takes no locks at all.</strong> It writes what is readable without
+cooperation — atomic counters, and one integer per worker saying which
+station it is inside — and then aborts, leaving a core so a debugger
+sees every thread's stack including the box that is not returning.
+Stations are named by index rather than by name, because the names are
+an array somebody may be growing right now and reading it would be the
+crash this report exists to explain.</p>
+<h2>Exit codes</h2>
+<p>Everything below the signal offset belongs to the program; the offset
+and above belongs to signals by convention, so no meaning here ever
+reaches up there.</p>
+<table>
+<tr><td>code</td><td>meaning</td></tr>
+<tr><td>0</td><td>ran out of work, or was politely asked to stop</td></tr>
+<tr><td>65</td><td>a map file the engine refused — the input was malformed</td></tr>
+<tr><td>70</td><td>an invalid operation from a program's own construction calls — the calling code was wrong</td></tr>
+<tr><td>71</td><td>out of memory, or another resource no edit can fix</td></tr>
+<tr><td>130</td><td>interrupted by a person</td></tr>
+</table>
+<p>The three middle codes make the distinction this project already
+draws — a fault the caller can correct and retry, against one it
+cannot — visible to a shell script rather than only to somebody
+reading the message. The interrupt code is the signal number added to
+the conventional offset, so every shell that already understands "this
+was interrupted" keeps understanding it.</p>
+<p><strong>The quit path is not in the list.</strong> It aborts, and the shell
+computes its own number from the signal. Naming one here would be
+inventing an agreement that already exists.</p>
+
+</main>
+</div></body></html>

@@ -90,6 +90,64 @@ Termination is a clean broadcast, never a break out of the loop. A
 worker left parked in a wait that never ends turns shutdown into a hang
 at the join.
 
+## The other ways a program ends
+
+Running out of work is one way and it is the happy one. There are
+three more, and every one of them arrives from **outside**, because a
+program cannot tell from inside that it should stop
+([106](../issues/completed/106-stopping-on-purpose.md)).
+
+**No handler is installed anywhere.** The three signals are blocked in
+every thread and the thread that started the program waits for one to
+arrive as an ordinary value. That removes the hardest constraint the
+design had: a handler may call almost nothing, while a thread holding
+a number may take locks, format text, and walk the station table. The
+pool's own ending arrives at the same waiting point as one more
+signal, so there is one place to wait, woken for two reasons, told
+apart by which number came back.
+
+| | polite shutdown | interrupt | quit |
+|---|---|---|---|
+| who sends it | a service manager | a person at a terminal | a person who wants evidence |
+| what it means | wind down, there is time | stop, and tell me why | stop now, leave the body |
+| diagnostics | none | everything | only what needs no lock |
+| waits for running boxes | yes | no | no |
+| how it ends | zero, by the rule above | 130, explicitly | aborts, leaving a core |
+
+**The polite path adds no mechanism.** It shuts the entrance — the one
+door the outside can push work through — and the ordinary ending does
+the rest. It writes nothing, because a supervisor stopping a healthy
+program did not ask for a report.
+
+**The interrupt gathers on the waiting thread itself**, not as a task.
+That is what makes it work on a program whose every worker is wedged:
+the queue guarantees nothing to anybody, and the one piece of work
+that must happen cannot be the one standing in line.
+
+**The quit takes no locks**, because the reason it arrived may be that
+a lock is held by something that will never release it.
+
+### There is no watchdog, and there cannot be
+
+Detecting a wedge from inside is not possible, and the reason is worth
+keeping. **The last-sleeper rule is structurally incapable of it**: it
+fires when workers go to *sleep*, and a worker in an infinite loop
+never sleeps. It answers "does everybody have nothing to do," while a
+wedge is the opposite condition.
+
+A progress counter comes closer — every station carries an always-on
+run count, so a wedge shows up as that sum not moving while every
+worker is busy. But **the threshold is unavoidably a guess**: sixteen
+workers each legitimately running a very long box look identical to
+sixteen wedged ones, and no cleverness distinguishes them. That is the
+halting problem wearing work clothes.
+
+And a detector would itself be a task, so when every worker is wedged
+there would be no thread left to run it. **The system would go silent
+exactly when the observation mattered.** So the engine does not guess;
+the signal comes from outside, where somebody who knows how long is
+too long is the one deciding.
+
 ## What the pool does not do
 
 **It does not detect deadlock**, because there is nothing that can

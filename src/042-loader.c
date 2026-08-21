@@ -19,6 +19,7 @@
  */
 #include "040-mapfile.h"
 #include "026-registry.h"
+#include "091-stopping.h"
 
 /* A box added while some earlier process ran; see 073-latebox.h. It
  * is declared here rather than included, because the loader needs one
@@ -46,11 +47,20 @@ static double stamp(void)
 static void die_load(const char *path, int line, const char *station,
                      const char *what)
 {
+    /*
+     * **Exit 65, meaning the input was malformed** (issue 106), rather
+     * than aborting. A core dump says nothing about a mistyped box
+     * name, and a shell script that wants to tell "the file was
+     * wrong" from "the machine ran out of memory" could not, because
+     * both arrived as the same abnormal death.
+     */
+    char said[768];
     if (station)
-        fprintf(stderr, "map %s:%d: station '%s': %s\n", path, line, station, what);
+        snprintf(said, sizeof said, "map %s:%d: station '%s': %s",
+                 path, line, station, what);
     else
-        fprintf(stderr, "map %s:%d: %s\n", path, line, what);
-    abort();
+        snprintf(said, sizeof said, "map %s:%d: %s", path, line, what);
+    sora_stop_now(NULL, SORA_EXIT_BAD_FILE, said);
 }
 /* }}} */
 

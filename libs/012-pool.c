@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>   /* raising the finished signal (issue 106) */
 
 /*
  * The starting capacity is deliberately small. Growth is cheap and
@@ -56,7 +57,27 @@ typedef struct worker {
  */
 struct pool_epoch {
     _Atomic uint64_t v;
-    char pad[64 - sizeof(_Atomic uint64_t)];
+    /*
+     * **Which station this worker is inside**, or -1 (issue 106).
+     *
+     * A number the pool ferries and never interprets, exactly like
+     * the one on the task it came from. It rides here rather than in
+     * an array of its own because it is written at the same two
+     * moments as the epoch beside it and by the same thread, so it
+     * costs one more write to a line that is already being written
+     * and is already nobody else's.
+     *
+     * **A number rather than the task's address**, and that is the
+     * whole reason it exists at all. The report written when somebody
+     * hits ctrl+C wants to say which station each worker was in, and
+     * the report written when somebody hits ctrl+backslash wants to
+     * say it while taking no locks and touching nothing that could
+     * have been freed. A stale integer is a wrong answer; a stale
+     * pointer is a crash inside the thing that exists to explain a
+     * crash.
+     */
+    _Atomic int32_t  station;
+    char pad[64 - sizeof(_Atomic uint64_t) - sizeof(_Atomic int32_t)];
 };
 /* }}} */
 
@@ -121,6 +142,24 @@ struct pool {
     /* Measurements for the phase 1 demo: the queue's own story. */
     int high_water;
     int growths;
+
+    /*
+     * **A signal to raise when this pool finishes by itself**, or 0
+     * (issue 106).
+     *
+     * The last worker to fall asleep decides a program is over, and
+     * the thread that wants to know is waiting for a *signal* —
+     * because it is also waiting to be told to stop, and one waiting
+     * point woken for two reasons is simpler than two waits. So the
+     * end of the work becomes one more signal, told apart from the
+     * others by its number.
+     *
+     * Opt-in, and it has to be: the default action for most signals
+     * is to kill the process, so a pool that raised one unasked would
+     * end every program that does not expect it. Nothing sets this
+     * unless somebody is waiting for it.
+     */
+    int finished_signal;
 };
 /* }}} */
 
@@ -271,6 +310,7 @@ static void *worker_main(void *arg)
 {
     worker_t *w = arg;
     pool_t *p = w->pool;
+    int finished_here = 0;
 
     this_worker_index = w->index;
 
@@ -319,10 +359,18 @@ static void *worker_main(void *arg)
                 atomic_load_explicit(epoch, memory_order_relaxed) + 1,
                 memory_order_release);
 
+            /* Which station, for a report somebody may ask for while
+             * this is still running (issue 106). Ferried, not read. */
+            atomic_store_explicit(&p->epochs[this_worker_index].station,
+                                  t->station, memory_order_relaxed);
+
             t->call(t);
             if (p->finish)
                 p->finish(p->finish_ctx, t);
             free(t);
+
+            atomic_store_explicit(&p->epochs[this_worker_index].station,
+                                  -1, memory_order_relaxed);
 
             atomic_store_explicit(epoch,
                 atomic_load_explicit(epoch, memory_order_relaxed) + 1,
@@ -355,6 +403,12 @@ static void *worker_main(void *arg)
             p->stop = 1;
             p->sleeping--;
             pthread_cond_broadcast(&p->wake);
+            /* Tell whoever is waiting for a signal that the work ran
+             * out (issue 106). Raised after the lock is released, at
+             * the bottom of this function, because a signal delivered
+             * to a thread that then wants this mutex would find it
+             * held by the thread that raised it. */
+            finished_here = p->finished_signal;
             break;
         }
 
@@ -365,7 +419,86 @@ static void *worker_main(void *arg)
     }
 
     pthread_mutex_unlock(&p->mutex);
+
+    /*
+     * The one worker that decided the program was over says so, to
+     * the process rather than to a thread (issue 106). Every thread
+     * blocks these signals, so it stays pending until whoever is
+     * waiting asks for it — which is exactly the handoff wanted, and
+     * needs no thread identity to be recorded anywhere.
+     */
+    if (finished_here)
+        kill(getpid(), finished_here);
     return NULL;
+}
+/* }}} */
+
+/* {{{ pool_signal_when_finished() */
+void pool_signal_when_finished(pool_t *p, int signo)
+{
+    pthread_mutex_lock(&p->mutex);
+    p->finished_signal = signo;
+    /*
+     * **It may already have happened**, and asking afterwards must
+     * still get an answer. A short program can run out of work
+     * between being released and anybody sitting down to wait, and a
+     * waiter that then waits for a signal nobody will ever raise
+     * waits forever — which is the exact failure this line exists to
+     * prevent, found by a test that hung.
+     *
+     * Raising it now rather than remembering to raise it later keeps
+     * the two cases one case: whoever waits gets the signal, and it
+     * does not matter which side of the finish they arrived on.
+     */
+    int already = p->stop;
+    pthread_mutex_unlock(&p->mutex);
+    if (already && signo)
+        kill(getpid(), signo);
+}
+/* }}} */
+
+/* {{{ pool_stop() */
+/*
+ * **Stop starting new things**, which is what halting honestly means
+ * here (issue 106). A worker inside a box finishes that box, because
+ * there is no safe way to interrupt executing C; a worker looking for
+ * work finds the flag instead and returns.
+ *
+ * Whatever is still queued stays queued and is never run. That is
+ * visible rather than hidden: tearing the pool down afterwards says
+ * how many were left.
+ */
+void pool_stop(pool_t *p)
+{
+    pthread_mutex_lock(&p->mutex);
+    p->stop = 1;
+    pthread_cond_broadcast(&p->wake);
+    pthread_cond_broadcast(&p->start_gate);
+    pthread_mutex_unlock(&p->mutex);
+}
+/* }}} */
+
+/* {{{ pool_queued() / pool_worker_station() */
+int pool_queued(pool_t *p)
+{
+    pthread_mutex_lock(&p->mutex);
+    int n = queue_count(p);
+    pthread_mutex_unlock(&p->mutex);
+    return n;
+}
+
+/*
+ * **Readable from any thread, holding nothing.** This is the one
+ * measurement the report written under a held lock is allowed to
+ * take, so it must be a plain load of a plain number and never a
+ * dereference of anything.
+ */
+int pool_worker_station(pool_t *p, int worker)
+{
+    if (worker < 0 || worker >= p->n_workers)
+        return -1;
+    return atomic_load_explicit(&p->epochs[worker].station,
+                                memory_order_relaxed);
 }
 /* }}} */
 
@@ -433,6 +566,12 @@ pool_t *pool_create(int n_workers, pool_finish_t finish, void *finish_ctx)
         fprintf(stderr, "pool: out of memory for the worker epochs\n");
         exit(71);
     }
+    /* A worker inside no station says so. Zeroed memory would claim
+     * every worker is inside station zero, which is a real station
+     * and therefore a lie rather than an absence (issue 106). */
+    for (int i = 0; i < p->n_workers; i++)
+        atomic_store_explicit(&p->epochs[i].station, -1,
+                              memory_order_relaxed);
 
     p->workers = calloc((size_t)p->n_workers, sizeof *p->workers);
     if (!p->workers) {

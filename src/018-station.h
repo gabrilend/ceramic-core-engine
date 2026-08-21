@@ -691,6 +691,24 @@ typedef struct map {
     int    n_named;
 
     /*
+     * **The outside door is shut** (issue 106).
+     *
+     * Set when a supervisor has politely asked the program to wind
+     * down. Delivering an argument from outside is refused from that
+     * moment, which is the whole of what "stop accepting new work"
+     * can mean here — the entrance is the only way anything outside
+     * puts work into a program, so closing it is what lets the queue
+     * actually drain and the last-sleeper rule fire.
+     *
+     * Nothing else changes. No worker is told anything, no task is
+     * discarded, no clock starts. The program ends exactly the way it
+     * would have ended on its own, which is the argument for this
+     * path: it adds no mechanism, only an early trigger for the one
+     * that already exists.
+     */
+    _Atomic int closing;
+
+    /*
      * True when this program was started beside another and shares
      * its workers (issue 212). It borrows the pool and must not
      * destroy it — the program that made it owns it, and tearing down
@@ -1139,7 +1157,7 @@ void        map_scrap_free_all(map_t *m);
  * stations, and holding anything else across a removal is your own
  * affair.
  */
-int map_remove_station(map_t *m, int station);
+const char *map_remove_station(map_t *m, int station);
 /* }}} */
 
 void map_connect(map_t *m, int from_station, int port,

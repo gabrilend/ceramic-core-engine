@@ -28,7 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
@@ -59,6 +58,7 @@
 <a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
 <a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
 <a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
@@ -143,8 +143,11 @@
 <a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
+<a href="info-091-stopping-h.html">091-stopping.h — the ways a program ends, from outside</a>
+<a href="info-092-stopping-c.html">092-stopping.c — the ways a program ends, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
+<a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
 </nav>
 <main>
 <h1>704 — Rewiring while it runs</h1>
@@ -196,7 +199,12 @@ decided rather than defaulted: refusals return minus one with the
 reason on stderr, because a loader that dies serves its author while
 a running engine that dies for one bad control instruction takes the
 plant down; the cost — an ignorable return — is weighed in the
-report. Adding a station remains out of scope, as this issue drew
+report. <strong>That choice was overturned</strong> once one surface built
+programs and one of its callers was a box, whose caller is a wire and
+therefore ignores everything it is not attached to: an invalid
+operation ends the program now, with the refusal still travelling so
+faults can be collected on the way
+(<a href="done-106-stopping-on-purpose.html">106</a>). Adding a station remains out of scope, as this issue drew
 it. Proven further by a wire moved mid-run with nothing lost and
 behaviour bending at the seam.</p>
 <h2>Intended behavior</h2>

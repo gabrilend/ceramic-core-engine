@@ -158,6 +158,33 @@ int slow_double(int x)
 }
 /* }}} */
 
+/* {{{ wedge() */
+/*
+ * **A box that never returns**, which is the one condition this
+ * engine cannot detect from inside and can only be examined from
+ * outside (issue 106).
+ *
+ * It exists so that the stopping paths can be proven against the
+ * situation they were designed for: every worker inside user code
+ * that will not come back, no thread free to run anything, and a
+ * queue that will never drain. A program with one of these ends only
+ * because somebody outside ends it.
+ *
+ * Spins on a volatile read rather than looping emptily, because an
+ * empty loop with no side effect is something a compiler may delete
+ * outright — and a wedge that optimises away is a test that proves
+ * the opposite of what it says.
+ */
+static volatile int wedge_forever = 1;
+
+int wedge(int x)
+{
+    while (wedge_forever)
+        ;
+    return x;
+}
+/* }}} */
+
 /* {{{ slow_seven() */
 /*
  * Seven, expensively: an input-less box whose cost is measurable.

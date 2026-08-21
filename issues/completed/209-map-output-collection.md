@@ -190,7 +190,7 @@ still a starting gate, where every worker parks until released
 moment when a program stops being built and starts being a program, so
 it is where a whole-program requirement can honestly be asked. Failing
 it is an invalid operation and therefore fatal
-([106](../106-stopping-on-purpose.md)).
+([106](106-stopping-on-purpose.md)).
 
 ### The symmetric half
 
@@ -368,7 +368,7 @@ warning is the notice, and it fires from the first doubling.
   arriving late instead of at once; and blocking the producer stalls
   upstream on a consumer that may never come, which is
   indistinguishable from a wedge — a condition
-  [106](../106-stopping-on-purpose.md) establishes the engine cannot
+  [106](106-stopping-on-purpose.md) establishes the engine cannot
   detect from inside.
 
   A ceiling would also need a number, and any number is wrong on a

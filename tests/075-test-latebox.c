@@ -156,8 +156,10 @@ static void a_different_width_is_refused(void)
     map_place_box(m, 0, "halve", STATION_PLAIN);   /* -> double, 8 bytes */
     map_place_box(m, 1, "keep", STATION_PLAIN);    /* takes int, 4 bytes */
 
-    int rc = map_rewire_connect(m, 0, 0, 1, 0);
-    check(rc != 0,
+    /* Through the face that hands the refusal back, which is one of
+     * the two that survive: the third printed it and returned a code
+     * a caller could ignore (issue 106). */
+    check(map_wire(m, 0, 0, 1, 0) != NULL,
           "eight bytes into a four-byte port was refused, as it would be "
           "for a box the program was built with");
 
@@ -204,8 +206,7 @@ static void a_disagreeing_layout_is_accepted(void)
     map_place_box(m, 0, "build_scrambled", STATION_PLAIN);
     map_place_box(m, 1, "magnitude_squared", STATION_PLAIN);
 
-    int rc = map_rewire_connect(m, 0, 0, 1, 0);
-    check(rc == 0,
+    check(map_wire(m, 0, 0, 1, 0) == NULL,
           "a disagreeing layout of the same width was ACCEPTED — this is "
           "the cost of checking widths, not a bug");
 

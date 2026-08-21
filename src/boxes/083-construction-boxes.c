@@ -61,12 +61,38 @@ typedef struct {
 static map_t *program_of(program p, const char *what)
 {
     if (p.at == 0) {
-        fprintf(stderr, "construction: %s was asked of no program at all — "
-                        "the port carrying it was never given one\n", what);
-        return NULL;
+        char said[256];
+        snprintf(said, sizeof said,
+                 "construction: %s was asked of no program at all — the "
+                 "port carrying it was never given one", what);
+        sora_stop_now(NULL, SORA_EXIT_BAD_CALL, said);
     }
     return (map_t *)p.at;
 }
+
+/* {{{ static void refused() */
+/*
+ * **A refused instruction ends the program** (issue 106).
+ *
+ * These used to print the reason and return zero, on the argument
+ * that a running engine should not die because a control surface sent
+ * one bad instruction. The cost of that was written down at the time
+ * as a debt: **a caller can ignore a return value**, and a box's
+ * caller is a *wire*, which ignores everything it is not attached to.
+ * A map that never wired the zero anywhere would carry on believing
+ * it had just edited a program it had not edited.
+ *
+ * So the debt is paid off rather than serviced. A program left half
+ * built by an ignored refusal is not a state anything can reach,
+ * because there is no surviving path that reaches it.
+ */
+static void refused(map_t *m, const char *what, const char *why)
+{
+    char said[512];
+    snprintf(said, sizeof said, "construction: refused %s: %s", what, why);
+    sora_stop_now(m, SORA_EXIT_BAD_CALL, said);
+}
+/* }}} */
 
 /*
  * Add a station running a named box, and say where it landed.
@@ -78,11 +104,9 @@ static map_t *program_of(program p, const char *what)
 int program_add_station(program p, const char *box_name)
 {
     map_t *m = program_of(p, "adding a station");
-    if (!m)
-        return -1;
     int at = map_add_station(m);
     if (at < 0)
-        return -1;
+        refused(m, "a station", "the table would not grow");
     map_place_box(m, at, box_name, STATION_PLAIN);
     return at;
 }
@@ -99,14 +123,10 @@ int program_wire(program p, int from_station, int from_port,
                  int to_station, int to_port)
 {
     map_t *m = program_of(p, "drawing a wire");
-    if (!m)
-        return 0;
     const char *no = map_wire(m, from_station, from_port,
                               to_station, to_port);
-    if (no) {
-        fprintf(stderr, "construction: refused a wire: %s\n", no);
-        return 0;
-    }
+    if (no)
+        refused(m, "a wire", no);
     return 1;
 }
 
@@ -121,14 +141,10 @@ int program_set_constant(program p, int station, int port,
                          const char *text)
 {
     map_t *m = program_of(p, "setting a constant");
-    if (!m)
-        return 0;
     const char *no = map_configure_port(m, station, port,
                                         IN_PORT_STATIC, text);
-    if (no) {
-        fprintf(stderr, "construction: refused a constant: %s\n", no);
-        return 0;
-    }
+    if (no)
+        refused(m, "a constant", no);
     return 1;
 }
 
@@ -156,23 +172,21 @@ int program_set_constant(program p, int station, int port,
 int program_set_door(program p, int station, int facing)
 {
     map_t *m = program_of(p, "marking a door");
-    if (!m)
-        return 0;
     const char *no;
     if (facing == DOOR_IN)
         no = map_designate_input(m, station);
     else if (facing == DOOR_OUT)
         no = map_designate_output(m, station);
     else {
-        fprintf(stderr, "construction: refused a door: %d is neither the "
-                        "way in (%d) nor the way out (%d)\n",
-                facing, DOOR_IN, DOOR_OUT);
+        char which[128];
+        snprintf(which, sizeof which,
+                 "%d is neither the way in (%d) nor the way out (%d)",
+                 facing, DOOR_IN, DOOR_OUT);
+        refused(m, "a door", which);
         return 0;
     }
-    if (no) {
-        fprintf(stderr, "construction: refused a door: %s\n", no);
-        return 0;
-    }
+    if (no)
+        refused(m, "a door", no);
     return 1;
 }
 
@@ -183,12 +197,8 @@ int program_set_door(program p, int station, int facing)
 int program_name_station(program p, int station, const char *name)
 {
     map_t *m = program_of(p, "naming a station");
-    if (!m)
-        return 0;
     const char *no = map_name_station(m, station, name);
-    if (no) {
-        fprintf(stderr, "construction: refused a name: %s\n", no);
-        return 0;
-    }
+    if (no)
+        refused(m, "a name", no);
     return 1;
 }

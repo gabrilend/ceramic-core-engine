@@ -505,6 +505,10 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
     buf_line(&w, "#include <stdio.h>");
     buf_line(&w, "#include <stdlib.h>");
     buf_line(&w, "#include \"049-observe.h\"");
+    /* A box that edits a program stops the program when it is refused
+     * (issue 106), so the box sources included below need to see the
+     * call that does the stopping. */
+    buf_line(&w, "#include \"091-stopping.h\"");
     buf_line(&w, "");
     buf_line(&w, "/* The box sources, included whole: their types become visible, and");
     buf_line(&w, " * the compiler can inline each box into its shim. */");

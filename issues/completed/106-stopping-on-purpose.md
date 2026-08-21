@@ -1,6 +1,6 @@
 # 106 — Stopping on purpose
 
-The sibling of [104](completed/104-termination-by-last-sleeper.md).
+The sibling of [104](104-termination-by-last-sleeper.md).
 That issue built the one way a program ends by itself: work runs out,
 the last worker to fall asleep looks once more, finds nothing, and
 stops everyone by broadcast. This is every other way a program ends —
@@ -8,6 +8,82 @@ because it was told to, or because it found something it refuses to
 continue past.
 
 ## Current behavior
+
+**Built.** A program answers three signals, the refusals that used to
+be ignorable are not, and every one of them has a scene proving it
+against the condition it was designed for.
+
+**No handler is installed anywhere**, which is the decision the whole
+thing turned on. The signals are blocked in every thread and the
+thread that started the program waits for one to arrive as an ordinary
+value — so every restriction on what a handler may call stops
+applying, and the reports below are free to take locks and format
+text. Blocking happens before any thread exists, because a thread
+inherits the mask of whoever made it, which is what makes "every
+thread" true without visiting any of them.
+
+**The pool's own ending arrives at that same waiting point**, as one
+more signal raised at the process. One place to wait, woken for two
+reasons, told apart by which number came back.
+
+**The three paths, and what each one proved.**
+
+*Polite* shuts the entrance and goes back to waiting, so the program
+ends exactly the way it would have ended on its own. It writes
+nothing, and the absence is the assertion. Its scene had to learn
+something first: the promise that more work may arrive has to be made
+**before** the gate opens. A program that seeds nothing has an empty
+queue and nobody promising anything in the window between release and
+the first delivery, so the last-sleeper rule correctly declares it
+over before it began. Three scenes were passing while asserting things
+about a program that had already finished.
+
+*Interrupt* stops the pool starting new things, gathers everything on
+the waiting thread, and exits 130. Proven with a deliberate backlog,
+and proven again with **every worker inside a box that never
+returns** — no thread free, no queue that will ever drain, and a full
+report naming the station they are stuck in.
+
+*Quit* takes no locks at all and aborts. Proven with a station's mutex
+held by somebody who will never release it, which is exactly what the
+full report cannot survive and this one must.
+
+**The second interrupt needed the one handler in the engine, and it
+was nominal without it.** A thread that is gathering is not asking for
+signals, so a second interrupt would sit pending behind a gather —
+and the gather is precisely the thing that may never finish, because
+it takes a station's mutex. So for the length of the gather, and only
+then, that one signal is unblocked with a handler that calls `_exit`
+and nothing else. Without it the escape hatch opened only in the cases
+where nobody needed it.
+
+**Refusals are fatal, and the third face is gone.** Rewiring's
+print-and-return-a-code face has been deleted; two remain, one that
+hands the reason back so a caller can collect it and one that stops
+the program. The construction boxes stop rather than returning a zero,
+which matters more there than anywhere else: **a box's caller is a
+wire**, and a wire ignores everything it is not attached to.
+
+**A discovery on the way: the pool could finish before anybody asked
+to be told.** A short program runs out of work between being released
+and the waiter sitting down, and a waiter that then waits for a signal
+nobody will ever raise waits forever. Asking now raises it immediately
+when it has already happened, so it does not matter which side of the
+finish the asker arrives on.
+
+**What accumulates and what does not, stated precisely**, because
+this issue promised more than is true. The whole-program pass collects
+every fault and reports them together, which it can because everything
+exists by then. A fault found while a station is being *built* — a
+box name that is not in the registry, a port number past the end, a
+constant whose text will not parse — stops there, because continuing
+past a station that could not be built means asking questions of
+something that is not there. That is the same for every per-line
+fault and always was; what changed is that they now carry exit codes
+saying which kind of fault they were.
+
+### What stood before
+
 
 **A program has exactly one way to stop, and it is the happy one.**
 
@@ -23,17 +99,17 @@ exist and are readable — go with it.
 **Failure is handled two different ways, and the disagreement is
 recorded as deliberate.** The loader dies on a bad map file, collecting
 every failure in the file first so its author gets the whole list at
-once ([604](completed/604-load-time-validation.md)). Runtime rewiring
+once ([604](604-load-time-validation.md)). Runtime rewiring
 does the opposite: it returns minus one, names the reason on the error
 stream, changes nothing, and leaves the program running
-([704](completed/704-runtime-rewiring.md)). The reasoning was that a
+([704](704-runtime-rewiring.md)). The reasoning was that a
 loader that dies serves its author while a running engine that dies for
 one bad control instruction takes the plant down with it. The
 first-pass report books the cost of that choice as a debt in plain
 words: **a caller can ignore a return value.**
 
 **Under one construction surface those became the same call.** Issue
-[212](completed/212-one-way-to-build-a-program.md) collapses loading and editing
+[212](212-one-way-to-build-a-program.md) collapses loading and editing
 into one act, so the two policies can no longer coexist. It resolves
 in favour of dying, and this issue is where that resolution is built.
 
@@ -207,43 +283,42 @@ somebody who actually knows how long is too long is the one deciding.
 
 ## Suggested implementation steps
 
-1. During startup: the three signals blocked in every thread, and the
-   report's destination opened, so that every failure path afterwards
-   holds a descriptor rather than a path it would have to resolve while
-   dying. This is the one piece that must exist before the engine runs,
-   and it is small.
-2. The initial thread **waits for a signal rather than handling one**,
-   and the last sleeper sends it one after broadcasting shutdown — so
-   there is a single waiting point woken for two different reasons,
-   told apart by which number arrives. No handler is installed
-   anywhere, which is why nothing in this issue is constrained by what
-   a handler is permitted to call.
-3. The polite path: reuse termination unchanged. Prove it by a program
-   stopped mid-run whose in-flight work all completes and whose exit is
-   indistinguishable from having run out of work.
-4. The interrupt path: drain, gather on the waiting thread, exit
-   non-zero. Prove it by a program with deliberate backlog whose report
-   names every station, **and by one whose every worker is deliberately
-   wedged** — which must still produce a full report, since nothing is
-   enqueued and no worker is asked for.
-5. The second-interrupt escape, proven by an interrupt arriving while
-   the diagnostics task is deliberately blocked.
-6. The quit path, taking no locks, proven by a program with a station
-   mutex deliberately held — the report must still appear.
-7. The construction surface's refusals become fatal, with the
-   accumulate-then-stop behaviour the loader already has, and the
-   rewiring path loses its ignorable return.
-8. A test that an ignored refusal cannot leave a half-built program,
-   which is the property this buys and the reason for the change.
+1. **Done.** The three signals blocked before any thread exists, and
+   the report's destination opened then rather than while dying.
+2. **Done.** The initial thread waits for a signal rather than
+   handling one, and the pool raises one when the work runs out — one
+   waiting point, two reasons. Building it found that the pool can
+   finish *before* anybody asks to be told, so asking after the fact
+   raises the signal immediately.
+3. **Done.** The polite path shuts the entrance and reuses the
+   ordinary ending. Its scene found that the standing promise has to
+   be made before the gate opens, without which the program is over
+   before it begins and the scene proves nothing.
+4. **Done.** Drain, gather on the waiting thread, exit 130 — proven
+   with a deliberate backlog and again with every worker inside a box
+   that never returns.
+5. **Done, and it was nominal until it was proven.** The escape needed
+   the one signal handler in the engine: a gathering thread is not
+   asking for signals, so a second interrupt would have sat pending
+   behind a gather that never returns. The scene holds a station's
+   mutex forever, which is exactly what makes the gather never return.
+6. **Done**, with that same held mutex: the lock-free report appears
+   where the full one cannot.
+7. **Done.** Rewiring's print-and-return-a-code face is deleted; the
+   construction boxes stop rather than returning a zero a wire would
+   ignore; malformed constants, refused map files and invalid calls
+   carry exit codes that tell a shell which kind of fault it was.
+8. **Done.** A caller asks for an impossible wire, ignores the answer
+   completely, and does not reach the next line.
 
 ## What this change reaches
 
 The refusal policy is stated in eight places that were deliberately
 kept in agreement, and all of them move together:
 
-- [704](completed/704-runtime-rewiring.md), which decided it
-- [211](completed/211-growing-the-station-table.md), which inherits it explicitly
-- [212](completed/212-one-way-to-build-a-program.md), which now answers it
+- [704](704-runtime-rewiring.md), which decided it
+- [211](211-growing-the-station-table.md), which inherits it explicitly
+- [212](212-one-way-to-build-a-program.md), which now answers it
 - the first-pass report, which books it as a debt
 - the observe interface file and the observe header
 - the rewire source, in a comment explaining the return value
@@ -253,7 +328,7 @@ kept in agreement, and all of them move together:
   returns with a light saying why, on the grounds that both inform
   without punishing. That scene cannot survive this change. It was
   already scheduled for rewriting in
-  [710](710-demos-after-the-pull-path.md) because the illegal operation
+  [710](../710-demos-after-the-pull-path.md) because the illegal operation
   it uses is a gather cycle and gathering is being removed, so it now
   needs rewriting for two independent reasons.
 
@@ -324,7 +399,7 @@ kept in agreement, and all of them move together:
 - *Does the fatal policy hold where the engine is embedded?* Yes, and
   it costs nothing, because **the embedder is already the same kind of
   boundary the operating system is.** A program compiled into the
-  browser workbench ([801](801-browser-workbench.md)) that aborts does
+  browser workbench ([801](../801-browser-workbench.md)) that aborts does
   not take the page down with it: the instance traps, the runtime
   unwinds it, and the host receives an exception with the page intact.
   So the workbench's answer to a refused edit is "that program died,
@@ -335,18 +410,18 @@ kept in agreement, and all of them move together:
 
 ## Related
 
-- [104 — Termination by last sleeper](completed/104-termination-by-last-sleeper.md),
+- [104 — Termination by last sleeper](104-termination-by-last-sleeper.md),
   the other way a program ends, unchanged by this
-- [102 — Workers and the run loop](completed/102-workers-and-run-loop.md),
+- [102 — Workers and the run loop](102-workers-and-run-loop.md),
   whose stop flag is already the brake and needs no addition
-- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   which decided the refusal policy this builds
-- [704 — Rewiring while it runs](completed/704-runtime-rewiring.md),
+- [704 — Rewiring while it runs](704-runtime-rewiring.md),
   whose ignorable return is what changes
-- [702 — Station statistics](completed/702-station-statistics.md) and
-  [701 — Buffer growth reporting](completed/701-buffer-growth-reporting.md),
+- [702 — Station statistics](702-station-statistics.md) and
+  [701 — Buffer growth reporting](701-buffer-growth-reporting.md),
   which already gather everything the report needs
-- [710 — The demos after the pull path](710-demos-after-the-pull-path.md),
+- [710 — The demos after the pull path](../710-demos-after-the-pull-path.md),
   which now inherits a second reason to rewrite the same scene
-- [006 — Scheduling](../docs/006-datapath-scheduling.md), which needs a
+- [006 — Scheduling](../../docs/006-datapath-scheduling.md), which needs a
   section on the ways a program ends

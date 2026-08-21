@@ -45,6 +45,8 @@
 #include "018-station.h"
 #include "026-registry.h"
 
+#include "091-stopping.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,9 +66,27 @@ typedef struct where {
 /* {{{ die_static() */
 static void die_static(const where_t *w, const char *what)
 {
-    fprintf(stderr, "statics: station %d port %d: %s\n",
-            w->station, w->port, what);
-    abort();
+    /*
+     * **Exit 70 rather than a core dump** (issue 106): text that will
+     * not parse is a fault in the calling code, which is a caller can
+     * correct and retry — and that is a different thing from running
+     * out of memory, which no edit fixes. A shell script can now tell
+     * them apart; before, both arrived as the same abnormal death.
+     *
+     * It still stops where the malformed value is rather than handing
+     * a refusal back to be collected with others, and that is not an
+     * omission. A value that will not parse is found while the
+     * station holding it is being built, and every other fault found
+     * at that moment stops there too — because continuing past a
+     * station that could not be built means asking questions of
+     * something that is not there. What accumulates is the
+     * whole-program pass, which runs when everything exists and can
+     * therefore report every fault at once.
+     */
+    char said[512];
+    snprintf(said, sizeof said, "statics: station %d port %d: %s",
+             w->station, w->port, what);
+    sora_stop_now(NULL, SORA_EXIT_BAD_CALL, said);
 }
 /* }}} */
 

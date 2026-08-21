@@ -28,7 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
@@ -59,6 +58,7 @@
 <a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
 <a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
 <a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
@@ -143,8 +143,11 @@
 <a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
+<a href="info-091-stopping-h.html">091-stopping.h — the ways a program ends, from outside</a>
+<a href="info-092-stopping-c.html">092-stopping.c — the ways a program ends, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
+<a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
 </nav>
 <main>
 <h1>712 — Capturing a running program</h1>
@@ -248,12 +251,12 @@ functions were added or changed while it ran, and what did not drain.
 The counters and buffer depths that
 <a href="done-701-buffer-growth-reporting.html">701</a> and
 <a href="done-702-station-statistics.html">702</a> already gather are most of
-it, and <a href="issue-106-stopping-on-purpose.html">106</a> already writes something of
+it, and <a href="done-106-stopping-on-purpose.html">106</a> already writes something of
 this shape on the way out of a dying program.</p>
 <h2>Suggested implementation steps</h2>
 <p>1. The drain: stop building tasks, wait for quiet, with the bound and
    the list of what was still busy. Most of this is
-   <a href="issue-106-stopping-on-purpose.html">106</a>'s sequence with a different ending.
+   <a href="done-106-stopping-on-purpose.html">106</a>'s sequence with a different ending.
 2. The map format's queued-value form, in the reader and the writer
    together.
 3. Capture of buffer contents and iterator cursors, appended to what
@@ -295,7 +298,7 @@ this shape on the way out of a dying program.</p>
 <ul>
 <li><a href="done-703-map-dump.html">703 — Dumping the loaded map</a>, the</li>
 <p>  schematic this stands on and does not replace</p>
-<li><a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>, whose</li>
+<li><a href="done-106-stopping-on-purpose.html">106 — Stopping on purpose</a>, whose</li>
 <p>  stop-the-world sequence this reuses with a different ending</p>
 <li><a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>,</li>
 <p>  which is why a captured program may contain code the binary does not</p>

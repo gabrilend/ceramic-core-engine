@@ -28,7 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-106-stopping-on-purpose.html" class="here">106 — Stopping on purpose</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
@@ -59,6 +58,7 @@
 <a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
 <a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
 <a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
+<a href="done-106-stopping-on-purpose.html" class="here">106 — Stopping on purpose</a>
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
@@ -143,8 +143,11 @@
 <a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
+<a href="info-091-stopping-h.html">091-stopping.h — the ways a program ends, from outside</a>
+<a href="info-092-stopping-c.html">092-stopping.c — the ways a program ends, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
+<a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
 </nav>
 <main>
 <h1>106 — Stopping on purpose</h1>
@@ -155,6 +158,69 @@ stops everyone by broadcast. This is every other way a program ends —
 because it was told to, or because it found something it refuses to
 continue past.</p>
 <h2>Current behavior</h2>
+<p><strong>Built.</strong> A program answers three signals, the refusals that used to
+be ignorable are not, and every one of them has a scene proving it
+against the condition it was designed for.</p>
+<p><strong>No handler is installed anywhere</strong>, which is the decision the whole
+thing turned on. The signals are blocked in every thread and the
+thread that started the program waits for one to arrive as an ordinary
+value — so every restriction on what a handler may call stops
+applying, and the reports below are free to take locks and format
+text. Blocking happens before any thread exists, because a thread
+inherits the mask of whoever made it, which is what makes "every
+thread" true without visiting any of them.</p>
+<p><strong>The pool's own ending arrives at that same waiting point</strong>, as one
+more signal raised at the process. One place to wait, woken for two
+reasons, told apart by which number came back.</p>
+<p><strong>The three paths, and what each one proved.</strong></p>
+<p><em>Polite</em> shuts the entrance and goes back to waiting, so the program
+ends exactly the way it would have ended on its own. It writes
+nothing, and the absence is the assertion. Its scene had to learn
+something first: the promise that more work may arrive has to be made
+<strong>before</strong> the gate opens. A program that seeds nothing has an empty
+queue and nobody promising anything in the window between release and
+the first delivery, so the last-sleeper rule correctly declares it
+over before it began. Three scenes were passing while asserting things
+about a program that had already finished.</p>
+<p><em>Interrupt</em> stops the pool starting new things, gathers everything on
+the waiting thread, and exits 130. Proven with a deliberate backlog,
+and proven again with **every worker inside a box that never
+returns** — no thread free, no queue that will ever drain, and a full
+report naming the station they are stuck in.</p>
+<p><em>Quit</em> takes no locks at all and aborts. Proven with a station's mutex
+held by somebody who will never release it, which is exactly what the
+full report cannot survive and this one must.</p>
+<p>**The second interrupt needed the one handler in the engine, and it
+was nominal without it.** A thread that is gathering is not asking for
+signals, so a second interrupt would sit pending behind a gather —
+and the gather is precisely the thing that may never finish, because
+it takes a station's mutex. So for the length of the gather, and only
+then, that one signal is unblocked with a handler that calls <code>_exit</code>
+and nothing else. Without it the escape hatch opened only in the cases
+where nobody needed it.</p>
+<p><strong>Refusals are fatal, and the third face is gone.</strong> Rewiring's
+print-and-return-a-code face has been deleted; two remain, one that
+hands the reason back so a caller can collect it and one that stops
+the program. The construction boxes stop rather than returning a zero,
+which matters more there than anywhere else: **a box's caller is a
+wire**, and a wire ignores everything it is not attached to.</p>
+<p>**A discovery on the way: the pool could finish before anybody asked
+to be told.** A short program runs out of work between being released
+and the waiter sitting down, and a waiter that then waits for a signal
+nobody will ever raise waits forever. Asking now raises it immediately
+when it has already happened, so it does not matter which side of the
+finish the asker arrives on.</p>
+<p><strong>What accumulates and what does not, stated precisely</strong>, because
+this issue promised more than is true. The whole-program pass collects
+every fault and reports them together, which it can because everything
+exists by then. A fault found while a station is being <em>built</em> — a
+box name that is not in the registry, a port number past the end, a
+constant whose text will not parse — stops there, because continuing
+past a station that could not be built means asking questions of
+something that is not there. That is the same for every per-line
+fault and always was; what changed is that they now carry exit codes
+saying which kind of fault they were.</p>
+<h3>What stood before</h3>
 <p><strong>A program has exactly one way to stop, and it is the happy one.</strong></p>
 <p>Running out of work is handled and proven. Nothing else is. There is no
 signal handling anywhere in the engine: a person pressing ctrl+C gets
@@ -316,34 +382,33 @@ so much as what that rule means.</p>
 <p>So the engine does not guess. The signal comes from outside, where
 somebody who actually knows how long is too long is the one deciding.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. During startup: the three signals blocked in every thread, and the
-   report's destination opened, so that every failure path afterwards
-   holds a descriptor rather than a path it would have to resolve while
-   dying. This is the one piece that must exist before the engine runs,
-   and it is small.
-2. The initial thread <strong>waits for a signal rather than handling one</strong>,
-   and the last sleeper sends it one after broadcasting shutdown — so
-   there is a single waiting point woken for two different reasons,
-   told apart by which number arrives. No handler is installed
-   anywhere, which is why nothing in this issue is constrained by what
-   a handler is permitted to call.
-3. The polite path: reuse termination unchanged. Prove it by a program
-   stopped mid-run whose in-flight work all completes and whose exit is
-   indistinguishable from having run out of work.
-4. The interrupt path: drain, gather on the waiting thread, exit
-   non-zero. Prove it by a program with deliberate backlog whose report
-   names every station, **and by one whose every worker is deliberately
-   wedged** — which must still produce a full report, since nothing is
-   enqueued and no worker is asked for.
-5. The second-interrupt escape, proven by an interrupt arriving while
-   the diagnostics task is deliberately blocked.
-6. The quit path, taking no locks, proven by a program with a station
-   mutex deliberately held — the report must still appear.
-7. The construction surface's refusals become fatal, with the
-   accumulate-then-stop behaviour the loader already has, and the
-   rewiring path loses its ignorable return.
-8. A test that an ignored refusal cannot leave a half-built program,
-   which is the property this buys and the reason for the change.</p>
+<p>1. <strong>Done.</strong> The three signals blocked before any thread exists, and
+   the report's destination opened then rather than while dying.
+2. <strong>Done.</strong> The initial thread waits for a signal rather than
+   handling one, and the pool raises one when the work runs out — one
+   waiting point, two reasons. Building it found that the pool can
+   finish <em>before</em> anybody asks to be told, so asking after the fact
+   raises the signal immediately.
+3. <strong>Done.</strong> The polite path shuts the entrance and reuses the
+   ordinary ending. Its scene found that the standing promise has to
+   be made before the gate opens, without which the program is over
+   before it begins and the scene proves nothing.
+4. <strong>Done.</strong> Drain, gather on the waiting thread, exit 130 — proven
+   with a deliberate backlog and again with every worker inside a box
+   that never returns.
+5. <strong>Done, and it was nominal until it was proven.</strong> The escape needed
+   the one signal handler in the engine: a gathering thread is not
+   asking for signals, so a second interrupt would have sat pending
+   behind a gather that never returns. The scene holds a station's
+   mutex forever, which is exactly what makes the gather never return.
+6. <strong>Done</strong>, with that same held mutex: the lock-free report appears
+   where the full one cannot.
+7. <strong>Done.</strong> Rewiring's print-and-return-a-code face is deleted; the
+   construction boxes stop rather than returning a zero a wire would
+   ignore; malformed constants, refused map files and invalid calls
+   carry exit codes that tell a shell which kind of fault it was.
+8. <strong>Done.</strong> A caller asks for an impossible wire, ignores the answer
+   completely, and does not reach the next line.</p>
 <h2>What this change reaches</h2>
 <p>The refusal policy is stated in eight places that were deliberately
 kept in agreement, and all of them move together:</p>

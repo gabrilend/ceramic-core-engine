@@ -360,6 +360,20 @@ the -1 is ignorable, and an ignored refusal is a silent divergence
 between intended and actual shape. Second pass: consider a refusal
 log the dump includes, so ignored refusals leave a trace.
 
+> **Settled, and not the way this paragraph guessed.** The two regimes
+> became one and the debt was paid off rather than serviced: an
+> invalid operation ends the program. The refusal still *travels*
+> rather than dying where it happens, so a caller collecting faults
+> can still collect them — but there is no surviving path in which an
+> ignored refusal leaves a program running that somebody believes they
+> just edited. The refusal log this suggested would have been a way to
+> notice the divergence afterwards; there is no divergence to notice.
+> The argument that killed the -1 was the one this paragraph made and
+> then set aside, given force by a program becoming able to edit
+> another: a box's caller is a *wire*, and a wire ignores everything
+> it is not attached to. See
+> [106](../issues/completed/106-stopping-on-purpose.md).
+
 **Statistics attribution wants a design pass.** Box time is recorded
 by the shims into the active map via a process global; gather time is
 charged to the puller at the call site; produced-counts ride the

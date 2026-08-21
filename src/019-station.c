@@ -14,6 +14,7 @@
  * fixing up when storage grows elsewhere.
  */
 #include "018-station.h"
+#include "091-stopping.h"   /* an invalid operation ends the program (issue 106) */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,9 +38,37 @@
  */
 static void fail(const char *what)
 {
-    fprintf(stderr, "map construction: %s\n", what);
-    abort();
+    /*
+     * **An invalid operation ends the program** (issue 106), with an
+     * exit code that says which kind of fault it was: one a caller
+     * can correct and retry. It used to abort, which left a core and
+     * told a shell script nothing.
+     *
+     * There is no map to hand over here, because this helper is
+     * reached from places that hold one and places that do not, and a
+     * report about the wrong program is worse than no report. What
+     * dies with a report is the path that knows which program it was
+     * editing.
+     */
+    char said[512];
+    snprintf(said, sizeof said, "map construction: %s", what);
+    sora_stop_now(NULL, SORA_EXIT_BAD_CALL, said);
 }
+
+/* {{{ fail_resource() */
+/*
+ * The other kind, and the distinction is the point (issue 106): out
+ * of memory is not something a caller can correct and retry, so
+ * anything that retries on failure has to be able to tell the two
+ * apart in code rather than in prose.
+ */
+static void fail_resource(const char *what)
+{
+    char said[512];
+    snprintf(said, sizeof said, "map construction: %s", what);
+    sora_stop_now(NULL, SORA_EXIT_NO_RESOURCE, said);
+}
+/* }}} */
 /* }}} */
 
 /* {{{ slot_stride() */
@@ -136,7 +165,7 @@ in_port_page_t *in_port_add_page(in_port_t *sl)
      * would find whatever the allocator left behind and believe it. */
     in_port_page_t *pg = calloc(1, sizeof *pg
                                 + (size_t)sl->page_slots * (size_t)sl->stride);
-    if (!pg) fail("out of memory for a page of a ring buffer");
+    if (!pg) fail_resource("out of memory for a page of a ring buffer");
 
     if (!sl->pages) {
         sl->pages = pg;
@@ -291,7 +320,7 @@ static int add_shelf(map_t *m)
 map_t *map_create_empty(void)
 {
     map_t *m = calloc(1, sizeof *m);
-    if (!m) fail("out of memory for the map");
+    if (!m) fail_resource("out of memory for the map");
     pthread_mutex_init(&m->rewire_mutex, NULL);
     pthread_mutex_init(&m->scrap_mutex, NULL);
     return m;
@@ -305,7 +334,7 @@ map_t *map_create(int n_stations)
         fail("a map needs at least one station");
 
     map_t *m = calloc(1, sizeof *m);
-    if (!m) fail("out of memory for the map");
+    if (!m) fail_resource("out of memory for the map");
 
     pthread_mutex_init(&m->rewire_mutex, NULL);
     pthread_mutex_init(&m->scrap_mutex, NULL);
@@ -324,7 +353,7 @@ map_t *map_create(int n_stations)
      */
     while (n_stations > m->n_shelves * STATIONS_PER_SHELF)
         if (add_shelf(m) < 0)
-            fail("out of memory for the station table");
+            fail_resource("out of memory for the station table");
     atomic_store_explicit(&m->n_stations, n_stations, memory_order_release);
 
     return m;
@@ -404,7 +433,7 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
     s->in_ports = NULL;
     if (n_in_ports > 0) {
         s->in_ports = calloc((size_t)n_in_ports, sizeof *s->in_ports);
-        if (!s->in_ports) fail("out of memory for a port array");
+        if (!s->in_ports) fail_resource("out of memory for a port array");
     }
 
     for (int i = 0; i < n_in_ports; i++) {
@@ -438,7 +467,7 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
          * set holds zeroes rather than whatever was there — though
          * nothing reads it until constant_set says somebody wrote it. */
         sl->constant = calloc(1, (size_t)sl->elem_size);
-        if (!sl->constant) fail("out of memory for a port's constant");
+        if (!sl->constant) fail_resource("out of memory for a port's constant");
         sl->constant_string = NULL;
         sl->constant_set = 0;
     }
@@ -948,6 +977,24 @@ const char *map_deliver_argument(map_t *m, int station, int port,
 {
     static _Thread_local char said[224];
 
+    /*
+     * **Shut, because somebody asked this program to wind down**
+     * (issue 106). The entrance is the only way anything outside puts
+     * work into a program, so refusing here is the whole of what
+     * "stop accepting new work" can mean — and it is what lets the
+     * queue drain and the ordinary ending fire.
+     *
+     * Asked first, before the station is even looked at, because a
+     * closing program has nothing useful to say about which of its
+     * doors somebody was aiming at.
+     */
+    if (atomic_load_explicit(&m->closing, memory_order_acquire)) {
+        snprintf(said, sizeof said,
+                 "this program is winding down and is not accepting new "
+                 "work");
+        return said;
+    }
+
     if (station < 0 || station >= m->n_stations) {
         snprintf(said, sizeof said, "station %d is outside the table",
                  station);
@@ -1343,7 +1390,7 @@ dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
     dest_set_t *set = calloc(1, sizeof *set + (size_t)(n > 0 ? n : 1)
                                               * sizeof(destination_t));
     if (!set)
-        fail("out of memory for a destination set");
+        fail_resource("out of memory for a destination set");
 
     int out = 0;
     int dropped = 0;
@@ -1465,14 +1512,14 @@ void map_retire(map_t *m, void *p, void (*free_fn)(void *))
     if (workers > 0) {
         snapshot = calloc((size_t)workers, sizeof *snapshot);
         if (!snapshot)
-            fail("out of memory retiring something");
+            fail_resource("out of memory retiring something");
         for (int i = 0; i < workers; i++)
             snapshot[i] = pool_worker_epoch(m->pool, i);
     }
 
     struct scrap_item *it = calloc(1, sizeof *it);
     if (!it)
-        fail("out of memory retiring something");
+        fail_resource("out of memory retiring something");
     it->p = p;
     it->free_fn = free_fn;
     it->snapshot = snapshot;

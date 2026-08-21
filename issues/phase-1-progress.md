@@ -12,14 +12,39 @@ above it in the project stands on this.
 | 103 — sleeping and waking | complete | Condition-variable sleep, wake-all on push, exact sleeper count under the one mutex. |
 | 104 — termination by last sleeper | complete | Last sleeper's final look decides; broadcast shutdown; outside submitters registered. |
 | 105 — phase 1 demo | complete | Four measured scenes: growth, termination tail, idle cost, throughput ceiling. |
-| 106 — stopping on purpose | open | The other ways a program ends: three signals, and a refusal that is fatal rather than ignorable. |
+| [106 — stopping on purpose](completed/106-stopping-on-purpose.md) | complete | Three signals answered by a thread that *waits* for one rather than handling it, so the reports may take locks; the pool's own ending arrives at the same waiting point as one more signal. A refusal is fatal rather than ignorable. |
 
-**Phase 1 reopened, at the far end.** Everything built here still
-stands untouched — the new issue adds no mechanism to the run loop and
-changes no lock. It only says what happens when a program is told to
-stop, or finds an instruction it refuses to continue past, neither of
-which the pool had an answer for. The happy ending stays exactly as
-104 built it; the polite shutdown reuses it unmodified.
+**Phase 1 reopened at the far end, and closed again.** Everything
+built here still stands untouched — the new work added no mechanism to
+the run loop and changed no lock. It only said what happens when a
+program is told to stop, or finds an instruction it refuses to
+continue past, neither of which the pool had an answer for. The happy
+ending is exactly as 104 built it, and the polite shutdown reuses it
+unmodified.
+
+What the pool gained is three small things it ferries without
+understanding: a signal to raise when it decides the work has run out,
+a way to be told to stop starting new things, and one number per
+worker saying which station that worker is inside. The last is a
+number rather than a pointer on purpose, because the report written
+while a lock is held forever must not dereference anything — a stale
+integer is a wrong answer, a stale pointer is a crash inside the thing
+that exists to explain a crash.
+
+**And the phase learned that a guarantee can be nominal.** The promise
+that a second interrupt always works could not have been kept as
+designed: with every signal blocked, a second one arriving during a
+report would sit pending behind a report that never finishes, so the
+escape would have opened only when nobody needed it. It works now, and
+it took the only signal handler in the engine to make it true.
+
+**It also learned that its own termination rule has a window in front
+of it.** A program that seeds nothing has an empty queue and nobody
+promising anything between the gate opening and the first delivery, so
+the last sleeper declares it finished before it has begun. That is the
+rule working exactly as 104 wrote it, and 104 provided the clause that
+answers it — make the standing promise before opening the gate. It
+took three test scenes passing for the wrong reason to notice.
 
 The pool moves opaque work across every core, sleeps for free, and
 knows when it is done. Nothing in it mentions a station, which is what

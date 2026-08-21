@@ -43,18 +43,11 @@
  */
 #include "049-observe.h"
 #include "026-registry.h"
+#include "091-stopping.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-/* {{{ refuse() */
-static int refuse(const char *what)
-{
-    fprintf(stderr, "rewire: refused: %s\n", what);
-    return -1;
-}
-/* }}} */
 
 /* {{{ said() */
 /*
@@ -293,29 +286,33 @@ const char *map_wire(map_t *m, int from_station, int port,
 }
 /* }}} */
 
-/* {{{ map_rewire_connect() */
+/* {{{ map_unwire() */
 /*
- * The same operation, for a caller that wants the refusal printed and
- * a code back. Kept because that is what live editing's callers
- * already expect; what changed is that it is a face on one
- * implementation rather than a second implementation.
+ * **Cut one wire, at any moment.** NULL when it came out, or a
+ * sentence saying why not — the same shape as drawing one, for the
+ * same reason: a caller reading a description collects every mistake
+ * and presents them together.
+ *
+ * **There used to be a third face on these operations and it is
+ * gone** (issue 106). It printed the refusal and returned minus one,
+ * which was chosen deliberately in 704: a loader that dies serves its
+ * author, while a running engine that dies for one bad control
+ * instruction takes the plant down with it. The cost was booked at
+ * the time as a debt in plain words — *a caller can ignore a return
+ * value* — and an ignored refusal leaves a program running that
+ * somebody believes they just edited.
+ *
+ * Two faces remain: one hands the refusal back so a caller can
+ * collect it, and one stops the program. Neither can be ignored into
+ * a half-built program.
  */
-int map_rewire_connect(map_t *m, int from_station, int port,
+const char *map_unwire(map_t *m, int from_station, int port,
                        int to_station, int to_port)
-{
-    const char *no = map_wire(m, from_station, port, to_station, to_port);
-    return no ? refuse(no) : 0;
-}
-/* }}} */
-
-/* {{{ map_rewire_disconnect() */
-int map_rewire_disconnect(map_t *m, int from_station, int port,
-                          int to_station, int to_port)
 {
     pthread_mutex_lock(&m->rewire_mutex);
     if (from_station < 0 || from_station >= m->n_stations) {
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("a station index outside the table");
+        return said("a station index outside the table");
     }
     station_t *from = map_station(m, from_station);
 
@@ -338,7 +335,7 @@ int map_rewire_disconnect(map_t *m, int from_station, int port,
     pthread_mutex_unlock(&m->rewire_mutex);
 
     if (!found)
-        return refuse("no such wire to remove");
+        return said("no such wire to remove");
 
     /* Filed, not freed: a walker may be inside the old set right now
      * (issue 214). A value already on its way down the removed wire
@@ -346,7 +343,21 @@ int map_rewire_disconnect(map_t *m, int from_station, int port,
      * delivered a moment earlier and is fine (issue 704). */
     map_retire(m, old, free);
 
-    return 0;
+    return NULL;
+}
+/* }}} */
+
+/* {{{ map_disconnect() */
+/*
+ * The same operation, for a caller that wants a refusal to stop the
+ * program (issue 106).
+ */
+void map_disconnect(map_t *m, int from_station, int port,
+                    int to_station, int to_port)
+{
+    const char *no = map_unwire(m, from_station, port, to_station, to_port);
+    if (no)
+        sora_stop_now(m, SORA_EXIT_BAD_CALL, no);
 }
 /* }}} */
 
@@ -405,18 +416,18 @@ static void reclaim_station(void *p)
 /* }}} */
 
 /* {{{ map_remove_station() */
-int map_remove_station(map_t *m, int station)
+const char *map_remove_station(map_t *m, int station)
 {
     pthread_mutex_lock(&m->rewire_mutex);
 
     if (station < 0 || station >= m->n_stations) {
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("removing a station outside the table");
+        return said("removing a station outside the table");
     }
     station_t *s = map_station(m, station);
     if (!s->call || atomic_load_explicit(&s->removed, memory_order_acquire)) {
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("removing a station that is not there");
+        return said("removing a station that is not there");
     }
 
     /*
@@ -462,7 +473,7 @@ int map_remove_station(map_t *m, int station)
             if (!fresh) {
                 pthread_mutex_unlock(&other->mutex);
                 pthread_mutex_unlock(&m->rewire_mutex);
-                return refuse("out of memory rebuilding a destination set");
+                return said("out of memory rebuilding a destination set");
             }
             int out = 0;
             for (int d = 0; d < old->n; d++)
@@ -485,7 +496,7 @@ int map_remove_station(map_t *m, int station)
     removed_parts_t *parts = calloc(1, sizeof *parts);
     if (!parts) {
         pthread_mutex_unlock(&m->rewire_mutex);
-        return refuse("out of memory removing a station");
+        return said("out of memory removing a station");
     }
     parts->station = s;
     parts->out_ports = s->out_ports;
@@ -498,6 +509,6 @@ int map_remove_station(map_t *m, int station)
 
     map_retire(m, parts, reclaim_station);
     pthread_mutex_unlock(&m->rewire_mutex);
-    return 0;
+    return NULL;
 }
 /* }}} */

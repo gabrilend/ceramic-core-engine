@@ -96,8 +96,30 @@ static void expect_death_saying(const char *map_text, const char *fragment,
     int status = 0;
     waitpid(pid, &status, 0);
 
-    if (!WIFSIGNALED(status)) {
+    /*
+     * **Exit 65, or a signal.** A refused map file now ends the
+     * program with the code meaning "the input was malformed" rather
+     * than aborting (issue 106), which is what lets a shell script
+     * tell a mistyped box name from a machine out of memory. A signal
+     * is still accepted here because a few refusals further down the
+     * engine have not been moved onto the return path yet, and this
+     * helper's job is to prove the map was refused rather than to
+     * police how.
+     *
+     * What is *not* accepted is a clean exit zero, which is the
+     * failure this is looking for: a bad map that ran anyway.
+     */
+    int refused = WIFSIGNALED(status)
+               || (WIFEXITED(status) && WEXITSTATUS(status) != 0);
+    if (!refused) {
         fprintf(stderr, "mapfile test failed: %s — the child survived\n", what);
+        exit(1);
+    }
+    if (WIFEXITED(status) && WEXITSTATUS(status) != 65) {
+        fprintf(stderr, "mapfile test failed: %s — refused, but with exit "
+                        "code %d rather than 65, which is the code meaning "
+                        "the input was malformed\n",
+                what, WEXITSTATUS(status));
         exit(1);
     }
     if (!strstr(words, fragment)) {

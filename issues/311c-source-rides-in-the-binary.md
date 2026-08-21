@@ -118,5 +118,5 @@ None outstanding.
   calls at runtime for argument names
 - [057 — Packaging](../docs/implementation-notes/057-packaging.md),
   where shipping one file rather than a tree is the point
-- [106 — Stopping on purpose](106-stopping-on-purpose.md), whose report
+- [106 — Stopping on purpose](completed/106-stopping-on-purpose.md), whose report
   gains the argument names and the elision rule

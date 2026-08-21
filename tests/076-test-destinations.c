@@ -64,7 +64,7 @@ static void a_wire_removed_mid_run(void)
     check(before && before->n == 2, "two wires make a set of two");
 
     map_start(m, 4);
-    check(map_rewire_disconnect(m, 0, 0, 2, 0) == 0, "a wire came out");
+    check(map_unwire(m, 0, 0, 2, 0) == NULL, "a wire came out");
 
     dest_set_t *after = out_port_dests(p);
     check(after && after->n == 1, "and the new set has one");
@@ -107,9 +107,9 @@ static void the_scrapyard_drains(void)
         int v = i;
         map_deliver_value(m, 0, 0, &v);
         if (i % 2 == 0)
-            map_rewire_connect(m, 0, 0, 2, 0);
+            map_connect(m, 0, 0, 2, 0);
         else
-            map_rewire_disconnect(m, 0, 0, 2, 0);
+            map_disconnect(m, 0, 0, 2, 0);
         int filed = map_scrap_count(m);
         if (filed > deepest)
             deepest = filed;
@@ -153,8 +153,8 @@ static void teardown_with_sets_still_filed(void)
 
     map_start(m, 2);
     for (int i = 0; i < 20; i++) {
-        map_rewire_disconnect(m, 0, 0, 2, 0);
-        map_rewire_connect(m, 0, 0, 2, 0);
+        map_disconnect(m, 0, 0, 2, 0);
+        map_connect(m, 0, 0, 2, 0);
     }
     check(map_scrap_count(m) > 0,
           "sets are filed and waiting when teardown arrives");
@@ -192,7 +192,7 @@ static void the_dump_still_round_trips(void)
           "and they sit in the order they were drawn");
 
     map_start(m, 2);
-    map_rewire_disconnect(m, 0, 0, 2, 0);
+    map_disconnect(m, 0, 0, 2, 0);
     set = out_port_dests(map_station(m, 0)->out_ports);
     check(set && set->n == 2 && set->items[0].station == 1
           && set->items[1].station == 3,

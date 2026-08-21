@@ -92,7 +92,7 @@ fault after it.
 
 The one remaining thing that still stops where it happens is text that
 does not parse, which belongs with the refusal policy
-([106](../106-stopping-on-purpose.md)) rather than here.
+([106](106-stopping-on-purpose.md)) rather than here.
 
 ### What stood before
 

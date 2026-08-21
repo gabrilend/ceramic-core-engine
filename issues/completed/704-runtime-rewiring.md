@@ -54,7 +54,12 @@ decided rather than defaulted: refusals return minus one with the
 reason on stderr, because a loader that dies serves its author while
 a running engine that dies for one bad control instruction takes the
 plant down; the cost — an ignorable return — is weighed in the
-report. Adding a station remains out of scope, as this issue drew
+report. **That choice was overturned** once one surface built
+programs and one of its callers was a box, whose caller is a wire and
+therefore ignores everything it is not attached to: an invalid
+operation ends the program now, with the refusal still travelling so
+faults can be collected on the way
+([106](106-stopping-on-purpose.md)). Adding a station remains out of scope, as this issue drew
 it. Proven further by a wire moved mid-run with nothing lost and
 behaviour bending at the seam.
 

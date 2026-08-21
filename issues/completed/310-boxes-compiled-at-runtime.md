@@ -303,7 +303,7 @@ would eventually disagree with the first about what a box is.
   exactly like a log: written as it happens, ephemeral, gone at reboot.
 
   **Writing it at creation rather than at dump time is the whole
-  decision**, and it is the same one [106](../106-stopping-on-purpose.md)
+  decision**, and it is the same one [106](106-stopping-on-purpose.md)
   makes about opening the report's destination during startup. A dump
   may be taken while the program is dying, and a failure path is the
   worst possible moment to discover that something needs saving. The

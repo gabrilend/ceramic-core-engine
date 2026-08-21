@@ -254,8 +254,8 @@ static void test_rewire_mid_run(void)
     /* The move: disconnect hold->writer_a, connect hold->writer_b —
      * while the map runs. Station indices follow file order: head 0,
      * hold 1, writer_a 2, writer_b 3. */
-    check(map_rewire_disconnect(m, 1, 0, 2, 1) == 0, "the old wire came out");
-    check(map_rewire_connect(m, 1, 0, 3, 1) == 0, "the new wire went in");
+    check(map_unwire(m, 1, 0, 2, 1) == NULL, "the old wire came out");
+    check(map_wire(m, 1, 0, 3, 1) == NULL, "the new wire went in");
 
     int w = 222;
     map_deliver_value(m, 1, 0, &w);

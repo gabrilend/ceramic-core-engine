@@ -130,17 +130,19 @@ static void byte_identical(void)
 
 /* {{{ static void different_widths_refused() */
 /*
- * The refusal that remains, through the runtime rewiring surface —
- * `add` returns an int and `mix` takes a double at its second port,
- * four bytes against eight. The message has to carry both names *and*
- * both widths: "box returns int, port takes double" does not say why
- * those disagree, and "4 bytes against 8 bytes" does.
+ * The refusal that remains — `add` returns an int and `mix` takes a
+ * double at its second port, four bytes against eight. The message
+ * has to carry both names *and* both widths: "box returns int, port
+ * takes double" does not say why those disagree, and "4 bytes against
+ * 8 bytes" does.
  *
- * The rewiring surface writes its reason to stderr and returns -1
- * rather than stopping the program, so the message is captured by
- * redirecting stderr into a file for the length of the call. That is
- * clumsier than asking for a string and it is what the surface
- * offers; issue 212 is where that returns-a-code shape gets revisited.
+ * **It asks for the reason instead of capturing it.** This scene used
+ * to redirect stderr into a file for the length of the call, because
+ * the only rewiring face available printed its refusal and returned a
+ * code. That face is gone (issue 106): a refusal a caller can ignore
+ * is a refusal that leaves a program running that somebody believes
+ * they just edited. What is left hands the sentence back, and a test
+ * that wants to read it simply reads it.
  */
 static void different_widths_refused(void)
 {
@@ -148,53 +150,20 @@ static void different_widths_refused(void)
     map_place_box(m, 0, "add", STATION_PLAIN);   /* -> int         */
     map_place_box(m, 1, "mix", STATION_PLAIN);   /* port 1: double */
 
-    char path[256];
-    snprintf(path, sizeof path, "/tmp/minimal-soramech/width-refusal-%d.txt",
-             (int)getpid());
+    const char *said = map_wire(m, 0, 0, 1, 1);
 
-    fflush(stderr);
-    int saved = dup(STDERR_FILENO);
-    int sink = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (sink < 0 || saved < 0) {
-        fprintf(stderr, "  FAIL: cannot capture stderr\n");
-        failures++;
-        map_destroy(m);
-        return;
+    check(said != NULL,
+          "a four-byte value into an eight-byte port was refused");
+    if (said) {
+        check(strstr(said, "int") && strstr(said, "double"),
+              "the refusal names both types");
+        check(strstr(said, "4 bytes") && strstr(said, "8 bytes"),
+              "and both widths, which is what actually disagrees");
+        printf("  refused: %s\n", said);
     }
-    dup2(sink, STDERR_FILENO);
-
-    int rc = map_rewire_connect(m, 0, 0, 1, 1);
-
-    fflush(stderr);
-    dup2(saved, STDERR_FILENO);
-    close(sink);
-    close(saved);
-
-    check(rc != 0, "a four-byte value into an eight-byte port was refused");
-
-    char said[512] = { 0 };
-    FILE *f = fopen(path, "r");
-    if (f) {
-        size_t got = fread(said, 1, sizeof said - 1, f);
-        said[got] = '\0';
-        fclose(f);
-    }
-    remove(path);
-
-    check(strstr(said, "int") && strstr(said, "double"),
-          "the refusal names both types");
-    check(strstr(said, "4 bytes") && strstr(said, "8 bytes"),
-          "and both widths, which is what actually disagrees");
-
-    /* Trim the trailing newline for a tidy line of output. */
-    size_t n = strlen(said);
-    while (n && (said[n - 1] == '\n' || said[n - 1] == '\r'))
-        said[--n] = '\0';
-    printf("  refused: %s\n", said);
 
     map_destroy(m);
 }
-/* }}} */
 /* }}} */
 
 /* {{{ static void a_source_with_no_inputs_is_checked_too() */
