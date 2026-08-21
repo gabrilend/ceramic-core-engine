@@ -776,6 +776,25 @@ const char *map_designate_output(map_t *m, int station)
 }
 /* }}} */
 
+/* {{{ map_start_beside() */
+map_t *map_start_beside(map_t *parent)
+{
+    if (!parent->pool)
+        fail("starting a program beside one that has not started itself");
+
+    map_t *m = map_create_empty();
+    /*
+     * The same workers, and nothing else shared. A task now says
+     * which program it belongs to, so a worker finishing one does not
+     * need to know whose pool it is running on — which is what makes
+     * this a field assignment rather than a mechanism.
+     */
+    m->pool = parent->pool;
+    m->pool_is_borrowed = 1;
+    return m;
+}
+/* }}} */
+
 /* {{{ map_designate_input() */
 /*
  * **Say that this station is where the outside delivers** (issue
@@ -1417,7 +1436,9 @@ void map_report_shutdown(map_t *m);
 void map_destroy(map_t *m)
 {
     map_observe_stop(m);
-    if (m->pool)
+    /* A borrowed pool belongs to the program that made it, and other
+     * programs may still be running on it (issue 212). */
+    if (m->pool && !m->pool_is_borrowed)
         pool_destroy(m->pool);
     map_report_shutdown(m);
     if (m->station_names) {

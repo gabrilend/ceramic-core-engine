@@ -157,9 +157,32 @@ real address from any other eight bytes.
 folded into the width non-guarantee, because the consequence differs
 in kind.
 
-Still to come: starting a second program beside this one rather than
-building into it, which needs the input station
-([213](213-the-input-station.md)) for anything to be fed to it.
+**And a program can be started beside another.** Its own station
+table, its own rewiring lock, its own everything — sharing only the
+workers. It cannot be wired to, which is the point rather than a
+limitation: a wire is a pair of indices and an index means something
+only inside one table, so reaching a program started beside you is
+what its entrance is for. A test starts one, feeds it, reads it, and
+outlives it.
+
+**This issue's claim about the shared pool was false as built**, and
+finding out cost one line to fix. It said the pool can be shared
+"because nothing about finishing requires knowing which program a task
+came from". Finishing requires exactly that: it resolves a station
+index, and an index means nothing without the table it indexes — so
+the map came from the pool's own context, which bound one pool to one
+program.
+
+The fix was the shape the pool already had. A task carries a station
+number and an exit number that the pool ferries without interpreting,
+which is what keeps it ignorant of maps; the owning program joins them
+as one more opaque field. **The map was already being passed to task
+construction and explicitly discarded**, so carrying it cost nothing
+at all. The claim is true now, and it was not before.
+
+Still to come: composing, which merges two tables into one — the other
+half of this section, and the one that needs real work rather than a
+field.
 
 ## Intended behavior
 
@@ -421,9 +444,14 @@ rather than drifting into place.
 9. A test that a station added to a running program, then configured,
    then wired, receives values and produces them — and that everything
    already running is undisturbed across all three steps.
-10. A test that a map starts a second map, feeds it through its input
-    station, reads its result, and survives that second map dying — the
-    proof that starting is genuinely separate from composing.
+10. **Done.** A program starts a second beside it, feeds it through
+    its entrance, reads its result, and outlives it. The test also
+    proves the negative — a wire cannot reach across — and proves it
+    the honest way: both programs have a station 0, they are different
+    stations, and asking to wire from one into the other's index is
+    simply a wire inside the first program to a station it does not
+    have. Nothing refuses it on grounds of *programs*; indices just do
+    not cross.
 
 ## Open questions
 

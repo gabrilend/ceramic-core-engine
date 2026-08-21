@@ -1,6 +1,6 @@
 # Conversation Summary: 55f347f4-2832-4363-ab6b-50a0c7b42395
 
-Generated on: 2026-08-20 17:46:11
+Generated on: 2026-08-21 07:34:24
 
 --------------------------------------------------------------------------------
 
@@ -2813,6 +2813,95 @@ what it was.
 What remains on both doors: the map file syntax for the declarations and the
 dump carrying them, and then one program used as a box inside another — which
 is now the only thing standing between here and the capstone being finished.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 18
+
+Ok let's keep going
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 18
+
+The map file needs to spell the two declarations. Let me look at how a station
+line is read, since `in` and `out` already mean something on the lines beneath
+it:
+
+
+A fourth word on the station line. Deliberately not `in`/`out` — those already
+mean a port on the lines beneath, and two things spelled the same way is the
+exact trap I fixed in the depth form earlier.
+
+
+Now the round trip — a program's doors must survive being written down, or it
+can't be composed after reloading:
+
+
+Same shape as the warning: a program with a declared entrance is fed from
+outside, so "nothing to seed" stops being a fault for it. That refusal needs the
+same escape clause:
+
+
+One doc edit didn't apply — let me check what 209 actually says now:
+
+
+My bookkeeping failed there — the code landed but that issue's record didn't,
+because a script asserted before writing and lost every edit in the batch. Let
+me redo it one at a time so a single miss can't discard the rest:
+
+
+Committed, clean, all tests pass. Two things happened here, and one was my
+error.
+
+
+**The work:** a station line gained a fourth word saying that station is where
+the outside delivers, or where results come from. The reader takes it, the dump
+writes it back, and a test reloads a written-out program to prove both survived
+— a program whose declarations were lost on the way to disk couldn't be
+composed afterwards, which is most of what naming them was for.
+
+
+**The words are `entry` and `result`, not `in` and `out`** — and the obvious
+choice was the wrong one. Those already name a *port* on the indented lines
+beneath a station. A file where one word means a port in one place and an entire
+station in another reads perfectly well and round-trips wrong. That's the second
+time this session: the depth-followed-by-a-dash bug was the same shape. Worth
+naming the pattern — **the danger isn't a word that's ambiguous to the parser,
+it's one that's unambiguous to the parser and ambiguous to the reader.**
+
+
+**Two refusals gained an escape clause they'd always described.** The
+whole-program check warns about a station whose buffered inputs nothing feeds,
+ending *"unless something outside delivers into it."* And reading a file refuses
+a program where nothing can start. Both sentences were written when a program
+had no way to *say* it expected to be fed, so both assumed the worst — and a
+declared entrance is precisely the case they were assuming away. Neither
+exemption was foreseen; both fell out of the declaration existing.
+
+
+**My error:** the output door's issue file didn't record any of its work. A
+script making several edits and saving once hit a mismatch on the last one and
+discarded the whole batch, so the ticket kept saying the work was still to do
+while the tests proved otherwise. I've redone it one edit at a time, and the fix
+is committed separately so the record shows the correction rather than hiding
+it.
+
+
+The thing most worth having recovered is what was *not* built: both door issues
+asked for a station that runs no box. It turned out unnecessary — such a door
+is a station running an identity function, an ordinary box somebody was going to
+write anyway rather than a new kind of station. The engine's inventory of
+distinct concepts stayed where it was. That's a decision that only exists in a
+ticket, because the code has nothing in it to point at.
+
+
+Both doors now exist with map-file syntax. What's left is the demonstration that
+ties them together: **one program used as a box inside another** — wired to
+its entry, read from its result, with the parent never naming anything inside
+it.
 
 
 --------------------------------------------------------------------------------

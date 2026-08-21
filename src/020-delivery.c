@@ -667,7 +667,11 @@ task_t *task_build(map_t *m, int station_index,
         memcpy(t->in[i], claimed + offset, (size_t)sl->elem_size);
         offset += sl->elem_size;
     }
-    (void)m;
+    /* The program this task belongs to, carried so that finishing it
+     * does not depend on which pool ran it (issue 212). The map was
+     * already being passed here and discarded, which is how small
+     * this turned out to be. */
+    t->owner = m;
 
     t->out = s->out_size > 0 ? data + in_bytes : NULL;
     return t;
@@ -954,7 +958,15 @@ static void station_hold_result(map_t *m, int index, station_t *s,
  */
 void map_deliver(void *ctx, task_t *t)
 {
-    map_t *m = ctx;
+    /*
+     * **The task says which program it belongs to**, not the pool
+     * (issue 212). The hook's own context is ignored, and that is the
+     * whole of what lets one pool serve several programs: a station
+     * index means nothing without the table it indexes, so while the
+     * map came from the pool, a pool could serve exactly one map.
+     */
+    (void)ctx;
+    map_t *m = t->owner;
     station_t *s = map_station(m, t->station);
 
     s->runs++;

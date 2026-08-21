@@ -17,6 +17,7 @@ one unless you are debugging this file.
 |---|---|---|
 | slots | array of task pointers | The ring. Holds pointers out; nothing points in. |
 | capacity | `int` | Ring length. Doubles when full. |
+| owner | `void *` | Which program a task belongs to, ferried without being interpreted — the same as the station and exit numbers beside it. It is what lets one pool serve several programs: finishing a task resolves a station index, and an index means nothing without its table, so while that came from the pool's own context a pool could serve exactly one program (issue 212). |
 | head, tail | `int` | Oldest task / next free slot. Equal means empty; one slot always spare so full is distinguishable. |
 | mutex | `pthread_mutex_t` | Guards every other field here. One lock, one truth. |
 | wake | `pthread_cond_t` | Sleeping workers wait on this; push and shutdown broadcast it. |

@@ -45,6 +45,23 @@ typedef void (*task_call_t)(task_t *t);
 
 struct task {
     task_call_t call;     /* the shim to run */
+    /*
+     * **Which program this task belongs to** (issue 212), carried the
+     * same way `station` and `port` are — ferried without being
+     * interpreted, which is what keeps the pool ignorant of maps. A
+     * void pointer for exactly that reason: the pool must not know
+     * what this is.
+     *
+     * Without it a pool serves one program, because finishing a task
+     * means resolving a station index, and an index means nothing
+     * without the table it indexes. The finish hook therefore had to
+     * carry the map, which bound the pool to it.
+     *
+     * With it, one pool can serve several programs — which is what
+     * lets a program start another beside itself, sharing the workers
+     * and nothing else.
+     */
+    void       *owner;
     int32_t     station;  /* which station produced it, so delivery knows where to look */
     int32_t     port;     /* an iterator's assigned exit; inert until phase 5 */
     int32_t     n_in;     /* how many input values ride along */

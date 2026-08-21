@@ -670,6 +670,15 @@ typedef struct map {
      * names grow behind them (issue 212). */
     int    n_named;
 
+    /*
+     * True when this program was started beside another and shares
+     * its workers (issue 212). It borrows the pool and must not
+     * destroy it — the program that made it owns it, and tearing down
+     * a pool other programs are still running on would take them with
+     * it.
+     */
+    int    pool_is_borrowed;
+
     /* The rewiring lock (issue 704): edge validation and list
      * mutation are one operation under it, never two. */
     pthread_mutex_t rewire_mutex;
@@ -952,6 +961,28 @@ const char *map_designate_output(map_t *m, int station);
  * mis-named station.
  */
 const char *map_designate_input(map_t *m, int station);
+
+/* {{{ map_start_beside() — issue 212 */
+/*
+ * **Start a fresh program beside this one, sharing its workers.**
+ *
+ * Composing and starting are two different acts and this is the
+ * second. A program started beside another has its own station table,
+ * its own rewiring lock, its own everything — except the pool.
+ *
+ * **You cannot wire to it**, and that is the point rather than a
+ * limitation. A wire is a station index and a port index, and an
+ * index only means anything inside one station table; two stations
+ * can be wired together exactly when they sit in the same table.
+ * Reaching a program started beside you is what its entrance is for.
+ *
+ * Which of the two you want follows from whether you want isolation.
+ * A composed program is one graph and a parent wires across the seam
+ * like it wires anything. A started one is separate, reached only
+ * through its doors, and a program that runs other programs wants
+ * that.
+ */
+map_t *map_start_beside(map_t *parent);
 
 /*
  * Deliver into a program from outside it. NULL when taken, or a
