@@ -201,5 +201,5 @@ field tables stop being walked and start being pointed at:**
 - [401 — Static input values](completed/401-static-ports.md), which creates the
   need by removing the retained text
 - [703 — The map dump](completed/703-map-dump.md), the first caller
-- [209 — The output station](209-map-output-collection.md), where a
+- [209 — The output station](completed/209-map-output-collection.md), where a
   program's results are text for the same reason

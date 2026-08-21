@@ -666,7 +666,7 @@ about the wrong operation.
   being a phase
 - [703 — The map dump](703-map-dump.md), which becomes the
   exact inverse of the reader
-- [209 — The output station](../209-map-output-collection.md) and
+- [209 — The output station](209-map-output-collection.md) and
   [506 — Boxes with several output ports](506-multi-output-boxes.md),
   the two halves of a program being usable as a box
 - [008 — Map file format](../../docs/008-map-file-format.md) and

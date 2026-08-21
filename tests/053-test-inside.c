@@ -78,7 +78,10 @@ static void test_buffer_report_names_the_right_slot(void)
     snprintf(map_text, sizeof map_text,
         "feeder seven p\n"
         "  out 0 - pairer.0\n"
-        "pairer add p\n"
+        /* Somewhere for results to come from, which every program has
+         * to declare (issue 209). The pairer is the station whose
+         * value is the point of the graph. */
+        "pairer add p result\n"
         "  out 0 - drain.0\n"
         "drain swallow p\n");
     write_text(map_path, map_text);
@@ -123,7 +126,7 @@ static void test_station_counts(void)
         "  0 = \"%s\"\n"
         "head seven p\n"
         "  out 0 - mid.0\n"
-        "mid double_it p\n"
+        "mid double_it p result\n"
         "  out 0 - sink.1\n"
         "sink write_int_file p\n"
         "  in 0 $0\n", out_path);
@@ -174,7 +177,7 @@ static void test_round_trip(void)
         "judge keep c\n"
         "  in 1 $0\n"
         "  out 2 - boost.0\n"
-        "boost add p\n"
+        "boost add p result\n"
         "  in 1 $2\n"
         "  out 0 - deal.0\n"
         "deal keep i\n"
@@ -230,7 +233,7 @@ static void test_rewire_mid_run(void)
         "  1 = \"%s\"\n"
         "head seven p\n"
         "  out 0 - hold.0\n"
-        "hold keep p\n"
+        "hold keep p result\n"
         "  out 0 - writer_a.1\n"
         "writer_a write_int_file p\n"
         "  in 0 $0\n"

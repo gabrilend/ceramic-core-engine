@@ -292,7 +292,11 @@ int main(void)
         "  in 1 = 1000\n"
         "  out 0 - twice.0\n"
         "  out 0 - waiting.0\n"
-        "twice double_it p\n"
+        /* The way out. Every program declares one (issue 209), and
+         * this is another thing the two paths have to agree about:
+         * the file says it in a fourth word, the surface says it in a
+         * call, and the dumps have to come out the same. */
+        "twice double_it p result\n"
         "  in 0 x64\n"
         "waiting add p\n"
         "  in 1 -\n";
@@ -340,6 +344,7 @@ int main(void)
     map_in_port_start_depth(built, 2, 0, 64);
     must_take(map_configure_port(built, 3, 1, IN_PORT_NONE, NULL),
               "a port left unwired");
+    must_take(map_designate_output(built, 2), "the way out");
 
     map_connect(built, 0, 0, 1, 0);   /* source -> adder.0 */
     map_connect(built, 1, 0, 2, 0);   /* adder  -> twice.0 */

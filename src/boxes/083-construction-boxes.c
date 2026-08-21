@@ -133,6 +133,50 @@ int program_set_constant(program p, int station, int port,
 }
 
 /*
+ * **Mark a station as a door, and say which way it faces.**
+ *
+ * One operation rather than two, because the two are one design seen
+ * from either side: a program's entrance is the station the outside
+ * may deliver to, and its results are where a parent wires from. A
+ * station is neither or one of them, never both.
+ *
+ * This had to exist the moment a program was required to say where
+ * its results come from (issue 209). Adding a station, drawing a wire
+ * and writing a constant were enough to build a *graph*; they were
+ * not enough to build a **program**, because the thing that turns
+ * reachable internals into a surface is exactly this mark — and a map
+ * that could build only graphs could build nothing that would run.
+ *
+ * `facing` is 1 for the way in and 2 for the way out, matching the
+ * mark the engine keeps. A number rather than text because a wire
+ * carries values, and this is one; a box that took a word would need
+ * the text to have come from somewhere, and the somewhere would be a
+ * constant nobody can see from the map.
+ */
+int program_set_door(program p, int station, int facing)
+{
+    map_t *m = program_of(p, "marking a door");
+    if (!m)
+        return 0;
+    const char *no;
+    if (facing == DOOR_IN)
+        no = map_designate_input(m, station);
+    else if (facing == DOOR_OUT)
+        no = map_designate_output(m, station);
+    else {
+        fprintf(stderr, "construction: refused a door: %d is neither the "
+                        "way in (%d) nor the way out (%d)\n",
+                facing, DOOR_IN, DOOR_OUT);
+        return 0;
+    }
+    if (no) {
+        fprintf(stderr, "construction: refused a door: %s\n", no);
+        return 0;
+    }
+    return 1;
+}
+
+/*
  * Name a station, so the program it belongs to can be written out as
  * a file that reads back.
  */

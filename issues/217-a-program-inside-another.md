@@ -28,7 +28,7 @@ by one operation that applies every rule at any moment. Ports are
 configured by one operation. A program declares where its arguments
 arrive and where its results come from
 ([213](213-the-input-station.md),
-[209](209-map-output-collection.md)). Reading a file is already
+[209](completed/209-map-output-collection.md)). Reading a file is already
 nothing but a sequence of those calls
 ([210g](completed/210g-one-way-to-build-a-station.md)).
 
@@ -137,7 +137,7 @@ a collision to prevent.
 4. A parent wiring into an instance's entrance and out of its results,
    running it, and being unable to tell that the thing behind the port
    is a graph rather than a C function — which is
-   [209](209-map-output-collection.md)'s step 7 and
+   [209](completed/209-map-output-collection.md)'s step 7 and
    [213](213-the-input-station.md)'s step 6, both of which have been
    waiting for this.
 5. Instantiating into a program that is already running, since every
@@ -190,7 +190,7 @@ calling a generated function rather than walking a parse tree.
 
 - [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
   where this was described and from which it is split
-- [209 — The output station](209-map-output-collection.md), whose last
+- [209 — The output station](completed/209-map-output-collection.md), whose last
   step is a program used as a box
 - [213 — The input station](213-the-input-station.md), whose last step
   is the same thing from the other side

@@ -1,6 +1,6 @@
 # 213 — The input station
 
-The other door. [209](209-map-output-collection.md) names where a
+The other door. [209](completed/209-map-output-collection.md) names where a
 program's results come from; this names where its arguments arrive.
 They are one design and it is worth reading them together.
 
@@ -18,7 +18,7 @@ declaration is that reaching inside stops being possible by accident.
 A surface nobody has to respect is not a surface.
 
 **One mark, two directions**, shared with
-[209](209-map-output-collection.md), because the two are one design
+[209](completed/209-map-output-collection.md), because the two are one design
 seen from either side. A station is neither door, or one of them.
 Being both is refused: a program whose entrance is its exit is
 somebody having named the wrong station.
@@ -202,7 +202,7 @@ want to.
    the output declaration, and reader support for both.
 2. **Done.** One mark on an ordinary station saying it is a door and
    which way it faces, shared with
-   [209](209-map-output-collection.md).
+   [209](completed/209-map-output-collection.md).
 
    The station that runs no box was **not** built and turned out not
    to be needed: a door that shapes nothing is a station running an
@@ -299,7 +299,7 @@ want to.
 
 ## Related
 
-- [209 — The output station](209-map-output-collection.md), the same
+- [209 — The output station](completed/209-map-output-collection.md), the same
   design pointed the other way, and where the pass-through kind is
   described
 - [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),

@@ -28,7 +28,6 @@
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
-<a href="issue-209-map-output-collection.html" class="here">209 — The output station</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
@@ -67,6 +66,7 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-209-map-output-collection.html" class="here">209 — The output station</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -173,9 +173,28 @@ be narrow.</p>
 written back, so a program's doors survive being put on disk — which
 is most of what naming them was for, since a parent wires to the doors
 and a reloaded program without them is one nothing can reach.</p>
-<p>Still to come: the load-time check that what is wired into an output
-type-checks, and a demonstration of a program used as a box inside
-another — which now has both halves of the seam it needs.</p>
+<p>**And a program that never says where its results come from is
+refused**, when a caller declares it finished. The check is asked
+there rather than while a program is being built, because a program
+under construction legitimately has no result station yet — the same
+reason the other whole-program checks live there. A caller that never
+says it is finished is never asked.</p>
+<p><strong>Requiring it found something missing.</strong> A map that builds a map
+could add stations, draw wires, write constants and name stations —
+enough to assemble any <em>graph</em>, and not enough to assemble a
+<strong>program</strong>, because nothing among those operations could mark a door.
+So the mark became a box like the others, and the test that a map
+builds a map now places a station and marks it as the built program's
+way out, carrying the station's index between the two operations down
+an ordinary wire.</p>
+<p><strong>What is wired into a result type-checks by the ordinary wire check</strong>,
+which needed nothing added here: there is one wiring operation now and
+it applies every rule wherever a wire is drawn
+(<a href="done-210g-one-way-to-build-a-station.html">210g</a>).</p>
+<p>Still to come, elsewhere: a demonstration of a program used as a box
+inside another, which is <a href="issue-217-a-program-inside-another.html">217</a>'s work
+— this issue built the seam and that one builds the thing that crosses
+it.</p>
 <h3>What stood before</h3>
 <p>A program has no output, and no way to say where its results come from.</p>
 <p>Values move between stations and stop there. A station whose box
@@ -382,13 +401,21 @@ warning is the notice, and it fires from the first doubling.</p>
    unlike values leaving a port, this order means something.
 5. <strong>Done.</strong> The dump writes the word and a test reloads a written-out
    program to prove both doors survived.
-6. The load-time check that a declared output station exists and that
-   what is wired into it type-checks — the ordinary wire check applied
-   at one more place.
-7. A demonstration program used as a box inside another, wired from its
-   output ports, with the parent unable to tell whether the thing
-   behind the port is a graph or a C function — and the same program
-   run alone, buffering, warning, and drained by its caller.</p>
+6. <strong>Done.</strong> A program that declares no result station is refused when
+   a caller says it is finished. What is wired into one type-checks by
+   the ordinary wire check, which needed nothing added: there is one
+   wiring operation and it applies every rule at every moment
+   (<a href="done-210g-one-way-to-build-a-station.html">210g</a>).</p>
+<p>   The requirement pulled one thing behind it. A map that builds a map
+   had no way to mark a door, so the operations it had could assemble
+   a graph and could not assemble a program. Marking a door is a box
+   now, and the map-builds-a-map test uses it — the index of the
+   station it just placed travels to the operation that marks it, down
+   an ordinary wire, with nothing kept between the two.
+7. <strong>Moved</strong> to <a href="issue-217-a-program-inside-another.html">217</a>, which is where
+   a program used as a box got split. This issue built one half of the
+   seam and <a href="issue-213-the-input-station.html">213</a> built the other; what
+   crosses it belongs with the thing that does the crossing.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>

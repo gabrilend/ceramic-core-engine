@@ -58,8 +58,22 @@ static map_t *a_program(int designate)
     must_take(map_name_station(m, out, "result"), "a name");
 
     must_take(map_wire(m, src, 0, out, 0), "a wire");
-    if (designate)
-        must_take(map_designate_output(m, out), "the designation");
+
+    /*
+     * **Every program declares a way out, so the scenes differ by
+     * *which* station is one rather than by whether any is** (issue
+     * 209). A program that has never said where its results come from
+     * is refused when it is brought up, and that is the requirement
+     * this file's first scene exists to be the happy side of.
+     *
+     * So the undesignated case marks the *source* instead. It changes
+     * nothing anybody here observes — the source's output is wired to
+     * the second station, and the designation only adds a rule for a
+     * port wired nowhere — and it leaves station one undesignated,
+     * which is the whole of what this scene is about.
+     */
+    must_take(map_designate_output(m, designate ? out : src),
+              "the designation");
 
     map_start(m, 2);
     must_take(map_bring_up(m), "the program");

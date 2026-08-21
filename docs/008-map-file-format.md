@@ -192,6 +192,25 @@ given a form of its own.
 A station may be one door or neither. Being both is refused: a program
 whose entrance is its exit is somebody having named the wrong station.
 
+**Every program has at least one `result`, and a file that names none
+is refused.** Not because the engine needs it — a program with no
+result station would run perfectly — but because without the
+requirement there are two different ways to produce nothing, and only
+one of them is legible. A program that does all its work by side
+effect and a program whose author forgot the results look identical
+from outside: a box is a C function, and nothing about it says whether
+it touches the world.
+
+The parallel is a C function returning void. It still declares its
+return, and the declaration is what a caller reads. Here the station
+is the declaration, and **what flows through it is a separate
+matter** — a `result` station with nothing wired into it is the
+ordinary way to say "this program produces nothing", and it is exactly
+as valid as one carrying a value.
+
+An entrance is not required, because a program that takes no arguments
+is a complete thought. A program that produces nothing has to say so.
+
 **A program may have several of each.** A box returns one value, so a
 station has one output port, so one station is one result. A program
 producing three things has three stations marked `result`, each with

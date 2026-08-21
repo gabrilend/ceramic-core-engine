@@ -12,7 +12,7 @@ consumers. Two different diagnoses, written into the output so nobody
 has to work out which they are looking at.
 
 There is now a third: an **output buffer** piling up
-([209](../209-map-output-collection.md)). It is not a rate mismatch at
+([209](209-map-output-collection.md)). It is not a rate mismatch at
 all. It means the program's results are accumulating with nobody
 collecting them — computing into somewhere nobody is looking. So unlike
 the other two, which are performance signals summarised at teardown, it

@@ -11,7 +11,7 @@ smaller and louder: an **output buffer growing** is reported from the
 first doubling, because unlike the two piles this phase already
 distinguishes, it does not mean a rate mismatch. It means nobody is
 collecting the program's results at all
-([209](../209-map-output-collection.md)).
+([209](209-map-output-collection.md)).
 
 The reasoning that produced the gather column outlives it, and it is
 the best sentence in this issue: **charge a cost where it is actually

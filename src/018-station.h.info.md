@@ -136,6 +136,16 @@ port operation that did.
 operation under the name callers already say, for the cases with no
 text: it stops the program on refusal rather than handing one back.
 
+**map_bring_up(map) → NULL or a collected complaint** — a caller
+declaring a program finished: the whole-program checks run, and
+everything that can run without waiting for an arrival is started.
+Repeatable, and nothing is started when anything is wrong. What it
+refuses: an arrow landing on a port that is not a buffer, and **a
+program that never says where its results come from** — one station
+has to be marked as the way out, though nothing need be wired into it.
+What it warns about without refusing: a port with no source, and
+buffered inputs no arrow feeds.
+
 **map_check_sources(map) → NULL or a sentence** — every parameter with
 nowhere to get a value, named and counted. Asked when somebody says
 the program is finished, not while it is being assembled, because a

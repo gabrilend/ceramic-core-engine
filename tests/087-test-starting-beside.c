@@ -47,8 +47,29 @@ int main(void)
     map_place_box(first, keeper, "keep", STATION_PLAIN);
     must_take(map_name_station(first, keeper, "keeper"), "a name");
     must_take(map_designate_input(first, keeper), "an entrance");
+
+    /*
+     * A way out, with nothing wired into it yet. Every program
+     * declares where its results come from (issue 209), and this is
+     * the case that requirement is shaped around: the declaration is
+     * the interface, and what flows through it is a separate matter.
+     *
+     * It is also what makes the demonstration below possible, because
+     * it gives this program a station 1 — and the second program has
+     * one too, and they are not the same station.
+     */
+    int outcome = map_add_station(first);
+    map_place_box(first, outcome, "double_it", STATION_PLAIN);
+    must_take(map_name_station(first, outcome, "outcome"), "a name");
+    must_take(map_designate_output(first, outcome), "a result");
+
     map_start(first, 3);
     pool_submitter_register(first->pool);
+    /* Its way out has nothing wired into it yet — the wire arrives
+     * further down — so bringing it up says so. That notice is this
+     * program being honest, not this program being wrong. */
+    printf("  (the notice below is a way out nobody has wired yet)\n");
+    fflush(stdout);
     must_take(map_bring_up(first), "the first program");
     pool_release(first->pool);
 
@@ -76,20 +97,36 @@ int main(void)
     }
 
     /*
-     * **You cannot wire across.** Both programs have a station 0, and
-     * they are different stations — an index is only meaningful
-     * inside one table. Asking to wire from the first program's
-     * station into the second's is not refused by some rule about
-     * programs; it is simply a wire inside the first program, which
-     * has no station 1 at all. That is what "indices do not cross
-     * maps" means in practice.
+     * **You cannot wire across, and nothing refuses you.** That is the
+     * uncomfortable half of the claim and the half worth proving.
+     *
+     * Both programs have a station 1. They are different stations,
+     * because an index is only meaningful inside one table. So asking
+     * the first program to wire into "station 1" is not refused by
+     * some rule about programs — there is no such rule and no such
+     * check. It draws a perfectly ordinary wire, **inside the first
+     * program**, to the first program's own station 1.
+     *
+     * This scene used to assert a refusal, which was true only because
+     * the first program happened to have no station 1 to land on. That
+     * made it a test of an accident. What is actually guaranteed is
+     * narrower and more useful to know: a wire cannot leave a table,
+     * so a request that looks like it crosses lands at home instead.
+     * Reaching a program started beside you is what its entrance is
+     * for, and there is no second way.
      */
-    if (map_wire(first, keeper, 0, 1, 0) == NULL) {
-        fprintf(stderr, "a wire reached across into another program\n");
+    if (map_station(first, 1) == map_station(second, 1)) {
+        fprintf(stderr, "the two station 1s are one record, so this proves "
+                        "nothing\n");
         return 1;
     }
-    printf("  a wire could not reach across into a program started "
-           "beside\n");
+    must_take(map_wire(first, keeper, 0, 1, 0),
+              "a wire that looks like it crosses");
+
+    int homeward = 21;
+    must_take(map_deliver_argument(first, keeper, 0, &homeward,
+                                   sizeof homeward),
+              "a value into the first program");
 
     /* Reached the only way anything outside reaches a program. */
     for (int i = 1; i <= 4; i++) {
@@ -101,6 +138,25 @@ int main(void)
 
     pool_submitter_unregister(first->pool);
     pool_join(first->pool);
+
+    /*
+     * The value went to the first program's own station 1 — doubled
+     * to 42 and held at its way out — rather than to the second
+     * program's station 1, which doubles too and would have produced
+     * the same number somewhere else entirely. Two stations, one
+     * index, and the wire stayed home.
+     */
+    int homeward_result = 0;
+    if (map_output_waiting(first, outcome) != 1
+        || !map_output_take(first, outcome, &homeward_result,
+                            sizeof homeward_result)
+        || homeward_result != 42) {
+        fprintf(stderr, "the wire that looked like it crossed did not "
+                        "land in the first program\n");
+        return 1;
+    }
+    printf("  a wire naming another program's index drew an ordinary wire "
+           "at home instead; indices do not cross\n");
 
     if (map_output_waiting(second, answer) != 4) {
         fprintf(stderr, "the second program produced %d results, not 4\n",

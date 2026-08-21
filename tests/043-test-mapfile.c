@@ -157,7 +157,12 @@ static void test_half_built_round_trips(void)
      * wired is still refused at load, which issue 212 changes when it
      * stops the seed sweep being a phase. */
     snprintf(map_text, sizeof map_text,
-        "runner add p\n"
+        /* Marked as the way out, because a program that never says
+         * where its results come from is not finished (issue 209).
+         * Nothing is wired out of it, which is exactly the case the
+         * requirement is built to make legible: the declaration is
+         * the interface, and what flows through it is separate. */
+        "runner add p result\n"
         "  in 0 = 3\n"
         "  in 1 = 4\n"
         "\n"
@@ -235,7 +240,11 @@ static void test_a_program_is_a_text_file(void)
         "  in 1 $1\n"
         "  out 2 - doubler.0\n"
         "\n"
-        "doubler double_it p\n"
+        /* The way out is the doubler rather than the sink, because a
+         * station that returns nothing has no output port to be one
+         * with (issue 209). Its value goes on to the sink as well —
+         * being the way out adds a rule only when nothing is wired. */
+        "doubler double_it p result\n"
         "  out 0 - sink.1\n"
         "\n"
         "sink write_int_file p\n"
@@ -347,17 +356,26 @@ static void test_every_refusal(void)
         "there is no pull path any more",
         "a gather line from an old map was accepted");
 
+    /* Declared a way out, so that this map has exactly the one fault
+     * it is testing for. Without the word it fails earlier, for never
+     * having said where its results come from, and the refusal under
+     * test never runs. */
     expect_death_saying(
-        "lonely add p\n",
+        "lonely add p result\n",
         "nothing to seed",
         "a map that can never start was accepted");
+
+    expect_death_saying(
+        "head seven p\n",
+        "never says where its results come from",
+        "a program that never says what it produces was accepted");
 
     expect_death_saying(
         "silent swallow c\n",
         "cannot be a comparator",
         "a void comparator was accepted");
 
-    printf("  eleven wrong maps, eleven refusals, each naming its mistake\n");
+    printf("  twelve wrong maps, twelve refusals, each naming its mistake\n");
 }
 /* }}} */
 

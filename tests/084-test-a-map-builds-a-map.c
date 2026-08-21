@@ -75,6 +75,39 @@ int main(void)
                                  "\"seven\""),
               "the box to place");
 
+    /*
+     * The second operation, and the one that makes what the first
+     * built into a **program** rather than a graph: mark the station
+     * it placed as the way out.
+     *
+     * It had to exist as a box the moment a program was required to
+     * say where its results come from (issue 209). Placing stations
+     * and drawing wires can assemble any shape; nothing among them
+     * could produce something that would *run*, because the thing
+     * that turns reachable internals into a surface is this mark.
+     *
+     * **The station index travels down a wire**, which is the whole
+     * demonstration. The first operation returns where it put the
+     * station; the second takes a station to mark. One is the other,
+     * and the engine moves it between them the way it moves any
+     * value — no state kept between the two, no order arranged, just
+     * a wire and the ordinary rule that a station runs when its ports
+     * are full.
+     */
+    int doorman = map_add_station(builder);
+    map_place_box(builder, doorman, "program_set_door", STATION_PLAIN);
+    must_take(map_name_station(builder, doorman, "doorman"), "a name");
+    must_take(map_configure_port(builder, doorman, 0, IN_PORT_STATIC, address),
+              "the program to mark a door in");
+    /* Port 1 arrives by wire — it is where the station landed. */
+    must_take(map_configure_port(builder, doorman, 2, IN_PORT_STATIC, "2"),
+              "which way the door faces");
+    must_take(map_wire(builder, adder, 0, doorman, 1),
+              "the wire carrying a station index between two operations");
+
+    /* The builder's own way out is the answer to "did it work". */
+    must_take(map_designate_output(builder, doorman), "the builder's way out");
+
     map_start(builder, 2);
     must_take(map_bring_up(builder), "the builder");
     pool_release(builder->pool);
@@ -100,7 +133,20 @@ int main(void)
                 made->box_name ? made->box_name : "(nothing)");
         return 1;
     }
-    printf("  a map placed a station into another map\n");
+    if (made->door != DOOR_OUT) {
+        fprintf(stderr, "the builder placed the station but did not mark "
+                        "it as the way out\n");
+        return 1;
+    }
+    int worked = 0;
+    if (!map_output_take(builder, doorman, &worked, sizeof worked)
+        || worked != 1) {
+        fprintf(stderr, "the builder's own result says the door was not "
+                        "marked\n");
+        return 1;
+    }
+    printf("  a map placed a station into another map and marked it as "
+           "that map's way out\n");
 
     /*
      * And the built program runs. This is the half that a shape-only

@@ -29,6 +29,19 @@ one somebody had to mean.
 | `program_wire` | a program, two stations and two ports | 1 drawn, 0 refused | Draws a wire, applying every rule the engine applies anywhere else. |
 | `program_set_constant` | a program, a station, a port, text | 1 taken, 0 refused | Gives a port a constant. Text rather than bytes, because bytes are exact only against the build that wrote them while text resolves its layout when it is read. |
 | `program_name_station` | a program, a station, a name | 1 taken, 0 refused | Names a station, so the program can be written out as a file that reads back. |
+| `program_set_door` | a program, a station, which way it faces (1 in, 2 out) | 1 marked, 0 refused | Marks a station as a door. One operation for both directions, because the two are one design seen from either side. |
+
+**The door operation is what turns a graph into a program**, and it
+had to exist the moment a program was required to say where its
+results come from (issue 209). The four operations above it can
+assemble any shape; none of them could produce something that would
+*run*, because the thing that turns reachable internals into a surface
+is the mark. A map that could build only graphs could build nothing.
+
+It takes a number rather than a word for the direction, because a wire
+carries values: a box taking a word would need the word to have come
+from somewhere, and the somewhere would be a constant nobody reading
+the map can see.
 
 A box returns one value, so a refusal's reason cannot come back beside
 the answer — it is printed, and a map that wants to react reacts to

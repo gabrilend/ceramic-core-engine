@@ -28,7 +28,6 @@
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
-<a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
@@ -67,6 +66,7 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-209-map-output-collection.html">209 — The output station</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -168,7 +168,7 @@ its own.</p>
 <tr><td>206 — task struct</td><td>complete</td><td>One exact-size allocation: shim, station, port, input copies, output.</td></tr>
 <tr><td>207 — hand-built maps</td><td><strong>being retired</strong></td><td>The scaffolding is absorbed into one construction surface, or deleted.</td></tr>
 <tr><td>208 — phase 2 demo</td><td>complete</td><td>Occupancy, overlap, both backlog kinds, fan-out cost, live backpressure.</td></tr>
-<tr><td><a href="issue-209-map-output-collection.html">209 — the output station</a></td><td><strong>mechanism built</strong></td><td>A designation naming where results come from; unwired means hold, not discard, and the pile-up is shouted from the first doubling because it means nobody is collecting at all. The map file spells it and the dump writes it back. A program used as a box remains.</td></tr>
+<tr><td><a href="done-209-map-output-collection.html">209 — the output station</a></td><td><strong>complete</strong></td><td>A designation naming where results come from; unwired means hold, not discard, and the pile-up is shouted from the first doubling because it means nobody is collecting at all. The map file spells it and the dump writes it back. And <strong>every program declares one</strong> — asked when a caller says the program is finished, satisfied by a station with nothing wired into it, because the declaration is the interface and what flows through it is separate. Requiring it found that a map which builds a map could assemble a graph and not a program: marking a door had to become a box like the others.</td></tr>
 <tr><td><a href="done-210-input-port-record.html">210 — what an input port is</a></td><td><strong>complete</strong></td><td>The record all three input kinds share, designed once — now two kinds plus unconfigured. Split into eight children, every one of them settled: six built, one refused, one construction surface with both its callers arrived.</td></tr>
 <tr><td>210a — the pull path removed</td><td><strong>complete</strong></td><td>The gatherer kind and everything reading it, taken out. Every box now runs on a worker that picked it up.</td></tr>
 <tr><td><a href="done-210b-the-port-record.html">210b — the port record</a></td><td><strong>complete</strong></td><td>Both storages on every port, the three-value tag, slots allocated at instantiation whatever the port is currently for — which is what makes changing a port's source a field write. The map file learned the two forms it owed: a bare dash for a port with no source, and <code>x64</code> before the source for a starting depth, so a half-built program round-trips.</td></tr>

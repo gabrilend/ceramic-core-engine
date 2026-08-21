@@ -92,6 +92,13 @@ What it checks:
   nothing ever writes to will never run. Reported — unless it is a
   declared entrance, which is precisely a station something outside
   delivers into.
+- **A program that never says where its results come from.** Fatal.
+  Bringing a program up is a caller declaring it finished, and a
+  finished program that has not said what it produces has not said
+  what it is for. A station marked as the way out **with nothing
+  wired into it** satisfies this completely — the declaration is the
+  interface, and what flows through it is a separate matter. See
+  [008](008-map-file-format.md).
 
 Two checks used to live here and can no longer be stated, because
 nothing is pulled: a cycle among gather links, and a port fanning out

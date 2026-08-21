@@ -33,9 +33,31 @@ written back, so a program's doors survive being put on disk — which
 is most of what naming them was for, since a parent wires to the doors
 and a reloaded program without them is one nothing can reach.
 
-Still to come: the load-time check that what is wired into an output
-type-checks, and a demonstration of a program used as a box inside
-another — which now has both halves of the seam it needs.
+**And a program that never says where its results come from is
+refused**, when a caller declares it finished. The check is asked
+there rather than while a program is being built, because a program
+under construction legitimately has no result station yet — the same
+reason the other whole-program checks live there. A caller that never
+says it is finished is never asked.
+
+**Requiring it found something missing.** A map that builds a map
+could add stations, draw wires, write constants and name stations —
+enough to assemble any *graph*, and not enough to assemble a
+**program**, because nothing among those operations could mark a door.
+So the mark became a box like the others, and the test that a map
+builds a map now places a station and marks it as the built program's
+way out, carrying the station's index between the two operations down
+an ordinary wire.
+
+**What is wired into a result type-checks by the ordinary wire check**,
+which needed nothing added here: there is one wiring operation now and
+it applies every rule wherever a wire is drawn
+([210g](210g-one-way-to-build-a-station.md)).
+
+Still to come, elsewhere: a demonstration of a program used as a box
+inside another, which is [217](../217-a-program-inside-another.md)'s work
+— this issue built the seam and that one builds the thing that crosses
+it.
 
 ### What stood before
 
@@ -102,7 +124,7 @@ port holds at least one value, and then one value is taken from each.
 Three values waiting on the first input and one on the second means one
 complete set moves and two stay behind, and the station waits for the
 second input to be fed again. This is not a rule added for doorways; it
-is [204](completed/204-readiness-check.md) doing what it already does,
+is [204](204-readiness-check.md) doing what it already does,
 and the doorway gets no exemption from it.
 
 **Which means a program's results cannot come out of step.** A program
@@ -162,13 +184,13 @@ exactly that, and is ordinary rather than suspicious.
 **The requirement is checked when the program is released to run**, not
 when a file finishes being read. There is no end-of-file moment any
 more — reading is a sequence of operations and several files can build
-one program ([212](completed/212-one-way-to-build-a-program.md)) — but there is
+one program ([212](212-one-way-to-build-a-program.md)) — but there is
 still a starting gate, where every worker parks until released
-([102](completed/102-workers-and-run-loop.md)). That gate is the one
+([102](102-workers-and-run-loop.md)). That gate is the one
 moment when a program stops being built and starts being a program, so
 it is where a whole-program requirement can honestly be asked. Failing
 it is an invalid operation and therefore fatal
-([106](106-stopping-on-purpose.md)).
+([106](../106-stopping-on-purpose.md)).
 
 ### The symmetric half
 
@@ -176,7 +198,7 @@ If a program has named output ports, it needs named input ports for the
 same reason: a parent wiring *into* a sub-program otherwise has to
 reach inside and name a station by its internal name, which is not
 composition. That is the input station, and it is
-[213](213-the-input-station.md) — the same design, pointed the other
+[213](../213-the-input-station.md) — the same design, pointed the other
 way.
 
 ### Several outputs means several stations
@@ -205,7 +227,7 @@ What it buys is that a program has several doors out rather than one.
 That turned out to be fine, and it settles something else: since a
 program's several outputs are several stations, a program used as a box
 never needs a box with several output ports — which retires
-[506](completed/506-multi-output-boxes.md), whose whole argument was that boxes
+[506](506-multi-output-boxes.md), whose whole argument was that boxes
 had to catch up to what programs could do.
 
 ### An unwired output port holds its values
@@ -286,13 +308,22 @@ warning is the notice, and it fires from the first doubling.
    unlike values leaving a port, this order means something.
 5. **Done.** The dump writes the word and a test reloads a written-out
    program to prove both doors survived.
-6. The load-time check that a declared output station exists and that
-   what is wired into it type-checks — the ordinary wire check applied
-   at one more place.
-7. A demonstration program used as a box inside another, wired from its
-   output ports, with the parent unable to tell whether the thing
-   behind the port is a graph or a C function — and the same program
-   run alone, buffering, warning, and drained by its caller.
+6. **Done.** A program that declares no result station is refused when
+   a caller says it is finished. What is wired into one type-checks by
+   the ordinary wire check, which needed nothing added: there is one
+   wiring operation and it applies every rule at every moment
+   ([210g](210g-one-way-to-build-a-station.md)).
+
+   The requirement pulled one thing behind it. A map that builds a map
+   had no way to mark a door, so the operations it had could assemble
+   a graph and could not assemble a program. Marking a door is a box
+   now, and the map-builds-a-map test uses it — the index of the
+   station it just placed travels to the operation that marks it, down
+   an ordinary wire, with nothing kept between the two.
+7. **Moved** to [217](../217-a-program-inside-another.md), which is where
+   a program used as a box got split. This issue built one half of the
+   seam and [213](../213-the-input-station.md) built the other; what
+   crosses it belongs with the thing that does the crossing.
 
 ## Open questions
 
@@ -337,7 +368,7 @@ warning is the notice, and it fires from the first doubling.
   arriving late instead of at once; and blocking the producer stalls
   upstream on a consumer that may never come, which is
   indistinguishable from a wedge — a condition
-  [106](106-stopping-on-purpose.md) establishes the engine cannot
+  [106](../106-stopping-on-purpose.md) establishes the engine cannot
   detect from inside.
 
   A ceiling would also need a number, and any number is wrong on a
@@ -366,17 +397,17 @@ warning is the notice, and it fires from the first doubling.
 
 ## Related
 
-- [213 — The input station](213-the-input-station.md), the same design
+- [213 — The input station](../213-the-input-station.md), the same design
   pointed the other way
-- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   where a program becoming usable as a box is the point
-- [506 — Boxes with several output ports](completed/506-multi-output-boxes.md),
+- [506 — Boxes with several output ports](506-multi-output-boxes.md),
   the box side of the same question
-- [205 — The delivery walk](completed/205-delivery-walk.md), which
+- [205 — The delivery walk](205-delivery-walk.md), which
   gains one case: a destination that is a boundary rather than a slot
-- [104 — Termination by last sleeper](completed/104-termination-by-last-sleeper.md),
+- [104 — Termination by last sleeper](104-termination-by-last-sleeper.md),
   untouched — an earlier draft of this issue would have added a final
   act to it, and the reason it does not is worth keeping visible
-- [003 — Delivery](../docs/003-datapath-delivery.md) and
-  [008 — Map file format](../docs/008-map-file-format.md), each of
+- [003 — Delivery](../../docs/003-datapath-delivery.md) and
+  [008 — Map file format](../../docs/008-map-file-format.md), each of
   which needs a section

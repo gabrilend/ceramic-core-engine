@@ -21,7 +21,7 @@ one pointer and takes no lock at all.
 
 **And it gains one case**: a destination that is a *boundary* rather
 than a slot. An output station runs no box
-([209](../209-map-output-collection.md)), so arriving at one means the
+([209](209-map-output-collection.md)), so arriving at one means the
 value has left the program — or, if nothing is wired beyond it, is held
 where it landed.
 

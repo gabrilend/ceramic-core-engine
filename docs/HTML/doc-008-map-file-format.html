@@ -28,7 +28,6 @@
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
-<a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
@@ -67,6 +66,7 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-209-map-output-collection.html">209 — The output station</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -305,6 +305,22 @@ exactly the failure a depth followed by a dash produced before it was
 given a form of its own.</p>
 <p>A station may be one door or neither. Being both is refused: a program
 whose entrance is its exit is somebody having named the wrong station.</p>
+<p>**Every program has at least one <code>result</code>, and a file that names none
+is refused.** Not because the engine needs it — a program with no
+result station would run perfectly — but because without the
+requirement there are two different ways to produce nothing, and only
+one of them is legible. A program that does all its work by side
+effect and a program whose author forgot the results look identical
+from outside: a box is a C function, and nothing about it says whether
+it touches the world.</p>
+<p>The parallel is a C function returning void. It still declares its
+return, and the declaration is what a caller reads. Here the station
+is the declaration, and **what flows through it is a separate
+matter** — a <code>result</code> station with nothing wired into it is the
+ordinary way to say "this program produces nothing", and it is exactly
+as valid as one carrying a value.</p>
+<p>An entrance is not required, because a program that takes no arguments
+is a complete thought. A program that produces nothing has to say so.</p>
 <p><strong>A program may have several of each.</strong> A box returns one value, so a
 station has one output port, so one station is one result. A program
 producing three things has three stations marked <code>result</code>, each with

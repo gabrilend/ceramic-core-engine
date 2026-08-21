@@ -1197,6 +1197,54 @@ const char *map_bring_up(map_t *m)
     free(landed);
     free(first_port);
 
+    /*
+     * **A program says where its results come from, or it is not
+     * finished** (issue 209).
+     *
+     * Bringing a program up is a caller declaring it finished, and a
+     * finished program that has never said what it produces has not
+     * said what it is for. The parallel is a C function returning
+     * void: it still declares its return, and the declaration is what
+     * a caller reads.
+     *
+     * What the requirement buys is that a program's interface is
+     * **total**. Without it there are two different ways to produce
+     * nothing — no result station at all, and a result station nobody
+     * wired anything into — and only the second is legible. The
+     * engine cannot tell a program that deliberately does all its work
+     * by side effect from one whose author forgot the results, because
+     * a box is a C function and nothing about it says whether it
+     * touches the world. Requiring the declaration moves that from
+     * something the engine would have to guess into something the
+     * program states, and a program that writes to disk and returns
+     * nothing then declares exactly that.
+     *
+     * **A station with nothing wired into it satisfies this**, which
+     * is the whole point: the declaration is the interface, and what
+     * flows through it is a separate matter.
+     *
+     * It is asked here rather than while a program is being built,
+     * because a program under construction legitimately has no result
+     * station yet — the same reason the other whole-program checks
+     * live here. A caller that never says it is finished is never
+     * asked.
+     */
+    int has_result = 0;
+    for (int i = 0; i < m->n_stations; i++) {
+        station_t *s = map_station(m, i);
+        if (s->call && s->door == DOOR_OUT)
+            has_result = 1;
+    }
+    if (!has_result) {
+        faults++;
+        if (used < (int)sizeof said - 128)
+            used += snprintf(said + used, sizeof said - (size_t)used,
+                             "%sthis program never says where its results "
+                             "come from — one station has to be marked as "
+                             "the way out, even when nothing is wired into "
+                             "it", used ? "; " : "");
+    }
+
     if (faults) {
         if (used < (int)sizeof said - 48)
             snprintf(said + used, sizeof said - (size_t)used,
