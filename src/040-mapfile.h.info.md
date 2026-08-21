@@ -35,6 +35,31 @@ This caller adds exactly one policy of its own: a *file* somebody
 asked to be run that starts nothing and declares no entrance is
 refused, because it would do nothing at all.
 
+**map_instantiate_file(map, path) → instance** — **a description
+brought inside a program that already exists.** Reading a file into a
+fresh program is this with the program fixed at "a new empty one",
+which is what it always was.
+
+A description is a **template being instantiated**, not a program
+being merged: new stations are built for its stations and wired the
+way it says, and one description can be instantiated as many times
+into one program as anybody likes with nothing shared between the
+copies. Nothing that already exists is renumbered.
+
+What the description says and where its stations land are related by a
+**table**, not an offset: adding a station hands back a freed place
+before it grows the table, so a program that has had removals gets
+whatever holes exist, in whatever order. The offset is what the
+translation degenerates to when nothing has been removed.
+
+**map_instance_entrance / map_instance_result(map, instance, nth) →
+int** — the nth door facing that way, or -1. This is the whole of what
+a parent is entitled to know about something it brought inside itself;
+everything that is not a door belongs to the description's author to
+rename or restructure.
+
+**map_instance_free(instance)** — the handle goes, the stations stay.
+
 **map_seed_count(map) → int** — how many stations the bring-up
 started; one when the author expected ten means a wiring mistake.
 

@@ -53,6 +53,23 @@ check: it asked the width question only when both stations had input
 port arrays, and a box taking no arguments has none. See
 `052-rewire.c.info.md`.
 
+## Reading into a program that already exists
+
+The two passes take a **translation table** rather than a base, and
+the reason is worth knowing: adding a station hands back a *freed*
+place before it grows the table, so a description read into a program
+that has had removals gets whatever holes exist, in whatever order.
+An offset is right only while nothing has ever been taken out.
+
+That is what makes bringing a description inside an existing program
+the same act as reading one into a fresh one (issue 217). Nothing that
+already exists is renumbered; new stations are built and the
+description's own numbers are translated to wherever they landed.
+
+Arrows resolve against **the description being read**, never against
+the program. A name does work only inside a description, so an arrow
+to `gate` can never land on somebody else's `gate`.
+
 ## The load-time breakdown
 
 Four stages, not five: parse, first pass, second pass, bring-up.

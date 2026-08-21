@@ -292,6 +292,28 @@ an old map stops with an explanation rather than loading into
 something its author did not write. This matters more than it looks:
 the two forms differ by one character, and the wrong one would have
 loaded and run.</p>
+<h3>What a station may be called</h3>
+<p>A name is an arbitrary label. <strong>The engine never reads one</strong> — every
+wire is an index — and nothing mechanical anywhere depends on one. Two
+stations in one program may share a name and nothing about the program
+is worse for it.</p>
+<p>The one place a name does any work is inside a <em>file</em>, because text
+has no indices and an arrow written down has to say something. So two
+rules follow, and both are about the file rather than about the
+program:</p>
+<p><strong>A file may not name two stations the same thing.</strong> An arrow to
+<code>gate</code> in a file with two <code>gate</code> lines cannot say which it means, so
+the reader refuses it.</p>
+<p><strong>A station cannot be called <code>in</code>, <code>out</code> or <code>statics</code>.</strong> The reader
+dispatches on the first word of a line, and those three already mean
+something there.</p>
+<p><strong>And the dump makes names unique on the way out.</strong> A program can
+legitimately hold two stations called <code>gate</code> — bringing one
+description inside another twice produces exactly that — and writing
+it down needs labels the file can tell apart. The second one is
+written with a suffix; nothing is lost, because a label carrying no
+meaning can be spelled differently without the program changing. The
+names on the running program are untouched.</p>
 <h3>A station may be one of the program's doors</h3>
 <p>A fourth word on a station line says that this station is where the
 outside delivers, or where the program's results come from:</p>

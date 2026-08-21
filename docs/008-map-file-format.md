@@ -170,6 +170,34 @@ something its author did not write. This matters more than it looks:
 the two forms differ by one character, and the wrong one would have
 loaded and run.
 
+### What a station may be called
+
+A name is an arbitrary label. **The engine never reads one** — every
+wire is an index — and nothing mechanical anywhere depends on one. Two
+stations in one program may share a name and nothing about the program
+is worse for it.
+
+The one place a name does any work is inside a *file*, because text
+has no indices and an arrow written down has to say something. So two
+rules follow, and both are about the file rather than about the
+program:
+
+**A file may not name two stations the same thing.** An arrow to
+`gate` in a file with two `gate` lines cannot say which it means, so
+the reader refuses it.
+
+**A station cannot be called `in`, `out` or `statics`.** The reader
+dispatches on the first word of a line, and those three already mean
+something there.
+
+**And the dump makes names unique on the way out.** A program can
+legitimately hold two stations called `gate` — bringing one
+description inside another twice produces exactly that — and writing
+it down needs labels the file can tell apart. The second one is
+written with a suffix; nothing is lost, because a label carrying no
+meaning can be spelled differently without the program changing. The
+names on the running program are untouched.
+
 ### A station may be one of the program's doors
 
 A fourth word on a station line says that this station is where the

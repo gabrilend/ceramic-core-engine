@@ -152,6 +152,51 @@ map_t *map_load_file(const char *path, int n_workers);
 int map_seed_count(map_t *m);
 /* }}} */
 
+/* {{{ map_instantiate_file() — issue 217 */
+/*
+ * **A description brought inside a program that already exists.**
+ *
+ * Reading a file into a fresh program is this with the program fixed
+ * at "a new empty one", which is what it always was. What changes is
+ * that the program may already have stations in it, so a description
+ * is a **template being instantiated** rather than a program being
+ * merged: new stations are built for its stations and wired the way
+ * it says, and one description can be instantiated as many times into
+ * one program as anybody likes with nothing shared between the
+ * copies.
+ *
+ * **Nothing that already exists is renumbered**, so the invariant
+ * everything here rests on — an index means what it meant — is never
+ * approached. What the description says and where its stations land
+ * are two different numbers, related by a table rather than by an
+ * offset: adding a station hands back a *freed* place before it grows
+ * the table, so a program that has had removals gets whatever holes
+ * exist, in whatever order. The offset is what the translation
+ * degenerates to when nothing has been removed.
+ *
+ * Legal at any moment, because every operation it is made of is.
+ */
+typedef struct map_instance {
+    /* Where each of the description's stations landed, in the order
+     * the description declared them. The engine needs it; a parent
+     * should want the doors instead. */
+    int *station;
+    int  count;
+} map_instance_t;
+
+map_instance_t map_instantiate_file(map_t *m, const char *path);
+
+/*
+ * **The nth door of an instance facing that way**, or -1. This is the
+ * whole of what a parent is entitled to know about something it
+ * brought inside itself: everything that is not a door belongs to the
+ * description's author to rename or restructure.
+ */
+int  map_instance_entrance(map_t *m, const map_instance_t *in, int nth);
+int  map_instance_result(map_t *m, const map_instance_t *in, int nth);
+void map_instance_free(map_instance_t *in);
+/* }}} */
+
 /* {{{ map_load_last_timing — the load-time cost, staged */
 /*
  * Where the loading time went, in seconds, for the most recent

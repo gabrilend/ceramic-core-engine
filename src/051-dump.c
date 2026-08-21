@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* {{{ kind_letter() */
 static char kind_letter(unsigned char kind)
@@ -58,6 +59,61 @@ void map_dump(map_t *m, FILE *out)
         abort();
     }
 
+    /*
+     * **The names written out are made unique, and the ones on the
+     * program are left alone** (issue 217).
+     *
+     * A station name is an arbitrary label the engine never reads;
+     * two stations in one program may share one and nothing about the
+     * program is worse for it. Bringing one description inside another
+     * twice produces exactly that — two copies of every station the
+     * description names, including its doors.
+     *
+     * A *file* cannot have two, and the reason is not fussiness: an
+     * arrow is written as a destination name, so a file with two
+     * `gate` lines cannot say which `gate` an arrow means. The parser
+     * refuses one, correctly.
+     *
+     * So the disambiguation happens here, where it is needed, and
+     * nothing is lost by it — a label carrying no meaning can be
+     * spelled differently without the program changing. What comes
+     * back from reading such a file is the same graph with different
+     * labels on some of its stations, which is the same program by
+     * every measure this project has.
+     *
+     * The suffix separator is a character the parser will accept
+     * inside a name and never confuse for anything else. It cannot be
+     * a dot: an arrow destination is split on its *last* dot to find
+     * the port, so `gate.2` would read as station `gate`, port 2.
+     */
+    char **written = calloc((size_t)(m->n_stations > 0 ? m->n_stations : 1),
+                            sizeof *written);
+    if (!written) {
+        fprintf(stderr, "dump: out of memory naming stations\n");
+        abort();
+    }
+    for (int i = 0; i < m->n_stations; i++) {
+        if (!map_station(m, i)->call)
+            continue;
+        const char *want = m->station_names[i];
+        char candidate[128];
+        snprintf(candidate, sizeof candidate, "%s", want);
+        for (int attempt = 2; ; attempt++) {
+            int taken = 0;
+            for (int j = 0; j < i; j++)
+                if (written[j] && strcmp(written[j], candidate) == 0)
+                    taken = 1;
+            if (!taken)
+                break;
+            snprintf(candidate, sizeof candidate, "%s~%d", want, attempt);
+        }
+        written[i] = strdup(candidate);
+        if (!written[i]) {
+            fprintf(stderr, "dump: out of memory naming stations\n");
+            abort();
+        }
+    }
+
     fprintf(out, "# dumped from the live station table — what the engine is\n");
     fprintf(out, "# actually running, which is not necessarily what any file\n");
     fprintf(out, "# said. derived facts appear as comments.\n");
@@ -89,7 +145,7 @@ void map_dump(map_t *m, FILE *out)
      */
     for (int i = 0; i < m->n_stations; i++) {
         station_t *s = map_station(m, i);
-        fprintf(out, "\n%s ", m->station_names[i]);
+        fprintf(out, "\n%s ", written[i]);
         /*
          * The station knows its own name (issue 311b): the generated
          * placement function wrote it as a literal. This used to scan
@@ -204,9 +260,13 @@ void map_dump(map_t *m, FILE *out)
             dest_set_t *set = out_port_dests(p);
             for (int di = 0; set && di < set->n; di++)
                 fprintf(out, "  out %d - %s.%d\n", out_port_index,
-                        m->station_names[set->items[di].station],
+                        written[set->items[di].station],
                         set->items[di].port);
         }
     }
+
+    for (int i = 0; i < m->n_stations; i++)
+        free(written[i]);
+    free(written);
 }
 /* }}} */

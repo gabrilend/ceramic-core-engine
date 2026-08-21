@@ -191,6 +191,59 @@ int program_set_door(program p, int station, int facing)
 }
 
 /*
+ * **Bring a described part inside this program, and wire it in.**
+ *
+ * One operation rather than three, and the shape was chosen against a
+ * more general one that would have cost more than it bought.
+ *
+ * The general version returns a *handle* — where the instance's
+ * entrance and its way out landed — and the caller wires them. A box
+ * returns one value, so that handle is a struct of two numbers, and
+ * getting the numbers out of it means a box that takes the struct and
+ * returns one field. That is **a function written to fit the engine**,
+ * which is the one cost this design refuses to impose (issue 209
+ * refused it in the same words when a station with several output
+ * ports was proposed).
+ *
+ * So the operation says what a composing map actually wants: *put
+ * this part between here and there*. It instantiates the description,
+ * wires the named station of this program into the part's first
+ * entrance, and wires the part's first way out into the named
+ * destination. No handle escapes, nothing needs unpacking, and every
+ * argument is a number or a piece of text a wire already carries.
+ *
+ * What it does not reach: a part with several entrances or several
+ * ways out, which needs the handle and therefore needs an answer to
+ * the question above. Recorded in 217 rather than guessed at.
+ */
+int program_place_part(program p, const char *path,
+                       int from_station, int from_port,
+                       int to_station, int to_port)
+{
+    map_t *m = program_of(p, "placing a part");
+
+    map_instance_t in = map_instantiate_file(m, path);
+    int entrance = map_instance_entrance(m, &in, 0);
+    int result = map_instance_result(m, &in, 0);
+    map_instance_free(&in);
+
+    if (entrance < 0)
+        refused(m, "a part", "the description declares no entrance, so "
+                             "nothing can be fed into it");
+    if (result < 0)
+        refused(m, "a part", "the description declares no way out, so "
+                             "nothing can be taken from it");
+
+    const char *no = map_wire(m, from_station, from_port, entrance, 0);
+    if (no)
+        refused(m, "the wire into a part", no);
+    no = map_wire(m, result, 0, to_station, to_port);
+    if (no)
+        refused(m, "the wire out of a part", no);
+    return 1;
+}
+
+/*
  * Name a station, so the program it belongs to can be written out as
  * a file that reads back.
  */

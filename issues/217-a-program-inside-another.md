@@ -7,6 +7,71 @@ sentence.
 
 ## Current behavior
 
+**Built.** A description can be brought inside a program that already
+exists, as many times as anybody likes, and a parent wires to what it
+brought in by its doors and nothing else.
+
+**It is instantiating a template, not merging two programs**, and
+saying it that way is what made it small. There is no second running
+program picked up and carried, no handle that becomes invalid, no
+table stitched onto another. There is a *description* and a table with
+some number of stations in it; new stations are built for the
+description's stations and wired the way it says. One description
+instantiated twice is two of everything — separate stations, separate
+buffers, separate constants — with nothing shared, which is the test
+that says template rather than move.
+
+**And no wire is rewritten**, so the invariant everything here rests
+on is never approached.
+
+**The offset was wrong, and the correction is the interesting part.**
+This issue said a description's numbers are translated by an offset:
+its third station becomes *base plus three*. That is true only while
+nothing has ever been removed. Adding a station hands back a **freed
+place** before it grows the table, so a program that has had removals
+gets whatever holes exist, in whatever order — and the offset story
+reads perfectly right up until it does not. What the reader keeps is a
+small **translation table** saying where each of the description's
+stations landed, and the offset is what that table degenerates to on a
+program nothing has been taken out of.
+
+**A parent is entitled to the doors and nothing else.** The handle
+could reach any of an instance's stations and doing so would be
+reaching inside something whose author may rename or restructure
+anything that is not a door, so what the surface offers is *the nth
+entrance* and *the nth way out*. The test wires two instances in
+series and reads twenty-eight out of them without naming anything
+inside either.
+
+**Instantiating into a running program needed nothing added**, because
+every operation it is made of was already legal at any moment.
+
+**The operation exists as a box, in a shape chosen against a more
+general one.** A box returns one value, so a handle carrying an
+entrance *and* a way out is a struct of two numbers — and getting the
+numbers out means a box that takes the struct and returns one field,
+which is **a function written to fit the engine**, the one cost this
+design refuses. So the box says what a composing map actually wants:
+*put this part between here and there*. No handle escapes and nothing
+needs unpacking. What it does not reach is a part with several
+entrances or several ways out, which is below.
+
+**The dump makes names unique on the way out**, which the open
+question below predicted and instantiating twice made real. Two copies
+of one description give two stations with one name; a *file* cannot
+have that, because an arrow is written as a destination name and could
+not say which one it meant. Nothing is lost by spelling a label
+differently — a name is arbitrary text the engine never reads — and
+the round trip is proven on a program holding two of everything.
+
+**A station cannot be called `in`, `out` or `statics`.** The reader
+dispatches on the first word of a line and those three already mean
+something there. Found by naming a door `in` and being told there was
+an input line before any station.
+
+### What stood before
+
+
 **A program can be started beside another, and cannot be brought
 inside one.**
 
@@ -64,6 +129,13 @@ means what it meant is never bent — because no existing index changes.
 This is what reading a file already does, with the base fixed at zero.
 
 ### The offset is the whole mechanism
+
+*It is not, quite, and the correction is under Current behavior: a
+description's stations land wherever the table had room, which is not
+`base + n` on a program anything has been removed from. What the
+reader keeps is a translation table, and the offset is what that table
+degenerates to when nothing has been removed. Everything else this
+section says holds.*
 
 A description's stations are numbered from zero in the order they are
 declared. Instantiating one asks the table for a place per station,
@@ -134,58 +206,76 @@ a collision to prevent.
 
 ## Suggested implementation steps
 
-1. An operation that instantiates a description into an existing
-   program at a base, returning the base and the count so the caller
-   can find the doors. The reader's two passes already take a base;
-   this is the caller that passes something other than zero.
-2. Locating the instance's doors, so a parent can wire to them without
-   knowing anything else about it. The instance knows which of its
-   stations were declared as doors, and the parent needs those as
-   indices in its own numbering.
-3. Instantiating the same description twice into one program, with
-   nothing shared between the two — separate stations, separate
-   buffers, separate constants. This is the test that says "template"
-   rather than "move".
-4. A parent wiring into an instance's entrance and out of its results,
-   running it, and being unable to tell that the thing behind the port
-   is a graph rather than a C function — which is
+1. **Done**, and not at a base. The reader keeps a translation table
+   saying where each of the description's stations landed, because
+   adding a station hands back a freed place before it grows the
+   table — so an offset is right only on a program nothing has been
+   removed from.
+2. **Done.** The nth entrance and the nth way out, found by asking
+   which way a station faces. A parent gets those and nothing else.
+3. **Done.** Two instances of one description share no station, and
+   their doors are different stations.
+4. **Done.** A parent wires its own source into the first instance's
+   entrance, that instance's way out into the second's entrance, and
+   reads twenty-eight from its own way out — naming nothing inside
+   either. This is
    [209](completed/209-map-output-collection.md)'s step 7 and
-   [213](213-the-input-station.md)'s step 6, both of which have been
-   waiting for this.
-5. Instantiating into a program that is already running, since every
-   operation it is made of is already legal at any moment.
-6. The operation as a box, so that a program can bring a program into
-   a program — the same way the other construction operations became
-   boxes in [212](completed/212-one-way-to-build-a-program.md).
+   [213](213-the-input-station.md)'s step 6, both of which had been
+   waiting for it.
+5. **Done**, and it needed nothing added.
+6. **Done**, as *put this part between here and there* rather than as
+   an operation returning a handle — see the reasoning above.
+7. **Done, and it was the open question below arriving.** The dump
+   makes names unique on the way out, so a program holding two copies
+   of one description can still be written down and read back.
 
 ## Open questions
 
-**Open: what does the dump write when two stations share a name?**
+**Answered: what does the dump write when two stations share a name?**
 
-The file format spells an arrow as a destination *name* and a port.
-Two stations called `gate` in one program cannot both be written down
-that way — a file with two `gate` lines is refused by the parser,
-which is right, because an arrow to `gate` in such a file means
-nothing.
+**The first way, and it cost one pass.** A name is an arbitrary label
+carrying no meaning, so nothing is lost by writing the second `gate`
+as something else — the file needs labels it can tell apart, and that
+is a property of the *file* rather than of the program. The names on
+the program are left exactly as they are.
 
-So a program that instantiates one description twice runs perfectly
-and cannot currently be written out and read back. Three ways out, and
-the first looks right:
+The two rejected answers are kept because the reasoning is the design.
+Giving an instance's names a prefix when it is built would turn `gate`
+into `sub.gate` in the program itself, and the format would need no
+change — an arrow destination is split on its *last* dot, so
+`sub.gate.0` already reads as station `sub.gate`, port 0. It was
+refused for making a name mechanical again, which is the thing this
+issue says it is not. Dropping names from arrows altogether would
+throw away the reason a map file is readable by a person.
 
-- **The dump makes the names unique on the way out.** A name is an
-  arbitrary label carrying no meaning, so nothing is lost by writing
-  the second `gate` as something else — the file needs labels it can
-  tell apart, and that is a property of the *file* rather than of the
-  program. Costs one pass over the names at dump time and no change
-  to the format, the parser, or the engine.
-- **The instance's names gain a prefix when it is built.** Turns
-  `gate` into `sub.gate` in the program itself. The format needs no
-  change — an arrow destination is split on its *last* dot, so
-  `sub.gate.0` already reads as station `sub.gate`, port 0 — but it
-  makes a name mechanical again, which is the thing this issue says
-  it is not.
-- **The format stops spelling arrows by name.** Honest, and it throws
-  away the reason a map file is readable by a person.
+**Open: a part with several entrances or several ways out, from a
+box.**
+
+The C call handles it: the surface offers the *nth* door, and a
+caller asks for as many as it likes. The **box** does not, because a
+box returns one value and a handle carrying two station numbers is a
+struct somebody downstream has to take apart — which is a function
+written to fit the engine, and [209](completed/209-map-output-collection.md)
+refused exactly that when a station with several output ports was
+proposed.
+
+Three shapes are worth weighing before one is built, and none is
+obviously right:
+
+- **A box per door**, taking the description and a door number and
+  returning that station's index. It would have to instantiate to
+  answer, so two calls would build two copies — unless the instance
+  is remembered somewhere, which is state the engine does not keep.
+- **A part placed with a list of wires**, given as text the way a
+  constant is. Keeps one call and one value, and moves the wiring
+  description into a string the engine parses, which is a second
+  little language.
+- **Accept the struct and the unpackers**, on the grounds that a
+  handle is a value like any other and the objection was about faking
+  *several returns*, not about returning a small record. This is the
+  one that most deserves re-reading: `program` is already a
+  one-field struct travelling on a wire, and nobody called that a
+  function written to fit the engine.
 
 **Open: what does a description arrive as?**
 

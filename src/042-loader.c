@@ -66,42 +66,32 @@ static void die_load(const char *path, int line, const char *station,
 
 /* {{{ find_station_index() */
 /*
- * Which station a name belongs to, **asked of the program rather than
- * of a table this file keeps** (issue 210g).
+ * Which station a name belongs to, **asked of the description being
+ * read and of nothing else** (issue 210g).
  *
  * There used to be a private lookup table here: the description
  * records in file order, searched by name, freed when loading ended.
- * It existed because names were copied onto the map in one sweep at
- * the very end, so during the two passes the map did not know them.
+ * That was a second copy of something, and the copy is gone — this
+ * searches the description itself, which the reader is holding
+ * anyway, and translates through the table saying where each of its
+ * stations landed.
  *
- * Naming is an operation now, and the reader performs it as each
- * station is created — which is what it had to become for a program
- * built by calling the surface to be describable at all (issue 212).
- * The moment that was true, the private table was a second copy of
- * something the map already held, and the refusals raised while
- * wiring could name the stations they were about instead of numbering
- * them.
- *
- * **It searches the stations this read created and no others**, which
- * is the whole of what a station name is for. A name is an arbitrary
- * label with no mechanical meaning anywhere in the engine; the one
- * place it does any work is inside a *description*, because text has
- * no indices and an arrow written down has to say something. Two
- * stations in one program may share a name; two stations in one file
- * may not, and the parser refuses that.
- *
- * So the range matters even though it is the whole table today. A
- * description read into a program that already has stations — which
- * is what bringing one program inside another comes to — must resolve
- * its arrows among its own stations, or an arrow to `gate` could land
- * on somebody else's `gate` that happened to be read first.
+ * **The scope is the point.** A name is an arbitrary label with no
+ * mechanical meaning anywhere in the engine; the one place it does
+ * any work is inside a description, because text has no indices and
+ * an arrow written down has to say something. Two stations in one
+ * program may share a name; two stations in one file may not, and the
+ * parser refuses that. So a description read into a program that
+ * already has stations resolves its arrows among its own, and an
+ * arrow to `gate` can never land on somebody else's `gate`.
  */
-static int find_station_index(map_t *m, int base, int count,
+static int find_station_index(map_description_t *d, const int *at,
                               const char *name)
 {
-    for (int i = base; i < base + count && i < m->n_named; i++)
-        if (m->station_names[i] && strcmp(m->station_names[i], name) == 0)
-            return i;
+    int i = 0;
+    for (desc_station_t *s = d->stations; s; s = s->next, i++)
+        if (strcmp(s->name, name) == 0)
+            return at[i];
     return -1;
 }
 /* }}} */
@@ -119,23 +109,35 @@ static int find_station_index(map_t *m, int base, int count,
  * 210) an input line names an entry number, and a number needs
  * nothing else to exist first.
  */
-static void first_pass(map_t *m, map_description_t *d, int base)
+static void first_pass(map_t *m, map_description_t *d, int *at)
 {
     int index = 0;
     for (desc_station_t *s = d->stations; s; s = s->next, index++) {
-        /* One place at a time, the same call a running program makes
+        /*
+         * One place at a time, the same call a running program makes
          * to add a station (issue 211). The index it hands back is the
          * one this station will answer to forever.
          *
-         * Written against a **base** rather than against zero, so that
-         * what a description says and where it lands are two different
-         * numbers. They are the same number when a file is read into
-         * an empty program, which is every caller today; they stop
-         * being the same the moment a description is read into a
-         * program that already has stations. */
-        if (map_add_station(m) != base + index)
+         * **What the description says and where it lands are two
+         * different numbers, and they are not related by an offset.**
+         * That was the plan and it is not true: adding a station hands
+         * back a *freed* place before it grows the table, so reading a
+         * description into a program that has had removals gets
+         * whatever holes exist, in whatever order. The offset is what
+         * the translation degenerates to when nothing has been removed
+         * — which is every program that has never had a station taken
+         * out, and is why the offset story reads correctly right up
+         * until it does not.
+         *
+         * So the reader keeps a small table of where each of the
+         * description's stations landed, and translates through it.
+         * Both passes read that table; nothing else ever sees it
+         * (issue 217).
+         */
+        at[index] = map_add_station(m);
+        if (at[index] < 0)
             die_load(d->path, s->line, s->name,
-                     "the station table handed back an unexpected place");
+                     "the station table would not grow");
 
         /*
          * **The name goes on immediately** (issue 210g), rather than
@@ -146,7 +148,7 @@ static void first_pass(map_t *m, map_description_t *d, int base)
          * static, a width that disagrees — can say which station it
          * is about in the word the file's author typed.
          */
-        const char *named = map_name_station(m, base + index, s->name);
+        const char *named = map_name_station(m, at[index], s->name);
         if (named)
             die_load(d->path, s->line, s->name, named);
 
@@ -168,15 +170,15 @@ static void first_pass(map_t *m, map_description_t *d, int base)
                      "is not in a file under src/boxes/", s->box);
             die_load(d->path, s->line, s->name, message);
         }
-        map_place_box(m, base + index, s->box, s->kind);
+        map_place_box(m, at[index], s->box, s->kind);
 
         /* A door, if the line said so (issues 209, 213). Through the
          * same call anybody else would make — reading a file has no
          * privileges here either. */
         if (s->door != DOOR_NONE) {
             const char *no = s->door == DOOR_IN
-                           ? map_designate_input(m, base + index)
-                           : map_designate_output(m, base + index);
+                           ? map_designate_input(m, at[index])
+                           : map_designate_output(m, at[index]);
             if (no)
                 die_load(d->path, s->line, s->name, no);
         }
@@ -207,7 +209,7 @@ static void first_pass(map_t *m, map_description_t *d, int base)
              * reallocation nobody asked for (issue 210b).
              */
             if (in->depth > 0) {
-                const char *no = map_in_port_start_depth(m, base + index,
+                const char *no = map_in_port_start_depth(m, at[index],
                                                          in->port, in->depth);
                 if (no)
                     die_load(d->path, in->line, s->name, no);
@@ -221,7 +223,7 @@ static void first_pass(map_t *m, map_description_t *d, int base)
              * half-built program be a real program (issue 210b).
              */
             if (in->is_none) {
-                const char *no = map_configure_port(m, base + index, in->port,
+                const char *no = map_configure_port(m, at[index], in->port,
                                                     IN_PORT_NONE, NULL);
                 if (no)
                     die_load(d->path, in->line, s->name, no);
@@ -260,7 +262,7 @@ static void first_pass(map_t *m, map_description_t *d, int base)
                     die_load(d->path, in->line, s->name, message);
                 }
             }
-            const char *no = map_configure_port(m, base + index, in->port,
+            const char *no = map_configure_port(m, at[index], in->port,
                                                 IN_PORT_STATIC, text);
             if (no)
                 die_load(d->path, in->line, s->name, no);
@@ -291,13 +293,12 @@ static void first_pass(map_t *m, map_description_t *d, int base)
  * Then draw the wire, and hand any refusal upward with the file and
  * the line in front of it.
  */
-static void second_pass(map_t *m, map_description_t *d, int base)
+static void second_pass(map_t *m, map_description_t *d, const int *at)
 {
     int index = 0;
     for (desc_station_t *s = d->stations; s; s = s->next, index++) {
         for (desc_output_t *out = s->outputs; out; out = out->next) {
-            int dest = find_station_index(m, base, d->n_stations,
-                                          out->dest_station);
+            int dest = find_station_index(d, at, out->dest_station);
             if (dest < 0) {
                 char message[256];
                 snprintf(message, sizeof message,
@@ -305,7 +306,7 @@ static void second_pass(map_t *m, map_description_t *d, int base)
                          out->dest_station);
                 die_load(d->path, out->line, s->name, message);
             }
-            const char *no = map_wire(m, base + index, out->port, dest,
+            const char *no = map_wire(m, at[index], out->port, dest,
                                       out->dest_port);
             if (no)
                 die_load(d->path, out->line, s->name, no);
@@ -332,13 +333,21 @@ map_t *map_load_file(const char *path, int n_workers)
      */
     map_t *m = map_create_empty();
 
-    /* An empty program, so the base is zero. It is written as a base
-     * anyway, because the number a description says and the number a
-     * station lands on are two different things wherever a
-     * description is read into a program that already has stations. */
-    first_pass(m, d, 0);
+    /*
+     * An empty program, so every station lands where the description
+     * said. The translation table is filled and read anyway, because
+     * *this* caller getting the identity translation is a fact about
+     * this caller and not about the mechanism (issue 217).
+     */
+    int *at = calloc((size_t)(d->n_stations > 0 ? d->n_stations : 1),
+                     sizeof *at);
+    if (!at)
+        die_load(path, 0, NULL, "out of memory reading a map");
+
+    first_pass(m, d, at);
     double t2 = stamp();
-    second_pass(m, d, 0);
+    second_pass(m, d, at);
+    free(at);
     double t3 = stamp();
 
     /* The pool exists before the seed so the seed has somewhere to
@@ -409,6 +418,107 @@ map_t *map_load_file(const char *path, int n_workers)
 
     mapfile_free(d);
     return m;
+}
+/* }}} */
+
+/* {{{ map_instantiate_file() */
+/*
+ * **Bring a description inside a program that already exists** (issue
+ * 217) — the operation this whole file turns out to have been, with
+ * the program fixed at "a fresh empty one".
+ *
+ * **It is instantiating a template, not merging two programs.** There
+ * is no second running program being picked up and carried, no handle
+ * that becomes invalid, no table stitched onto another table. There
+ * is a *description* and there is a table with some number of
+ * stations in it; this builds new stations for the description's
+ * stations and wires them the way the description says. One
+ * description can be instantiated as many times into one program as
+ * anybody likes, with nothing shared between the copies — separate
+ * stations, separate buffers, separate constants.
+ *
+ * **So no wire is rewritten.** The description says its third station
+ * feeds its fifth; that becomes wherever the third landed feeding
+ * wherever the fifth landed. Nothing that already exists is
+ * renumbered, so the invariant this engine rests on — an index means
+ * what it meant — is not approached, let alone bent.
+ *
+ * **Legal at any moment**, because every operation it is made of is:
+ * adding a station, naming one, placing a box, configuring a port,
+ * drawing a wire. A program with workers in flight gains a subgraph
+ * the same way it gains a station.
+ *
+ * The caller gets a handle it can find the instance's doors through,
+ * and **the doors are all it should want**. A parent wiring into an
+ * interior station of an instance is reaching inside, which is the
+ * thing the marks exist to stop happening by accident.
+ */
+map_instance_t map_instantiate_file(map_t *m, const char *path)
+{
+    map_description_t *d = mapfile_parse(path);
+
+    map_instance_t in;
+    in.count = d->n_stations;
+    in.station = calloc((size_t)(in.count > 0 ? in.count : 1),
+                        sizeof *in.station);
+    if (!in.station)
+        die_load(path, 0, NULL, "out of memory instantiating a map");
+
+    first_pass(m, d, in.station);
+    second_pass(m, d, in.station);
+
+    mapfile_free(d);
+    return in;
+}
+/* }}} */
+
+/* {{{ map_instance_door() / map_instance_free() */
+/*
+ * **The nth station of this instance facing that way**, or -1.
+ *
+ * This is the whole of what a parent is entitled to know about
+ * something it brought inside itself. It could reach any of the
+ * instance's stations through the handle — the translation table is
+ * right there — and doing so would be reaching inside a thing whose
+ * author may rename or restructure anything that is not a door.
+ *
+ * A program may have several of each, so the nth rather than the
+ * only. They come back in the order the description declared them,
+ * which is the one order a description can be said to have.
+ */
+static int map_instance_door(map_t *m, const map_instance_t *in,
+                             int facing, int nth)
+{
+    int seen = 0;
+    for (int i = 0; i < in->count; i++) {
+        station_t *s = map_station(m, in->station[i]);
+        if (s->call && s->door == facing && seen++ == nth)
+            return in->station[i];
+    }
+    return -1;
+}
+
+int map_instance_entrance(map_t *m, const map_instance_t *in, int nth)
+{
+    return map_instance_door(m, in, DOOR_IN, nth);
+}
+
+int map_instance_result(map_t *m, const map_instance_t *in, int nth)
+{
+    return map_instance_door(m, in, DOOR_OUT, nth);
+}
+
+/*
+ * The handle goes; the stations stay. Nothing in the running program
+ * refers to this — it was the reader's note to itself about where
+ * things landed, and a parent keeps it only for as long as it is
+ * still deciding what to wire.
+ */
+void map_instance_free(map_instance_t *in)
+{
+    free(in->station);
+    in->station = NULL;
+    in->count = 0;
 }
 /* }}} */
 
