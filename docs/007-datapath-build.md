@@ -92,6 +92,20 @@ per box, and it leaves no macros in the source to read around later.
 
 ## No table at all
 
+**This section is where the build path is going, and part of it has
+arrived.** What stands today: the generator emits a placement function
+per box, placing a box routes through it, and nothing reads the box
+record to build a station. What does not: the map file still names a
+box by a bare function name, the generator does not read maps at all,
+and a running program still resolves a name — which is why the record
+and a small table of placement functions still exist.
+
+The rest waits on one thing, and the dependency is deliberate. What
+the generator would emit here *is* construction calls, so writing it
+against an interface the project has decided to replace would make the
+most-read generated file in the project an example of how not to build
+a program, for however long the replacement took.
+
 The map file says `"math.c:add"` as text, and something has to turn
 that into a function pointer. **The generator does, while generating.**
 
@@ -117,13 +131,21 @@ since it calls the same construction surface a person would.
 constant the compiler folded:
 
 ```c
-static void place__math_dot_c__add(station_t *s) {
-    s->box_name = "math.c:add";      /* a literal, for the dump */
-    s->call     = add__call;
-    s->ports[0].elem_size = sizeof(int);
-    s->ports[1].elem_size = sizeof(int);
-    s->out_size = sizeof(int);
-    s->compare  = int__compare_g;
+static void sora_box_src_sl_boxes_sl_math_dot_c__add__place(
+        map_t *m, int station, int kind) {
+    int extra = (kind == STATION_COMPARATOR) ? 1 : 0;
+    int sizes[] = { (int)sizeof(int), (int)sizeof(int), (int)sizeof(int) };
+    map_place(m, station, add__call, kind, 2 + extra, sizes,
+              (int)sizeof(int));
+
+    station_t *s = map_station(m, station);
+    s->box_name = "add";             /* a literal, for the dump */
+    s->in_ports[0].type_name = "int";
+    s->in_ports[1].type_name = "int";
+    if (extra) {
+        s->in_ports[2].type_name = "int";
+        s->compare = int__compare_g;
+    }
 }
 ```
 
@@ -137,11 +159,19 @@ follows a pointer rather than searching by type name. And the name a
 station reports is a string literal its own placement function wrote,
 not an index into anything.
 
-**There used to be a record per box** — parameter arrays, type-name
-strings, the exact task allocation size, a backwards lookup from shim
-pointer to name — and every field of it was read once, at placement, by
-code that generated code could just as well have written. Issue 311 is
-that change.
+**There is still a record per box, and it is on its way out** —
+parameter arrays, type-name strings, the exact task allocation size.
+Every field of it was read once, at placement, by code that generated
+code could just as well have written, and placement no longer reads
+any of it. What keeps the record alive is that a *running* program can
+still be asked to place a box by name, so something has to be searched;
+when the generator emits the calls instead, nothing will be.
+
+The backwards lookup from a call site to a name is already gone, and
+it went the way these things go: the last known caller was removed and
+the function refused to disappear, because the check that refuses a
+mismatched wire on a running program had been reaching through it for
+a type's spelling.
 
 ### Generated symbols escape punctuation, so two files cannot collide
 
@@ -151,11 +181,40 @@ symbol**, and the linker would fail with a message about a duplicate
 symbol rather than about two files that should have been named
 differently.
 
-So punctuation is transcribed, and the escape character escapes itself:
-`.` becomes `_dot_`, `_` becomes `_und_`, and the colon becomes a
-double underscore. `math.c` gives `math_dot_c`; `math_c` gives
-`math_und_c`. Escaping the escape is what makes the scheme injective,
-for the same reason percent-encoding has to write `%` as `%25`.
+So punctuation is transcribed, and the escape character escapes
+itself:
+
+| in a name | in a symbol | why |
+|---|---|---|
+| `.` | `_dot_` | a filename's extension |
+| `/` | `_sl_` | the path, which is what settles two files sharing a basename |
+| `-` | `_dsh_` | this project's own sources are named like `029-demo-boxes.c` |
+| `_` | `_und_` | the escape character, escaping itself |
+| `:` | `__` | the separator between file and function |
+| anything else | `_xNN_` | hex, so no filename can defeat it |
+
+`math.c` gives `math_dot_c`; `math_c` gives `math_und_c`. Escaping the
+escape is what makes the scheme injective, for the same reason
+percent-encoding has to write `%` as `%25`.
+
+**The symbol comes from the whole path**, settled to one spelling
+first, so that naming a box briefly and naming it in full produce the
+same symbol rather than two definitions of one function. An earlier
+version of this table had no rule for the separator at all, which
+could not work: the design leans on paths to tell apart two files
+sharing a short name, and if a symbol came from the short name alone
+those two files would produce one symbol and a path would settle
+nothing.
+
+**Every symbol carries a fixed prefix**, which does two jobs for one
+decision — it keeps generated names clear of anything a box author
+writes, and it means a file whose name *begins with a digit*, as every
+source in this project does, still produces a legal identifier.
+
+The last row is what makes the scheme **total** rather than merely
+adequate for names anybody has thought of. A character with no rule
+would have to be dropped or flattened, and either is how two files
+quietly become one symbol.
 
 Nothing decodes a symbol back into a name — a name a person reads comes
 from the string literal, because these are static functions whose

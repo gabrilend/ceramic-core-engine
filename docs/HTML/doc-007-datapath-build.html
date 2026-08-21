@@ -214,6 +214,18 @@ Rejected in favour of a build-time script, because a generator is one
 generalized program that parses things rather than a macro expanded
 per box, and it leaves no macros in the source to read around later.</p>
 <h2>No table at all</h2>
+<p>**This section is where the build path is going, and part of it has
+arrived.** What stands today: the generator emits a placement function
+per box, placing a box routes through it, and nothing reads the box
+record to build a station. What does not: the map file still names a
+box by a bare function name, the generator does not read maps at all,
+and a running program still resolves a name — which is why the record
+and a small table of placement functions still exist.</p>
+<p>The rest waits on one thing, and the dependency is deliberate. What
+the generator would emit here <em>is</em> construction calls, so writing it
+against an interface the project has decided to replace would make the
+most-read generated file in the project an example of how not to build
+a program, for however long the replacement took.</p>
 <p>The map file says <code>"math.c:add"</code> as text, and something has to turn
 that into a function pointer. <strong>The generator does, while generating.</strong></p>
 <p>A map is a blueprint for the compilation rather than something a
@@ -234,13 +246,21 @@ since it calls the same construction surface a person would.</p>
 <p><strong>Each box gets a placement function</strong>, and every number it writes is a
 constant the compiler folded:</p>
 <pre class="code">
-<span class="kw">static</span> <span class="kw">void</span> place__math_dot_c__add(station_t *s) {
-    s-&gt;box_name = <span class="st">"math.c:add"</span>;      <span class="cm">/* a literal, for the dump */</span>
-    s-&gt;call     = add__call;
-    s-&gt;ports[0].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
-    s-&gt;ports[1].elem_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
-    s-&gt;out_size = <span class="kw">sizeof</span>(<span class="kw">int</span>);
-    s-&gt;compare  = int__compare_g;
+<span class="kw">static</span> <span class="kw">void</span> sora_box_src_sl_boxes_sl_math_dot_c__add__place(
+        map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> kind) {
+    <span class="kw">int</span> extra = (kind == STATION_COMPARATOR) ? 1 : 0;
+    <span class="kw">int</span> sizes[] = { (<span class="kw">int</span>)<span class="kw">sizeof</span>(<span class="kw">int</span>), (<span class="kw">int</span>)<span class="kw">sizeof</span>(<span class="kw">int</span>), (<span class="kw">int</span>)<span class="kw">sizeof</span>(<span class="kw">int</span>) };
+    map_place(m, station, add__call, kind, 2 + extra, sizes,
+              (<span class="kw">int</span>)<span class="kw">sizeof</span>(<span class="kw">int</span>));
+
+    station_t *s = map_station(m, station);
+    s-&gt;box_name = <span class="st">"add"</span>;             <span class="cm">/* a literal, for the dump */</span>
+    s-&gt;in_ports[0].type_name = <span class="st">"int"</span>;
+    s-&gt;in_ports[1].type_name = <span class="st">"int"</span>;
+    <span class="kw">if</span> (extra) {
+        s-&gt;in_ports[2].type_name = <span class="st">"int"</span>;
+        s-&gt;compare = int__compare_g;
+    }
 }
 </pre>
 <p><strong>Why nothing else needs a lookup either.</strong> A station copies what it
@@ -252,22 +272,54 @@ the placement function, so reading <code>{ 1.5, 2.5, 3.5 }</code> out of a map
 follows a pointer rather than searching by type name. And the name a
 station reports is a string literal its own placement function wrote,
 not an index into anything.</p>
-<p><strong>There used to be a record per box</strong> — parameter arrays, type-name
-strings, the exact task allocation size, a backwards lookup from shim
-pointer to name — and every field of it was read once, at placement, by
-code that generated code could just as well have written. Issue 311 is
-that change.</p>
+<p><strong>There is still a record per box, and it is on its way out</strong> —
+parameter arrays, type-name strings, the exact task allocation size.
+Every field of it was read once, at placement, by code that generated
+code could just as well have written, and placement no longer reads
+any of it. What keeps the record alive is that a <em>running</em> program can
+still be asked to place a box by name, so something has to be searched;
+when the generator emits the calls instead, nothing will be.</p>
+<p>The backwards lookup from a call site to a name is already gone, and
+it went the way these things go: the last known caller was removed and
+the function refused to disappear, because the check that refuses a
+mismatched wire on a running program had been reaching through it for
+a type's spelling.</p>
 <h3>Generated symbols escape punctuation, so two files cannot collide</h3>
 <p><code>math.c:add</code> is not a C identifier. Mangling it naively to
 <code>math_c__add</code> would make **<code>math.c</code> and <code>math_c</code> produce the same
 symbol**, and the linker would fail with a message about a duplicate
 symbol rather than about two files that should have been named
 differently.</p>
-<p>So punctuation is transcribed, and the escape character escapes itself:
-<code>.</code> becomes <code>_dot_</code>, <code>_</code> becomes <code>_und_</code>, and the colon becomes a
-double underscore. <code>math.c</code> gives <code>math_dot_c</code>; <code>math_c</code> gives
-<code>math_und_c</code>. Escaping the escape is what makes the scheme injective,
-for the same reason percent-encoding has to write <code>%</code> as <code>%25</code>.</p>
+<p>So punctuation is transcribed, and the escape character escapes
+itself:</p>
+<table>
+<tr><td>in a name</td><td>in a symbol</td><td>why</td></tr>
+<tr><td><code>.</code></td><td><code>_dot_</code></td><td>a filename's extension</td></tr>
+<tr><td><code>/</code></td><td><code>_sl_</code></td><td>the path, which is what settles two files sharing a basename</td></tr>
+<tr><td><code>-</code></td><td><code>_dsh_</code></td><td>this project's own sources are named like <code>029-demo-boxes.c</code></td></tr>
+<tr><td><code>_</code></td><td><code>_und_</code></td><td>the escape character, escaping itself</td></tr>
+<tr><td><code>:</code></td><td><code>__</code></td><td>the separator between file and function</td></tr>
+<tr><td>anything else</td><td><code>_xNN_</code></td><td>hex, so no filename can defeat it</td></tr>
+</table>
+<p><code>math.c</code> gives <code>math_dot_c</code>; <code>math_c</code> gives <code>math_und_c</code>. Escaping the
+escape is what makes the scheme injective, for the same reason
+percent-encoding has to write <code>%</code> as <code>%25</code>.</p>
+<p><strong>The symbol comes from the whole path</strong>, settled to one spelling
+first, so that naming a box briefly and naming it in full produce the
+same symbol rather than two definitions of one function. An earlier
+version of this table had no rule for the separator at all, which
+could not work: the design leans on paths to tell apart two files
+sharing a short name, and if a symbol came from the short name alone
+those two files would produce one symbol and a path would settle
+nothing.</p>
+<p><strong>Every symbol carries a fixed prefix</strong>, which does two jobs for one
+decision — it keeps generated names clear of anything a box author
+writes, and it means a file whose name <em>begins with a digit</em>, as every
+source in this project does, still produces a legal identifier.</p>
+<p>The last row is what makes the scheme <strong>total</strong> rather than merely
+adequate for names anybody has thought of. A character with no rule
+would have to be dropped or flattened, and either is how two files
+quietly become one symbol.</p>
 <p>Nothing decodes a symbol back into a name — a name a person reads comes
 from the string literal, because these are static functions whose
 symbol names may not survive a stripped binary at all.</p>
