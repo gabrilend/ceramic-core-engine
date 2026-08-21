@@ -316,9 +316,10 @@ static void handle_static_entry(parse_state_t *st, const char *line_text)
 static void handle_station(parse_state_t *st, const char *name,
                            const char *rest)
 {
-    char box[128], kind_word[8], extra[8];
+    char box[128], kind_word[8], door_word[16], extra[8];
     rest = next_word(rest, box, sizeof box);
     rest = next_word(rest, kind_word, sizeof kind_word);
+    rest = next_word(rest, door_word, sizeof door_word);
     next_word(rest, extra, sizeof extra);
 
     if (!box[0] || !kind_word[0])
@@ -341,6 +342,26 @@ static void handle_station(parse_state_t *st, const char *name,
         return;
     }
 
+    /*
+     * An optional fourth word says this station is one of the
+     * program's doors (issues 209, 213): `entry` for where the
+     * outside delivers, `result` for where results come from.
+     *
+     * Words rather than `in` and `out`, which already mean a port on
+     * the lines beneath a station. A file where one word means a port
+     * in one place and a whole station in another is the kind of
+     * ambiguity that reads fine and round-trips wrong.
+     */
+    int door = DOOR_NONE;
+    if (door_word[0]) {
+        if (strcmp(door_word, "entry") == 0)       door = DOOR_IN;
+        else if (strcmp(door_word, "result") == 0) door = DOOR_OUT;
+        else
+            die_parse(st->path, st->line,
+                      "after the kind, only 'entry' (the outside delivers "
+                      "here) or 'result' (results come from here)");
+    }
+
     for (desc_station_t *s = st->d->stations; s; s = s->next)
         if (strcmp(s->name, name) == 0)
             die_parse(st->path, st->line, "a station with this name already exists");
@@ -349,6 +370,7 @@ static void handle_station(parse_state_t *st, const char *name,
     s->name = copy_string(name, st->path, st->line);
     s->box = copy_string(box, st->path, st->line);
     s->kind = kind;
+    s->door = door;
     s->line = st->line;
 
     *st->station_tail = s;

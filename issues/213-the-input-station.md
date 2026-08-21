@@ -42,9 +42,19 @@ program with two workers are in flight at once, and which finishes
 first is a schedule. The test checks the set and says why, because
 asserting the sequence would be asserting the scheduler.
 
-Still to come: the map file syntax for both declarations, deriving a
-port's type from what it feeds, the command-line path, and one program
-used as a box inside another.
+**The map file spells both**, and both survive a round trip.
+
+**Two refusals gained the same escape clause, and neither was
+foreseen.** The whole-program pass warns about a station whose
+buffered inputs no arrow feeds, and reading a file refuses a program
+in which nothing can start. Both were written when there was no way
+for a program to *say* it expected to be fed, so both assumed the
+worst — and a declared entrance is exactly the case they were assuming
+away. Warning about one, or refusing to run it, would be telling
+somebody that the thing they had just declared might not happen.
+
+Still to come: deriving a port's type from what it feeds, the
+command-line path, and one program used as a box inside another.
 
 ### What stood before
 

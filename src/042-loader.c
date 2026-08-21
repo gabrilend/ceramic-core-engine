@@ -116,6 +116,17 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
         }
         map_place_box(m, index, s->box, s->kind);
 
+        /* A door, if the line said so (issues 209, 213). Through the
+         * same call anybody else would make — reading a file has no
+         * privileges here either. */
+        if (s->door != DOOR_NONE) {
+            const char *no = s->door == DOOR_IN
+                           ? map_designate_input(m, index)
+                           : map_designate_output(m, index);
+            if (no)
+                die_load(d->path, s->line, s->name, no);
+        }
+
         for (desc_input_t *in = s->inputs; in; in = in->next) {
             station_t *placed = map_station(m, index);
             if (in->port < 0 || in->port >= placed->n_in_ports) {
@@ -344,7 +355,25 @@ map_t *map_load_file(const char *path, int n_workers)
      * running to send one, then the program does nothing at all, and
      * saying so is more use than starting it.
      */
-    if (map_seed_count(m) == 0)
+    /*
+     * **Unless the program has a declared entrance**, in which case
+     * waiting is exactly what it is supposed to do (issue 213). This
+     * refusal means "nothing can start and nothing can arrive, so
+     * this program will do nothing at all" — and a declared entrance
+     * is a station something outside delivers to, which makes the
+     * second half of that false.
+     *
+     * The same escape clause the unfed-inputs warning gained, and for
+     * the same reason: both were written when there was no way for a
+     * program to say it expected to be fed, so both had to assume the
+     * worst.
+     */
+    int has_entrance = 0;
+    for (int i = 0; i < m->n_stations; i++)
+        if (map_station(m, i)->door == DOOR_IN)
+            has_entrance = 1;
+
+    if (map_seed_count(m) == 0 && !has_entrance)
         die_load(path, 0, NULL,
                  "nothing to seed — every station waits for a buffered "
                  "value, so the map cannot ever start");

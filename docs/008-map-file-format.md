@@ -170,6 +170,43 @@ something its author did not write. This matters more than it looks:
 the two forms differ by one character, and the wrong one would have
 loaded and run.
 
+### A station may be one of the program's doors
+
+A fourth word on a station line says that this station is where the
+outside delivers, or where the program's results come from:
+
+```
+gate    keep      p entry     the outside delivers here
+answer  double_it p result    results wait here to be taken
+middle  add       p           an interior station, which is most of them
+```
+
+**`entry` and `result` rather than `in` and `out`**, and the reason is
+worth stating because the obvious choice is the wrong one. Those two
+words already name a *port* on the indented lines beneath a station. A
+file in which one word means a port in one place and a whole station
+in another reads perfectly well and round-trips wrong, which is
+exactly the failure a depth followed by a dash produced before it was
+given a form of its own.
+
+A station may be one door or neither. Being both is refused: a program
+whose entrance is its exit is somebody having named the wrong station.
+
+**A program may have several of each.** A box returns one value, so a
+station has one output port, so one station is one result. A program
+producing three things has three stations marked `result`, each with
+its own inputs — which gets the readiness check that already exists
+rather than needing a station whose ports come in groups.
+
+**What the marks buy.** A parent composing this program wires to its
+doors and never names anything inside it; rename an interior station
+and nothing outside breaks. And two things that used to assume the
+worst stop doing so — a station whose buffered inputs no arrow feeds
+is no longer warned about when it is a declared entrance, and a
+program in which nothing can start is no longer refused when it has
+one, because both of those were written when there was no way for a
+program to say it expected to be fed.
+
 ### A starting depth, which any of the three may carry
 
 Every port's ring buffer starts with room for ten values and grows when

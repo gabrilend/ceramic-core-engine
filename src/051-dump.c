@@ -104,9 +104,16 @@ void map_dump(map_t *m, FILE *out)
          * marker is deliberately not a legal box name, so a dump
          * carrying one cannot be read back in silence.
          */
-        fprintf(out, "%s %c   # station %d\n",
+        /* The door, if it is one (issues 209, 213). A program whose
+         * doors did not survive being written down could not be
+         * composed after a round trip, which is most of what naming
+         * them was for. */
+        const char *door = s->door == DOOR_IN  ? " entry"
+                         : s->door == DOOR_OUT ? " result"
+                         : "";
+        fprintf(out, "%s %c%s   # station %d\n",
                 s->box_name ? s->box_name : "?placed-by-hand?",
-                kind_letter(s->kind), i);
+                kind_letter(s->kind), door, i);
 
         for (int j = 0; j < s->n_in_ports; j++) {
             in_port_t *sl = &s->in_ports[j];

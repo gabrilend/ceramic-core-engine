@@ -79,6 +79,17 @@ typedef struct desc_output {
 } desc_output_t;
 
 typedef struct desc_station {
+    /*
+     * Which door this station is, if any (issues 209, 213): written
+     * as a fourth word on the station line, `entry` or `result`.
+     *
+     * **Deliberately not `in` and `out`.** Those already mean a port
+     * on the indented lines beneath a station, and one file in which
+     * a word means a port in one place and a whole station in another
+     * is the shape of mistake that survives review — the same trap a
+     * depth followed by a dash fell into.
+     */
+    int   door;
     char *name;
     char *box;
     int   kind;

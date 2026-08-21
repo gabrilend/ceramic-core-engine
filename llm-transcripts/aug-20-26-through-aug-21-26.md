@@ -1,6 +1,6 @@
 # Conversation Summary: 55f347f4-2832-4363-ab6b-50a0c7b42395
 
-Generated on: 2026-08-20 17:32:22
+Generated on: 2026-08-20 17:46:11
 
 --------------------------------------------------------------------------------
 
@@ -2725,6 +2725,94 @@ What remains on it: the map file syntax for the designation and the dump
 carrying it, the load-time check that what's wired in type-checks, and a program
 used as a box inside another — that last one needs **the input station**, the
 same design pointed the other way, which is now the next available piece.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 17
+
+okay can we keep going?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 17
+
+Next: the input station — the same design pointed the other way. Let me read
+it.
+
+
+Step 2 says the mark is shared — "a station carries a mark saying it is a door
+and which way it faces." I built it as an output-only flag; let me generalise it
+properly rather than add a second one:
+
+
+A stray non-English word got into that message. Fixing:
+
+
+Now the test that matters: a parent using a program as a box without naming
+anything inside it.
+
+
+Two findings. The result order isn't the argument order — with two workers
+those three values are in flight concurrently, so asserting the sequence would
+be asserting a schedule. And the warning about unfed buffered inputs now fires
+on a declared entrance, which is exactly the station something outside *does*
+deliver to:
+
+
+Committed, clean, all tests pass. **A program now has a surface.**
+
+
+Before, a value got into a running program exactly one way: somebody holding it
+named a station *inside* it. That works, and it means every caller knows the
+program's insides — rename an interior station and every caller breaks. That
+isn't encapsulation; the program had no surface, only internals that happened to
+be reachable.
+
+
+**The refusal is the whole of it.** Underneath, an argument arriving is the
+ordinary delivery down an ordinary wire — nothing was added to the delivery
+path. What changed is *who may use it*. The test proves the refusal as carefully
+as the delivery, because a surface nobody has to respect isn't a surface.
+
+
+**One mark, two directions**, shared with the output door — they're one design
+seen from either end. Being both is refused: a program whose entrance is its
+exit is somebody having named the wrong station.
+
+
+Two things worth calling out:
+
+
+**A declared entrance stopped setting off a false alarm.** The whole-program
+check warns about a station whose buffered inputs nothing feeds, and that
+warning has always ended *"unless something outside delivers into it."* A
+declared entrance is exactly such a station — so the sentence's own escape
+clause finally became something the engine could check. Warning about it would
+be telling somebody that the thing they just declared might not happen.
+
+
+**And one claim the test deliberately doesn't make.** My first version asserted
+results come out in the order the arguments went in, and it failed —
+correctly. Three values fed to a program with two workers are in flight
+together, and which finishes first is a schedule. Results are held oldest-first,
+so they emerge in the order they *arrived* at the output station, which is a
+different thing. The test checks the set and says why, because asserting the
+sequence would be asserting the scheduler — the thing this engine most
+deliberately refuses to promise.
+
+
+Also recorded: the "station that runs no box" both door issues called for turned
+out **not to be needed**. A door that shapes nothing is a station running an
+identity box — an ordinary function somebody was going to write anyway, rather
+than a new kind of station. That keeps the count of things this engine has at
+what it was.
+
+
+What remains on both doors: the map file syntax for the declarations and the
+dump carrying them, and then one program used as a box inside another — which
+is now the only thing standing between here and the capstone being finished.
 
 
 --------------------------------------------------------------------------------

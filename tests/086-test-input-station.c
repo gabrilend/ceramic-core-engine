@@ -22,11 +22,15 @@
  */
 #include "018-station.h"
 #include "026-registry.h"
+#include "040-mapfile.h"
+#include "049-observe.h"
+#include "073-latebox.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /* {{{ static void must_take() */
 static void must_take(const char *refusal, const char *what)
@@ -150,5 +154,70 @@ int main(void)
     printf("  a station was refused as both entrance and exit\n");
 
     map_destroy(m);
+
+    /*
+     * And the doors survive being written down.
+     *
+     * A program whose declarations were lost on the way to disk could
+     * not be composed after a round trip, which is most of what
+     * naming them was for — the parent wires to the doors, so a
+     * reloaded program with no doors is a program a parent can no
+     * longer reach.
+     */
+    char dir[256], path[320];
+    snprintf(dir, sizeof dir, "%s/doors-%d", registry_late_source_dir(),
+             (int)getpid());
+    char cmd[512];
+    snprintf(cmd, sizeof cmd, "mkdir -p %s", dir);
+    if (system(cmd) != 0) {
+        fprintf(stderr, "cannot make %s\n", dir);
+        return 1;
+    }
+    snprintf(path, sizeof path, "%s/doors.map", dir);
+
+    FILE *f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "cannot write %s\n", path);
+        return 1;
+    }
+    fputs("gate keep p entry\n"
+          "  out 0 - answer.0\n"
+          "answer double_it p result\n", f);
+    fclose(f);
+
+    map_t *loaded = map_load_file(path, 2);
+    if (map_station(loaded, 0)->door != DOOR_IN
+        || map_station(loaded, 1)->door != DOOR_OUT) {
+        fprintf(stderr, "the doors did not survive being read\n");
+        return 1;
+    }
+
+    char dumped[320];
+    snprintf(dumped, sizeof dumped, "%s/doors-dump.map", dir);
+    f = fopen(dumped, "w");
+    map_dump(loaded, f);
+    fclose(f);
+
+    map_t *again = map_load_file(dumped, 2);
+    if (map_station(again, 0)->door != DOOR_IN
+        || map_station(again, 1)->door != DOOR_OUT) {
+        fprintf(stderr, "the doors did not survive being written down\n");
+        return 1;
+    }
+    printf("  both doors survived a round trip through a file\n");
+
+    /* And a word that is neither is refused rather than ignored. */
+    char bad[320];
+    snprintf(bad, sizeof bad, "%s/bad.map", dir);
+    f = fopen(bad, "w");
+    fputs("gate keep p sideways\n", f);
+    fclose(f);
+
+    pool_release(loaded->pool);
+    pool_join(loaded->pool);
+    pool_release(again->pool);
+    pool_join(again->pool);
+    map_destroy(loaded);
+    map_destroy(again);
     return 0;
 }

@@ -175,9 +175,17 @@ which is not the order the arguments went in. Three values fed to a
 program with two workers are in flight at once, and which finishes
 first is a schedule. The test checks the set and says why, because
 asserting the sequence would be asserting the scheduler.</p>
-<p>Still to come: the map file syntax for both declarations, deriving a
-port's type from what it feeds, the command-line path, and one program
-used as a box inside another.</p>
+<p><strong>The map file spells both</strong>, and both survive a round trip.</p>
+<p>**Two refusals gained the same escape clause, and neither was
+foreseen.** The whole-program pass warns about a station whose
+buffered inputs no arrow feeds, and reading a file refuses a program
+in which nothing can start. Both were written when there was no way
+for a program to <em>say</em> it expected to be fed, so both assumed the
+worst — and a declared entrance is exactly the case they were assuming
+away. Warning about one, or refusing to run it, would be telling
+somebody that the thing they had just declared might not happen.</p>
+<p>Still to come: deriving a port's type from what it feeds, the
+command-line path, and one program used as a box inside another.</p>
 <h3>What stood before</h3>
 <p>A program has no declared entry.</p>
 <p>Values get into a running program in exactly one way that anybody
