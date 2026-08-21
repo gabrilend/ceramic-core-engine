@@ -1,6 +1,6 @@
 # Conversation Summary: 55f347f4-2832-4363-ab6b-50a0c7b42395
 
-Generated on: 2026-08-21 07:45:48
+Generated on: 2026-08-21 08:05:39
 
 --------------------------------------------------------------------------------
 
@@ -2983,6 +2983,191 @@ the doors that mark the seam. That's genuinely different from everything so far:
 it means copying stations between tables and offsetting every wire index, on
 records that hold their own mutexes. It's the one piece of that issue that needs
 real work rather than a field, and it's where I'd start next.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 20
+
+Okay can you make an open question somewhere to re-evaluate the station table
+system in the context of running multiple boxes inside of one map? Then, let's
+keep going with something else. I gotta go run an errand so feel free to work on
+anything that isn't high priority, and just keep working until you get bored.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 20
+
+Recording the open question first, in the capstone where composing is still to
+be built:
+
+
+Question recorded. Now for something low-priority — I'll take the
+documentation generator's two structural faults, because I've deleted orphaned
+pages by hand six or seven times today and that's exactly the sort of thing the
+issue says nobody should have to remember.
+
+
+Two faults, and the second has cost me manual work all session. Let me fix the
+discovery first — a walk rather than a list, so a new directory enrols itself:
+
+
+Prefix works out to the same names, so no pages moved. Now the sweep — the
+fault that's been costing me manual deletions:
+
+
+The sweep works. Let me verify it doesn't destroy anything real, then check the
+walk actually enrols a new directory:
+
+
+A directory nobody named enrolled itself, with its own sidebar heading. Removing
+the probe and confirming the sweep takes its page with it:
+
+
+The issue record missed again — and I committed before checking, which is the
+same mistake as earlier. Let me look at the actual text:
+
+
+Let me stop guessing line numbers and locate both ends by content:
+
+
+Now something else low-risk and useful: a consistency audit of the documents.
+I've found several stale claims by accident this session — let me look for the
+rest deliberately.
+
+
+The port record one is stale — a static's value has lived on the port since
+the table was deleted. Fixing:
+
+
+That section is accurate, but one sentence in it isn't — the text is parsed
+when a port is *bound*, not each time it's claimed:
+
+
+That document still describes loading as privileged — the checks and the seed
+left it. Let me bring it up to date:
+
+
+Two leftovers in that tail — a duplicated sentence and a claim that's no
+longer true now the pass repeats:
+
+
+Next gap: the house rules say every source file has a companion interface
+document. Let me check which don't:
+
+
+Three, all in phase 7's territory. Let me see what each actually offers:
+
+
+That file's own header has two stale claims — delivery no longer snapshots,
+and refusals no longer only print. Let me check the removal's contract, then
+write all three documents:
+
+
+Now the two stale claims in the rewire file's own header, which the audit turned
+up:
+
+
+Let me audit the guarantees page — it's the most load-bearing document and a
+lot changed under it today.
+
+
+Two stale entries. V2 speaks of a port's *head*, which stopped existing when the
+scan replaced the indices, and T4 credits the registry for a size the station
+now carries:
+
+
+S3 carries the same stale claim I fixed in the phase page — nothing is
+reallocated any more. And the doors aren't promised anywhere, though they're now
+a checkable property:
+
+
+I've duplicated identifiers — S6 and S7 already exist further down, and one of
+them already promises exactly what I added. Let me look:
+
+
+The existing S7 was aspirational when written — there were no such stations.
+Now it's enforced rather than merely undefined:
+
+
+A non-English word slipped into that commit message — second time today. Let
+me check whether it's safe to correct:
+
+
+Corrected — the commit is local, 22 ahead of the remote. Let me continue the
+audit with the two remaining datapath documents that changed most.
+
+
+The build document already describes the placement functions — written ahead
+of the implementation. But its escape table has the same gap I found in the
+issue, and it speaks of the record in the past tense while the record still
+exists:
+
+
+That section describes where the build path is going, not where it is — the
+generator doesn't read maps yet. Let me mark the boundary rather than leave it
+reading as fact:
+
+
+Good stopping point — clean tree, all tests pass, 129 pages with no unresolved
+references. Here's the stretch while you were out.
+
+
+**The open question is recorded**, in the capstone where composing is still to
+be built, with a pointer from the station table's row on the phase page. It asks
+the thing you wanted asked: every choice in the station table was priced when a
+map was one hand-written program, and composing merges whole programs into one
+table, which supplies quite different numbers. It names five specific pressures
+rather than gesturing — shelf sizing chosen for growth a station at a time,
+wires being renumbered by an offset (**the first time in this engine anything
+has ever rewritten a wire**), the bring-up pass being quadratic in the table, a
+mutex per station whether or not anything contends for it, and what a name means
+when two programs each have a station called `gate`. None is known to be a
+problem; the point is that the cheapest moment to find out is while composing is
+still a design.
+
+
+**Then low-priority work.** The documentation generator now walks instead of
+being told where to look — a new directory under `docs/` enrols itself with
+its own heading, and interface files are found wherever they live. And it
+sweeps: anything in the output no source produces is deleted, with the count
+printed. That one had been costing me real time — across today a document was
+renamed, four issue files renamed, and six issues moved to completed, and every
+one left a stale page with a live URL that I deleted by hand.
+
+
+**Three source files got the companion description the house rules require** —
+the one that changes a program's shape while it runs, the one that writes a
+program back out, and the one that reports what the machine did. Writing them
+turned up two claims the rewiring file makes about itself that had stopped being
+true.
+
+
+**And a deliberate audit of the documents**, rather than tripping over stale
+claims one at a time. Nine corrections across six documents: a port described as
+holding a number into a table deleted long ago, a constant said to be parsed per
+claim when it's parsed once at bind, the account of reading a file still
+describing it as privileged, a guarantee speaking of a port's *head* after heads
+stopped existing, two crediting a table for numbers a generated function now
+folds into instructions.
+
+
+Two things worth flagging from it. **One promise turned out to be already kept**
+— the page has always said a program is reached only through its doors, but as
+*discipline*, meaning nobody was stopped. Both doors exist now and delivering
+from outside refuses anything else, so it moved from a convention to a surface.
+And I briefly duplicated two guarantee identifiers by adding entries that
+already existed further down — they existed because somebody had thought it
+through before the mechanism did.
+
+
+**Two process errors, both mine, both committed before I checked.** An issue
+file's record was lost twice when a batch edit asserted before saving, and I
+committed anyway. The fix isn't a better matcher — it's looking at the result
+before committing. Both corrections are separate commits rather than hidden. I
+also amended one unpushed commit message where a non-English word had slipped
+in.
 
 
 --------------------------------------------------------------------------------
