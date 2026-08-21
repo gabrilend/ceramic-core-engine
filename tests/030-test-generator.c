@@ -196,6 +196,80 @@ static void test_compares(void)
 }
 /* }}} */
 
+/* {{{ static void the_binary_carries_its_own_source() */
+/*
+ * **The C this program was made from, inside this program** (issue
+ * 311c).
+ *
+ * The generated file includes each box source whole so the compiler
+ * can see the types and inline each box into its shim, and until now
+ * the text was thrown away at that point — surviving only as compiled
+ * code. So a running program could not say what its boxes look like,
+ * and a program handed to somebody else was a binary needing a source
+ * tree beside it before it could do anything with new code.
+ *
+ * What is asserted is the thing worth having: the carried text is
+ * **byte for byte** the file on disk. Not similar, not equivalent —
+ * the same, because a source reported from a program has to be the
+ * source that program was compiled from, or it is worse than nothing.
+ *
+ * If somebody edits a box source and rebuilds, this passes. If
+ * somebody edits it and does not rebuild, this fails, which is
+ * correct: the binary is then carrying the truth and the disk is not.
+ */
+static void the_binary_carries_its_own_source(void)
+{
+    check(sora_n_box_sources > 0,
+          "the program carries at least one box source");
+
+    for (int i = 0; i < sora_n_box_sources; i++) {
+        const char *path = sora_box_sources[i].path;
+        const char *carried = sora_box_sources[i].text;
+
+        char full[512];
+        snprintf(full, sizeof full, "%s/%s", SORA_ROOT, path);
+        FILE *f = fopen(full, "rb");
+        if (!f) {
+            fprintf(stderr, "generator test failed: cannot open %s to "
+                            "compare the carried text against\n", full);
+            exit(1);
+        }
+
+        size_t at = 0;
+        int same = 1, c;
+        while ((c = fgetc(f)) != EOF) {
+            if (carried[at] != (char)c) {
+                same = 0;
+                break;
+            }
+            at++;
+        }
+        fclose(f);
+        if (same && carried[at] != '\0')
+            same = 0;   /* the carried copy is longer than the file */
+
+        if (!same) {
+            fprintf(stderr, "generator test failed: the carried text of %s "
+                            "differs from the file at byte %zu — the binary "
+                            "and the disk disagree about what was "
+                            "compiled\n", path, at);
+            exit(1);
+        }
+    }
+
+    /* Found by the path the build knew, and by the bare name a person
+     * would type having seen the file. */
+    check(registry_box_source("src/boxes/029-demo-boxes.c") != NULL,
+          "a source is found by the path the build knew it as");
+    check(registry_box_source("029-demo-boxes.c") != NULL,
+          "and by the bare name somebody would type");
+    check(registry_box_source("no-such-file.c") == NULL,
+          "and a name that is not there is not there");
+
+    printf("  every box source is carried in the binary, byte for byte\n");
+}
+/* }}} */
+
 /* {{{ test_map_placed_by_name() */
 static _Atomic long placed_total;
 
@@ -246,5 +320,6 @@ int main(void)
     test_field_tables();
     test_compares();
     test_map_placed_by_name();
+    the_binary_carries_its_own_source();
     return 0;
 }

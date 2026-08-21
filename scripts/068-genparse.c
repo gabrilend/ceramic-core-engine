@@ -146,8 +146,15 @@ const cmp_t *gp_compare_for(const description_t *d, const char *type)
 }
 /* }}} */
 
-/* {{{ static char *read_file() */
-static char *read_file(arena_t *a, const char *path, size_t *len_out)
+/* {{{ gp_read_file() */
+/*
+ * One file into the arena, whole. **Exported rather than static
+ * because the emitter wants the same bytes** (issue 311c): a box
+ * source is read here to be parsed, and read again to be written out
+ * as text the compiled program carries. Two readers with one error
+ * message beats two readers with two.
+ */
+char *gp_read_file(arena_t *a, const char *path, size_t *len_out)
 {
     FILE *f = fopen(path, "rb");
     if (!f) {
@@ -450,7 +457,7 @@ static void parse_params(description_t *d, box_t *b, const char *inner,
 void gp_parse_file(description_t *d, const char *path)
 {
     size_t n = 0;
-    char *text = read_file(d->arena, path, &n);
+    char *text = gp_read_file(d->arena, path, &n);
     char *file = arena_strdup(d->arena, path);
     blank_noise(text, n, file);
 

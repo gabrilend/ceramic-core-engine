@@ -155,4 +155,36 @@ void registry_print(FILE *out);
 void map_place_box(map_t *m, int station, const char *box_name, int kind);
 /* }}} */
 
+/* {{{ box sources, as text — issue 311c */
+/*
+ * **The C a program was made from, carried inside it.**
+ *
+ * The generated file already includes each box source whole so the
+ * compiler can see the types and inline each box into its shim. This
+ * is the same text emitted a second time as data, so a running
+ * program can say what its boxes look like — and so a program handed
+ * to somebody else is not a binary that needs a source tree beside it
+ * before it can do anything with new code.
+ *
+ * The text is exactly what was compiled, which is the point of
+ * carrying it: a source reported from here can never have changed on
+ * disk since, because this copy did not come from disk.
+ *
+ * The path is shortened against the project root, so two machines
+ * building the same tree emit the same file.
+ */
+typedef struct box_source {
+    const char *path;
+    const char *text;
+} box_source_t;
+
+extern const box_source_t sora_box_sources[];
+extern const int          sora_n_box_sources;
+
+/* The text of one box source, by the path the build knew it as, or
+ * NULL. A bare basename matches too, because that is how a person
+ * refers to a file they can see. */
+const char *registry_box_source(const char *path);
+/* }}} */
+
 #endif

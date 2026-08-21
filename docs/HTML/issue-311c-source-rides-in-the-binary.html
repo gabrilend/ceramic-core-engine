@@ -155,13 +155,39 @@
 the build includes is also emitted as text, so the compiled program
 carries the C it was made from.</p>
 <h2>Current behavior</h2>
+<p>**The text is carried, and reading names back out of it is blocked on
+a decision.**</p>
+<p>Every box source the build includes is emitted a second time as a C
+array, with a small table from path to text. A program can be asked
+for the C one of its sources was compiled from, by the path the build
+knew it as or by the bare name somebody would type having seen the
+file. **A test compares the carried text against the file on disk byte
+for byte**, which is the assertion worth having: a source reported
+from a program has to be the source that program was compiled from, or
+it is worse than nothing.</p>
+<p>The method is the unremarkable one — a C array in the generated file,
+portable, no post-build step, nothing to learn. The alternatives and
+what each costs are below.</p>
+<p>*<em>What is not built is reading </em>names* back out of that text**, and
+the reason is a wrong assumption in this issue rather than a missing
+afternoon. Step 2 says the generator's declaration parser is
+"callable at runtime anyway", crediting
+<a href="done-308-generator-in-c.html">308</a> for it. 308 made the generator
+a <strong>C program</strong>, which is callable as a <em>process</em> — and that is how
+<a href="done-310-boxes-compiled-at-runtime.html">310</a> reaches it, by
+running the binary. The parser is not linked into the engine and
+nothing has ever linked it.</p>
+<p>So there is a fork here that this issue thought it had already
+crossed, and it is written up under Open questions rather than
+guessed at.</p>
+<h3>What stood before</h3>
 <p>The generated file <code>#include</code>s each box source <strong>whole</strong>, so the
 compiler can see the types and inline each box into its shim. The text
-is therefore already read, already present at the moment of generation,
-and then thrown away — it survives only as compiled code.</p>
-<p>So a running program cannot say what its boxes look like, and a program
-handed to somebody else is a binary that needs a source tree beside it
-before it can do anything with new code.</p>
+was therefore already read, already present at the moment of
+generation, and then thrown away — it survived only as compiled code.</p>
+<p>So a running program could not say what its boxes look like, and a
+program handed to somebody else was a binary that needed a source tree
+beside it before it could do anything with new code.</p>
 <h2>Intended behavior</h2>
 <p><strong>Each included box source is emitted a second time, as data.</strong></p>
 <pre class="code">
@@ -218,21 +244,61 @@ once <a href="issue-311d-the-map-becomes-code.html">311d</a> lands. If it ever s
 small, the move that keeps this decision is the ELF section above —
 same data, out of the loaded image, at the price of portability.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The generator emits a string array per included source, and a table
-   from path to text.
-2. An accessor: given a box source path, hand back its text. Given a
-   box name and a parameter index, hand back that parameter's name by
-   parsing the text — which is the generator's own declaration parser,
-   which <a href="done-308-generator-in-c.html">308</a> is making callable at runtime
-   anyway.
-3. The debug report uses it, printing argument names by index, and
-   saying nothing at all about sources that have not moved.
-4. The modification-time check designed for that report is not built;
-   this issue is why.
-5. A test that the embedded text for a source matches the file it was
-   generated from, byte for byte, at build time.</p>
+<p>1. <strong>Done.</strong> A string array per included source, and a table from
+   path to text. The generator's own file reader was exported rather
+   than copied, so a source is read twice with one error message
+   between the two readers.
+2. <strong>Half done.</strong> Given a path, the text comes back — by the path the
+   build knew it as, or by the bare name somebody would type. Given a
+   box name and a parameter index, the parameter's <em>name</em> does not,
+   because the parser that would read it is not linked into the
+   engine. See the open question.
+3. <strong>Waits on 2.</strong>
+4. <strong>Done by not doing.</strong> The modification-time check an earlier draft
+   designed is not built, and this issue is why: the embedded text is
+   by definition the text that was compiled, so there is nothing to
+   warn about. Somebody editing a source on disk after the build
+   changes nothing the binary can see, which is correct — the running
+   code is the old code.
+5. <strong>Done.</strong> The carried text is compared against the file byte for
+   byte. If somebody edits a box source and rebuilds, it passes; if
+   they edit and do not rebuild, it fails, which is correct, because
+   the binary is then carrying the truth and the disk is not.</p>
 <h2>Open questions</h2>
-<p>None outstanding.</p>
+<p>**Open: how does a running program read a name out of the source it
+carries?**</p>
+<p>This issue assumed the answer and the assumption is wrong.
+<a href="done-308-generator-in-c.html">308</a> made the generator a C
+<em>program</em>, which is callable as a process — and
+<a href="done-310-boxes-compiled-at-runtime.html">310</a> reaches it exactly
+that way, by running the binary. The declaration parser is not linked
+into the engine, and nothing has ever linked it.</p>
+<p>Three ways, and none is obviously right:</p>
+<ul>
+<li><strong>Link the parser into the engine.</strong> Two of the generator's four</li>
+<p>  files — the text utilities and the parser, not the emitter — become
+  part of every program. A program could then read its own carried
+  source with no subprocess, which would also let runtime compilation
+  check a box before shelling out to compile it. It costs every
+  program an arena allocator and about a thousand lines of what is
+  currently build tooling.</p>
+<li><strong>Ask the generator binary.</strong> It already answers <code>--describe</code>, and</li>
+<p>  the engine already runs it to compile a box while a program runs, so
+  the dependency exists and nothing new is added. It costs a process
+  per question, which is fine for a debug report and absurd for
+  anything else — and it means a program that ships without the
+  generator beside it loses the feature, which is most of what this
+  issue was for.</p>
+<li><strong>Emit the names as data too.</strong> The generator knows every parameter</li>
+<p>  name at generation time and could write them out beside the source
+  text. It is by far the cheapest and it runs against
+  <a href="issue-311b-placement-instead-of-records.html">311b</a>, which is deleting name
+  strings from the engine on the grounds that the engine never reads
+  them. The counter-argument is that these are read by <em>reports</em>
+  rather than by the engine, and that a table of names beside a blob
+  of text is a strange thing to carry when the text already contains
+  them.</p>
+</ul>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>

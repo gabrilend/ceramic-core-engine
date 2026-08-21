@@ -48,6 +48,10 @@ CFLAGS += -I$(DIR)/libs -I$(DIR)/src
 # construction rather than by checking.
 CFLAGS += -DSORA_CC='"$(CC)"'
 CFLAGS += -DSORA_GENERATOR='"$(BUILD)/generate"'
+# The project root, so a test can find the box sources the generated
+# file names — those paths are shortened against it so that two
+# machines building the same tree emit the same file (issue 311c).
+CFLAGS += -DSORA_ROOT='"$(DIR)"'
 CFLAGS += -DSORA_INCLUDE='"$(DIR)/src"'
 CFLAGS += -DSORA_INCLUDE_LIBS='"$(DIR)/libs"'
 CFLAGS += -DSORA_RAM_SHARED='"$(RAM_SHARED)"'

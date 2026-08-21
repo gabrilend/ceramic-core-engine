@@ -486,6 +486,79 @@ static void emit_placements(buf_t *w, const description_t *d,
 void ge_emit(const description_t *d, const char **sources, int n_sources,
              const char *out_path, const char *root);
 
+/* {{{ static void emit_sources() */
+/*
+ * **Every box source, a second time, as text** (issue 311c).
+ *
+ * The generated file already `#include`s each source whole, so the
+ * compiler can see the types and inline each box into its shim — and
+ * the text is thrown away at that point, surviving only as compiled
+ * code. So a running program could not say what its boxes look like,
+ * and a program handed to somebody else was a binary that needed a
+ * source tree beside it before it could do anything with new code.
+ *
+ * The method is chosen for being unremarkable. A C array in the
+ * generated file is portable, needs no post-build step, and adds
+ * nothing anybody has to learn. A named ELF section would load
+ * smaller and is ELF-only; appending past the last segment works
+ * anywhere but needs a program to find its own executable, and
+ * `/proc` is Linux-only while `argv[0]` lies.
+ *
+ * **The text is emitted exactly as it was read**, which is what makes
+ * it worth carrying: a name reported from it can never come from a
+ * source that has since changed on disk, because this is the source
+ * that was compiled.
+ */
+static void emit_sources(buf_t *w, arena_t *a, const char **sources,
+                         int n_sources, const char *root)
+{
+    buf_line(w, "/* The box sources again, as text (issue 311c): the");
+    buf_line(w, " * compiled program carries the C it was made from. */");
+
+    for (int i = 0; i < n_sources; i++) {
+        size_t n = 0;
+        char *text = gp_read_file(a, sources[i], &n);
+        char *sym = gt_box_symbol(a, path_within(sources[i], root),
+                                  "source");
+
+        buf_line(w, "static const char %s[] =", sym);
+        /*
+         * One C string per line of the original, so the generated
+         * file stays readable and a compiler's line limit is never
+         * approached. Escaped by hand rather than by a library,
+         * because the set of characters that matter inside a C string
+         * literal is small and known: the backslash, the quote, and
+         * the newline that ends each piece.
+         */
+        buf_addstr(w, "    \"");
+        for (size_t k = 0; k < n; k++) {
+            char c = text[k];
+            if (c == '\\')      buf_addstr(w, "\\\\");
+            else if (c == '"')  buf_addstr(w, "\\\"");
+            else if (c == '\n') buf_addstr(w, "\\n\"\n    \"");
+            else if (c == '\r') buf_addstr(w, "\\r");
+            else if (c == '\t') buf_addstr(w, "\\t");
+            else                buf_addch(w, c);
+        }
+        buf_addstr(w, "\";\n");
+        buf_line(w, "");
+    }
+
+    buf_line(w, "/* Which text belongs to which source. The path is the one");
+    buf_line(w, " * the build handed the generator, shortened against the");
+    buf_line(w, " * project root so two machines emit the same file. */");
+    buf_line(w, "const box_source_t sora_box_sources[] = {");
+    for (int i = 0; i < n_sources; i++) {
+        const char *shortened = path_within(sources[i], root);
+        char *sym = gt_box_symbol(a, shortened, "source");
+        buf_line(w, "    { \"%s\", %s },", shortened, sym);
+    }
+    buf_line(w, "};");
+    buf_line(w, "const int sora_n_box_sources = %d;", n_sources);
+    buf_line(w, "");
+}
+/* }}} */
+
 void ge_emit(const description_t *d, const char **sources, int n_sources,
              const char *out_path, const char *root)
 {
@@ -526,6 +599,7 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
         exit(71);
     }
 
+    emit_sources(&w, d->arena, sources, n_sources, root);
     emit_compares(&w, d, compare_of);
     emit_shims(&w, d);
     emit_structs(&w, d);

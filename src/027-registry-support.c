@@ -108,6 +108,37 @@ void registry_print(FILE *out)
 }
 /* }}} */
 
+/* {{{ registry_box_source() */
+/*
+ * **The C one box source was compiled from** (issue 311c), by the
+ * path the build knew it as.
+ *
+ * A bare basename matches too, because that is how a person refers to
+ * a file they can see — `029-demo-boxes.c` rather than
+ * `src/boxes/029-demo-boxes.c`. Where two sources share a basename
+ * the full path is the way to say which, exactly as it is for
+ * addressing a box.
+ */
+const char *registry_box_source(const char *path)
+{
+    if (!path || !*path)
+        return NULL;
+
+    for (int i = 0; i < sora_n_box_sources; i++)
+        if (strcmp(sora_box_sources[i].path, path) == 0)
+            return sora_box_sources[i].text;
+
+    /* Then by basename, for somebody who typed what they could see. */
+    for (int i = 0; i < sora_n_box_sources; i++) {
+        const char *slash = strrchr(sora_box_sources[i].path, '/');
+        const char *base = slash ? slash + 1 : sora_box_sources[i].path;
+        if (strcmp(base, path) == 0)
+            return sora_box_sources[i].text;
+    }
+    return NULL;
+}
+/* }}} */
+
 /* {{{ map_place_box() */
 void map_place_box(map_t *m, int station, const char *box_name, int kind)
 {

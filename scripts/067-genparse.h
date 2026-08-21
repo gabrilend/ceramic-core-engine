@@ -144,4 +144,14 @@ int   gp_primitive_kind(const char *type, tkind_t *out);
 void  gp_fail(const char *file, int line, const char *fmt, ...);
 /* }}} */
 
+/* {{{ gp_read_file() — issue 311c */
+/*
+ * One file into the arena, whole, with the generator's own error
+ * message if it cannot be read. Exported because a box source is read
+ * twice: once here to be parsed, and once by the emitter to be
+ * written out as text the compiled program carries.
+ */
+char *gp_read_file(arena_t *a, const char *path, size_t *len_out);
+/* }}} */
+
 #endif

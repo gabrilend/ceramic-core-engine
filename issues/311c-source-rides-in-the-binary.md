@@ -6,14 +6,46 @@ carries the C it was made from.
 
 ## Current behavior
 
+**The text is carried, and reading names back out of it is blocked on
+a decision.**
+
+Every box source the build includes is emitted a second time as a C
+array, with a small table from path to text. A program can be asked
+for the C one of its sources was compiled from, by the path the build
+knew it as or by the bare name somebody would type having seen the
+file. **A test compares the carried text against the file on disk byte
+for byte**, which is the assertion worth having: a source reported
+from a program has to be the source that program was compiled from, or
+it is worse than nothing.
+
+The method is the unremarkable one — a C array in the generated file,
+portable, no post-build step, nothing to learn. The alternatives and
+what each costs are below.
+
+**What is not built is reading *names* back out of that text**, and
+the reason is a wrong assumption in this issue rather than a missing
+afternoon. Step 2 says the generator's declaration parser is
+"callable at runtime anyway", crediting
+[308](completed/308-generator-in-c.md) for it. 308 made the generator
+a **C program**, which is callable as a *process* — and that is how
+[310](completed/310-boxes-compiled-at-runtime.md) reaches it, by
+running the binary. The parser is not linked into the engine and
+nothing has ever linked it.
+
+So there is a fork here that this issue thought it had already
+crossed, and it is written up under Open questions rather than
+guessed at.
+
+### What stood before
+
 The generated file `#include`s each box source **whole**, so the
 compiler can see the types and inline each box into its shim. The text
-is therefore already read, already present at the moment of generation,
-and then thrown away — it survives only as compiled code.
+was therefore already read, already present at the moment of
+generation, and then thrown away — it survived only as compiled code.
 
-So a running program cannot say what its boxes look like, and a program
-handed to somebody else is a binary that needs a source tree beside it
-before it can do anything with new code.
+So a running program could not say what its boxes look like, and a
+program handed to somebody else was a binary that needed a source tree
+beside it before it could do anything with new code.
 
 ## Intended behavior
 
@@ -86,23 +118,64 @@ same data, out of the loaded image, at the price of portability.
 
 ## Suggested implementation steps
 
-1. The generator emits a string array per included source, and a table
-   from path to text.
-2. An accessor: given a box source path, hand back its text. Given a
-   box name and a parameter index, hand back that parameter's name by
-   parsing the text — which is the generator's own declaration parser,
-   which [308](completed/308-generator-in-c.md) is making callable at runtime
-   anyway.
-3. The debug report uses it, printing argument names by index, and
-   saying nothing at all about sources that have not moved.
-4. The modification-time check designed for that report is not built;
-   this issue is why.
-5. A test that the embedded text for a source matches the file it was
-   generated from, byte for byte, at build time.
+1. **Done.** A string array per included source, and a table from
+   path to text. The generator's own file reader was exported rather
+   than copied, so a source is read twice with one error message
+   between the two readers.
+2. **Half done.** Given a path, the text comes back — by the path the
+   build knew it as, or by the bare name somebody would type. Given a
+   box name and a parameter index, the parameter's *name* does not,
+   because the parser that would read it is not linked into the
+   engine. See the open question.
+3. **Waits on 2.**
+4. **Done by not doing.** The modification-time check an earlier draft
+   designed is not built, and this issue is why: the embedded text is
+   by definition the text that was compiled, so there is nothing to
+   warn about. Somebody editing a source on disk after the build
+   changes nothing the binary can see, which is correct — the running
+   code is the old code.
+5. **Done.** The carried text is compared against the file byte for
+   byte. If somebody edits a box source and rebuilds, it passes; if
+   they edit and do not rebuild, it fails, which is correct, because
+   the binary is then carrying the truth and the disk is not.
 
 ## Open questions
 
-None outstanding.
+**Open: how does a running program read a name out of the source it
+carries?**
+
+This issue assumed the answer and the assumption is wrong.
+[308](completed/308-generator-in-c.md) made the generator a C
+*program*, which is callable as a process — and
+[310](completed/310-boxes-compiled-at-runtime.md) reaches it exactly
+that way, by running the binary. The declaration parser is not linked
+into the engine, and nothing has ever linked it.
+
+Three ways, and none is obviously right:
+
+- **Link the parser into the engine.** Two of the generator's four
+  files — the text utilities and the parser, not the emitter — become
+  part of every program. A program could then read its own carried
+  source with no subprocess, which would also let runtime compilation
+  check a box before shelling out to compile it. It costs every
+  program an arena allocator and about a thousand lines of what is
+  currently build tooling.
+- **Ask the generator binary.** It already answers `--describe`, and
+  the engine already runs it to compile a box while a program runs, so
+  the dependency exists and nothing new is added. It costs a process
+  per question, which is fine for a debug report and absurd for
+  anything else — and it means a program that ships without the
+  generator beside it loses the feature, which is most of what this
+  issue was for.
+- **Emit the names as data too.** The generator knows every parameter
+  name at generation time and could write them out beside the source
+  text. It is by far the cheapest and it runs against
+  [311b](311b-placement-instead-of-records.md), which is deleting name
+  strings from the engine on the grounds that the engine never reads
+  them. The counter-argument is that these are read by *reports*
+  rather than by the engine, and that a table of names beside a blob
+  of text is a strange thing to carry when the text already contains
+  them.
 
 ## Related
 
