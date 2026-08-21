@@ -129,8 +129,37 @@ port, which the whole-map version did and the per-edge version did
 not. A refusal that says "the destination port" names nothing anybody
 can go and look at.
 
-Still to come: box wrappers, so a map can perform these operations on
-another map.
+**And a map builds a map.** The construction operations exist as
+ordinary boxes — add a station, draw a wire, write a constant, name a
+station — so a program can perform them on another program with
+nothing added to the engine. A test assembles a builder, points it at
+an empty program, runs it, and then brings up and runs what it made,
+because a station can look right and still be unrunnable and the way
+to find out is to run it.
+
+**A program is named by where it lives**, carried as a number, because
+a box takes its arguments by value and cannot reach anything — the
+last global pointer to a map was deleted precisely so two programs
+could run in one process without seeing each other.
+
+**That is where this engine's one accepted risk becomes real**, and it
+was decided rather than discovered, which is what
+[309](completed/309-types-by-width.md) asked for when it wrote the
+hazard down and declined to fix it. A wire is legal when both ends
+count the same bytes; an address is eight of them and so is a double.
+So the engine will accept a wire feeding any eight-byte value into the
+argument saying which program to build into, and the result is not a
+wrong number but a write through those bytes. The boxes refuse a null
+before touching anything, which catches the likeliest mistake — an
+unwired port delivers zero — and past that nothing distinguishes a
+real address from any other eight bytes.
+[058](../docs/058-guarantees.md) says so in its own words rather than
+folded into the width non-guarantee, because the consequence differs
+in kind.
+
+Still to come: starting a second program beside this one rather than
+building into it, which needs the input station
+([213](213-the-input-station.md)) for anything to be fed to it.
 
 ## Intended behavior
 
@@ -374,10 +403,16 @@ rather than drifting into place.
    placement function per box writes a station directly, and placing by
    name is that function being called. Built in
    [311b](311b-placement-instead-of-records.md).
-7. **Box wrappers for the operations**, so a map can perform them: add
-   a station, draw a wire, write a constant, each a plain C function
-   taking values and returning one. This is what lets a program build
-   another program without anything being added to the engine.
+7. **Done.** The operations exist as boxes — add a station, draw a
+   wire, write a constant, name a station — each a plain C function
+   taking values and returning one, in an ordinary box source the
+   engine has no idea is special.
+
+   A program is named by its address, carried as a number, because a
+   box cannot reach anything ambient. That makes 309's recorded
+   hazard real: the engine cannot tell an address from any other
+   eight-byte value. Decided deliberately, refused where refusal is
+   possible, and stated in 058.
 8. **Done**, and it earned its keep immediately by finding a
    round-trip bug: a deepened buffer and a port with no source were
    spelled the same way in the file format, so the first could be

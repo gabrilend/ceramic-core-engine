@@ -130,6 +130,7 @@
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
 <a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
@@ -250,8 +251,34 @@ program is checked — so it had to learn to name the station and the
 port, which the whole-map version did and the per-edge version did
 not. A refusal that says "the destination port" names nothing anybody
 can go and look at.</p>
-<p>Still to come: box wrappers, so a map can perform these operations on
-another map.</p>
+<p><strong>And a map builds a map.</strong> The construction operations exist as
+ordinary boxes — add a station, draw a wire, write a constant, name a
+station — so a program can perform them on another program with
+nothing added to the engine. A test assembles a builder, points it at
+an empty program, runs it, and then brings up and runs what it made,
+because a station can look right and still be unrunnable and the way
+to find out is to run it.</p>
+<p><strong>A program is named by where it lives</strong>, carried as a number, because
+a box takes its arguments by value and cannot reach anything — the
+last global pointer to a map was deleted precisely so two programs
+could run in one process without seeing each other.</p>
+<p><strong>That is where this engine's one accepted risk becomes real</strong>, and it
+was decided rather than discovered, which is what
+<a href="done-309-types-by-width.html">309</a> asked for when it wrote the
+hazard down and declined to fix it. A wire is legal when both ends
+count the same bytes; an address is eight of them and so is a double.
+So the engine will accept a wire feeding any eight-byte value into the
+argument saying which program to build into, and the result is not a
+wrong number but a write through those bytes. The boxes refuse a null
+before touching anything, which catches the likeliest mistake — an
+unwired port delivers zero — and past that nothing distinguishes a
+real address from any other eight bytes.
+<a href="doc-058-guarantees.html">058</a> says so in its own words rather than
+folded into the width non-guarantee, because the consequence differs
+in kind.</p>
+<p>Still to come: starting a second program beside this one rather than
+building into it, which needs the input station
+(<a href="issue-213-the-input-station.html">213</a>) for anything to be fed to it.</p>
 <h2>Intended behavior</h2>
 <p>**There is one surface, and it has five operations: create an empty
 program, add a station, remove a station, configure an input port, and
@@ -461,10 +488,15 @@ rather than drifting into place.</p>
    placement function per box writes a station directly, and placing by
    name is that function being called. Built in
    <a href="issue-311b-placement-instead-of-records.html">311b</a>.
-7. <strong>Box wrappers for the operations</strong>, so a map can perform them: add
-   a station, draw a wire, write a constant, each a plain C function
-   taking values and returning one. This is what lets a program build
-   another program without anything being added to the engine.
+7. <strong>Done.</strong> The operations exist as boxes — add a station, draw a
+   wire, write a constant, name a station — each a plain C function
+   taking values and returning one, in an ordinary box source the
+   engine has no idea is special.</p>
+<p>   A program is named by its address, carried as a number, because a
+   box cannot reach anything ambient. That makes 309's recorded
+   hazard real: the engine cannot tell an address from any other
+   eight-byte value. Decided deliberately, refused where refusal is
+   possible, and stated in 058.
 8. <strong>Done</strong>, and it earned its keep immediately by finding a
    round-trip bug: a deepened buffer and a port with no source were
    spelled the same way in the file format, so the first could be

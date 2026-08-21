@@ -130,6 +130,7 @@
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
 <a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
@@ -376,6 +377,37 @@ runs the readiness check, and a waiting ring value completes the input
 set, so it is consumed. That is real work on real values rather than an
 error — but a fast writer against a deep queue empties it faster than
 the producer alone would have.</p>
+<p><strong>An address travelling down a wire is not checked, and cannot be.</strong></p>
+<p>The construction operations exist as boxes, so that a program can
+build a program (issue 212). Such a box has to be told which program
+to act on, and it cannot reach one — a box takes its arguments by
+value and the last global pointer to a map was deleted so that two
+programs could run in one process without seeing each other. So a
+program is named by <strong>where it lives</strong>, carried as a number.</p>
+<p>A wire is legal when both ends count the same bytes. On the machines
+this runs on an address is eight of them, and so is a <code>double</code>, a
+<code>long</code>, and a file offset. **So the engine will accept a wire feeding
+any eight-byte value into the argument that says which program to
+build into**, and what follows is not a wrong answer. It is a write
+through whatever those bytes were.</p>
+<p>This is the same accepted cost as everywhere else — width tells two
+types apart and nothing else does — and it is recorded separately
+because the consequence is different in kind. When values are data, a
+mis-wire produces a wrong number: visible, local, eventually noticed.
+When the value is an address the engine will build through, a mis-wire
+produces a fault with no useful location, because the engine did
+exactly what it was told.</p>
+<p><strong>What is done about it, and what is not.</strong> The construction boxes
+refuse a null before touching anything, which catches the likeliest
+mistake — a port never given a value delivers zero. Past null, nothing
+distinguishes a real address from any other eight bytes, and nothing
+here pretends to. The honest fix is comparing types by <em>layout</em>
+instead of by width, which is designed in full and whose tables have
+been emitted since phase 3, unconsulted; it was not taken, and this is
+the cost of not taking it. Wrapping the address in a deliberately
+odd-sized struct was considered and rejected, because buying the
+distinction that way makes the type system lie about sizes, which is
+worse than what it prevents.</p>
 <p><strong>Nothing about the order values leave a port.</strong> A value delivered
 first is not necessarily claimed first. A reader scans for a usable
 slot rather than computing where the oldest one must be, and slots are

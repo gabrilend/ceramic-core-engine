@@ -130,6 +130,7 @@
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
+<a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
 <a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
@@ -271,6 +272,15 @@ below and its field tables have existed since phase 3.</p>
 were data, and self-modifying programs change what it costs without
 changing what it is. That should be a decision somebody makes rather
 than a discovery somebody has.</p>
+<p><strong>It was made, and it was made this way.</strong> The construction operations
+became boxes (<a href="issue-212-one-way-to-build-a-program.html">212</a>), a program
+is named by its address, and the risk stands — recorded in
+<a href="doc-058-guarantees.html">058</a> in its own words rather than
+folded into the width non-guarantee, because a mis-wire that produces
+a wrong number and a mis-wire that produces a write through arbitrary
+memory are different facts. Shape comparison was weighed again at that
+moment and again not taken. The boxes refuse a null before touching
+anything, which is the whole of what can be checked.</p>
 <h2>Suggested implementation steps</h2>
 <p>1. The wire check compares the two sizes instead of the two name
    strings, at every place a wire is checked: the loader, the runtime

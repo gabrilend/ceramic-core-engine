@@ -159,6 +159,16 @@ were data, and self-modifying programs change what it costs without
 changing what it is. That should be a decision somebody makes rather
 than a discovery somebody has.
 
+**It was made, and it was made this way.** The construction operations
+became boxes ([212](../212-one-way-to-build-a-program.md)), a program
+is named by its address, and the risk stands — recorded in
+[058](../../docs/058-guarantees.md) in its own words rather than
+folded into the width non-guarantee, because a mis-wire that produces
+a wrong number and a mis-wire that produces a write through arbitrary
+memory are different facts. Shape comparison was weighed again at that
+moment and again not taken. The boxes refuse a null before touching
+anything, which is the whole of what can be checked.
+
 
 ## Suggested implementation steps
 

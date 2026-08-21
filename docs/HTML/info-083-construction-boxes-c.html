@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>208 — Phase 2 demo: a graph that runs itself</title>
+<title>083-construction-boxes.c — building a program from inside one</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -68,7 +68,7 @@
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
-<a href="done-208-phase-2-demo.html" class="here">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
 <a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
@@ -130,7 +130,7 @@
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
-<a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
+<a href="info-083-construction-boxes-c.html" class="here">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
 <a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
@@ -140,78 +140,52 @@
 <a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
-<h1>208 — Phase 2 demo: a graph that runs itself</h1>
-<blockquote><strong>The program this built was deleted (<a href="issue-713-demos-you-can-steer.html">713</a>).</strong></blockquote>
-<blockquote>Every word below stands as the record of what the first generation of</blockquote>
-<blockquote>demos was and what it proved; what replaced it is a live control panel</blockquote>
-<blockquote>per phase rather than a paged transcript. Nothing here needs rebuilding.</blockquote>
-<h2>Current behavior</h2>
-<p>Built and discoverable from the root launcher. Five scenes, all
-measured: a sixteen-wide map reaching full worker occupancy with
-nobody arranging it; one station with fourteen bodies inside it at
-once and an intact checksum; the two kinds of backlog shown side by
-side — a slow single-input consumer piling tasks into the pool's ring
-while its slot stays one deep, and a pairing station's starved side
-growing its buffer to hold four hundred waiting values (a distinction
-the design docs did not draw; docs 002 now corrected, first-pass
-report carries the lesson); fan-out cost measured at widths one, ten,
-and a hundred; and a live text view of six hundred values pooling
-behind a ticket gate and draining as tickets trickle in. Results
-mirror to the shared-memory tier.</p>
-<p>Each scene opens with a story and reports in that story's units beside
-the engine's own, under the standard issue 707 sets: a print shop with
-no foreman, one recipe card and many cooks, a restaurant pass where a
-backlog on the ticket rail and a backlog on the warming shelf mean
-opposite things, a dispatcher who dials every depot herself, and a
-queue on a pavement outside a ticketed door. The backlog scene quotes
-phase 7's buffer report rather than paraphrasing it, and the demo says
-up front that lines beginning "observe:" are the engine's own alarm on
-the error stream rather than something going wrong.</p>
-<h2>Intended behavior</h2>
-<p>The first demo where the shape of the program is visible. It should
-make one thing obvious to someone watching: **nobody scheduled any of
-this.** A map was described, values were dropped in, and the machine
-filled every core on its own.</p>
-<p>It reuses phase 1's pool wholesale — same queue, same workers, same
-termination — and adds stations on top, which is the point of a phase
-demo. Show the old tool doing new work.</p>
-<p><strong>What it should show, in order of how convincing it is:</strong></p>
-<p><strong>Occupancy across a wide map.</strong> A graph wide enough to saturate the
-machine. Report how many workers were busy over time, sampled, against
-the theoretical maximum. The interesting number is how close a graph
-gets to full occupancy without anyone arranging for it.</p>
-<p><strong>Concurrent invocations of one station.</strong> Feed a single station far
-more values than it can consume at once and report how many of its
-invocations overlapped in time. This is the property that most needs
-proving, because it is the one the design paid for by forbidding boxes
-to remember.</p>
-<p><strong>Buffer growth under mismatched rates.</strong> A producer deliberately
-faster than its consumer. Report each slot's growth count and final
-capacity. This shows the growth path working and shows what it looks
-like when a map is unbalanced — which is the same reading phase 7 will
-later surface automatically.</p>
-<p><strong>Fan-out cost.</strong> One station wired to increasing numbers of
-destinations. Report the time the delivering worker spends walking
-the list against the time it took to run the box. This is where the
-"one worker does a hundred lock-and-check cycles" decision either
-justifies itself or does not.</p>
-<p><strong>A visual, if it is cheap.</strong> The map drawn as text — stations, arrows,
-and a live count of values sitting in each buffer — redrawn as it runs.
-Watching values pool up behind a slow station explains backpressure
-better than any number does.</p>
-<h2>Suggested implementation steps</h2>
-<p>1. Build the demo map with the construction calls from issue 207.
-2. Instrument by measurement only. No number in the output should be a
-   constant written into the demo's source.
-3. Write results to <code>tmp/shared-memory/</code> as well as the screen so runs
-   can be compared.
-4. Confirm the root launcher finds it.</p>
-<h2>Related</h2>
-<ul>
-<li><a href="doc-003-datapath-delivery.html">003 — Delivery</a></li>
-<li>Issues 201 through 207 — everything being demonstrated</li>
-<li>Issue 105 — the phase 1 demo this builds on</li>
-</ul>
+<h1>083-construction-boxes.c — building a program from inside one</h1>
+<p>The construction surface as ordinary box functions, so that assembling
+a program is something a <strong>map</strong> can do and not only something C can
+do (issue 212). A station running one of these adds a station to
+another program; another draws a wire in it. Nothing was added to the
+engine to permit this — these are box sources like any other, and the
+engine has no idea they are special.</p>
+<h2>How a box says which program</h2>
+<p><strong>By its address, carried as a number.</strong> A box takes its arguments by
+value and may not reach anything ambient; the last global pointer to a
+map was deleted on purpose, so that two programs could run in one
+process without seeing each other. So a box acting on a program has to
+be handed one, and where it lives is the only way to say *that
+particular program* as a value.</p>
+<p>The address travels inside a one-field struct with its own name, which
+buys nothing from the engine — a wire is checked by width — and
+everything from the person reading a map. A port typed <code>program</code> is
+one somebody had to mean.</p>
+<h2>The functions</h2>
+<table>
+<tr><td>Function</td><td>Takes</td><td>Gives</td><td>Does</td></tr>
+<tr><td><code>program_add_station</code></td><td>a program, a box name</td><td>the station's index, or -1</td><td>Adds a station running that box. An index is what every wire is made of, so this is the value the others take.</td></tr>
+<tr><td><code>program_wire</code></td><td>a program, two stations and two ports</td><td>1 drawn, 0 refused</td><td>Draws a wire, applying every rule the engine applies anywhere else.</td></tr>
+<tr><td><code>program_set_constant</code></td><td>a program, a station, a port, text</td><td>1 taken, 0 refused</td><td>Gives a port a constant. Text rather than bytes, because bytes are exact only against the build that wrote them while text resolves its layout when it is read.</td></tr>
+<tr><td><code>program_name_station</code></td><td>a program, a station, a name</td><td>1 taken, 0 refused</td><td>Names a station, so the program can be written out as a file that reads back.</td></tr>
+</table>
+<p>A box returns one value, so a refusal's reason cannot come back beside
+the answer — it is printed, and a map that wants to react reacts to
+the zero.</p>
+<h2>The risk this file makes real</h2>
+<p><strong>A wire is legal when both ends count the same bytes</strong>, which is
+right for data: two boxes may spell one shape differently and mean the
+same thing. An address is eight bytes on the machines this runs on,
+and so is a <code>double</code>, a <code>long</code>, and a file offset.</p>
+<p>So the engine will accept a wire feeding any eight-byte value into the
+program argument of anything here, and what follows is not a wrong
+answer — it is a write through whatever those bytes were.</p>
+<p>That was decided rather than discovered: issue 309 recorded the hazard
+when it chose width comparison and said the decision would fall due
+the moment a program could build a program. It fell due here.
+<a href="doc-058-guarantees.html">058</a> states the residue in its own
+words.</p>
+<p><strong>What is checked is a null</strong>, before anything is touched, because a
+port never given a value delivers zero and that is the likeliest
+mistake by a wide margin. Past null nothing distinguishes a real
+address from any other eight bytes, and nothing here pretends to.</p>
 
 </main>
 </div></body></html>

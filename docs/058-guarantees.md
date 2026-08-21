@@ -280,6 +280,42 @@ set, so it is consumed. That is real work on real values rather than an
 error — but a fast writer against a deep queue empties it faster than
 the producer alone would have.
 
+**An address travelling down a wire is not checked, and cannot be.**
+
+The construction operations exist as boxes, so that a program can
+build a program (issue 212). Such a box has to be told which program
+to act on, and it cannot reach one — a box takes its arguments by
+value and the last global pointer to a map was deleted so that two
+programs could run in one process without seeing each other. So a
+program is named by **where it lives**, carried as a number.
+
+A wire is legal when both ends count the same bytes. On the machines
+this runs on an address is eight of them, and so is a `double`, a
+`long`, and a file offset. **So the engine will accept a wire feeding
+any eight-byte value into the argument that says which program to
+build into**, and what follows is not a wrong answer. It is a write
+through whatever those bytes were.
+
+This is the same accepted cost as everywhere else — width tells two
+types apart and nothing else does — and it is recorded separately
+because the consequence is different in kind. When values are data, a
+mis-wire produces a wrong number: visible, local, eventually noticed.
+When the value is an address the engine will build through, a mis-wire
+produces a fault with no useful location, because the engine did
+exactly what it was told.
+
+**What is done about it, and what is not.** The construction boxes
+refuse a null before touching anything, which catches the likeliest
+mistake — a port never given a value delivers zero. Past null, nothing
+distinguishes a real address from any other eight bytes, and nothing
+here pretends to. The honest fix is comparing types by *layout*
+instead of by width, which is designed in full and whose tables have
+been emitted since phase 3, unconsulted; it was not taken, and this is
+the cost of not taking it. Wrapping the address in a deliberately
+odd-sized struct was considered and rejected, because buying the
+distinction that way makes the type system lie about sizes, which is
+worse than what it prevents.
+
 **Nothing about the order values leave a port.** A value delivered
 first is not necessarily claimed first. A reader scans for a usable
 slot rather than computing where the oldest one must be, and slots are
