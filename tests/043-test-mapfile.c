@@ -274,7 +274,12 @@ static void test_every_refusal(void)
         "head seven p\n"
         "  out 0 - other.5\n"
         "other double_it p\n",
-        "that station has 1 port",
+        /* The refusal moved into the wiring operation (issue 210g)
+         * and gained the box's name on the way, which is what let the
+         * loader stop keeping a second copy of this check. What is
+         * asserted is the fact, not the sentence: the arrow named a
+         * port, and the box has one. */
+        "'double_it' has 1 port",
         "an arrow to a port beyond the box was accepted");
 
     expect_death_saying(
@@ -284,10 +289,25 @@ static void test_every_refusal(void)
         "box returns int (4 bytes), port takes double (8 bytes)",
         "a wire between different widths was accepted");
 
+    /*
+     * The entry this line names exists, and it did not have to
+     * before. Reading a file resolves what the *file* says — which
+     * statics entry, which text — and only then asks the program to
+     * take it, so a line that is wrong in both ways is now answered
+     * about the entry rather than about the port. This map has one
+     * fault instead of two, which is what it was always meant to
+     * have: a port number past the end of a box that takes nothing.
+     */
     expect_death_saying(
+        "statics\n"
+        "  0 = 5\n"
+        "\n"
         "head seven p\n"
         "  in 3 $0\n",
-        "names a port that does not exist",
+        /* Likewise the input side: the port check is the
+         * configuration surface's now, so the words are the ones it
+         * speaks (issue 210g). */
+        "has no port 3",
         "an input line beyond the box was accepted");
 
     expect_death_saying(

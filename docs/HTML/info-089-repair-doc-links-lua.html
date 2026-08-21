@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>711 — An index is a position in the reading order</title>
+<title>089-repair-doc-links.lua — making the record walkable, from outside</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -41,7 +41,7 @@
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
-<a href="issue-711-the-index-means-reading-order.html" class="here">711 — An index is a position in the reading order</a>
+<a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
@@ -125,7 +125,7 @@
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 <a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 <a href="info-088-complete-issue-lua.html">088-complete-issue.lua — finishing an issue, from outside</a>
-<a href="info-089-repair-doc-links-lua.html">089-repair-doc-links.lua — making the record walkable, from outside</a>
+<a href="info-089-repair-doc-links-lua.html" class="here">089-repair-doc-links.lua — making the record walkable, from outside</a>
 <a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
@@ -145,106 +145,44 @@
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 </nav>
 <main>
-<h1>711 — An index is a position in the reading order</h1>
-<p><strong>Very low priority.</strong> Nothing is broken, nothing is blocked, and no
-other issue waits on this. It is here so the rule is written down
-somewhere before the numbering drifts further, and so that whoever
-eventually cares has a plan rather than an argument.</p>
-<h2>Current behavior</h2>
-<p>Every file in the project carries an index — <code>019-station.c</code>,
-<code>020-delivery.c</code> — and the numbers run across the whole tree rather
-than per directory, so the project sorts into one sequence. The next
-number comes from the hidden <code>.file-index-counter</code> at the project root.</p>
-<p>The sequence genuinely reads well in places. Engine files interleave
-with the tests that prove them: 018 and 019 are what a station is and
-how one is placed, 020 is a value arriving, and 021 through 024 are the
-tests for exactly those. A thing, then its proof, then the next thing.</p>
-<p><strong>Two problems, and only the second one needs work.</strong></p>
-<p><strong>The rule was never written down.</strong> A reader meeting <code>033-statics.c</code>
-beside <code>034-gather.c</code> has no way to learn whether the numbers mean
-<em>read these in this order</em>, <em>these were created in this order</em>, or
-<em>these are related to each other</em>. The convention is followed carefully
-and communicates nothing to anyone who was not told about it. That was
-raised while numbering the phase demo runners and is larger than they
-were.</p>
-<p><strong>And the numbering has drifted toward meaning relatedness.</strong> Where
-files sit near each other because they are <em>about</em> the same thing
-rather than because one should be read after the other, the index has
-quietly acquired a second meaning. Two meanings in one channel is the
-thing this project avoids everywhere else.</p>
-<h2>Intended behavior</h2>
-<p>**An index means one thing: where this file sits in the order somebody
-should read the project.** Not what it is about, not what it relates
-to, not when it was made. If two files should be read one after the
-other they are adjacent; if they merely concern the same subsystem,
-that is what the directory and the name say, and the index says nothing
-about it.</p>
-<p><strong>Adjacency is a consequence, not a purpose.</strong> Related files will often
-end up near each other, because a thing and its test usually are read
-together. That is fine. What is not fine is <em>choosing</em> a number in
-order to place a file near its relatives, because then a reader
-following the order meets a detour nobody signposted.</p>
-<p><strong>The letter suffix survives untouched.</strong> A demo runner takes its
-source's index with a letter appended — <code>037a</code> runs <code>037</code> — and that is
-consistent rather than an exception: a runner is not a step in the
-story, it is the second half of the step its source is. The same shape
-the issues use when one splits into parts.</p>
-<p><strong>Renumbering is done by a tool, never by hand.</strong> The tool reads the
-tree, takes a desired order, rewrites the filenames, updates the
-counter, and — this is the part that matters — **rewrites every
-reference to every renamed file**, in source includes, in the build, in
-the info files, in the documents, and in the issues. A renumbering done
-by hand is a renumbering that leaves stragglers, and a straggler here
-is a broken build or a dead link rather than a cosmetic flaw.</p>
-<p><strong>The order has to be decided before it can be applied</strong>, and that is
-the actual work. The tool is mechanical; deciding what should be read
-after what is a judgement about how the project is best explained, and
-it should be made by reading the sequence end to end rather than by
-sorting on anything.</p>
-<h2>Suggested implementation steps</h2>
-<p>1. Read the current sequence end to end and write down where it stops
-   being a reading order — the places a number was chosen for
-   adjacency rather than for sequence. That list is the specification
-   for everything after it.
-2. The renumbering tool: read the tree, accept a desired order, rename,
-   rewrite every reference, update <code>.file-index-counter</code>. It must be
-   able to report what it <em>would</em> do without doing it, because the
-   first run of a tool like this is the one nobody trusts.
-3. A check that nothing references a name that no longer exists, run
-   after the rename — the same sweep the project already expects by
-   hand whenever a path changes.
-4. Apply it. One commit, so the before and the after are both in the
-   record and the move is reversible.
-5. The documentation site's navigation follows the index afterward, so
-   the order is visible rather than merely true.</p>
-<h2>Open questions</h2>
+<h1>089-repair-doc-links.lua — making the record walkable, from outside</h1>
+<p>Reads every link in every markdown document in the project, and where
+one names a file that is not at that path, re-aims it at the file it
+was asking for.</p>
+<h2>Usage</h2>
+<p>    luajit scripts/089-repair-doc-links.lua [--apply] [DIR]</p>
+<table>
+<tr><td>Argument</td><td>Meaning</td></tr>
+<tr><td><code>--apply</code></td><td>Actually write. Without it nothing changes and the report says what would have happened.</td></tr>
+<tr><td><code>DIR</code></td><td>Project root, if not the one hard-coded at the top.</td></tr>
+</table>
+<p>Safe to run at any time; a project with no broken links reports zero
+and writes nothing.</p>
+<h2>How it decides</h2>
+<p><strong>By filename, not by similarity.</strong> Every document filename in this
+project is unique — which is what the numbered-filename rule buys — so
+a broken link is not ambiguous about <em>which</em> document it wanted, only
+about how to get there. It finds the one file with that name and
+computes the relative path from the linking document's directory.</p>
+<p>Two cases are reported and left alone rather than repaired:</p>
 <ul>
-<li><strong>How does the convention explain itself to a reader?</strong> Renumbering</li>
-<p>  makes the order correct; it does not make it legible. Four shapes
-  were considered and none chosen, because the choice is worth making
-  when somebody is actually doing the work rather than now:</p>
-<li>a line in each file's own header naming what comes before and</li>
-<p>    after, generated by the same tool — which reaches a reader who
-    never opens a document, and that is the failure case;</p>
-<li>a generated reading index listing every file in order with a line</li>
-<p>    about each, taken from the header each file already has, which
-    shows the whole shape at once but has to be found;</p>
-<li>both, with the documentation site's navigation ordered by index and</li>
-<p>    next-and-previous links at each page foot;</p>
-<li>nothing, on the grounds that the convention is for the author and a</li>
-<p>    stranger reads in whatever order they like anyway.</p>
+<li>a name matching <strong>no</strong> file in the project, which means the document</li>
+<p>  was renamed or never written. A tool that picked a near-match would
+  quietly point a reader at the wrong document.</p>
+<li>a name matching <strong>more than one</strong> file, which cannot happen while</li>
+<p>  the numbering rule holds, and is worth hearing about immediately if
+  it ever does.</p>
 </ul>
-<h2>Related</h2>
-<ul>
-<li><a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>,</li>
-<p>  where this was raised, and which settled the runner suffix</p>
-<li><a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>, whose</li>
-<p>  navigation would carry the order if it is to be shown rather than
-  stated</p>
-<li><a href="doc-000-table-of-contents.html">000 — Table of contents</a>, which</li>
-<p>  states the reading order for documents and is the model for stating
-  it for everything else</p>
-</ul>
+<p>Anchors (<code>#section</code>), external links, and the generated site under
+<code>docs/HTML/</code> are untouched — that last because <code>make html</code> rebuilds it
+from these very files.</p>
+<h2>What it found the first time it ran</h2>
+<p>107 dead links across 54 files, nearly all of them in
+<code>issues/completed/</code>: issues moved into the completed record over the
+project's history whose outbound links were never repaired. The
+completed issues are the project's stated blueprint for rebuilding
+itself, and a blueprint whose cross-references lead nowhere is a
+blueprint somebody has to reconstruct by hand.</p>
 
 </main>
 </div></body></html>

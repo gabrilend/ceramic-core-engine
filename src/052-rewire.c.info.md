@@ -24,6 +24,19 @@ station's own mutex, so nobody is left holding something freed.
 | `map_rewire_disconnect` | the same | 0, or -1 | Cuts one wire, by rebuilding the destination list without it. |
 | `map_remove_station` | a program, a station | 0, or -1 | Takes a station out and frees its place for reuse. |
 
+**And having one of them is what found a hole in it.** The width check
+sat behind a condition asking whether *both* stations had input port
+arrays. The destination always does, or the port index would have been
+refused already; the source frequently does not, because a box that
+takes no arguments and returns a value is how most programs begin.
+Every such station could be wired into a port of any width at all with
+nothing said. It stayed invisible while the loader carried a width
+check of its own — every program read from a file met that one first —
+and it opened the moment a program was built by calling the surface.
+Taking the loader's copy away is what made it show, which is the
+argument in miniature: the second check was not redundancy, it was
+concealment. There is a test for it now with the other width scenes.
+
 **There is one implementation and three faces on it**, differing only
 in what a caller wants done with a refusal: hand it back, print it and
 return a code, or stop the program (which is what the construction

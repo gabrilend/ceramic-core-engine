@@ -29,8 +29,6 @@
 <h2>Issues, open</h2>
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
-<a href="issue-210-input-port-record.html">210 — What an input port is</a>
-<a href="issue-210g-one-way-to-build-a-station.html" class="here">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
@@ -69,12 +67,14 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
 <a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
 <a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="done-210g-one-way-to-build-a-station.html" class="here">210g — One way to build a station</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
@@ -124,6 +124,8 @@
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 <a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
+<a href="info-088-complete-issue-lua.html">088-complete-issue.lua — finishing an issue, from outside</a>
+<a href="info-089-repair-doc-links-lua.html">089-repair-doc-links.lua — making the record walkable, from outside</a>
 <a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
@@ -144,15 +146,16 @@
 </nav>
 <main>
 <h1>210g — One way to build a station</h1>
-<p>Seventh child of <a href="issue-210-input-port-record.html">210</a>. Everything above
+<p>Seventh child of <a href="done-210-input-port-record.html">210</a>. Everything above
 made a port describable; this makes there be exactly one way to say
 it.</p>
 <h2>Current behavior</h2>
-<p><strong>Unblocked, and half built.</strong> The generator now emits a placement
-function per box and by-name placement calls one
+<p><strong>Built.</strong> The generator emits a placement function per box and
+by-name placement calls one
 (<a href="issue-311b-placement-instead-of-records.html">311b</a>), so hand placement is
 the primitive and there are no longer two contracts that can express
-different programs.</p>
+different programs — and reading a file is now a caller of the
+configuration surface rather than a builder beside it.</p>
 <p>What now stands:</p>
 <ul>
 <li><strong>One operation says where a port's values come from</strong>: a station, a</li>
@@ -191,13 +194,44 @@ becomes ready, which is the same outcome as a buffered input nothing
 feeds — already a warning, for the same reason. So it is a warning,
 and a loud one, because a station that silently never runs is the
 hardest fault to notice from outside.</p>
-<p><strong>What is left is the callers.</strong> The loader becoming the first of them
-and runtime editing the second is where reading a file stops being a
-privileged path, and that is
-<a href="issue-212-one-way-to-build-a-program.html">212</a>'s work rather than this
-issue's — as is the test that a program read from a file and one built
-by calling this surface dump identically, which cannot be written
-until the loader is a caller.</p>
+<p><strong>And the callers arrived.</strong> Reading a file performs one call per port
+line: a starting depth where the line gave one, then the single
+configuration operation for a bare dash or a constant. Live editing
+reaches the same operation through the construction boxes, so a
+program editing another program and a person reading a file are doing
+the same thing to the same surface.</p>
+<p>**Three things the loader used to keep were not redundancy — two of
+them were concealment.**</p>
+<ul>
+<li><em>Its own port-range check</em>, whose wording was the better of the two:</li>
+<p>  it named the box, counted its ports, and remembered that a
+  comparator carries one more than its parameter list shows. That
+  wording moved down into the surface, where every caller reaches it,
+  and the loader kept nothing but the file and the line it prefixes.</p>
+<li><em>Its own width check.</em> Removing it uncovered a real hole. The</li>
+<p>  wiring operation asked the width question only when <strong>both</strong>
+  stations had input port arrays — and a box that takes nothing and
+  returns a value has none, which is how most programs begin. Every
+  such station could be wired into a port of any width at all with
+  nothing said. No program read from a file ever showed it, because
+  the loader's copy ran first; a program built by calling the surface
+  would have gone straight through. That is the fault two paths
+  produce, found by taking one of them away, and there is a test for
+  it now beside the other width scenes.</p>
+<li><em>Its own name table.</em> Names are copied onto the program as each</li>
+<p>  station is created rather than in a sweep at the end, so arrows
+  resolve against the program itself. What that buys beyond one fewer
+  allocation: every refusal raised while wiring can say which station
+  it is about in the word the file's author typed.</p>
+</ul>
+<p>**The last operation that stopped the program instead of refusing was
+the starting depth**, and it does not any more. A caller collecting
+every mistake in a file cannot collect the one that killed it, so a
+bad depth was the single fault in a map file capable of hiding every
+fault after it.</p>
+<p>The one remaining thing that still stops where it happens is text that
+does not parse, which belongs with the refusal policy
+(<a href="issue-106-stopping-on-purpose.html">106</a>) rather than here.</p>
 <h3>What stood before</h3>
 <p>The reason is written into step 1 already but is easy to read past:
 hand placement becoming the primitive means *a generated placement
@@ -279,9 +313,16 @@ unqualified: a port with no source is an error, full stop.</p>
    caller rather than its author.
 2. <strong>Done.</strong> One port-configuration operation, with tag conversion
    becoming a case of it and constant-binding reached through it.
-3. The loader becomes its first caller, losing whatever it does today
-   that the surface does not offer.
-4. Runtime editing becomes its second caller.
+3. <strong>Done.</strong> The loader becomes its first caller. What it lost: a
+   port-range check (whose better wording moved into the surface), a
+   width check (whose removal uncovered a hole in the surviving one),
+   and a private name table (replaced by naming each station as it is
+   created). What it kept is the one thing the surface cannot do —
+   turning a name into an index, which is a fact about the file being
+   read and about nothing else.
+4. <strong>Done.</strong> Runtime editing is the second caller, through the
+   construction boxes: a program that gives another program's port a
+   constant performs this same operation.
 5. <strong>Done, and inverted.</strong> Every parameter that has nowhere to get a
    value is named and counted — but reported rather than refused, for
    the reasons above. The <em>unqualified</em> half of this step survives
@@ -292,8 +333,11 @@ unqualified: a port with no source is an error, full stop.</p>
 6. <strong>Done</strong>, with the readiness tests: a station with an unconfigured
    port never becomes ready, and becomes ready the moment that port is
    given a source, with the values waiting at its other ports intact.
-7. A test that a program read from a file and one built by calling the
-   configuration surface directly produce identical dumps.</p>
+7. <strong>Done</strong>, in <a href="issue-212-one-way-to-build-a-program.html">212</a>, which is
+   where it had to live: it could not be written until the loader was
+   a caller, and making it one is that issue's capstone work. A
+   program written to disk and loaded, and the same program built by
+   calling the surface, dump byte for byte the same.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>
@@ -321,7 +365,7 @@ unqualified: a port with no source is an error, full stop.</p>
   failing for two reasons — does not arise.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="issue-210-input-port-record.html">210 — What an input port is</a>, the parent</li>
+<li><a href="done-210-input-port-record.html">210 — What an input port is</a>, the parent</li>
 <li><a href="done-210b-the-port-record.html">210b — The port record</a>, whose <em>none</em> tag</li>
 <p>  this checks for</p>
 <li><a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>,</li>

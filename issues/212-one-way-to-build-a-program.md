@@ -403,7 +403,7 @@ rather than drifting into place.
    the ordinary path taken once per station at startup rather than a
    rare event with its own machinery.
 3. Port configuration through the surface, using the record from
-   [210](210-input-port-record.md), including binding a static — which
+   [210](completed/210-input-port-record.md), including binding a static — which
    is the operation hand placement could never perform, and the reason
    there were two paths.
 4. **Done.** The whole-program checks and the seed are one pass a
@@ -412,7 +412,7 @@ rather than drifting into place.
    re-run what the first started.
 
    One thing had to be resolved rather than implemented: this issue
-   and [210g](210g-one-way-to-build-a-station.md) disagreed about a
+   and [210g](completed/210g-one-way-to-build-a-station.md) disagreed about a
    port with no source. That issue wanted it fatal; this one says a
    station may hold one indefinitely, and
    [210b](completed/210b-the-port-record.md) made the map file able to
@@ -550,7 +550,7 @@ design.
 
 ## Related
 
-- [210 — What an input port is](210-input-port-record.md), the record
+- [210 — What an input port is](completed/210-input-port-record.md), the record
   the configure operation writes, and where the *none* state comes from
 - [211 — Growing the station table](completed/211-growing-the-station-table.md),
   which makes "add a station" possible at all

@@ -445,25 +445,105 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
 }
 /* }}} */
 
-/* {{{ map_in_port_start_depth() */
-void map_in_port_start_depth(map_t *m, int station, int port, int slots)
+/* {{{ static void station_label_into() */
+/*
+ * The name a map file gave a station, or its index when nothing gave
+ * it one. A program built by calling the surface has no names, and a
+ * complaint that says "?" about it is one nobody can act on.
+ */
+static void station_label_into(map_t *m, int i, char *out, size_t room)
 {
-    if (station < 0 || station >= m->n_stations)
-        fail("setting the starting depth of a port on a station outside the table");
+    if (m->station_names && i < m->n_named && m->station_names[i])
+        snprintf(out, room, "%s", m->station_names[i]);
+    else
+        snprintf(out, room, "%d", i);
+}
+/* }}} */
+
+/* {{{ static void no_such_port_into() */
+/*
+ * **One sentence for "that port does not exist", written once**
+ * (issue 210g).
+ *
+ * The loader used to compose its own, and it was the better of the
+ * two: it named the box, counted its ports, and remembered that a
+ * comparator carries one more than its parameter list shows. The
+ * surface's said only which numbers disagreed. Two spellings of one
+ * refusal is the small version of the same fault two construction
+ * paths were — so the good one moved down here, where every caller
+ * reaches it, and the loader kept nothing of its own but the file and
+ * the line it prefixes this with.
+ *
+ * The threshold clause is why this cannot be a format string at each
+ * call site: a comparator's last port is not one of the box's
+ * parameters, so a reader counting parameters in the box source finds
+ * one fewer than the refusal names and concludes the engine is
+ * confused.
+ */
+static void no_such_port_into(map_t *m, int station, int port,
+                              char *out, size_t room)
+{
     station_t *s = map_station(m, station);
-    if (port < 0 || port >= s->n_in_ports)
-        fail("setting the starting depth of a port the box does not have");
+    char who[64];
+    station_label_into(m, station, who, sizeof who);
+    snprintf(out, room,
+             "station '%s' has no port %d — '%s' has %d port%s (its "
+             "parameters%s)",
+             who, port, s->box_name ? s->box_name : "?", s->n_in_ports,
+             s->n_in_ports == 1 ? "" : "s",
+             s->kind == STATION_COMPARATOR ? ", plus the threshold" : "");
+}
+/* }}} */
+
+/* {{{ map_in_port_start_depth() */
+/*
+ * **A refusal travels rather than stopping here** (issue 210g).
+ *
+ * This used to die on the spot, which was the last port operation
+ * that did. A caller reading a file collects every mistake in it and
+ * presents them together, and it cannot collect what killed the
+ * process — so a depth on a port that does not exist would have been
+ * the one fault in a map file that hid every fault after it.
+ *
+ * Existing callers that pass sound arguments are unaffected: a
+ * function that returned nothing now returns nothing they have to
+ * look at, and the only difference is that the ones who *do* look can
+ * say where the trouble was.
+ */
+const char *map_in_port_start_depth(map_t *m, int station, int port, int slots)
+{
+    static _Thread_local char said[192];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said,
+                 "station %d is outside the table", station);
+        return said;
+    }
+    station_t *s = map_station(m, station);
+    if (port < 0 || port >= s->n_in_ports) {
+        no_such_port_into(m, station, port, said, sizeof said);
+        return said;
+    }
     /* One slot is a legitimate depth. It used to take two, because a
      * spare was held back so that head meeting tail could mean empty
      * rather than full; a slot that carries its own state needs no
      * such stand-in, and every slot is usable (issue 210c). */
-    if (slots < 1)
-        fail("a ring buffer needs at least one slot");
+    if (slots < 1) {
+        snprintf(said, sizeof said,
+                 "a ring buffer needs at least one slot, and %d was asked for",
+                 slots);
+        return said;
+    }
 
     in_port_t *sl = &s->in_ports[port];
-    if (sl->held != 0)
-        fail("setting the starting depth of a port that already holds values "
-             "— this is a starting depth, and the start has been and gone");
+    if (sl->held != 0) {
+        char who[64];
+        station_label_into(m, station, who, sizeof who);
+        snprintf(said, sizeof said,
+                 "%s.%d already holds values — this is a starting depth, and "
+                 "the start has been and gone", who, port);
+        return said;
+    }
 
     /* The starting depth sets the **page size**, not merely the first
      * page's size (issue 210e). Every page a port ever adds is this
@@ -480,6 +560,7 @@ void map_in_port_start_depth(map_t *m, int station, int port, int slots)
     in_port_add_page(sl);
     sl->read_hint = 0;
     sl->write_hint = 0;
+    return NULL;
 }
 /* }}} */
 
@@ -546,9 +627,10 @@ const char *map_configure_port(map_t *m, int station, int port,
     }
     station_t *s = map_station(m, station);
     if (port < 0 || port >= s->n_in_ports) {
-        snprintf(said, sizeof said,
-                 "station %d has no port %d — it has %d",
-                 station, port, s->n_in_ports);
+        /* The loader's wording, which named the box and remembered
+         * the comparator's threshold, moved down here so that every
+         * caller gets it and nobody keeps a second copy (issue 210g). */
+        no_such_port_into(m, station, port, said, sizeof said);
         return said;
     }
     if (source < 0 || source >= IN_PORT_KIND_COUNT) {
@@ -634,12 +716,16 @@ const char *map_check_sources(map_t *m)
                  * this surface has no names, and a complaint that
                  * says "?" about it is a complaint nobody can act
                  * on. Both spellings read the same way: which
-                 * station, then which port. */
+                 * station, then which port.
+                 *
+                 * Through the shared speller, which is the third
+                 * copy of these four lines being retired. The copies
+                 * had drifted in a way that mattered: this one read
+                 * the names array by station index without asking
+                 * how long it is, and stations added after the last
+                 * naming call leave it shorter than the table. */
                 char who[64];
-                if (m->station_names && m->station_names[i])
-                    snprintf(who, sizeof who, "%s", m->station_names[i]);
-                else
-                    snprintf(who, sizeof who, "%d", i);
+                station_label_into(m, i, who, sizeof who);
                 used += snprintf(said + used, sizeof said - (size_t)used,
                                  "%s%s.%d has no source",
                                  used ? "; " : "", who, j);
@@ -653,21 +739,6 @@ const char *map_check_sources(map_t *m)
         snprintf(said + used, sizeof said - (size_t)used,
                  " (%d ports in all)", found);
     return said;
-}
-/* }}} */
-
-/* {{{ static void station_label_into() */
-/*
- * The name a map file gave a station, or its index when nothing gave
- * it one. A program built by calling the surface has no names, and a
- * complaint that says "?" about it is one nobody can act on.
- */
-static void station_label_into(map_t *m, int i, char *out, size_t room)
-{
-    if (m->station_names && m->station_names[i])
-        snprintf(out, room, "%s", m->station_names[i]);
-    else
-        snprintf(out, room, "%d", i);
 }
 /* }}} */
 

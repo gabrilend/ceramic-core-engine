@@ -29,8 +29,6 @@
 <h2>Issues, open</h2>
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
-<a href="issue-210-input-port-record.html" class="here">210 — What an input port is</a>
-<a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
@@ -69,12 +67,14 @@
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
+<a href="done-210-input-port-record.html" class="here">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
 <a href="done-210c-a-state-on-every-slot.html">210c — A state on every slot</a>
 <a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a>
 <a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a>
 <a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>
+<a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
@@ -124,6 +124,8 @@
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
 <a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 <a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
+<a href="info-088-complete-issue-lua.html">088-complete-issue.lua — finishing an issue, from outside</a>
+<a href="info-089-repair-doc-links-lua.html">089-repair-doc-links.lua — making the record walkable, from outside</a>
 <a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
@@ -165,7 +167,7 @@ whole family.</p>
 <tr><td><a href="done-210d-the-copies-leave-the-lock.html">210d — The copies leave the lock</a></td><td><strong>complete</strong> — the mutex narrowed to the slot states, the value copies moved outside it</td><td>210c, and its second half needs 210e</td></tr>
 <tr><td><a href="done-210e-growth-adds-a-page.html">210e — Growth adds a page</a></td><td><strong>complete</strong> — a ring buffer that grows by appending, copying nothing</td><td>210d's scan, and it precedes 210d's copies</td></tr>
 <tr><td><a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a></td><td><strong>complete</strong> — conversion between tags as one operation, slots left alone</td><td>210b</td></tr>
-<tr><td><a href="issue-210g-one-way-to-build-a-station.html">210g — One way to build a station</a></td><td>a single construction and configuration surface</td><td>210b, 210f</td></tr>
+<tr><td><a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a></td><td><strong>complete</strong> — a single construction and configuration surface, with reading a file as its first caller and live editing as its second</td><td>210b, 210f</td></tr>
 <tr><td><a href="done-210h-optional-parameters.html">210h — Optional parameters</a></td><td>refused — the record of why a parameter cannot be optional</td><td>210g</td></tr>
 </table>
 <p>The order is real rather than tidy, and <strong>building it corrected it.</strong>
@@ -186,8 +188,8 @@ at all, only a step that has to come first.</p>
 copies.** The dependency was never between two issues; it was between
 two halves of one of them, which is the kind of thing a family finds
 out when somebody tries to build it.</p>
-<p><strong>210f and 210g branch off 210b</strong> and can be built while the
-concurrency line is in progress.</p>
+<p><strong>210f and 210g branched off 210b</strong> and were built while the
+concurrency line was in progress.</p>
 <h2>The statics blocker, which is cleared</h2>
 <p>**<a href="done-401-static-ports.html">401</a> is done and this family is no
 longer cut in two.** The record below is kept because the deadlock it
@@ -244,17 +246,26 @@ constant's own bytes for a static.</p>
 ready slots; every slot carries its own state; growth appends a page
 rather than reallocating; and the station's mutex covers the slot
 states and nothing else, with every value copy happening outside it.</p>
-<p><strong>The concurrency line is finished, and so is the conversion.</strong> What
-is left of this family is one thing: the construction surface
-(<a href="issue-210g-one-way-to-build-a-station.html">210g</a>), which is also what phase
-2's capstone stands on.</p>
-<p><strong>And that one is blocked outside this family.</strong> Making a station
-constructible one way means hand placement and by-name placement
-stopping being two contracts, and the answer chosen for that is a
-generated placement function per box —
+<p><strong>The family is finished.</strong> The concurrency line, the conversion, and
+now the construction surface
+(<a href="done-210g-one-way-to-build-a-station.html">210g</a>) — which phase
+2's capstone stands on and which was the last child left.</p>
+<p><strong>It was blocked outside this family and the block cleared.</strong> Making a
+station constructible one way meant hand placement and by-name
+placement stopping being two contracts, and the answer chosen for that
+was a generated placement function per box —
 <a href="issue-311b-placement-instead-of-records.html">311b</a>'s work, not this
-family's. So the last child waits on the generator line, and the order
-runs: boxes addressed by file, placement functions, then this.</p>
+family's. The order ran as written: boxes addressed by file, placement
+functions, then the surface, then its callers.</p>
+<p><strong>What the last step cost and what it caught.</strong> Reading a file became
+a caller rather than a builder, which meant giving up its own
+port-range check, its own width check, and its own name table. The
+second of those was hiding a real hole in the check that survives: the
+width question was asked only of wires whose <em>source</em> station had
+input ports, and a box that takes nothing and returns a value has
+none. Every program in this project starts with one of those. No file
+ever revealed it, because the loader's copy ran first — which is the
+argument for one path stated as a fact rather than as a preference.</p>
 <p><strong>210a is done: the gatherer is gone</strong>, along with the pull module,
 the inline execution of a box during task assembly, the cycle walk,
 the runtime gather-repoint operation, the gather timing charged to

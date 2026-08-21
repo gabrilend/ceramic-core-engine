@@ -54,18 +54,28 @@ static void die_load(const char *path, int line, const char *station,
 }
 /* }}} */
 
-/* The loader's name table: file order, discarded when loading ends.
- * Names cost this one table and buy legible errors (issue 601). */
-typedef struct name_table {
-    desc_station_t **by_index;   /* description records, in file order */
-    int              count;
-} name_table_t;
-
 /* {{{ find_station_index() */
-static int find_station_index(const name_table_t *names, const char *name)
+/*
+ * Which station a name belongs to, **asked of the program rather than
+ * of a table this file keeps** (issue 210g).
+ *
+ * There used to be a private lookup table here: the description
+ * records in file order, searched by name, freed when loading ended.
+ * It existed because names were copied onto the map in one sweep at
+ * the very end, so during the two passes the map did not know them.
+ *
+ * Naming is an operation now, and the reader performs it as each
+ * station is created — which is what it had to become for a program
+ * built by calling the surface to be describable at all (issue 212).
+ * The moment that was true, the private table was a second copy of
+ * something the map already held, and the refusals raised while
+ * wiring could name the stations they were about instead of numbering
+ * them.
+ */
+static int find_station_index(map_t *m, const char *name)
 {
-    for (int i = 0; i < names->count; i++)
-        if (strcmp(names->by_index[i]->name, name) == 0)
+    for (int i = 0; i < m->n_named; i++)
+        if (m->station_names[i] && strcmp(m->station_names[i], name) == 0)
             return i;
     return -1;
 }
@@ -84,7 +94,7 @@ static int find_station_index(const name_table_t *names, const char *name)
  * 210) an input line names an entry number, and a number needs
  * nothing else to exist first.
  */
-static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
+static void first_pass(map_t *m, map_description_t *d)
 {
     int index = 0;
     for (desc_station_t *s = d->stations; s; s = s->next, index++) {
@@ -94,7 +104,19 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
         if (map_add_station(m) != index)
             die_load(d->path, s->line, s->name,
                      "the station table handed back an unexpected place");
-        names->by_index[index] = s;
+
+        /*
+         * **The name goes on immediately** (issue 210g), rather than
+         * in a sweep after both passes as it used to. Two things
+         * follow, and the second is the reason: this file no longer
+         * keeps its own lookup table, and every refusal raised from
+         * here onwards — a port that does not exist, an arrow onto a
+         * static, a width that disagrees — can say which station it
+         * is about in the word the file's author typed.
+         */
+        const char *named = map_name_station(m, index, s->name);
+        if (named)
+            die_load(d->path, s->line, s->name, named);
 
         const box_info_t *b = registry_find(s->box);
         if (!b) {
@@ -127,27 +149,37 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
                 die_load(d->path, s->line, s->name, no);
         }
 
+        /*
+         * **Every port line below is one call on the configuration
+         * surface** (issue 210g), and the loader has nothing of its
+         * own left on this path.
+         *
+         * It used to check the port number by hand, then reach for
+         * whichever of three differently-shaped calls the line seemed
+         * to want: one to set a depth, one to convert a tag, one to
+         * bind a constant. Two of those three are one call now, the
+         * check they each needed lives inside it, and the loader's
+         * part is to hand the refusal upward with the file and the
+         * line stuck to the front of it.
+         *
+         * The wording did not get worse for moving. The good version
+         * of "that port does not exist" — the one that names the box
+         * and remembers a comparator's threshold — was this file's,
+         * and it went down into the surface with the check.
+         */
         for (desc_input_t *in = s->inputs; in; in = in->next) {
-            station_t *placed = map_station(m, index);
-            if (in->port < 0 || in->port >= placed->n_in_ports) {
-                char message[256];
-                snprintf(message, sizeof message,
-                         "'in %d' names a port that does not exist — '%s' has "
-                         "%d port%s (its parameters%s)",
-                         in->port, s->box, placed->n_in_ports,
-                         placed->n_in_ports == 1 ? "" : "s",
-                         s->kind == STATION_COMPARATOR
-                             ? ", plus the threshold" : "");
-                die_load(d->path, in->line, s->name, message);
-            }
             /*
              * A starting depth, if the line gave one, before anything
              * else touches the port — it sizes the slots, and sizing
              * them after a value has been put in them would be a
              * reallocation nobody asked for (issue 210b).
              */
-            if (in->depth > 0)
-                map_in_port_start_depth(m, index, in->port, in->depth);
+            if (in->depth > 0) {
+                const char *no = map_in_port_start_depth(m, index, in->port,
+                                                         in->depth);
+                if (no)
+                    die_load(d->path, in->line, s->name, no);
+            }
 
             /*
              * A bare dash: this port has no source yet. Nothing is
@@ -157,7 +189,10 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
              * half-built program be a real program (issue 210b).
              */
             if (in->is_none) {
-                map_in_port_convert(m, index, in->port, IN_PORT_NONE);
+                const char *no = map_configure_port(m, index, in->port,
+                                                    IN_PORT_NONE, NULL);
+                if (no)
+                    die_load(d->path, in->line, s->name, no);
                 continue;
             }
 
@@ -193,52 +228,13 @@ static void first_pass(map_t *m, map_description_t *d, name_table_t *names)
                     die_load(d->path, in->line, s->name, message);
                 }
             }
-            map_in_port_static_text(m, index, in->port, text);
+            const char *no = map_configure_port(m, index, in->port,
+                                                IN_PORT_STATIC, text);
+            if (no)
+                die_load(d->path, in->line, s->name, no);
         }
     }
-    names->count = index;
 }
-/* }}} */
-
-/* {{{ type_check_wire() */
-/*
- * The wire check (issue 603), at the first moment both ends are
- * known.
- *
- * **Widths, not names** (issue 309). It compared the two type name
- * strings until then, which meant a box producing four integers
- * called `vec4` could not feed a box taking four integers called
- * `stats` even though the bytes are indistinguishable and delivery
- * would copy them correctly — the author's only options were to
- * rename one or to write a box that took one and returned the other
- * and did nothing.
- *
- * The names still ride along, in the message and nowhere else,
- * because "4 bytes against 4 bytes" is not a sentence anybody can act
- * on. Both widths are reported beside them, because "box returns
- * vec4, port takes stats" does not say *why* those disagree and
- * "16 bytes against 12" does.
- *
- * What this widens rather than closes: two types of the same width
- * and different layouts now wire without complaint. That is the
- * accepted cost, and it is stated as a non-guarantee in 058.
- */
-static void type_check_wire(map_description_t *d, int line,
-                            const char *from_name, const box_info_t *from_box,
-                            const char *to_name, int to_port,
-                            const char *to_type, int to_size)
-{
-    if (from_box->return_size != to_size) {
-        fprintf(stderr,
-                "map %s:%d: %s -> %s.%d: box returns %s (%d bytes), "
-                "port takes %s (%d bytes)\n",
-                d->path, line, from_name, to_name, to_port,
-                from_box->return_type, from_box->return_size,
-                to_type ? to_type : "?", to_size);
-        abort();
-    }
-}
-/* }}} */
 /* }}} */
 
 /* {{{ second_pass() */
@@ -247,15 +243,28 @@ static void type_check_wire(map_description_t *d, int line,
  * can be found by name, which is the whole reason for a second pass:
  * an arrow names its destination, and a file may draw an arrow to a
  * station it has not declared yet.
+ *
+ * **The wire check that used to live here is gone** (issue 210g).
+ * There was a `type_check_wire` in this file that compared the box's
+ * return width against the destination port's, printed the two type
+ * names and the two widths, and stopped the program — and the wiring
+ * operation performs exactly that check, in exactly those words, for
+ * every caller. Keeping both meant this file could decide what a
+ * legal wire is, which is the capability that had to stop existing
+ * for there to be one construction path rather than two that agree by
+ * inspection.
+ *
+ * So do the one thing the surface cannot: turn a *name* into an index,
+ * which is a fact about the file being read and about nothing else.
+ * Then draw the wire, and hand any refusal upward with the file and
+ * the line in front of it.
  */
-static void second_pass(map_t *m, map_description_t *d, name_table_t *names)
+static void second_pass(map_t *m, map_description_t *d)
 {
     int index = 0;
     for (desc_station_t *s = d->stations; s; s = s->next, index++) {
-        const box_info_t *from_box = registry_find(s->box);
-
         for (desc_output_t *out = s->outputs; out; out = out->next) {
-            int dest = find_station_index(names, out->dest_station);
+            int dest = find_station_index(m, out->dest_station);
             if (dest < 0) {
                 char message[256];
                 snprintf(message, sizeof message,
@@ -263,21 +272,10 @@ static void second_pass(map_t *m, map_description_t *d, name_table_t *names)
                          out->dest_station);
                 die_load(d->path, out->line, s->name, message);
             }
-            station_t *dest_station = map_station(m, dest);
-            if (out->dest_port < 0 || out->dest_port >= dest_station->n_in_ports) {
-                char message[256];
-                snprintf(message, sizeof message,
-                         "arrow to '%s.%d', but that station has %d port%s",
-                         out->dest_station, out->dest_port,
-                         dest_station->n_in_ports,
-                         dest_station->n_in_ports == 1 ? "" : "s");
-                die_load(d->path, out->line, s->name, message);
-            }
-            type_check_wire(d, out->line, s->name, from_box,
-                            out->dest_station, out->dest_port,
-                            dest_station->in_ports[out->dest_port].type_name,
-                            dest_station->in_ports[out->dest_port].elem_size);
-            map_connect(m, index, out->port, dest, out->dest_port);
+            const char *no = map_wire(m, index, out->port, dest,
+                                      out->dest_port);
+            if (no)
+                die_load(d->path, out->line, s->name, no);
         }
     }
 }
@@ -300,31 +298,11 @@ map_t *map_load_file(const char *path, int n_workers)
      * program.
      */
     map_t *m = map_create_empty();
-    name_table_t names;
-    names.by_index = calloc((size_t)d->n_stations, sizeof *names.by_index);
-    if (!names.by_index)
-        die_load(path, 0, NULL, "out of memory for the name table");
-    names.count = 0;
 
-    first_pass(m, d, &names);
+    first_pass(m, d);
     double t2 = stamp();
-    second_pass(m, d, &names);
+    second_pass(m, d);
     double t3 = stamp();
-
-    /*
-     * The names move onto the map **before** the program is brought
-     * up, because that is what the bring-up complains with. They used
-     * to be copied over at the very end, when the loader's own table
-     * had served — which was fine while the loader printed its own
-     * messages out of that table, and stops being fine the moment
-     * somebody else does the complaining.
-     */
-    for (int i = 0; i < m->n_stations; i++) {
-        const char *no = map_name_station(m, i, names.by_index[i]->name);
-        if (no)
-            die_load(path, 0, NULL, no);
-    }
-    double t4 = stamp();
 
     /* The pool exists before the seed so the seed has somewhere to
      * push, but its workers stay parked until the caller releases —
@@ -377,18 +355,21 @@ map_t *map_load_file(const char *path, int n_workers)
         die_load(path, 0, NULL,
                  "nothing to seed — every station waits for a buffered "
                  "value, so the map cannot ever start");
-    double t5 = stamp();
+    double t4 = stamp();
 
+    /*
+     * Four stages rather than five (issue 210g). Naming used to be a
+     * sweep of its own between wiring and starting, and it was timed
+     * as "validation" because validating is what else happened there.
+     * Naming happens as each station is created now, so what is left
+     * between the wires and the first task is the bring-up, which is
+     * what this last number should have been called all along.
+     */
     map_load_last_timing.parse = t1 - t0;
     map_load_last_timing.first_pass = t2 - t1;
     map_load_last_timing.second_pass = t3 - t2;
-    map_load_last_timing.validation = t4 - t3;
-    map_load_last_timing.seed = t5 - t4;
+    map_load_last_timing.bring_up = t4 - t3;
 
-    /* The loader's lookup table has served; the names it carried are
-     * already on the map, where the dump and anyone watching find
-     * them (issue 703). */
-    free(names.by_index);
     mapfile_free(d);
     return m;
 }

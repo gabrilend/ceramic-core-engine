@@ -29,27 +29,40 @@ box function up in the registry. That gives the shim pointer, the
 parameter count, and each parameter's type and size. Allocate the
 station's port array with one ring-buffer port per parameter — the
 default — each sized exactly `sizeof` its parameter, and record the
-station's name — through the operation that names one, so that the
-name lands on the program itself rather than in a table only the
-loader could read. Its own lookup table, which resolves arrows, is
-still thrown away when reading ends; the two were different things
-wearing one name.
+station's name — through the operation that names one, **as the
+station is created**, so that the name lands on the program itself.
+
+The loader used to keep a lookup table of its own for resolving
+arrows, and it does not any more: the names are on the program, so the
+program is what gets asked. That is one fewer allocation and one
+larger thing — every refusal raised from here onwards can say which
+station it is about in the word the file's author typed, instead of
+numbering it.
 
 A comparator gets one extra port on the end, typed to match the box's
 return value.
 
-Then apply the input lines, converting the named ports from ring
-buffers to statics and copying each one's value in.
+Then apply the input lines. Each one is a call on the port
+configuration operation: a starting depth where the line gave one,
+then a source — a bare dash for none, or text for a constant, copied
+into the port at the port's own type.
 
 **Second pass: resolve the arrows.** By now every station exists and
-can be found by name. For each output line, look up the destination
-station and port, and append a `{station, port}` pair to that port's
-destination list.
+can be found by name. For each output line, turn the destination name
+into an index — the one thing here that is a fact about the file
+rather than about the program — and then draw the wire through the
+ordinary wiring operation.
 
-This is also where every wire is type-checked, because it is the first
-moment both ends are known. The registry knows the source box's return
-type and the destination box's parameter type, both derived from the C
-that will actually run, so the check needs nothing from the file.
+**The wire check belongs to that operation, not to loading.** Reading
+a file used to perform a width check of its own before connecting, on
+the grounds that this is the first moment both ends are known. It is,
+and the wiring operation is reached at exactly that moment, so the
+second copy bought nothing and cost something: while it existed, the
+first one could have a hole that no program read from a file would
+ever meet. It had one. A station with no input ports at all — a box
+that takes nothing and returns a value — skipped the width question
+entirely, and only a program built by calling the surface could have
+found out.
 
 ## Then the program is brought up, which is a separate act
 

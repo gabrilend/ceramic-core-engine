@@ -808,8 +808,15 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
  * this is a case of configuring a port rather than a parameter of
  * building a station. Naming a station, a port, and what that port
  * should be is the shape that surface already has.
+ *
+ * **Returns NULL when it took, or a sentence saying why not** (issue
+ * 210g). It used to stop the program, and it was the last port
+ * operation that did — which made a bad depth the one fault in a map
+ * file capable of hiding every fault after it, since a caller
+ * collecting mistakes cannot collect the one that killed it.
  */
-void map_in_port_start_depth(map_t *m, int station, int port, int slots);
+const char *map_in_port_start_depth(map_t *m, int station, int port,
+                                    int slots);
 /* }}} */
 
 /* {{{ map_in_port_convert() — issues 210b, 210f */

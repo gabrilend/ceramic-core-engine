@@ -97,20 +97,19 @@ sizes array, output size)** — put a box at a station: one ring-buffer
 port per element size. Scaffolding until the loader takes over
 (phase 6); sizes come from the registry from phase 3.
 
-**map_in_port_start_depth(map, station, port, slots)** — tell one port
-how deep its buffer should start. A hint, not a setting: growth covers
-being wrong, so nobody has to be right. Refuses a port that already
-holds values, and refuses fewer than two slots (one is always spare).
-Worth using when an author already knows one input side outruns its
-siblings and would rather not watch it grow thirteen times to find
-out.
+**map_configure_port(map, station, port, source, text) → NULL or a
+sentence** — **the one operation that says where a port's values come
+from.** A station, a port, a source, and — when the source is a value
+— the value itself as text. Binding a constant, taking a source away,
+and giving a port back to the arrows were three calls with three
+shapes; they are cases of this one. Text distinguishes the two ways to
+become a constant: given some, the port takes that value; given none,
+it goes back to the value it held before, and having never held one is
+refused.
 
-**map_in_port_convert(map, station, port, kind)** — change what a port
-is. The tag changes and nothing else: slots are not freed, not
-cleared, not drained, so values waiting in a buffer are still waiting
-if it becomes a buffer again. Becoming a static is refused here
-because it needs a value this call has no room for — bind through the
-statics table instead. Takes the station's mutex, so no readiness
+The tag changes and nothing else: slots are not freed, not cleared,
+not drained, so values waiting in a buffer are still waiting if it
+becomes a buffer again. Takes the station's mutex, so no readiness
 walk sees a port mid-change.
 
 The honest cost of losing nothing: a port converted away and back may
@@ -118,10 +117,41 @@ serve a value that arrived before the conversion after values that
 arrived during it. Arrival order is not promised, so nothing that was
 still being offered is lost here.
 
+**It returns a refusal rather than stopping**, which is what lets a
+caller reading a file collect every mistake in it and present them
+together. Reading a file is one of its two callers; a program editing
+another program, through the construction boxes, is the other.
+
+**map_in_port_start_depth(map, station, port, slots) → NULL or a
+sentence** — tell one port how deep its buffer should start, which
+also sets the size of every page it will ever add. A hint, not a
+setting: growth covers being wrong, so nobody has to be right. Refuses
+a port that already holds values, and refuses fewer than one slot.
+Worth using when an author already knows one input side outruns its
+siblings and would rather not watch it grow thirteen times to find
+out. It used to stop the program instead of refusing, and was the last
+port operation that did.
+
+**map_in_port_convert(map, station, port, kind)** — the same
+operation under the name callers already say, for the cases with no
+text: it stops the program on refusal rather than handing one back.
+
+**map_check_sources(map) → NULL or a sentence** — every parameter with
+nowhere to get a value, named and counted. Asked when somebody says
+the program is finished, not while it is being assembled, because a
+port with no source is the ordinary state of a station nobody has
+finished wiring. No exceptions, ever.
+
+**map_wire(map, from station, port, to station, to port) → NULL or a
+sentence** — **the one wiring operation**, legal at any moment,
+applying every rule: the source is placed and is not a sink, the port
+index means something for that station kind, the destination port
+exists and is a buffer, and the two widths agree. Ports are created in
+order, no gaps; repeat a port to fan out.
+
 **map_connect(map, from station, port index, to station, to port)** —
-draw a wire. Ports are created in order, no gaps; repeat a port to
-fan out. Destination must already be placed. Fails loudly on any
-nonsense (port out of range, wiring from a sink, gaps in ports).
+the same operation, for a caller that wants a refusal to stop the
+program.
 
 **map_start(map, worker count)** — create the pool with delivery as
 its finish hook. Seed values before releasing `map->pool`; release

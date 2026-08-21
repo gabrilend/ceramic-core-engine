@@ -18,14 +18,14 @@ whole family.
 
 | issue | what it builds | depends on |
 |---|---|---|
-| [210a — The pull path removed](completed/210a-the-pull-path-removed.md) | the gatherer kind and everything reading it, taken out | — |
-| [210b — The port record](completed/210b-the-port-record.md) | both storages, the three-value tag, slots allocated at instantiation | 210a |
-| [210c — A state on every slot](completed/210c-a-state-on-every-slot.md) | **complete** — the four-state per-slot machine | 210b |
-| [210d — The copies leave the lock](completed/210d-the-copies-leave-the-lock.md) | **complete** — the mutex narrowed to the slot states, the value copies moved outside it | 210c, and its second half needs 210e |
-| [210e — Growth adds a page](completed/210e-growth-adds-a-page.md) | **complete** — a ring buffer that grows by appending, copying nothing | 210d's scan, and it precedes 210d's copies |
-| [210f — Changing what a port is](completed/210f-changing-what-a-port-is.md) | **complete** — conversion between tags as one operation, slots left alone | 210b |
-| [210g — One way to build a station](210g-one-way-to-build-a-station.md) | a single construction and configuration surface | 210b, 210f |
-| [210h — Optional parameters](completed/210h-optional-parameters.md) | refused — the record of why a parameter cannot be optional | 210g |
+| [210a — The pull path removed](210a-the-pull-path-removed.md) | the gatherer kind and everything reading it, taken out | — |
+| [210b — The port record](210b-the-port-record.md) | both storages, the three-value tag, slots allocated at instantiation | 210a |
+| [210c — A state on every slot](210c-a-state-on-every-slot.md) | **complete** — the four-state per-slot machine | 210b |
+| [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md) | **complete** — the mutex narrowed to the slot states, the value copies moved outside it | 210c, and its second half needs 210e |
+| [210e — Growth adds a page](210e-growth-adds-a-page.md) | **complete** — a ring buffer that grows by appending, copying nothing | 210d's scan, and it precedes 210d's copies |
+| [210f — Changing what a port is](210f-changing-what-a-port-is.md) | **complete** — conversion between tags as one operation, slots left alone | 210b |
+| [210g — One way to build a station](210g-one-way-to-build-a-station.md) | **complete** — a single construction and configuration surface, with reading a file as its first caller and live editing as its second | 210b, 210f |
+| [210h — Optional parameters](210h-optional-parameters.md) | refused — the record of why a parameter cannot be optional | 210g |
 
 The order is real rather than tidy, and **building it corrected it.**
 The sequence was written as 210c → 210d → 210e, each removing the
@@ -48,17 +48,17 @@ copies.** The dependency was never between two issues; it was between
 two halves of one of them, which is the kind of thing a family finds
 out when somebody tries to build it.
 
-**210f and 210g branch off 210b** and can be built while the
-concurrency line is in progress.
+**210f and 210g branched off 210b** and were built while the
+concurrency line was in progress.
 
 ## The statics blocker, which is cleared
 
-**[401](completed/401-static-ports.md) is done and this family is no
+**[401](401-static-ports.md) is done and this family is no
 longer cut in two.** The record below is kept because the deadlock it
 describes was real and the way out of it is the useful part.
 
 Half of this family waited on 401 and
-[405](405-statics-mutation.md), which are not children of this issue
+[405](../405-statics-mutation.md), which are not children of this issue
 and were expected to stand on it rather than the reverse.
 
 The reason was one sentence: **a port cannot be given room for a static
@@ -96,7 +96,7 @@ is unblocked.
   argument inside a task. **The port decides how a value is stored;
   the slot is where it lands.**
 
-**The source now says this too** ([215](completed/215-ports-and-slots.md)). It
+**The source now says this too** ([215](215-ports-and-slots.md)). It
 used to call a port a slot and call a slot a cell, so this section
 described a vocabulary that only the documents used. The rename was
 taken ahead of the rest of this family rather than after it, precisely
@@ -119,18 +119,28 @@ ready slots; every slot carries its own state; growth appends a page
 rather than reallocating; and the station's mutex covers the slot
 states and nothing else, with every value copy happening outside it.
 
-**The concurrency line is finished, and so is the conversion.** What
-is left of this family is one thing: the construction surface
-([210g](210g-one-way-to-build-a-station.md)), which is also what phase
-2's capstone stands on.
+**The family is finished.** The concurrency line, the conversion, and
+now the construction surface
+([210g](210g-one-way-to-build-a-station.md)) — which phase
+2's capstone stands on and which was the last child left.
 
-**And that one is blocked outside this family.** Making a station
-constructible one way means hand placement and by-name placement
-stopping being two contracts, and the answer chosen for that is a
-generated placement function per box —
-[311b](311b-placement-instead-of-records.md)'s work, not this
-family's. So the last child waits on the generator line, and the order
-runs: boxes addressed by file, placement functions, then this.
+**It was blocked outside this family and the block cleared.** Making a
+station constructible one way meant hand placement and by-name
+placement stopping being two contracts, and the answer chosen for that
+was a generated placement function per box —
+[311b](../311b-placement-instead-of-records.md)'s work, not this
+family's. The order ran as written: boxes addressed by file, placement
+functions, then the surface, then its callers.
+
+**What the last step cost and what it caught.** Reading a file became
+a caller rather than a builder, which meant giving up its own
+port-range check, its own width check, and its own name table. The
+second of those was hiding a real hole in the check that survives: the
+width question was asked only of wires whose *source* station had
+input ports, and a box that takes nothing and returns a value has
+none. Every program in this project starts with one of those. No file
+ever revealed it, because the loader's copy ran first — which is the
+argument for one path stated as a fact rather than as a preference.
 
 **210a is done: the gatherer is gone**, along with the pull module,
 the inline execution of a box during task assembly, the cycle walk,
@@ -179,7 +189,7 @@ is accepted, because it needs several slots at once and nothing
 composes several atomic operations into one. What is *not* under it is
 the expensive part: both value copies happen outside, protected by the
 fact that a slot in *reserved* or *claimed* belongs to exactly one
-worker. See [210d](completed/210d-the-copies-leave-the-lock.md), which also
+worker. See [210d](210d-the-copies-leave-the-lock.md), which also
 records why the lock-free claim that was planned here was abandoned.
 
 **A delivering writer takes it not at all.** Writing a value touches
@@ -203,8 +213,8 @@ program. A write cannot make something run that could not run anyway,
 because the check it triggers is the ordinary one and an empty ring
 port still answers no.
 
-The statics work proper belongs to [401](completed/401-static-ports.md) and
-[405](405-statics-mutation.md), which stand on 210b's record.
+The statics work proper belongs to [401](401-static-ports.md) and
+[405](../405-statics-mutation.md), which stand on 210b's record.
 
 ## Open questions
 
@@ -225,7 +235,7 @@ The statics work proper belongs to [401](completed/401-static-ports.md) and
   a measurement ever shows that fixed cost mattering, the cheap move is
   the second option, publishing progress every so often rather than
   every time, and nothing above has to change for it. Belongs to
-  [210d](completed/210d-the-copies-leave-the-lock.md).
+  [210d](210d-the-copies-leave-the-lock.md).
 
 - *A writer that dies mid-copy leaves a slot reserved forever — should
   that be detected, reclaimed, or reported?* None of the three, because
@@ -246,7 +256,7 @@ The statics work proper belongs to [401](completed/401-static-ports.md) and
   gather slot invoked its upstream box inline, on the claiming thread,
   while slots were held, so a box that crashed there really did strand
   them. That was the pull path, and removing it is what closed the
-  window. [210a](completed/210a-the-pull-path-removed.md) removed it,
+  window. [210a](210a-the-pull-path-removed.md) removed it,
   so the answer above rests on the engine as it is rather than on the
   engine as it is going to be.
 
@@ -256,20 +266,20 @@ The statics work proper belongs to [401](completed/401-static-ports.md) and
 
 ## Related
 
-- [202 — Ring buffer slots](completed/202-ring-buffer-ports.md), whose
+- [202 — Ring buffer slots](202-ring-buffer-ports.md), whose
   storage this keeps and whose exclusivity it drops
-- [401 — Static input values](completed/401-static-ports.md), whose value moves
+- [401 — Static input values](401-static-ports.md), whose value moves
   onto the port here
-- [405 — Changing a static while it runs](405-statics-mutation.md),
+- [405 — Changing a static while it runs](../405-statics-mutation.md),
   which becomes one case of changing a port
-- [403 — Gatherer slots](completed/403-gatherer-ports.md), the kind
+- [403 — Gatherer slots](403-gatherer-ports.md), the kind
   210a removed
-- [211 — Growing the station table](completed/211-growing-the-station-table.md),
+- [211 — Growing the station table](211-growing-the-station-table.md),
   the same paging shape one level up
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
   the surface that configures these
-- [002 — Stations and ports](../docs/002-stations-and-ports.md), which
+- [002 — Stations and ports](../../docs/002-stations-and-ports.md), which
   this rewrites, including the word it uses for a port
-- [056 — Why there is no pull path](../docs/implementation-notes/056-no-pull-path.md)
-- [058 — Guarantees](../docs/058-guarantees.md), where the lost arrival
+- [056 — Why there is no pull path](../../docs/implementation-notes/056-no-pull-path.md)
+- [058 — Guarantees](../../docs/058-guarantees.md), where the lost arrival
   order belongs

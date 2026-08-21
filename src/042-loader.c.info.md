@@ -1,22 +1,60 @@
 # 042-loader.c — the loader, from inside
 
-Interface in `040-mapfile.h.info.md`. The shape:
+Interface in `040-mapfile.h.info.md`.
 
-1. **First pass** — every station created from the registry (the
-   misspelled-box message is deliberately the best in the program),
-   slots defaulting to ring buffers, the comparator's threshold
-   appended and typed, statics bound. The name table lives here and
-   dies when loading ends.
-2. **Second pass** — arrows resolved by name (forward references are
-   why passes exist), every wire type-checked by type *name* at the
-   first moment both ends are known.
-3. **Whole-map validation** — collected, then one stop: arrows onto
-   non-buffer slots; plus the loud-but-not-fatal warning for buffered
-   stations nothing feeds.
-4. **Seed** — the one scan the engine ever makes: stations with no
-   ring slots are enqueued through the same task construction
-   delivery uses, announced by name, counted. Zero seeded is fatal:
-   the map could never start.
+**It is a reader, not a builder** (issues 210g, 212). Every structural
+thing it does is a call somebody else could make: add a station, name
+it, place a box, mark a door, set a port's starting depth, give a port
+a source, draw a wire, bring the program up. It owns no rule about
+what a legal program is, and there is no state called *still loading*
+for it to be in.
 
-The pool exists before the seed (somewhere to push) with workers
-parked (the termination rule's outside-pusher clause stays true).
+The shape:
+
+1. **First pass** — one station per station line. Created, **named
+   immediately**, box placed by name (the misspelled-box message is
+   deliberately the best in the program), door marked if the line said
+   so, then one call per port line: a starting depth where the line
+   gave one, then the single configuration operation for a bare dash
+   or for a constant. Refusals come back as sentences and go out with
+   the file and the line stuck to the front.
+2. **Second pass** — arrows resolved by name, which is the one thing
+   here the surface cannot do: a name is a fact about the file, an
+   index is a fact about the program. Forward references are why two
+   passes exist at all. Then the ordinary wiring operation, which
+   applies every rule including the width check.
+3. **Bring-up** — the whole-program checks and the first tasks, in one
+   call any caller can make (issue 212). This caller adds one policy
+   of its own: a *file* that starts nothing and has no declared
+   entrance is refused, because it would do nothing at all.
+
+## What used to be here and is not
+
+- **A private name table.** The description records in file order,
+  searched by name, freed at the end. It existed because names were
+  copied onto the map in a sweep after both passes, so during the
+  passes the map did not know them. Naming as each station is created
+  retires it — and lets every refusal raised while wiring name the
+  station in the word the file's author typed.
+- **A width check.** It compared the box's return size against the
+  destination port's and stopped the program. The wiring operation
+  does exactly that for every caller. Keeping both meant this file
+  could decide what a legal wire is.
+- **A port-range check.** Its wording was the better of the two — it
+  named the box and remembered the comparator's threshold — so the
+  wording moved into the surface rather than being discarded with the
+  check.
+- **The seed sweep.** Binding a constant is a write, and a write runs
+  the ordinary readiness check, so the writes that build a program are
+  the writes that start it (issue 212).
+
+Removing the second of those uncovered a real hole in the surviving
+check: it asked the width question only when both stations had input
+port arrays, and a box taking no arguments has none. See
+`052-rewire.c.info.md`.
+
+## The load-time breakdown
+
+Four stages, not five: parse, first pass, second pass, bring-up.
+*Validation* was the naming sweep and *seed* was a phase only this
+file could enter; neither is a stage any more.

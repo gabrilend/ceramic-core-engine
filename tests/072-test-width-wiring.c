@@ -197,12 +197,64 @@ static void different_widths_refused(void)
 /* }}} */
 /* }}} */
 
+/* {{{ static void a_source_with_no_inputs_is_checked_too() */
+/*
+ * **The same refusal, from a station that takes nothing** — and this
+ * is the scene that would have caught a real hole.
+ *
+ * The width check in the wiring operation used to sit behind a
+ * condition asking whether *both* stations had input port arrays. The
+ * destination always does, or the port index would have been refused
+ * already. The source frequently does not: a box that takes no
+ * arguments and returns a value is how most programs begin, and every
+ * one of them could be wired into a port of any width at all with
+ * nothing said.
+ *
+ * It stayed invisible because the loader carried a width check of its
+ * own, so every program read from a file met that one first. The hole
+ * only opened when a program was built by calling the surface — which
+ * is the exact shape of fault two paths produce, and the reason there
+ * is one path now (issue 210g).
+ *
+ * `seven` takes nothing and returns an int; `mix` takes a double at
+ * its second port. Four bytes against eight, with no input array on
+ * the near end.
+ */
+static void a_source_with_no_inputs_is_checked_too(void)
+{
+    map_t *m = map_create(2);
+    map_place_box(m, 0, "seven", STATION_PLAIN);  /* () -> int      */
+    map_place_box(m, 1, "mix", STATION_PLAIN);    /* port 1: double */
+
+    check(map_station(m, 0)->n_in_ports == 0,
+          "the source really does take nothing, which is the whole point");
+
+    const char *no = map_wire(m, 0, 0, 1, 1);
+    check(no != NULL,
+          "a four-byte value from an input-less station into an eight-byte "
+          "port was refused");
+    if (no) {
+        check(strstr(no, "4 bytes") && strstr(no, "8 bytes"),
+              "and the refusal says which widths disagree");
+        printf("  refused: %s\n", no);
+    }
+
+    /* And the wire really did not happen — a refusal that says no and
+     * connects anyway is worse than one that says yes. */
+    check(out_port_dests(station_out_port(map_station(m, 0), 0)) == NULL,
+          "and nothing was connected");
+
+    map_destroy(m);
+}
+/* }}} */
+
 /* {{{ main */
 int main(void)
 {
     byte_identical();
     identical_shapes_wire();
     different_widths_refused();
+    a_source_with_no_inputs_is_checked_too();
 
     if (failures) {
         fprintf(stderr, "%d width-wiring checks failed\n", failures);

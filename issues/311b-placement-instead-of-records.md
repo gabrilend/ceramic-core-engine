@@ -136,7 +136,7 @@ has since changed on disk.
 
 ## What this does to hand placement
 
-[210g](210g-one-way-to-build-a-station.md) asks whether placing a
+[210g](completed/210g-one-way-to-build-a-station.md) asks whether placing a
 station by hand — stating shapes directly instead of naming a box —
 survives. **It does, and this issue is what makes the answer easy.**
 
@@ -217,7 +217,7 @@ to scan; the placement function writes the name and the dump reads it.
   emission this replaces
 - [304 — Struct field tables](completed/304-struct-field-tables.md),
   which stop being searched and start being pointed at
-- [210g — One way to build a station](210g-one-way-to-build-a-station.md),
+- [210g — One way to build a station](completed/210g-one-way-to-build-a-station.md),
   whose open question about hand placement this answers
 - [308 — The generator, in C](completed/308-generator-in-c.md), which does the
   emitting

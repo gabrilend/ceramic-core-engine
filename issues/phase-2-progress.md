@@ -24,14 +24,14 @@ its own.
 | 207 — hand-built maps | **being retired** | The scaffolding is absorbed into one construction surface, or deleted. |
 | 208 — phase 2 demo | complete | Occupancy, overlap, both backlog kinds, fan-out cost, live backpressure. |
 | [209 — the output station](209-map-output-collection.md) | **mechanism built** | A designation naming where results come from; unwired means hold, not discard, and the pile-up is shouted from the first doubling because it means nobody is collecting at all. The map file spells it and the dump writes it back. A program used as a box remains. |
-| 210 — what an input port is | **parent, in progress** | The record all three input kinds share, designed once — now two kinds plus unconfigured. Split into eight children; see below. |
+| [210 — what an input port is](completed/210-input-port-record.md) | **complete** | The record all three input kinds share, designed once — now two kinds plus unconfigured. Split into eight children, every one of them settled: six built, one refused, one construction surface with both its callers arrived. |
 | 210a — the pull path removed | **complete** | The gatherer kind and everything reading it, taken out. Every box now runs on a worker that picked it up. |
 | [210b — the port record](completed/210b-the-port-record.md) | **complete** | Both storages on every port, the three-value tag, slots allocated at instantiation whatever the port is currently for — which is what makes changing a port's source a field write. The map file learned the two forms it owed: a bare dash for a port with no source, and `x64` before the source for a starting depth, so a half-built program round-trips.
 | [210c — a state on every slot](completed/210c-a-state-on-every-slot.md) | **complete** | Four states on every slot, and only one of them a compare-and-swap once it was clear which transitions have a single possible mover. Built first and exercised while the old locking still made a bug in it harmless, which is why nothing tore when the lock came off. |
 | [210d — the copies leave the lock](completed/210d-the-copies-leave-the-lock.md) | **complete** | The mutex covers the slot states and nothing else; a delivering writer takes no lock at all; the copies happen either side of the hold, protected by the fact that a reserved or claimed slot belongs to exactly one worker. Check-all-then-flip-all, so no roll-back path exists. Large values fell from about 1180 ns a delivery to about 620. |
 | [210e — growth adds a page](completed/210e-growth-adds-a-page.md) | **complete** | Append rather than copy, in equal-sized pages, so no slot that already exists ever moves. Taken *before* 210d's copies rather than after, because that is the order with no window in it — the dependency turned out to run between two halves of 210d rather than between two issues. |
 | [210f — changing what a port is](completed/210f-changing-what-a-port-is.md) | **complete** | A field write, with waiting values left where they sit rather than freed — proven by a round trip through static that serves every value it was carrying. The tag became atomic, because a delivery reads it before taking any lock. |
-| [210g — one way to build a station](210g-one-way-to-build-a-station.md) | **surface built**, callers wait | One configuration surface: a station, a port, a source, a value — with conversion and constant-binding as cases of it, a refusal that travels instead of stopping, and the unqualified check that every parameter has somewhere to get a value. The loader becoming its caller is the capstone's work. |
+| [210g — one way to build a station](completed/210g-one-way-to-build-a-station.md) | **complete** | One configuration surface: a station, a port, a source, a value — with conversion and constant-binding as cases of it, a refusal that travels instead of stopping, and the unqualified check that every parameter has somewhere to get a value. Both callers arrived: reading a file gave up its own port check, its own width check and its own name table, and live editing reaches the same operation through the construction boxes. Giving up the width check uncovered a hole in the one that survives. |
 | [210h — optional parameters](completed/210h-optional-parameters.md) | refused | Refused: it would have been the only exemption to the rule that a station runs when every slot holds a value. The record of why, and where the case it reached for actually belongs. |
 | [211 — growing the station table](completed/211-growing-the-station-table.md) | **complete** | Shelves: grow by adding one, so nothing already placed ever moves — mutex included, which is the whole reason. A removed place is reused before the table grows, and reading a map file is now that same growth, one station per line. |
 | [212 — one way to build a program](212-one-way-to-build-a-program.md) | **in progress** | The capstone. Create, configure, wire — legal at any moment, loading as one caller. The whole-program pass is out of the loader and repeatable, so *still loading* is no longer a state anything can be in, and a file-built program and a surface-built one are proven to dump identically — which found a round-trip bug on its first run. A program can be started beside another, sharing only the workers — which needed a task to say which program it belongs to, because this issue's claim that finishing does not require knowing was false as built. Wiring is one implementation with three faces, and unifying it found that construction's rules had been two short of live editing's all along. And a map builds a map: the operations exist as boxes, which is where the engine's one accepted risk becomes real — an address is eight bytes and so is a double. Starting a second program beside this one waits on the input station. |
@@ -94,6 +94,25 @@ task.** 210a removed the pull path, which was the engine's one named
 exception — a box run inline, on the thread of whoever was assembling
 somebody else's work. The rule above was always the interesting half;
 this is the other half arriving late.
+
+**A second check is not redundancy, and 210g is where the phase found
+out what it is instead.**
+
+Reading a file kept a width check of its own, beside the one the
+wiring operation applies. Taking it away — which is what "reading a
+file has no privileges" means in practice — uncovered a hole in the
+survivor: it asked the width question only of wires whose *source*
+station had input ports, and a box that takes nothing and returns a
+value has none. Every program in this project begins with one of
+those. No program read from a file could ever have shown it, because
+the loader's copy ran first.
+
+So the second check was not a belt beside a brace. **It was a curtain
+in front of a gap**, and the gap was only reachable by the newer of
+the two paths — the one built precisely so that a program could be
+assembled without a file. That is worth more than the fix: it is the
+argument for one path, stated as something that happened rather than
+as something preferred.
 
 **A guarantee can be lost rather than moved, and 210a is where the
 phase learned to say so.** Rewiring holds one lock across checking an

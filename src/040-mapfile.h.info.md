@@ -19,14 +19,27 @@ fatal naming file, line, and what was expected.
 
 **mapfile_free(description)**
 
-**map_load_file(path, worker count) → map** — the whole journey:
-parse; first pass (stations from the registry, ring slots by
-default, comparator threshold appended, statics bound); second pass
-(arrows resolved by name and type-checked — "adder -> printer.0: box
-returns int, port takes float"); whole-map validation (collected,
-printed together);
-pool started with workers parked; seed swept. Caller releases the
-pool, joins it, destroys the map.
+**map_load_file(path, worker count) → map** — the whole journey, and
+every structural step of it is a call anybody could make (issues 210g,
+212): parse; first pass (a station per station line, named as it is
+created, its box placed by name, its door marked, one configuration
+call per port line); second pass (each arrow's destination name turned
+into an index — the one thing here that is a fact about the file
+rather than about the program — then the ordinary wiring operation,
+which applies the width check and every other rule); pool started with
+workers parked; then the program brought up, which is where the
+whole-program checks live and where the first tasks are made. Caller
+releases the pool, joins it, destroys the map.
 
-**map_seed_count(map) → int** — how many stations the seed enqueued;
-one when the author expected ten means a wiring mistake.
+This caller adds exactly one policy of its own: a *file* somebody
+asked to be run that starts nothing and declares no entrance is
+refused, because it would do nothing at all.
+
+**map_seed_count(map) → int** — how many stations the bring-up
+started; one when the author expected ten means a wiring mistake.
+
+**map_load_last_timing** — where the most recent load's seconds went,
+in four stages: parse, first pass, second pass, bring-up. There were
+two more and both stopped being stages rather than getting faster —
+*validation* timed a naming sweep that no longer happens, and *seed*
+timed a phase only the loader could enter.

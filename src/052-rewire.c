@@ -141,8 +141,30 @@ const char *map_wire(map_t *m, int from_station, int port,
         return said("a port index beyond what this station kind can mean");
     }
     if (to_port < 0 || to_port >= to->n_in_ports) {
+        /*
+         * Named the way the loader's own copy of this check named it
+         * (issue 210g), because that copy is going: which station the
+         * arrow lands on, what its box is called, and how many ports
+         * that box has. "A destination port the box does not have"
+         * describes the fault without naming anything anybody can go
+         * and look at, which is the same complaint that moved the
+         * buffer refusal's wording earlier in this function.
+         */
+        char who[64];
+        if (m->station_names && to_station < m->n_named
+            && m->station_names[to_station])
+            snprintf(who, sizeof who, "%s", m->station_names[to_station]);
+        else
+            snprintf(who, sizeof who, "%d", to_station);
+        char message[224];
+        snprintf(message, sizeof message,
+                 "an arrow lands on %s.%d, but '%s' has %d port%s (its "
+                 "parameters%s)",
+                 who, to_port, to->box_name ? to->box_name : "?",
+                 to->n_in_ports, to->n_in_ports == 1 ? "" : "s",
+                 to->kind == STATION_COMPARATOR ? ", plus the threshold" : "");
         pthread_mutex_unlock(&m->rewire_mutex);
-        return said("a destination port the box does not have");
+        return said(message);
     }
     in_port_t *dest = &to->in_ports[to_port];
     if (dest->kind != IN_PORT_RING) {
@@ -176,8 +198,27 @@ const char *map_wire(map_t *m, int from_station, int port,
      * both widths ride along beside them, because "box returns vec4,
      * port takes stats" does not say why those disagree.
      */
-    if (from->in_ports && to->in_ports) {
+    {
         /*
+         * **Asked of every wire, with nothing standing in front of
+         * it** (issue 210g). This block used to be reached only when
+         * both stations had input port arrays, and the source's array
+         * has nothing to do with the question: a station with no
+         * inputs at all — a box that takes nothing and returns a
+         * value, which is how most programs start — could be wired
+         * into a port of any width whatsoever and nothing complained.
+         *
+         * It was invisible while the loader kept a width check of its
+         * own, because every program read from a file went through
+         * that one first. Taking the loader's copy away is what made
+         * the hole in this one show, which is the argument for having
+         * one of these rather than two: the second check was not
+         * redundancy, it was concealment.
+         *
+         * The destination's array needs no guarding either. A port
+         * index past the end was refused a few lines above, and a
+         * station with no ports refuses every index there is.
+         *
          * **The width decides, and only the width** (issue 309). Two
          * boxes may spell one shape differently and mean the same
          * data, so a wire is legal when both sides count the same

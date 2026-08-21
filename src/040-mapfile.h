@@ -160,11 +160,22 @@ int map_seed_count(map_t *m);
  * (issue 606's breakdown scene reads it).
  */
 typedef struct map_load_timing {
-    double parse;
-    double first_pass;
-    double second_pass;
-    double validation;
-    double seed;
+    double parse;       /* text into a description                    */
+    double first_pass;  /* every station created, named, ports set     */
+    double second_pass; /* every arrow drawn                           */
+    /*
+     * The checks and the first tasks, together (issue 210g).
+     *
+     * There were two more stages here, and both stopped being stages
+     * rather than getting faster. *Validation* timed a sweep that
+     * copied the loader's private name table onto the map, which is
+     * gone because naming happens as each station is created. *Seed*
+     * timed a phase only the loader could enter, which is gone
+     * because bringing a program up is something any caller does
+     * (issue 212). What is left between the last wire and the first
+     * task is one call, so it is one number.
+     */
+    double bring_up;
 } map_load_timing_t;
 
 extern map_load_timing_t map_load_last_timing;
