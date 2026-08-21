@@ -883,6 +883,55 @@ static int (*const route_choose[STATION_KIND_COUNT])(station_t *, task_t *) = {
 };
 /* }}} */
 
+/* {{{ station_hold_result() */
+/*
+ * Keep one result for somebody outside to take (issue 209).
+ *
+ * Under the station's own mutex, because a worker finishing a box and
+ * a caller draining results genuinely meet here — unlike a slot,
+ * which belongs to exactly one worker and needs no lock around its
+ * bytes, a held result belongs to the station until it is taken.
+ *
+ * Doubling, and **the growth is shouted from the first one** rather
+ * than summarised at the end like the other two piles. A port backing
+ * up means uneven inputs and the task ring backing up means slow
+ * consumers; both are performance signals worth a line at teardown.
+ * This backing up means nobody is collecting the program's results at
+ * all, which is not a performance signal — it is a program computing
+ * into somewhere nobody is looking, and waiting until shutdown to
+ * mention it wastes the entire run.
+ */
+static void station_hold_result(map_t *m, int index, station_t *s,
+                                const void *value)
+{
+    pthread_mutex_lock(&s->mutex);
+    if (s->n_held == s->held_room) {
+        int room = s->held_room ? s->held_room * 2 : 8;
+        void *bigger = realloc(s->held, (size_t)room * (size_t)s->out_size);
+        if (!bigger) {
+            pthread_mutex_unlock(&s->mutex);
+            fprintf(stderr, "delivery: out of memory holding a result\n");
+            abort();
+        }
+        s->held = bigger;
+        s->held_room = room;
+        if (s->held_growths++ > 0 || room > 8)
+            fprintf(stderr,
+                    "observe: results are piling up at %s — %d waiting and "
+                    "nobody taking them; this program is computing into "
+                    "somewhere nobody is looking\n",
+                    (m->station_names && index < m->n_named
+                     && m->station_names[index])
+                        ? m->station_names[index] : "an output station",
+                    s->n_held);
+    }
+    memcpy((unsigned char *)s->held + (size_t)s->n_held * (size_t)s->out_size,
+           value, (size_t)s->out_size);
+    s->n_held++;
+    pthread_mutex_unlock(&s->mutex);
+}
+/* }}} */
+
 /* {{{ map_deliver() */
 /*
  * The delivery walk: the pool's finish hook. Two paths at the top —
@@ -922,8 +971,22 @@ void map_deliver(void *ctx, task_t *t)
 
     out_port_t *port = station_out_port(s, out_port_index);
     dest_set_t *set = out_port_dests(port);
-    if (!set)
+    if (!set || set->n == 0) {
+        /*
+         * Nobody is wired here. For almost every station that means
+         * **discard**, deliberately: an unwired comparator branch is
+         * the ordinary case, and a program that sends everything below
+         * a threshold somewhere means to drop the rest.
+         *
+         * For a designated output it means **hold**, and that is the
+         * one rule the designation adds (issue 209). A program's own
+         * results are the one thing discarding makes meaningless —
+         * a program that computed them and dropped them did nothing.
+         */
+        if (s->is_output)
+            station_hold_result(m, t->station, s, t->out);
         return;
+    }
 
     /* A hundred destinations is a hundred lock-write-check cycles by
      * this one worker before it takes more work — acceptable, because

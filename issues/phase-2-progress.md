@@ -23,7 +23,7 @@ its own.
 | 206 — task struct | complete | One exact-size allocation: shim, station, port, input copies, output. |
 | 207 — hand-built maps | **being retired** | The scaffolding is absorbed into one construction surface, or deleted. |
 | 208 — phase 2 demo | complete | Occupancy, overlap, both backlog kinds, fan-out cost, live backpressure. |
-| 209 — the output station | open | A pass-through naming where results come from; unwired means hold, not discard. |
+| [209 — the output station](209-map-output-collection.md) | **mechanism built** | A designation naming where results come from; unwired means hold, not discard, and the pile-up is shouted from the first doubling because it means nobody is collecting at all. The map file syntax, the dump, and a program used as a box remain. |
 | 210 — what an input port is | **parent, in progress** | The record all three input kinds share, designed once — now two kinds plus unconfigured. Split into eight children; see below. |
 | 210a — the pull path removed | **complete** | The gatherer kind and everything reading it, taken out. Every box now runs on a worker that picked it up. |
 | [210b — the port record](completed/210b-the-port-record.md) | **complete** | Both storages on every port, the three-value tag, slots allocated at instantiation whatever the port is currently for — which is what makes changing a port's source a field write. The map file learned the two forms it owed: a bare dash for a port with no source, and `x64` before the source for a starting depth, so a half-built program round-trips.

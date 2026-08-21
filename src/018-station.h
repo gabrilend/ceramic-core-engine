@@ -504,6 +504,45 @@ typedef struct station {
      */
     unsigned char   seeded;
 
+    /*
+     * **Designated as a place a program's results come from** (issue
+     * 209).
+     *
+     * It is not a different kind of station and runs whatever box it
+     * was placed with, or none. What the designation adds is exactly
+     * one rule: when its output port is wired nowhere, the values are
+     * **held** instead of discarded.
+     *
+     * Discarding is right for every other port and wrong for this
+     * one. An unwired comparator branch is the ordinary case — a
+     * program sends everything below a threshold somewhere and means
+     * to drop the rest — so a port wired to nothing throws its value
+     * away on purpose. But a program's own results are the one thing
+     * that discarding makes meaningless: a program that computed them
+     * and dropped them did nothing.
+     */
+    unsigned char   is_output;
+
+    /*
+     * The results waiting to be taken, when nobody is wired to this
+     * station's output port. Guarded by the station's own mutex — the
+     * one the claim already takes — because a worker finishing a box
+     * and somebody outside draining results genuinely meet here.
+     *
+     * Grown by doubling. **A pile-up here is a third diagnosis and
+     * not either of the other two**: a port backing up means uneven
+     * inputs, the task ring backing up means consumers slower than
+     * producers, and this backing up means *nobody is collecting the
+     * program's results at all*. It is the loudest of the three by
+     * design, because the other two are performance signals and this
+     * one means the program is computing into somewhere nobody is
+     * looking.
+     */
+    void           *held;
+    int             n_held;
+    int             held_room;
+    int             held_growths;
+
 
     /* Comparator only: the three-way compare for the box's return
      * type, resolved from the registry at placement so the delivery
@@ -856,6 +895,31 @@ const char *map_check_sources(map_t *m);
  * is worse than one that refuses.
  */
 const char *map_bring_up(map_t *m);
+/* }}} */
+
+/* {{{ map_designate_output() and collecting — issue 209 */
+/*
+ * **Where a program's results come from.**
+ *
+ * A designated station stays an ordinary station — same shape, same
+ * readiness, running whatever box it was placed with or none. The
+ * designation adds one rule: when its output port is wired nowhere,
+ * values are **held** rather than discarded. Discarding is right for
+ * every other port and wrong for this one, because a program that
+ * computed its results and dropped them did nothing.
+ *
+ * A program may have several. A box returns one value, so a station
+ * has one output port, so a program output is one station; several
+ * results are several stations, and each gets the readiness check
+ * that already exists rather than a new shape.
+ *
+ * `map_output_waiting` says how many are held; `map_output_take`
+ * takes the oldest, returning 1 or 0. Both exist because a caller
+ * asked to drain results cannot write the loop with only one of them.
+ */
+const char *map_designate_output(map_t *m, int station);
+int map_output_waiting(map_t *m, int station);
+int map_output_take(map_t *m, int station, void *into, int size);
 /* }}} */
 
 /* {{{ map_name_station() — issue 212 */

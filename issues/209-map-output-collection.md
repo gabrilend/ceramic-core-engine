@@ -233,10 +233,10 @@ warning is the notice, and it fires from the first doubling.
    summarises. **Two warnings, not one**: a doorway backing up on its
    inputs and one backing up on its output are opposite diagnoses and
    must read differently.
-4. The call that takes values out, from outside the graph, mirroring
-   the call that writes a static in — **and beside it, a call that says
-   how many are waiting**, without which a caller cannot write the
-   drainer they are being asked to write.
+4. **Done.** Both calls: take the oldest, and say how many wait.
+   Oldest first, which is the one ordering this engine can still
+   honestly offer — one station produced them all in sequence, so
+   unlike values leaving a port, this order means something.
 5. Carrying the declaration through the dump, so a dumped program still
    names its outputs and round-trips.
 6. The load-time check that a declared output station exists and that

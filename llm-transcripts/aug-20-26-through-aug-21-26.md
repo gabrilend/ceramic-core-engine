@@ -1,6 +1,6 @@
 # Conversation Summary: 55f347f4-2832-4363-ab6b-50a0c7b42395
 
-Generated on: 2026-08-20 16:52:55
+Generated on: 2026-08-20 17:13:08
 
 --------------------------------------------------------------------------------
 
@@ -2431,6 +2431,218 @@ the quiescence sweep the others don't. What remains is **box wrappers**: plain C
 functions for these operations, so a map can perform them on another map. That's
 what makes a program able to build a program, and it's the last thing standing
 between here and the generator emitting construction calls.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 15
+
+Please continue
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 15
+
+Last piece of the capstone: box wrappers, so a map can build a map. That needs a
+box to name a map, and a box takes only values. Let me check whether that's been
+decided anywhere:
+
+
+This is the moment a hazard the project already wrote down falls due, and it
+says explicitly that it *"should be a decision somebody makes rather than a
+discovery somebody has."* So I'm stopping to put it to you.
+
+
+**The situation.** A wire is legal when both sides count the same bytes —
+that's what lets two boxes spell one shape differently and still connect, which
+you reminded me of earlier. It's a mild price while values are *data*: a wrong
+wire gives a wrong number, which is visible and eventually noticed. Box wrappers
+change that. Their inputs are **handles** — a map, a placement function, a
+compiled box — and on a 64-bit machine every one of those is eight bytes. So
+is a `double`, a `long`, and a pointer to something else entirely. A wire
+delivering any eight-byte value into a box expecting a map handle is legal by
+the current rule, and the failure isn't a wrong number: it's a call through
+whatever was in those bytes.
+
+
+**[Asked the user]**
+
+
+*Q1 — Handles:* Box wrappers make handles into wire values. What happens about
+the eight-byte problem?
+
+- Build them; record the hazard — The wrappers land and the risk is written
+  down as a stated non-guarantee in its own words: wiring anything eight bytes
+  wide into an operation expecting a handle is accepted by the engine, and what
+  follows is a call through those bytes rather than a wrong answer. Cheapest,
+  and honest about what it costs. It also means the first person to mis-wire a
+  self-building program gets a crash with no useful location, since the engine
+  did exactly what it was told.
+
+- Take shape comparison first — The design for comparing types by layout
+  rather than by width was written in full during the width work and
+  deliberately not taken — width won for being one integer against another.
+  Its field tables have been emitted since phase 3 and have never been
+  consulted. Reviving it would catch this honestly: a handle and a double have
+  different layouts even at the same size. Costs: it is a real piece of work
+  before the wrappers, and it partly re-opens a decision that was closed on good
+  grounds.
+
+- Keep handles off the wires entirely — Don't give the operations box
+  wrappers. A program that builds another program does it through generated
+  construction calls instead — which is where the map-becomes-code work is
+  heading anyway, since the generator emits the calls and no name survives into
+  the running program. Handles then never become values a wire can carry, and
+  the hazard does not arise. Costs: a map cannot build a map at runtime from
+  values it computed, only from what was compiled in.
+
+- Check handles by name, data by width — One targeted exception: a wire
+  carrying a handle type is checked by identity, everything else by width.
+  Narrow, and it puts the check exactly where the danger is. Costs: an exception
+  in a rule whose whole appeal was having none, and something has to decide
+  which types count as handles — which is a list somebody maintains, and lists
+  somebody maintains go stale.
+
+→ **Answered:** I need more background context. What is a map handle? We're
+talking about composing boxes right?". Read the answers carefully — they may
+request clarification, changes, or that you not proceed — and follow what they
+actually say.
+
+
+Fair — let me lay out the mechanism, because the answer turns on it.
+
+
+**What a map is.** One running program. Concretely it's a heap-allocated struct
+holding the station table, the names, the rewiring lock, and a pointer to the
+worker pool. Every operation that changes a program takes it as the first
+argument — `map_add_station(m)`, `map_wire(m, …)` — because "add a
+station" is meaningless without *to which program*.
+
+
+**Why a box can't just reach one.** A box is a plain C function that takes its
+arguments by value, returns one value, and is not permitted to remember or reach
+anything. That's not decoration: earlier work deleted the last global pointer to
+a map precisely so two programs could run in one process without seeing each
+other. A box has no way to name a map except by being handed one.
+
+
+**What step 7 asks for.** The capstone wants the construction operations to
+exist *as boxes* — a station whose box is "add a station", wired to a station
+whose box is "draw a wire" — so a program can build another program using
+nothing but the engine it already has. This isn't about composing ordinary data
+boxes; those are unaffected. It's specifically about boxes whose job is to
+modify a program.
+
+
+**Where the handle comes in.** For such a box to act on a map, the map has to
+arrive as one of its input *values*. The only way to say "this particular map"
+as a value is its address — an 8-byte number on a 64-bit machine. That number
+is the handle.
+
+
+**And the hazard.** The engine decides a wire is legal by comparing byte counts,
+which is what you pointed out is right for data — two boxes may spell one
+shape differently and mean the same thing. But a `double` is 8 bytes. So is a
+`long`, a file offset, and a pointer to something else entirely. So the engine
+would happily accept a wire feeding a computed `double` into the "which map"
+input, and the box would then treat that bit pattern as an address and write a
+station table into it. Not a wrong number — a write through arbitrary memory.
+
+
+**[Asked the user]**
+
+
+*Q1 — Handles:* Given that — should a map's address ever travel down a wire
+as a value?
+
+- No — keep addresses off the wires — Don't give the construction operations
+  box wrappers. A program that builds another program does it through generated
+  construction calls instead, which is where the map-becomes-code work already
+  heads: the generator turns a description into the calls it names, so nothing
+  has to carry an address as a value. The hazard never arises because the
+  dangerous value never exists. Costs: a running program cannot build a program
+  out of values it computed while running — only out of what was compiled in.
+
+- Yes, and write down what it costs — Build the wrappers; record plainly that
+  wiring any eight-byte value into an operation expecting a map is accepted by
+  the engine, and that what follows is a write through those bytes rather than a
+  wrong answer. Cheapest, and the engine keeps one rule with no exceptions.
+  Costs: the first person to mis-wire a self-building program gets a crash with
+  no useful location, because the engine did exactly what it was told.
+
+- Yes, but check layouts first — Before the wrappers, revive comparing types
+  by their layout rather than their size — designed in full during the width
+  work, deliberately not taken, and its tables emitted since phase 3 and never
+  consulted. A map's address and a double have different layouts even at the
+  same size, so this catches it honestly rather than by exception. Costs: real
+  work before the wrappers, and it reopens a decision closed on good grounds.
+
+- Yes, but names for addresses only — One targeted exception — a wire
+  carrying an address is checked by which type it is, everything else by size.
+  Narrow, and it puts the check exactly where the danger is. Costs: an exception
+  in a rule whose appeal was having none, and somebody has to maintain the list
+  of which types count as addresses.
+
+→ **Selected:** Yes, and write down what it costs
+
+
+Decided: the wrappers land and the cost gets written down. Let me look at what a
+box source may contain, since the generator refuses anything it doesn't
+recognise:
+
+
+Registered as ordinary boxes. Now the test that a map actually builds a map:
+
+
+A map builds a map, and the program it built comes up and runs. Now writing down
+what that costs:
+
+
+Committed, clean, all tests pass. **A program can now build a program.**
+
+
+The operations that create structure — add a station, draw a wire, write a
+constant, name a station — exist as ordinary box functions in a box source the
+engine has no idea is special. A test assembles a builder, points it at an empty
+program, runs it, and then **brings up and runs what it made**. Both halves
+matter: a station can look correct and still be unrunnable, and the way to find
+out is to run it.
+
+
+**On your question about the handle** — the answer is now in the code and the
+documents, but the short version: a box takes its arguments by value and may not
+reach anything ambient, because the last global pointer to a running program was
+deleted on purpose so two programs could share a process without seeing each
+other. So a box acting on a program must be *handed* one, and its address is the
+only way to say "that particular program" as a value.
+
+
+**And that's where the accepted risk became real.** The ticket that chose
+comparison-by-size wrote this hazard down when it made the choice — including
+the sentence that it should be *"a decision somebody makes rather than a
+discovery somebody has"*. It fell due exactly here. You decided to accept it and
+write down what it costs, so the guarantees page now records it in its own words
+rather than folded into the comparison-by-size entry: a mis-wire yielding a
+wrong number and a mis-wire yielding a write through arbitrary memory are
+different facts about the same rule.
+
+
+What's actually defended: a null, checked before anything is touched, because a
+port never given a value delivers zero and that's the likeliest mistake by a
+wide margin. Past null nothing distinguishes a real address from any other eight
+bytes, and the box source says so rather than implying otherwise.
+
+
+The capstone is now down to one thing: **starting a second program beside this
+one** rather than building into it — separate station table, no wires across,
+reached only by delivering into its input station. That waits on the input
+station itself, which isn't built.
+
+
+So the next genuinely available work is **the input station** — where a
+program's arguments arrive — and its sibling, the output station, which is
+startable now and is what the input one stands on.
 
 
 --------------------------------------------------------------------------------

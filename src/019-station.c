@@ -725,6 +725,113 @@ const char *map_name_station(map_t *m, int station, const char *name)
 }
 /* }}} */
 
+/* {{{ map_designate_output() */
+/*
+ * **Say that this station is a place the program's results come
+ * from** (issue 209).
+ *
+ * It stays an ordinary station: same shape, same readiness, running
+ * whatever box it was placed with or none. The designation adds
+ * exactly one rule — when its output port is wired nowhere, values
+ * are held rather than discarded — and one meaning, which is that a
+ * parent composing this program has somewhere to wire from and a
+ * person reading it can tell which station is the point.
+ *
+ * A program may have **several**, each with its own input ports and
+ * its one output port, because a box returns one value and so a
+ * station has one output port and so a program output is one station.
+ * The alternative — one station whose output ports each owned a
+ * subset of its inputs — needs a box returning several values, which
+ * C does not have, and would be the only thing in the engine with
+ * several readiness checks over subsets of its ports.
+ */
+const char *map_designate_output(map_t *m, int station)
+{
+    static _Thread_local char said[192];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said, "station %d is outside the table",
+                 station);
+        return said;
+    }
+    station_t *s = map_station(m, station);
+    if (!s->call) {
+        snprintf(said, sizeof said,
+                 "station %d has no box placed — place, then designate",
+                 station);
+        return said;
+    }
+    if (s->out_size == 0) {
+        /* A station whose box returns nothing has no output port, so
+         * there is nothing for a parent to wire from and nothing to
+         * hold. Refused rather than accepted-and-useless, because the
+         * mistake is almost certainly the wrong station. */
+        snprintf(said, sizeof said,
+                 "station %d returns nothing, so it has no results to be "
+                 "the source of", station);
+        return said;
+    }
+    s->is_output = 1;
+    return NULL;
+}
+/* }}} */
+
+/* {{{ map_output_waiting() / map_output_take() */
+/*
+ * The two halves of collecting a program's results from outside,
+ * mirroring the call that writes a constant in (issue 209).
+ *
+ * **Both, because one is not usable without the other.** A caller
+ * asked to drain results needs to know whether there are any, and
+ * asking by taking and checking for failure makes "none waiting"
+ * indistinguishable from "not an output station" without a second
+ * question anyway.
+ *
+ * Under the station's own mutex, which is the same lock a worker
+ * finishing a box takes to put a result there — unlike a slot, which
+ * belongs to one worker, a held result belongs to the station until
+ * somebody takes it.
+ */
+int map_output_waiting(map_t *m, int station)
+{
+    if (station < 0 || station >= m->n_stations)
+        return 0;
+    station_t *s = map_station(m, station);
+    pthread_mutex_lock(&s->mutex);
+    int n = s->n_held;
+    pthread_mutex_unlock(&s->mutex);
+    return n;
+}
+
+int map_output_take(map_t *m, int station, void *into, int size)
+{
+    if (station < 0 || station >= m->n_stations)
+        return 0;
+    station_t *s = map_station(m, station);
+    if (size != s->out_size)
+        fail("taking a result into something the wrong size for it");
+
+    pthread_mutex_lock(&s->mutex);
+    if (s->n_held == 0) {
+        pthread_mutex_unlock(&s->mutex);
+        return 0;
+    }
+    /* Oldest first, and the shuffle is deliberate over the
+     * alternative. Results are taken far less often than they are
+     * produced, and a caller draining them wants them in the order
+     * the program produced them — which is the one ordering this
+     * engine can still honestly offer, because a single station
+     * produced them all in sequence. */
+    memcpy(into, s->held, (size_t)size);
+    s->n_held--;
+    if (s->n_held > 0)
+        memmove(s->held, (unsigned char *)s->held + size,
+                (size_t)s->n_held * (size_t)size);
+    pthread_mutex_unlock(&s->mutex);
+    return 1;
+}
+/* }}} */
+
 /* {{{ map_bring_up() */
 const char *map_bring_up(map_t *m)
 {
@@ -1201,6 +1308,13 @@ void map_destroy(map_t *m)
             pthread_mutex_destroy(&s->mutex);
             continue;
         }
+        /* Results nobody took. Freed rather than reported, because
+         * the pile-up was already shouted about from the first
+         * doubling — saying it twice at teardown would be the same
+         * fault wearing a different hat (issue 209). */
+        free(s->held);
+        s->held = NULL;
+
         for (int j = 0; j < s->n_in_ports; j++) {
             in_port_free_pages(&s->in_ports[j]);
             /* Both storages, because a port carries both whatever it
