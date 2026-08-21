@@ -81,6 +81,6 @@ owes.
 
 ## Related
 
-- [006 — Scheduling](../docs/006-datapath-scheduling.md)
+- [006 — Scheduling](../../docs/006-datapath-scheduling.md)
 - Issue 102 — the workers that pop from this
 - Issue 103 — what a worker does when the pop comes back empty

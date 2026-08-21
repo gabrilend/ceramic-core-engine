@@ -71,6 +71,6 @@ project can have. Refusing at build time is the whole point.
 
 ## Related
 
-- [005 — Routing](../docs/005-routing.md)
-- [007 — The build path](../docs/007-datapath-build.md)
+- [005 — Routing](../../docs/005-routing.md)
+- [007 — The build path](../../docs/007-datapath-build.md)
 - Issue 503 — the comparator that calls these

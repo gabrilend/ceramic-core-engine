@@ -89,5 +89,5 @@ guessing about it later.
 
 ## Related
 
-- [006 — Scheduling](../docs/006-datapath-scheduling.md)
+- [006 — Scheduling](../../docs/006-datapath-scheduling.md)
 - Issues 101 through 104 — everything being demonstrated

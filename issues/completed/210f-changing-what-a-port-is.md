@@ -1,7 +1,7 @@
 # 210f — Changing what a port is
 
 Sixth child of [210](210-input-port-record.md). It branches off
-[210b](completed/210b-the-port-record.md) rather than following the concurrency
+[210b](210b-the-port-record.md) rather than following the concurrency
 line, and can be built alongside it.
 
 ## Current behavior
@@ -76,7 +76,7 @@ mechanism is there; the tests are not.
 ## Intended behavior
 
 **Conversion is a field write.** The tag changes; storage does not
-move. [210b](completed/210b-the-port-record.md) is what makes this possible by
+move. [210b](210b-the-port-record.md) is what makes this possible by
 giving every port its slots at instantiation regardless of what the
 port is currently for, so there is never a moment when the storage a
 tag needs is absent.
@@ -91,7 +91,7 @@ late.
 That "slightly late" is the honest cost and should be said plainly: a
 port turned into a static and back may deliver a value that arrived
 before the conversion, after values that arrived after it. Given that
-[210d](completed/210d-the-copies-leave-the-lock.md) already gives up arrival order
+[210d](210d-the-copies-leave-the-lock.md) already gives up arrival order
 as a guarantee, this costs nothing that was still being promised — but
 it is a second reason for the same non-guarantee, and a reader
 deserves to know it is not only rollback that opens gaps.
@@ -118,7 +118,7 @@ destroyed.
 4. **Done.** Values waiting in a ring port when it becomes a static
    are still there, and still delivered, when it becomes a ring again.
 5. **Done.** Both reasons for out-of-order delivery are listed in
-   [058](../docs/058-guarantees.md). While correcting it, the first
+   [058](../../docs/058-guarantees.md). While correcting it, the first
    reason turned out to name a roll-back path that no longer exists —
    the claim checks every port before taking from any of them, so a
    partial claim cannot happen. The scan is the reason on its own.
@@ -151,13 +151,13 @@ destroyed.
 ## Related
 
 - [210 — What an input port is](210-input-port-record.md), the parent
-- [210b — The port record](completed/210b-the-port-record.md), whose standing
+- [210b — The port record](210b-the-port-record.md), whose standing
   buffer is the entire reason this is cheap
 - [210g — One way to build a station](210g-one-way-to-build-a-station.md),
   which offers this operation as part of one surface
-- [405 — Changing a static while it runs](405-statics-mutation.md),
+- [405 — Changing a static while it runs](../405-statics-mutation.md),
   which becomes one case of this
-- [704 — Rewiring while it runs](completed/704-runtime-rewiring.md),
+- [704 — Rewiring while it runs](704-runtime-rewiring.md),
   the same live-editing discipline on the wires
-- [058 — Guarantees](../docs/058-guarantees.md), which gains a second
+- [058 — Guarantees](../../docs/058-guarantees.md), which gains a second
   reason for a non-guarantee it already carries

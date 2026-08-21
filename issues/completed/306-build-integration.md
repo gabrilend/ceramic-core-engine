@@ -54,5 +54,5 @@ reader at the map rather than at the real cause.
 
 ## Related
 
-- [007 — The build path](../docs/007-datapath-build.md)
+- [007 — The build path](../../docs/007-datapath-build.md)
 - Issues 301 through 305 — what this runs

@@ -10,7 +10,7 @@ are to be the same kind of thing, boxes need what programs already
 have. That was the whole case for the mechanism.
 
 A program's several outputs are now several **stations**
-([209](209-map-output-collection.md)), each with one output port. So a
+([209](../209-map-output-collection.md)), each with one output port. So a
 program used as a box presents several separate output points, not one
 box with several ports, and there is nothing for a box to catch up to.
 A box returns one value because a C function returns one value, and
@@ -144,14 +144,14 @@ multi-output box uses all of them. Same noun, three rules.
 
 ## Related
 
-- [501 — Routing dispatch](completed/501-routing-dispatch.md), whose
+- [501 — Routing dispatch](501-routing-dispatch.md), whose
   meaning of "port" this widens
-- [502 — Comparator](completed/502-comparator.md) and
-  [504 — Iterator](completed/504-iterator.md), the two kinds this must
+- [502 — Comparator](502-comparator.md) and
+  [504 — Iterator](504-iterator.md), the two kinds this must
   refuse to combine with, at first
-- [304 — Struct field tables](completed/304-struct-field-tables.md),
+- [304 — Struct field tables](304-struct-field-tables.md),
   which already provides the offsets this needs
-- [209 — The output station](209-map-output-collection.md), where a map
+- [209 — The output station](../209-map-output-collection.md), where a map
   with several outputs makes this necessary
-- [005 — Routing](../docs/005-routing.md), which needs rewriting around
+- [005 — Routing](../../docs/005-routing.md), which needs rewriting around
   the wider meaning of a port

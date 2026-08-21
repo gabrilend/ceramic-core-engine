@@ -23,7 +23,7 @@ runtime rewiring reuse the same check when a wire is drawn on a running
 program. And the message: naming both stations, the port, and both
 type names is why *"head → wrong.1: box returns int, slot takes
 double"* is actionable, and it is the standard the shape-based
-comparison in [309](../309-types-by-width.md) has to meet or beat.
+comparison in [309](309-types-by-width.md) has to meet or beat.
 
 The remainder describes it as built.
 
@@ -93,7 +93,7 @@ the next reader knows it was a decision.
 
 ## Related
 
-- [009 — Loading](../docs/009-datapath-load.md)
+- [009 — Loading](../../docs/009-datapath-load.md)
 - Issue 303 — the registry this reads
 - Issue 602 — the first pass
 - Issue 604 — the checks that need the whole map

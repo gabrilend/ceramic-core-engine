@@ -8,7 +8,7 @@ Under [212](../212-one-way-to-build-a-program.md), adding a station is
 the only way one ever comes into existence, so the table starts empty
 and grows while a program is read. It grows by adding another
 allocation and a pointer to it, never by reallocating
-([211](../211-growing-the-station-table.md)) — because this issue put
+([211](211-growing-the-station-table.md)) — because this issue put
 the station's mutex inside the station record, and a mutex is
 identified by where it lives. Move one and every thread parked on it
 waits at an address nobody will unlock.
@@ -97,6 +97,6 @@ a change to this structure.
 
 ## Related
 
-- [002 — Stations and ports](../docs/002-stations-and-ports.md)
+- [002 — Stations and ports](../../docs/002-stations-and-ports.md)
 - Issue 202 — what goes in the ports array
 - Issue 207 — how a table gets built before map files exist

@@ -97,6 +97,6 @@ call ends. A gather cycle is a call that never returns.
 
 ## Related
 
-- [004 — Gathering](../docs/004-datapath-statics.md)
+- [004 — Gathering](../../docs/004-datapath-statics.md)
 - Issue 403 — the gathering this bounds
 - Issue 704 — runtime rewiring, which reuses this check

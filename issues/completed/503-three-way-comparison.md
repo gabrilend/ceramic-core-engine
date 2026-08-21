@@ -70,6 +70,6 @@ this project can have, and refusing at build time is the whole point.
 
 ## Related
 
-- [005 — Routing](../docs/005-routing.md)
+- [005 — Routing](../../docs/005-routing.md)
 - Issue 305 — where compare functions come from
 - Issue 502 — the comparator that calls this

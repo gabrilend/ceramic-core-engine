@@ -73,7 +73,7 @@ describe.** Four of the phase 4 demo's five scenes, three pieces of the
 phase 6 demo, and one phase 7 scene demonstrate the pull path, which is
 being removed. The story contract laid out below is what their
 replacements are held to, and
-[710](710-demos-after-the-pull-path.md) says what each one needs. That
+[710](../710-demos-after-the-pull-path.md) says what each one needs. That
 is a different issue rather than a reopening of this one: the shape of
 a scene is settled and proven across thirty-five of them; what changes
 is which mechanics there are to tell stories about.
@@ -346,5 +346,5 @@ from the launcher again. The rest of this issue is the second line.
   each of which this rewrites
 - Issue 705 — the HTML documentation set, the other half of making
   this project legible to someone who did not build it
-- [010 — Roadmap](../docs/010-roadmap.md), where each phase states what
+- [010 — Roadmap](../../docs/010-roadmap.md), where each phase states what
   it exists to do — the source of what each demo has to justify

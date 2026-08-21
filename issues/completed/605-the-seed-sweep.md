@@ -106,6 +106,6 @@ correctly and uselessly.
 
 ## Related
 
-- [009 — Loading](../docs/009-datapath-load.md)
+- [009 — Loading](../../docs/009-datapath-load.md)
 - Issue 104 — the termination rule this must not violate
 - Issue 403 — why gatherers are excluded

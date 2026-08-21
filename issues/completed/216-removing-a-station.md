@@ -158,7 +158,7 @@ something exotic knows it is doing something exotic.
    built twice — it is the same question asked about a different thing.
 4. Freeing, and the free slot list.
 5. Placement prefers a free slot before growing the array
-   ([211](../211-growing-the-station-table.md)).
+   ([211](211-growing-the-station-table.md)).
 6. A test that a station is removed while values are in flight through
    its neighbours, and nothing tears.
 7. A test that a slot is reused and the new station receives only what
@@ -185,7 +185,7 @@ something exotic knows it is doing something exotic.
 
 ## Related
 
-- [211 — Growing the station table](../211-growing-the-station-table.md),
+- [211 — Growing the station table](211-growing-the-station-table.md),
   which this makes the other half of — a table that grows and shrinks
 - [212 — One way to build a program](../212-one-way-to-build-a-program.md),
   whose surface gains this operation

@@ -1,6 +1,6 @@
 # 210h — Optional parameters
 
-Last child of [210](../210-input-port-record.md), and the one that is not
+Last child of [210](210-input-port-record.md), and the one that is not
 built. This is the record of the refusal, kept in full because the
 reasoning constrains everything downstream of it and because the design
 it rejects is one somebody will propose again.
@@ -13,7 +13,7 @@ is no way for a box to say that one of its inputs is one it can do
 without.
 
 After [210b](210b-the-port-record.md) there is a *none* tag, and after
-[210g](../210g-one-way-to-build-a-station.md) a port left in it is caught
+[210g](210g-one-way-to-build-a-station.md) a port left in it is caught
 at configuration time as an error. **There is no exemption from that
 check**, and this issue is the record of why one was considered and
 refused.
@@ -117,11 +117,11 @@ dissolved with the feature rather than being answered.
 
 ## Related
 
-- [210 — What an input port is](../210-input-port-record.md), the parent,
+- [210 — What an input port is](210-input-port-record.md), the parent,
   whose *none* tag this leaves meaning exactly one thing
 - [210b — The port record](210b-the-port-record.md), whose *none* tag
   this would have reinterpreted for one kind of parameter
-- [210g — One way to build a station](../210g-one-way-to-build-a-station.md),
+- [210g — One way to build a station](210g-one-way-to-build-a-station.md),
   whose configuration-time check keeps its single unqualified rule
 - [005 — Routing](../../docs/005-routing.md), the comparator that carries
   the case this was reaching for

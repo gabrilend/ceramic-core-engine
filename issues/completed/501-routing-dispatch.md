@@ -59,7 +59,7 @@ has been chosen.
 
 ## Related
 
-- [005 — Routing](../docs/005-routing.md)
-- [003 — Delivery](../docs/003-datapath-delivery.md), step 1
+- [005 — Routing](../../docs/005-routing.md)
+- [003 — Delivery](../../docs/003-datapath-delivery.md), step 1
 - Issue 205 — the call site this fills
 - Issues 502 and 504 — the other two rows

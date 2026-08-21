@@ -115,7 +115,7 @@ said. If those two ever disagree, this is what shows it.
 
 ## Related
 
-- [008 — Map file format](../docs/008-map-file-format.md)
-- [009 — Loading](../docs/009-datapath-load.md)
+- [008 — Map file format](../../docs/008-map-file-format.md)
+- [009 — Loading](../../docs/009-datapath-load.md)
 - Issues 601 through 605 — everything being demonstrated
 - Issue 505 — the phase 5 demo this builds on

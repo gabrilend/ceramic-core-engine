@@ -18,7 +18,7 @@ special-cased. It simply has two callers.
 The gatherer row goes with the pull path. The null entries in the claim
 table, which meant "resolved later, outside the mutex," become explicit
 cases, because a decision written as a hole is one a reader has to
-already know how to interpret ([210](../210-input-port-record.md)).
+already know how to interpret ([210](210-input-port-record.md)).
 
 **And the mutex goes.** The claim becomes a walk of the ports in
 ascending index order, flipping a ready slot to claimed at each and
@@ -111,6 +111,6 @@ functions that must be kept in agreement.
 
 ## Related
 
-- [003 — Delivery](../docs/003-datapath-delivery.md)
+- [003 — Delivery](../../docs/003-datapath-delivery.md)
 - Issue 205 — what calls this
 - Issue 206 — what happens after the mutex is released

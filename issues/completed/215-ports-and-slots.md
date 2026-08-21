@@ -45,7 +45,7 @@ port has not yet vacated — the map file parser has an input-port
 variable and an output-port variable in one file, and the input one
 was being renamed onto the output one's name. **All three renames had
 to happen in a single substitution**, which is what
-[079](../scripts/079-rename-identifiers.lua.info.md) exists for and
+[079](../../scripts/079-rename-identifiers.lua.info.md) exists for and
 why it was built rather than the rename being done by hand.
 
 ### The mapping, so this is reproducible
@@ -227,10 +227,10 @@ None outstanding.
 
 - [210 — What an input port is](210-input-port-record.md), which states
   the correct vocabulary and names the debt
-- [002 — Stations and ports](../docs/002-stations-and-ports.md), whose
+- [002 — Stations and ports](../../docs/002-stations-and-ports.md), whose
   filename and body were both part of the debt
-- [205 — The delivery walk](completed/205-delivery-walk.md), which
+- [205 — The delivery walk](205-delivery-walk.md), which
   speaks both nouns constantly
-- [202 — Ring buffer slots](completed/202-ring-buffer-ports.md), whose
+- [202 — Ring buffer slots](202-ring-buffer-ports.md), whose
   title is already correct under the new vocabulary and was not under
   the old one

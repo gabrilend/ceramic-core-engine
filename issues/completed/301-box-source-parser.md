@@ -75,6 +75,6 @@ cause.
 
 ## Related
 
-- [007 — The build path](../docs/007-datapath-build.md)
+- [007 — The build path](../../docs/007-datapath-build.md)
 - Issues 302 through 305 — the emitters this feeds
 - Issue 306 — where in the build this runs

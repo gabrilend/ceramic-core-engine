@@ -92,4 +92,4 @@ apparatus compiles out.
 ## Related
 
 - Issue 701 — the other half of the picture
-- [002 — Stations and ports](../docs/002-stations-and-ports.md)
+- [002 — Stations and ports](../../docs/002-stations-and-ports.md)

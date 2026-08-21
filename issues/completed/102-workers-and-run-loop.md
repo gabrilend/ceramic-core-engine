@@ -69,6 +69,6 @@ statistics possible in phase 7.
 
 ## Related
 
-- [006 — Scheduling](../docs/006-datapath-scheduling.md)
+- [006 — Scheduling](../../docs/006-datapath-scheduling.md)
 - Issue 101 — the queue this pops from
 - Issue 103 — replaces the temporary busy return

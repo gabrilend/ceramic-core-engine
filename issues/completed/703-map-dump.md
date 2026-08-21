@@ -100,5 +100,5 @@ and this is where a reader gets to see the ones the registry supplied.
 
 ## Related
 
-- [008 — Map file format](../docs/008-map-file-format.md)
+- [008 — Map file format](../../docs/008-map-file-format.md)
 - Issue 704 — the reason this matters most

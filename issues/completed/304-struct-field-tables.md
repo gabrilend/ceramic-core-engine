@@ -66,6 +66,6 @@ the same statics entry and each read it their own way.
 
 ## Related
 
-- [007 — The build path](../docs/007-datapath-build.md)
-- [008 — Map file format](../docs/008-map-file-format.md), the statics table
+- [007 — The build path](../../docs/007-datapath-build.md)
+- [008 — Map file format](../../docs/008-map-file-format.md), the statics table
 - Issue 402 — the reader that uses these

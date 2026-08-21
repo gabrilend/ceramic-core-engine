@@ -93,7 +93,7 @@ current-behavior section should be updated to say it has.
 
 ## Related
 
-- [009 — Loading](../docs/009-datapath-load.md)
+- [009 — Loading](../../docs/009-datapath-load.md)
 - Issue 601 — the description this consumes
 - Issue 603 — the second pass
 - Issue 207 — the scaffolding this replaces

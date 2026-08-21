@@ -43,7 +43,7 @@ not about values.
 
 **And one step turned out to belong to its sibling.** The value copies
 are only safe once growth has stopped relocating slots, so
-[210e](completed/210e-growth-adds-a-page.md) was built first. See the
+[210e](210e-growth-adds-a-page.md) was built first. See the
 parent for the corrected order.
 
 ### What stood before
@@ -142,7 +142,7 @@ because walking the ports in one direction keeps the scan's memory
 access predictable, but nothing about safety rests on it any more.
 
 **And the guarantee the lock-free direction would have weakened stays
-intact.** [T3](../docs/058-guarantees.md) — *one invocation's inputs
+intact.** [T3](../../docs/058-guarantees.md) — *one invocation's inputs
 are claimed atomically with respect to each other, all of them, under a
 single hold* — is exactly what one hold across the walk means.
 
@@ -229,7 +229,7 @@ individually.
 **That non-guarantee is written down before the test that contradicts
 it is retired.** There is a passing test asserting several hundred
 in-order deliveries. It has to go, and the order matters: record the
-non-guarantee in [058](../docs/058-guarantees.md) first, then retire
+non-guarantee in [058](../../docs/058-guarantees.md) first, then retire
 the test citing it. Retiring it first would leave a window in which
 the project has silently stopped promising something it still appears
 to promise.
@@ -237,7 +237,7 @@ to promise.
 ## Suggested implementation steps
 
 1. **Done.** The lost ordering recorded in
-   [058](../docs/058-guarantees.md) as a stated non-guarantee, with its
+   [058](../../docs/058-guarantees.md) as a stated non-guarantee, with its
    reason.
 2. **Done.** The in-order delivery test narrowed rather than deleted.
    It held three things at once: that values arrive untorn, that none
@@ -274,12 +274,12 @@ partial claim while another interleaves.
 - [210c — A state on every slot](210c-a-state-on-every-slot.md), which
   must land first — the ownership meaning of *reserved* and *claimed*
   is the whole reason the copies can leave the lock
-- [210e — Growth adds a page](completed/210e-growth-adds-a-page.md), which is
+- [210e — Growth adds a page](210e-growth-adds-a-page.md), which is
   only safe because nothing here computes a location from the capacity
-- [204 — The readiness check](completed/204-readiness-check.md), the
+- [204 — The readiness check](204-readiness-check.md), the
   walk this changes
-- [214 — Destinations without a lock](completed/214-destinations-without-a-lock.md),
+- [214 — Destinations without a lock](214-destinations-without-a-lock.md),
   the output side, which does remove its lock — the asymmetry is that a
   delivery walk reads one pointer and a claim needs N slots at once
-- [058 — Guarantees](../docs/058-guarantees.md), where the lost arrival
+- [058 — Guarantees](../../docs/058-guarantees.md), where the lost arrival
   order is recorded and where T3 survives this unchanged

@@ -200,7 +200,7 @@ buffer depth, the ports grew thirteen times each during the run. Every
 growth allocates a new array and copies every value across *under the
 same mutex being measured*, and that copy is proportional to the
 element size — so the large-value figure was substantially a
-measurement of growth. Growth is [210e](completed/210e-growth-adds-a-page.md)'s
+measurement of growth. Growth is [210e](210e-growth-adds-a-page.md)'s
 problem. A baseline containing it would have made this issue look like
 it achieved less than it did, because moving the delivery copy out of
 the lock leaves the growth copy inside it. The ports are now sized
@@ -218,13 +218,13 @@ None outstanding. The baseline question above is answered.
 ## Related
 
 - [210 — What an input port is](210-input-port-record.md), the parent
-- [210b — The port record](completed/210b-the-port-record.md), which this needs
+- [210b — The port record](210b-the-port-record.md), which this needs
   for the slots to live on
 - [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md),
   which is only expressible once slots carry their own states
-- [210e — Growth adds a page](completed/210e-growth-adds-a-page.md), which needs
+- [210e — Growth adds a page](210e-growth-adds-a-page.md), which needs
   occupancy to stop being implied by indices
-- [202 — Ring buffer slots](completed/202-ring-buffer-ports.md), whose
+- [202 — Ring buffer slots](202-ring-buffer-ports.md), whose
   head-and-tail exclusivity this replaces
-- [205 — The delivery walk](completed/205-delivery-walk.md), the path
+- [205 — The delivery walk](205-delivery-walk.md), the path
   being measured

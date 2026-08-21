@@ -1,7 +1,7 @@
 # 214 — Destinations without a lock
 
 The other half of getting the station's mutex off the hot path.
-[210](../210-input-port-record.md) does the input side, where a claim
+[210](210-input-port-record.md) does the input side, where a claim
 stops taking a lock. This does the output side, where a delivery stops
 taking one to find out where it is going.
 
@@ -40,8 +40,8 @@ what would otherwise deadlock a sweep against a quiet pool.
 this issue asked. A worker is inside a *box* earlier in a task than it
 is inside a *delivery walk*, so a counter spanning the whole thing
 answers both questions, and the same mechanism now serves
-[310](../310-boxes-compiled-at-runtime.md)'s box unloading and
-[216](../216-removing-a-station.md)'s station removal. Destination sets
+[310](310-boxes-compiled-at-runtime.md)'s box unloading and
+[216](216-removing-a-station.md)'s station removal. Destination sets
 become freeable slightly later than they strictly must, which costs
 nothing anybody measures.
 
@@ -128,7 +128,7 @@ It is a scrapyard rather than a leak: everything in it is accounted
 for, and anything still filed at teardown is freed then.
 
 **This mechanism has a second customer, so build it to be shared.**
-[310](../310-boxes-compiled-at-runtime.md) needs to unload the compiled
+[310](310-boxes-compiled-at-runtime.md) needs to unload the compiled
 code of a box while workers may be inside it, which is the same
 lifetime problem in different clothes. It asks about a wider window,
 though: a worker is inside a *box* earlier in a task than it is inside
@@ -230,7 +230,7 @@ wiring changes and when the program ends, and never in between.
 
 ## Related
 
-- [210 — What an input port is](../210-input-port-record.md), the input
+- [210 — What an input port is](210-input-port-record.md), the input
   side of the same removal
 - [704 — Rewiring while it runs](704-runtime-rewiring.md),
   which added the snapshot this replaces, and recorded it as the

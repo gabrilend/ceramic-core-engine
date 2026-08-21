@@ -75,7 +75,7 @@ than a change to this structure.
 
 ## Related
 
-- [003 — Delivery](../docs/003-datapath-delivery.md)
+- [003 — Delivery](../../docs/003-datapath-delivery.md)
 - Issue 204 — where the values come from
 - Issue 302 — where the shim pointer comes from
 - Issue 504 — the port field's eventual use

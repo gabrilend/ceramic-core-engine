@@ -8,7 +8,7 @@ Head and tail are *positions*, taken modulo the capacity — which is
 what forces growth to physically move every value back into order when
 the capacity changes, and what makes a ring buffer the one thing in the
 engine that cannot grow by simply adding more room.
-[210](../210-input-port-record.md) replaces them: each slot carries its
+[210](210-input-port-record.md) replaces them: each slot carries its
 own state, a reader scans from a bookmark that is allowed to be wrong,
 and nothing anywhere computes a location from the capacity. Then a
 buffer grows by adding a page, nothing is copied, and the ordering
@@ -97,7 +97,7 @@ holding only the station's mutex.
 
 ## Related
 
-- [002 — Stations and ports](../docs/002-stations-and-ports.md)
+- [002 — Stations and ports](../../docs/002-stations-and-ports.md)
 - Issue 203 — growth
 - Issue 401 — static ports, the second tag value
 - Issue 403 — gatherer ports, the third

@@ -88,6 +88,6 @@ the source to read around later.
 
 ## Related
 
-- [007 — The build path](../docs/007-datapath-build.md)
+- [007 — The build path](../../docs/007-datapath-build.md)
 - Issue 301 — the description this consumes
 - Issue 207 — the hand-written shims this deletes

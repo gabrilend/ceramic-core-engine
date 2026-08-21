@@ -11,7 +11,7 @@ gathered is now written into a static port by an ordinary push, and
 writing a static runs the readiness check on the station holding it. So
 there is no pull to time.
 
-[056](../docs/implementation-notes/056-no-pull-path.md) carries the
+[056](../../docs/implementation-notes/056-no-pull-path.md) carries the
 full reasoning — what pulling was for, the three timings weighed for
 it, and the accounting problem that ended the search. The short version
 is that a pulled value arriving by delivery lands in a queue whose
@@ -170,8 +170,8 @@ currently distinguish from a worker inside a box.
    last of those is the whole point and is the one nobody has measured.
 6. Retire the inline gather on the delivering thread, along with the
    named exception to "boxes only run from the pool" that it created.
-7. Correct [004 — Gathering](../docs/004-datapath-statics.md) and
-   [058 — Guarantees](../docs/058-guarantees.md), both of which
+7. Correct [004 — Gathering](../../docs/004-datapath-statics.md) and
+   [058 — Guarantees](../../docs/058-guarantees.md), both of which
    currently describe the value as fresh as of scheduling.
 
 ## Open questions
@@ -247,18 +247,18 @@ step inside it.
 
 ## Related
 
-- [056 — Gather timing](../docs/implementation-notes/056-no-pull-path.md),
+- [056 — Gather timing](../../docs/implementation-notes/056-no-pull-path.md),
   which states this timing as the design and gives the reasoning, the
   guarantees, and the costs in full
 - [210 — What an input port is](210-input-port-record.md), which
   supplies the per-slot tag this reads and the port record it reads it
   from
-- [403 — Gatherer slots](completed/403-gatherer-ports.md) and
-  [404 — Gather chains and cycles](completed/404-gather-chains-and-cycles.md),
+- [403 — Gatherer slots](403-gatherer-ports.md) and
+  [404 — Gather chains and cycles](404-gather-chains-and-cycles.md),
   the mechanism whose timing this moves
-- [704 — Rewiring while it runs](completed/704-runtime-rewiring.md),
+- [704 — Rewiring while it runs](704-runtime-rewiring.md),
   which makes the unlocked read of a port's upstream index a real
   window rather than a theoretical one
-- [004 — Gathering](../docs/004-datapath-statics.md) and
-  [058 — Guarantees](../docs/058-guarantees.md), both of which state the
+- [004 — Gathering](../../docs/004-datapath-statics.md) and
+  [058 — Guarantees](../../docs/058-guarantees.md), both of which state the
   freshness promise this makes literally true

@@ -1,11 +1,11 @@
 # 210b — The port record
 
-Second child of [210](../210-input-port-record.md). The shape every other
+Second child of [210](210-input-port-record.md). The shape every other
 child stands on: what a port *is*, once there are two live kinds and a
 third state meaning nobody has said yet.
 
 **The statics block is cleared.** This issue was blocked in half on
-[401](401-static-ports.md) and [405](405-statics-mutation.md): a port
+[401](401-static-ports.md) and [405](../405-statics-mutation.md): a port
 could not be given room for a value that lived in a global register,
 and the map file's `$n` form named a table the design had decided to
 delete.
@@ -45,12 +45,12 @@ a ring buffer again.
 gets ten. This landed as its own call rather than as an argument on
 the call that creates the station — that array would have been null at
 roughly eighty existing call sites across the tests and the phase
-demos, and [210g](../210g-one-way-to-build-a-station.md) is about to make
+demos, and [210g](210g-one-way-to-build-a-station.md) is about to make
 configuring a port a single operation naming a station, a port, and
 what it becomes, which is the shape this already has.
 
 The first thing the depth call was used for was fixing a measurement:
-see [210c](../210c-a-state-on-every-slot.md), where the delivery baseline
+see [210c](210c-a-state-on-every-slot.md), where the delivery baseline
 turned out to be measuring buffer growth until the ports were sized
 past what the run could fill.
 
@@ -102,7 +102,7 @@ being a phase.
 **Both storages live on the port; the tag says which is in effect.**
 Ring slots and a static's bytes both have room, exactly one is
 current, and the other sits idle. This is the whole trick that makes
-[210f](../210f-changing-what-a-port-is.md) a field write.
+[210f](210f-changing-what-a-port-is.md) a field write.
 
 **Slots are allocated when the station is instantiated, for every port
 regardless of what that port is currently for.** The element size is
@@ -242,10 +242,10 @@ because they say which pieces are built and which are not.
 
 ## Related
 
-- [210 — What an input port is](../210-input-port-record.md), the parent
+- [210 — What an input port is](210-input-port-record.md), the parent
 - [210a — The pull path removed](210a-the-pull-path-removed.md),
   which leaves the record with one fewer kind to carry
-- [210f — Changing what a port is](../210f-changing-what-a-port-is.md),
+- [210f — Changing what a port is](210f-changing-what-a-port-is.md),
   which is only cheap because of the standing buffer decided here
 - [212 — One way to build a program](../212-one-way-to-build-a-program.md),
   which needs the *none* tag to assemble a program from nothing

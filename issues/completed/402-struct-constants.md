@@ -69,4 +69,4 @@ they are not caught then.
 
 - Issue 304 — the field tables this walks
 - Issue 401 — the table this fills
-- [008 — Map file format](../docs/008-map-file-format.md)
+- [008 — Map file format](../../docs/008-map-file-format.md)

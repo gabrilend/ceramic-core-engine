@@ -111,7 +111,7 @@ file that is not there stops the program and says so.
 
 ## Related
 
-- [004 — Gathering](../docs/004-datapath-statics.md)
+- [004 — Gathering](../../docs/004-datapath-statics.md)
 - Issue 404 — chains and cycles
 - Issue 604 — the load-time rules this creates
 - Issue 605 — why the startup sweep must skip these

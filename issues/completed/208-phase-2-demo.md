@@ -82,6 +82,6 @@ better than any number does.
 
 ## Related
 
-- [003 — Delivery](../docs/003-datapath-delivery.md)
+- [003 — Delivery](../../docs/003-datapath-delivery.md)
 - Issues 201 through 207 — everything being demonstrated
 - Issue 105 — the phase 1 demo this builds on

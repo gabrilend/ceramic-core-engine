@@ -78,6 +78,6 @@ system, and is deliberately not done.
 
 ## Related
 
-- [007 — The build path](../docs/007-datapath-build.md)
+- [007 — The build path](../../docs/007-datapath-build.md)
 - Issue 301 — the description this consumes
 - Issue 603 — the load-time wire check that reads this

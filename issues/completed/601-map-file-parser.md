@@ -11,7 +11,7 @@ now a ring buffer or a static, and a station whose value another
 station reads simply has an arrow drawn to it. In its place comes a
 form for a port with **no source at all**, since a station can be
 created before it is wired and the dump writes what is actually there
-rather than a tidied version of it ([210](../210-input-port-record.md)).
+rather than a tidied version of it ([210](210-input-port-record.md)).
 
 The design decision this issue made is untouched by any of that and is
 the reason it reads well now: **the parser reads and never
@@ -96,5 +96,5 @@ which surfaces much later as a station that never runs.
 
 ## Related
 
-- [008 — Map file format](../docs/008-map-file-format.md)
+- [008 — Map file format](../../docs/008-map-file-format.md)
 - Issue 602 — what consumes this description

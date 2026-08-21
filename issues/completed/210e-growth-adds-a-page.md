@@ -116,7 +116,7 @@ than a single number, and the report should say the sum.
 ## Suggested implementation steps
 
 1. The page list on the port: a first page allocated at instantiation
-   as [210b](completed/210b-the-port-record.md) already does, and a link for
+   as [210b](210b-the-port-record.md) already does, and a link for
    the rest.
 2. The scan walks pages rather than one array. This is where the cost
    of paging lands and it should be looked at honestly: a scan that
@@ -166,11 +166,11 @@ than a single number, and the report should say the sum.
 - [210d — The copies leave the lock](210d-the-copies-leave-the-lock.md),
   which must land first, and which this must follow closely because it
   is what makes the existing growth unsafe
-- [203 — Slot buffer growth](completed/203-port-buffer-growth.md), the
+- [203 — Slot buffer growth](203-port-buffer-growth.md), the
   copy-and-unwrap this retires, and whose premise the parent removes
   rather than fixes
-- [211 — Growing the station table](completed/211-growing-the-station-table.md),
+- [211 — Growing the station table](211-growing-the-station-table.md),
   the same paging shape one level up, and the place its reasoning is
   written out in full
-- [701 — Buffer growth reporting](completed/701-buffer-growth-reporting.md),
+- [701 — Buffer growth reporting](701-buffer-growth-reporting.md),
   which speaks the numbers this changes the meaning of

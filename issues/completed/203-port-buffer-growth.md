@@ -11,7 +11,7 @@ back into order. That copy is the reason growth needs the mutex, the
 reason it has an ordering hazard, and the reason a ring buffer was the
 one thing in the engine that could not grow by simply adding room.
 
-[210](../210-input-port-record.md) removes the premise rather than the
+[210](210-input-port-record.md) removes the premise rather than the
 symptom: slots carry their own state, a reader scans from a bookmark
 that is allowed to be wrong, and nothing computes a location from the
 capacity. Then a buffer grows by **adding a page**, nothing is copied,
@@ -95,7 +95,7 @@ reporting it later is a read rather than a retrofit.
 
 ## Related
 
-- [002 — Stations and ports](../docs/002-stations-and-ports.md)
+- [002 — Stations and ports](../../docs/002-stations-and-ports.md)
 - Issue 201 — why the station is fixed-size
 - Issue 202 — the buffer being grown
 - Issue 701 — reporting the growth count

@@ -100,6 +100,6 @@ one see the flag and return on its own.
 
 ## Related
 
-- [006 — Scheduling](../docs/006-datapath-scheduling.md)
+- [006 — Scheduling](../../docs/006-datapath-scheduling.md)
 - Issue 103 — the sleeping count this reads
 - Issue 605 — the seed sweep, the one thing that pushes from outside

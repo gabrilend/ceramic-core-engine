@@ -112,7 +112,7 @@ read against each other.
 
 ## Related
 
-- [004 — Statics and recalculation](../docs/004-datapath-statics.md),
+- [004 — Statics and recalculation](../../docs/004-datapath-statics.md),
   which describes what this demo now has to show instead
 - Issues 401 through 405 — everything being demonstrated
 - Issue 307 — the phase 3 demo this builds on

@@ -121,7 +121,7 @@ the same `sizeof` the compiler computes for every other box, so it asks
 nothing the type system cannot answer. Two same-width structs with
 different layouts already wire at build time — that is the accepted
 cost here — and a box compiled later makes it likelier without making
-it different. [310](../310-boxes-compiled-at-runtime.md) records the same
+it different. [310](310-boxes-compiled-at-runtime.md) records the same
 correction from its own side.
 
 The design is kept because if anybody ever wants layout disagreements

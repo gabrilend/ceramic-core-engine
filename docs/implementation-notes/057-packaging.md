@@ -298,7 +298,7 @@ input, a program whose map names only boxes the binary already carries
 never invokes a compiler at all — it ships as one file, source text
 included, and runs on a machine with no toolchain on it. The compiler
 is required precisely when new code is genuinely arriving, which is
-[310](../../issues/310-boxes-compiled-at-runtime.md)'s path and the
+[310](../../issues/completed/310-boxes-compiled-at-runtime.md)'s path and the
 only case where anyone would expect otherwise.
 
 **1. What happens on an error — settled.** An installable handler,

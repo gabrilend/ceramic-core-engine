@@ -98,7 +98,7 @@ been decided about yet. This one should be loud.
 
 ## Related
 
-- [009 — Loading](../docs/009-datapath-load.md)
+- [009 — Loading](../../docs/009-datapath-load.md)
 - Issue 404 — the cycle walk this applies
 - Issue 403 — the gatherer rules being enforced
 - Issue 605 — what runs after this passes

@@ -59,6 +59,6 @@ that window is where issue 104's failure lives.
 
 ## Related
 
-- [006 — Scheduling](../docs/006-datapath-scheduling.md)
+- [006 — Scheduling](../../docs/006-datapath-scheduling.md)
 - Issue 102 — the run loop this modifies
 - Issue 104 — depends on the sleeping count being exact

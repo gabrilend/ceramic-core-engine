@@ -87,6 +87,6 @@ five demos read against each other.
 
 ## Related
 
-- [005 — Routing](../docs/005-routing.md)
+- [005 — Routing](../../docs/005-routing.md)
 - Issues 501 through 504 — everything being demonstrated
 - Issue 406 — the phase 4 demo this builds on

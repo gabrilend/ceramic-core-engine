@@ -1,6 +1,6 @@
 # 210a — The pull path removed
 
-First child of [210](../210-input-port-record.md), and first because
+First child of [210](210-input-port-record.md), and first because
 every other child is smaller once it is done. It removes a whole input
 kind rather than adding one, which makes it the only piece of the
 family whose product is an absence.
@@ -164,7 +164,7 @@ files rather than reinterpret them, which is written up above.
 
 - [056 — Why there is no pull path](../../docs/implementation-notes/056-no-pull-path.md),
   the reasoning this carries out
-- [210 — What an input port is](../210-input-port-record.md), the parent
+- [210 — What an input port is](210-input-port-record.md), the parent
 - [403 — Gatherer slots](403-gatherer-ports.md) and
   [404 — Gather chains and cycles](404-gather-chains-and-cycles.md),
   which built what this removes

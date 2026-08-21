@@ -68,7 +68,7 @@ Consistency is worth more than the walk.
 
 ## Related
 
-- [005 — Routing](../docs/005-routing.md)
+- [005 — Routing](../../docs/005-routing.md)
 - Issue 204 — the readiness check where the cursor advances
 - Issue 206 — the task field the port is recorded in
 - Issue 501 — the dispatch this fills

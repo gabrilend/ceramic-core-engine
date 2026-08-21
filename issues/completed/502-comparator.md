@@ -88,7 +88,7 @@ the station table stays a flat array of identical records.
 
 ## Related
 
-- [005 — Routing](../docs/005-routing.md)
+- [005 — Routing](../../docs/005-routing.md)
 - Issue 501 — the dispatch this fills
 - Issue 503 — the comparison itself
 - Issue 601 — why the kind is written rather than inferred

@@ -103,7 +103,7 @@ box is a gatherer in phase 4. Neither needs a line of engine code.
 
 ## Related
 
-- [003 — Delivery](../docs/003-datapath-delivery.md)
+- [003 — Delivery](../../docs/003-datapath-delivery.md)
 - Issue 204 — the check this runs
 - Issue 206 — the task this builds
 - Issue 501 — where port selection grows two more cases

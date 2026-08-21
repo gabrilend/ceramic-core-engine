@@ -79,6 +79,6 @@ reported, so the two demos can be read against each other.
 
 ## Related
 
-- [007 — The build path](../docs/007-datapath-build.md)
+- [007 — The build path](../../docs/007-datapath-build.md)
 - Issues 301 through 306 — everything being demonstrated
 - Issue 208 — the phase 2 demo this builds on
