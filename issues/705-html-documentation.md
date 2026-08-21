@@ -3,7 +3,9 @@
 ## Current behavior
 
 IN PROGRESS — the generator and site stand; two of the five
-interactive pieces remain.
+interactive pieces remain. Both structural faults are fixed: discovery
+walks rather than being told where to look, and the output is swept of
+pages no source produces.
 
 Built so far: a Lua generator (`make html`, also run by a full
 build so stale HTML cannot ship) reading every markdown source —
@@ -24,22 +26,34 @@ piece and the steppable sleep-and-termination protocol (the race
 animation), plus deeper links that land mid-page rather than at
 page tops.
 
-Also remaining: document discovery is a fixed list of directories,
-each listed one level deep. A subdirectory of `docs/` is invisible
-to the generator, and invisible *silently* — the pages simply do
-not appear, and nothing says so. `docs/implementation-notes/`
-currently reaches the site only because a hand-written pass was
-added for it, which is the wrong shape: the next subdirectory will
-be missed the same way.
+**Both structural faults are fixed.**
 
-**And the generator never removes anything.** Renaming a document
-leaves its old page sitting in the output directory, reachable by its
-old URL, with stale content and stale links, because the generator only
-ever writes. Found by renaming an issue: the previous page survived the
-rename and had to be deleted by hand. The build should sweep pages
-whose source no longer exists, for the same reason it should walk
-directories rather than list them — anything the generator does not do
-automatically is something somebody has to remember, and they will not.
+*Discovery walks rather than lists.* Every subdirectory of `docs/`
+becomes its own section, named from the directory itself, so the
+hand-written pass for implementation notes is gone and the next
+subdirectory enrols itself. Interface files are found anywhere under
+the project, because one lives beside the source it describes and
+which directory that is should never decide whether it reaches the
+site. The top-level document listing stays one level deep on purpose:
+those documents are a reading order, and a subdirectory folded into
+them would break the sequence.
+
+*And the output is swept.* Anything in it that no source produces is
+deleted, and the count is printed rather than done quietly. Deleting
+is safe precisely because the directory is entirely derived — nothing
+in it is authored, so nothing in it can be lost.
+
+The sweep earned itself immediately. Over one working session a
+document was renamed, four issue files were renamed, and six issues
+moved to completed; every one left a stale page behind that had to be
+found and deleted by hand, each with a live URL serving content that
+quietly disagreed with the project. Anything a generator does not do
+automatically is something a person has to remember, and forgetting is
+silent.
+
+Both were checked by doing them: a directory nobody had named appeared
+on the site with its own heading, and vanished again when the
+directory went away.
 
 ## Intended behavior
 

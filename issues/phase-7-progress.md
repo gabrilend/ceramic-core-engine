@@ -10,7 +10,7 @@ confidence.
 | 702 — station statistics | **extended** | Counts always on; timing compiles in and out. The gather column goes; an output-buffer warning arrives. |
 | 703 — map dump | **extended** | The live table as a map file; needs a bytes-to-text formatter once statics leave the table. |
 | 704 — runtime rewiring | **extended** | Check and change under one lock; the snapshot it added is replaced, and adding a station stops being out of scope. |
-| 705 — HTML documentation | in progress | Generator and 78-page site stand; two widgets and deep links remain. |
+| 705 — HTML documentation | in progress | Generator and site stand; two widgets and deep links remain. Discovery now walks rather than being told where to look, and the output is swept of pages no source produces — which one working session of renames had made a chore. |
 | 706 — phase 7 demo | complete, **artifact deleted** | Live view, bottleneck relieved mid-run, dump truth, measured measurement. The program it built is gone; the account of what it proved stands. |
 | 707 — demos as word problems | complete, **contract replaced** | All 35 scenes open with a story and report in its units; two presenters own the layout. The justification rule survives into the panels; the scene shape does not. |
 | 709 — slideshow and transcripts | open | An introduction, and the conversation logs as a book. |
