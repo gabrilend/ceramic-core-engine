@@ -137,6 +137,14 @@ At the end of this phase, a program is a directory of C functions and a
 text file, and changing the shape of the program does not require
 touching the C.
 
+**And then most of it stopped belonging to loading.** The validation
+and the seed became one pass a caller invokes, repeatable, and the
+loader became a reader whose every line is a call anybody could make
+— so *still loading* is no longer a state anything can be in. What
+survives of the two-pass structure is one sentence: resolve names
+after every station exists. See
+[212](../issues/212-one-way-to-build-a-program.md).
+
 Described by [008 — Map file format](008-map-file-format.md) and
 [009 — Loading](009-datapath-load.md).
 

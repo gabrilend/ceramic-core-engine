@@ -301,8 +301,12 @@ statics
 **The table carries no types.** A port that references an entry knows
 what type it is, because the box function's parameter at that position
 says so, and the generator knows what that is. The text is read into
-bytes at the moment a port claims it, walking the field table the
-generator emitted for that struct.
+bytes when the port is **bound**, walking the field table the
+generator emitted for that struct — once, not on every claim. Text
+resolves its layout when it is read, which is what makes it survive a
+rebuild that would silently change what the same bytes meant; doing
+that work per claim would pay for the property on every value instead
+of once.
 
 This is the same reason the wiring carries no types: if the table said
 `int` where the box wanted `float`, there would be two sources of truth

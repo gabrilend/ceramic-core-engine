@@ -218,6 +218,16 @@ the last of those is completion, not a stall.</p>
 <p><strong>It does not know anything about boxes, stations, or maps.</strong> It moves
 opaque task structs between threads. Everything about what a task
 <em>means</em> lives on the delivery path.</p>
+<p>That ignorance turned out to be worth more than tidiness. A task
+carries a station number, an exit number, and **which program it
+belongs to**, all three ferried without being looked at — and the last
+of those is what lets one pool serve several programs at once, which
+is how a program can set another going beside itself. It could not
+before: finishing a task means resolving a station number, a number
+means nothing without the table it indexes, and while that table came
+from the pool's own context a pool served exactly one program. Making
+the pool carry one more thing it does not understand was the whole
+change (<a href="issue-212-one-way-to-build-a-program.html">212</a>).</p>
 <h2>Related</h2>
 <ul>
 <li><a href="doc-003-datapath-delivery.html">003 — Delivery</a>, which produces the tasks</li>

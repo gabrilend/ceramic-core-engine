@@ -237,6 +237,13 @@ every load-time validation rule; the seed sweep.</p>
 <p>At the end of this phase, a program is a directory of C functions and a
 text file, and changing the shape of the program does not require
 touching the C.</p>
+<p><strong>And then most of it stopped belonging to loading.</strong> The validation
+and the seed became one pass a caller invokes, repeatable, and the
+loader became a reader whose every line is a call anybody could make
+— so <em>still loading</em> is no longer a state anything can be in. What
+survives of the two-pass structure is one sentence: resolve names
+after every station exists. See
+<a href="issue-212-one-way-to-build-a-program.html">212</a>.</p>
 <p>Described by <a href="doc-008-map-file-format.html">008 — Map file format</a> and
 <a href="doc-009-datapath-load.html">009 — Loading</a>.</p>
 <p>---</p>

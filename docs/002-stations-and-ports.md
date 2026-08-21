@@ -137,10 +137,20 @@ readiness check on the station holding it. See
 [056](implementation-notes/056-no-pull-path.md) for what that was for
 and what ending it cost.
 
-**Static.** The port holds an index into the statics table. Its value
-never arrives — it is simply always there, which means a static port is
-always full and never affects whether a station is ready. Thresholds,
-file paths, and configuration live here.
+**Static.** The port holds the value itself. It never arrives — it is
+simply always there, which means a static port is always full and
+never affects whether a station is ready. Thresholds, file paths, and
+configuration live here.
+
+The value used to be an index into a table the whole program shared,
+and moving it onto the port bought three things
+([401](../issues/completed/401-static-ports.md)): a process can hold
+more than one running program, because reaching that table was what
+forced a single one; a static is claimed under the station's own mutex
+beside the ring pops, so every value one invocation carries is true at
+one instant; and two ports of different types can no longer name one
+entry and read the same bytes each their own way, which stopped being
+a rule to document and became a thing that cannot be said.
 
 Reading one is a **peek**: the value is not consumed, so a station
 driven by its ring side reads the same static on every one of its runs.

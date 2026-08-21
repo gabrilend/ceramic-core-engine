@@ -1,21 +1,39 @@
 # 009 — Datapath: loading and starting
 
 The binary holds a registry of boxes and no map. The map file holds a
-map and no code. This is what happens in the moment between, and it is
-the only moment in the program's life when the station table is walked
-from end to end.
+map and no code. This is what happens in the moment between.
 
-## Two passes
+**Reading a file has no privileges**, and that is the shape of this
+document now. It used to describe a sequence only one mechanism could
+perform — count the stations, allocate the table once, place, wire,
+validate in a phase nothing else could enter, seed, release — with a
+state called *still loading* that nothing else could be in. Every one
+of those has become an ordinary operation
+([212](../issues/212-one-way-to-build-a-program.md)). What is left of
+reading a file is a reader: each line becomes calls anybody could
+make, and then it asks for the program to be brought up like anybody
+would.
+
+## Two passes, for one reason
 
 Declaration order in a map file does not matter — an arrow may point at
 a station declared further down. That requires reading the file twice.
+
+**The two-pass structure survives only as that sentence**: resolve
+names after every station exists. It is not two kinds of pass any
+more, and neither pass can do anything the construction surface does
+not offer.
 
 **First pass: create every station.** For each station line, look its
 box function up in the registry. That gives the shim pointer, the
 parameter count, and each parameter's type and size. Allocate the
 station's port array with one ring-buffer port per parameter — the
 default — each sized exactly `sizeof` its parameter, and record the
-station's name in a lookup table that is thrown away when loading ends.
+station's name — through the operation that names one, so that the
+name lands on the program itself rather than in a table only the
+loader could read. Its own lookup table, which resolves arrows, is
+still thrown away when reading ends; the two were different things
+wearing one name.
 
 A comparator gets one extra port on the end, typed to match the box's
 return value.
@@ -33,9 +51,34 @@ moment both ends are known. The registry knows the source box's return
 type and the destination box's parameter type, both derived from the C
 that will actually run, so the check needs nothing from the file.
 
-## Then the checks that need the whole map
+## Then the program is brought up, which is a separate act
 
-Some errors are only visible once every station and arrow exists:
+Some things are only visible once every station and arrow exists, and
+asking about them is no longer part of reading a file. A caller
+assembles a program by whatever route — reading a file, calling the
+surface, or both — and then says it is finished. That is when the
+whole-program checks run and when everything that can start does.
+
+**It is repeatable**, which is the point rather than a convenience: a
+station added to a running program is checked and started by the next
+call, and one already started is not started twice. There is no
+end-of-file moment to hang a whole-program question on, because
+several files can build one program — but there is still a starting
+gate, and that is where such a question can honestly be asked.
+
+What it checks:
+
+- **An arrow landing on a port that is not a buffer**, which would
+  have nowhere to put its value. Fatal, and now caught earlier still —
+  as the wire is drawn, since wiring applies every rule at any moment.
+- **A port with no source.** Reported, not refused: that is the
+  ordinary state of a station nobody has finished wiring, and being
+  able to sit in it is what lets a program be assembled a piece at a
+  time.
+- **Unreachable stations.** A station with buffered inputs that
+  nothing ever writes to will never run. Reported — unless it is a
+  declared entrance, which is precisely a station something outside
+  delivers into.
 
 Two checks used to live here and can no longer be stated, because
 nothing is pulled: a cycle among gather links, and a port fanning out
@@ -43,8 +86,6 @@ to both a gatherer and a ring buffer. See
 [056](implementation-notes/056-no-pull-path.md). A cycle in the push
 direction remains legal — it is how anything repeats — and needs a
 finite companion input to ever stop.
-- **Unreachable stations.** Not fatal, but worth reporting: a station
-  with ring-buffer inputs that nothing ever writes to will never run.
 
 ## The seed
 
@@ -53,12 +94,11 @@ by something writing into it, which means that at the instant the
 program starts, nothing can happen — every station is waiting for a
 delivery, and there is nobody to deliver.
 
-So the station table is swept exactly once, here, and never again.
+So the station table is swept, at that gate, and this is the one place
+in the engine that walks it looking for work. Everywhere else a
+station is reached by index, through a wire.
 
-**Enqueue every station that has no ring-buffer inputs and whose output
-feeds a ring buffer.**
-
-Both halves of that sentence are load-bearing.
+**Enqueue every station that has no ring-buffer inputs.**
 
 *No ring-buffer inputs* means the station has nothing that can ever be
 written into it, so it will never be discovered by delivery. If it is
@@ -72,9 +112,10 @@ separate startup step is the ordinary mechanism arriving at the end of
 construction. Nothing here is special-cased; the same thing happens
 when a station is added to a program that is already running.
 
-After the sweep, the pool is running and the map propagates on its own.
-The sweep is also the last time anything iterates the station table;
-from here on, every station is reached by index, through a wire.
+After the sweep, the pool is running and the map propagates on its
+own — until somebody adds a station and brings the program up again,
+which sweeps once more and starts only what it has not already
+started.
 
 ## Termination, from the map's point of view
 
