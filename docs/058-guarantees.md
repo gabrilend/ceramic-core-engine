@@ -145,7 +145,9 @@ system will say so.
 | P4 | Every task is run exactly once, handed to the finish hook, and freed — three unconditional steps. | A task cannot have phases. A two-trip task must be two tasks. The pull path spent a long time looking for a way around this and never needed one: the pool has not changed for any of it. | structure |
 | P5 | When the pool declares completion, no task remains and nobody could enqueue one. | The last worker to fall asleep re-scans before anyone sleeps. Without that re-scan the program can exit silently having not done part of its work. | runtime |
 | P6 | Deadlock is impossible. | Bought entirely by B4. Nothing waits, so a worker is always running, delivering, or asleep with nothing to do — and the last is completion, not a stall. | discipline (via B4) |
-| P7 | The pool knows nothing about boxes, stations, or maps. | It reads one field of a task. Nothing about a map can influence scheduling. | structure |
+| P7 | The pool knows nothing about boxes, stations, or maps. | It reads one field of a task. Nothing about a map can influence scheduling. **It now ferries four things it does not interpret** — the owning program, the station, the exit port, and which station each worker is inside — and interpreting none of them is what keeps this true. | structure |
+| P8 | A program that has run out of work says so, whether or not anybody was already waiting to hear it. | Asking to be told raises the signal immediately when it has already happened, so the two cases are one case. Without it, a short program that finished between being released and the waiter sitting down would leave that waiter waiting forever. | runtime |
+| P9 | A running box cannot be stopped, and nothing pretends otherwise. | There is no safe way to interrupt executing C: the cancellation facility acts only at cancellation points, does not unwind C, and leaves held mutexes locked forever. So halting honestly means **stop starting new things**, which is achievable, and stopping what is already running is not. | structure |
 
 ---
 
@@ -179,7 +181,8 @@ for and what removing them cost.
 | C1 | Every size and offset is computed by the C compiler, never by the generator. | They are emitted as `sizeof` and `offsetof` expressions. The generator cannot guess wrong because it does not guess. **Where they live has changed and the rule has not**: they were rows in a table read at placement, and they are now expressions inside a generated placement function, folded into immediates and stored nowhere at all (issue 311b). | build |
 | C2 | A box that exists is a box the generator saw. | Box sources are discovered, never listed, so a box cannot exist that the build silently ignores. | build |
 | C3 | You can never compile against a stale registry. | A failing generator writes nothing into place. | build |
-| C4 | A map that loads is a map that can run. | Validation happens at load, so a mistyped wire is a startup error rather than a surprise at the first delivery. | load |
+| C4 | A map that loads is a map that can run. | Validation happens when a caller declares the program finished, so a mistyped wire is a startup error rather than a surprise at the first delivery. | load |
+| C6 | A program says where its results come from, or it does not run. | A station marked as the way out with nothing wired into it satisfies this completely — the declaration is the interface and what flows through it is separate. What it buys is that a program's interface is **total**: without it, a program that does all its work by side effect and one whose author forgot the results are indistinguishable from outside, because a box is a C function and nothing about it says whether it touches the world. | load |
 | C5 | The dump round-trips: dumping a dump yields the dump. | The live map can always be written back out as a map file that reads back in. Held by a test. | runtime |
 
 ---
@@ -190,6 +193,9 @@ for and what removing them cost.
 |---|---|---|---|
 | E1 | There are no fallbacks. Every error stops the program and names what failed and where. | The engine owns its process. This is what makes it hostile to embed in someone else's — see [057](implementation-notes/057-packaging.md). | discipline |
 | E2 | A wrong answer never keeps flowing. | Follows from E1. | discipline |
+| E3 | An invalid operation ends the program. **A refusal cannot be ignored into a half-built program**, because there is no surviving path that reaches one. | The refusal still *travels* — it is handed back so a caller reading a description can collect faults — but nothing may discard it and continue. This overturned a deliberate earlier choice, where rewiring returned a code so that one bad control instruction would not take the plant down; the cost of that was booked at the time as *a caller can ignore a return value*, and it got sharper once a box could edit a program, because a box's caller is a wire and a wire ignores everything it is not attached to. | structure |
+| E4 | How a program died is legible to a shell, not only to somebody reading the message. | Distinct exit codes: a malformed input, a wrong call, a resource no edit can fix, an interruption. Anything that retries on failure can tell a fault it can correct from one it cannot, in code rather than in prose. | structure |
+| E5 | A person can always stop a program, and always get out of stopping it. | Three signals, each needing less cooperation than the last, and a second interrupt that leaves immediately — which needs the only signal handler in the engine, because a thread that is gathering a report is not asking for signals and the report is exactly the thing that may never finish. | runtime |
 
 ---
 
