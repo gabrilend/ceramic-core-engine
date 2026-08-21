@@ -10,7 +10,7 @@ fixed order, with a notion of *still loading* that existed nowhere
 else. What replaced it is one surface for creating a station,
 configuring a port, and drawing a wire, legal at any moment, with
 **loading as its first caller rather than a path of its own**
-([212](212-one-way-to-build-a-program.md)). Building a program and
+([212](completed/212-one-way-to-build-a-program.md)). Building a program and
 editing a running one stopped being two things.
 
 | Issue | State | In one line |

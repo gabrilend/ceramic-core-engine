@@ -81,7 +81,7 @@ no lock, no copy, and no possibility of seeing a half-edited set.
 Three things fall out. The walk gets faster by exactly the copy it no
 longer makes. Old and new readers each see a coherent set rather than a
 mixture. And it fits the decision that wires are attached in batches
-([212](../212-one-way-to-build-a-program.md)) — a batch was going to
+([212](212-one-way-to-build-a-program.md)) — a batch was going to
 rebuild the list anyway, so building an array instead is no extra work.
 
 An array is also better on its own terms than a linked list here: the
@@ -237,7 +237,7 @@ wiring changes and when the program ends, and never in between.
   retrofit its own plan had missed
 - [205 — The delivery walk](205-delivery-walk.md), the walk
   this changes
-- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   where wires are attached in batches, which is what makes rebuilding
   an array per change reasonable
 - [703 — The map dump](703-map-dump.md), whose round trip

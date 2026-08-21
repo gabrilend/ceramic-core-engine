@@ -112,7 +112,7 @@ before: finishing a task means resolving a station number, a number
 means nothing without the table it indexes, and while that table came
 from the pool's own context a pool served exactly one program. Making
 the pool carry one more thing it does not understand was the whole
-change ([212](../issues/212-one-way-to-build-a-program.md)).
+change ([212](../issues/completed/212-one-way-to-build-a-program.md)).
 
 ## Related
 

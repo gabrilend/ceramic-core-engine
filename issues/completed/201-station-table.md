@@ -4,7 +4,7 @@
 
 **Built, and the one flat allocation is becoming shelves.**
 
-Under [212](../212-one-way-to-build-a-program.md), adding a station is
+Under [212](212-one-way-to-build-a-program.md), adding a station is
 the only way one ever comes into existence, so the table starts empty
 and grows while a program is read. It grows by adding another
 allocation and a pointer to it, never by reallocating

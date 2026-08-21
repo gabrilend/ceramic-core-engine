@@ -143,7 +143,7 @@ loader became a reader whose every line is a call anybody could make
 — so *still loading* is no longer a state anything can be in. What
 survives of the two-pass structure is one sentence: resolve names
 after every station exists. See
-[212](../issues/212-one-way-to-build-a-program.md).
+[212](../issues/completed/212-one-way-to-build-a-program.md).
 
 **The name lookup table went with it**, and so did the loader's own
 copies of the port-range check and the wire check. Stations are named

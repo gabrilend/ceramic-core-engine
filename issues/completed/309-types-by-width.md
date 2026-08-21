@@ -137,7 +137,7 @@ visible, local, and eventually noticed.
 
 **It stops being mild when the value is a pointer the engine will call
 through.** Once a program can build another program
-([212](../212-one-way-to-build-a-program.md)), the surface's operations
+([212](212-one-way-to-build-a-program.md)), the surface's operations
 exist as boxes, and their inputs are handles: a map handle, a placement
 function, a compiled box. On a 64-bit machine every one of those is
 **eight bytes** — and so is a `double`, a `long`, a file offset, and a
@@ -160,7 +160,7 @@ changing what it is. That should be a decision somebody makes rather
 than a discovery somebody has.
 
 **It was made, and it was made this way.** The construction operations
-became boxes ([212](../212-one-way-to-build-a-program.md)), a program
+became boxes ([212](212-one-way-to-build-a-program.md)), a program
 is named by its address, and the risk stands — recorded in
 [058](../../docs/058-guarantees.md) in its own words rather than
 folded into the width non-guarantee, because a mis-wire that produces
@@ -218,7 +218,7 @@ anything, which is the whole of what can be checked.
   whose wire check this replaces and whose error message this improves
 - [502 — The comparator](502-comparator.md), whose
   return-type check is the other caller
-- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   where a wire drawn at runtime meets the same check
 - [801 — The workbench in the browser](../801-browser-workbench.md), which
   loads box sources the running program never compiled

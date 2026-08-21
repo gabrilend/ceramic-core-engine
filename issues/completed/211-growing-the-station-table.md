@@ -190,7 +190,7 @@ delivery ever arrives. Somebody assembling a program may deliberately
 place boxes before wiring them, and under one construction surface that
 is a normal sequence rather than a half-finished load. The loud warning
 this used to produce moves into the whole-program pass in
-[212](../212-one-way-to-build-a-program.md), where a caller asks for it
+[212](212-one-way-to-build-a-program.md), where a caller asks for it
 when a caller wants it.
 
 Refusal follows the decision 704 already made and reasoned: a running
@@ -335,7 +335,7 @@ laid out.
 
 ## Related
 
-- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   which makes this the mechanism underneath every program's first
   moment rather than a capability a running one gains
 - [704 — Rewiring while it runs](704-runtime-rewiring.md),

@@ -94,7 +94,7 @@ start is still refused at load by the seed sweep, so the round-trip
 test builds a program that is partly wired rather than wholly unwired.
 That is what a program mid-assembly actually looks like, and the
 wholly-unwired case belongs to
-[212](../212-one-way-to-build-a-program.md), where the seed sweep stops
+[212](212-one-way-to-build-a-program.md), where the seed sweep stops
 being a phase.
 
 ## Intended behavior
@@ -247,7 +247,7 @@ because they say which pieces are built and which are not.
   which leaves the record with one fewer kind to carry
 - [210f — Changing what a port is](210f-changing-what-a-port-is.md),
   which is only cheap because of the standing buffer decided here
-- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   which needs the *none* tag to assemble a program from nothing
 - [202 — Ring buffer slots](202-ring-buffer-ports.md), the
   storage this keeps

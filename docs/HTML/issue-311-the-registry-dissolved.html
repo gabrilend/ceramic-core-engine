@@ -29,8 +29,8 @@
 <h2>Issues, open</h2>
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
-<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html" class="here">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
@@ -77,6 +77,7 @@
 <a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
@@ -252,7 +253,7 @@ and how its symbol is spelled, and everything else is written against
 that. 311b and 311c are independent of each other. <strong>311d needs both</strong>,
 since it emits calls to placement functions that 311b defines.</p>
 <p>**311d additionally waits on
-<a href="issue-212-one-way-to-build-a-program.html">212</a>, and the first three do
+<a href="done-212-one-way-to-build-a-program.html">212</a>, and the first three do
 not.** What 311d emits is construction calls, and emitting them
 against an interface the project has decided to replace would make the
 most-read generated file in the project an example of how <em>not</em> to
@@ -269,7 +270,7 @@ runs other programs is a map**, not a tool. It reads a description,
 compiles what the description names, starts a fresh map, and feeds it
 through its input station — using the construction surface as boxes,
 which is what this engine is for. See
-<a href="issue-212-one-way-to-build-a-program.html">212</a>, where composing and starting
+<a href="done-212-one-way-to-build-a-program.html">212</a>, where composing and starting
 are separated.</p>
 <h2>What this does not give up</h2>
 <p><strong>Guarantee <a href="doc-058-guarantees.html">C1</a> survives untouched</strong> —
@@ -302,7 +303,7 @@ binary now carries.</p>
 <p>  table this deletes</p>
 <li><a href="done-304-struct-field-tables.html">304 — Struct field tables</a>,</li>
 <p>  which stop being searched by name and start being pointed at</p>
-<li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
+<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
 <p>  whose construction surface the generated code calls</p>
 <li><a href="doc-007-datapath-build.html">007 — The build path</a> and</li>
 <p>  <a href="doc-008-map-file-format.html">008 — Map file format</a>, both of

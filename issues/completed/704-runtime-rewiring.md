@@ -16,7 +16,7 @@ write, so the delivery walk takes no lock at all
 which this issue deliberately left out of scope, is now the mechanism
 underneath every program's first moment**
 ([211](211-growing-the-station-table.md),
-[212](../212-one-way-to-build-a-program.md)): the table starts empty and
+[212](212-one-way-to-build-a-program.md)): the table starts empty and
 grows as a program is read, so loading is this capability's first
 caller rather than a separate construction path.
 

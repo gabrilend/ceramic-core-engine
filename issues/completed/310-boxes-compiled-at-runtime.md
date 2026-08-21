@@ -328,7 +328,7 @@ would eventually disagree with the first about what a box is.
 - [306 — Build integration](306-build-integration.md), whose
   no-partial-output guarantee applies here too: a failed generation
   must leave nothing loadable
-- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   which made the frozen registry a visible limit
 - [801 — The workbench in the browser](../801-browser-workbench.md), which
   reads C files the running program never compiled

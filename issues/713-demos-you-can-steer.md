@@ -137,7 +137,7 @@ the protocol already exist as engine features.**
 |---|---|---|
 | Engine → page | The whole shape: stations, kinds, ports, sources, wires, static values | The map dump, which already writes the live table as a map file and already round-trips ([703](completed/703-map-dump.md)) |
 | Engine → page | The motion: per-port occupancy, ring depth, worker states, run counts, time spent, growth events | The statistics and reporting instruments ([701](completed/701-buffer-growth-reporting.md), [702](completed/702-station-statistics.md)) |
-| Page → engine | Every lever: add a station, configure a port, draw or cut a wire, convert a port's source | The construction surface ([212](212-one-way-to-build-a-program.md)), which is legal at any moment by design |
+| Page → engine | Every lever: add a station, configure a port, draw or cut a wire, convert a port's source | The construction surface ([212](completed/212-one-way-to-build-a-program.md)), which is legal at any moment by design |
 | Page → engine | Turn a dial | Writing a static ([405](405-statics-mutation.md)), which is an event and runs the readiness check |
 | Page → engine | Type a function and place it | Boxes compiled while the program runs ([310](completed/310-boxes-compiled-at-runtime.md)) |
 

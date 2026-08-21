@@ -129,7 +129,7 @@ in its wiring — which is the same argument that moves them onto ports.
 3. Have the reader copy from the file's numbered entries into each
    binding port as it goes, retaining nothing afterward — one call on
    the construction surface per bound port, the same call a debugger
-   would make ([212](../212-one-way-to-build-a-program.md)).
+   would make ([212](212-one-way-to-build-a-program.md)).
 4. Remove the table, its mutex, and its teardown from the map.
 5. The bytes-to-text formatter, walking a field table the way the
    reader does in the other direction, with the dump as its first

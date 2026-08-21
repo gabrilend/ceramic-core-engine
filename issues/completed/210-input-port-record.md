@@ -276,7 +276,7 @@ The statics work proper belongs to [401](401-static-ports.md) and
   210a removed
 - [211 — Growing the station table](211-growing-the-station-table.md),
   the same paging shape one level up
-- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   the surface that configures these
 - [002 — Stations and ports](../../docs/002-stations-and-ports.md), which
   this rewrites, including the word it uses for a port

@@ -7,7 +7,7 @@
 The two passes existed for one reason: a station may be wired to one
 declared later in the file, so arrows cannot resolve until every
 station exists. That reason is permanent and the machinery around it is
-not. Under [212](../212-one-way-to-build-a-program.md) the whole
+not. Under [212](212-one-way-to-build-a-program.md) the whole
 procedure is *create every station, then draw every wire, then let the
 construction writes land* — so "resolve names after every station
 exists" is all that is left of this, and it is a step in a sequence

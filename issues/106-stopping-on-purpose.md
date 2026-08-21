@@ -33,7 +33,7 @@ first-pass report books the cost of that choice as a debt in plain
 words: **a caller can ignore a return value.**
 
 **Under one construction surface those became the same call.** Issue
-[212](212-one-way-to-build-a-program.md) collapses loading and editing
+[212](completed/212-one-way-to-build-a-program.md) collapses loading and editing
 into one act, so the two policies can no longer coexist. It resolves
 in favour of dying, and this issue is where that resolution is built.
 
@@ -243,7 +243,7 @@ kept in agreement, and all of them move together:
 
 - [704](completed/704-runtime-rewiring.md), which decided it
 - [211](completed/211-growing-the-station-table.md), which inherits it explicitly
-- [212](212-one-way-to-build-a-program.md), which now answers it
+- [212](completed/212-one-way-to-build-a-program.md), which now answers it
 - the first-pass report, which books it as a debt
 - the observe interface file and the observe header
 - the rewire source, in a comment explaining the return value
@@ -339,7 +339,7 @@ kept in agreement, and all of them move together:
   the other way a program ends, unchanged by this
 - [102 — Workers and the run loop](completed/102-workers-and-run-loop.md),
   whose stop flag is already the brake and needs no addition
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
   which decided the refusal policy this builds
 - [704 — Rewiring while it runs](completed/704-runtime-rewiring.md),
   whose ignorable return is what changes

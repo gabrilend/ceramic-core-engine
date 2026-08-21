@@ -29,8 +29,8 @@
 <h2>Issues, open</h2>
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
-<a href="issue-212-one-way-to-build-a-program.html" class="here">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
@@ -77,6 +77,7 @@
 <a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="done-212-one-way-to-build-a-program.html" class="here">212 — One way to build a program</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
@@ -151,46 +152,11 @@ this says how one comes to exist, and makes that the same act whether
 it happens at startup, halfway through a run, or inside another
 program.</p>
 <h2>Current behavior</h2>
-<p>The shape of a program is three facts: which stations exist, where each
-station's input ports get their values, and which arrows connect which
-output port to which input port. Those facts come into existence
-through three unrelated paths that share their rules but not their
-construction, and each one can do something the other two cannot.</p>
-<p><strong>Hand placement</strong>, phase 2 scaffolding. The caller says how many
-stations exist, then places each one by handing over a shim pointer, a
-kind, an input count, an array of <code>int</code> element sizes, and the size of
-the return value, then connects ports to destinations. It is marked in
-the header as scaffolding and was deliberately kept irritating. It
-cannot bind a static value to a port, because it is never given any
-type names, and turning the text of a static into bytes requires
-knowing the field layout. It survives only inside tests, wrapping
-counters no generated box can reach.</p>
-<p><strong>The loader.</strong> It counts the station lines in a text file, allocates
-the station table once at exactly that size, and places every station
-by name — the moment the registry supplies the shim, the input count,
-the element sizes, and the type names hand placement lacks. A second
-pass resolves arrows by name, because a station may be wired to one
-declared later in the file. Then whole-map validation, then the seed
-sweep, then the workers are released. It can do everything, once, at
-startup, from a file.</p>
-<p><strong>Runtime rewiring.</strong> Connect, disconnect, and gather-repoint on a live
-map, with every per-edge rule the loader applies applied here too — the
-rules were deliberately made callable per edge rather than only per map
-— and with the check and the change under one rewiring lock. It works
-on a running program, and it cannot add a station, because the table
-was sized once and never grows.</p>
-<p>So the loader can bind statics and nothing else can; rewiring works on
-a running program and nothing else does; and nothing at all can add a
-station after startup. Three routes produce identical structures — the
-same station records, the same ports, the same two-integer destinations
-— and are kept in agreement by hand.</p>
-<p>There is also a concept inside the loader that exists nowhere else:
-<strong>still loading</strong>. The table is sized before any station exists,
-forward references are legal because a second pass will resolve them,
-and the workers are parked until the sequence finishes. Nothing outside
-the loader can be in that state, which is why nothing outside the
-loader can build a program.</p>
-<h2>Current behavior, in progress</h2>
+<p><strong>Built.</strong> All ten implementation steps below are done, and the
+one thing this issue described but never listed as a step —
+bringing a program inside another — is split into
+<a href="issue-217-a-program-inside-another.html">217</a>, where splitting it
+corrected what it was.</p>
 <p><strong>The whole-program pass is out of the loader</strong>, which is the step
 that ends <em>still loading</em> as a state only one mechanism could be in.</p>
 <p>A caller now assembles a program by whatever route and then says it is
@@ -301,9 +267,64 @@ which is what keeps it ignorant of maps; the owning program joins them
 as one more opaque field. **The map was already being passed to task
 construction and explicitly discarded**, so carrying it cost nothing
 at all. The claim is true now, and it was not before.</p>
-<p>Still to come: composing, which merges two tables into one — the other
-half of this section, and the one that needs real work rather than a
-field.</p>
+<p><strong>Composing is split out</strong>, into
+<a href="issue-217-a-program-inside-another.html">217</a>, and splitting it corrected it.
+It was described here as <em>merging two tables into one</em>, which is why
+it looked like the half of this issue needing real work: two live
+programs joined, every wire in one of them rewritten, a handle
+somewhere becoming invalid.</p>
+<p>It is none of that. **A program brought inside another is a template
+being instantiated, not a program being moved.** There is a
+description and there is a table with some number of stations in it;
+instantiating builds new stations at the end of that table and
+translates the description's numbers by where they landed. Nothing
+that already exists is renumbered, so the invariant this whole engine
+rests on — an index means what it meant — is not bent at all. It is
+importing a library, and one description can be instantiated as many
+times into one program as somebody likes.</p>
+<p>That is what reading a file already does with the base fixed at zero,
+which is why the reader's two passes now take a base and add it to
+everything. Every caller passes zero today.</p>
+<h3>What stood before</h3>
+<p>The shape of a program is three facts: which stations exist, where each
+station's input ports get their values, and which arrows connect which
+output port to which input port. Those facts come into existence
+through three unrelated paths that share their rules but not their
+construction, and each one can do something the other two cannot.</p>
+<p><strong>Hand placement</strong>, phase 2 scaffolding. The caller says how many
+stations exist, then places each one by handing over a shim pointer, a
+kind, an input count, an array of <code>int</code> element sizes, and the size of
+the return value, then connects ports to destinations. It is marked in
+the header as scaffolding and was deliberately kept irritating. It
+cannot bind a static value to a port, because it is never given any
+type names, and turning the text of a static into bytes requires
+knowing the field layout. It survives only inside tests, wrapping
+counters no generated box can reach.</p>
+<p><strong>The loader.</strong> It counts the station lines in a text file, allocates
+the station table once at exactly that size, and places every station
+by name — the moment the registry supplies the shim, the input count,
+the element sizes, and the type names hand placement lacks. A second
+pass resolves arrows by name, because a station may be wired to one
+declared later in the file. Then whole-map validation, then the seed
+sweep, then the workers are released. It can do everything, once, at
+startup, from a file.</p>
+<p><strong>Runtime rewiring.</strong> Connect, disconnect, and gather-repoint on a live
+map, with every per-edge rule the loader applies applied here too — the
+rules were deliberately made callable per edge rather than only per map
+— and with the check and the change under one rewiring lock. It works
+on a running program, and it cannot add a station, because the table
+was sized once and never grows.</p>
+<p>So the loader can bind statics and nothing else can; rewiring works on
+a running program and nothing else does; and nothing at all can add a
+station after startup. Three routes produce identical structures — the
+same station records, the same ports, the same two-integer destinations
+— and are kept in agreement by hand.</p>
+<p>There is also a concept inside the loader that exists nowhere else:
+<strong>still loading</strong>. The table is sized before any station exists,
+forward references are legal because a second pass will resolve them,
+and the workers are parked until the sequence finishes. Nothing outside
+the loader can be in that state, which is why nothing outside the
+loader can build a program.</p>
 <h2>Intended behavior</h2>
 <p>**There is one surface, and it has five operations: create an empty
 program, add a station, remove a station, configure an input port, and
@@ -330,6 +351,14 @@ becomes one way among several to drive the surface. Reading a file,
 editing a running program, and composing a sub-program become the same
 calls arriving from different places.</p>
 <h3>Composing and starting are two different acts</h3>
+<p>*This section says "merges" throughout, and merging is not what
+composing turned out to be — it is instantiating a description at an
+offset, which is set out under Current behavior above and built in
+<a href="issue-217-a-program-inside-another.html">217</a>. What survives here unchanged
+is the half this section exists for: **which of the two you want
+follows from whether you want isolation**, and that a wire being an
+index is what makes them different acts rather than variations of
+one.*</p>
 <p>A program can bring another program into itself, or set one going
 beside itself, and these are not variations of one thing. **The
 difference falls out of what a wire is.**</p>
@@ -505,10 +534,21 @@ rather than drifting into place.</p>
    <a href="done-210b-the-port-record.html">210b</a> made the map file able to
    spell one so a half-built program round-trips. The later two win,
    and the check reports rather than refuses.
-5. Reduce the loader to a reader: each line of text becomes one call on
-   the surface, stopping at the first refusal and naming the file and
-   the line. The two-pass structure survives only as "resolve names
-   after every station exists," not as two kinds of pass.
+5. <strong>Done</strong>, in <a href="done-210g-one-way-to-build-a-station.html">210g</a>.
+   Each line of text is one call on the surface, and the two-pass
+   structure survives only as "resolve names after every station
+   exists." What reading a file gave up: its own port-range check
+   (whose better wording moved into the surface), its own width check,
+   and its own name table (stations are named as they are created, so
+   arrows resolve against the program).</p>
+<p>   Giving up the width check is what found something. The wiring
+   operation asked whether the widths agreed only when <em>both</em>
+   stations had input ports, and a box that takes nothing and returns
+   a value has none — so every program's first station could be wired
+   into a port of any width at all. No file could reveal it, because
+   the reader's copy ran first. A second check is not always
+   redundancy; this one was a curtain in front of a gap that only the
+   surface-built path could reach.
 6. Hand placement stays and becomes the primitive — a generated
    placement function per box writes a station directly, and placing by
    name is that function being called. Built in
@@ -527,9 +567,16 @@ rather than drifting into place.</p>
    spelled the same way in the file format, so the first could be
    written down and not read back. Naming a station had to become an
    operation for the test to be writable at all.
-9. A test that a station added to a running program, then configured,
-   then wired, receives values and produces them — and that everything
-   already running is undisturbed across all three steps.
+9. <strong>Done.</strong> A station is added to a running program, given a
+   constant, wired in, and produces a result per value it is sent,
+   with the part that was already running losing nothing.</p>
+<p>   The scene had to learn something to be assertable at all. Wired in
+   while the first batch was still moving, the new station received
+   however many of those values had not been handled yet — which is a
+   number the scheduler decides. That is this issue's own sentence
+   about values arriving down a wire that exists, met in practice, so
+   the scene lets the first batch land before it grows the program.
+   Nothing is quiesced to do it; the program runs throughout.
 10. <strong>Done.</strong> A program starts a second beside it, feeds it through
     its entrance, reads its result, and outlives it. The test also
     proves the negative — a wire cannot reach across — and proves it
@@ -539,48 +586,97 @@ rather than drifting into place.</p>
     have. Nothing refuses it on grounds of <em>programs</em>; indices just do
     not cross.</p>
 <h2>Open questions</h2>
-<p>**Open: does the station table still hold up once one map holds many
-programs' worth of boxes?**</p>
-<p>Composing merges: a program brought into another produces <strong>one</strong>
-station table holding both sets of stations. Nothing about that is
-resolved at run time, which is the appeal — no boundary to check, no
-per-program bookkeeping, no dispatch asking which program a station
-belongs to. The nesting is a fact about how the graph was described
-rather than about how it runs.</p>
+<p>**Answered: does the station table still hold up once one map holds
+many programs' worth of boxes?**</p>
+<p>A program brought inside another produces <strong>one</strong> station table
+holding both sets of stations. Nothing about that is resolved at run
+time, which is the appeal — no boundary to check, no per-instance
+bookkeeping, no dispatch asking which program a station belongs to.
+The nesting is a fact about how the graph was described rather than
+about how it runs.</p>
 <p>But the table was designed when a map was one program somebody wrote
-by hand, and composing changes the numbers it lives under. Every
-question below was settled at that size and should be asked again at
-the other one, <em>before</em> composing is built rather than after:</p>
+by hand, and this changes the numbers it lives under. Every question
+below was settled at that size, so all of them were asked again at the
+other one <em>before</em> anything was built. **Two hold as they are, one was
+fixed, and one dissolved when the operation was described correctly.**</p>
 <ul>
-<li><strong>Shelves.</strong> Growing by adding a shelf keeps every station still,</li>
-<p>  which is load-bearing because a station holds its own mutex. That
-  was priced against a program growing a station at a time. A merge
-  adds a whole program's worth at once, and the shelf size was chosen
-  for the other shape entirely.</p>
-<li><strong>Wires as indices.</strong> A wire is a pair of numbers valid forever</li>
-<p>  inside one table. Merging means every wire in the incoming program
-  is renumbered by an offset. That is mechanical, and it is also the
-  first thing in this engine that ever <em>rewrites</em> a wire — worth
-  looking hard at, because "an index means what it meant" has been
-  true without exception until now.</p>
-<li><strong>The whole-program passes.</strong> Bringing a program up walks every</li>
-<p>  station and, for each, every other station's destinations, looking
-  for arrows that land on it. That is quadratic in the table, which
-  nobody minded at a dozen stations. Composing several programs into
-  one is exactly how a table stops being a dozen stations.</p>
-<li><strong>A mutex per station.</strong> Fine at a dozen; a merged table of</li>
-<p>  thousands is thousands of mutexes allocated whether or not anything
-  ever contends for them.</p>
-<li><strong>What a name means after a merge.</strong> Two programs may each have a</li>
-<p>  station called <code>gate</code>. Names are for writing a program back out as a
-  file that reads in again, so a merged program with two <code>gate</code>s
-  cannot be written down — which makes this a question about the file
-  format as much as about the table.</p>
+<li><strong>Shelves — asked, and they hold.</strong> Growing by adding a shelf keeps</li>
+<p>  every station still, which is load-bearing because a station holds
+  its own mutex. That was priced against a program growing a station
+  at a time; a merge adds a whole program's worth at once.</p>
 </ul>
-<p>None of these is known to be a problem. The point is that they were
-all decided under one set of numbers and composing supplies another,
-and the cheapest moment to find out is while composing is still a
-design.</p>
+<p>  It does not matter, and the reason is that a shelf holds records
+  rather than a copy of anything. Merging a thousand stations
+  allocates sixteen shelves and writes sixteen pointers into an array
+  that holds addresses; nothing already placed is read, moved, or
+  copied. The shelf size decides how many allocations that is and
+  nothing else. <strong>What would have mattered is a flat array</strong>, which
+  is what shelves replaced, and it would have mattered by moving
+  every mutex in the table.</p>
+<ul>
+<li><strong>Wires as indices — asked, and the question dissolved.</strong> A wire is</li>
+<p>  a pair of numbers valid forever inside one table, and the worry was
+  that merging renumbers every wire in the incoming program: the first
+  thing in this engine that ever <em>rewrites</em> a wire, against an
+  invariant that has held without exception.</p>
+</ul>
+<p>  Nothing is rewritten, because nothing is merged. A description is
+  <strong>instantiated</strong>, and a description's numbers were never indices in
+  anybody's table — they are what the description says about itself.
+  Building it at a base means the arrow from its third station to its
+  fifth is drawn from <em>base + 3</em> to <em>base + 5</em>. No wire that exists
+  changes, and the invariant is not approached, let alone bent.</p>
+<p>  This is what the whole thing turned on. Described as merging it
+  needed a renumbering pass and a rule for what happens to the program
+  that was absorbed; described as instantiating it needs an offset.
+  See <a href="issue-217-a-program-inside-another.html">217</a>.</p>
+<ul>
+<li>**The whole-program passes — asked, and fixed rather than</li>
+<p>  accepted.** Bringing a program up walked every station and, for
+  each, every other station's destinations, looking for arrows that
+  land on it: the table walked once per station. Nobody minded at a
+  dozen stations, and composing is exactly how a table stops being a
+  dozen stations.</p>
+</ul>
+<p>  Turning it round costs one array. Walk every destination in the
+  program once, marking where each lands; then each station reads its
+  own answer. The work is now proportional to the stations plus the
+  wires — the size of the thing being described rather than its
+  square. Done, because the question had an answer rather than a
+  decision, and because the fix is cheaper than carrying the question.</p>
+<ul>
+<li><strong>A mutex per station — asked, and it is not the expensive part.</strong></li>
+<p>  Fine at a dozen; a merged table of thousands is thousands of
+  mutexes allocated whether or not anything ever contends for them.</p>
+</ul>
+<p>  A mutex on this platform is forty bytes and initialising one writes
+  those bytes. Ten thousand stations is four hundred kilobytes and ten
+  thousand short writes, against ten thousand port arrays, ten
+  thousand first pages of slots, and ten thousand constants — every
+  one of which is a separate allocation the same station already
+  pays for. The mutex is not what a large table costs.</p>
+<ul>
+<li>**What a name means — asked, and it is less than this issue</li>
+<p>  assumed.** Two programs may each have a station called <code>gate</code>, and
+  a program holding two of them cannot be written down as a file that
+  reads back, because an arrow to <code>gate</code> in such a file means nothing.</p>
+</ul>
+<p>  What settles it is that **a station name is an arbitrary label and
+  the engine never reads one.** Nothing mechanical anywhere depends on
+  a name; every wire is an index. The one place a name does any work
+  is inside a <em>description</em>, because text has no indices and an arrow
+  written down has to say something — so names resolve within the
+  description being read and never across it, which is a rule the
+  reader now follows explicitly rather than by there only ever having
+  been one description.</p>
+<p>  Two stations in one program sharing a name is therefore correct
+  rather than a collision. What it costs is the dump, and that is
+  <a href="issue-217-a-program-inside-another.html">217</a>'s open question rather than
+  this one's.</p>
+<p>The point of asking was that they were all decided under one set of
+numbers. Doing it before building was worth it twice over: one of them
+turned out to want fixing, and one of them turned out to be a question
+about the wrong operation.</p>
 <p><strong>Answered, kept because the reasoning is the design:</strong></p>
 <ul>
 <li>*What refuses what, when — does the caller declare whether a bad</li>

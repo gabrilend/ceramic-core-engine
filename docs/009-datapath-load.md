@@ -9,7 +9,7 @@ perform — count the stations, allocate the table once, place, wire,
 validate in a phase nothing else could enter, seed, release — with a
 state called *still loading* that nothing else could be in. Every one
 of those has become an ordinary operation
-([212](../issues/212-one-way-to-build-a-program.md)). What is left of
+([212](../issues/completed/212-one-way-to-build-a-program.md)). What is left of
 reading a file is a reader: each line becomes calls anybody could
 make, and then it asks for the program to be brought up like anybody
 would.

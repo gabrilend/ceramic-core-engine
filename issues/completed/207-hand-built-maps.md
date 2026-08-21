@@ -14,7 +14,7 @@ into bytes needs the field layout. That was read for a long time as a
 limitation of hand placement; it is really just an argument nobody ever
 passed.
 
-Under [212](../212-one-way-to-build-a-program.md) there is one surface
+Under [212](212-one-way-to-build-a-program.md) there is one surface
 for creating a station, configuring a port, and drawing a wire, used by
 a file reader and a control socket alike. Hand placement either takes
 the type names the registry already holds and *becomes* that surface,

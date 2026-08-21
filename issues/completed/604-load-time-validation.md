@@ -18,7 +18,7 @@ rather than one error per run — and that outlives any particular rule.
 Its second was noticing that two rules belonged *earlier*, applied per
 edge as a wire is drawn rather than per program at the end; runtime
 rewiring later reused exactly that shape for every rule it applies, and
-[212](../212-one-way-to-build-a-program.md) makes it the norm.
+[212](212-one-way-to-build-a-program.md) makes it the norm.
 
 What is left of the whole-program pass is smaller and different in
 kind: the checks that genuinely need everything present are now a

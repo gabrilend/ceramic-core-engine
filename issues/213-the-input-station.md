@@ -302,7 +302,7 @@ want to.
 - [209 — The output station](209-map-output-collection.md), the same
   design pointed the other way, and where the pass-through kind is
   described
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
   which is what makes a program constructible and therefore composable
 - [004 — Statics and recalculation](../docs/004-datapath-statics.md),
   where starting a program is explained without reference to this

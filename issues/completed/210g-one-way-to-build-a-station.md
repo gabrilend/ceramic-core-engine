@@ -41,7 +41,7 @@ and they are right.
 [210b](210b-the-port-record.md) taught the map file to
 *spell* a port with no source, so that a half-built program could be
 written down and read back — and there is a test that reloads one.
-[212](../212-one-way-to-build-a-program.md) says plainly that a station
+[212](212-one-way-to-build-a-program.md) says plainly that a station
 may hold such a port indefinitely, because that is what makes "add a
 station now, wire it in a moment" an ordinary sequence rather than a
 window of invalidity.
@@ -116,7 +116,7 @@ tests, where it was written alongside the *none* tag.
 
 So the order for this corner of the project is: boxes addressed by
 file, then placement functions, then this, then
-[212](../212-one-way-to-build-a-program.md).
+[212](212-one-way-to-build-a-program.md).
 
 ### What stands today
 
@@ -161,14 +161,14 @@ is keeping a way to build a program that the loader cannot.
 file are the same program.** Not equivalent — the same, provably, by
 dumping both and comparing bytes. That is the test that makes the
 claim mean something, and it is the reason this issue exists as more
-than tidying: it is what lets [212](../212-one-way-to-build-a-program.md)
+than tidying: it is what lets [212](212-one-way-to-build-a-program.md)
 say that reading a file is a sequence of ordinary operations rather
 than a privileged path.
 
 **Refusal follows one policy.** The surface returns a refusal that
 travels upward and accumulates rather than dying where it happens,
 because the loader's rule is to collect every failure in a file and
-present them together. [212](../212-one-way-to-build-a-program.md) owns
+present them together. [212](212-one-way-to-build-a-program.md) owns
 that policy and overturns the one rewiring chose; this issue supplies
 the surface it applies to.
 
@@ -214,7 +214,7 @@ unqualified: a port with no source is an error, full stop.
 6. **Done**, with the readiness tests: a station with an unconfigured
    port never becomes ready, and becomes ready the moment that port is
    given a source, with the values waiting at its other ports intact.
-7. **Done**, in [212](../212-one-way-to-build-a-program.md), which is
+7. **Done**, in [212](212-one-way-to-build-a-program.md), which is
    where it had to live: it could not be written until the loader was
    a caller, and making it one is that issue's capstone work. A
    program written to disk and loaded, and the same program built by
@@ -258,7 +258,7 @@ unqualified: a port with no source is an error, full stop.
   whose conversion becomes a case of this surface
 - [210h — Optional parameters](210h-optional-parameters.md),
   refused, which is what leaves the check added here unqualified
-- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   which stands on this and owns the refusal policy
 - [207 — Hand-built maps](207-hand-built-maps.md), the second
   contract in question

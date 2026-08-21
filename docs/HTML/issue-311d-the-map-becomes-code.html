@@ -29,8 +29,8 @@
 <h2>Issues, open</h2>
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
-<a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
+<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
@@ -77,6 +77,7 @@
 <a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
+<a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
@@ -151,7 +152,7 @@ removes the last name from a running program. The generator reads a map
 and emits the construction calls it describes, so a map file is a
 <strong>blueprint for the compilation</strong> rather than something a program parses
 while it runs.</p>
-<p>**This waits for <a href="issue-212-one-way-to-build-a-program.html">212</a>, and the
+<p>**This waits for <a href="done-212-one-way-to-build-a-program.html">212</a>, and the
 dependency is deliberately kept hard.** What the generator emits <em>is</em>
 construction calls, so writing it against the placement and wiring
 functions that exist today would mean writing generated code that
@@ -245,7 +246,7 @@ never seen a map.</p>
 <p>  a program that runs other programs. That is not a tool and not a mode:
   it is a map whose boxes read a description, compile what it names,
   start a fresh map, and feed it through its input station. See
-  <a href="issue-212-one-way-to-build-a-program.html">212</a>.</p>
+  <a href="done-212-one-way-to-build-a-program.html">212</a>.</p>
 <li><strong>A box arriving mid-run</strong> → compiled when the source arrives, which</li>
 <p>  is <a href="done-310-boxes-compiled-at-runtime.html">310</a>'s path.</p>
 </ul>
@@ -269,7 +270,7 @@ the compiler being needed exactly when new code genuinely arrives.</p>
 7. The engine's runtime map parser deleted — **and the parser itself
    kept, as a box.** Nothing in the <em>engine</em> parses maps any more, but
    a program that runs other programs needs a box that reads one
-   (<a href="issue-212-one-way-to-build-a-program.html">212</a>), so the parsing functions
+   (<a href="done-212-one-way-to-build-a-program.html">212</a>), so the parsing functions
    move out of the engine and into a box source. The generator, which
    is becoming a C program in <a href="done-308-generator-in-c.html">308</a>, links the
    same implementation. One parser, two callers, and neither of them
@@ -300,7 +301,7 @@ the compiler being needed exactly when new code genuinely arrives.</p>
   yet is written <code>in 2 -</code> and is an ordinary state; a station that can
   never become ready is not an error; a program assembled from nothing
   and wired one arrow at a time is the thing
-  <a href="issue-212-one-way-to-build-a-program.html">212</a> exists to allow.</p>
+  <a href="done-212-one-way-to-build-a-program.html">212</a> exists to allow.</p>
 <p>  A build that refused a half-wired map would be refusing exactly the
   program somebody is in the middle of writing. So the generator stays
   incurious about shape: it resolves names, it emits calls, and it
@@ -316,7 +317,7 @@ the compiler being needed exactly when new code genuinely arrives.</p>
 <p>  whose functions this calls</p>
 <li><a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,</li>
 <p>  whose embedded text shrinks to what a map actually needs</p>
-<li><a href="issue-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
+<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
 <p>  where composing and starting are separated, and where a program that
   runs other programs turns out to be a map rather than a tool</p>
 <li><a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>,</li>

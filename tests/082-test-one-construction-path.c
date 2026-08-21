@@ -81,6 +81,189 @@ static void must_take(const char *refusal, const char *what)
 }
 /* }}} */
 
+/* {{{ static int a_station_joins_a_running_program() */
+/*
+ * **The other half of the claim**: the same operations, on a program
+ * whose workers are in flight.
+ *
+ * The scene above proves that reading a file and calling the surface
+ * build the same program. It proves it at rest — both programs are
+ * assembled, then started, then compared. That leaves the more
+ * interesting sentence untested: every one of these operations is
+ * legal *at any moment*, because there is no state called "still
+ * loading" for anything to be in.
+ *
+ * So this one runs the sequence a workbench would run. A program is
+ * going, with values moving through it. A station is added, its ports
+ * are given sources, it is wired in, and the program is brought up
+ * again. It takes values and produces them; the part that was already
+ * running is undisturbed and loses nothing.
+ *
+ * **The order is add, configure, wire, and the order is the point.**
+ * A station comes into existence with somewhere to be and nothing to
+ * do, and that is a state it may hold indefinitely — it cannot become
+ * ready, so no worker can pick it up, so there is no window of
+ * invalidity to guard. Configuring gives its ports sources; wiring is
+ * the last step and is what lets the first value arrive. Nothing here
+ * is quiesced, paused, or locked out for the duration.
+ *
+ * What is asserted at the end is three things: the new station ran
+ * once per value it was sent, the results it produced are the right
+ * numbers rather than merely the right count, and the station that
+ * was already there ran exactly as many times as it was fed. That
+ * last one is the "undisturbed" half, and it is the one worth having:
+ * growing a program that is running must not cost the running program
+ * a single value.
+ */
+static int a_station_joins_a_running_program(void)
+{
+    map_t *m = map_create_empty();
+
+    /* The part that is already going: values in, doubled, kept. */
+    int doubler = map_add_station(m);
+    map_place_box(m, doubler, "double_it", STATION_PLAIN);
+    must_take(map_name_station(m, doubler, "doubler"), "a name");
+
+    int kept = map_add_station(m);
+    map_place_box(m, kept, "keep", STATION_PLAIN);
+    must_take(map_name_station(m, kept, "kept"), "a name");
+    must_take(map_wire(m, doubler, 0, kept, 0), "the first wire");
+
+    map_start(m, 4);
+    /* A standing promise that more work may arrive, so the last
+     * sleeper does not decide the program is finished between two
+     * deliveries (issue 104). */
+    pool_submitter_register(m->pool);
+    pool_release(m->pool);
+
+    const int BATCH = 50;
+    for (int i = 0; i < BATCH; i++) {
+        int v = i;
+        map_deliver_value(m, doubler, 0, &v);
+    }
+
+    /*
+     * ---- and now, mid-flight ----
+     *
+     * **Wait for the first batch to land before growing, and the wait
+     * is not tidiness.** A wire drawn from a station that is
+     * currently producing means those values start arriving down it
+     * *immediately* — that is what a wire is, and issue 212 says so
+     * rather than guarding against it. So a station wired in while
+     * fifty values are still moving receives however many of them had
+     * not been handled yet, which is a number decided by the
+     * scheduler.
+     *
+     * That is correct behaviour and an untestable assertion. Letting
+     * the first batch finish first is what makes "the new station saw
+     * exactly the second batch" a fact rather than a race, and it
+     * costs the scene nothing: the operations being proven are the
+     * same ones either way, and the program is still running
+     * throughout — no worker is stopped, nothing is quiesced, the
+     * pool is never paused.
+     */
+    while (atomic_load(&map_station(m, kept)->runs) < BATCH)
+        usleep(200);
+
+
+    /* Add: a place, and a box in it. Nothing can reach it yet. */
+    int adder = map_add_station(m);
+    map_place_box(m, adder, "add", STATION_PLAIN);
+    must_take(map_name_station(m, adder, "adder"), "a name");
+
+    int results = map_add_station(m);
+    map_place_box(m, results, "keep", STATION_PLAIN);
+    must_take(map_name_station(m, results, "results"), "a name");
+    must_take(map_designate_output(m, results), "the results door");
+
+    /* This scene collects at the end rather than as it goes, which is
+     * precisely the condition the output door shouts about: results
+     * accumulating with nobody taking them. Announced so the lines
+     * below read as the engine working rather than as trouble. */
+    printf("  (the pile-up notices below are this scene not draining "
+           "until the end)\n");
+    fflush(stdout);
+
+    /* Configure: the second addend is a constant. Written while the
+     * program runs, through the same call a map file's `in 1 = 1000`
+     * becomes. */
+    must_take(map_configure_port(m, adder, 1, IN_PORT_STATIC, "1000"),
+              "a constant bound to a running program");
+
+    /* Wire: last, which is when the first value can arrive. */
+    must_take(map_wire(m, adder, 0, results, 0), "the results wire");
+    must_take(map_wire(m, doubler, 0, adder, 0), "the wire that starts it");
+
+    for (int i = 0; i < BATCH; i++) {
+        int v = i;
+        map_deliver_value(m, doubler, 0, &v);
+    }
+
+    pool_submitter_unregister(m->pool);
+    pool_join(m->pool);
+
+    int failed = 0;
+
+    if (atomic_load(&map_station(m, adder)->runs) != BATCH) {
+        fprintf(stderr, "the station added mid-run ran %d times, not %d\n",
+                (int)atomic_load(&map_station(m, adder)->runs), BATCH);
+        failed = 1;
+    }
+
+    /*
+     * The right numbers, not merely the right count. Every value in
+     * the second batch was doubled and had a thousand added, so the
+     * results are 1000, 1002, 1004 and so on — but they come out in
+     * whatever order finished first, which is a schedule and not
+     * something to assert. So: tick each expected value off a list
+     * and demand the list ends empty.
+     */
+    int seen[64] = { 0 };
+    int taken = 0;
+    for (;;) {
+        int got = 0;
+        if (!map_output_take(m, results, &got, sizeof got))
+            break;
+        taken++;
+        int which = (got - 1000) / 2;
+        if (got != 1000 + 2 * which || which < 0 || which >= BATCH) {
+            fprintf(stderr, "a result of %d is not two times anything "
+                            "plus a thousand\n", got);
+            failed = 1;
+            break;
+        }
+        seen[which]++;
+    }
+    if (taken != BATCH) {
+        fprintf(stderr, "%d results came out of the door, not %d\n",
+                taken, BATCH);
+        failed = 1;
+    }
+    for (int i = 0; i < BATCH && !failed; i++)
+        if (seen[i] != 1) {
+            fprintf(stderr, "the result for input %d appeared %d times\n",
+                    i, seen[i]);
+            failed = 1;
+        }
+
+    /* The undisturbed half: everything sent, before and after the
+     * program grew, reached the station that was always there. */
+    if (atomic_load(&map_station(m, kept)->runs) != 2 * BATCH) {
+        fprintf(stderr, "the station that was already there ran %d times, "
+                        "not %d — growing the program cost it values\n",
+                (int)atomic_load(&map_station(m, kept)->runs), 2 * BATCH);
+        failed = 1;
+    }
+
+    map_destroy(m);
+    if (!failed)
+        printf("  a station was added, configured and wired into a running "
+               "program; it produced %d results and the running part lost "
+               "nothing\n", taken);
+    return failed;
+}
+/* }}} */
+
 int main(void)
 {
     char dir[256], map_path[320], from_file[320], from_calls[320];
@@ -228,5 +411,10 @@ int main(void)
 
     map_destroy(read);
     map_destroy(built);
+
+    /* The same operations, on a program that is already running. */
+    if (a_station_joins_a_running_program() != 0)
+        return 1;
+
     return 0;
 }

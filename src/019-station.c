@@ -1073,6 +1073,63 @@ const char *map_bring_up(map_t *m)
                 strchr(unsourced, ';') ? "they are finished"
                                        : "it is finished");
 
+    /*
+     * **Which ports arrows land on, worked out once for the whole
+     * program** (issue 212).
+     *
+     * This used to be asked per station: for each one, walk every
+     * *other* station's destinations looking for arrows that land
+     * here. That is the table walked once per station — quadratic in
+     * the number of stations, which nobody minded at a dozen of them.
+     *
+     * Composing is what changes the number. A program brought into
+     * another produces one table holding both, and a table that holds
+     * several programs' worth of boxes is exactly how a dozen
+     * stations stops being a dozen. Turning it round costs one array
+     * and answers the same question: walk every destination in the
+     * program once, marking where each one lands. The work becomes
+     * proportional to the stations plus the wires, which is the size
+     * of the thing being described rather than its square.
+     *
+     * One flat array of flags, indexed by a station's first port plus
+     * the port number, so there is one allocation rather than one per
+     * station. An empty place contributes no ports and is skipped,
+     * which keeps the offsets honest without a special case.
+     */
+    int *first_port = calloc((size_t)m->n_stations + 1, sizeof *first_port);
+    if (!first_port)
+        return "out of memory checking a program";
+    int total_ports = 0;
+    for (int i = 0; i < m->n_stations; i++) {
+        first_port[i] = total_ports;
+        station_t *s = map_station(m, i);
+        total_ports += s->call ? s->n_in_ports : 0;
+    }
+    first_port[m->n_stations] = total_ports;
+
+    unsigned char *landed = calloc((size_t)(total_ports > 0 ? total_ports : 1),
+                                   sizeof *landed);
+    if (!landed) {
+        free(first_port);
+        return "out of memory checking a program";
+    }
+    for (int k = 0; k < m->n_stations; k++) {
+        station_t *other = map_station(m, k);
+        for (out_port_t *p = other->out_ports; p; p = p->next) {
+            dest_set_t *set = out_port_dests(p);
+            for (int di = 0; set && di < set->n; di++) {
+                int at = set->items[di].station;
+                int port = set->items[di].port;
+                if (at < 0 || at >= m->n_stations)
+                    continue;
+                station_t *dest = map_station(m, at);
+                if (!dest->call || port < 0 || port >= dest->n_in_ports)
+                    continue;
+                landed[first_port[at] + port] = 1;
+            }
+        }
+    }
+
     for (int i = 0; i < m->n_stations; i++) {
         station_t *s = map_station(m, i);
         if (!s->call)
@@ -1081,21 +1138,7 @@ const char *map_bring_up(map_t *m)
         char who[64];
         station_label_into(m, i, who, sizeof who);
 
-        /* Which of this station's ports does an arrow land on? Sized
-         * to its real port count, because a fixed cap here would be a
-         * silent hole in the checking. */
-        int landed_on[s->n_in_ports > 0 ? s->n_in_ports : 1];
-        memset(landed_on, 0, sizeof landed_on);
-        for (int k = 0; k < m->n_stations; k++) {
-            station_t *other = map_station(m, k);
-            for (out_port_t *p = other->out_ports; p; p = p->next) {
-                dest_set_t *set = out_port_dests(p);
-                for (int di = 0; set && di < set->n; di++)
-                    if (set->items[di].station == i
-                        && set->items[di].port < s->n_in_ports)
-                        landed_on[set->items[di].port] = 1;
-            }
-        }
+        const unsigned char *landed_on = landed + first_port[i];
 
         int has_ring = 0, any_arrow = 0;
         for (int j = 0; j < s->n_in_ports; j++) {
@@ -1150,6 +1193,9 @@ const char *map_bring_up(map_t *m)
                     "arrow feeds — unless something outside delivers into "
                     "it, it will never run\n", who);
     }
+
+    free(landed);
+    free(first_port);
 
     if (faults) {
         if (used < (int)sizeof said - 48)

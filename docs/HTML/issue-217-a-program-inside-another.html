@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>006 — Datapath: scheduling</title>
+<title>217 — A program inside another</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -12,7 +12,7 @@
 <a href="doc-003-datapath-delivery.html">003 — Datapath: delivery</a>
 <a href="doc-004-datapath-statics.html">004 — Datapath: statics and recalculation</a>
 <a href="doc-005-routing.html">005 — Routing</a>
-<a href="doc-006-datapath-scheduling.html" class="here">006 — Datapath: scheduling</a>
+<a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
 <a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
 <a href="doc-008-map-file-format.html">008 — Map file format</a>
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
@@ -30,7 +30,7 @@
 <a href="issue-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="issue-209-map-output-collection.html">209 — The output station</a>
 <a href="issue-213-the-input-station.html">213 — The input station</a>
-<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="issue-217-a-program-inside-another.html" class="here">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
@@ -146,98 +146,180 @@
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 </nav>
 <main>
-<h1>006 — Datapath: scheduling</h1>
-<p>Delivery decides <em>what</em> runs. The pool decides <em>when</em>, and by whom.</p>
-<p>It is a fixed set of worker threads, one queue of tasks, and one rule
-about sleeping that turns out to also be the rule about when the
-program is finished.</p>
-<h2>The task queue</h2>
-<p>A ring of pointers. Each entry points at a task struct sitting on its
-own in the heap; the ring holds only the pointers.</p>
-<p>Two indices: one at the oldest task, one at the port where the next
-task goes. Both wrap at the end. It is first-in-first-out, so a task
-that has been waiting cannot be starved by newer arrivals.</p>
-<p><strong>When the ring fills, it doubles.</strong> If the writing index would land on
-the reading index, the storage is reallocated to twice the size, the
-wrapped portion is copied so the queue reads contiguously again, and
-the indices are corrected. This happens while the queue's mutex is
-held, so nothing else is inside.</p>
-<p>Growth is safe by construction, and for a reason worth stating: nothing
-in the program holds a pointer <em>into</em> the ring. The ring holds pointers
-<em>out</em> to task structs, and a worker that takes one carries the pointer
-away with it. The ring's own storage can move underneath everyone
-without a single dangling reference.</p>
-<p>This is reachable, not theoretical. One box wired to a hundred
-destinations produces a hundred tasks from a single run, so the queue
-can go from nearly empty to overflowing during one delivery.</p>
-<p>The alternative — a worker that finds the queue full runs a task itself
-and then retries — was rejected. Growth delays an enqueue by a bounded
-memory copy; running a task delays it by however long an arbitrary user
-function takes.</p>
-<p>Task structs are allocated fresh per invocation and freed by the worker
-that ran them, after its outputs have been delivered. Each is sized
-exactly for its box, since the generator knows what that box needs.
-Swapping in a free list later is invisible to everything else.</p>
-<h2>Workers</h2>
-<p>A fixed number of threads, decided at startup. Each loops: take a task
-from the queue, run its shim, deliver its output, free the task, repeat.</p>
-<p>A worker that finds the queue empty sleeps rather than spins. Spinning
-burns a core per idle worker; sleeping costs a trip into the kernel,
-which is expensive but paid only when there is nothing to do anyway.</p>
-<p>A count of sleeping workers is maintained. When a task is pushed, every
-sleeping worker is woken — not a chosen one. A worker that has just
-finished enqueuing does not sleep, because the queue is not empty; it
-just put something in it.</p>
-<h2>Termination</h2>
-<p>The rule is one sentence: **the worker whose own registration brings
-the sleeper count up to the worker total re-scans the queue before
-anyone actually sleeps.**</p>
-<p>If it finds a task, it deregisters itself, wakes everyone, and goes to
-work. If it finds nothing, the program is finished — a stop flag is
-set, every worker is woken, each sees the flag and returns, and the
-main thread joins them.</p>
-<p>The re-scan is not decoration. Without it there is a race that ends in
-a silent wrong answer rather than a hang:</p>
-<p>1. Worker A scans the queue, finds it empty, decides to sleep — and is
-   preempted right there, before registering itself.
-2. Worker B finishes a task, delivers, enqueues a new one, checks the
-   sleeper count to decide whom to wake, sees zero, and wakes nobody.
-3. Worker A resumes and registers itself asleep.</p>
-<p>Every worker is now asleep, the count reads "all of them," and there is
-a task sitting in the queue. Without the re-scan, that state is
-indistinguishable from completion, and the program exits cleanly having
-silently not done part of its work.</p>
-<p>With the re-scan, worker A is the one whose registration completed the
-count, so it looks again and finds B's task. And when the re-scan does
-come up empty, the conclusion is sound: every other worker has already
-finished its task and found nothing, so there is nobody left who could
-enqueue anything.</p>
-<p>Termination is a clean broadcast, never a break out of the loop. A
-worker left parked in a wait that never ends turns shutdown into a hang
-at the join.</p>
-<h2>What the pool does not do</h2>
-<p><strong>It does not detect deadlock</strong>, because there is nothing that can
-deadlock. No box blocks. Nothing waits on a value. A worker is always
-either running a box, delivering, or asleep with nothing to do — and
-the last of those is completion, not a stall.</p>
-<p><strong>It does not prioritize.</strong> Tasks run in the order they were created.</p>
-<p><strong>It does not know anything about boxes, stations, or maps.</strong> It moves
-opaque task structs between threads. Everything about what a task
-<em>means</em> lives on the delivery path.</p>
-<p>That ignorance turned out to be worth more than tidiness. A task
-carries a station number, an exit number, and **which program it
-belongs to**, all three ferried without being looked at — and the last
-of those is what lets one pool serve several programs at once, which
-is how a program can set another going beside itself. It could not
-before: finishing a task means resolving a station number, a number
-means nothing without the table it indexes, and while that table came
-from the pool's own context a pool served exactly one program. Making
-the pool carry one more thing it does not understand was the whole
-change (<a href="done-212-one-way-to-build-a-program.html">212</a>).</p>
+<h1>217 — A program inside another</h1>
+<p>Split out of <a href="done-212-one-way-to-build-a-program.html">212</a>, whose
+ten implementation steps are built and whose intended behaviour ends
+with a sentence it never got to: <strong>a map is a box.</strong> This is that
+sentence.</p>
+<h2>Current behavior</h2>
+<p>**A program can be started beside another, and cannot be brought
+inside one.**</p>
+<p>Starting beside works and is proven: a fresh program with its own
+station table, its own rewiring lock, its own everything except the
+workers, reached only through its doors. A test starts one, feeds it,
+reads it, and outlives it
+(<a href="done-212-one-way-to-build-a-program.html">212</a>).</p>
+<p>What has no answer is the other half. A program that wants to <em>use</em>
+another program — not run it alongside, but wire into it and out of it
+the way it wires into any station — has nowhere to put it. There is no
+operation that says "and here is a graph, place it".</p>
+<p>Everything that operation would need already exists. Stations are
+added one at a time, into a table that grows without moving anything
+(<a href="done-211-growing-the-station-table.html">211</a>). Wires are drawn
+by one operation that applies every rule at any moment. Ports are
+configured by one operation. A program declares where its arguments
+arrive and where its results come from
+(<a href="issue-213-the-input-station.html">213</a>,
+<a href="issue-209-map-output-collection.html">209</a>). Reading a file is already
+nothing but a sequence of those calls
+(<a href="done-210g-one-way-to-build-a-station.html">210g</a>).</p>
+<h2>Intended behavior</h2>
+<p>**Bringing a program inside another is instantiating a template, not
+merging two programs.**</p>
+<p>This is the correction that makes the whole thing small, and getting
+it the other way round is what made it look large. Nothing running is
+being joined to anything else running. There is no second live program
+whose stations are picked up and carried, no handle that becomes
+invalid, no table stitched onto another table.</p>
+<p>There is a <strong>description</strong> — a text file, or whatever else can produce
+one — and there is a program with some number of stations in it
+already. Instantiating the description builds new stations at the end
+of that table and wires them together. It is importing a library: the
+description is the header, the stations it produces are the machinery
+that gets constructed, and one description can be instantiated any
+number of times into the same program with nothing shared between the
+copies.</p>
+<p><strong>So a wire is not rewritten. It is translated.</strong> A description says
+its third station's output goes to its fifth station's second port.
+Instantiated into a program that already holds fifty-five stations,
+that becomes station fifty-eight to station sixty, port two. The
+description is untouched and says what it always said; the numbers in
+the program are the numbers that description means <em>here</em>. Nothing
+that already existed is renumbered, and the invariant that an index
+means what it meant is never bent — because no existing index changes.</p>
+<p>This is what reading a file already does, with the base fixed at zero.</p>
+<h3>The offset is the whole mechanism</h3>
+<p>A description's stations are numbered from zero in the order they are
+declared. Instantiating one asks the table for a place per station,
+and the first place it is given is the <strong>base</strong>. From there:</p>
+<ul>
+<li>station <em>n</em> of the description is station <em>base + n</em> of the program</li>
+<li>every arrow inside the description is drawn from <em>base + from</em> to</li>
+<p>  <em>base + to</em></p>
+<li>every arrow <em>into</em> or <em>out of</em> the instance is drawn by the parent,</li>
+<p>  in the parent's own numbers, to the instance's doors</p>
+</ul>
+<p>The reader is already written this way, which was not true a moment
+ago and is the step this issue stands on. Its two passes take a base
+and add it to everything; today every caller passes zero.</p>
+<h3>What the parent wires to</h3>
+<p><strong>The doors, and nothing else.</strong> A description declares which of its
+stations is the entrance and which are the results, and those are the
+only two things a parent has any business naming. A parent wiring into
+an interior station of an instance is reaching inside, and the point
+of the declaration is that reaching inside stops happening by
+accident.</p>
+<p>That is the difference between this and starting beside, and it is
+worth stating as one sentence: **an instance shares the parent's
+station table, so it can be wired to; a program started beside has its
+own, so it cannot.** Which one somebody wants follows from whether
+they want isolation. A program that runs <em>other people's</em> programs
+wants the second, and can be as broken as it likes. A program that
+uses a subgraph it wrote wants the first, and pays nothing at run time
+for it: after instantiation there is no seam, no boundary to check, no
+per-instance bookkeeping, and no dispatch asking which program a
+station belongs to. There are stations with indices, the way there
+always were.</p>
+<h3>Station names are labels, and this is where that starts to matter</h3>
+<p>A station name is arbitrary text. <strong>The engine never reads one</strong> —
+every wire is an index — and nothing mechanical anywhere depends on
+one. Two stations in one program may be called the same thing and
+nothing about the program is worse for it.</p>
+<p>The one place a name does any work is inside a <strong>description</strong>,
+because text has no indices: an arrow written down has to say
+something, and what it says is a name. So names are resolved *within
+the description being read* and never across it. The parser already
+refuses two stations with one name in a single file, which is the rule
+that makes that resolution total.</p>
+<p>Instantiating one description twice therefore produces two <code>gate</code>
+stations in one program, and that is correct and expected rather than
+a collision to prevent.</p>
+<p><strong>What it costs is the dump</strong>, and that is the open question below.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. An operation that instantiates a description into an existing
+   program at a base, returning the base and the count so the caller
+   can find the doors. The reader's two passes already take a base;
+   this is the caller that passes something other than zero.
+2. Locating the instance's doors, so a parent can wire to them without
+   knowing anything else about it. The instance knows which of its
+   stations were declared as doors, and the parent needs those as
+   indices in its own numbering.
+3. Instantiating the same description twice into one program, with
+   nothing shared between the two — separate stations, separate
+   buffers, separate constants. This is the test that says "template"
+   rather than "move".
+4. A parent wiring into an instance's entrance and out of its results,
+   running it, and being unable to tell that the thing behind the port
+   is a graph rather than a C function — which is
+   <a href="issue-209-map-output-collection.html">209</a>'s step 7 and
+   <a href="issue-213-the-input-station.html">213</a>'s step 6, both of which have been
+   waiting for this.
+5. Instantiating into a program that is already running, since every
+   operation it is made of is already legal at any moment.
+6. The operation as a box, so that a program can bring a program into
+   a program — the same way the other construction operations became
+   boxes in <a href="done-212-one-way-to-build-a-program.html">212</a>.</p>
+<h2>Open questions</h2>
+<p><strong>Open: what does the dump write when two stations share a name?</strong></p>
+<p>The file format spells an arrow as a destination <em>name</em> and a port.
+Two stations called <code>gate</code> in one program cannot both be written down
+that way — a file with two <code>gate</code> lines is refused by the parser,
+which is right, because an arrow to <code>gate</code> in such a file means
+nothing.</p>
+<p>So a program that instantiates one description twice runs perfectly
+and cannot currently be written out and read back. Three ways out, and
+the first looks right:</p>
+<ul>
+<li><strong>The dump makes the names unique on the way out.</strong> A name is an</li>
+<p>  arbitrary label carrying no meaning, so nothing is lost by writing
+  the second <code>gate</code> as something else — the file needs labels it can
+  tell apart, and that is a property of the <em>file</em> rather than of the
+  program. Costs one pass over the names at dump time and no change
+  to the format, the parser, or the engine.</p>
+<li><strong>The instance's names gain a prefix when it is built.</strong> Turns</li>
+<p>  <code>gate</code> into <code>sub.gate</code> in the program itself. The format needs no
+  change — an arrow destination is split on its <em>last</em> dot, so
+  <code>sub.gate.0</code> already reads as station <code>sub.gate</code>, port 0 — but it
+  makes a name mechanical again, which is the thing this issue says
+  it is not.</p>
+<li><strong>The format stops spelling arrows by name.</strong> Honest, and it throws</li>
+<p>  away the reason a map file is readable by a person.</p>
+</ul>
+<p><strong>Open: what does a description arrive as?</strong></p>
+<p>Reading a file is one way. The others are worth naming before the
+operation's shape is fixed, because they decide whether it takes a
+path, a parsed description, or something else: a description built by
+calling the parser on text held in memory; a description produced by
+another program; and — the case
+<a href="issue-311d-the-map-becomes-code.html">311d</a> is heading for — a description
+the generator has already turned into code, where instantiating is
+calling a generated function rather than walking a parse tree.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-003-datapath-delivery.html">003 — Delivery</a>, which produces the tasks</li>
-<li><a href="doc-009-datapath-load.html">009 — Loading</a>, which produces the first ones</li>
+<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
+<p>  where this was described and from which it is split</p>
+<li><a href="issue-209-map-output-collection.html">209 — The output station</a>, whose last</li>
+<p>  step is a program used as a box</p>
+<li><a href="issue-213-the-input-station.html">213 — The input station</a>, whose last step</li>
+<p>  is the same thing from the other side</p>
+<li><a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>,</li>
+<p>  which makes adding a run of stations ordinary</p>
+<li><a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>,</li>
+<p>  which made reading a file a sequence of ordinary calls</p>
+<li><a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>, where a</li>
+<p>  description stops being parsed at run time</p>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, which gains</li>
+<p>  whatever answers the dump question</p>
 </ul>
 
 </main>

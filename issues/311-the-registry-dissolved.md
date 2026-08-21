@@ -129,7 +129,7 @@ that. 311b and 311c are independent of each other. **311d needs both**,
 since it emits calls to placement functions that 311b defines.
 
 **311d additionally waits on
-[212](212-one-way-to-build-a-program.md), and the first three do
+[212](completed/212-one-way-to-build-a-program.md), and the first three do
 not.** What 311d emits is construction calls, and emitting them
 against an interface the project has decided to replace would make the
 most-read generated file in the project an example of how *not* to
@@ -147,7 +147,7 @@ runs other programs is a map**, not a tool. It reads a description,
 compiles what the description names, starts a fresh map, and feeds it
 through its input station — using the construction surface as boxes,
 which is what this engine is for. See
-[212](212-one-way-to-build-a-program.md), where composing and starting
+[212](completed/212-one-way-to-build-a-program.md), where composing and starting
 are separated.
 
 ## What this does not give up
@@ -186,7 +186,7 @@ binary now carries.
   table this deletes
 - [304 — Struct field tables](completed/304-struct-field-tables.md),
   which stop being searched by name and start being pointed at
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
   whose construction surface the generated code calls
 - [007 — The build path](../docs/007-datapath-build.md) and
   [008 — Map file format](../docs/008-map-file-format.md), both of

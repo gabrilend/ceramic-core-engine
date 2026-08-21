@@ -151,7 +151,7 @@ something exotic knows it is doing something exotic.
    destination, collecting those that name the target. On its own,
    testable without removing anything.
 2. Removal as an operation on the construction surface
-   ([212](../212-one-way-to-build-a-program.md)), taking the rewiring lock
+   ([212](212-one-way-to-build-a-program.md)), taking the rewiring lock
    and performing steps 2 through 4.
 3. The quiescence wait, shared with
    [310](310-boxes-compiled-at-runtime.md)'s box unloading rather than
@@ -187,7 +187,7 @@ something exotic knows it is doing something exotic.
 
 - [211 — Growing the station table](211-growing-the-station-table.md),
   which this makes the other half of — a table that grows and shrinks
-- [212 — One way to build a program](../212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   whose surface gains this operation
 - [214 — Destinations without a lock](214-destinations-without-a-lock.md),
   whose retire-sweep-free is the same lifetime problem in miniature

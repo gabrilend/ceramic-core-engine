@@ -162,7 +162,7 @@ exactly that, and is ordinary rather than suspicious.
 **The requirement is checked when the program is released to run**, not
 when a file finishes being read. There is no end-of-file moment any
 more — reading is a sequence of operations and several files can build
-one program ([212](212-one-way-to-build-a-program.md)) — but there is
+one program ([212](completed/212-one-way-to-build-a-program.md)) — but there is
 still a starting gate, where every worker parks until released
 ([102](completed/102-workers-and-run-loop.md)). That gate is the one
 moment when a program stops being built and starts being a program, so
@@ -368,7 +368,7 @@ warning is the notice, and it fires from the first doubling.
 
 - [213 — The input station](213-the-input-station.md), the same design
   pointed the other way
-- [212 — One way to build a program](212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
   where a program becoming usable as a box is the point
 - [506 — Boxes with several output ports](completed/506-multi-output-boxes.md),
   the box side of the same question

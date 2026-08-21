@@ -4,7 +4,7 @@
 
 **Built, and becoming a caller rather than a mechanism.**
 
-Under [212](../212-one-way-to-build-a-program.md) there is one surface
+Under [212](212-one-way-to-build-a-program.md) there is one surface
 for creating a station, configuring a port, and drawing a wire, legal
 at any moment — and loading a file is its first caller rather than a
 construction path of its own. So this pass survives as *turn each

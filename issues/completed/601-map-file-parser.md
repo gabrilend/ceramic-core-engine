@@ -17,7 +17,7 @@ The design decision this issue made is untouched by any of that and is
 the reason it reads well now: **the parser reads and never
 constructs.** It produces a description; something else builds from it.
 That is what lets the loader become a thin reader under
-[212](../212-one-way-to-build-a-program.md) — turning each line into
+[212](212-one-way-to-build-a-program.md) — turning each line into
 one call on a construction surface — rather than having to be
 disentangled from the thing it feeds.
 
