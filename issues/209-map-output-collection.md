@@ -2,6 +2,43 @@
 
 ## Current behavior
 
+**Built, and the map file spells it.**
+
+A station can be designated as a place results come from, and the
+designation adds exactly one rule: when its output port is wired
+nowhere, values are **held** rather than discarded. Two calls take
+them out — how many wait, and take the oldest — and both exist because
+a caller asked to drain results cannot write that loop with only one.
+
+**A station that returns nothing is refused as an output**, rather
+than accepted and useless: it has no output port for a parent to wire
+from and nothing to hold, so the mistake is almost certainly the wrong
+station.
+
+**The pile-up is shouted from the first doubling**, not summarised at
+teardown like the other two. A port backing up means uneven inputs and
+the task ring backing up means slow consumers; both are performance
+signals worth a line at the end. Results backing up means *nobody is
+collecting them at all* — a program computing into somewhere nobody is
+looking — and waiting until shutdown to say so wastes the whole run.
+
+**The test asserts both directions**, and the second matters more than
+it looks: an undesignated station runs, produces, and drops the value.
+That is the rule this designation is an exception to, so a test
+checking only the holding half would not have shown the exception to
+be narrow.
+
+**A fourth word on a station line says it**, `result`, read and
+written back, so a program's doors survive being put on disk — which
+is most of what naming them was for, since a parent wires to the doors
+and a reloaded program without them is one nothing can reach.
+
+Still to come: the load-time check that what is wired into an output
+type-checks, and a demonstration of a program used as a box inside
+another — which now has both halves of the seam it needs.
+
+### What stood before
+
 A program has no output, and no way to say where its results come from.
 
 Values move between stations and stop there. A station whose box
@@ -222,23 +259,33 @@ warning is the notice, and it fires from the first doubling.
 
 ## Suggested implementation steps
 
-1. Box file syntax for declaring that a station is an output, and
-   reader support for it. Several stations may be, and each has one
-   output port.
-2. The station kind that runs no box: placement, and a delivery walk
-   that recognises arrival at the boundary rather than calling a shim.
-3. The unwired case — hold the values rather than discarding — and the
-   growth warning, which fires from the first doubling and says which
-   station, unlike the ordinary growth report which waits and
-   summarises. **Two warnings, not one**: a doorway backing up on its
-   inputs and one backing up on its output are opposite diagnoses and
-   must read differently.
+1. **Done.** A fourth word on a station line — `result` — with the
+   reader and the dump both carrying it. Several stations may be, each
+   with its one output port.
+
+   Not `out`, which already names a port on the lines beneath a
+   station. One word meaning a port in one place and a whole station
+   in another reads fine and round-trips wrong.
+2. **Done for the designation.** A designated station is an ordinary
+   station and the delivery walk recognises the boundary: a value
+   reaching an output port wired nowhere is held rather than dropped.
+
+   The station running *no box at all* was not built and turned out
+   not to be needed. A door that shapes nothing is a station running
+   an identity box — an ordinary function somebody was going to write
+   anyway, rather than a new kind of station. The count of things this
+   engine has stays where it was.
+3. **Done.** Values are held rather than discarded, and the warning
+   fires from the first doubling and names the station. The two read
+   differently, as required: a doorway backing up on its inputs is the
+   ordinary uneven-inputs report, and one backing up on its output
+   says nobody is collecting the program's results at all.
 4. **Done.** Both calls: take the oldest, and say how many wait.
    Oldest first, which is the one ordering this engine can still
    honestly offer — one station produced them all in sequence, so
    unlike values leaving a port, this order means something.
-5. Carrying the declaration through the dump, so a dumped program still
-   names its outputs and round-trips.
+5. **Done.** The dump writes the word and a test reloads a written-out
+   program to prove both doors survived.
 6. The load-time check that a declared output station exists and that
    what is wired into it type-checks — the ordinary wire check applied
    at one more place.
