@@ -3,9 +3,16 @@
  *
  * What this is: issue 704, the feature the whole design has been
  * quietly preparing for. Wires hold station indices rather than
- * addresses; stations never move; delivery snapshots destination
- * lists under the station's mutex. Each of those was chosen partly
- * for this moment, and this file is the debt being redeemed.
+ * addresses; stations never move; a destination list is an immutable
+ * array published by one write, so a delivery walk reads it without a
+ * lock. Each of those was chosen partly for this moment, and this
+ * file is the debt being redeemed.
+ *
+ * The third of those used to read "delivery snapshots destination
+ * lists under the station's mutex", which is what it did before issue
+ * 214 — a lock and a copy proportional to fan-out on every value the
+ * engine moved. The preparation survived the mechanism being
+ * replaced by a better one.
  *
  * A fourth preparation was here and is gone: the gather cycle check
  * ran when a connection was made rather than when it was traversed,
@@ -21,11 +28,18 @@
  * lock delivery snapshots under, so no walker can be left holding a
  * freed node.
  *
- * Refusal behaviour, decided rather than defaulted: refusals return
- * -1 with the reason on stderr. A loader that dies serves its
+ * Refusal behaviour, decided rather than defaulted: a refusal is
+ * handed back and the caller decides. A loader that dies serves its
  * author, but a running engine that dies because a control surface
- * sent one bad instruction takes the plant down with it. The cost —
- * a caller can ignore the -1 — is weighed in the first-pass report.
+ * sent one bad instruction takes the plant down with it.
+ *
+ * There are three faces on that now (issue 212). One returns the
+ * reason, which is what lets somebody reading a file collect every
+ * mistake and present them together; one prints it and returns -1,
+ * which is what live editing's callers already expected; one stops
+ * the program, which is what construction wants. The cost of the
+ * middle one — a caller can ignore the -1 — is weighed in the
+ * first-pass report, and the first face is the answer to it.
  */
 #include "049-observe.h"
 #include "026-registry.h"

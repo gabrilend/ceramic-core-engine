@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>049-observe.h — seeing inside, from outside</title>
+<title>051-dump.c — writing a running program back out as a file</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -133,9 +133,9 @@
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
-<a href="info-049-observe-h.html" class="here">049-observe.h — seeing inside, from outside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
 <a href="info-050-observe-c.html">050-observe.c — the engine saying out loud what it already knew</a>
-<a href="info-051-dump-c.html">051-dump.c — writing a running program back out as a file</a>
+<a href="info-051-dump-c.html" class="here">051-dump.c — writing a running program back out as a file</a>
 <a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
@@ -143,41 +143,53 @@
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 </nav>
 <main>
-<h1>049-observe.h — seeing inside, from outside</h1>
-<p>Phase 7's surface, implemented across the observe (050), dump (051),
-and rewire (052) files.</p>
-<h2>Reports</h2>
-<p><strong>map_report_buffers(map, stream)</strong> — every port that grew or held a
-backlog: doublings, capacity, high water, named by station. Plus the
-task ring's own story, with the reminder that port piles and ring
-piles are different diagnoses.</p>
-<p><strong>map_report_stations(map, stream, order)</strong> — runs and
-tasks-produced per station (always on), plus box time and mutex wait
-when built with <code>-DSORA_STATS</code> (clock reads compile out otherwise).
-Orders: by time, by contention, by count — a dispatch table of
-comparators.</p>
-<p><strong>map_observe_start(map, path, interval ms) / map_observe_stop</strong> —
-periodic emission from a non-worker thread that pushes nothing.
-A non-positive interval refuses: unwanted observation is refused,
-not defaulted.</p>
-<p><strong>map_report_shutdown(map)</strong> — called by teardown; slots grown past
-the shout threshold are named on stderr.</p>
-<h2>The dump</h2>
-<p><strong>map_dump(map, stream)</strong> — the live table in map format, derived
-facts as comments (types, sizes, indices). Loaded maps
-only (names required). Load → dump → load → dump is byte-identical;
-statics render their load-time text, with runtime byte-writes noted
-as not re-serialized.</p>
-<h2>Rewiring</h2>
-<p><strong>map_rewire_connect / map_rewire_disconnect</strong> —
-change the shape while it runs. All load-time rules per edge, check
-and mutation under one rewiring lock, list surgery additionally
-under the owning station's mutex (delivery snapshots under the
-same). A third operation repointed a gather wire and carried the
-cycle walk; it went with the pull path. Refusals return -1 with the
-reason on stderr — a running
-engine is not killed by one bad instruction; the trade is weighed in
-the first-pass report.</p>
+<h1>051-dump.c — writing a running program back out as a file</h1>
+<p>One function. It walks the live station table and writes a map file
+describing what the engine is <strong>actually running</strong>, which is not
+necessarily what any file said — a program can be edited while it
+runs, and this is how you find out what it became.</p>
+<table>
+<tr><td>Function</td><td>Takes</td><td>Gives</td><td>Does</td></tr>
+<tr><td><code>map_dump</code></td><td>a program, a stream</td><td>nothing</td><td>Writes the whole program as a map file that reads back in.</td></tr>
+</table>
+<h2>What makes it worth having</h2>
+<p><strong>It reads back.</strong> That is the whole property, and it is what makes
+this the cheapest proof available that two ways of building a program
+produce the same program: dump both and compare the text. Two
+identical dumps are two identical station tables, including every
+detail a hand-written comparison would forget to check.</p>
+<p>It has already earned that twice. Comparing a file-built program
+against a surface-built one found that a deepened buffer and a port
+with no source were spelled the same way in the format, so the first
+could be written down and not read back.</p>
+<h2>What it needs from a program</h2>
+<p><strong>Every station must have a name</strong>, because a station line begins with
+one. A program built by hand and never named cannot be described on
+disk, and this says so plainly rather than inventing a spelling — the
+marker it writes instead is deliberately not a legal name, so such a
+dump cannot be read back in silence.</p>
+<p>The question is asked per station. It used to ask whether the program
+had <em>any</em> names, which was the same question while reading a file was
+the only way to build one — the loader named all of them or none.</p>
+<h2>What it writes, and what it deliberately does not</h2>
+<p><strong>Derived facts appear as comments</strong>, so they can be read without
+being re-read as instructions.</p>
+<p><strong>The format writes exceptions.</strong> A port at the default depth says
+nothing about depth; a port that is an ordinary buffer says nothing
+about its source. A line for every property of every port would be a
+file nobody could scan.</p>
+<p><strong>Values are spoken from their bytes</strong>, not echoed from remembered
+text. A constant a runtime write changed dumps as what it <em>now is</em>,
+which the older table-and-number form could not do — it printed what
+the file had said. That hole was admitted in its own comment for a
+long time before it closed.</p>
+<p>**There is no statics section any more, and its absence is the dump
+getting more accurate rather than less.** That section is notation —
+a way to write a value once while describing a map and point ports at
+it by number. With each value living on the port that reads it, every
+constant is written beside its port, from its bytes. Two ports that
+shared an entry dump as two ports each holding their own copy, because
+that is what they now are.</p>
 
 </main>
 </div></body></html>

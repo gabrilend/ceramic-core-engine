@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>049-observe.h — seeing inside, from outside</title>
+<title>052-rewire.c — changing the shape while it runs</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -133,51 +133,77 @@
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
-<a href="info-049-observe-h.html" class="here">049-observe.h — seeing inside, from outside</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
 <a href="info-050-observe-c.html">050-observe.c — the engine saying out loud what it already knew</a>
 <a href="info-051-dump-c.html">051-dump.c — writing a running program back out as a file</a>
-<a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
+<a href="info-052-rewire-c.html" class="here">052-rewire.c — changing the shape while it runs</a>
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 </nav>
 <main>
-<h1>049-observe.h — seeing inside, from outside</h1>
-<p>Phase 7's surface, implemented across the observe (050), dump (051),
-and rewire (052) files.</p>
-<h2>Reports</h2>
-<p><strong>map_report_buffers(map, stream)</strong> — every port that grew or held a
-backlog: doublings, capacity, high water, named by station. Plus the
-task ring's own story, with the reminder that port piles and ring
-piles are different diagnoses.</p>
-<p><strong>map_report_stations(map, stream, order)</strong> — runs and
-tasks-produced per station (always on), plus box time and mutex wait
-when built with <code>-DSORA_STATS</code> (clock reads compile out otherwise).
-Orders: by time, by contention, by count — a dispatch table of
-comparators.</p>
-<p><strong>map_observe_start(map, path, interval ms) / map_observe_stop</strong> —
-periodic emission from a non-worker thread that pushes nothing.
-A non-positive interval refuses: unwanted observation is refused,
-not defaulted.</p>
-<p><strong>map_report_shutdown(map)</strong> — called by teardown; slots grown past
-the shout threshold are named on stderr.</p>
-<h2>The dump</h2>
-<p><strong>map_dump(map, stream)</strong> — the live table in map format, derived
-facts as comments (types, sizes, indices). Loaded maps
-only (names required). Load → dump → load → dump is byte-identical;
-statics render their load-time text, with runtime byte-writes noted
-as not re-serialized.</p>
-<h2>Rewiring</h2>
-<p><strong>map_rewire_connect / map_rewire_disconnect</strong> —
-change the shape while it runs. All load-time rules per edge, check
-and mutation under one rewiring lock, list surgery additionally
-under the owning station's mutex (delivery snapshots under the
-same). A third operation repointed a gather wire and carried the
-cycle walk; it went with the pull path. Refusals return -1 with the
-reason on stderr — a running
-engine is not killed by one bad instruction; the trade is weighed in
-the first-pass report.</p>
+<h1>052-rewire.c — changing the shape while it runs</h1>
+<p>Drawing and cutting wires, and taking a station out, on a program that
+may have workers in flight. The feature the whole design was quietly
+preparing for: wires hold station numbers rather than addresses,
+stations never move, and a delivery walk reads a destination list
+without a lock — each of those was chosen partly for this, and this
+file is the debt being redeemed.</p>
+<h2>The one lock, and what it is for</h2>
+<p><strong>Checking an edge and installing it are one operation.</strong> Two threads
+each adding an individually legal wire can produce an illegal pair, so
+the check and the insertion are never separated — one rewiring lock
+holds both. List surgery additionally happens under the owning
+station's own mutex, so nobody is left holding something freed.</p>
+<h2>The functions</h2>
+<table>
+<tr><td>Function</td><td>Takes</td><td>Gives</td><td>Does</td></tr>
+<tr><td><code>map_wire</code></td><td>a program, a station and output port, a station and input port</td><td>NULL, or a sentence</td><td><strong>The one wiring operation.</strong> Draws a wire at any moment — while a program is being assembled or while it runs — applying every rule.</td></tr>
+<tr><td><code>map_rewire_connect</code></td><td>the same</td><td>0, or -1</td><td>The same operation, printing the refusal and returning a code.</td></tr>
+<tr><td><code>map_rewire_disconnect</code></td><td>the same</td><td>0, or -1</td><td>Cuts one wire, by rebuilding the destination list without it.</td></tr>
+<tr><td><code>map_remove_station</code></td><td>a program, a station</td><td>0, or -1</td><td>Takes a station out and frees its place for reuse.</td></tr>
+</table>
+<p><strong>There is one implementation and three faces on it</strong>, differing only
+in what a caller wants done with a refusal: hand it back, print it and
+return a code, or stop the program (which is what the construction
+call in the station layer does). Construction and live editing used to
+have an implementation each, and construction's was quietly the
+weaker — it never asked whether the destination could hold a value and
+never compared the widths — so a program built by hand could contain a
+wire the same program read from a file would have been refused. Which
+face you want is a property of the caller, and it is the only thing
+that ever legitimately varied.</p>
+<h2>What removal does, and why in that order</h2>
+<p><strong>The wires that name a station are cut before the station goes.</strong>
+A wire lives only as a destination record on some other station's
+output port, so one walk over every station finds all of them. Doing
+it first is what makes reusing the place safe <em>without</em> putting a
+version number on every wire — the walk is paid once, rarely, instead
+of on every delivery.</p>
+<p>Each affected list is rebuilt whole and published by one write, so a
+walker sees the before or the after and never a partial cut. The
+station is marked removed first, so a value already in flight toward
+it is discarded on arrival rather than delivered into a station being
+dismantled — which is what this engine already does with a value that
+has nowhere to go.</p>
+<p><strong>The place does not come free immediately.</strong> A task is built from a
+station's fields after the readiness check released its mutex, so a
+worker may still be inside one. A quiescence sweep decides when nobody
+can be, using a per-worker counter that is odd inside a task and even
+outside it.</p>
+<h2>Refusal, decided rather than defaulted</h2>
+<p>A loader that dies serves its author. A running engine that dies
+because a control surface sent one bad instruction takes the plant
+down with it. So the operations here hand a refusal back rather than
+stopping, and the caller decides — which is also what lets somebody
+reading a file collect every mistake in it and present them together
+instead of one per run.</p>
+<h2>What is gone</h2>
+<p>A gather cycle check that ran when a connection was made rather than
+when it was traversed, and an operation that repointed a gather wire
+while the program ran. Nothing is pulled any more, so what remains is
+connecting, cutting, and removing.</p>
 
 </main>
 </div></body></html>

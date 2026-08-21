@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>049-observe.h — seeing inside, from outside</title>
+<title>050-observe.c — the engine saying out loud what it already knew</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -133,8 +133,8 @@
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
-<a href="info-049-observe-h.html" class="here">049-observe.h — seeing inside, from outside</a>
-<a href="info-050-observe-c.html">050-observe.c — the engine saying out loud what it already knew</a>
+<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
+<a href="info-050-observe-c.html" class="here">050-observe.c — the engine saying out loud what it already knew</a>
 <a href="info-051-dump-c.html">051-dump.c — writing a running program back out as a file</a>
 <a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
@@ -143,41 +143,59 @@
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 </nav>
 <main>
-<h1>049-observe.h — seeing inside, from outside</h1>
-<p>Phase 7's surface, implemented across the observe (050), dump (051),
-and rewire (052) files.</p>
-<h2>Reports</h2>
-<p><strong>map_report_buffers(map, stream)</strong> — every port that grew or held a
-backlog: doublings, capacity, high water, named by station. Plus the
-task ring's own story, with the reminder that port piles and ring
-piles are different diagnoses.</p>
-<p><strong>map_report_stations(map, stream, order)</strong> — runs and
-tasks-produced per station (always on), plus box time and mutex wait
-when built with <code>-DSORA_STATS</code> (clock reads compile out otherwise).
-Orders: by time, by contention, by count — a dispatch table of
-comparators.</p>
-<p><strong>map_observe_start(map, path, interval ms) / map_observe_stop</strong> —
-periodic emission from a non-worker thread that pushes nothing.
-A non-positive interval refuses: unwanted observation is refused,
-not defaulted.</p>
-<p><strong>map_report_shutdown(map)</strong> — called by teardown; slots grown past
-the shout threshold are named on stderr.</p>
-<h2>The dump</h2>
-<p><strong>map_dump(map, stream)</strong> — the live table in map format, derived
-facts as comments (types, sizes, indices). Loaded maps
-only (names required). Load → dump → load → dump is byte-identical;
-statics render their load-time text, with runtime byte-writes noted
-as not re-serialized.</p>
-<h2>Rewiring</h2>
-<p><strong>map_rewire_connect / map_rewire_disconnect</strong> —
-change the shape while it runs. All load-time rules per edge, check
-and mutation under one rewiring lock, list surgery additionally
-under the owning station's mutex (delivery snapshots under the
-same). A third operation repointed a gather wire and carried the
-cycle walk; it went with the pull path. Refusals return -1 with the
-reason on stderr — a running
-engine is not killed by one bad instruction; the trade is weighed in
-the first-pass report.</p>
+<h1>050-observe.c — the engine saying out loud what it already knew</h1>
+<p>The reporting half of phase 7. Nothing here decides anything: the
+numbers have been kept all along — growth counts and high-water marks
+since the station layer was built, run counts riding the delivery
+path, timing from the shims when it is compiled in — and this file
+reads and formats them.</p>
+<table>
+<tr><td>Function</td><td>Takes</td><td>Gives</td><td>Does</td></tr>
+<tr><td><code>map_report_buffers</code></td><td>a program, a stream</td><td>nothing</td><td>Which ports have grown and how deep the backlog reached, plus the task queue's own growth.</td></tr>
+<tr><td><code>map_report_stations</code></td><td>a program, a stream, an ordering</td><td>nothing</td><td>Per-station run counts, values produced, and time spent when timing is compiled in.</td></tr>
+<tr><td><code>map_report_shutdown</code></td><td>a program</td><td>nothing</td><td>The parting word: anything that grew far enough to be worth complaining about.</td></tr>
+<tr><td><code>map_observe_start</code></td><td>a program, a path, an interval</td><td>nothing</td><td>Emits a report on a timer, from a thread that is not a worker.</td></tr>
+<tr><td><code>map_observe_stop</code></td><td>a program</td><td>nothing</td><td>Stops it.</td></tr>
+<tr><td><code>sora_stats_box_time</code></td><td>a task, nanoseconds</td><td>nothing</td><td>How long one box took, charged onto the task by its shim.</td></tr>
+</table>
+<h2>Reading a machine that is still moving</h2>
+<p><strong>The walk takes no lock</strong>, and the numbers are stale by a moment.
+That is the nature of observing something live, and it is the right
+trade: a report that stopped the engine to be exact would change the
+thing it was measuring.</p>
+<p><strong>The timer thread is not a worker and pushes nothing.</strong> Termination
+is decided by the last worker to fall asleep finding no work, so
+anything that could push after that moment would break it. This
+watches and never contributes.</p>
+<h2>Three piles, three different diagnoses</h2>
+<p>This is the part worth knowing, because the numbers look alike and
+mean opposite things.</p>
+<p><strong>A port backing up</strong> means one input side is outpacing its siblings —
+values arriving faster on one arrow than the station can pair them
+with on another. Memory is absorbing the difference.</p>
+<p><strong>The task queue backing up</strong> means the workers are behind the
+program: more became runnable than there were threads to run it.</p>
+<p><strong>Results backing up</strong> means *nobody is collecting the program's
+results at all*. This one is louder than the other two by design. The
+first two are performance signals worth a line in the teardown report;
+this is a program computing into somewhere nobody is looking, and
+waiting until shutdown to mention it wastes the entire run — so it is
+said from the first doubling, naming the station.</p>
+<h2>The shout at the end</h2>
+<p>A port grown past a threshold gets a complaint at shutdown, per the
+rule that a warning is an error nobody has decided about yet. **The
+number lives here and nowhere else**, deliberately: a threshold quoted
+in a document is one that goes stale silently.</p>
+<p>It counts <strong>pages</strong>, not doublings, and it moved when growth stopped
+doubling and started appending. Sixteen pages is the same backlog four
+doublings used to mean — left where it was, the same complaint would
+have fired whenever a consumer was briefly slow, and a warning that
+cries wolf costs more than it is worth.</p>
+<h2>Naming a station</h2>
+<p>Reports name a station the way a map file named it, or by its index
+when nothing did. A program built by calling the construction surface
+has no names at all, and a report that says <code>?</code> about it is one nobody
+can act on.</p>
 
 </main>
 </div></body></html>
