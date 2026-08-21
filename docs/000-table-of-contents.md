@@ -26,7 +26,10 @@ minimal-soramech/
 │   │   │                           were, and what each one costs
 │   │   ├── README.md               what belongs here, and the rules
 │   │   ├── 056-no-pull-path.md    why there is no pull path
-│   │   └── 057-packaging.md        handing the engine to someone else
+│   │   ├── 057-packaging.md        handing the engine to someone else
+│   │   └── 090-one-table-per-      where a station table lives, and why
+│   │       processor.md            the software rule and the hardware
+│   │                               boundary are the same boundary
 │   └── HTML/                       the generated site: every document,
 │                                   issue, and interface, cross-linked
 │                                   (make html; start at index.html)
@@ -78,6 +81,7 @@ memory so that path can start.
 | What you may rely on without measuring | [058 — Guarantees](058-guarantees.md) |
 | Why nothing is ever pulled, and what that cost | [056 — Why there is no pull path](implementation-notes/056-no-pull-path.md) |
 | What it would take to use this from another project | [057 — Packaging](implementation-notes/057-packaging.md) |
+| Which processor a station table belongs to | [090 — One station table per processor](implementation-notes/090-one-table-per-processor.md) |
 | Where the design had a real choice, and what it cost | [Implementation notes](implementation-notes/README.md) |
 
 ## The phases

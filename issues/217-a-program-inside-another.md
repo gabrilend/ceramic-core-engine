@@ -88,6 +88,18 @@ an interior station of an instance is reaching inside, and the point
 of the declaration is that reaching inside stops happening by
 accident.
 
+**And the choice has a second axis, which is where the hardware
+comes in.** A station table belongs to one processor, and so does the
+pool that runs it
+([090](../docs/implementation-notes/090-one-table-per-processor.md)).
+So things composed into one table run on one processor: composing is
+the right shape for a subgraph you want *close*, and the wrong shape
+for work you want spread across sockets — for which the answer is a
+second program with a second table, fed through its entrance. The
+choice was about isolation, that a composed program shares a fate; it
+is also about locality, that a composed program shares a processor's
+memory.
+
 That is the difference between this and starting beside, and it is
 worth stating as one sentence: **an instance shares the parent's
 station table, so it can be wired to; a program started beside has its

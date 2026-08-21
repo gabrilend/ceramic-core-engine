@@ -621,6 +621,26 @@ typedef struct station {
 #define STATION_SHELF_SHIFT 6
 #define STATION_SHELF_MASK  (STATIONS_PER_SHELF - 1)
 
+/*
+ * **A station table belongs to one processor**, and so does the pool
+ * that runs it.
+ *
+ * Not to one machine and not to one core: to the package, the thing
+ * with its own memory controller. Every core inside it shares that
+ * processor's fast memory, and a table living there is reachable by
+ * all of them at the speed everything below assumes. Two processors
+ * *can* share a table when the memory holding the stations is
+ * reachable from both, and that is the slower path and the exception.
+ *
+ * Nothing here pins a table to a processor — no affinity, no
+ * allocation on a particular node. What is written down is the intent,
+ * because the one thing that would make it impossible later is a wire
+ * that crosses tables, and there is now a standing reason not to have
+ * one beyond the software reason there always was. A program spanning
+ * two processors is two programs talking through their doors, not one
+ * program with a long wire. See
+ * docs/implementation-notes/090-one-table-per-processor.md.
+ */
 typedef struct map {
     /*
      * **The table is shelves, not one array** (issue 211).
@@ -988,6 +1008,13 @@ const char *map_designate_input(map_t *m, int station);
  * like it wires anything. A started one is separate, reached only
  * through its doors, and a program that runs other programs wants
  * that.
+ */
+/*
+ * **This is the within-one-processor case.** Several programs, one
+ * pool, one processor's cores, reaching each other only through their
+ * doors. The across-processors case is the same shape with a pool
+ * each, and it needs nothing added here — a door does not ask where
+ * its caller is.
  */
 map_t *map_start_beside(map_t *parent);
 

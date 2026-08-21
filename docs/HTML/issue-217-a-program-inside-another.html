@@ -21,6 +21,7 @@
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
+<a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-README.html">Implementation notes</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
@@ -219,6 +220,17 @@ only two things a parent has any business naming. A parent wiring into
 an interior station of an instance is reaching inside, and the point
 of the declaration is that reaching inside stops happening by
 accident.</p>
+<p>**And the choice has a second axis, which is where the hardware
+comes in.** A station table belongs to one processor, and so does the
+pool that runs it
+(<a href="impl-090-one-table-per-processor.html">090</a>).
+So things composed into one table run on one processor: composing is
+the right shape for a subgraph you want <em>close</em>, and the wrong shape
+for work you want spread across sockets — for which the answer is a
+second program with a second table, fed through its entrance. The
+choice was about isolation, that a composed program shares a fate; it
+is also about locality, that a composed program shares a processor's
+memory.</p>
 <p>That is the difference between this and starting beside, and it is
 worth stating as one sentence: **an instance shares the parent's
 station table, so it can be wired to; a program started beside has its
