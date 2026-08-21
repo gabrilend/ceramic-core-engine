@@ -74,16 +74,32 @@ CFLAGS += -DSORA_RAM_EXEC='"$(RAM_EXEC)"'
 BOX_SRC   := $(wildcard $(DIR)/src/boxes/*.c)
 GEN_SRC   := $(wildcard $(DIR)/scripts/*.c)
 GEN_LIB   := $(filter-out $(DIR)/scripts/070-generate.c,$(GEN_SRC))
+
+# The map reader, linked into the generator so it can compile a
+# description into the calls it describes (issue 311d). It parses text
+# into a description and touches nothing else of the engine — three
+# enumerations for the station kinds and the door marks — which is why
+# a build tool can hold it. Its eventual home is the generator alone;
+# until the engine stops reading maps at run time it has two callers.
+GEN_MAPS  := $(DIR)/src/041-mapfile.c
+
+# Which maps this build compiles into the binary. Discovered, never
+# listed, so a map cannot exist that the build silently does not see —
+# the same rule box sources have always had.
+MAP_SRC   := $(wildcard $(DIR)/maps/*.map)
+MAP_FLAGS := $(patsubst %,--map=%,$(MAP_SRC))
 GENERATOR := $(BUILD)/generate
 GENERATED := $(DIR)/src/generated/registry.c
 
-$(GENERATOR): $(GEN_SRC) | $(BUILD)
-	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $(GEN_SRC)
+$(GENERATOR): $(GEN_SRC) $(GEN_MAPS) | $(BUILD)
+	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $(GEN_SRC) $(GEN_MAPS)
 
-$(GENERATED): $(BOX_SRC) $(GENERATOR)
+# Maps join the dependency list, so editing one regenerates (issue
+# 311d step 3).
+$(GENERATED): $(BOX_SRC) $(MAP_SRC) $(GENERATOR)
 	mkdir -p $(DIR)/src/generated
 
-	$(GENERATOR) $(GENERATED) --root=$(DIR) $(BOX_SRC)
+	$(GENERATOR) $(GENERATED) --root=$(DIR) $(MAP_FLAGS) $(BOX_SRC)
 # Everything the engine is made of: the pool from libs/, the station
 # layer and what follows from src/, and the generated registry.
 # Discovered by wildcard so a new engine file enrolls itself.
@@ -142,8 +158,8 @@ $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) | $(BUILD)
 # than the engine: it is testing the build tool, not the thing the
 # tool builds. An explicit rule beats the pattern rule above, so this
 # one file compiles differently without excluding it from the sweep.
-$(BUILD)/071-test-gentext: $(DIR)/tests/071-test-gentext.c $(GEN_LIB) | $(BUILD)
-	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $< $(GEN_LIB)
+$(BUILD)/071-test-gentext: $(DIR)/tests/071-test-gentext.c $(GEN_LIB) $(GEN_MAPS) | $(BUILD)
+	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $< $(GEN_LIB) $(GEN_MAPS)
 
 # Shell-driven tests sit beside the compiled ones — the generator's
 # command-line conduct is proven from the shell.

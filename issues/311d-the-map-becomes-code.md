@@ -25,15 +25,65 @@ of emitting against the final interface only.
 
 ## Current behavior
 
-The generator globs the box source directory and emits a shim for every
-function it finds. The build has never seen a map file, so it cannot
-know which of those a program uses, and it compiles in all of them.
+**A map is compiled into the calls it describes, and nothing has been
+deleted yet.**
 
-At run time a loader reads the map as text, resolves each box name
-against the registry, and calls the construction surface. So a program
-carries a parser, a table, and every box anyone ever wrote — and nothing
-checks that a name in a map corresponds to anything at all until that
-loader runs, on somebody else's machine.
+The generator is told which descriptions the build should compile —
+discovered from a directory, never listed, the same rule box sources
+have always had. For each one it emits a function that builds it:
+create a station, name it, call that box's **placement function
+directly**, mark a door, set depths and sources, and then draw every
+wire once every station exists.
+
+**No box name survives into the running program.** The text `seven`
+was resolved on the author's machine and became a call to that box's
+placement function. A name that matches nothing, or matches boxes in
+two sources with no path given, **fails the build naming the map
+line** — none of which was checkable before, because the build had
+never seen a map.
+
+**Station names do survive, and that is not an inconsistency.** A box
+name was a question the engine had to answer at run time and no longer
+is. A station name is data the program carries about itself so it can
+be written back out as a file that reads in again — the same status
+the box's own name literal already has.
+
+**The generated function works at an offset.** It records where each
+station landed rather than assuming they are numbered from zero,
+because adding a station hands back a freed place before it grows the
+table. Building one compiled description twice into one program gives
+two independent copies, which is the same claim instantiating from
+text makes ([217](completed/217-a-program-inside-another.md)).
+
+**And the two paths are proven to be one.** A description read as text
+and the same description compiled into C are dumped and the text
+compared byte for byte. Not equivalent — the same. The generated
+function calls the same construction surface a person calling C would,
+so reading a map and compiling one stop being two paths that must
+agree and become one path with two authors.
+
+### What has not happened
+
+Everything that *removes* something. The engine still carries the map
+parser and still reads descriptions at run time; the generator emits a
+shim for every box it was given rather than only for the ones a map
+names; the linker is not yet told to discard what nothing reaches. Each
+of those is a step below, and each of them changes what other parts of
+the project are allowed to do — so they are separated from the step
+that makes the capability exist.
+
+### What stood before
+
+The generator globbed the box source directory and emitted a shim for
+every function it found. The build had never seen a map file, so it
+could not know which of those a program uses, and it compiled in all
+of them.
+
+At run time a loader read the map as text, resolved each box name
+against the registry, and called the construction surface. So a
+program carried a parser, a table, and every box anyone ever wrote —
+and nothing checked that a name in a map corresponded to anything at
+all until that loader ran, on somebody else's machine.
 
 ## Intended behavior
 
@@ -128,20 +178,31 @@ the compiler being needed exactly when new code genuinely arrives.
 
 ## Suggested implementation steps
 
-1. The generator learns to read a map file. The parser moves out of the
-   engine and into the generator, which is now its only home.
-2. Emission of `build_program`: places, wires, constants, in an order
-   that satisfies the construction surface's own rules.
-3. Map files join the Makefile's dependency list, so editing one
-   regenerates. Splitting generated material per box source is what
-   makes it incremental.
-4. The build-time reference check: every `file:function` in every named
-   map exists, is unambiguous, and has the parameter count the station
-   line implies.
-5. The generator emits shims only for named functions, and includes
-   only named sources.
-6. Linker garbage collection turned on, and a test that a binary built
-   from a three-box map does not contain a fourth box's code.
+1. **Half done.** The generator reads map files, by linking the same
+   parser the engine has. The parser has *not* moved yet, because the
+   engine still reads descriptions at run time — so there is one
+   implementation with two callers rather than two implementations,
+   which is the property that matters. Moving it is step 7's work.
+2. **Done.** Create, name, place, mark a door, set depths and
+   sources, then draw every wire — the reader's own order, so that
+   the two produce the same program rather than two similar ones. It
+   records where each station landed rather than assuming they start
+   at zero, so the same function works on an empty program and a
+   crowded one.
+3. **Done for the dependency**, not for the splitting. Descriptions
+   are discovered from a directory and join the generated file's
+   prerequisites, so editing one regenerates. Splitting the generated
+   material per box source, which is what would make that
+   *incremental* rather than whole, is not built.
+4. **Done for the parts a station line carries.** Every box name in
+   every named map is resolved at build time, and a name matching
+   nothing or matching two sources fails the build naming the map
+   line. The parameter count is not checked against the line, because
+   a station line does not state one — it says which box, and the box
+   says how many ports it has.
+5. Not built. The generator still emits a shim for every box it was
+   given.
+6. Not built.
 7. The engine's runtime map parser deleted — **and the parser itself
    kept, as a box.** Nothing in the *engine* parses maps any more, but
    a program that runs other programs needs a box that reads one
@@ -152,8 +213,11 @@ the compiler being needed exactly when new code genuinely arrives.
    the engine.
 8. [009](../docs/009-datapath-load.md) rewritten around what replaced
    it.
-9. A test that a program built from a compiled map and the same program
-   built by hand-written construction calls produce identical dumps.
+9. **Done**, and by the stronger comparison: a program built from a
+   compiled map and the same map *read as text* dump identically. The
+   hand-written form is already proven identical to the read form
+   ([212](completed/212-one-way-to-build-a-program.md)), so this
+   closes the triangle.
 
 ## Open questions
 

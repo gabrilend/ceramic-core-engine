@@ -20,6 +20,9 @@
  * build can find it (issue 306).
  */
 #include "067-genparse.h"
+/* The map reader, so the generator can compile a description into
+ * the calls it describes (issue 311d). */
+#include "040-mapfile.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -482,8 +485,218 @@ static void emit_placements(buf_t *w, const description_t *d,
 }
 /* }}} */
 
+/* {{{ static const box_t *box_named() */
+/*
+ * Which box a map line means, resolved **at build time, on the
+ * author's machine, naming the map line** (issue 311d step 4).
+ *
+ * None of this was checkable before, because the build had never seen
+ * a map. A name that matches nothing and a name that matches two
+ * files are both stopped here rather than at somebody else's startup.
+ *
+ * A bare name is what a map line carries today. When the format
+ * learns to say `file:function` (issue 311a) this gains a path to
+ * settle a tie with, and the ambiguity below stops being fatal for
+ * anybody who says which they meant.
+ */
+static const box_t *box_named(const description_t *d, const char *name,
+                              const char *map_path, int line)
+{
+    const box_t *found = NULL;
+    int matches = 0;
+    for (int i = 0; i < d->boxes.n; i++) {
+        const box_t *b = vec_at(&d->boxes, i);
+        if (strcmp(b->name, name) == 0) {
+            found = b;
+            matches++;
+        }
+    }
+    if (matches == 0) {
+        fprintf(stderr, "generator: %s:%d: no box named '%s' in any source "
+                        "this build was given\n", map_path, line, name);
+        exit(65);
+    }
+    if (matches > 1) {
+        fprintf(stderr, "generator: %s:%d: '%s' names a box in more than "
+                        "one source, and the line does not say which\n",
+                map_path, line, name);
+        exit(65);
+    }
+    return found;
+}
+/* }}} */
+
+/* {{{ static void emit_maps() */
+/*
+ * **A map compiled into the calls it describes** (issue 311d).
+ *
+ * The text was a thing a program parsed while it ran; it becomes a
+ * blueprint for the compilation instead. Every box name in it is
+ * resolved here, on the author's machine, and becomes a direct call
+ * to that box's placement function — so no box name survives into the
+ * running program, and a misspelled one fails the build rather than
+ * somebody else's startup.
+ *
+ * **Station names do survive**, and that is not an inconsistency. A
+ * box name is a question the engine had to answer at run time and no
+ * longer does. A station name is *data the program carries about
+ * itself*, so it can be written back out as a file that reads in
+ * again — the same status the box's own name literal already has.
+ *
+ * **The emitted function records where each station landed**, exactly
+ * as reading a file does, rather than assuming they are numbered from
+ * zero. Adding a station hands back a freed place before it grows the
+ * table, so a description built into a program that has had removals
+ * gets whatever holes exist; the array is what makes the same
+ * generated function work on an empty program and a crowded one.
+ *
+ * The order is the reader's order — create, name, place, mark a door,
+ * set depths and sources, then draw every wire — so that a program
+ * built from this and the same program read from the file are the
+ * same program rather than two similar ones.
+ */
+static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
+                      const char **maps, int n_maps, const char *root)
+{
+    if (n_maps == 0) {
+        buf_line(w, "/* No maps were named to this build (issue 311d). */");
+        buf_line(w, "const map_build_t sora_map_builds[] = { { 0, 0 } };");
+        buf_line(w, "const int sora_n_map_builds = 0;");
+        buf_line(w, "");
+        return;
+    }
+
+    /*
+     * Two helpers the generated build functions lean on, so every
+     * refusal is handled the same way and each emitted line stays one
+     * call. Emitted only when there are maps, because a build with
+     * warnings as errors rejects a function nobody calls.
+     */
+    buf_line(w, "/* A refusal from a generated build ends the program");
+    buf_line(w, " * (issue 106): it is an invalid operation, and the caller");
+    buf_line(w, " * is generated code with nothing better to decide. */");
+    buf_line(w, "static void sora_built_take(const char *refusal)");
+    buf_line(w, "{");
+    buf_line(w, "    if (refusal)");
+    buf_line(w, "        sora_stop_now(0, SORA_EXIT_BAD_CALL, refusal);");
+    buf_line(w, "}");
+    buf_line(w, "");
+
+    for (int mi = 0; mi < n_maps; mi++) {
+        map_description_t *md = mapfile_parse(maps[mi]);
+        const char *shortened = path_within(maps[mi], root);
+        char *sym = gt_box_symbol(a, shortened, "build");
+
+        buf_line(w, "/* builds %s */", shortened);
+        buf_line(w, "static void %s(map_t *m)", sym);
+        buf_line(w, "{");
+        buf_line(w, "    int at[%d];", md->n_stations > 0 ? md->n_stations : 1);
+
+        int index = 0;
+        for (desc_station_t *s = md->stations; s; s = s->next, index++) {
+            const box_t *b = box_named(d, s->box, maps[mi], s->line);
+            char *place = gt_box_symbol(a, path_within(b->file, root),
+                                        b->name);
+            const char *kind = s->kind == STATION_COMPARATOR
+                             ? "STATION_COMPARATOR"
+                             : s->kind == STATION_ITERATOR
+                             ? "STATION_ITERATOR" : "STATION_PLAIN";
+
+            buf_line(w, "    at[%d] = map_add_station(m);", index);
+            buf_line(w, "    sora_built_take(map_name_station(m, at[%d], "
+                        "\"%s\"));", index, s->name);
+            buf_line(w, "    %s__place(m, at[%d], %s);", place, index, kind);
+            if (s->door == DOOR_IN)
+                buf_line(w, "    sora_built_take(map_designate_input(m, "
+                            "at[%d]));", index);
+            else if (s->door == DOOR_OUT)
+                buf_line(w, "    sora_built_take(map_designate_output(m, "
+                            "at[%d]));", index);
+
+            for (desc_input_t *in = s->inputs; in; in = in->next) {
+                if (in->depth > 0)
+                    buf_line(w, "    sora_built_take(map_in_port_start_depth"
+                                "(m, at[%d], %d, %d));",
+                             index, in->port, in->depth);
+                if (in->is_none) {
+                    buf_line(w, "    sora_built_take(map_configure_port(m, "
+                                "at[%d], %d, IN_PORT_NONE, 0));",
+                             index, in->port);
+                    continue;
+                }
+                const char *text = in->text;
+                if (in->is_static) {
+                    for (desc_static_t *e = md->statics; e; e = e->next)
+                        if (e->id == in->static_id) {
+                            text = e->text;
+                            break;
+                        }
+                    if (!text) {
+                        fprintf(stderr, "generator: %s:%d: 'in %d $%d' names "
+                                        "a statics entry the file does not "
+                                        "give a value for\n",
+                                maps[mi], in->line, in->port, in->static_id);
+                        exit(65);
+                    }
+                }
+                if (!text)
+                    continue;   /* a depth and nothing else */
+                buf_addstr(w, "    sora_built_take(map_configure_port(m, "
+                              "at[");
+                buf_addf(w, "%d], %d, IN_PORT_STATIC, \"", index, in->port);
+                for (const char *c = text; *c; c++) {
+                    if (*c == '\\')     buf_addstr(w, "\\\\");
+                    else if (*c == '"') buf_addstr(w, "\\\"");
+                    else                buf_addch(w, *c);
+                }
+                buf_addstr(w, "\"));\n");
+            }
+        }
+
+        /* Every wire, after every station exists — which is all that
+         * survives of the reader's two passes. */
+        index = 0;
+        for (desc_station_t *s = md->stations; s; s = s->next, index++) {
+            for (desc_output_t *out = s->outputs; out; out = out->next) {
+                int dest = 0, found = -1;
+                for (desc_station_t *t = md->stations; t; t = t->next, dest++)
+                    if (strcmp(t->name, out->dest_station) == 0) {
+                        found = dest;
+                        break;
+                    }
+                if (found < 0) {
+                    fprintf(stderr, "generator: %s:%d: arrow to '%s', which "
+                                    "this map does not declare\n",
+                            maps[mi], out->line, out->dest_station);
+                    exit(65);
+                }
+                buf_line(w, "    sora_built_take(map_wire(m, at[%d], %d, "
+                            "at[%d], %d));",
+                         index, out->port, found, out->dest_port);
+            }
+        }
+
+        buf_line(w, "}");
+        buf_line(w, "");
+        mapfile_free(md);
+    }
+
+    buf_line(w, "/* Which built function belongs to which description. */");
+    buf_line(w, "const map_build_t sora_map_builds[] = {");
+    for (int mi = 0; mi < n_maps; mi++) {
+        const char *shortened = path_within(maps[mi], root);
+        char *sym = gt_box_symbol(a, shortened, "build");
+        buf_line(w, "    { \"%s\", %s },", shortened, sym);
+    }
+    buf_line(w, "};");
+    buf_line(w, "const int sora_n_map_builds = %d;", n_maps);
+    buf_line(w, "");
+}
+/* }}} */
+
 /* {{{ ge_emit() */
 void ge_emit(const description_t *d, const char **sources, int n_sources,
+             const char **maps, int n_maps,
              const char *out_path, const char *root);
 
 /* {{{ static void emit_sources() */
@@ -560,6 +773,7 @@ static void emit_sources(buf_t *w, arena_t *a, const char **sources,
 /* }}} */
 
 void ge_emit(const description_t *d, const char **sources, int n_sources,
+             const char **maps, int n_maps,
              const char *out_path, const char *root)
 {
     buf_t w;
@@ -607,6 +821,8 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
     /* Emitted beside the record rather than instead of it, so the two
      * can be compared before either is trusted (issue 311b). */
     emit_placements(&w, d, compare_of, d->arena, root);
+
+    emit_maps(&w, d, d->arena, maps, n_maps, root);
 
     free(compare_of);
 

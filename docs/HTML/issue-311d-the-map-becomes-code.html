@@ -148,6 +148,7 @@
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
+<a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
 </nav>
 <main>
 <h1>311d — The map becomes code</h1>
@@ -173,14 +174,55 @@ never gets removed. <strong>The other three children do not wait</strong>; this 
 sits behind the construction surface, and that is accepted as the cost
 of emitting against the final interface only.</p>
 <h2>Current behavior</h2>
-<p>The generator globs the box source directory and emits a shim for every
-function it finds. The build has never seen a map file, so it cannot
-know which of those a program uses, and it compiles in all of them.</p>
-<p>At run time a loader reads the map as text, resolves each box name
-against the registry, and calls the construction surface. So a program
-carries a parser, a table, and every box anyone ever wrote — and nothing
-checks that a name in a map corresponds to anything at all until that
-loader runs, on somebody else's machine.</p>
+<p>**A map is compiled into the calls it describes, and nothing has been
+deleted yet.**</p>
+<p>The generator is told which descriptions the build should compile —
+discovered from a directory, never listed, the same rule box sources
+have always had. For each one it emits a function that builds it:
+create a station, name it, call that box's **placement function
+directly**, mark a door, set depths and sources, and then draw every
+wire once every station exists.</p>
+<p><strong>No box name survives into the running program.</strong> The text <code>seven</code>
+was resolved on the author's machine and became a call to that box's
+placement function. A name that matches nothing, or matches boxes in
+two sources with no path given, **fails the build naming the map
+line** — none of which was checkable before, because the build had
+never seen a map.</p>
+<p><strong>Station names do survive, and that is not an inconsistency.</strong> A box
+name was a question the engine had to answer at run time and no longer
+is. A station name is data the program carries about itself so it can
+be written back out as a file that reads in again — the same status
+the box's own name literal already has.</p>
+<p><strong>The generated function works at an offset.</strong> It records where each
+station landed rather than assuming they are numbered from zero,
+because adding a station hands back a freed place before it grows the
+table. Building one compiled description twice into one program gives
+two independent copies, which is the same claim instantiating from
+text makes (<a href="done-217-a-program-inside-another.html">217</a>).</p>
+<p><strong>And the two paths are proven to be one.</strong> A description read as text
+and the same description compiled into C are dumped and the text
+compared byte for byte. Not equivalent — the same. The generated
+function calls the same construction surface a person calling C would,
+so reading a map and compiling one stop being two paths that must
+agree and become one path with two authors.</p>
+<h3>What has not happened</h3>
+<p>Everything that <em>removes</em> something. The engine still carries the map
+parser and still reads descriptions at run time; the generator emits a
+shim for every box it was given rather than only for the ones a map
+names; the linker is not yet told to discard what nothing reaches. Each
+of those is a step below, and each of them changes what other parts of
+the project are allowed to do — so they are separated from the step
+that makes the capability exist.</p>
+<h3>What stood before</h3>
+<p>The generator globbed the box source directory and emitted a shim for
+every function it found. The build had never seen a map file, so it
+could not know which of those a program uses, and it compiled in all
+of them.</p>
+<p>At run time a loader read the map as text, resolved each box name
+against the registry, and called the construction surface. So a
+program carried a parser, a table, and every box anyone ever wrote —
+and nothing checked that a name in a map corresponded to anything at
+all until that loader ran, on somebody else's machine.</p>
 <h2>Intended behavior</h2>
 <p><strong>A map is compiled into a function that builds it.</strong></p>
 <pre class="code">
@@ -257,20 +299,31 @@ never seen a map.</p>
 <p>The last two are the same mechanism at different scale, and both are
 the compiler being needed exactly when new code genuinely arrives.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The generator learns to read a map file. The parser moves out of the
-   engine and into the generator, which is now its only home.
-2. Emission of <code>build_program</code>: places, wires, constants, in an order
-   that satisfies the construction surface's own rules.
-3. Map files join the Makefile's dependency list, so editing one
-   regenerates. Splitting generated material per box source is what
-   makes it incremental.
-4. The build-time reference check: every <code>file:function</code> in every named
-   map exists, is unambiguous, and has the parameter count the station
-   line implies.
-5. The generator emits shims only for named functions, and includes
-   only named sources.
-6. Linker garbage collection turned on, and a test that a binary built
-   from a three-box map does not contain a fourth box's code.
+<p>1. <strong>Half done.</strong> The generator reads map files, by linking the same
+   parser the engine has. The parser has <em>not</em> moved yet, because the
+   engine still reads descriptions at run time — so there is one
+   implementation with two callers rather than two implementations,
+   which is the property that matters. Moving it is step 7's work.
+2. <strong>Done.</strong> Create, name, place, mark a door, set depths and
+   sources, then draw every wire — the reader's own order, so that
+   the two produce the same program rather than two similar ones. It
+   records where each station landed rather than assuming they start
+   at zero, so the same function works on an empty program and a
+   crowded one.
+3. <strong>Done for the dependency</strong>, not for the splitting. Descriptions
+   are discovered from a directory and join the generated file's
+   prerequisites, so editing one regenerates. Splitting the generated
+   material per box source, which is what would make that
+   <em>incremental</em> rather than whole, is not built.
+4. <strong>Done for the parts a station line carries.</strong> Every box name in
+   every named map is resolved at build time, and a name matching
+   nothing or matching two sources fails the build naming the map
+   line. The parameter count is not checked against the line, because
+   a station line does not state one — it says which box, and the box
+   says how many ports it has.
+5. Not built. The generator still emits a shim for every box it was
+   given.
+6. Not built.
 7. The engine's runtime map parser deleted — **and the parser itself
    kept, as a box.** Nothing in the <em>engine</em> parses maps any more, but
    a program that runs other programs needs a box that reads one
@@ -281,8 +334,11 @@ the compiler being needed exactly when new code genuinely arrives.</p>
    the engine.
 8. <a href="doc-009-datapath-load.html">009</a> rewritten around what replaced
    it.
-9. A test that a program built from a compiled map and the same program
-   built by hand-written construction calls produce identical dumps.</p>
+9. <strong>Done</strong>, and by the stronger comparison: a program built from a
+   compiled map and the same map <em>read as text</em> dump identically. The
+   hand-written form is already proven identical to the read form
+   (<a href="done-212-one-way-to-build-a-program.html">212</a>), so this
+   closes the triangle.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>

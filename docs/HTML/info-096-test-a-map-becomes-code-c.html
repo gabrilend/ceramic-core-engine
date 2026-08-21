@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>040-mapfile.h — the map file surface, from outside</title>
+<title>096-test-a-map-becomes-code.c — what it proves</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -134,7 +134,7 @@
 <a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
 <a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
 <a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
-<a href="info-040-mapfile-h.html" class="here">040-mapfile.h — the map file surface, from outside</a>
+<a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
 <a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
@@ -148,82 +148,45 @@
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
-<a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
+<a href="info-096-test-a-map-becomes-code-c.html" class="here">096-test-a-map-becomes-code.c — what it proves</a>
 </nav>
 <main>
-<h1>040-mapfile.h — the map file surface, from outside</h1>
-<p>A program is a directory of C functions and a text file. This is the
-text file's door.</p>
-<h2>Data structures</h2>
-<p><strong>map_description</strong> — what the file said, nothing constructed:
-stations (name, box name, kind, input overrides, output arrows, all
-with line numbers), the statics entries as raw text, the file path.
-Public so the parser can be tested without building anything.</p>
-<h2>Functions</h2>
-<p><strong>mapfile_parse(path) → description</strong> — read a map file. Line
-oriented; first word dispatches (<code>statics</code>, <code>in</code>, <code>out</code>, station
-line); <code>#</code> comments; indentation meaningless. Any malformed line is
-fatal naming file, line, and what was expected.</p>
-<p><strong>mapfile_free(description)</strong></p>
-<p><strong>map_load_file(path, worker count) → map</strong> — the whole journey, and
-every structural step of it is a call anybody could make (issues 210g,
-212): parse; first pass (a station per station line, named as it is
-created, its box placed by name, its door marked, one configuration
-call per port line); second pass (each arrow's destination name turned
-into an index — the one thing here that is a fact about the file
-rather than about the program — then the ordinary wiring operation,
-which applies the width check and every other rule); pool started with
-workers parked; then the program brought up, which is where the
-whole-program checks live and where the first tasks are made. Caller
-releases the pool, joins it, destroys the map.</p>
-<p>This caller adds exactly one policy of its own: a <em>file</em> somebody
-asked to be run that starts nothing and declares no entrance is
-refused, because it would do nothing at all.</p>
-<p><strong>map_instantiate_file(map, path) → instance</strong> — **a description
-brought inside a program that already exists.** Reading a file into a
-fresh program is this with the program fixed at "a new empty one",
-which is what it always was.</p>
-<p>A description is a <strong>template being instantiated</strong>, not a program
-being merged: new stations are built for its stations and wired the
-way it says, and one description can be instantiated as many times
-into one program as anybody likes with nothing shared between the
-copies. Nothing that already exists is renumbered.</p>
-<p>What the description says and where its stations land are related by a
-<strong>table</strong>, not an offset: adding a station hands back a freed place
-before it grows the table, so a program that has had removals gets
-whatever holes exist, in whatever order. The offset is what the
-translation degenerates to when nothing has been removed.</p>
-<p>**map_instance_entrance / map_instance_result(map, instance, nth) →
-int** — the nth door facing that way, or -1. This is the whole of what
-a parent is entitled to know about something it brought inside itself;
-everything that is not a door belongs to the description's author to
-rename or restructure.</p>
-<p><strong>map_instance_free(instance)</strong> — the handle goes, the stations stay.</p>
-<p><strong>map_add_part(map, name, out part) → NULL or a refusal</strong> — **adding a
-box and adding a map are one operation.** A map is a list of boxes and
-the wiring between them; a box is a list of one.</p>
-<p>A <strong>part</strong> is where values go in and where they come out. For a map
-those are the stations it declared as doors; for a single box they are
-the same station, because a box's own input ports are its way in and
-its own output port is its way out — a box is a map of one station
-whose doors are itself.</p>
-<p>Which kind a name refers to is resolved rather than guessed: a box
-lives in the binary and a description lives on disk, both are looked
-for, and finding both or neither is refused naming what was searched.</p>
-<p>**map_connect_parts(map, from part, port, to part, port) → NULL or a
-refusal** — a wire from one part's way out to another's way in. For
-two single boxes this is the ordinary wire. Port numbers are the ones
-a wire has always had, so a comparator's three outcomes are reachable
-exactly as before.</p>
-<p>Nothing takes a part apart. Everything that consumes one takes it
-whole, which is what keeps a handle from needing accessors.</p>
-<p><strong>map_seed_count(map) → int</strong> — how many stations the bring-up
-started; one when the author expected ten means a wiring mistake.</p>
-<p><strong>map_load_last_timing</strong> — where the most recent load's seconds went,
-in four stages: parse, first pass, second pass, bring-up. There were
-two more and both stopped being stages rather than getting faster —
-<em>validation</em> timed a naming sweep that no longer happens, and <em>seed</em>
-timed a phase only the loader could enter.</p>
+<h1>096-test-a-map-becomes-code.c — what it proves</h1>
+<p>A description read as text while a program runs, and the same
+description compiled into C at build time, produce the **same
+program**. Not equivalent — the same, by dumping both and comparing
+the text byte for byte.</p>
+<p>Comparing dumps is the cheapest proof available: the dump walks the
+live station table and writes what is actually there, so two identical
+dumps are two identical tables including every field a hand-written
+comparison would forget to check. If the two paths ever diverge — a
+default applied on one side, a port left in a different state, arrows
+attached in a different order — the text differs and the test names
+the first line where they part.</p>
+<table>
+<tr><td>Scene</td><td>What it proves</td></tr>
+<tr><td>the build compiled what it was told about</td><td>A description is found by the path the build knew it as, or by the bare name somebody would type. One the program was not built with is absent.</td></tr>
+<tr><td>identical dumps</td><td>Reading a map and compiling one are one path with two authors, not two paths that must agree.</td></tr>
+<tr><td>built twice</td><td>The generated function records where each station landed rather than assuming they start at zero, so building it twice into one program gives two independent copies — the same claim instantiating from text makes.</td></tr>
+</table>
+<h2>Why the compiled form matters</h2>
+<p><strong>No box name survives.</strong> Every one in the description was resolved on
+the author's machine and became a direct call to that box's placement
+function, so a misspelled box fails the build rather than somebody
+else's startup, and nothing is looked up while the program runs.</p>
+<p><strong>Station names do survive</strong>, and that is not an inconsistency. A box
+name was a question the engine had to answer at run time and no longer
+is. A station name is data the program carries about itself, so it can
+be written back out as a file that reads in again — which is exactly
+what this test relies on.</p>
+<h2>The description it uses</h2>
+<p><code>maps/095-doubling.map</code>, which is deliberately not the simplest map
+that could work: it has a constant, a port given a starting depth, a
+fan-out, a port left with no source, and both doors. Each of those is
+something one path could get right and the other wrong.</p>
+<p>It lives in <code>maps/</code> rather than in a temporary directory because the
+build has to see it. The maps a program declares are also a manifest,
+and a map the build never saw cannot be compiled in.</p>
 
 </main>
 </div></body></html>

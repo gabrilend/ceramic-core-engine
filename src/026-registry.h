@@ -187,4 +187,38 @@ extern const int          sora_n_box_sources;
 const char *registry_box_source(const char *path);
 /* }}} */
 
+/* {{{ maps compiled into code — issue 311d */
+/*
+ * **A map the build was told about, as the calls it describes.**
+ *
+ * The text was a thing a program parsed while it ran; it becomes a
+ * blueprint for the compilation instead. Every box name in it was
+ * resolved on the author's machine and became a direct call to that
+ * box's placement function, so **no box name survives into the
+ * running program** and a misspelled one fails the build rather than
+ * somebody else's startup.
+ *
+ * Station names do survive, and that is not an inconsistency: a box
+ * name was a question the engine had to answer at run time and no
+ * longer is, while a station name is data the program carries about
+ * itself so it can be written back out as a file that reads in again.
+ *
+ * The built function works on an empty program and on a crowded one,
+ * because it records where each station landed rather than assuming
+ * they are numbered from zero.
+ */
+typedef struct map_build {
+    const char *path;
+    void      (*build)(map_t *m);
+} map_build_t;
+
+extern const map_build_t sora_map_builds[];
+extern const int         sora_n_map_builds;
+
+/* The build function for one description, by the path the build knew
+ * it as, or by the bare name somebody would type. NULL when this
+ * program was not built with that map. */
+const map_build_t *registry_map_build(const char *path);
+/* }}} */
+
 #endif

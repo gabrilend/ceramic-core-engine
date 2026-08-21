@@ -1,0 +1,24 @@
+# 095-doubling.map — a description the build compiles into calls.
+#
+# What this is: the smallest map that exercises everything a
+# generated build function has to emit — a station with a constant, a
+# station with a deepened buffer, a fan-out, a port left with no
+# source, and both doors. Issue 311d turns it into C on the way past.
+#
+# It is here rather than in a test's temporary directory because the
+# build has to see it: the maps a program declares are also a
+# manifest, and a map the build never saw cannot be compiled in.
+
+gate keep p entry
+  out 0 - adder.0
+
+adder add p
+  in 1 = 1000
+  out 0 - twice.0
+  out 0 - waiting.0
+
+twice double_it p result
+  in 0 x64
+
+waiting add p
+  in 1 -

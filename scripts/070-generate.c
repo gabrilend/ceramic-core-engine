@@ -47,12 +47,14 @@
 #include <string.h>
 
 void ge_emit(const description_t *d, const char **sources, int n_sources,
+             const char **maps, int n_maps,
              const char *out_path, const char *root);
 
 /* {{{ static void usage() */
 static void usage(void)
 {
-    fprintf(stderr, "usage: generate <output.c> <box.c>...\n");
+    fprintf(stderr, "usage: generate <output.c> [--root=DIR] "
+                    "[--map=FILE]... <box.c>...\n");
     fprintf(stderr, "       generate --describe <box.c>...\n");
     exit(65);
 }
@@ -81,9 +83,25 @@ int main(int argc, char **argv)
     const char *root = NULL;
     const char *sources[argc > 2 ? argc - 2 : 1];
     int n_sources = 0;
+    /*
+     * **Maps the build was told about** (issue 311d). Each becomes a
+     * function that builds it — construction calls, with every box
+     * name resolved to a placement function while somebody can still
+     * read an error message about it.
+     *
+     * Named with a flag rather than positionally, because a map file
+     * and a box source are both `.c`-adjacent text as far as a shell
+     * glob is concerned and telling them apart by extension would be
+     * a rule the build has to remember rather than one the caller
+     * states.
+     */
+    const char *maps[argc > 2 ? argc - 2 : 1];
+    int n_maps = 0;
     for (int i = 2; i < argc; i++) {
         if (strncmp(argv[i], "--root=", 7) == 0)
             root = argv[i] + 7;
+        else if (strncmp(argv[i], "--map=", 6) == 0)
+            maps[n_maps++] = argv[i] + 6;
         else
             sources[n_sources++] = argv[i];
     }
@@ -100,7 +118,7 @@ int main(int argc, char **argv)
     if (describe_only)
         gp_describe(&d);
     else
-        ge_emit(&d, sources, n_sources, out_path, root);
+        ge_emit(&d, sources, n_sources, maps, n_maps, out_path, root);
 
     gp_free(&d);
     return 0;

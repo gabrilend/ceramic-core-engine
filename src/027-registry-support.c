@@ -139,6 +139,31 @@ const char *registry_box_source(const char *path)
 }
 /* }}} */
 
+/* {{{ registry_map_build() */
+/*
+ * **The compiled form of one description** (issue 311d), by the path
+ * the build knew it as or by the bare name somebody would type — the
+ * same two ways a box source is found, for the same reason.
+ */
+const map_build_t *registry_map_build(const char *path)
+{
+    if (!path || !*path)
+        return NULL;
+
+    for (int i = 0; i < sora_n_map_builds; i++)
+        if (strcmp(sora_map_builds[i].path, path) == 0)
+            return &sora_map_builds[i];
+
+    for (int i = 0; i < sora_n_map_builds; i++) {
+        const char *slash = strrchr(sora_map_builds[i].path, '/');
+        const char *base = slash ? slash + 1 : sora_map_builds[i].path;
+        if (strcmp(base, path) == 0)
+            return &sora_map_builds[i];
+    }
+    return NULL;
+}
+/* }}} */
+
 /* {{{ map_place_box() */
 void map_place_box(map_t *m, int station, const char *box_name, int kind)
 {
