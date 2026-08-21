@@ -28,11 +28,9 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
-<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -82,6 +80,7 @@
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -92,6 +91,7 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
@@ -159,7 +159,7 @@ program.</p>
 <p><strong>Built.</strong> All ten implementation steps below are done, and the
 one thing this issue described but never listed as a step —
 bringing a program inside another — is split into
-<a href="issue-217-a-program-inside-another.html">217</a>, where splitting it
+<a href="done-217-a-program-inside-another.html">217</a>, where splitting it
 corrected what it was.</p>
 <p><strong>The whole-program pass is out of the loader</strong>, which is the step
 that ends <em>still loading</em> as a state only one mechanism could be in.</p>
@@ -272,7 +272,7 @@ as one more opaque field. **The map was already being passed to task
 construction and explicitly discarded**, so carrying it cost nothing
 at all. The claim is true now, and it was not before.</p>
 <p><strong>Composing is split out</strong>, into
-<a href="issue-217-a-program-inside-another.html">217</a>, and splitting it corrected it.
+<a href="done-217-a-program-inside-another.html">217</a>, and splitting it corrected it.
 It was described here as <em>merging two tables into one</em>, which is why
 it looked like the half of this issue needing real work: two live
 programs joined, every wire in one of them rewritten, a handle
@@ -358,7 +358,7 @@ calls arriving from different places.</p>
 <p>*This section says "merges" throughout, and merging is not what
 composing turned out to be — it is instantiating a description at an
 offset, which is set out under Current behavior above and built in
-<a href="issue-217-a-program-inside-another.html">217</a>. What survives here unchanged
+<a href="done-217-a-program-inside-another.html">217</a>. What survives here unchanged
 is the half this section exists for: **which of the two you want
 follows from whether you want isolation**, and that a wire being an
 index is what makes them different acts rather than variations of
@@ -633,7 +633,7 @@ fixed, and one dissolved when the operation was described correctly.**</p>
 <p>  This is what the whole thing turned on. Described as merging it
   needed a renumbering pass and a rule for what happens to the program
   that was absorbed; described as instantiating it needs an offset.
-  See <a href="issue-217-a-program-inside-another.html">217</a>.</p>
+  See <a href="done-217-a-program-inside-another.html">217</a>.</p>
 <ul>
 <li>**The whole-program passes — asked, and fixed rather than</li>
 <p>  accepted.** Bringing a program up walked every station and, for
@@ -675,7 +675,7 @@ fixed, and one dissolved when the operation was described correctly.**</p>
   been one description.</p>
 <p>  Two stations in one program sharing a name is therefore correct
   rather than a collision. What it costs is the dump, and that is
-  <a href="issue-217-a-program-inside-another.html">217</a>'s open question rather than
+  <a href="done-217-a-program-inside-another.html">217</a>'s open question rather than
   this one's.</p>
 <p>The point of asking was that they were all decided under one set of
 numbers. Doing it before building was worth it twice over: one of them

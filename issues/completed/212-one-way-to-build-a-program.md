@@ -10,7 +10,7 @@ program.
 **Built.** All ten implementation steps below are done, and the
 one thing this issue described but never listed as a step —
 bringing a program inside another — is split into
-[217](../217-a-program-inside-another.md), where splitting it
+[217](217-a-program-inside-another.md), where splitting it
 corrected what it was.
 
 
@@ -141,7 +141,7 @@ construction and explicitly discarded**, so carrying it cost nothing
 at all. The claim is true now, and it was not before.
 
 **Composing is split out**, into
-[217](../217-a-program-inside-another.md), and splitting it corrected it.
+[217](217-a-program-inside-another.md), and splitting it corrected it.
 It was described here as *merging two tables into one*, which is why
 it looked like the half of this issue needing real work: two live
 programs joined, every wire in one of them rewritten, a handle
@@ -243,7 +243,7 @@ calls arriving from different places.
 *This section says "merges" throughout, and merging is not what
 composing turned out to be — it is instantiating a description at an
 offset, which is set out under Current behavior above and built in
-[217](../217-a-program-inside-another.md). What survives here unchanged
+[217](217-a-program-inside-another.md). What survives here unchanged
 is the half this section exists for: **which of the two you want
 follows from whether you want isolation**, and that a wire being an
 index is what makes them different acts rather than variations of
@@ -553,7 +553,7 @@ fixed, and one dissolved when the operation was described correctly.**
   This is what the whole thing turned on. Described as merging it
   needed a renumbering pass and a rule for what happens to the program
   that was absorbed; described as instantiating it needs an offset.
-  See [217](../217-a-program-inside-another.md).
+  See [217](217-a-program-inside-another.md).
 - **The whole-program passes — asked, and fixed rather than
   accepted.** Bringing a program up walked every station and, for
   each, every other station's destinations, looking for arrows that
@@ -593,7 +593,7 @@ fixed, and one dissolved when the operation was described correctly.**
 
   Two stations in one program sharing a name is therefore correct
   rather than a collision. What it costs is the dump, and that is
-  [217](../217-a-program-inside-another.md)'s open question rather than
+  [217](217-a-program-inside-another.md)'s open question rather than
   this one's.
 
 The point of asking was that they were all decided under one set of

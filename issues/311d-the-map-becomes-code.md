@@ -195,7 +195,7 @@ the compiler being needed exactly when new code genuinely arrives.
   whose resolution rules this applies
 - [311b — Placement instead of records](311b-placement-instead-of-records.md),
   whose functions this calls
-- [311c — Source rides in the binary](311c-source-rides-in-the-binary.md),
+- [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md),
   whose embedded text shrinks to what a map actually needs
 - [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
   where composing and starting are separated, and where a program that

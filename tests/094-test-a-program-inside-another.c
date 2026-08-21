@@ -303,89 +303,107 @@ static void instantiating_into_a_running_program(void)
 }
 /* }}} */
 
-/* {{{ static void a_map_places_a_part() */
+/* {{{ static void a_map_adds_a_map() */
 /*
- * **A program bringing a described part inside another program**,
- * which is the operation existing as an ordinary box rather than only
- * as a C call.
+ * **Adding a box and adding a map are one operation**, and this is
+ * the scene that says so.
  *
- * The builder is itself a map: one station running the
- * part-placing operation, told which program to work on by a constant
- * carrying its address, and told where to put the part by two more.
- * Nothing was added to the engine to allow this — it is a box source
- * like any other, and the engine has no idea it is special.
+ * The builder is itself a map. It adds a described part to another
+ * program, adds a plain box to the same program, and wires them
+ * together — using the *same* two operations for both, because a map
+ * is a list of boxes with wiring and a box is a list of one.
  *
- * What the built program then does is the proof: seven in, doubled by
- * the part, fourteen at the way out.
+ * What travels between the operations is a **part**: where values go
+ * in and where they come out. For the described part those are two
+ * different stations; for the plain box they are the same station,
+ * because a box's own input ports are its way in and its own output
+ * port is its way out. Nothing takes a part apart — every operation
+ * that consumes one takes it whole, which is why no box exists here
+ * whose only job is to pull a field out of a handle.
  */
-static void a_map_places_a_part(void)
+static void a_map_adds_a_map(void)
 {
-    /* The program that will receive the part, with the two stations
-     * the part is going to sit between. */
     map_t *built = map_create_empty();
-    int source = map_add_station(built);
-    map_place_box(built, source, "seven", STATION_PLAIN);
-    must_take(map_name_station(built, source, "source"), "a name");
-    int answer = map_add_station(built);
-    map_place_box(built, answer, "keep", STATION_PLAIN);
-    must_take(map_name_station(built, answer, "answer"), "a name");
-    must_take(map_designate_output(built, answer), "a way out");
     map_start(built, 2);
 
     char address[64];
     snprintf(address, sizeof address, "{ %zu }", (size_t)built);
-
     char quoted[600];
     snprintf(quoted, sizeof quoted, "\"%s\"", part_path);
 
-    /* The builder: one station, six constants, no wires. */
     map_t *builder = map_create_empty();
-    int placer = map_add_station(builder);
-    map_place_box(builder, placer, "program_place_part", STATION_PLAIN);
-    must_take(map_name_station(builder, placer, "placer"), "a name");
-    must_take(map_designate_output(builder, placer), "the builder's answer");
 
-    must_take(map_configure_port(builder, placer, 0, IN_PORT_STATIC,
+    /* Add the described part — three stations and their wiring. */
+    int add_part = map_add_station(builder);
+    map_place_box(builder, add_part, "program_add", STATION_PLAIN);
+    must_take(map_name_station(builder, add_part, "add_part"), "a name");
+    must_take(map_configure_port(builder, add_part, 0, IN_PORT_STATIC,
                                  address), "the program to build into");
-    must_take(map_configure_port(builder, placer, 1, IN_PORT_STATIC,
-                                 quoted), "the description to place");
-    char n[16];
-    snprintf(n, sizeof n, "%d", source);
-    must_take(map_configure_port(builder, placer, 2, IN_PORT_STATIC, n),
-              "where the part is fed from");
-    must_take(map_configure_port(builder, placer, 3, IN_PORT_STATIC, "0"),
-              "which port of it");
-    snprintf(n, sizeof n, "%d", answer);
-    must_take(map_configure_port(builder, placer, 4, IN_PORT_STATIC, n),
-              "where the part feeds");
-    must_take(map_configure_port(builder, placer, 5, IN_PORT_STATIC, "0"),
-              "which port of that");
+    must_take(map_configure_port(builder, add_part, 1, IN_PORT_STATIC,
+                                 quoted), "the map to add");
 
-    map_start(builder, 1);
+    /* Add a plain box — one station — through the same operation. */
+    int add_box = map_add_station(builder);
+    map_place_box(builder, add_box, "program_add", STATION_PLAIN);
+    must_take(map_name_station(builder, add_box, "add_box"), "a name");
+    must_take(map_configure_port(builder, add_box, 0, IN_PORT_STATIC,
+                                 address), "the same program");
+    must_take(map_configure_port(builder, add_box, 1, IN_PORT_STATIC,
+                                 "\"seven\""), "the box to add");
+
+    /* Wire the box's way out into the part's way in, which for the
+     * box is its own station and for the part is its entrance. */
+    int join = map_add_station(builder);
+    map_place_box(builder, join, "program_connect", STATION_PLAIN);
+    must_take(map_name_station(builder, join, "join"), "a name");
+    must_take(map_configure_port(builder, join, 0, IN_PORT_STATIC, address),
+              "the program to wire in");
+    must_take(map_wire(builder, add_box, 0, join, 1), "the box, as a part");
+    must_take(map_configure_port(builder, join, 2, IN_PORT_STATIC, "0"),
+              "which output port");
+    must_take(map_wire(builder, add_part, 0, join, 3), "the map, as a part");
+    must_take(map_configure_port(builder, join, 4, IN_PORT_STATIC, "0"),
+              "which input port");
+
+    /* Mark the part's way out as the built program's way out. */
+    int door = map_add_station(builder);
+    map_place_box(builder, door, "program_set_door", STATION_PLAIN);
+    must_take(map_name_station(builder, door, "door"), "a name");
+    must_take(map_configure_port(builder, door, 0, IN_PORT_STATIC, address),
+              "the program to mark in");
+    must_take(map_wire(builder, add_part, 0, door, 1), "the part to mark");
+    must_take(map_configure_port(builder, door, 2, IN_PORT_STATIC, "2"),
+              "facing out");
+    must_take(map_designate_output(builder, door), "the builder's answer");
+
+    map_start(builder, 2);
     must_take(map_bring_up(builder), "the builder");
     pool_release(builder->pool);
     pool_join(builder->pool);
 
     int worked = 0;
-    check(map_output_take(builder, placer, &worked, sizeof worked)
+    check(map_output_take(builder, door, &worked, sizeof worked)
           && worked == 1,
-          "the builder says it placed and wired the part");
+          "the builder added a box and a map through one operation and "
+          "wired them together");
 
-    /* And what it built runs. A station can look right and still be
-     * unrunnable, and the way to find out is to run it. */
     must_take(map_bring_up(built), "the program the builder made");
     pool_release(built->pool);
     pool_join(built->pool);
 
     int got = 0;
-    check(map_output_take(built, answer, &got, sizeof got) && got == 14,
-          "and the program it built ran: seven in, doubled by the part, "
-          "fourteen out");
+    int found = 0;
+    for (int i = 0; i < built->n_stations && !found; i++)
+        if (map_station(built, i)->door == DOOR_OUT)
+            found = map_output_take(built, i, &got, sizeof got);
+    check(found && got == 14,
+          "and what it built ran: seven from the box, doubled by the "
+          "map, fourteen at the way out");
 
     map_destroy(builder);
     map_destroy(built);
-    printf("  a map brought a described part inside another map and wired "
-           "it in\n");
+    printf("  a map added a box and a map to another map, through one "
+           "operation\n");
 }
 /* }}} */
 
@@ -482,7 +500,7 @@ int main(void)
     two_instances_share_nothing();
     a_parent_cannot_tell();
     instantiating_into_a_running_program();
-    a_map_places_a_part();
+    a_map_adds_a_map();
     a_composed_program_still_writes_down();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);

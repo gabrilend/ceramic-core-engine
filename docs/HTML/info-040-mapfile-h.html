@@ -28,11 +28,9 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
-<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -82,6 +80,7 @@
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -92,6 +91,7 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
@@ -198,6 +198,24 @@ a parent is entitled to know about something it brought inside itself;
 everything that is not a door belongs to the description's author to
 rename or restructure.</p>
 <p><strong>map_instance_free(instance)</strong> — the handle goes, the stations stay.</p>
+<p><strong>map_add_part(map, name, out part) → NULL or a refusal</strong> — **adding a
+box and adding a map are one operation.** A map is a list of boxes and
+the wiring between them; a box is a list of one.</p>
+<p>A <strong>part</strong> is where values go in and where they come out. For a map
+those are the stations it declared as doors; for a single box they are
+the same station, because a box's own input ports are its way in and
+its own output port is its way out — a box is a map of one station
+whose doors are itself.</p>
+<p>Which kind a name refers to is resolved rather than guessed: a box
+lives in the binary and a description lives on disk, both are looked
+for, and finding both or neither is refused naming what was searched.</p>
+<p>**map_connect_parts(map, from part, port, to part, port) → NULL or a
+refusal** — a wire from one part's way out to another's way in. For
+two single boxes this is the ordinary wire. Port numbers are the ones
+a wire has always had, so a comparator's three outcomes are reachable
+exactly as before.</p>
+<p>Nothing takes a part apart. Everything that consumes one takes it
+whole, which is what keeps a handle from needing accessors.</p>
 <p><strong>map_seed_count(map) → int</strong> — how many stations the bring-up
 started; one when the author expected ten means a wiring mistake.</p>
 <p><strong>map_load_last_timing</strong> — where the most recent load's seconds went,

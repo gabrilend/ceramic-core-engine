@@ -95,36 +95,74 @@ static void refused(map_t *m, const char *what, const char *why)
 /* }}} */
 
 /*
- * Add a station running a named box, and say where it landed.
+ * **What a program is made of, from a program's point of view.**
  *
- * Returns the station's index, or -1 when it could not be added. An
- * index is what every wire is made of, so this is the value the rest
- * of the operations take.
+ * Where values go in and where they come out. For a map brought
+ * inside this one those are the stations it declared as doors; for a
+ * single box they are the same station, because a box's own input
+ * ports are its way in and its own output port is its way out.
+ *
+ * Its own name, so a port typed `part` is one somebody had to mean —
+ * which buys nothing from the engine, a wire being checked by width,
+ * and everything from a person reading the map.
+ *
+ * **It is never taken apart.** Everything below that consumes one
+ * takes it whole, so there is no box here whose only job is to pull a
+ * field out of it — which is the thing this design refuses to make
+ * anybody write.
  */
-int program_add_station(program p, const char *box_name)
+typedef struct {
+    int entrance;
+    int result;
+} part;
+
+/*
+ * **Add a box, or add a map. It is one operation.**
+ *
+ * A map is a list of boxes and the wiring between them; a box is a
+ * list of one. Adding a map walks its list, instantiates each of its
+ * boxes and connects them the way it says. Adding a box walks a list
+ * of length one and connects nothing. What comes back is the same
+ * kind of thing either way.
+ *
+ * A map brought in this way **shares this program's station table and
+ * its workers**. There is no seam afterwards: there are stations with
+ * indices, the way there always were.
+ *
+ * Which kind the name refers to is resolved rather than guessed — a
+ * box lives in the binary and a description lives on disk, both are
+ * looked for, and finding both or neither ends the program saying
+ * which places were searched.
+ */
+part program_add(program p, const char *what)
 {
-    map_t *m = program_of(p, "adding a station");
-    int at = map_add_station(m);
-    if (at < 0)
-        refused(m, "a station", "the table would not grow");
-    map_place_box(m, at, box_name, STATION_PLAIN);
-    return at;
+    map_t *m = program_of(p, "adding a part");
+    part made = { -1, -1 };
+    map_part_t got;
+    const char *no = map_add_part(m, what, &got);
+    if (no)
+        refused(m, "a part", no);
+    made.entrance = got.entrance;
+    made.result = got.result;
+    return made;
 }
 
 /*
- * Draw a wire from one station's output port to another's input port.
+ * **A wire from one part's way out to another part's way in.**
  *
- * Returns 1 when it was drawn and 0 when it was refused, with the
- * reason printed. A box returns one value, so the reason cannot come
- * back beside the answer; a map that wants to react to a refusal
- * reacts to the zero.
+ * For two single boxes this is the ordinary wire, because a box's
+ * doors are itself. For two maps it crosses what used to be a seam
+ * and finds nothing there to cross. The port numbers are the ones a
+ * wire has always had, so a comparator's three outcomes are reachable
+ * exactly as before.
  */
-int program_wire(program p, int from_station, int from_port,
-                 int to_station, int to_port)
+int program_connect(program p, part from, int from_port,
+                    part to, int to_port)
 {
     map_t *m = program_of(p, "drawing a wire");
-    const char *no = map_wire(m, from_station, from_port,
-                              to_station, to_port);
+    map_part_t a = { from.entrance, from.result };
+    map_part_t b = { to.entrance, to.result };
+    const char *no = map_connect_parts(m, a, from_port, b, to_port);
     if (no)
         refused(m, "a wire", no);
     return 1;
@@ -137,11 +175,14 @@ int program_wire(program p, int from_station, int from_port,
  * constants as text: bytes are exact only against the exact build
  * that wrote them, while text resolves its layout when it is read.
  */
-int program_set_constant(program p, int station, int port,
+int program_set_constant(program p, part which, int port,
                          const char *text)
 {
     map_t *m = program_of(p, "setting a constant");
-    const char *no = map_configure_port(m, station, port,
+    /* A part's way *in* is what takes a value, whether it is a single
+     * box's own port or a brought-in map's entrance. Both read the
+     * same way: give this thing's port a value. */
+    const char *no = map_configure_port(m, which.entrance, port,
                                         IN_PORT_STATIC, text);
     if (no)
         refused(m, "a constant", no);
@@ -169,14 +210,17 @@ int program_set_constant(program p, int station, int port,
  * the text to have come from somewhere, and the somewhere would be a
  * constant nobody can see from the map.
  */
-int program_set_door(program p, int station, int facing)
+int program_set_door(program p, part which, int facing)
 {
     map_t *m = program_of(p, "marking a door");
+    /* Marking a part as one of this program's own doors: the way in
+     * for an entrance, the way out for a result. A single box has one
+     * station for both, so either mark lands where it should. */
     const char *no;
     if (facing == DOOR_IN)
-        no = map_designate_input(m, station);
+        no = map_designate_input(m, which.entrance);
     else if (facing == DOOR_OUT)
-        no = map_designate_output(m, station);
+        no = map_designate_output(m, which.result);
     else {
         char which[128];
         snprintf(which, sizeof which,
@@ -191,66 +235,17 @@ int program_set_door(program p, int station, int facing)
 }
 
 /*
- * **Bring a described part inside this program, and wire it in.**
- *
- * One operation rather than three, and the shape was chosen against a
- * more general one that would have cost more than it bought.
- *
- * The general version returns a *handle* — where the instance's
- * entrance and its way out landed — and the caller wires them. A box
- * returns one value, so that handle is a struct of two numbers, and
- * getting the numbers out of it means a box that takes the struct and
- * returns one field. That is **a function written to fit the engine**,
- * which is the one cost this design refuses to impose (issue 209
- * refused it in the same words when a station with several output
- * ports was proposed).
- *
- * So the operation says what a composing map actually wants: *put
- * this part between here and there*. It instantiates the description,
- * wires the named station of this program into the part's first
- * entrance, and wires the part's first way out into the named
- * destination. No handle escapes, nothing needs unpacking, and every
- * argument is a number or a piece of text a wire already carries.
- *
- * What it does not reach: a part with several entrances or several
- * ways out, which needs the handle and therefore needs an answer to
- * the question above. Recorded in 217 rather than guessed at.
- */
-int program_place_part(program p, const char *path,
-                       int from_station, int from_port,
-                       int to_station, int to_port)
-{
-    map_t *m = program_of(p, "placing a part");
-
-    map_instance_t in = map_instantiate_file(m, path);
-    int entrance = map_instance_entrance(m, &in, 0);
-    int result = map_instance_result(m, &in, 0);
-    map_instance_free(&in);
-
-    if (entrance < 0)
-        refused(m, "a part", "the description declares no entrance, so "
-                             "nothing can be fed into it");
-    if (result < 0)
-        refused(m, "a part", "the description declares no way out, so "
-                             "nothing can be taken from it");
-
-    const char *no = map_wire(m, from_station, from_port, entrance, 0);
-    if (no)
-        refused(m, "the wire into a part", no);
-    no = map_wire(m, result, 0, to_station, to_port);
-    if (no)
-        refused(m, "the wire out of a part", no);
-    return 1;
-}
-
-/*
  * Name a station, so the program it belongs to can be written out as
  * a file that reads back.
  */
-int program_name_station(program p, int station, const char *name)
+int program_name_station(program p, part which, const char *name)
 {
     map_t *m = program_of(p, "naming a station");
-    const char *no = map_name_station(m, station, name);
+    /* Names a part's way in, which for a single box is the station
+     * itself and for a brought-in map is the station a parent knows
+     * about. The rest of a map's stations were named by its own
+     * description and keep those names. */
+    const char *no = map_name_station(m, which.entrance, name);
     if (no)
         refused(m, "a name", no);
     return 1;

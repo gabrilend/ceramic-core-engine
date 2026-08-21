@@ -130,7 +130,7 @@ shim pointer to a box name — the station knows its own name now.
 parameter name, and under [309](completed/309-types-by-width.md) it does not use
 type names either, only widths. Error messages and the dump read them
 out of the source the binary carries
-([311c](311c-source-rides-in-the-binary.md)) — which is the exact text
+([311c](completed/311c-source-rides-in-the-binary.md)) — which is the exact text
 that was compiled, so a name reported can never come from a source that
 has since changed on disk.
 
@@ -208,7 +208,7 @@ to scan; the placement function writes the name and the dump reads it.
 
 - [311 — The registry dissolved](311-the-registry-dissolved.md), the
   parent
-- [311c — Source rides in the binary](311c-source-rides-in-the-binary.md),
+- [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md),
   which is where type and argument names go once the engine stops
   carrying them
 - [311d — The map becomes code](311d-the-map-becomes-code.md), which

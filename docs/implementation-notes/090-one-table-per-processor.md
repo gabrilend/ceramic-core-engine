@@ -62,7 +62,7 @@ made easy anyway.
 ## What follows for composing
 
 Bringing a program inside another produces one station table
-([217](../../issues/217-a-program-inside-another.md)). Under this note
+([217](../../issues/completed/217-a-program-inside-another.md)). Under this note
 that is also a statement about placement: **things composed into one
 table run on one processor.** Composing is therefore the right shape
 for a subgraph you want close, and the wrong shape for work you want

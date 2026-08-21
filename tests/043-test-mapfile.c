@@ -317,7 +317,11 @@ static void test_every_refusal(void)
         "head seven p\n"
         "  out 0 - wrong.1\n"
         "wrong mix p\n",
-        "box returns int (4 bytes), port takes double (8 bytes)",
+        /* Both ends, by position and by size (issues 311b, 311c).
+         * A type name is not what makes a wire legal or illegal — the
+         * width is — so the message points at the two places that
+         * disagree and at how much each of them counts. */
+        "head output 0 produces 4 bytes and wrong input 1 takes 8 bytes",
         "a wire between different widths was accepted");
 
     /*

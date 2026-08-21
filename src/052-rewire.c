@@ -221,30 +221,50 @@ const char *map_wire(map_t *m, int from_station, int port,
          */
         if (from->out_size != dest->elem_size) {
             /*
-             * The spellings, fetched **here and only here**, because
-             * this is the one place they are wanted: "4 bytes against
-             * 8 bytes" names no fix, while "box returns int, port
-             * takes double" names two.
+             * **The refusal names both ends by position and by size,
+             * and no type name appears in it** (issues 311b, 311c).
              *
-             * A lookup on the refusal path rather than a field on
-             * every station, and the difference matters more than the
-             * few bytes: a type name stored on a station is a type
-             * name the engine *carries*, and carrying them is what
-             * this line of work is removing. A refusal is rare enough
-             * to pay for its own message.
+             * It used to fetch the two spellings and say "box returns
+             * int (4 bytes), port takes double (8 bytes)". That reads
+             * well and it is the wrong shape for what this engine
+             * actually checks. A name is not what makes a wire legal
+             * or illegal — the width is — so a message built around
+             * names invites somebody to go and look at the names,
+             * which are not the disagreement. Two types with one
+             * layout and different names wire perfectly; two with one
+             * name could not disagree.
              *
-             * When the box records go, this reads the spelling out of
-             * the box source the binary carries (issue 311c) — the
-             * exact text that was compiled, so a name reported can
-             * never come from a source that has since changed on disk.
+             * What does disagree is a *place* and a *count*, on each
+             * end. So the message gives both: which station and which
+             * port, and how many bytes it has. The reader is pointed
+             * at the two things that are actually in conflict, and at
+             * where to go and change one of them.
+             *
+             * It also stops this being the last thing on the refusal
+             * path that reaches back into a box record for a
+             * spelling, which is one fewer reason for those records
+             * to exist.
              */
-            const box_info_t *b = from->box_name
-                                ? registry_find(from->box_name) : NULL;
-            char message[192];
+            char from_who[64], to_who[64];
+            if (m->station_names && from_station < m->n_named
+                && m->station_names[from_station])
+                snprintf(from_who, sizeof from_who, "%s",
+                         m->station_names[from_station]);
+            else
+                snprintf(from_who, sizeof from_who, "%d", from_station);
+            if (m->station_names && to_station < m->n_named
+                && m->station_names[to_station])
+                snprintf(to_who, sizeof to_who, "%s",
+                         m->station_names[to_station]);
+            else
+                snprintf(to_who, sizeof to_who, "%d", to_station);
+
+            char message[224];
             snprintf(message, sizeof message,
-                     "box returns %s (%d bytes), port takes %s (%d bytes)",
-                     b ? b->return_type : "?", from->out_size,
-                     dest->type_name ? dest->type_name : "?", dest->elem_size);
+                     "%s output %d produces %d bytes and %s input %d takes "
+                     "%d bytes",
+                     from_who, port, from->out_size,
+                     to_who, to_port, dest->elem_size);
             pthread_mutex_unlock(&m->rewire_mutex);
             return said(message);
         }

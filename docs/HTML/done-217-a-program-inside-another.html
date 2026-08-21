@@ -28,11 +28,9 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-217-a-program-inside-another.html" class="here">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
-<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -82,6 +80,7 @@
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-217-a-program-inside-another.html" class="here">217 — A program inside another</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -92,6 +91,7 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
@@ -189,15 +189,23 @@ series and reads twenty-eight out of them without naming anything
 inside either.</p>
 <p><strong>Instantiating into a running program needed nothing added</strong>, because
 every operation it is made of was already legal at any moment.</p>
-<p>**The operation exists as a box, in a shape chosen against a more
-general one.** A box returns one value, so a handle carrying an
-entrance <em>and</em> a way out is a struct of two numbers — and getting the
-numbers out means a box that takes the struct and returns one field,
-which is <strong>a function written to fit the engine</strong>, the one cost this
-design refuses. So the box says what a composing map actually wants:
-<em>put this part between here and there</em>. No handle escapes and nothing
-needs unpacking. What it does not reach is a part with several
-entrances or several ways out, which is below.</p>
+<p><strong>Adding a box and adding a map are one operation</strong>, and saying it
+that way is what settled the shape. A map is a list of boxes and the
+wiring between them; a box is a list of one. Adding a map walks its
+list, instantiates each of its boxes and connects them the way it
+says; adding a box walks a list of length one and connects nothing.</p>
+<p>So what comes back is the same kind of thing either way: <strong>a part</strong>,
+which is where values go in and where they come out. For a map those
+are its declared doors. For a single box they are the same station,
+because a box's own input ports are its way in and its own output port
+is its way out — a box is a map of one station whose doors are itself.</p>
+<p><strong>And a part is never taken apart.</strong> The worry was that a handle
+carrying two station numbers would need boxes whose only job is to
+pull a field out of it, which is a function written to fit the engine.
+Nothing pulls a field out: wiring takes two parts and two port
+numbers, giving a port a constant takes a part, marking a door takes a
+part. A part travels on a wire exactly the way a program handle does,
+and neither is ever opened.</p>
 <p><strong>The dump makes names unique on the way out</strong>, which the open
 question below predicted and instantiating twice made real. Two copies
 of one description give two stations with one name; a <em>file</em> cannot
@@ -338,8 +346,15 @@ a collision to prevent.</p>
    <a href="done-213-the-input-station.html">213</a>'s step 6, both of which had been
    waiting for it.
 5. <strong>Done</strong>, and it needed nothing added.
-6. <strong>Done</strong>, as <em>put this part between here and there</em> rather than as
-   an operation returning a handle — see the reasoning above.
+6. <strong>Done, and then done again in a better shape.</strong> The first version
+   was <em>put this part between here and there</em> — one call that
+   instantiated and wired, avoiding a handle by never letting one
+   escape, and hard-coding one entrance and one way out.</p>
+<p>   It is now <strong>one operation that adds a box or adds a map</strong>, because
+   those are the same act over a list of one or a list of many. It
+   hands back a part, and everything that consumes a part takes it
+   whole — so the handle travels on a wire between construction
+   operations, and nothing exists whose job is to open it.
 7. <strong>Done, and it was the open question below arriving.</strong> The dump
    makes names unique on the way out, so a program holding two copies
    of one description can still be written down and read back.</p>
@@ -358,42 +373,61 @@ change — an arrow destination is split on its <em>last</em> dot, so
 refused for making a name mechanical again, which is the thing this
 issue says it is not. Dropping names from arrows altogether would
 throw away the reason a map file is readable by a person.</p>
-<p>**Open: a part with several entrances or several ways out, from a
-box.**</p>
-<p>The C call handles it: the surface offers the <em>nth</em> door, and a
-caller asks for as many as it likes. The <strong>box</strong> does not, because a
-box returns one value and a handle carrying two station numbers is a
-struct somebody downstream has to take apart — which is a function
-written to fit the engine, and <a href="done-209-map-output-collection.html">209</a>
-refused exactly that when a station with several output ports was
-proposed.</p>
-<p>Three shapes are worth weighing before one is built, and none is
-obviously right:</p>
+<p>**Answered: a part with several entrances or several ways out, from a
+box — by making adding a box and adding a map one operation.**</p>
+<p>The question assumed two different acts that had to be reconciled.
+They are not two acts. **A map is a list of boxes and the wiring
+between them; a box is a list of one.** Adding a map walks its list,
+instantiates each of its boxes, and connects them the way it says.
+Adding a box walks a list of length one and connects nothing. That is
+the whole difference, and it is a difference in the length of a list
+rather than in what is happening.</p>
+<p>So what comes back is the same kind of thing either way: **a part,
+which is where values go in and where they come out.** For a map those
+are the stations it declared as doors. **For a single box they are the
+same station**, because a box's own input ports are its way in and its
+own output port is its way out — a box is a map of one station whose
+doors are itself.</p>
+<p><strong>And that dissolves the objection rather than settling it.</strong> The
+worry was that a handle carrying two station numbers would need boxes
+whose only job is to pull a field out of it, which is a function
+written to fit the engine. Nothing pulls a field out, because
+everything that consumes a part takes it whole: wiring takes two parts
+and two port numbers, giving a port a constant takes a part, marking a
+door takes a part. A part is passed along exactly the way a program
+handle already is, and neither is ever taken apart.</p>
+<p>The three shapes weighed before are kept because the reasoning is the
+design. A box per door would have to instantiate to answer, so two
+calls would build two copies unless the engine remembered instances,
+which is state it does not keep. A wiring list given as text would put
+a second little language inside a string. Accepting the struct with
+unpackers is the one this replaces: the struct is accepted, and the
+unpackers turned out to be unnecessary.</p>
+<p>*<em>Answered: what does a description arrive as? As a </em>name that
+resolves*, and the set of things a name can resolve to is open.**</p>
+<p>The operation takes a name and looks for it in two places: a box
+compiled into the binary, and a description on disk. Finding both is
+refused as ambiguous rather than settled by an order nobody can see;
+finding neither is refused naming both places that were searched.</p>
+<p>That shape survives every other way a description might arrive,
+because each of them is one more place to look rather than a different
+operation:</p>
 <ul>
-<li><strong>A box per door</strong>, taking the description and a door number and</li>
-<p>  returning that station's index. It would have to instantiate to
-  answer, so two calls would build two copies — unless the instance
-  is remembered somewhere, which is state the engine does not keep.</p>
-<li><strong>A part placed with a list of wires</strong>, given as text the way a</li>
-<p>  constant is. Keeps one call and one value, and moves the wiring
-  description into a string the engine parses, which is a second
-  little language.</p>
-<li><strong>Accept the struct and the unpackers</strong>, on the grounds that a</li>
-<p>  handle is a value like any other and the objection was about faking
-  <em>several returns</em>, not about returning a small record. This is the
-  one that most deserves re-reading: <code>program</code> is already a
-  one-field struct travelling on a wire, and nobody called that a
-  function written to fit the engine.</p>
+<li><strong>A description parsed from text held in memory</strong> is a third place,</li>
+<p>  and the reader already separates parsing from building — the two
+  passes take a parsed description and a translation table, not a
+  path.</p>
+<li><strong>A description produced by another program</strong> is that same case</li>
+<p>  arriving from somewhere else.</p>
+<li><strong>A description the generator has already turned into code</strong></li>
+<p>  (<a href="issue-311d-the-map-becomes-code.html">311d</a>) is the interesting one: the
+  name resolves to a generated function rather than to a parse tree,
+  and instantiating means calling it. The caller cannot tell, which is
+  the point — and it is why the operation takes a <em>name</em> rather than a
+  path or a parsed structure.</p>
 </ul>
-<p><strong>Open: what does a description arrive as?</strong></p>
-<p>Reading a file is one way. The others are worth naming before the
-operation's shape is fixed, because they decide whether it takes a
-path, a parsed description, or something else: a description built by
-calling the parser on text held in memory; a description produced by
-another program; and — the case
-<a href="issue-311d-the-map-becomes-code.html">311d</a> is heading for — a description
-the generator has already turned into code, where instantiating is
-calling a generated function rather than walking a parse tree.</p>
+<p>So nothing here waits on 311d. What 311d changes is what a name may
+find, not what the operation is.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>

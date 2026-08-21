@@ -23,29 +23,37 @@ one somebody had to mean.
 
 ## The functions
 
+Everything here speaks in **parts**. A part is where values go in and
+where they come out — for a map brought inside this one, the stations
+it declared as doors; for a single box, the same station, because a
+box's own input ports are its way in and its own output port is its
+way out.
+
 | Function | Takes | Gives | Does |
 |---|---|---|---|
-| `program_add_station` | a program, a box name | the station's index, or -1 | Adds a station running that box. An index is what every wire is made of, so this is the value the others take. |
-| `program_wire` | a program, two stations and two ports | 1 drawn, 0 refused | Draws a wire, applying every rule the engine applies anywhere else. |
-| `program_set_constant` | a program, a station, a port, text | 1 taken, 0 refused | Gives a port a constant. Text rather than bytes, because bytes are exact only against the build that wrote them while text resolves its layout when it is read. |
-| `program_name_station` | a program, a station, a name | 1 taken, 0 refused | Names a station, so the program can be written out as a file that reads back. |
-| `program_set_door` | a program, a station, which way it faces (1 in, 2 out) | 1 marked, 0 refused | Marks a station as a door. One operation for both directions, because the two are one design seen from either side. |
+| `program_add` | a program, a name | a part | **Adds a box, or adds a map. One operation.** A map is a list of boxes and the wiring between them; a box is a list of one. |
+| `program_connect` | a program, two parts and two port numbers | 1 | A wire from one part's way out to another's way in. For two boxes this is the ordinary wire; for two maps it crosses what used to be a seam and finds nothing there. |
+| `program_set_constant` | a program, a part, a port, text | 1 | Gives a port a constant. Text rather than bytes, because bytes are exact only against the build that wrote them while text resolves its layout when it is read. |
+| `program_set_door` | a program, a part, which way it faces | 1 | Marks a part as one of this program's own doors. |
+| `program_name_station` | a program, a part, a name | 1 | Names a part's way in, so the program can be written out as a file that reads back. |
 
-**The door operation is what turns a graph into a program**, and it
-had to exist the moment a program was required to say where its
-results come from (issue 209). The four operations above it can
-assemble any shape; none of them could produce something that would
-*run*, because the thing that turns reachable internals into a surface
-is the mark. A map that could build only graphs could build nothing.
+**A part is never taken apart**, and that is the design rather than an
+accident. Everything above that consumes one takes it whole, so
+nothing exists here whose only job is to pull a field out of a
+handle — which is the thing this project calls *a function written to
+fit the engine* and refuses to make anybody write. A part travels on a
+wire exactly the way a program handle does.
 
-It takes a number rather than a word for the direction, because a wire
-carries values: a box taking a word would need the word to have come
-from somewhere, and the somewhere would be a constant nobody reading
-the map can see.
+**Which kind a name refers to is resolved, not guessed.** A box lives
+in the binary and a description lives on disk; both are looked for.
+Finding both ends the program as ambiguous rather than settling it by
+an order nobody can see, and finding neither ends it naming both
+places that were searched.
 
-A box returns one value, so a refusal's reason cannot come back beside
-the answer — it is printed, and a map that wants to react reacts to
-the zero.
+A refusal ends the program (issue 106). These used to print a reason
+and return zero, and a box's caller is a **wire**, which ignores
+everything it is not attached to — so a map that never wired the zero
+anywhere would carry on believing it had edited a program it had not.
 
 ## The risk this file makes real
 

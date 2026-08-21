@@ -66,14 +66,14 @@ int main(void)
 
     map_t *builder = map_create_empty();
     int adder   = map_add_station(builder);
-    map_place_box(builder, adder, "program_add_station", STATION_PLAIN);
+    map_place_box(builder, adder, "program_add", STATION_PLAIN);
     must_take(map_name_station(builder, adder, "adder"), "a name");
 
     must_take(map_configure_port(builder, adder, 0, IN_PORT_STATIC, address),
               "the program to build into");
     must_take(map_configure_port(builder, adder, 1, IN_PORT_STATIC,
                                  "\"seven\""),
-              "the box to place");
+              "the thing to add");
 
     /*
      * The second operation, and the one that makes what the first
@@ -86,20 +86,26 @@ int main(void)
      * could produce something that would *run*, because the thing
      * that turns reachable internals into a surface is this mark.
      *
-     * **The station index travels down a wire**, which is the whole
-     * demonstration. The first operation returns where it put the
-     * station; the second takes a station to mark. One is the other,
-     * and the engine moves it between them the way it moves any
-     * value — no state kept between the two, no order arranged, just
-     * a wire and the ordinary rule that a station runs when its ports
-     * are full.
+     * **The part travels down a wire**, which is the whole
+     * demonstration. The first operation returns what it added; the
+     * second takes something to mark. One is the other, and the
+     * engine moves it between them the way it moves any value — no
+     * state kept between the two, no order arranged, just a wire and
+     * the ordinary rule that a station runs when its ports are full.
+     *
+     * **A box added is a part whose way in and way out are the same
+     * station**, so marking it as a door needs no special case: the
+     * mark lands on the one station either way. Adding a whole map
+     * would produce a part with two different stations in it and this
+     * line would read identically.
      */
     int doorman = map_add_station(builder);
     map_place_box(builder, doorman, "program_set_door", STATION_PLAIN);
     must_take(map_name_station(builder, doorman, "doorman"), "a name");
     must_take(map_configure_port(builder, doorman, 0, IN_PORT_STATIC, address),
               "the program to mark a door in");
-    /* Port 1 arrives by wire — it is where the station landed. */
+    /* Port 1 arrives by wire — it is the part the first operation
+     * made, travelling whole. Nothing takes it apart. */
     must_take(map_configure_port(builder, doorman, 2, IN_PORT_STATIC, "2"),
               "which way the door faces");
     must_take(map_wire(builder, adder, 0, doorman, 1),

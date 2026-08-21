@@ -1,6 +1,6 @@
 # 311c — Source rides in the binary
 
-Third child of [311](311-the-registry-dissolved.md). Every box source
+Third child of [311](../311-the-registry-dissolved.md). Every box source
 the build includes is also emitted as text, so the compiled program
 carries the C it was made from.
 
@@ -26,9 +26,9 @@ what each costs are below.
 the reason is a wrong assumption in this issue rather than a missing
 afternoon. Step 2 says the generator's declaration parser is
 "callable at runtime anyway", crediting
-[308](completed/308-generator-in-c.md) for it. 308 made the generator
+[308](308-generator-in-c.md) for it. 308 made the generator
 a **C program**, which is callable as a *process* — and that is how
-[310](completed/310-boxes-compiled-at-runtime.md) reaches it, by
+[310](310-boxes-compiled-at-runtime.md) reaches it, by
 running the binary. The parser is not linked into the engine and
 nothing has ever linked it.
 
@@ -82,11 +82,11 @@ compiler folded into placement functions, and the text — all in the
 binary. A program ships as a single file with no tree beside it.
 
 **A box added at runtime has something to be compiled *against*.**
-[310](completed/310-boxes-compiled-at-runtime.md) needs source at runtime, and
+[310](310-boxes-compiled-at-runtime.md) needs source at runtime, and
 this is where the source it already had comes from.
 
 **Type and argument names come back for free.**
-[311b](311b-placement-instead-of-records.md) drops every name string
+[311b](../311b-placement-instead-of-records.md) drops every name string
 the engine was carrying, because the engine never used one. Error
 messages and the dump do, and they read them here.
 
@@ -112,7 +112,7 @@ the section.
 The text sits in the loaded image, so a program's binary grows by
 roughly the size of its box sources. That is small next to what those
 sources compile to, and it only counts the sources a map actually needs
-once [311d](311d-the-map-becomes-code.md) lands. If it ever stops being
+once [311d](../311d-the-map-becomes-code.md) lands. If it ever stops being
 small, the move that keeps this decision is the ELF section above —
 same data, out of the loaded image, at the price of portability.
 
@@ -122,12 +122,15 @@ same data, out of the loaded image, at the price of portability.
    path to text. The generator's own file reader was exported rather
    than copied, so a source is read twice with one error message
    between the two readers.
-2. **Half done.** Given a path, the text comes back — by the path the
-   build knew it as, or by the bare name somebody would type. Given a
-   box name and a parameter index, the parameter's *name* does not,
-   because the parser that would read it is not linked into the
-   engine. See the open question.
-3. **Waits on 2.**
+2. **Done, in the half that survives.** Given a path, the text comes
+   back — by the path the build knew it as, or by the bare name
+   somebody would type. Given a box name and a parameter index, the
+   parameter's *name* does not, and no longer needs to: the messages
+   that wanted names now name positions and sizes instead. See the
+   answered question below.
+3. **Dissolved with it.** The report prints no argument names,
+   because a name is not what a reader should be sent to look at. Both
+   ends of a disagreement are given by position and by count.
 4. **Done by not doing.** The modification-time check an earlier draft
    designed is not built, and this issue is why: the embedded text is
    by definition the text that was compiled, so there is nothing to
@@ -141,55 +144,56 @@ same data, out of the loaded image, at the price of portability.
 
 ## Open questions
 
-**Open: how does a running program read a name out of the source it
-carries?**
+**Answered: how does a running program read a name out of the source
+it carries? It does not, and the messages stopped wanting names.**
 
-This issue assumed the answer and the assumption is wrong.
-[308](completed/308-generator-in-c.md) made the generator a C
-*program*, which is callable as a process — and
-[310](completed/310-boxes-compiled-at-runtime.md) reaches it exactly
-that way, by running the binary. The declaration parser is not linked
-into the engine, and nothing has ever linked it.
+The question was the wrong shape, and the answer changed what the
+messages say rather than where a parser lives.
 
-Three ways, and none is obviously right:
+**A refusal names both ends of a wire by position and by size.** A
+type name is not what makes a wire legal or illegal — the width is
+([309](309-types-by-width.md)) — so a message built around
+names sends somebody to look at the thing that is *not* the
+disagreement. Two types with one layout and different names wire
+perfectly; two things sharing a name could not disagree. What actually
+conflicts is a place and a count on each end, so that is what the
+message gives: which station, which port, how many bytes, on both
+sides.
 
-- **Link the parser into the engine.** Two of the generator's four
-  files — the text utilities and the parser, not the emitter — become
-  part of every program. A program could then read its own carried
-  source with no subprocess, which would also let runtime compilation
-  check a box before shelling out to compile it. It costs every
-  program an arena allocator and about a thousand lines of what is
-  currently build tooling.
-- **Ask the generator binary.** It already answers `--describe`, and
-  the engine already runs it to compile a box while a program runs, so
-  the dependency exists and nothing new is added. It costs a process
-  per question, which is fine for a debug report and absurd for
-  anything else — and it means a program that ships without the
-  generator beside it loses the feature, which is most of what this
-  issue was for.
-- **Emit the names as data too.** The generator knows every parameter
-  name at generation time and could write them out beside the source
-  text. It is by far the cheapest and it runs against
-  [311b](311b-placement-instead-of-records.md), which is deleting name
-  strings from the engine on the grounds that the engine never reads
-  them. The counter-argument is that these are read by *reports*
-  rather than by the engine, and that a table of names beside a blob
-  of text is a strange thing to carry when the text already contains
-  them.
+    seven output 0 produces 4 bytes and mix input 1 takes 8 bytes
+
+That also retires the last thing on the refusal path that reached back
+into a box record for a spelling, which is one fewer reason for those
+records to exist
+([311b](../311b-placement-instead-of-records.md)).
+
+**And the parser, if it is ever wanted, arrives behind a build
+flag.** Linking it in is a real option — the generator's text
+utilities and its parser, not its emitter, become part of the program,
+and a program could then read its own carried source with no
+subprocess. What made it look mandatory was reports wanting names, and
+they no longer do. So it becomes something a **debug build** switches
+on rather than something every program carries: the ordinary build
+stays as small as it is, and somebody who wants argument names in a
+report asks for them when they build.
+
+Not built. Written down so that whoever wants it knows the shape it
+should take, and so that nobody adds it to the default build by
+mistake.
 
 ## Related
 
-- [311 — The registry dissolved](311-the-registry-dissolved.md), the
+- [311 — The registry dissolved](../311-the-registry-dissolved.md), the
   parent
-- [311b — Placement instead of records](311b-placement-instead-of-records.md),
+- [311b — Placement instead of records](../311b-placement-instead-of-records.md),
   which drops the names this brings back
-- [311d — The map becomes code](311d-the-map-becomes-code.md), which
+- [311d — The map becomes code](../311d-the-map-becomes-code.md), which
   decides how much source there is to embed
-- [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
+- [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   which needs source at runtime and now has it
-- [308 — The generator, in C](completed/308-generator-in-c.md), whose parser this
+- [308 — The generator, in C](308-generator-in-c.md), whose parser this
   calls at runtime for argument names
-- [057 — Packaging](../docs/implementation-notes/057-packaging.md),
+- [057 — Packaging](../../docs/implementation-notes/057-packaging.md),
   where shipping one file rather than a tree is the point
-- [106 — Stopping on purpose](completed/106-stopping-on-purpose.md), whose report
+- [106 — Stopping on purpose](106-stopping-on-purpose.md), whose report
   gains the argument names and the elision rule

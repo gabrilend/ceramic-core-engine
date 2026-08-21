@@ -28,11 +28,9 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
-<a href="issue-311c-source-rides-in-the-binary.html" class="here">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -82,6 +80,7 @@
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -92,6 +91,7 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311c-source-rides-in-the-binary.html" class="here">311c — Source rides in the binary</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
@@ -248,12 +248,15 @@ same data, out of the loaded image, at the price of portability.</p>
    path to text. The generator's own file reader was exported rather
    than copied, so a source is read twice with one error message
    between the two readers.
-2. <strong>Half done.</strong> Given a path, the text comes back — by the path the
-   build knew it as, or by the bare name somebody would type. Given a
-   box name and a parameter index, the parameter's <em>name</em> does not,
-   because the parser that would read it is not linked into the
-   engine. See the open question.
-3. <strong>Waits on 2.</strong>
+2. <strong>Done, in the half that survives.</strong> Given a path, the text comes
+   back — by the path the build knew it as, or by the bare name
+   somebody would type. Given a box name and a parameter index, the
+   parameter's <em>name</em> does not, and no longer needs to: the messages
+   that wanted names now name positions and sizes instead. See the
+   answered question below.
+3. <strong>Dissolved with it.</strong> The report prints no argument names,
+   because a name is not what a reader should be sent to look at. Both
+   ends of a disagreement are given by position and by count.
 4. <strong>Done by not doing.</strong> The modification-time check an earlier draft
    designed is not built, and this issue is why: the embedded text is
    by definition the text that was compiled, so there is nothing to
@@ -265,40 +268,36 @@ same data, out of the loaded image, at the price of portability.</p>
    they edit and do not rebuild, it fails, which is correct, because
    the binary is then carrying the truth and the disk is not.</p>
 <h2>Open questions</h2>
-<p>**Open: how does a running program read a name out of the source it
-carries?**</p>
-<p>This issue assumed the answer and the assumption is wrong.
-<a href="done-308-generator-in-c.html">308</a> made the generator a C
-<em>program</em>, which is callable as a process — and
-<a href="done-310-boxes-compiled-at-runtime.html">310</a> reaches it exactly
-that way, by running the binary. The declaration parser is not linked
-into the engine, and nothing has ever linked it.</p>
-<p>Three ways, and none is obviously right:</p>
-<ul>
-<li><strong>Link the parser into the engine.</strong> Two of the generator's four</li>
-<p>  files — the text utilities and the parser, not the emitter — become
-  part of every program. A program could then read its own carried
-  source with no subprocess, which would also let runtime compilation
-  check a box before shelling out to compile it. It costs every
-  program an arena allocator and about a thousand lines of what is
-  currently build tooling.</p>
-<li><strong>Ask the generator binary.</strong> It already answers <code>--describe</code>, and</li>
-<p>  the engine already runs it to compile a box while a program runs, so
-  the dependency exists and nothing new is added. It costs a process
-  per question, which is fine for a debug report and absurd for
-  anything else — and it means a program that ships without the
-  generator beside it loses the feature, which is most of what this
-  issue was for.</p>
-<li><strong>Emit the names as data too.</strong> The generator knows every parameter</li>
-<p>  name at generation time and could write them out beside the source
-  text. It is by far the cheapest and it runs against
-  <a href="issue-311b-placement-instead-of-records.html">311b</a>, which is deleting name
-  strings from the engine on the grounds that the engine never reads
-  them. The counter-argument is that these are read by <em>reports</em>
-  rather than by the engine, and that a table of names beside a blob
-  of text is a strange thing to carry when the text already contains
-  them.</p>
-</ul>
+<p>**Answered: how does a running program read a name out of the source
+it carries? It does not, and the messages stopped wanting names.**</p>
+<p>The question was the wrong shape, and the answer changed what the
+messages say rather than where a parser lives.</p>
+<p><strong>A refusal names both ends of a wire by position and by size.</strong> A
+type name is not what makes a wire legal or illegal — the width is
+(<a href="done-309-types-by-width.html">309</a>) — so a message built around
+names sends somebody to look at the thing that is <em>not</em> the
+disagreement. Two types with one layout and different names wire
+perfectly; two things sharing a name could not disagree. What actually
+conflicts is a place and a count on each end, so that is what the
+message gives: which station, which port, how many bytes, on both
+sides.</p>
+<p>    seven output 0 produces 4 bytes and mix input 1 takes 8 bytes</p>
+<p>That also retires the last thing on the refusal path that reached back
+into a box record for a spelling, which is one fewer reason for those
+records to exist
+(<a href="issue-311b-placement-instead-of-records.html">311b</a>).</p>
+<p>**And the parser, if it is ever wanted, arrives behind a build
+flag.** Linking it in is a real option — the generator's text
+utilities and its parser, not its emitter, become part of the program,
+and a program could then read its own carried source with no
+subprocess. What made it look mandatory was reports wanting names, and
+they no longer do. So it becomes something a <strong>debug build</strong> switches
+on rather than something every program carries: the ordinary build
+stays as small as it is, and somebody who wants argument names in a
+report asks for them when they build.</p>
+<p>Not built. Written down so that whoever wants it knows the shape it
+should take, and so that nobody adds it to the default build by
+mistake.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>

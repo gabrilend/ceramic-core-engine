@@ -55,7 +55,7 @@ it applies every rule wherever a wire is drawn
 ([210g](210g-one-way-to-build-a-station.md)).
 
 Still to come, elsewhere: a demonstration of a program used as a box
-inside another, which is [217](../217-a-program-inside-another.md)'s work
+inside another, which is [217](217-a-program-inside-another.md)'s work
 — this issue built the seam and that one builds the thing that crosses
 it.
 
@@ -320,7 +320,7 @@ warning is the notice, and it fires from the first doubling.
    now, and the map-builds-a-map test uses it — the index of the
    station it just placed travels to the operation that marks it, down
    an ordinary wire, with nothing kept between the two.
-7. **Moved** to [217](../217-a-program-inside-another.md), which is where
+7. **Moved** to [217](217-a-program-inside-another.md), which is where
    a program used as a box got split. This issue built one half of the
    seam and [213](213-the-input-station.md) built the other; what
    crosses it belongs with the thing that does the crossing.

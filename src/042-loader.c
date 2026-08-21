@@ -522,6 +522,120 @@ void map_instance_free(map_instance_t *in)
 }
 /* }}} */
 
+/* {{{ map_add_part() */
+/*
+ * **Adding a box and adding a map are one operation** (issue 217).
+ *
+ * A map is a list of boxes and the wiring between them; a box is a
+ * list of one. That is the whole difference, and once it is said that
+ * way the two stop being different acts — adding a map means walking
+ * its list, instantiating each of its boxes and then connecting them
+ * the way it says, and adding a box means walking a list of length
+ * one and connecting nothing.
+ *
+ * **What comes back is the same kind of thing either way.** A part is
+ * where values go in and where they come out. For a map those are the
+ * stations it declared as doors. **For a single box they are the same
+ * station**, because a box's own input ports are its way in and its
+ * own output port is its way out — a box is a map of one station
+ * whose doors are itself.
+ *
+ * That is what makes a handle safe to hand around without ever taking
+ * it apart: everything that consumes one takes it whole.
+ *
+ * **Which kind it is, is resolved rather than guessed.** A box lives
+ * in the binary and a description lives on disk, so both are looked
+ * for. Finding both is refused as ambiguous rather than settled by an
+ * order nobody can see; finding neither is refused naming both places
+ * that were searched.
+ */
+const char *map_add_part(map_t *m, const char *what, map_part_t *out)
+{
+    static _Thread_local char said[512];
+
+    if (!what || !*what)
+        return "adding a part with no name";
+
+    const box_info_t *box = registry_find(what);
+    FILE *described = fopen(what, "r");
+    if (described)
+        fclose(described);
+
+    if (box && described) {
+        snprintf(said, sizeof said,
+                 "'%s' is both a box in this binary and a description on "
+                 "disk — say which by using a path that is not also a box "
+                 "name", what);
+        return said;
+    }
+
+    if (box) {
+        /* A list of one. Its doors are itself. */
+        int at = map_add_station(m);
+        if (at < 0)
+            return "the station table would not grow";
+        map_place_box(m, at, what, STATION_PLAIN);
+        out->entrance = at;
+        out->result = at;
+        return NULL;
+    }
+
+    if (described) {
+        map_instance_t in = map_instantiate_file(m, what);
+        out->entrance = map_instance_entrance(m, &in, 0);
+        out->result = map_instance_result(m, &in, 0);
+        map_instance_free(&in);
+        if (out->result < 0) {
+            snprintf(said, sizeof said,
+                     "'%s' declares no way out, so nothing can be taken "
+                     "from it", what);
+            return said;
+        }
+        return NULL;
+    }
+
+    snprintf(said, sizeof said,
+             "'%s' is neither a box compiled into this program nor a "
+             "description that can be read from disk", what);
+    return said;
+}
+/* }}} */
+
+/* {{{ map_connect_parts() */
+/*
+ * **A wire from one part's way out to another part's way in**, which
+ * is the only wire a composing caller ever needs to draw (issue 217).
+ *
+ * For two single boxes this is the ordinary wire, because a box's
+ * doors are itself. For two maps it crosses what used to be a seam
+ * and there is nothing there to cross — after instantiation there are
+ * stations with indices, the way there always were.
+ *
+ * The port numbers are the ones a wire has always had: which output
+ * port of the producing station, and which input port of the
+ * receiving one. A comparator's three outcomes are reachable this way
+ * exactly as before.
+ */
+const char *map_connect_parts(map_t *m, map_part_t from, int from_port,
+                              map_part_t to, int to_port)
+{
+    static _Thread_local char said[256];
+
+    if (from.result < 0) {
+        snprintf(said, sizeof said,
+                 "wiring out of a part that has no way out");
+        return said;
+    }
+    if (to.entrance < 0) {
+        snprintf(said, sizeof said,
+                 "wiring into a part that declares no way in — a program "
+                 "that takes no arguments cannot be fed");
+        return said;
+    }
+    return map_wire(m, from.result, from_port, to.entrance, to_port);
+}
+/* }}} */
+
 /* {{{ map_seed_count() */
 int map_seed_count(map_t *m)
 {

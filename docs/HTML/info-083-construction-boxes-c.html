@@ -28,11 +28,9 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
-<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -82,6 +80,7 @@
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -92,6 +91,7 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
@@ -169,27 +169,34 @@ buys nothing from the engine — a wire is checked by width — and
 everything from the person reading a map. A port typed <code>program</code> is
 one somebody had to mean.</p>
 <h2>The functions</h2>
+<p>Everything here speaks in <strong>parts</strong>. A part is where values go in and
+where they come out — for a map brought inside this one, the stations
+it declared as doors; for a single box, the same station, because a
+box's own input ports are its way in and its own output port is its
+way out.</p>
 <table>
 <tr><td>Function</td><td>Takes</td><td>Gives</td><td>Does</td></tr>
-<tr><td><code>program_add_station</code></td><td>a program, a box name</td><td>the station's index, or -1</td><td>Adds a station running that box. An index is what every wire is made of, so this is the value the others take.</td></tr>
-<tr><td><code>program_wire</code></td><td>a program, two stations and two ports</td><td>1 drawn, 0 refused</td><td>Draws a wire, applying every rule the engine applies anywhere else.</td></tr>
-<tr><td><code>program_set_constant</code></td><td>a program, a station, a port, text</td><td>1 taken, 0 refused</td><td>Gives a port a constant. Text rather than bytes, because bytes are exact only against the build that wrote them while text resolves its layout when it is read.</td></tr>
-<tr><td><code>program_name_station</code></td><td>a program, a station, a name</td><td>1 taken, 0 refused</td><td>Names a station, so the program can be written out as a file that reads back.</td></tr>
-<tr><td><code>program_set_door</code></td><td>a program, a station, which way it faces (1 in, 2 out)</td><td>1 marked, 0 refused</td><td>Marks a station as a door. One operation for both directions, because the two are one design seen from either side.</td></tr>
+<tr><td><code>program_add</code></td><td>a program, a name</td><td>a part</td><td><strong>Adds a box, or adds a map. One operation.</strong> A map is a list of boxes and the wiring between them; a box is a list of one.</td></tr>
+<tr><td><code>program_connect</code></td><td>a program, two parts and two port numbers</td><td>1</td><td>A wire from one part's way out to another's way in. For two boxes this is the ordinary wire; for two maps it crosses what used to be a seam and finds nothing there.</td></tr>
+<tr><td><code>program_set_constant</code></td><td>a program, a part, a port, text</td><td>1</td><td>Gives a port a constant. Text rather than bytes, because bytes are exact only against the build that wrote them while text resolves its layout when it is read.</td></tr>
+<tr><td><code>program_set_door</code></td><td>a program, a part, which way it faces</td><td>1</td><td>Marks a part as one of this program's own doors.</td></tr>
+<tr><td><code>program_name_station</code></td><td>a program, a part, a name</td><td>1</td><td>Names a part's way in, so the program can be written out as a file that reads back.</td></tr>
 </table>
-<p><strong>The door operation is what turns a graph into a program</strong>, and it
-had to exist the moment a program was required to say where its
-results come from (issue 209). The four operations above it can
-assemble any shape; none of them could produce something that would
-<em>run</em>, because the thing that turns reachable internals into a surface
-is the mark. A map that could build only graphs could build nothing.</p>
-<p>It takes a number rather than a word for the direction, because a wire
-carries values: a box taking a word would need the word to have come
-from somewhere, and the somewhere would be a constant nobody reading
-the map can see.</p>
-<p>A box returns one value, so a refusal's reason cannot come back beside
-the answer — it is printed, and a map that wants to react reacts to
-the zero.</p>
+<p><strong>A part is never taken apart</strong>, and that is the design rather than an
+accident. Everything above that consumes one takes it whole, so
+nothing exists here whose only job is to pull a field out of a
+handle — which is the thing this project calls *a function written to
+fit the engine* and refuses to make anybody write. A part travels on a
+wire exactly the way a program handle does.</p>
+<p><strong>Which kind a name refers to is resolved, not guessed.</strong> A box lives
+in the binary and a description lives on disk; both are looked for.
+Finding both ends the program as ambiguous rather than settling it by
+an order nobody can see, and finding neither ends it naming both
+places that were searched.</p>
+<p>A refusal ends the program (issue 106). These used to print a reason
+and return zero, and a box's caller is a <strong>wire</strong>, which ignores
+everything it is not attached to — so a map that never wired the zero
+anywhere would carry on believing it had edited a program it had not.</p>
 <h2>The risk this file makes real</h2>
 <p><strong>A wire is legal when both ends count the same bytes</strong>, which is
 right for data: two boxes may spell one shape differently and mean the

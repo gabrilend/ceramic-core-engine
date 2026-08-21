@@ -28,11 +28,9 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
-<a href="issue-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -82,6 +80,7 @@
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -92,6 +91,7 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
@@ -187,7 +187,7 @@ survives the table being deleted.</p>
 <tr><td><a href="issue-311-the-registry-dissolved.html">311 — the registry dissolved</a></td><td>open</td><td><strong>Parent.</strong> The table goes away entirely — not shrinks, goes. A running program holds no name and no lookup, because the generator resolves every name while generating.</td></tr>
 <tr><td><a href="issue-311a-boxes-addressed-by-file.html">311a — boxes addressed by file</a></td><td><strong>symbol scheme done</strong>, map format waits</td><td>A map names <code>file:function</code>. Bare basenames resolve, paths settle ties, and generated symbols escape punctuation so <code>math.c</code> and <code>math_c</code> cannot collide.</td></tr>
 <tr><td><a href="issue-311b-placement-instead-of-records.html">311b — placement instead of records</a></td><td><strong>placement routed</strong>, deletions wait</td><td>A generated placement function per box writes a station directly, every size a folded constant. Hand placement turns out to be the primitive.</td></tr>
-<tr><td><a href="issue-311c-source-rides-in-the-binary.html">311c — source rides in the binary</a></td><td>open</td><td>Each included box source emitted as a C array, so one file carries code, numbers, and text.</td></tr>
+<tr><td><a href="done-311c-source-rides-in-the-binary.html">311c — source rides in the binary</a></td><td>open</td><td>Each included box source emitted as a C array, so one file carries code, numbers, and text.</td></tr>
 <tr><td><a href="issue-311d-the-map-becomes-code.html">311d — the map becomes code</a></td><td>open, <strong>waits on phase 2's capstone</strong></td><td>The generator turns a map into the construction calls it describes, so no name survives into a running program. The build also learns what to include; the linker discards the rest. It emits against the one construction surface only — never against the interface that surface replaces.</td></tr>
 </table>
 <h2>What the phase established</h2>

@@ -1,6 +1,6 @@
 # 217 — A program inside another
 
-Split out of [212](completed/212-one-way-to-build-a-program.md), whose
+Split out of [212](212-one-way-to-build-a-program.md), whose
 ten implementation steps are built and whose intended behaviour ends
 with a sentence it never got to: **a map is a box.** This is that
 sentence.
@@ -46,15 +46,25 @@ inside either.
 **Instantiating into a running program needed nothing added**, because
 every operation it is made of was already legal at any moment.
 
-**The operation exists as a box, in a shape chosen against a more
-general one.** A box returns one value, so a handle carrying an
-entrance *and* a way out is a struct of two numbers — and getting the
-numbers out means a box that takes the struct and returns one field,
-which is **a function written to fit the engine**, the one cost this
-design refuses. So the box says what a composing map actually wants:
-*put this part between here and there*. No handle escapes and nothing
-needs unpacking. What it does not reach is a part with several
-entrances or several ways out, which is below.
+**Adding a box and adding a map are one operation**, and saying it
+that way is what settled the shape. A map is a list of boxes and the
+wiring between them; a box is a list of one. Adding a map walks its
+list, instantiates each of its boxes and connects them the way it
+says; adding a box walks a list of length one and connects nothing.
+
+So what comes back is the same kind of thing either way: **a part**,
+which is where values go in and where they come out. For a map those
+are its declared doors. For a single box they are the same station,
+because a box's own input ports are its way in and its own output port
+is its way out — a box is a map of one station whose doors are itself.
+
+**And a part is never taken apart.** The worry was that a handle
+carrying two station numbers would need boxes whose only job is to
+pull a field out of it, which is a function written to fit the engine.
+Nothing pulls a field out: wiring takes two parts and two port
+numbers, giving a port a constant takes a part, marking a door takes a
+part. A part travels on a wire exactly the way a program handle does,
+and neither is ever opened.
 
 **The dump makes names unique on the way out**, which the open
 question below predicted and instantiating twice made real. Two copies
@@ -79,7 +89,7 @@ Starting beside works and is proven: a fresh program with its own
 station table, its own rewiring lock, its own everything except the
 workers, reached only through its doors. A test starts one, feeds it,
 reads it, and outlives it
-([212](completed/212-one-way-to-build-a-program.md)).
+([212](212-one-way-to-build-a-program.md)).
 
 What has no answer is the other half. A program that wants to *use*
 another program — not run it alongside, but wire into it and out of it
@@ -88,14 +98,14 @@ operation that says "and here is a graph, place it".
 
 Everything that operation would need already exists. Stations are
 added one at a time, into a table that grows without moving anything
-([211](completed/211-growing-the-station-table.md)). Wires are drawn
+([211](211-growing-the-station-table.md)). Wires are drawn
 by one operation that applies every rule at any moment. Ports are
 configured by one operation. A program declares where its arguments
 arrive and where its results come from
-([213](completed/213-the-input-station.md),
-[209](completed/209-map-output-collection.md)). Reading a file is already
+([213](213-the-input-station.md),
+[209](209-map-output-collection.md)). Reading a file is already
 nothing but a sequence of those calls
-([210g](completed/210g-one-way-to-build-a-station.md)).
+([210g](210g-one-way-to-build-a-station.md)).
 
 ## Intended behavior
 
@@ -163,7 +173,7 @@ accident.
 **And the choice has a second axis, which is where the hardware
 comes in.** A station table belongs to one processor, and so does the
 pool that runs it
-([090](../docs/implementation-notes/090-one-table-per-processor.md)).
+([090](../../docs/implementation-notes/090-one-table-per-processor.md)).
 So things composed into one table run on one processor: composing is
 the right shape for a subgraph you want *close*, and the wrong shape
 for work you want spread across sockets — for which the answer is a
@@ -219,12 +229,20 @@ a collision to prevent.
    entrance, that instance's way out into the second's entrance, and
    reads twenty-eight from its own way out — naming nothing inside
    either. This is
-   [209](completed/209-map-output-collection.md)'s step 7 and
-   [213](completed/213-the-input-station.md)'s step 6, both of which had been
+   [209](209-map-output-collection.md)'s step 7 and
+   [213](213-the-input-station.md)'s step 6, both of which had been
    waiting for it.
 5. **Done**, and it needed nothing added.
-6. **Done**, as *put this part between here and there* rather than as
-   an operation returning a handle — see the reasoning above.
+6. **Done, and then done again in a better shape.** The first version
+   was *put this part between here and there* — one call that
+   instantiated and wired, avoiding a handle by never letting one
+   escape, and hard-coding one entrance and one way out.
+
+   It is now **one operation that adds a box or adds a map**, because
+   those are the same act over a list of one or a list of many. It
+   hands back a part, and everything that consumes a part takes it
+   whole — so the handle travels on a wire between construction
+   operations, and nothing exists whose job is to open it.
 7. **Done, and it was the open question below arriving.** The dump
    makes names unique on the way out, so a program holding two copies
    of one description can still be written down and read back.
@@ -248,59 +266,82 @@ refused for making a name mechanical again, which is the thing this
 issue says it is not. Dropping names from arrows altogether would
 throw away the reason a map file is readable by a person.
 
-**Open: a part with several entrances or several ways out, from a
-box.**
+**Answered: a part with several entrances or several ways out, from a
+box — by making adding a box and adding a map one operation.**
 
-The C call handles it: the surface offers the *nth* door, and a
-caller asks for as many as it likes. The **box** does not, because a
-box returns one value and a handle carrying two station numbers is a
-struct somebody downstream has to take apart — which is a function
-written to fit the engine, and [209](completed/209-map-output-collection.md)
-refused exactly that when a station with several output ports was
-proposed.
+The question assumed two different acts that had to be reconciled.
+They are not two acts. **A map is a list of boxes and the wiring
+between them; a box is a list of one.** Adding a map walks its list,
+instantiates each of its boxes, and connects them the way it says.
+Adding a box walks a list of length one and connects nothing. That is
+the whole difference, and it is a difference in the length of a list
+rather than in what is happening.
 
-Three shapes are worth weighing before one is built, and none is
-obviously right:
+So what comes back is the same kind of thing either way: **a part,
+which is where values go in and where they come out.** For a map those
+are the stations it declared as doors. **For a single box they are the
+same station**, because a box's own input ports are its way in and its
+own output port is its way out — a box is a map of one station whose
+doors are itself.
 
-- **A box per door**, taking the description and a door number and
-  returning that station's index. It would have to instantiate to
-  answer, so two calls would build two copies — unless the instance
-  is remembered somewhere, which is state the engine does not keep.
-- **A part placed with a list of wires**, given as text the way a
-  constant is. Keeps one call and one value, and moves the wiring
-  description into a string the engine parses, which is a second
-  little language.
-- **Accept the struct and the unpackers**, on the grounds that a
-  handle is a value like any other and the objection was about faking
-  *several returns*, not about returning a small record. This is the
-  one that most deserves re-reading: `program` is already a
-  one-field struct travelling on a wire, and nobody called that a
-  function written to fit the engine.
+**And that dissolves the objection rather than settling it.** The
+worry was that a handle carrying two station numbers would need boxes
+whose only job is to pull a field out of it, which is a function
+written to fit the engine. Nothing pulls a field out, because
+everything that consumes a part takes it whole: wiring takes two parts
+and two port numbers, giving a port a constant takes a part, marking a
+door takes a part. A part is passed along exactly the way a program
+handle already is, and neither is ever taken apart.
 
-**Open: what does a description arrive as?**
+The three shapes weighed before are kept because the reasoning is the
+design. A box per door would have to instantiate to answer, so two
+calls would build two copies unless the engine remembered instances,
+which is state it does not keep. A wiring list given as text would put
+a second little language inside a string. Accepting the struct with
+unpackers is the one this replaces: the struct is accepted, and the
+unpackers turned out to be unnecessary.
 
-Reading a file is one way. The others are worth naming before the
-operation's shape is fixed, because they decide whether it takes a
-path, a parsed description, or something else: a description built by
-calling the parser on text held in memory; a description produced by
-another program; and — the case
-[311d](311d-the-map-becomes-code.md) is heading for — a description
-the generator has already turned into code, where instantiating is
-calling a generated function rather than walking a parse tree.
+**Answered: what does a description arrive as? As a *name that
+resolves*, and the set of things a name can resolve to is open.**
+
+The operation takes a name and looks for it in two places: a box
+compiled into the binary, and a description on disk. Finding both is
+refused as ambiguous rather than settled by an order nobody can see;
+finding neither is refused naming both places that were searched.
+
+That shape survives every other way a description might arrive,
+because each of them is one more place to look rather than a different
+operation:
+
+- **A description parsed from text held in memory** is a third place,
+  and the reader already separates parsing from building — the two
+  passes take a parsed description and a translation table, not a
+  path.
+- **A description produced by another program** is that same case
+  arriving from somewhere else.
+- **A description the generator has already turned into code**
+  ([311d](../311d-the-map-becomes-code.md)) is the interesting one: the
+  name resolves to a generated function rather than to a parse tree,
+  and instantiating means calling it. The caller cannot tell, which is
+  the point — and it is why the operation takes a *name* rather than a
+  path or a parsed structure.
+
+So nothing here waits on 311d. What 311d changes is what a name may
+find, not what the operation is.
 
 ## Related
 
-- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   where this was described and from which it is split
-- [209 — The output station](completed/209-map-output-collection.md), whose last
+- [209 — The output station](209-map-output-collection.md), whose last
   step is a program used as a box
-- [213 — The input station](completed/213-the-input-station.md), whose last step
+- [213 — The input station](213-the-input-station.md), whose last step
   is the same thing from the other side
-- [211 — Growing the station table](completed/211-growing-the-station-table.md),
+- [211 — Growing the station table](211-growing-the-station-table.md),
   which makes adding a run of stations ordinary
-- [210g — One way to build a station](completed/210g-one-way-to-build-a-station.md),
+- [210g — One way to build a station](210g-one-way-to-build-a-station.md),
   which made reading a file a sequence of ordinary calls
-- [311d — The map becomes code](311d-the-map-becomes-code.md), where a
+- [311d — The map becomes code](../311d-the-map-becomes-code.md), where a
   description stops being parsed at run time
-- [008 — Map file format](../docs/008-map-file-format.md), which gains
+- [008 — Map file format](../../docs/008-map-file-format.md), which gains
   whatever answers the dump question

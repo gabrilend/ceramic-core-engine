@@ -176,7 +176,7 @@ this shape on the way out of a dying program.
   stop-the-world sequence this reuses with a different ending
 - [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
   which is why a captured program may contain code the binary does not
-- [311c — Source rides in the binary](311c-source-rides-in-the-binary.md),
+- [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md),
   which already puts every box's text in the artifact
 - [311d — The map becomes code](311d-the-map-becomes-code.md), whose
   rule about when a toolchain is needed this inherits exactly

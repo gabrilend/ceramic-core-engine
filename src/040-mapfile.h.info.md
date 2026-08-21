@@ -60,6 +60,29 @@ rename or restructure.
 
 **map_instance_free(instance)** — the handle goes, the stations stay.
 
+**map_add_part(map, name, out part) → NULL or a refusal** — **adding a
+box and adding a map are one operation.** A map is a list of boxes and
+the wiring between them; a box is a list of one.
+
+A **part** is where values go in and where they come out. For a map
+those are the stations it declared as doors; for a single box they are
+the same station, because a box's own input ports are its way in and
+its own output port is its way out — a box is a map of one station
+whose doors are itself.
+
+Which kind a name refers to is resolved rather than guessed: a box
+lives in the binary and a description lives on disk, both are looked
+for, and finding both or neither is refused naming what was searched.
+
+**map_connect_parts(map, from part, port, to part, port) → NULL or a
+refusal** — a wire from one part's way out to another's way in. For
+two single boxes this is the ordinary wire. Port numbers are the ones
+a wire has always had, so a comparator's three outcomes are reachable
+exactly as before.
+
+Nothing takes a part apart. Everything that consumes one takes it
+whole, which is what keeps a handle from needing accessors.
+
 **map_seed_count(map) → int** — how many stations the bring-up
 started; one when the author expected ten means a wiring mistake.
 

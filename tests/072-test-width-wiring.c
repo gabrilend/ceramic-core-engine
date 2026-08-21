@@ -131,10 +131,16 @@ static void byte_identical(void)
 /* {{{ static void different_widths_refused() */
 /*
  * The refusal that remains — `add` returns an int and `mix` takes a
- * double at its second port, four bytes against eight. The message
- * has to carry both names *and* both widths: "box returns int, port
- * takes double" does not say why those disagree, and "4 bytes against
- * 8 bytes" does.
+ * double at its second port, four bytes against eight.
+ *
+ * **The message names both ends by position and by size, and carries
+ * no type name at all.** It used to give the two spellings, which
+ * reads well and is the wrong shape for what this engine checks: a
+ * name is not what makes a wire legal, the width is, so a message
+ * built around names sends somebody to look at the thing that is not
+ * the disagreement. Two types with one layout and different names
+ * wire perfectly. What actually conflicts is a place and a count on
+ * each end, so that is what the message gives.
  *
  * **It asks for the reason instead of capturing it.** This scene used
  * to redirect stderr into a file for the length of the call, because
@@ -155,10 +161,10 @@ static void different_widths_refused(void)
     check(said != NULL,
           "a four-byte value into an eight-byte port was refused");
     if (said) {
-        check(strstr(said, "int") && strstr(said, "double"),
-              "the refusal names both types");
+        check(strstr(said, "output 0") && strstr(said, "input 1"),
+              "the refusal names both ends by position");
         check(strstr(said, "4 bytes") && strstr(said, "8 bytes"),
-              "and both widths, which is what actually disagrees");
+              "and both counts, which is what actually disagrees");
         printf("  refused: %s\n", said);
     }
 
@@ -204,7 +210,7 @@ static void a_source_with_no_inputs_is_checked_too(void)
           "port was refused");
     if (no) {
         check(strstr(no, "4 bytes") && strstr(no, "8 bytes"),
-              "and the refusal says which widths disagree");
+              "and the refusal says which counts disagree");
         printf("  refused: %s\n", no);
     }
 

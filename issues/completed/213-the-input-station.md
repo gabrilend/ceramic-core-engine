@@ -88,7 +88,7 @@ outside there is no wire.
 
 **And one program is used as a box inside another**, which was this
 issue's last step and is built in
-[217](../217-a-program-inside-another.md): a parent wires into an
+[217](217-a-program-inside-another.md): a parent wires into an
 instance's entrance and out of its way out, naming nothing inside it.
 
 ### What stood before
@@ -261,7 +261,7 @@ want to.
    wrong count is refused rather than half delivered, and a program
    that has already finished is refused rather than handed arguments
    nobody will run.
-6. **Done**, in [217](../217-a-program-inside-another.md), which is where
+6. **Done**, in [217](217-a-program-inside-another.md), which is where
    putting one program inside another got built. A parent wires into
    an instance's entrance and out of its way out and names nothing
    inside it.

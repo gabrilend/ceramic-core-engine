@@ -197,6 +197,40 @@ int  map_instance_result(map_t *m, const map_instance_t *in, int nth);
 void map_instance_free(map_instance_t *in);
 /* }}} */
 
+/* {{{ map_add_part() / map_connect_parts() — issue 217 */
+/*
+ * **Adding a box and adding a map are one operation.**
+ *
+ * A map is a list of boxes and the wiring between them; a box is a
+ * list of one. Adding a map walks its list, instantiates each box and
+ * connects them the way it says; adding a box walks a list of length
+ * one and connects nothing.
+ *
+ * **A part is where values go in and where they come out.** For a map
+ * those are the stations it declared as doors. For a single box they
+ * are the same station, because a box's own input ports are its way
+ * in and its own output port is its way out — a box is a map of one
+ * station whose doors are itself.
+ *
+ * That is what lets a handle be passed around without ever being
+ * taken apart: everything that consumes one takes it whole, so
+ * nothing has to exist whose only job is to pull a field out of it.
+ *
+ * Which kind a name refers to is **resolved rather than guessed**: a
+ * box lives in the binary and a description lives on disk, both are
+ * looked for, and finding both or neither is refused with the places
+ * that were searched named.
+ */
+typedef struct map_part {
+    int entrance;   /* where values go in, or -1 if nothing may be fed */
+    int result;     /* where values come out */
+} map_part_t;
+
+const char *map_add_part(map_t *m, const char *what, map_part_t *out);
+const char *map_connect_parts(map_t *m, map_part_t from, int from_port,
+                              map_part_t to, int to_port);
+/* }}} */
+
 /* {{{ map_load_last_timing — the load-time cost, staged */
 /*
  * Where the loading time went, in seconds, for the most recent
