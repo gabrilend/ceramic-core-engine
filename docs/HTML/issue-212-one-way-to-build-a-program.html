@@ -117,6 +117,13 @@
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
+<a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
+<a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
+<a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
+<a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
+<a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
+<a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
+<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 <a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
@@ -131,13 +138,6 @@
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
-<a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
-<a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
-<a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
-<a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
-<a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
-<a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
-<a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 </nav>
 <main>
 <h1>212 — One way to build a program</h1>
@@ -534,6 +534,48 @@ rather than drifting into place.</p>
     have. Nothing refuses it on grounds of <em>programs</em>; indices just do
     not cross.</p>
 <h2>Open questions</h2>
+<p>**Open: does the station table still hold up once one map holds many
+programs' worth of boxes?**</p>
+<p>Composing merges: a program brought into another produces <strong>one</strong>
+station table holding both sets of stations. Nothing about that is
+resolved at run time, which is the appeal — no boundary to check, no
+per-program bookkeeping, no dispatch asking which program a station
+belongs to. The nesting is a fact about how the graph was described
+rather than about how it runs.</p>
+<p>But the table was designed when a map was one program somebody wrote
+by hand, and composing changes the numbers it lives under. Every
+question below was settled at that size and should be asked again at
+the other one, <em>before</em> composing is built rather than after:</p>
+<ul>
+<li><strong>Shelves.</strong> Growing by adding a shelf keeps every station still,</li>
+<p>  which is load-bearing because a station holds its own mutex. That
+  was priced against a program growing a station at a time. A merge
+  adds a whole program's worth at once, and the shelf size was chosen
+  for the other shape entirely.</p>
+<li><strong>Wires as indices.</strong> A wire is a pair of numbers valid forever</li>
+<p>  inside one table. Merging means every wire in the incoming program
+  is renumbered by an offset. That is mechanical, and it is also the
+  first thing in this engine that ever <em>rewrites</em> a wire — worth
+  looking hard at, because "an index means what it meant" has been
+  true without exception until now.</p>
+<li><strong>The whole-program passes.</strong> Bringing a program up walks every</li>
+<p>  station and, for each, every other station's destinations, looking
+  for arrows that land on it. That is quadratic in the table, which
+  nobody minded at a dozen stations. Composing several programs into
+  one is exactly how a table stops being a dozen stations.</p>
+<li><strong>A mutex per station.</strong> Fine at a dozen; a merged table of</li>
+<p>  thousands is thousands of mutexes allocated whether or not anything
+  ever contends for them.</p>
+<li><strong>What a name means after a merge.</strong> Two programs may each have a</li>
+<p>  station called <code>gate</code>. Names are for writing a program back out as a
+  file that reads in again, so a merged program with two <code>gate</code>s
+  cannot be written down — which makes this a question about the file
+  format as much as about the table.</p>
+</ul>
+<p>None of these is known to be a problem. The point is that they were
+all decided under one set of numbers and composing supplies another,
+and the cheapest moment to find out is while composing is still a
+design.</p>
 <p><strong>Answered, kept because the reasoning is the design:</strong></p>
 <ul>
 <li>*What refuses what, when — does the caller declare whether a bad</li>

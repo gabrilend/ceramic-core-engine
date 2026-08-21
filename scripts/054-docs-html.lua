@@ -53,6 +53,9 @@ end
 -- }}}
 
 -- {{{ local function list_dir()
+-- One directory, one level deep. Still used where the *order* of a
+-- listing is the point — the numbered documents are a reading order
+-- and folding a subdirectory into them would break the sequence.
 local function list_dir(path, pattern)
     local names = {}
     local p = io.popen("ls " .. path .. " 2>/dev/null")
@@ -66,6 +69,65 @@ local function list_dir(path, pattern)
     end
     table.sort(names)
     return names
+end
+-- }}}
+
+-- {{{ local function list_subdirs()
+-- The directories directly inside one, so each can become its own
+-- section rather than being missed. This replaced a hand-written pass
+-- for the one subdirectory that existed at the time, which was the
+-- wrong shape: the next one would have been missed the same way, and
+-- missed *silently* — the pages simply would not appear and nothing
+-- would say so.
+local function list_subdirs(path)
+    local names = {}
+    local p = io.popen("find " .. path .. " -mindepth 1 -maxdepth 1 -type d "
+                       .. "2>/dev/null")
+    if p then
+        for line in p:lines() do
+            names[#names + 1] = line:match("([^/]+)$")
+        end
+        p:close()
+    end
+    table.sort(names)
+    return names
+end
+-- }}}
+
+-- {{{ local function walk_for()
+-- Every file matching a pattern anywhere under a root, as full paths.
+-- Used where a file's *location* is incidental — an interface file
+-- lives beside the source it describes, and which directory that is
+-- should never decide whether it reaches the site.
+--
+-- The derived and the foreign are skipped: the generated site itself,
+-- the RAM scratch tiers, the repository's own metadata, and the
+-- conversation logs, which are large, numerous, and not documentation
+-- of the engine.
+local function walk_for(root, pattern)
+    local paths = {}
+    local cmd = "find " .. root .. " -type f -name '" .. pattern .. "' "
+             .. "-not -path '*/docs/HTML/*' -not -path '*/tmp/*' "
+             .. "-not -path '*/.git/*' -not -path '*/llm-transcripts/*' "
+             .. "2>/dev/null"
+    local p = io.popen(cmd)
+    if p then
+        for line in p:lines() do paths[#paths + 1] = line end
+        p:close()
+    end
+    table.sort(paths)
+    return paths
+end
+-- }}}
+
+-- {{{ local function heading_for()
+-- A directory name as a sidebar heading: hyphens become spaces and
+-- the first letter is raised, so `implementation-notes` reads as
+-- "Implementation notes" without anybody maintaining a table of
+-- special cases.
+local function heading_for(dirname)
+    local words = dirname:gsub("%-", " ")
+    return words:sub(1, 1):upper() .. words:sub(2)
 end
 -- }}}
 
@@ -108,16 +170,25 @@ for _, name in ipairs(list_dir(DIR .. "/docs", "%.md$")) do
     add_page(DIR .. "/docs/" .. name, "doc-" .. name:gsub("%.md$", ".html"),
              title_of(DIR .. "/docs/" .. name, name), "The documents")
 end
--- Implementation notes. A separate pass because the docs listing above
--- is deliberately not recursive: the numbered documents are a reading
--- order, and a subdirectory folded into it would break the sequence.
--- These are decisions rather than descriptions, so they get their own
--- heading in the sidebar.
-for _, name in ipairs(list_dir(DIR .. "/docs/implementation-notes", "%.md$")) do
-    add_page(DIR .. "/docs/implementation-notes/" .. name,
-             "impl-" .. name:gsub("%.md$", ".html"),
-             title_of(DIR .. "/docs/implementation-notes/" .. name, name),
-             "Implementation notes")
+-- Every subdirectory of docs/, each its own section. The top-level
+-- listing above stays one level deep on purpose — those documents are
+-- a reading order and a subdirectory folded into them would break the
+-- sequence — but a subdirectory is a *group*, and groups enrol
+-- themselves here rather than being named one at a time.
+--
+-- The prefix on the output name is the directory's own, so two
+-- subdirectories cannot collide with each other or with the documents
+-- above them.
+for _, sub in ipairs(list_subdirs(DIR .. "/docs")) do
+    if sub ~= "HTML" then
+        local here = DIR .. "/docs/" .. sub
+        for _, name in ipairs(list_dir(here, "%.md$")) do
+            add_page(here .. "/" .. name,
+                     sub:sub(1, 4) .. "-" .. name:gsub("%.md$", ".html"),
+                     title_of(here .. "/" .. name, name),
+                     heading_for(sub))
+        end
+    end
 end
 -- The sealed vision.
 add_page(DIR .. "/vision", "vision.html", "vision (sealed)", "The beginning")
@@ -137,14 +208,16 @@ for _, name in ipairs(list_dir(DIR .. "/issues/completed", "%.md$")) do
              title_of(DIR .. "/issues/completed/" .. name, name),
              "Issues, completed")
 end
--- Interface files, wherever they live.
-for _, place in ipairs({ "libs", "src", "src/boxes", "scripts" }) do
-    for _, name in ipairs(list_dir(DIR .. "/" .. place, "%.info%.md$")) do
-        add_page(DIR .. "/" .. place .. "/" .. name,
-                 "info-" .. name:gsub("%.info%.md$", ".html"):gsub("%.", "-", 1),
-                 title_of(DIR .. "/" .. place .. "/" .. name, name),
-                 "Interfaces")
-    end
+-- Interface files, wherever they live — found by walking rather than
+-- by naming the places they have lived so far. An interface file sits
+-- beside the source it describes, and which directory that is should
+-- never be what decides whether it reaches the site.
+for _, path in ipairs(walk_for(DIR, "*.info.md")) do
+    local name = path:match("([^/]+)$")
+    add_page(path,
+             "info-" .. name:gsub("%.info%.md$", ".html"):gsub("%.", "-", 1),
+             title_of(path, name),
+             "Interfaces")
 end
 -- }}}
 
@@ -595,6 +668,42 @@ write_file(OUT .. "/index.html",
     '<!DOCTYPE html><meta charset="utf-8">' ..
     '<meta http-equiv="refresh" content="0; url=doc-000-table-of-contents.html">')
 
+-- {{{ the sweep
+--
+-- **Anything in the output that no source produces is deleted.**
+--
+-- The generator only ever wrote, which meant a renamed document left
+-- its old page sitting there: stale content, stale links, and a URL
+-- that still worked. Found by renaming an issue and having the
+-- previous page survive; met again every time a document moved or an
+-- issue was completed, each of which had to be cleaned up by hand.
+--
+-- That is the whole argument for doing it here. Anything a generator
+-- does not do automatically is something a person has to remember,
+-- and the failure of remembering is silent — a stale page does not
+-- announce itself, it just quietly disagrees with the project.
+--
+-- Deleting is safe because this directory is *entirely* derived:
+-- every file in it is written by this run or is left over from an
+-- older one. Nothing here is authored, so nothing here can be lost.
+local kept = { ["index.html"] = true, ["style.css"] = true }
+for _, page in ipairs(pages) do kept[page.out] = true end
+
+local swept = 0
+local listing = io.popen("ls " .. OUT .. " 2>/dev/null")
+if listing then
+    local strays = {}
+    for name in listing:lines() do
+        if not kept[name] then strays[#strays + 1] = name end
+    end
+    listing:close()
+    for _, name in ipairs(strays) do
+        os.remove(OUT .. "/" .. name)
+        swept = swept + 1
+    end
+end
+-- }}}
+
 -- Reachability: every page carries the full sidebar, so reachability
 -- is structural; the check verifies the sidebar really lists all.
 local sample = read_file(OUT .. "/" .. pages[1].out)
@@ -616,5 +725,9 @@ if #unresolved > 0 then
     end
 end
 
-print(("docs-html: %d pages into %s (%d unresolved references)")
-    :format(#pages, OUT, #unresolved))
+-- Said out loud rather than done quietly: a sweep that removes a page
+-- somebody expected to be there should be visible in the build log
+-- they are already reading.
+print(("docs-html: %d pages into %s (%d unresolved references%s)")
+    :format(#pages, OUT, #unresolved,
+            swept > 0 and (", %d stale swept"):format(swept) or ""))

@@ -455,6 +455,51 @@ rather than drifting into place.
 
 ## Open questions
 
+**Open: does the station table still hold up once one map holds many
+programs' worth of boxes?**
+
+Composing merges: a program brought into another produces **one**
+station table holding both sets of stations. Nothing about that is
+resolved at run time, which is the appeal — no boundary to check, no
+per-program bookkeeping, no dispatch asking which program a station
+belongs to. The nesting is a fact about how the graph was described
+rather than about how it runs.
+
+But the table was designed when a map was one program somebody wrote
+by hand, and composing changes the numbers it lives under. Every
+question below was settled at that size and should be asked again at
+the other one, *before* composing is built rather than after:
+
+- **Shelves.** Growing by adding a shelf keeps every station still,
+  which is load-bearing because a station holds its own mutex. That
+  was priced against a program growing a station at a time. A merge
+  adds a whole program's worth at once, and the shelf size was chosen
+  for the other shape entirely.
+- **Wires as indices.** A wire is a pair of numbers valid forever
+  inside one table. Merging means every wire in the incoming program
+  is renumbered by an offset. That is mechanical, and it is also the
+  first thing in this engine that ever *rewrites* a wire — worth
+  looking hard at, because "an index means what it meant" has been
+  true without exception until now.
+- **The whole-program passes.** Bringing a program up walks every
+  station and, for each, every other station's destinations, looking
+  for arrows that land on it. That is quadratic in the table, which
+  nobody minded at a dozen stations. Composing several programs into
+  one is exactly how a table stops being a dozen stations.
+- **A mutex per station.** Fine at a dozen; a merged table of
+  thousands is thousands of mutexes allocated whether or not anything
+  ever contends for them.
+- **What a name means after a merge.** Two programs may each have a
+  station called `gate`. Names are for writing a program back out as a
+  file that reads in again, so a merged program with two `gate`s
+  cannot be written down — which makes this a question about the file
+  format as much as about the table.
+
+None of these is known to be a problem. The point is that they were
+all decided under one set of numbers and composing supplies another,
+and the cheapest moment to find out is while composing is still a
+design.
+
 **Answered, kept because the reasoning is the design:**
 
 - *What refuses what, when — does the caller declare whether a bad

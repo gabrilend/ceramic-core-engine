@@ -15,7 +15,7 @@ its own.
 
 | Issue | State | In one line |
 |---|---|---|
-| 201 — station table | **extended** | Flat array of fixed-size records; growing it means shelves, because a station holds its mutex. |
+| 201 — station table | **extended**, and to be re-asked | Flat array of fixed-size records; growing it means shelves, because a station holds its mutex. Every choice in it was priced when a map was one hand-written program; composing merges whole programs into one table, which supplies quite different numbers. The open question is in [212](212-one-way-to-build-a-program.md). |
 | 202 — ring-buffer slots | **extended** | Exact-size slots stay; the two indices go, and with them the copy that growth needs. |
 | [203 — port buffer growth](completed/203-port-buffer-growth.md) | **replaced** | Doubling with unwrap became adding a page, once nothing computed a position from the capacity. The copy it was built around could not be made safe once the value copies leave the lock, so it had to stop existing rather than be ordered correctly. |
 | 204 — readiness check | **extended** | Same check, second caller: writing a static reaches it too. The mutex around the claim goes. |

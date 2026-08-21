@@ -1,6 +1,6 @@
 # Conversation Summary: 55f347f4-2832-4363-ab6b-50a0c7b42395
 
-Generated on: 2026-08-21 07:34:24
+Generated on: 2026-08-21 07:45:48
 
 --------------------------------------------------------------------------------
 
@@ -2902,6 +2902,87 @@ Both doors now exist with map-file syntax. What's left is the demonstration that
 ties them together: **one program used as a box inside another** — wired to
 its entry, read from its result, with the parent never naming anything inside
 it.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 19
+
+Ok let's keep going
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 19
+
+The remaining demonstration is a program *using* another program. The capstone
+distinguishes two ways — composing merges the tables, starting keeps them
+separate and shares only the pool. Let me check whether a second map can share a
+pool:
+
+
+The capstone says the pool is shared "because nothing about finishing requires
+knowing which program a task came from." Let me check whether that's true as
+built:
+
+
+Confirmed, and the claim is false as built: a station index means nothing
+without a map, so the finish hook has to come from the pool's context — which
+ties one pool to one map. The fix is small and the shape is already there. Note
+what `task_build` does with the map it's handed:
+
+
+Now a program can be started beside another, sharing only the workers:
+
+
+Passing. One line of noise to account for — the final delivery lands after the
+workers have gone home, so its task never runs. Let me say what that actually
+proves:
+
+
+Committed, clean, all tests pass. **A program can now set another going beside
+it.**
+
+
+Own station table, own editing lock, own everything — sharing only the
+workers. **You cannot wire to it, and that's the point rather than a
+shortcoming.** A wire is a station number and a port number; a number means
+something only inside one table, and a table belongs to one program. So two
+stations can be joined exactly when they sit in the same program.
+
+
+**The test proves the negative the honest way.** Both programs have a station
+numbered zero, and they're different stations. Asking to wire from one into the
+other's number isn't refused on grounds of *programs* — it's simply a wire
+inside the first program, to a station the first program doesn't have. Nothing
+had to be added to forbid it. Numbers just don't cross.
+
+
+**And the issue's own explanation of why the pool could be shared was wrong.**
+It said sharing was fine "because nothing about finishing requires knowing which
+program a task came from." Finishing requires precisely that — it resolves a
+station index, and an index means nothing without the table it indexes. So the
+map came from the pool's own context, which bound one pool to one program. The
+claim would have read as settled forever if nobody tried to build on it.
+
+
+**The repair was a shape the pool already had.** A task carries a station number
+and an exit number that the workers ferry without ever looking at them —
+that's what keeps the pool ignorant of programs. The owning program becomes one
+more such field. And the map was *already* being handed to task construction and
+explicitly discarded, so carrying it cost nothing. Either a happy accident or an
+earlier decision paying out late.
+
+
+That's step 10 of the capstone done, and with it the last claim the capstone
+made that was checkable without new mechanism.
+
+
+**What remains is composing** — merging two station tables into one, joined at
+the doors that mark the seam. That's genuinely different from everything so far:
+it means copying stations between tables and offsetting every wire index, on
+records that hold their own mutexes. It's the one piece of that issue that needs
+real work rather than a field, and it's where I'd start next.
 
 
 --------------------------------------------------------------------------------
