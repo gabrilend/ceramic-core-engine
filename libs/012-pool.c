@@ -478,6 +478,31 @@ void pool_stop(pool_t *p)
 }
 /* }}} */
 
+/* {{{ pool_finished() */
+/*
+ * **Whether this pool has already decided the work is over.**
+ *
+ * It exists so that a caller arriving too late can be *told* rather
+ * than quietly achieving nothing. The window is real and has caught
+ * two different callers: a program that seeds nothing has an empty
+ * queue and, until somebody registers a standing promise, nobody
+ * promising anything — so between the gate opening and the first
+ * delivery the last sleeper correctly declares it finished. Anything
+ * pushed afterwards is a task nobody will ever run.
+ *
+ * The rule that prevents it is issue 104's and has not changed: make
+ * the promise before opening the gate. This is how somebody finds out
+ * they did not.
+ */
+int pool_finished(pool_t *p)
+{
+    pthread_mutex_lock(&p->mutex);
+    int done = p->stop;
+    pthread_mutex_unlock(&p->mutex);
+    return done;
+}
+/* }}} */
+
 /* {{{ pool_queued() / pool_worker_station() */
 int pool_queued(pool_t *p)
 {

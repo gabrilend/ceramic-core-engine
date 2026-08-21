@@ -1,6 +1,6 @@
 # 213 — The input station
 
-The other door. [209](completed/209-map-output-collection.md) names where a
+The other door. [209](209-map-output-collection.md) names where a
 program's results come from; this names where its arguments arrive.
 They are one design and it is worth reading them together.
 
@@ -18,7 +18,7 @@ declaration is that reaching inside stops being possible by accident.
 A surface nobody has to respect is not a surface.
 
 **One mark, two directions**, shared with
-[209](completed/209-map-output-collection.md), because the two are one design
+[209](209-map-output-collection.md), because the two are one design
 seen from either side. A station is neither door, or one of them.
 Being both is refused: a program whose entrance is its exit is
 somebody having named the wrong station.
@@ -53,8 +53,43 @@ worst — and a declared entrance is exactly the case they were assuming
 away. Warning about one, or refusing to run it, would be telling
 somebody that the thing they had just declared might not happen.
 
-Still to come: deriving a port's type from what it feeds, the
-command-line path, and one program used as a box inside another.
+**A command line is an argument list, and nothing was built to make
+that true.** A program's arguments are the input ports of the stations
+it declared as entrances, in station order and then port order, and
+the text is turned into bytes by the same reader that turns a
+constant written in a map file into bytes. Same code, same
+compiler-computed offsets, same messages naming the field that was
+wrong — so **struct arguments in brace syntax came along free**, which
+is what the scene proving it is for.
+
+Two things it says out loud rather than doing quietly. A count that
+does not match is refused, naming how many the program wanted, because
+half a command line is a program waiting forever for the rest. And a
+program that has *already finished* is refused, because the window
+between the workers being released and the first argument arriving is
+real: a program that seeds nothing has an empty queue and, until
+somebody holds a standing promise, nobody promising anything, so the
+last sleeper correctly decides it is over. The rule that prevents that
+is the pool's own and has not changed — make the promise before
+opening the gate — and this is how somebody finds out they did not.
+
+**Deriving a port's type dissolved with the boxless station.** Step 3
+asked for each input port's type to be worked out from what it feeds,
+and for a port whose destinations disagree to be refused. That was
+written for a door that runs no box, where the port would have nothing
+to get a type from. The boxless station was not built and turned out
+not to be needed (step 2), so every entrance runs an ordinary box and
+its ports are typed by that box's parameters, resolved from the
+registry at placement. There is nothing left to derive, and the
+checking the step asked for is already done twice over: the ordinary
+wire check on anything the entrance feeds, and the size check at the
+door, which is the only moment it *can* be checked because from
+outside there is no wire.
+
+**And one program is used as a box inside another**, which was this
+issue's last step and is built in
+[217](../217-a-program-inside-another.md): a parent wires into an
+instance's entrance and out of its way out, naming nothing inside it.
 
 ### What stood before
 
@@ -127,7 +162,7 @@ the first caller's object with the second caller's colour is a
 perfectly legal outcome.
 
 The reason is already written down and is deliberate:
-[210d](completed/210d-the-copies-leave-the-lock.md) states that values may leave a port in
+[210d](210d-the-copies-leave-the-lock.md) states that values may leave a port in
 a different order than they arrived, because with positions gone a
 reader takes the first ready slot its scan finds, and rollback opens
 gaps wherever it happens. If order within one port is not promised,
@@ -145,7 +180,7 @@ no argument, but it scales with callers rather than with the interface,
 which is the wrong axis.
 
 **This is not a defect and is already written down.**
-[058](../docs/058-guarantees.md) states it twice over: a value carries
+[058](../../docs/058-guarantees.md) states it twice over: a value carries
 no relationship to any other value, and a station pairs whatever is at
 the head of each of its ports. What the door adds is only a new place
 for somebody to walk into it, since a caller who has just written two
@@ -188,7 +223,7 @@ that is not a special case needing special handling. It has nothing to
 receive, so nothing arrives, and the program starts the way any program
 starts: the statics bound during construction are writes, and a write
 runs the readiness check on the station holding it
-([004](../docs/004-datapath-statics.md)). The door is for arguments;
+([004](../../docs/004-datapath-statics.md)). The door is for arguments;
 starting is a separate thing that happens everywhere.
 
 **And a leaf box and a composite box finally look alike from outside.**
@@ -198,28 +233,38 @@ want to.
 
 ## Suggested implementation steps
 
-1. Box file syntax for declaring which station is the input, alongside
-   the output declaration, and reader support for both.
+1. **Done.** A fourth word on a station line declares which way it
+   faces, and the reader and the dump both carry it.
 2. **Done.** One mark on an ordinary station saying it is a door and
    which way it faces, shared with
-   [209](completed/209-map-output-collection.md).
+   [209](209-map-output-collection.md).
 
    The station that runs no box was **not** built and turned out not
    to be needed: a door that shapes nothing is a station running an
    identity box, which is an ordinary function somebody was going to
    write anyway rather than a new kind of station. That keeps the
    count of things this engine has at what it was.
-3. Deriving each input port's type from what it feeds, and refusing a
-   port whose destinations disagree.
+3. **Dissolved**, by step 2's decision. This was written for a door
+   that runs no box, whose ports would have had nothing to get a type
+   from. Every entrance runs an ordinary box, so its ports are typed
+   by that box's parameters, resolved from the registry at placement —
+   there is nothing to derive. What the step wanted checked is checked
+   twice already: by the ordinary wire check on whatever the entrance
+   feeds, and by the size check at the door, which is the only moment
+   it can be checked because from outside there is no wire.
 4. **Done.** A call naming a program, a station, a port and a value,
    refusing any station that is not a declared entrance and checking
    the size — which is the only moment it can be checked, there being
    no wire to have checked it when it was drawn.
-5. The command-line path, reusing the statics text reader, with a test
-   passing a struct argument in brace syntax.
-6. A test that one program is used as a box inside another — wired to
-   its input ports, read from its output ports, with the parent never
-   naming anything inside it.
+5. **Done**, and it reused the statics text reader unchanged — which
+   is why a struct argument in brace syntax needed nothing built. A
+   wrong count is refused rather than half delivered, and a program
+   that has already finished is refused rather than handed arguments
+   nobody will run.
+6. **Done**, in [217](../217-a-program-inside-another.md), which is where
+   putting one program inside another got built. A parent wires into
+   an instance's entrance and out of its way out and names nothing
+   inside it.
 
 ## Open questions
 
@@ -283,7 +328,7 @@ want to.
   waiting for a value.
 
   **What decides whether it waits forever or ends is already in the
-  pool.** [104](completed/104-termination-by-last-sleeper.md) gave an
+  pool.** [104](104-termination-by-last-sleeper.md) gave an
   outside submitter a way to register a standing promise that more work
   may come, and termination waits while any such promise is held. A
   control socket still open holds one, and the program waits. The shell
@@ -299,14 +344,14 @@ want to.
 
 ## Related
 
-- [209 — The output station](completed/209-map-output-collection.md), the same
+- [209 — The output station](209-map-output-collection.md), the same
   design pointed the other way, and where the pass-through kind is
   described
-- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   which is what makes a program constructible and therefore composable
-- [004 — Statics and recalculation](../docs/004-datapath-statics.md),
+- [004 — Statics and recalculation](../../docs/004-datapath-statics.md),
   where starting a program is explained without reference to this
-- [402 — Struct constants](completed/402-struct-constants.md), whose
+- [402 — Struct constants](402-struct-constants.md), whose
   text reader the command-line path reuses unchanged
-- [008 — Map file format](../docs/008-map-file-format.md), which gains
+- [008 — Map file format](../../docs/008-map-file-format.md), which gains
   one declaration and a note about arguments

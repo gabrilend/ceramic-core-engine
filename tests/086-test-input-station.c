@@ -42,6 +42,106 @@ static void must_take(const char *refusal, const char *what)
 }
 /* }}} */
 
+static int failures = 0;
+
+/* {{{ static void check() */
+static void check(int ok, const char *what)
+{
+    if (!ok) {
+        fprintf(stderr, "  FAIL: %s\n", what);
+        failures++;
+    }
+}
+/* }}} */
+
+/* {{{ static void the_command_line_is_an_argument_list() */
+/*
+ * **A program run from a shell gets its arguments through the same
+ * door as everything else** (issue 213).
+ *
+ * There is no new mechanism here and that is the claim. The engine
+ * already turns text into correctly laid-out bytes — it is how a
+ * constant written in a map file becomes a value — so pointing that
+ * reader at an argument list is the same code, the same
+ * compiler-computed offsets, and the same messages naming the field
+ * that was wrong. **Struct arguments in brace syntax come along for
+ * free**, which is what this scene exists to show: nothing was built
+ * to make them work.
+ *
+ * A program's arguments are the input ports of the stations it
+ * declared as entrances, taken in station order and then port order.
+ * Two entrances of one port each is a program that takes two
+ * arguments.
+ */
+static void the_command_line_is_an_argument_list(void)
+{
+    map_t *m = map_create_empty();
+
+    /* One entrance taking a struct, which is the interesting half. */
+    int shape = map_add_station(m);
+    map_place_box(m, shape, "magnitude_squared", STATION_PLAIN); /* (vec3) */
+    must_take(map_name_station(m, shape, "shape"), "a name");
+    must_take(map_designate_input(m, shape), "an entrance");
+
+    /* One entrance taking a plain number. */
+    int count = map_add_station(m);
+    map_place_box(m, count, "double_it", STATION_PLAIN);         /* (int) */
+    must_take(map_name_station(m, count, "count"), "a name");
+    must_take(map_designate_input(m, count), "a second entrance");
+
+    int shape_out = map_add_station(m);
+    map_place_box(m, shape_out, "swallow", STATION_PLAIN);
+    must_take(map_name_station(m, shape_out, "shape_out"), "a name");
+    must_take(map_wire(m, shape, 0, shape_out, 0), "a wire");
+
+    int answer = map_add_station(m);
+    map_place_box(m, answer, "keep", STATION_PLAIN);
+    must_take(map_name_station(m, answer, "answer"), "a name");
+    must_take(map_designate_output(m, answer), "a way out");
+    must_take(map_wire(m, count, 0, answer, 0), "a wire");
+
+    map_start(m, 2);
+    must_take(map_bring_up(m), "the program");
+
+    /*
+     * **The promise before the gate**, which is the rule anything
+     * outside the workers has always had to follow. This program
+     * seeds nothing — every station waits for an argument — so
+     * without it the last sleeper decides the program is over between
+     * the release and the first delivery, and every argument becomes
+     * a task nobody runs.
+     */
+    pool_submitter_register(m->pool);
+    pool_release(m->pool);
+
+    /* A wrong count is refused rather than half delivered, and says
+     * how many the program wanted. */
+    char *too_few[] = { "prog", "21" };
+    const char *no = map_deliver_command_line(m, 2, too_few);
+    check(no != NULL && strstr(no, "takes 2 arguments") != NULL,
+          "a command line of the wrong length is refused, saying how "
+          "many the program wanted");
+
+    /* The real thing: a struct in brace syntax and a number. */
+    char *argv[] = { "prog", "{ 1.0, 2.0, 2.0 }", "21" };
+    must_take(map_deliver_command_line(m, 3, argv), "the command line");
+
+    pool_submitter_unregister(m->pool);
+    pool_join(m->pool);
+
+    int got = 0;
+    check(map_output_take(m, answer, &got, sizeof got) && got == 42,
+          "the number argument arrived and was doubled");
+    check(atomic_load(&map_station(m, shape)->runs) == 1,
+          "and the struct argument arrived as a struct, in brace syntax "
+          "nobody had to build support for");
+
+    map_destroy(m);
+    printf("  a command line became arguments, struct in braces and all\n");
+}
+/* }}} */
+
+
 int main(void)
 {
     /*
@@ -219,5 +319,9 @@ int main(void)
     pool_join(again->pool);
     map_destroy(loaded);
     map_destroy(again);
+
+    the_command_line_is_an_argument_list();
+    if (failures)
+        return 1;
     return 0;
 }

@@ -137,7 +137,7 @@ shrinks, which was never worth anything by itself.
 The one thing step 2 cannot find is a **caller outside the map**. The
 input station accepts deliveries from outside, several callers into one
 port, and the engine deliberately does not remember who called
-([213](../213-the-input-station.md)) — so there is nothing to walk.
+([213](213-the-input-station.md)) — so there is nothing to walk.
 
 **That is declared undefined rather than solved.** A program is reached
 through its input and output stations, and holding on to anything else
@@ -194,7 +194,7 @@ something exotic knows it is doing something exotic.
 - [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   which designs the quiescence sweep and whose box unloading becomes
   far more useful once a station can be removed
-- [213 — The input station](../213-the-input-station.md), the door that
+- [213 — The input station](213-the-input-station.md), the door that
   outside callers use and the reason they cannot be walked
 - [058 — Guarantees](../../docs/058-guarantees.md), where S2 is restated
   and the interface guarantee is added

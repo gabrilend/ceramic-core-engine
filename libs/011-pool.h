@@ -228,6 +228,15 @@ void pool_signal_when_finished(pool_t *p, int signo);
 void pool_stop(pool_t *p);
 int  pool_queued(pool_t *p);
 int  pool_worker_station(pool_t *p, int worker);
+
+/*
+ * **pool_finished(pool)** — whether the pool has already decided the
+ * work is over. For telling a caller that arrived too late, rather
+ * than letting it push tasks nobody will ever run. The window it
+ * detects is closed by making a standing promise before the gate
+ * opens, which is issue 104's rule and has not changed.
+ */
+int  pool_finished(pool_t *p);
 /* }}} */
 /* }}} */
 

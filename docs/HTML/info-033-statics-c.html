@@ -28,7 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
@@ -79,6 +78,7 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-213-the-input-station.html">213 — The input station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
@@ -179,6 +179,22 @@ where a number belongs, an untyped port.</p>
 <p>Parsed into scratch first and installed under the station's mutex, so a
 malformed value never half-overwrites a working one and no concurrent
 claim sees a value mid-parse. Runs the readiness check afterwards.</p>
+<p><strong>map_deliver_argument_text(map, station, port, text)</strong> — an argument
+written as text, turned into the bytes that port wants and delivered
+through the ordinary door. The constant reader pointed somewhere else:
+somebody typing <code>{ 5, 2.0, "hey" }</code> on a command line and somebody
+writing it in a map file are doing the same thing, so struct arguments
+in brace syntax needed nothing built.</p>
+<p>A string argument's characters are <strong>never freed</strong>, deliberately. The
+value delivered for a string port <em>is</em> a pointer, and what it points
+at has to outlive every box that might read it — which is the whole
+run.</p>
+<p><strong>map_deliver_command_line(map, argc, argv)</strong> — the whole of it. A
+program's arguments are the input ports of the stations it declared as
+entrances, in station order and then port order. A count that does not
+match is refused rather than half delivered, and a program that has
+already finished is refused rather than handed arguments nobody will
+run — see the standing-promise rule in <code>011-pool.h.info.md</code>.</p>
 <p><strong>map_in_port_static_write(map, station, port, bytes, size)</strong> — change a
 constant mid-run. Size-checked against what the port holds, and the
 station's own mutex — the lock the claim already takes — is held for

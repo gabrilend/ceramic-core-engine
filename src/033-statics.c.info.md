@@ -34,6 +34,25 @@ Parsed into scratch first and installed under the station's mutex, so a
 malformed value never half-overwrites a working one and no concurrent
 claim sees a value mid-parse. Runs the readiness check afterwards.
 
+**map_deliver_argument_text(map, station, port, text)** — an argument
+written as text, turned into the bytes that port wants and delivered
+through the ordinary door. The constant reader pointed somewhere else:
+somebody typing `{ 5, 2.0, "hey" }` on a command line and somebody
+writing it in a map file are doing the same thing, so struct arguments
+in brace syntax needed nothing built.
+
+A string argument's characters are **never freed**, deliberately. The
+value delivered for a string port *is* a pointer, and what it points
+at has to outlive every box that might read it — which is the whole
+run.
+
+**map_deliver_command_line(map, argc, argv)** — the whole of it. A
+program's arguments are the input ports of the stations it declared as
+entrances, in station order and then port order. A count that does not
+match is refused rather than half delivered, and a program that has
+already finished is refused rather than handed arguments nobody will
+run — see the standing-promise rule in `011-pool.h.info.md`.
+
 **map_in_port_static_write(map, station, port, bytes, size)** — change a
 constant mid-run. Size-checked against what the port holds, and the
 station's own mutex — the lock the claim already takes — is held for

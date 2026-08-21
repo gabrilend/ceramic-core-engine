@@ -519,6 +519,101 @@ void in_port_constant_free(in_port_t *sl)
 }
 /* }}} */
 
+/* {{{ port_text_to_bytes() */
+/*
+ * **Text into the bytes one port's type wants**, which is the one
+ * thing this file knows how to do and the reason two very different
+ * callers share it.
+ *
+ * A constant written in a map file and an argument typed on a command
+ * line are the same problem: somebody wrote a value down as
+ * characters, and the layout it has to become is a fact the compiler
+ * computed and the generator recorded. Pointing this at an argument
+ * list instead of at a statics line is the same code, the same
+ * offsets, and the same messages naming the field that was wrong
+ * (issue 213).
+ *
+ * `into` is `elem_size` bytes the caller owns. `owned_string` comes
+ * back non-null when the port is a string port, holding characters
+ * the caller must keep alive for as long as anything can read the
+ * pointer that was written into `into` — because a string value *is*
+ * that pointer, and freeing what it points at is freeing something a
+ * box may still be looking at.
+ */
+static void port_text_to_bytes(const in_port_t *sl, const char *text,
+                               unsigned char *into, char **owned_string,
+                               const where_t *w)
+{
+    unsigned char *fresh = into;
+    char *fresh_string = NULL;
+
+    const struct_info_t *si = NULL;
+    switch (classify_port(sl, &si)) {
+    case TN_INT: {
+        char *end;
+        long long v = strtoll(text, &end, 0);
+        if (end == text)
+            die_static(w, "an integer port wants a number");
+        write_integer(v, fresh, sl->elem_size, w);
+        break;
+    }
+    case TN_UINT: {
+        char *end;
+        unsigned long long v = strtoull(text, &end, 0);
+        if (end == text)
+            die_static(w, "an unsigned port wants a number");
+        write_unsigned(v, fresh, sl->elem_size, w);
+        break;
+    }
+    case TN_FLOAT: {
+        char *end;
+        double v = strtod(text, &end);
+        if (end == text)
+            die_static(w, "a floating port wants a number");
+        write_float(v, fresh, sl->elem_size, w);
+        break;
+    }
+    case TN_STRING: {
+        /* The claimed value is a pointer; the characters live on the
+         * port for the life of the map, which is what makes handing
+         * the pointer to a box sound. */
+        const char *start = text;
+        int len;
+        if (*text == '"') {
+            const char *stop = strchr(text + 1, '"');
+            if (!stop)
+                die_static(w, "unterminated string");
+            start = text + 1;
+            len = (int)(stop - start);
+        } else {
+            len = (int)strlen(text);
+        }
+        fresh_string = malloc((size_t)len + 1);
+        if (!fresh_string)
+            die_static(w, "out of memory for string storage");
+        memcpy(fresh_string, start, (size_t)len);
+        fresh_string[len] = 0;
+        if (sl->elem_size != (int)sizeof(const char *))
+            die_static(w, "a string port that is not pointer-sized");
+        memcpy(fresh, &fresh_string, sizeof fresh_string);
+        break;
+    }
+    case TN_STRUCT: {
+        if (si->size != sl->elem_size)
+            die_static(w, "struct size disagrees with the port");
+        const char *after = parse_struct_text(si, text, fresh, w);
+        if (*skip_ws(after) != 0)
+            die_static(w, "trailing text after the struct value");
+        break;
+    }
+    default:
+        die_static(w, "the port's type is not one the reader knows");
+    }
+
+    *owned_string = fresh_string;
+}
+/* }}} */
+
 /* {{{ map_in_port_static_text() */
 void map_in_port_static_text(map_t *m, int station, int port, const char *text)
 {
@@ -546,69 +641,7 @@ void map_in_port_static_text(map_t *m, int station, int port, const char *text)
     if (!fresh)
         die_static(&w, "out of memory parsing a constant");
     char *fresh_string = NULL;
-
-    const struct_info_t *si = NULL;
-    switch (classify_port(sl, &si)) {
-    case TN_INT: {
-        char *end;
-        long long v = strtoll(text, &end, 0);
-        if (end == text)
-            die_static(&w, "an integer port wants a number");
-        write_integer(v, fresh, sl->elem_size, &w);
-        break;
-    }
-    case TN_UINT: {
-        char *end;
-        unsigned long long v = strtoull(text, &end, 0);
-        if (end == text)
-            die_static(&w, "an unsigned port wants a number");
-        write_unsigned(v, fresh, sl->elem_size, &w);
-        break;
-    }
-    case TN_FLOAT: {
-        char *end;
-        double v = strtod(text, &end);
-        if (end == text)
-            die_static(&w, "a floating port wants a number");
-        write_float(v, fresh, sl->elem_size, &w);
-        break;
-    }
-    case TN_STRING: {
-        /* The claimed value is a pointer; the characters live on the
-         * port for the life of the map, which is what makes handing
-         * the pointer to a box sound. */
-        const char *start = text;
-        int len;
-        if (*text == '"') {
-            const char *stop = strchr(text + 1, '"');
-            if (!stop)
-                die_static(&w, "unterminated string");
-            start = text + 1;
-            len = (int)(stop - start);
-        } else {
-            len = (int)strlen(text);
-        }
-        fresh_string = malloc((size_t)len + 1);
-        if (!fresh_string)
-            die_static(&w, "out of memory for string storage");
-        memcpy(fresh_string, start, (size_t)len);
-        fresh_string[len] = 0;
-        if (sl->elem_size != (int)sizeof(const char *))
-            die_static(&w, "a string port that is not pointer-sized");
-        memcpy(fresh, &fresh_string, sizeof fresh_string);
-        break;
-    }
-    case TN_STRUCT: {
-        if (si->size != sl->elem_size)
-            die_static(&w, "struct size disagrees with the port");
-        const char *after = parse_struct_text(si, text, fresh, &w);
-        if (*skip_ws(after) != 0)
-            die_static(&w, "trailing text after the struct value");
-        break;
-    }
-    default:
-        die_static(&w, "the port's type is not one the reader knows");
-    }
+    port_text_to_bytes(sl, text, fresh, &fresh_string, &w);
 
     /* One of the four rare structural operations (issue 210): the
      * install and the tag together, under the station's mutex, so no
@@ -635,6 +668,149 @@ void map_in_port_static_text(map_t *m, int station, int port, const char *text)
      * what starts a freshly loaded map, deliberately and once. */
     if (m->pool)
         map_station_try_start(m, station);
+}
+/* }}} */
+
+/* {{{ map_deliver_argument_text() */
+/*
+ * **An argument written as text**, turned into the bytes the port
+ * wants and delivered through the ordinary door (issue 213).
+ *
+ * This is the constant reader pointed somewhere else. Somebody typing
+ * `{ 5, 2.0, "hey" }` on a command line and somebody writing it in a
+ * map file are doing the same thing, so struct arguments in brace
+ * syntax come along for free, with the same compiler-computed offsets
+ * and the same messages naming the field that was wrong.
+ *
+ * **A string argument leaks, deliberately.** The value delivered for
+ * a string port *is* a pointer, and whatever it points at has to
+ * outlive every box that might read it — which is the whole run.
+ * Freeing it would be freeing something a box may still be looking
+ * at. One allocation per argument, released when the process is, is
+ * the honest shape: a command line lives as long as the program does.
+ */
+const char *map_deliver_argument_text(map_t *m, int station, int port,
+                                      const char *text)
+{
+    static _Thread_local char said[256];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said, "station %d is outside the table",
+                 station);
+        return said;
+    }
+    station_t *s = map_station(m, station);
+    if (port < 0 || port >= s->n_in_ports) {
+        snprintf(said, sizeof said, "station %d has no port %d — it has %d",
+                 station, port, s->n_in_ports);
+        return said;
+    }
+    in_port_t *sl = &s->in_ports[port];
+    if (!sl->type_name) {
+        snprintf(said, sizeof said,
+                 "station %d port %d has no registry type, so text has no "
+                 "shape to become", station, port);
+        return said;
+    }
+    if (!text) {
+        snprintf(said, sizeof said, "an argument with no text");
+        return said;
+    }
+
+    where_t w = { station, port };
+    unsigned char *bytes = calloc(1, (size_t)sl->elem_size);
+    if (!bytes)
+        return "out of memory parsing an argument";
+
+    char *owned = NULL;
+    port_text_to_bytes(sl, text, bytes, &owned, &w);
+
+    const char *no = map_deliver_argument(m, station, port, bytes,
+                                          sl->elem_size);
+    free(bytes);
+    /* `owned` is not freed; see above. */
+    return no;
+}
+/* }}} */
+
+/* {{{ map_deliver_command_line() */
+/*
+ * **The command line, delivered into a program's entrances** (issue
+ * 213).
+ *
+ * A program's arguments are the input ports of the stations it
+ * declared as entrances, taken in station order and then in port
+ * order. A program with two entrances of two ports each takes four
+ * arguments, and which is which is a fact about the program that a
+ * person reading its map file can see.
+ *
+ * **It holds a standing promise while it delivers and drops it
+ * afterwards**, which is the rule the pool has always had for
+ * anything outside the workers: without it the program can decide it
+ * has finished between two arguments. Dropping it afterwards is what
+ * lets a program whose arguments are all in actually end.
+ *
+ * A count that does not match is refused rather than partly
+ * delivered, and the refusal says how many the program wanted. Half a
+ * command line is a program that waits forever for the rest, which is
+ * a worse way to learn about a typo than being told.
+ */
+const char *map_deliver_command_line(map_t *m, int argc, char **argv)
+{
+    static _Thread_local char said[256];
+
+    int wanted = 0;
+    for (int i = 0; i < m->n_stations; i++) {
+        station_t *s = map_station(m, i);
+        if (s->call && s->door == DOOR_IN)
+            wanted += s->n_in_ports;
+    }
+
+    int given = argc > 0 ? argc - 1 : 0;
+    if (given != wanted) {
+        snprintf(said, sizeof said,
+                 "this program takes %d argument%s and was given %d",
+                 wanted, wanted == 1 ? "" : "s", given);
+        return said;
+    }
+
+    /*
+     * **Too late is said out loud rather than achieved quietly.**
+     *
+     * A program that seeds nothing has an empty queue, and until
+     * somebody holds a standing promise it also has nobody promising
+     * anything — so between the workers being released and the first
+     * argument arriving, the last sleeper correctly decides the
+     * program is over. Everything delivered afterwards is a task that
+     * will never run, and the symptom is a program that did nothing
+     * for no visible reason.
+     *
+     * The rule that prevents it is the pool's own and has not
+     * changed: make the promise before opening the gate. This is not
+     * a second mechanism for it — a registration taken here could not
+     * close a window that opened before this was called. It is how
+     * somebody finds out they left it open.
+     */
+    if (m->pool && pool_finished(m->pool)) {
+        snprintf(said, sizeof said,
+                 "this program had already finished before its arguments "
+                 "arrived — something outside has to hold a standing "
+                 "promise from before the workers are released until the "
+                 "last argument is in");
+        return said;
+    }
+
+    int taken = 0;
+    const char *no = NULL;
+    for (int i = 0; i < m->n_stations && !no; i++) {
+        station_t *s = map_station(m, i);
+        if (!s->call || s->door != DOOR_IN)
+            continue;
+        for (int j = 0; j < s->n_in_ports && !no; j++)
+            no = map_deliver_argument_text(m, i, j, argv[1 + taken++]);
+    }
+
+    return no;
 }
 /* }}} */
 

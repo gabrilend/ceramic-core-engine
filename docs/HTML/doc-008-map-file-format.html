@@ -28,7 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-213-the-input-station.html">213 — The input station</a>
 <a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
@@ -79,6 +78,7 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-213-the-input-station.html">213 — The input station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
@@ -360,6 +360,29 @@ is no longer warned about when it is a declared entrance, and a
 program in which nothing can start is no longer refused when it has
 one, because both of those were written when there was no way for a
 program to say it expected to be fed.</p>
+<h3>What a program's arguments are</h3>
+<p><strong>The input ports of the stations it declared as entrances</strong>, in
+station order and then port order. A program with two entrances of one
+port each takes two arguments, and a person reading the file can see
+which is which.</p>
+<p>Nothing in the file declares argument <em>types</em>, and nothing needs to:
+an entrance runs an ordinary box, so its ports are typed by that box's
+parameters. That keeps the format's standing rule that it carries no
+types anywhere.</p>
+<p>**Arguments arrive as text and become bytes through the same reader
+that turns a constant into bytes** — the one that walks the field
+table the generator emitted, using compiler-computed offsets. So a
+struct argument is written the way a struct constant is:</p>
+<pre class="code">
+./program '{ 1.0, 2.0, 2.0 }' 21
+</pre>
+<p>and the messages naming a field that was wrong are the same messages.</p>
+<p>Two refusals rather than two silences. A count that does not match is
+refused, saying how many the program wanted, because half a command
+line is a program waiting forever for the rest. And a program that has
+already finished is refused rather than handed arguments nobody will
+run — which happens when nothing held a standing promise across the
+moment the workers were released.</p>
 <h3>A starting depth, which any of the three may carry</h3>
 <p>Every port's ring buffer starts with room for ten values and grows when
 it needs to. A port may be told to start deeper, written **before the

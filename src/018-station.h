@@ -1049,6 +1049,34 @@ map_t *map_start_beside(map_t *parent);
  */
 const char *map_deliver_argument(map_t *m, int station, int port,
                                  const void *value, int size);
+/* {{{ map_deliver_argument_text() / map_deliver_command_line() — issue 213 */
+/*
+ * **Arguments written as text.** The constant reader pointed at a
+ * command line instead of at a map file — same code, same
+ * compiler-computed offsets, same messages naming the field that was
+ * wrong, and struct arguments in brace syntax for free.
+ *
+ * `map_deliver_command_line` takes the whole of it: a program's
+ * arguments are the input ports of the stations it declared as
+ * entrances, in station order and then port order. It holds a
+ * standing promise while it delivers and drops it afterwards, which
+ * is what stops the program deciding it has finished between two
+ * arguments and what lets it end once they are all in.
+ *
+ * A count that does not match is refused rather than partly
+ * delivered: half a command line is a program waiting forever for the
+ * rest, which is a worse way to learn about a typo than being told.
+ *
+ * **A string argument's characters are never freed**, deliberately.
+ * The value delivered for a string port *is* a pointer, and what it
+ * points at has to outlive every box that might read it — which is
+ * the whole run. A command line lives as long as the program does.
+ */
+const char *map_deliver_argument_text(map_t *m, int station, int port,
+                                      const char *text);
+const char *map_deliver_command_line(map_t *m, int argc, char **argv);
+/* }}} */
+
 int map_output_waiting(map_t *m, int station);
 int map_output_take(map_t *m, int station, void *into, int size);
 /* }}} */

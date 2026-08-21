@@ -277,7 +277,7 @@ shared because nothing about finishing requires knowing which program
 a task came from. **You cannot wire to it**, because indices do not
 cross maps. You reach it the way anything outside reaches a program:
 by delivering into its input station, which
-[213](../213-the-input-station.md) already allows without qualification —
+[213](213-the-input-station.md) already allows without qualification —
 several callers delivering to one program input is several arrows into
 one port, and the engine deliberately does not remember who called.
 

@@ -254,6 +254,36 @@ program in which nothing can start is no longer refused when it has
 one, because both of those were written when there was no way for a
 program to say it expected to be fed.
 
+### What a program's arguments are
+
+**The input ports of the stations it declared as entrances**, in
+station order and then port order. A program with two entrances of one
+port each takes two arguments, and a person reading the file can see
+which is which.
+
+Nothing in the file declares argument *types*, and nothing needs to:
+an entrance runs an ordinary box, so its ports are typed by that box's
+parameters. That keeps the format's standing rule that it carries no
+types anywhere.
+
+**Arguments arrive as text and become bytes through the same reader
+that turns a constant into bytes** — the one that walks the field
+table the generator emitted, using compiler-computed offsets. So a
+struct argument is written the way a struct constant is:
+
+```
+./program '{ 1.0, 2.0, 2.0 }' 21
+```
+
+and the messages naming a field that was wrong are the same messages.
+
+Two refusals rather than two silences. A count that does not match is
+refused, saying how many the program wanted, because half a command
+line is a program waiting forever for the rest. And a program that has
+already finished is refused rather than handed arguments nobody will
+run — which happens when nothing held a standing promise across the
+moment the workers were released.
+
 ### A starting depth, which any of the three may carry
 
 Every port's ring buffer starts with room for ten values and grows when

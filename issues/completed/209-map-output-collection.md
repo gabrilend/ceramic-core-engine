@@ -198,7 +198,7 @@ If a program has named output ports, it needs named input ports for the
 same reason: a parent wiring *into* a sub-program otherwise has to
 reach inside and name a station by its internal name, which is not
 composition. That is the input station, and it is
-[213](../213-the-input-station.md) — the same design, pointed the other
+[213](213-the-input-station.md) — the same design, pointed the other
 way.
 
 ### Several outputs means several stations
@@ -322,7 +322,7 @@ warning is the notice, and it fires from the first doubling.
    an ordinary wire, with nothing kept between the two.
 7. **Moved** to [217](../217-a-program-inside-another.md), which is where
    a program used as a box got split. This issue built one half of the
-   seam and [213](../213-the-input-station.md) built the other; what
+   seam and [213](213-the-input-station.md) built the other; what
    crosses it belongs with the thing that does the crossing.
 
 ## Open questions
@@ -397,7 +397,7 @@ warning is the notice, and it fires from the first doubling.
 
 ## Related
 
-- [213 — The input station](../213-the-input-station.md), the same design
+- [213 — The input station](213-the-input-station.md), the same design
   pointed the other way
 - [212 — One way to build a program](212-one-way-to-build-a-program.md),
   where a program becoming usable as a box is the point

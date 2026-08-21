@@ -28,7 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-213-the-input-station.html" class="here">213 — The input station</a>
 <a href="issue-217-a-program-inside-another.html">217 — A program inside another</a>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
@@ -79,6 +78,7 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-213-the-input-station.html" class="here">213 — The input station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
@@ -194,8 +194,40 @@ for a program to <em>say</em> it expected to be fed, so both assumed the
 worst — and a declared entrance is exactly the case they were assuming
 away. Warning about one, or refusing to run it, would be telling
 somebody that the thing they had just declared might not happen.</p>
-<p>Still to come: deriving a port's type from what it feeds, the
-command-line path, and one program used as a box inside another.</p>
+<p>**A command line is an argument list, and nothing was built to make
+that true.** A program's arguments are the input ports of the stations
+it declared as entrances, in station order and then port order, and
+the text is turned into bytes by the same reader that turns a
+constant written in a map file into bytes. Same code, same
+compiler-computed offsets, same messages naming the field that was
+wrong — so <strong>struct arguments in brace syntax came along free</strong>, which
+is what the scene proving it is for.</p>
+<p>Two things it says out loud rather than doing quietly. A count that
+does not match is refused, naming how many the program wanted, because
+half a command line is a program waiting forever for the rest. And a
+program that has <em>already finished</em> is refused, because the window
+between the workers being released and the first argument arriving is
+real: a program that seeds nothing has an empty queue and, until
+somebody holds a standing promise, nobody promising anything, so the
+last sleeper correctly decides it is over. The rule that prevents that
+is the pool's own and has not changed — make the promise before
+opening the gate — and this is how somebody finds out they did not.</p>
+<p><strong>Deriving a port's type dissolved with the boxless station.</strong> Step 3
+asked for each input port's type to be worked out from what it feeds,
+and for a port whose destinations disagree to be refused. That was
+written for a door that runs no box, where the port would have nothing
+to get a type from. The boxless station was not built and turned out
+not to be needed (step 2), so every entrance runs an ordinary box and
+its ports are typed by that box's parameters, resolved from the
+registry at placement. There is nothing left to derive, and the
+checking the step asked for is already done twice over: the ordinary
+wire check on anything the entrance feeds, and the size check at the
+door, which is the only moment it <em>can</em> be checked because from
+outside there is no wire.</p>
+<p><strong>And one program is used as a box inside another</strong>, which was this
+issue's last step and is built in
+<a href="issue-217-a-program-inside-another.html">217</a>: a parent wires into an
+instance's entrance and out of its way out, naming nothing inside it.</p>
 <h3>What stood before</h3>
 <p>A program has no declared entry.</p>
 <p>Values get into a running program in exactly one way that anybody
@@ -312,8 +344,8 @@ One announces its interface in a C signature, the other in two
 stations. A parent wiring to either cannot tell, and has no reason to
 want to.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Box file syntax for declaring which station is the input, alongside
-   the output declaration, and reader support for both.
+<p>1. <strong>Done.</strong> A fourth word on a station line declares which way it
+   faces, and the reader and the dump both carry it.
 2. <strong>Done.</strong> One mark on an ordinary station saying it is a door and
    which way it faces, shared with
    <a href="done-209-map-output-collection.html">209</a>.</p>
@@ -322,17 +354,27 @@ want to.</p>
    identity box, which is an ordinary function somebody was going to
    write anyway rather than a new kind of station. That keeps the
    count of things this engine has at what it was.
-3. Deriving each input port's type from what it feeds, and refusing a
-   port whose destinations disagree.
+3. <strong>Dissolved</strong>, by step 2's decision. This was written for a door
+   that runs no box, whose ports would have had nothing to get a type
+   from. Every entrance runs an ordinary box, so its ports are typed
+   by that box's parameters, resolved from the registry at placement —
+   there is nothing to derive. What the step wanted checked is checked
+   twice already: by the ordinary wire check on whatever the entrance
+   feeds, and by the size check at the door, which is the only moment
+   it can be checked because from outside there is no wire.
 4. <strong>Done.</strong> A call naming a program, a station, a port and a value,
    refusing any station that is not a declared entrance and checking
    the size — which is the only moment it can be checked, there being
    no wire to have checked it when it was drawn.
-5. The command-line path, reusing the statics text reader, with a test
-   passing a struct argument in brace syntax.
-6. A test that one program is used as a box inside another — wired to
-   its input ports, read from its output ports, with the parent never
-   naming anything inside it.</p>
+5. <strong>Done</strong>, and it reused the statics text reader unchanged — which
+   is why a struct argument in brace syntax needed nothing built. A
+   wrong count is refused rather than half delivered, and a program
+   that has already finished is refused rather than handed arguments
+   nobody will run.
+6. <strong>Done</strong>, in <a href="issue-217-a-program-inside-another.html">217</a>, which is where
+   putting one program inside another got built. A parent wires into
+   an instance's entrance and out of its way out and names nothing
+   inside it.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>

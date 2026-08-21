@@ -92,7 +92,7 @@ added one at a time, into a table that grows without moving anything
 by one operation that applies every rule at any moment. Ports are
 configured by one operation. A program declares where its arguments
 arrive and where its results come from
-([213](213-the-input-station.md),
+([213](completed/213-the-input-station.md),
 [209](completed/209-map-output-collection.md)). Reading a file is already
 nothing but a sequence of those calls
 ([210g](completed/210g-one-way-to-build-a-station.md)).
@@ -220,7 +220,7 @@ a collision to prevent.
    reads twenty-eight from its own way out — naming nothing inside
    either. This is
    [209](completed/209-map-output-collection.md)'s step 7 and
-   [213](213-the-input-station.md)'s step 6, both of which had been
+   [213](completed/213-the-input-station.md)'s step 6, both of which had been
    waiting for it.
 5. **Done**, and it needed nothing added.
 6. **Done**, as *put this part between here and there* rather than as
@@ -294,7 +294,7 @@ calling a generated function rather than walking a parse tree.
   where this was described and from which it is split
 - [209 — The output station](completed/209-map-output-collection.md), whose last
   step is a program used as a box
-- [213 — The input station](213-the-input-station.md), whose last step
+- [213 — The input station](completed/213-the-input-station.md), whose last step
   is the same thing from the other side
 - [211 — Growing the station table](completed/211-growing-the-station-table.md),
   which makes adding a run of stations ordinary
