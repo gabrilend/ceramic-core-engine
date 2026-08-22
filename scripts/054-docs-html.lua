@@ -427,6 +427,11 @@ nav a { display: block; color: var(--dim); text-decoration: none;
   text-overflow: ellipsis; }
 nav a:hover { color: var(--wire); }
 nav a.here { color: var(--ink); }
+/* The one link out of the reading order, marked so it does not read as
+ * the first chapter (issue 801). */
+nav a.elsewhere { color: var(--box); border-bottom: 1px solid #2a2e36;
+  padding-bottom: 10px; margin-bottom: 8px; }
+nav a.elsewhere:hover { color: var(--wire); }
 main { padding: 34px 44px; max-width: 860px; }
 h1, h2, h3, h4 { font-family: 'DejaVu Sans Mono', Menlo, monospace;
   color: var(--box); line-height: 1.3; }
@@ -615,6 +620,12 @@ local WIDGETS = {
 local function sidebar_html(current)
     local out = { '<nav>' }
     out[#out + 1] = ('<h2>minimal soramech</h2>')
+    -- **A peer, not a chapter** (issue 801). The workbench sits above
+    -- the numbered reading order rather than inside it: a reader
+    -- working down that order should not meet a tool where a document
+    -- was promised. It is offered here because a door nobody can find
+    -- is a door nobody opens.
+    out[#out + 1] = '<a href="workbench.html" class="elsewhere">workbench &rarr;</a>'
     local last_section = nil
     for _, page in ipairs(pages) do
         if page.section ~= last_section then
@@ -668,6 +679,45 @@ write_file(OUT .. "/index.html",
     '<!DOCTYPE html><meta charset="utf-8">' ..
     '<meta http-equiv="refresh" content="0; url=doc-000-table-of-contents.html">')
 
+-- {{{ the workbench, carried in rather than generated
+--
+-- **A third front door** (issue 801): the site is something to read
+-- and the workbench is something to use, and they share a stylesheet
+-- and an aesthetic so it is unmistakably one project.
+--
+-- It is *copied* rather than generated, which is the one thing in this
+-- output that is not derived from a document. It is still derived —
+-- from the files under workbench/ — so the claim the sweep rests on
+-- holds: nothing here is authored in place, and nothing here can be
+-- lost by being deleted.
+--
+-- Copied rather than linked, because a link into the repository would
+-- make the published site depend on where it was built.
+--
+-- Its markup is the page's content only. The skeleton around it — the
+-- doctype, the stylesheets, the script — is written here, so that the
+-- workbench cannot drift from the site by forgetting to include
+-- something the site changed.
+local workbench = read_file(DIR .. "/workbench/102-workbench.html")
+if workbench then
+    write_file(OUT .. "/workbench.css",
+               read_file(DIR .. "/workbench/103-workbench.css") or "")
+    write_file(OUT .. "/workbench.js",
+               read_file(DIR .. "/workbench/104-workbench.js") or "")
+    write_file(OUT .. "/workbench.html", ([[
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>workbench — minimal soramech</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="workbench.css">
+</head><body>
+%s
+<script src="workbench.js"></script>
+</body></html>
+]]):format(workbench))
+end
+-- }}}
+
 -- {{{ the sweep
 --
 -- **Anything in the output that no source produces is deleted.**
@@ -686,7 +736,13 @@ write_file(OUT .. "/index.html",
 -- Deleting is safe because this directory is *entirely* derived:
 -- every file in it is written by this run or is left over from an
 -- older one. Nothing here is authored, so nothing here can be lost.
-local kept = { ["index.html"] = true, ["style.css"] = true }
+local kept = {
+    ["index.html"] = true, ["style.css"] = true,
+    -- Derived from workbench/ rather than from a document, and
+    -- therefore not in the page list the sweep is built from.
+    ["workbench.html"] = true, ["workbench.css"] = true,
+    ["workbench.js"] = true,
+}
 for _, page in ipairs(pages) do kept[page.out] = true end
 
 local swept = 0

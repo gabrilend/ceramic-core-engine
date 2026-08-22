@@ -5,6 +5,29 @@ is the first thing that helps somebody *write* one.
 
 ## Current behavior
 
+**The canvas exists and does nothing but let you draw.** Stations are
+placed, named, given a kind and the name of a box function; ports are
+added and removed; wires are drawn from an exit to an input. There is
+no validation, no download, no simulation, and no storage — each of
+those is a step below, and each reads the drawing rather than replacing
+it.
+
+**A station carries one fact the map file does not**, and finding that
+out was the useful part of building this. How many input ports a
+station has comes from the C — the box function's parameter list — and
+the format deliberately never says, because a map that carried a type
+or an arity would be a second source of truth that could disagree with
+the compiler. The page holds no C, so the author says instead, and that
+number is **layout rather than program**: it belongs in the companion
+file beside the map and never in the map itself.
+
+The same is true of an iterator's exit count, and not of a comparator's
+— a comparator has three because being a comparator is what having
+three means.
+
+**Everything else about writing a map is unchanged**, and the rest of
+this section is what that means.
+
 Writing a map means writing a text file by hand.
 
 The format is deliberately friendly to that — names rather than
@@ -245,10 +268,25 @@ that stand outside the engine live.
 
 ## Suggested implementation steps
 
-1. The canvas alone: place, name, choose kind, type a function name,
-   wire, with no validation at all. The interaction has to feel right
-   before anything is built on it, and it is the part with no prior
-   art in this project.
+1. **Done.** The canvas alone: place, name, choose kind, type a
+   function name, set how many ports, wire. No validation at all.
+
+   What the building of it settled: a drawing is two lists and a
+   counter, and the screen is a rendering of them rather than the place
+   they live — a screen that is the source of truth is a screen
+   somebody has to keep in step by hand. A station's identity is a
+   number never reused, so a wire names its ends without caring where
+   anything sits in an array, which is the same reason a wire in the
+   engine is a pair of indices rather than a pair of pointers.
+
+   Where a port *sits* is asked of the screen, because it is the one
+   thing the model genuinely does not know: it depends on how tall a
+   station rendered.
+
+   It is carried into the site rather than generated, which makes it
+   the only thing in that output not derived from a document — still
+   derived, so the sweep's claim that nothing there is authored in
+   place still holds.
 2. Emission: canvas to map file, matching
    [008](../docs/008-map-file-format.md) exactly, checked by loading
    the result with the real loader. The writer is the project's own,

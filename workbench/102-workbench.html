@@ -1,0 +1,39 @@
+<!--
+  102-workbench.html — the canvas, step one of issue 801.
+
+  What this is: the page somebody draws a map on. Stations are placed,
+  named, given a kind and the name of a box function, and wired to each
+  other. That is the whole of this step: no validation, no download, no
+  simulation. The interaction has to feel right before anything is
+  built on top of it, and it is the part of this project with no prior
+  art to copy.
+
+  What it deliberately does not do, and will not later: hold C, read C,
+  or run anything. A box is a name somebody types. The page cannot tell
+  you whether that name exists, because the thing that would answer is
+  a compiler and there is not one here.
+-->
+<div id="frame">
+  <header>
+    <h1>workbench</h1>
+    <p id="hint">
+      double-click the canvas to place a station &middot;
+      drag a station to move it &middot;
+      drag from a station's right edge to another's left to wire them
+    </p>
+  </header>
+
+  <div id="canvas">
+    <svg id="wires"></svg>
+    <div id="stations"></div>
+  </div>
+
+  <footer>
+    <span id="tally">nothing drawn yet</span>
+    <span id="caveat">
+      this page checks the shape of the graph. it does not check types —
+      a map that draws cleanly is well-formed and not necessarily
+      well-typed, and the loader is what says so.
+    </span>
+  </footer>
+</div>
