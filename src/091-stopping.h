@@ -113,6 +113,44 @@ const char *sora_report_path(void);
 int sora_wait(map_t *m);
 /* }}} */
 
+/* {{{ sora_capture() / sora_capture_now() — issue 712 */
+/*
+ * **Put a running program down on disk so it can be picked up again.**
+ *
+ * `sora_capture` is the polite one. It shuts the entrance — the only
+ * way anything outside pushes work in — lets everything already in
+ * flight finish and deliver, waits for the workers to go home, and
+ * then writes the artifact. What it produces is **complete** by
+ * construction: no task was running when it was written, so nothing
+ * was lost.
+ *
+ * **There is no bound on the wait, deliberately.** Quiet is decidable
+ * exactly — the pool knows when its queue is empty and every worker
+ * is asleep — so the only case that never returns is a box that never
+ * returns, and nothing inside the process can tell that from a box
+ * that is merely slow. Whoever asked for the capture already has a
+ * clock, and theirs is the only one that knows how long is too long
+ * for this deployment. This is the same reasoning that keeps a
+ * timeout out of `sora_wait`, and it is not weaker here.
+ *
+ * `sora_capture_now` is for when that clock runs out. It writes
+ * immediately, whatever is happening, and the artifact says so: a
+ * header naming every station a worker is still inside, and the plain
+ * statement that their inputs are lost and their results were never
+ * delivered.
+ *
+ * **The incompleteness is stated, never inferred.** A program reviving
+ * such an artifact without being told would be quietly missing work
+ * somebody computed, which is the standing rule of this engine wearing
+ * a different hat: a fallback is a warning and a warning is an error.
+ * Reading one back is refused unless the caller asks for salvage.
+ *
+ * Both return 0, or -1 with a reason on stderr.
+ */
+int sora_capture(map_t *m, const char *path);
+int sora_capture_now(map_t *m, const char *path);
+/* }}} */
+
 /* {{{ sora_stop_now() — issue 106 */
 /*
  * **An invalid operation ends the program**, having first said

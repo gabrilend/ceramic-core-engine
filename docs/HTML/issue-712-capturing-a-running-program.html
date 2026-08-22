@@ -164,8 +164,8 @@ written out whole, and restarted with every value back where it was.</p>
 the sense Smalltalk and Emacs use the word: a program frozen and
 revived rather than described and rebuilt.</p>
 <h2>Current behavior</h2>
-<p>**Everything a program holds except the pool is captured and
-revived** — the values waiting in every buffer, and each iterator's
+<p><strong>A running program can be put down and picked up again.</strong> Everything
+it holds is captured and revived — the values waiting in every buffer, and each iterator's
 place in its exits, which the station header calls *the one memory a
 station keeps*. A dump writes
 what each ring-buffer port is holding, in brackets, and reading it back
@@ -190,6 +190,7 @@ never consumed.</p>
 <li>every task already built and waiting in the pool, unless it drained</li>
 <li>the statistics counters</li>
 <li>boxes that arrived while it ran, if the artifact has to stand alone</li>
+<p>  without a toolchain</p>
 </ul>
 <h2>Why this engine can do what most cannot</h2>
 <p>The usual obstacle to capturing a running program is <strong>hidden state</strong>:
@@ -272,12 +273,22 @@ The counters and buffer depths that
 it, and <a href="done-106-stopping-on-purpose.html">106</a> already writes something of
 this shape on the way out of a dying program.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The drain: stop building tasks, wait for quiet, and say what was
-   still busy. Most of this is
+<p>1. <strong>Done.</strong> Two doors, because there are two situations and pretending
+   otherwise would make one of them lie.</p>
+<p>   The polite one shuts the entrance, lets everything in flight finish
+   and deliver, waits for the workers to go home, and writes. What it
+   produces is <strong>complete by construction</strong> — nothing was running when
+   it was written.</p>
+<p>   The other writes immediately, whatever is happening, and the
+   artifact states what it lost: a header naming every station a worker
+   is still inside, and the plain sentence that their inputs are gone
+   and their results were never delivered.</p>
+<p>   <strong>Neither invents a bound</strong>, which is the open question below
+   answered by not needing an answer. It is
    <a href="done-106-stopping-on-purpose.html">106</a>'s sequence with a
-   different ending — the entrance already shuts, the pool already
-   drains to the last-sleeper rule, and the report that names which
-   station each worker is stuck in already exists.
+   different ending, and it reuses what was already there: the entrance
+   shuts, the pool drains to the last-sleeper rule, and the pool
+   already knew which station each worker was inside.
 2. <strong>Done.</strong> The waiting-value form, <code>in 5 [7, 9]</code>, in the reader and
    the writer together, and on the format's own page. Brackets because
    braces already mean a struct value; a queue is a different kind of
@@ -286,12 +297,18 @@ this shape on the way out of a dying program.</p>
    iterator where it had got to — written on the station line as <code>@N</code>,
    only when it says something, and refused on anything that is not an
    iterator because there is nothing for it to mean.
-4. <strong>Done for the ordinary case.</strong> Reading a description back puts the
-   values into their ports through the ordinary delivery, so the
-   readiness check runs and nothing is reconstructed. Refusing an
-   artifact marked incomplete waits on there being such a mark, which
-   is step 1.
-5. <strong>Done for values in flight</strong>, not yet for a running pool. Work
+4. <strong>Done.</strong> Reading a description back puts the values into their
+   ports through the ordinary delivery, so the readiness check runs and
+   nothing is reconstructed.</p>
+<p>   And an artifact marked incomplete is **refused through the ordinary
+   door**, because a program quietly missing results somebody computed
+   is the failure this engine refuses everywhere. There is a second
+   door for salvaging one, with a different name, so that whoever uses
+   it has said out loud that they know what is missing. The question is
+   asked of the <em>file</em> rather than of the description, because the
+   marker is a comment and a comment is by definition not part of what
+   a file says about a program.
+5. <strong>Done.</strong> Work
    waiting survives the round trip; the revived program finishes the
    work it was carrying and produces the answers the first would have;
    a queue of struct values survives with its inner commas intact; and

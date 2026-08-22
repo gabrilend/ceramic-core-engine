@@ -141,7 +141,49 @@ static void build_from_file(map_t *m, const char *path, map_instance_t *out)
 /* }}} */
 
 /* {{{ map_load_file() */
+/* {{{ static int marked_incomplete() */
+/*
+ * **An artifact that says it lost work** (issue 712). A capture taken
+ * while workers were still inside boxes never got their results, and
+ * it says so at the top rather than leaving it to be noticed.
+ *
+ * Read from the text here rather than from the description, because
+ * the marker is a comment — the parser drops comments on the floor, as
+ * it should, since a comment is by definition not part of what a file
+ * says about a program. This is a fact about the *file*, and the file
+ * is what asks it.
+ */
+static int marked_incomplete(const char *text)
+{
+    return strstr(text, "# INCOMPLETE CAPTURE") != NULL;
+}
+/* }}} */
+
+static map_t *load_file(const char *path, int n_workers, int salvaging);
+
+/* {{{ map_load_file() / map_load_salvage() */
+/*
+ * **Reading a description back is refused when it says it lost work**,
+ * unless the caller asks for salvage (issue 712). A program picked up
+ * from an incomplete capture is quietly missing results somebody
+ * computed, and quietly is the part this engine refuses everywhere: a
+ * fallback is a warning and a warning is an error.
+ *
+ * Salvaging is a different act, and having a different name for it is
+ * the point — whoever calls it has said out loud that they know what
+ * is missing.
+ */
 map_t *map_load_file(const char *path, int n_workers)
+{
+    return load_file(path, n_workers, 0);
+}
+
+map_t *map_load_salvage(const char *path, int n_workers)
+{
+    return load_file(path, n_workers, 1);
+}
+
+static map_t *load_file(const char *path, int n_workers, int salvaging)
 {
     /*
      * An empty table, grown one station at a time as the description
@@ -150,6 +192,21 @@ map_t *map_load_file(const char *path, int n_workers)
      * different act from adding a station to a running program — and
      * under one construction surface it should not be.
      */
+    /* Asked of the file before anything is built from it, so a
+     * refusal costs no compiler invocation and leaves nothing behind
+     * to clean up. */
+    if (!salvaging) {
+        char *text = read_whole_file(path);
+        int lossy = marked_incomplete(text);
+        free(text);
+        if (lossy)
+            die_load(path, 0, NULL,
+                     "says at the top that it is an incomplete capture — "
+                     "work was still running when it was written and its "
+                     "results were never delivered. Read it with the "
+                     "salvage door if that is understood and wanted");
+    }
+
     map_t *m = map_create_empty();
 
     build_from_file(m, path, NULL);

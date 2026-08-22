@@ -45,6 +45,16 @@
  * list.
  */
 map_t *map_load_file(const char *path, int n_workers);
+
+/*
+ * The same, for an artifact that says at the top that it lost work
+ * (issue 712). Reading one through the ordinary door is refused,
+ * because a program quietly missing results somebody computed is the
+ * failure this engine refuses everywhere. Salvaging is a different
+ * act and has a different name so that whoever does it has said out
+ * loud that they know what is missing.
+ */
+map_t *map_load_salvage(const char *path, int n_workers);
 /* }}} */
 
 /* {{{ map_seed_count() — issue 605's reading */

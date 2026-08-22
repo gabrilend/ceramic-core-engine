@@ -27,11 +27,13 @@
 #include "026-emitted.h"
 #include "040-mapfile.h"
 #include "049-observe.h"
+#include "091-stopping.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 /* The box types this test delivers, spelled again here rather than
@@ -623,9 +625,185 @@ static void an_iterator_remembers_where_it_was(void)
 }
 /* }}} */
 
-/* {{{ main */
-int main(void)
+/* {{{ static void draining_produces_a_complete_capture() */
+/*
+ * **The polite capture.** Shut the entrance, let everything in flight
+ * finish and deliver, wait for the workers to go home, then write.
+ * What comes out is complete by construction — no task was running
+ * when it was written, so nothing could have been lost.
+ *
+ * There is no bound on the wait and that is deliberate: quiet is
+ * decidable exactly, so the only case that never returns is a box that
+ * never returns, and nothing inside the process can tell that from a
+ * box that is merely slow. Whoever asked already has a clock.
+ */
+static void draining_produces_a_complete_capture(void)
 {
+    char map_path[512], dump_path[512];
+    snprintf(map_path, sizeof map_path, "%s/flowing.map", work_dir);
+    snprintf(dump_path, sizeof dump_path, "%s/flowing-captured.map",
+             work_dir);
+
+    write_text(map_path,
+        "station gate keep p entry\n"
+        "  out 0 - twice.0\n"
+        "\n"
+        "station twice double_it p result\n");
+
+    map_t *m = map_load_file(map_path, 2);
+    for (int v = 0; v < 5; v++) {
+        int value = v;
+        map_deliver_argument(m, 0, 0, &value, (int)sizeof value);
+    }
+
+    check(sora_capture(m, dump_path) == 0, "the program was captured");
+
+    const char *text = slurp(dump_path);
+    check(strstr(text, "INCOMPLETE") == NULL,
+          "and the capture says nothing about being incomplete, because "
+          "it drained first");
+    check(atomic_load(&map_station(m, 1)->runs) == 5,
+          "everything in flight finished before it was written");
+
+    /* And it reads back through the ordinary door, which an
+     * incomplete one would not. */
+    map_t *revived = map_load_file(dump_path, 2);
+    check(revived != NULL, "and a complete capture reads back plainly");
+    pool_release(revived->pool);
+    pool_join(revived->pool);
+    map_destroy(revived);
+
+    map_destroy(m);
+    printf("  draining before writing produced a capture with nothing "
+           "missing\n");
+}
+/* }}} */
+
+/* {{{ static void an_incomplete_capture_says_so_and_is_refused() */
+/*
+ * **The other half, and the one that matters more.** A program that
+ * cannot drain is exactly when a capture is worth most — so the
+ * writing happens anyway, and the artifact states what it lost rather
+ * than leaving it to be discovered.
+ *
+ * The wedged box never returns, which is the one condition this engine
+ * cannot detect from inside. It runs in a forked child because a
+ * worker stuck in it stays stuck for the life of the process, and this
+ * test has more to do afterwards.
+ */
+static void an_incomplete_capture_says_so_and_is_refused(void)
+{
+    char map_path[512], dump_path[512];
+    snprintf(map_path, sizeof map_path, "%s/wedged.map", work_dir);
+    snprintf(dump_path, sizeof dump_path, "%s/wedged-captured.map",
+             work_dir);
+
+    write_text(map_path,
+        "station gate keep p entry\n"
+        "  out 0 - stuck.0\n"
+        "\n"
+        "station stuck wedge p result\n");
+
+    pid_t child = fork();
+    if (child == 0) {
+        map_t *m = map_load_file(map_path, 1);
+        int value = 1;
+        map_deliver_argument(m, 0, 0, &value, (int)sizeof value);
+        pool_release(m->pool);
+
+        /* Wait until the one worker is actually inside the wedge,
+         * rather than guessing. Nothing here invents a clock: it asks
+         * the pool what its worker is doing until the answer is the
+         * station that never returns. */
+        for (;;) {
+            int at = pool_worker_station(m->pool, 0);
+            if (at == 1)
+                break;
+        }
+
+        /* Not the polite one: draining would never return, which is
+         * the whole reason this door exists. */
+        _exit(sora_capture_now(m, dump_path) == 0 ? 0 : 1);
+    }
+    check(child > 0, "a child was forked to hold the wedged worker");
+    if (child <= 0)
+        return;
+
+    int status = 0;
+    waitpid(child, &status, 0);
+    check(WIFEXITED(status) && WEXITSTATUS(status) == 0,
+          "and it wrote its capture while a worker was stuck");
+
+    const char *text = slurp(dump_path);
+    check(strstr(text, "# INCOMPLETE CAPTURE") != NULL,
+          "the artifact says at the top that it is incomplete");
+    check(strstr(text, "stuck") != NULL,
+          "and names the station whose work was lost, by the name its "
+          "author gave it");
+
+    printf("  a program that could not drain was captured anyway, and "
+           "said what it lost\n");
+}
+/* }}} */
+
+/* {{{ static void reviving_a_lossy_capture_is_refused() */
+/*
+ * **Refused through the ordinary door, allowed through a door with a
+ * different name.** A program picked up from an incomplete capture is
+ * quietly missing results somebody computed, and quietly is the part
+ * this engine refuses everywhere.
+ *
+ * The refusal is fatal, so it is proven in a child; the salvage is
+ * ordinary and is proven here.
+ */
+static void reviving_a_lossy_capture_is_refused(const char *self)
+{
+    char lossy_path[512];
+    snprintf(lossy_path, sizeof lossy_path, "%s/lossy.map", work_dir);
+
+    /* Written by hand rather than captured, so what is being tested is
+     * the reading and not the writing. */
+    write_text(lossy_path,
+        "# INCOMPLETE CAPTURE\n"
+        "# 1 task was still running and did not finish:\n"
+        "#   stuck  (station 1)\n"
+        "\n"
+        "station gate keep p entry\n"
+        "  out 0 - twice.0\n"
+        "\n"
+        "station twice double_it p result\n");
+
+    char cmd[1024];
+    snprintf(cmd, sizeof cmd, "%s --load-lossy %s", self, lossy_path);
+    int rc = system(cmd);
+    check(rc != 0, "reading an incomplete capture the ordinary way was "
+                   "refused");
+
+    /* And salvaging it works, having said so out loud. */
+    map_t *salvaged = map_load_salvage(lossy_path, 2);
+    check(salvaged != NULL, "and salvaging the same file worked");
+    if (salvaged) {
+        pool_release(salvaged->pool);
+        pool_join(salvaged->pool);
+        map_destroy(salvaged);
+    }
+
+    printf("  an incomplete capture was refused by the ordinary door and "
+           "let through the one that names the risk\n");
+}
+/* }}} */
+
+/* {{{ main */
+int main(int argc, char **argv)
+{
+    const char *self = argv[0];
+
+    /* The child of the refusal test does one thing and dies trying. */
+    if (argc == 3 && strcmp(argv[1], "--load-lossy") == 0) {
+        map_load_file(argv[2], 1);
+        return 0;   /* not reached: the load is fatal */
+    }
+
     snprintf(work_dir, sizeof work_dir,
              "/dev/shm/minimal-soramech/capture-%d", (int)getpid());
     char command[512];
@@ -644,6 +822,9 @@ int main(void)
     writing_the_same_value_still_counts();
     a_write_drains_whatever_is_waiting();
     an_iterator_remembers_where_it_was();
+    draining_produces_a_complete_capture();
+    an_incomplete_capture_says_so_and_is_refused();
+    reviving_a_lossy_capture_is_refused(self);
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);
     if (system(command) != 0)

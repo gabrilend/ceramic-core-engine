@@ -10,8 +10,8 @@ revived rather than described and rebuilt.
 
 ## Current behavior
 
-**Everything a program holds except the pool is captured and
-revived** — the values waiting in every buffer, and each iterator's
+**A running program can be put down and picked up again.** Everything
+it holds is captured and revived — the values waiting in every buffer, and each iterator's
 place in its exits, which the station header calls *the one memory a
 station keeps*. A dump writes
 what each ring-buffer port is holding, in brackets, and reading it back
@@ -39,6 +39,7 @@ never consumed.
 - every task already built and waiting in the pool, unless it drained
 - the statistics counters
 - boxes that arrived while it ran, if the artifact has to stand alone
+  without a toolchain
 
 ## Why this engine can do what most cannot
 
@@ -140,12 +141,25 @@ this shape on the way out of a dying program.
 
 ## Suggested implementation steps
 
-1. The drain: stop building tasks, wait for quiet, and say what was
-   still busy. Most of this is
+1. **Done.** Two doors, because there are two situations and pretending
+   otherwise would make one of them lie.
+
+   The polite one shuts the entrance, lets everything in flight finish
+   and deliver, waits for the workers to go home, and writes. What it
+   produces is **complete by construction** — nothing was running when
+   it was written.
+
+   The other writes immediately, whatever is happening, and the
+   artifact states what it lost: a header naming every station a worker
+   is still inside, and the plain sentence that their inputs are gone
+   and their results were never delivered.
+
+   **Neither invents a bound**, which is the open question below
+   answered by not needing an answer. It is
    [106](completed/106-stopping-on-purpose.md)'s sequence with a
-   different ending — the entrance already shuts, the pool already
-   drains to the last-sleeper rule, and the report that names which
-   station each worker is stuck in already exists.
+   different ending, and it reuses what was already there: the entrance
+   shuts, the pool drains to the last-sleeper rule, and the pool
+   already knew which station each worker was inside.
 2. **Done.** The waiting-value form, `in 5 [7, 9]`, in the reader and
    the writer together, and on the format's own page. Brackets because
    braces already mean a struct value; a queue is a different kind of
@@ -154,12 +168,19 @@ this shape on the way out of a dying program.
    iterator where it had got to — written on the station line as `@N`,
    only when it says something, and refused on anything that is not an
    iterator because there is nothing for it to mean.
-4. **Done for the ordinary case.** Reading a description back puts the
-   values into their ports through the ordinary delivery, so the
-   readiness check runs and nothing is reconstructed. Refusing an
-   artifact marked incomplete waits on there being such a mark, which
-   is step 1.
-5. **Done for values in flight**, not yet for a running pool. Work
+4. **Done.** Reading a description back puts the values into their
+   ports through the ordinary delivery, so the readiness check runs and
+   nothing is reconstructed.
+
+   And an artifact marked incomplete is **refused through the ordinary
+   door**, because a program quietly missing results somebody computed
+   is the failure this engine refuses everywhere. There is a second
+   door for salvaging one, with a different name, so that whoever uses
+   it has said out loud that they know what is missing. The question is
+   asked of the *file* rather than of the description, because the
+   marker is a comment and a comment is by definition not part of what
+   a file says about a program.
+5. **Done.** Work
    waiting survives the round trip; the revived program finishes the
    work it was carrying and produces the answers the first would have;
    a queue of struct values survives with its inner commas intact; and

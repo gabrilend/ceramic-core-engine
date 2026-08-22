@@ -115,6 +115,49 @@ void map_dump(map_t *m, FILE *out)
         }
     }
 
+    /*
+     * **What did not finish, said rather than inferred** (issue 712).
+     *
+     * A capture taken while workers are mid-task loses their inputs
+     * and never delivers their results, and a file that did not say so
+     * would be a program quietly missing work somebody computed. That
+     * is the standing rule everywhere in this engine: a fallback is a
+     * warning and a warning is an error, so the artifact says what it
+     * lost.
+     *
+     * It comes first, before anything a reader would take as fact,
+     * because a header found halfway down is a header somebody has
+     * already read past.
+     */
+    if (m->pool) {
+        int workers = pool_worker_count(m->pool);
+        int busy = 0;
+        for (int i = 0; i < workers; i++)
+            if (pool_worker_station(m->pool, i) >= 0)
+                busy++;
+        if (busy > 0) {
+            fprintf(out, "# INCOMPLETE CAPTURE\n");
+            fprintf(out, "# %d task%s still running and did not finish:\n",
+                    busy, busy == 1 ? " was" : "s were");
+            for (int i = 0; i < workers; i++) {
+                int at = pool_worker_station(m->pool, i);
+                if (at < 0)
+                    continue;
+                const char *who = (at < m->n_named && m->station_names
+                                   && m->station_names[at])
+                                ? m->station_names[at] : NULL;
+                if (who)
+                    fprintf(out, "#   %s  (station %d)\n", who, at);
+                else
+                    fprintf(out, "#   station %d\n", at);
+            }
+            fprintf(out, "# Their input values are lost and their results "
+                         "were never\n");
+            fprintf(out, "# delivered. Everything below is otherwise "
+                         "accurate.\n");
+        }
+    }
+
     fprintf(out, "# dumped from the live station table — what the engine is\n");
     fprintf(out, "# actually running, which is not necessarily what any file\n");
     fprintf(out, "# said. derived facts appear as comments.\n");

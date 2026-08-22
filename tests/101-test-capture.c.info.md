@@ -92,6 +92,31 @@ whose next value went somewhere it was never going — the worst way for
 a written-down program to be wrong, because nothing about the file
 looks incorrect.
 
+## And three about putting the program down
+
+**draining_produces_a_complete_capture** — the polite door. Shut the
+entrance, let everything in flight finish, wait for the workers to go
+home, write. What comes out says nothing about being incomplete,
+because by construction nothing was running, and it reads back through
+the ordinary door.
+
+**an_incomplete_capture_says_so_and_is_refused** — the other door,
+which matters more: a program that cannot drain is exactly when a
+capture is worth most. A worker goes into the box that never returns,
+in a forked child because it stays there for the life of the process,
+and the artifact is written anyway with a header naming the station
+whose work was lost.
+
+The child waits for the worker to actually be inside the wedge by
+asking the pool what it is doing, rather than guessing. Nothing here
+invents a clock.
+
+**reviving_a_lossy_capture_is_refused** — reading such an artifact the
+ordinary way is fatal, proven in a child; salvaging the same file
+through the door with a different name works. The file is written by
+hand rather than captured, so what is under test is the reading and not
+the writing.
+
 ## What it does not cover
 
 Draining a running pool before the capture, and a program that grew

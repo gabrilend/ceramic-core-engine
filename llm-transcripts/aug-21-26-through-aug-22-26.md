@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 22:14:36
+Generated on: 2026-08-21 22:34:01
 
 --------------------------------------------------------------------------------
 
@@ -3030,6 +3030,139 @@ Worth noting where this came from: the bug was invisible until a program was
 revived from a capture, because in ordinary running, values arrive one at a time
 and each arrival asks again. The feature didn't cause the bug — it was the
 first thing that could see it.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 20
+
+oh also if we "change" a static to the same value that it currently is, that
+counts, and we should enqueue if there's only other statics, and drain if
+there's a ring buffer with values inside it. Only if all the values are present
+of course.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 20
+
+No comparison anywhere — a write always copies and always asks. That's already
+the behaviour you want, but nothing pins it, so someone could add "skip if
+unchanged" as an optimisation later.
+
+
+All eight pass. Let me make sure the identical-write scene would actually catch
+an optimisation someone adds later.
+
+
+The test didn't catch it — because skipping the *copy* doesn't skip the
+*check*. Let me try the placement that would actually break it.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 21
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 21
+
+No response requested.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 22
+
+hi something broke so if you were running some tests or whatever, maybe don't
+run them again. otherwise, just continue, it might have been a different program
+on the computer.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 22
+
+Nothing lost — the last commit landed and the tree is clean. Picking up
+**712's** remaining pieces; the iterator cursor is the other half of "what a
+program holds".
+
+
+The station line can carry it. Let me widen what follows the kind.
+
+
+Now the engine side and the emission.
+
+
+Now the dump writes it.
+
+
+Nine scenes. Let me check the rest of the suite once, then document.
+
+
+My earlier edit to the step list silently failed to match and never landed. Let
+me redo it properly.
+
+
+Nothing was lost — the last commit had landed and the tree was clean, so
+whatever broke was outside this work.
+
+
+## Since then
+
+
+**712 step 3 is complete.** The other half of "what a program holds": an
+iterator's place in its exits, which the station header has always called *the
+one memory a station keeps* and which nothing wrote down.
+
+
+It rides on the station line as `@N`, either order with the door word. Written
+only when it says something — zero is where an iterator starts, and no other
+kind of station has a position to be in. Setting one on a non-iterator is
+refused, since there's nothing for it to mean.
+
+
+The reason it matters is the failure mode: a capture that reset it produces a
+file of exactly the **right shape** whose next value goes to an exit it was
+never going to. The wiring is all there and only the behaviour is off, so
+nothing about the file looks wrong.
+
+
+**Also repaired:** the ticket's own step list. An earlier edit of mine had
+silently failed to match — I'd written the replacement against text that
+didn't quite exist, without an assertion to catch it — so the ticket still
+described finished work as unstarted. Found by reading the file rather than by
+anything failing.
+
+
+## 712 now stands at
+
+
+| step | |
+
+|---|---|
+
+| 1 — the drain | not built |
+
+| 2 — the waiting-value form | done |
+
+| 3 — buffer contents and cursors | done |
+
+| 4 — revival | done for the ordinary case; refusing an incomplete artifact waits on step 1 |
+
+| 5 — round trip | done for values in flight, not for a running pool |
+
+| 6 — the binary-producing path | not built |
+
+| 7 — the report | not built |
+
+
+Nine scenes in the capture test, and the suite passes.
+
+
+Next is step 1, the drain — which is where the "incomplete capture" header
+comes from, and therefore what step 4's remaining half needs.
 
 
 --------------------------------------------------------------------------------

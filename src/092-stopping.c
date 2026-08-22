@@ -401,6 +401,69 @@ int sora_wait(map_t *m)
 }
 /* }}} */
 
+/* {{{ static int write_capture() */
+static int write_capture(map_t *m, const char *path)
+{
+    FILE *f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "capture: cannot write %s: %s\n",
+                path, strerror(errno));
+        return -1;
+    }
+    map_dump(m, f);
+    if (fclose(f) != 0) {
+        fprintf(stderr, "capture: cannot finish writing %s: %s\n",
+                path, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+/* }}} */
+
+/* {{{ sora_capture() */
+int sora_capture(map_t *m, const char *path)
+{
+    if (!m || !path || !*path) {
+        fprintf(stderr, "capture: needs a program and somewhere to put it\n");
+        return -1;
+    }
+
+    /*
+     * **Shut the door first, then let it drain.** The entrance is the
+     * only way anything outside pushes work in, so closing it is the
+     * whole of what "stop accepting new work" can mean here — and with
+     * nothing new arriving, the last-sleeper rule ends the program the
+     * way it would have ended on its own. Nothing is told to hurry and
+     * no task is discarded.
+     */
+    atomic_store_explicit(&m->closing, 1, memory_order_release);
+
+    if (m->pool) {
+        /* Released in case nobody has: a pool whose workers are still
+         * parked at the starting gate never drains, and both of these
+         * are safe to call again. */
+        pool_release(m->pool);
+        pool_join(m->pool);
+    }
+
+    return write_capture(m, path);
+}
+/* }}} */
+
+/* {{{ sora_capture_now() */
+int sora_capture_now(map_t *m, const char *path)
+{
+    if (!m || !path || !*path) {
+        fprintf(stderr, "capture: needs a program and somewhere to put it\n");
+        return -1;
+    }
+    /* Nothing is shut and nothing is waited for. Whatever a worker is
+     * inside stays there, and the artifact says which stations those
+     * are. */
+    return write_capture(m, path);
+}
+/* }}} */
+
 /* {{{ sora_stop_now() */
 void sora_stop_now(map_t *m, int exit_code, const char *why)
 {
