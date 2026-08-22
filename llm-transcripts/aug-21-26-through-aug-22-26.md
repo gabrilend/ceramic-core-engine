@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 23:43:52
+Generated on: 2026-08-22 00:11:52
 
 --------------------------------------------------------------------------------
 
@@ -3588,6 +3588,275 @@ exists to avoid.
 
 Next in phase 8: the shelf (801 step 3, which the issue says should come early),
 then 802's shared-memory ring.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 27
+
+let's do agpl as the license actually so we get the neat badge. Make sure it's
+for both branches in the project.
+
+
+let's keep going?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 27
+
+Real AGPL-3.0, Affero clause intact. Installing it on this branch first.
+
+
+Now the `original` branch. Using a worktree so this one isn't disturbed.
+
+
+Both branches carry it, byte for byte. Neither is pushed — you didn't ask.
+
+
+Now phase 8, step 3: the shelf. The issue wants it early, before sessions get
+spent on drawings worth not losing.
+
+
+Reviewing it back, two real bugs. Let me fix them.
+
+
+A README change that isn't mine got swept into that commit. Let me split it back
+out.
+
+
+The license is on both branches, and the shelf is built. Three things to flag.
+
+
+## The license
+
+
+Verbatim AGPL-3.0 as `LICENSE` — 34,523 bytes, Affero clause intact — so
+GitHub's detector will give you the **AGPL-3.0 badge**. Same file byte-for-byte
+on `original`, which had no license at all before.
+
+
+Neither branch is pushed; you didn't ask.
+
+
+Worth knowing about the trade you made: **AGPL doesn't contain the "large
+companies pay me" clause.** It has a different lever — anyone who runs a
+modified version as a service owes their users the source. For an engine other
+programs are built with, section 13 is the clause that matters, since without it
+a modified engine could power a service forever with nobody ever seeing the
+changes.
+
+
+You still hold the copyright, so **dual licensing is available**: AGPL for
+everyone, plus paid terms for companies who don't want the copyleft. That's
+exactly how the "large corporations pay me" outcome usually gets reached in
+practice, and it keeps the badge. Say the word and I'll add it to the README.
+
+
+## Someone edited the README while I was working
+
+
+`README.md` changed on disk under me — `# minimal soramech` → `# ceramic
+core engine`, and `An engine` → `An system`. I swept it into my commit with
+`git add -A`, which was my mistake; I've split it back out and **left it
+uncommitted** for you.
+
+
+Two things about it: the rename would want to reach `CLAUDE.md`, `vision`, the
+site title, and the docs, not just the README — and `An system` should
+probably be `A system`. Tell me if it's a real rename and I'll carry it through
+properly.
+
+
+## The shelf
+
+
+Drawings save to browser storage on every edit — not on a timer, because a
+timer is a window in which work isn't saved yet, and that's the window a browser
+crashes in.
+
+
+**Two bugs found by reading it back**, since this machine has no working JS
+engine: discarding a map to the *left* of the current one shifted every later
+index, so clamping quietly moved you onto a different map — the one thing a
+shelf must never do. And an older saved shelf missing a field is now filled in
+rather than refused, because somebody's saved work isn't the place to be strict
+about a schema.
+
+
+Next in phase 8: validation as wires are drawn (step 4), then statics and
+download.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 28
+
+okay so the README.md file kinda sucks, can we rewrite it? First give me a
+report about why it sucks, assuming it structurally is just kinda bad, and then
+tell me what shape it should have instead.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 28
+
+Let me read it back cold rather than from memory.
+
+
+Read it back cold. Here's the report.
+
+
+## Why it's bad, structurally
+
+
+**1. It has no reader in mind, so it serves none.** Four different people open a
+README — someone deciding in twenty seconds whether to keep reading, someone
+who wants to run it, someone who wants to understand the idea, someone about to
+contribute. This interleaves all four. "Building it" sits between "What the rule
+buys" and "Writing a program", then more theory follows. The reader ping-pongs
+between registers.
+
+
+**2. It explains, then shows. It should show, then explain.** The order is
+textbook — definitions, theorem, corollaries. But nobody has agreed to study
+yet. Vocabulary before payoff is memorization with no hook.
+
+
+**3. The opening example is four unexplained syntaxes at once.** At line 9 the
+reader doesn't know what a station is, what `p` means, what `entry` means, or
+how to read `out 0 - parse.0`. It's meant as an intriguing hook and lands as
+noise. It also names functions that don't exist in the repo, so it can't be
+tried.
+
+
+**4. Nothing in it can be run — and one instruction is simply false.** I told
+people to run `./run-demo` without checking. It prints:
+
+
+```
+
+No demos directory at .../issues/completed/demos
+
+The seven paged demos were deleted; their replacements are not built yet
+
+```
+
+
+For a project whose entire claim is *"the shape executes itself across every
+core"*, there is **no path from clone to seeing that happen.** That's the single
+biggest miss, and the false instruction is worse than the absence.
+
+
+**5. "The parts worth knowing about" is a junk drawer**, and the heading admits
+it. Five sections whose only shared property is that I found them interesting.
+Two are build facts, two are runtime capabilities, one is operations.
+
+
+**6. It summarizes the docs instead of routing to them.** This project has an
+unusually good documentation set. The README duplicates chunks of it, which
+guarantees drift and wastes the reader's twenty seconds on material that exists
+better elsewhere.
+
+
+**7. It repeats itself.** The one rule appears in the opening paragraph, its own
+section, "What the rule buys", and "What this is not". Sizes-from-the-compiler
+appears twice.
+
+
+**8. Uniform emphasis is no emphasis.** Every section is three paragraphs with a
+bolded lead. Nothing stands out because everything does.
+
+
+**9. Wrong register.** It's written in the voice of the commit messages and
+issue files — which is right for a blueprint read by someone already invested,
+and reads as unearned confidence to a stranger. Many sentences assert a decision
+was correct before the reader knows what it was for.
+
+
+**10. No picture.** The central idea is *a graph of boxes with values moving
+along wires*, and there's no diagram. The one thing that would make it instant
+is missing.
+
+
+**11. Scope limits are at the bottom**, where they read as apology. They belong
+early, as a service — they let a wrong-fit reader leave happy in twenty
+seconds.
+
+
+**12. Two live errors from the rename**: line 3 says "An system", and the body
+still calls the project "SoraMech" under a title that now says "ceramic core
+engine".
+
+
+## The shape it should have
+
+
+The principle: **a README is a front door, not a summary of the house.** Show,
+then explain. Route, don't duplicate.
+
+
+| | section | job | reader leaves knowing |
+
+|---|---|---|---|
+
+| 1 | One line + a diagram | 15-second decision | what kind of thing this is |
+
+| 2 | What's strange about it | the hook | why it isn't another task queue |
+
+| 3 | **See it run** | earn trust | it works, on their machine |
+
+| 4 | The smallest real program | first success | how to make one |
+
+| 5 | The one rule | the idea, once | why it's shaped this way |
+
+| 6 | Good fit / bad fit | a service | whether to stay |
+
+| 7 | Where to go next | routing | which door is theirs |
+
+| 8 | License | two lines | the terms |
+
+
+Roughly ninety lines instead of two hundred and forty, and every section has a
+different job and a different reader-state.
+
+
+**Three things this fixes that aren't just trimming:**
+
+
+- **Section 3 has to actually exist**, which means building something runnable
+  first. Right now there is nothing to point at. Either a small runnable example
+  lands in the repo, or `make test` becomes the honest answer with a note about
+  what you'll see.
+
+- **The diagram carries the three nouns**, so they don't need a list. A picture
+  of two boxes, a wire, and a buffer between them teaches station-and-port
+  faster than four sentences.
+
+- **Sections 5 and 7 replace all of "the parts worth knowing about."** Each of
+  those five topics has a real document behind it; the README should say *that
+  they exist and where*, not restate them.
+
+
+## One decision before I write it
+
+
+Section 3 needs something to run. Options, best first:
+
+
+1. **A tiny example in the repo** — one map, two or three boxes, `make
+   example`. Twenty lines of C, and the README's example becomes real and
+   testable.
+
+2. **Point at `make test`** — honest, zero new code, but "run the tests" is a
+   weak first impression for an engine.
+
+3. **Restore a phase demo** — 713's work, much bigger, and it's a real issue
+   already.
+
+
+I'd do (1) and note it as serving 713 later. Want me to build the example first,
+or write the README against `make test` and add the example after?
 
 
 --------------------------------------------------------------------------------

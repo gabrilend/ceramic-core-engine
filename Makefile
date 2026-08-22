@@ -123,12 +123,25 @@ describe: $(GENERATOR)
 html:
 	luajit $(DIR)/scripts/054-docs-html.lua $(DIR)
 
+# The example a reader is pointed at first. It is built by `all` so it
+# can never quietly stop compiling, and run by `make example`, which is
+# the shortest path from cloning this to watching it do the thing it
+# exists to do.
+EXAMPLE := $(BUILD)/108-hello-graph
+
+$(EXAMPLE): $(DIR)/example/108-hello-graph.c $(ENGINE_SRC) $(SURFACE) | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
+
+.PHONY: example
+example: $(EXAMPLE)
+	@$(EXAMPLE)
+
 TEST_SRC  := $(wildcard $(DIR)/tests/*.c)
 TEST_BINS := $(patsubst $(DIR)/tests/%.c,$(BUILD)/%,$(TEST_SRC))
 
 .PHONY: all test clean
 
-all: $(TEST_BINS) html
+all: $(TEST_BINS) $(EXAMPLE) html
 
 # The build tree lives in RAM (tmp/ -> /tmp/<project>). It must exist
 # before anything writes into it; a build that dies on a missing

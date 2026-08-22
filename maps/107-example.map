@@ -1,0 +1,22 @@
+# The smallest program that shows what the engine is for.
+#
+# One number goes in. Two branches take it at the same time — nobody
+# said they may, they simply have no path between them — and a fourth
+# station waits until both have arrived before it runs at all.
+#
+# That waiting is the whole scheduler. There is no code anywhere that
+# says "wait for both": the station has two input ports, so it runs
+# when both hold a value, and not before.
+
+station in keep p entry
+  out 0 - twice.0
+  out 0 - plus.0
+
+station twice double_it p
+  out 0 - total.0
+
+station plus add p
+  in 1 = 10
+  out 0 - total.1
+
+station total add p result
