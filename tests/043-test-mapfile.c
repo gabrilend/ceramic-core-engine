@@ -431,19 +431,33 @@ static void test_every_refusal(void)
         "kind must be p (plain), c (comparator), or i (iterator)",
         "an unknown kind letter was accepted");
 
+    /*
+     * **A refusal that used to be here is gone, and the property it
+     * guarded went with it** (issue 405).
+     *
+     * An arrow whose destination held a static was refused, on the
+     * grounds that a static already holds its value and has nowhere
+     * to queue one. A value arriving there now *overwrites* the
+     * constant — which is how a constant gets computed at startup
+     * rather than written down, and is a property of the wire rather
+     * than of the box, so it shows up in the map file instead of
+     * happening invisibly inside C.
+     *
+     * What survives is the refusal below: an arrow onto a port with
+     * **no source**, which has nothing to queue into and nothing to
+     * overwrite. The two used to share one message that named which
+     * of them it had found; only one of them is still a mistake.
+     *
+     * The scene proving the new behaviour lives with the statics
+     * tests, where the write it performs lives.
+     */
     expect_death_saying(
-        "statics\n"
-        "  0 = 5\n"
-        "station head seven p\n"
+        "station head seven p result\n"
         "  out 0 - eater.0\n"
         "station eater double_it p\n"
-        "  in 0 $0\n",
-        /* The refusal names which of the two non-buffer states it
-         * found, rather than assuming static (issue 210b): an
-         * unconfigured port is also not a buffer, and it wants a
-         * different fix. */
-        "that port is a static value",
-        "an arrow onto a static port was accepted");
+        "  in 0 -\n",
+        "that port is a port with no source yet",
+        "an arrow onto a port with no source was accepted");
 
     /* The pull path's grave marker (issue 210). A bare station name
      * on an 'in' line used to mean "gather from there"; it is refused

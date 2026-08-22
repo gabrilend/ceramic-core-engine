@@ -21,7 +21,7 @@ editing a running one stopped being two things.
 | 604 — load-time validation | **moved out of the loader** | Both were about a pull path; the whole-program remainder becomes a report, not a refusal. |
 | 605 — the seed sweep | **moved, not removed** | Nothing replaced it: construction's own writes are what start a program. |
 | 606 — phase 6 demo | complete | One binary, three programs; edits followed; every refusal shown; everything at once. |
-| [607 — no reserved words](completed/607-no-reserved-words.md) | complete | Every line announces itself — `station`, `in`, `out`, `statics` — so a name never sits where a keyword sits and no word is reserved. The three words were the symptom; the problem was that a station line was defined as *what remains*, and a negative definition can only narrow. |
+| [607 — no reserved words](607-no-reserved-words.md) | complete | Every line announces itself — `station`, `in`, `out`, `statics` — so a name never sits where a keyword sits and no word is reserved. The three words were the symptom; the problem was that a station line was defined as *what remains*, and a negative definition can only narrow. |
 
 ## What the phase established, and what survived being widened
 

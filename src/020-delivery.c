@@ -789,22 +789,41 @@ int map_deliver_value(map_t *m, int station, int port, const void *value)
 
     if (port < 0 || port >= s->n_in_ports)
         die("delivering to a port the station does not have", station);
-    /* Two ways this is wrong, and they deserve different sentences: a
-     * static already holds its value and has nowhere to queue one, and
-     * an unconfigured port is one nobody has finished wiring.
+    /*
+     * **A value arriving at a static port overwrites it** (issue 405),
+     * rather than queueing into a buffer the port does not have.
      *
-     * The first of those is not permanent. Issue 405 makes an arrow
-     * into a static port *overwrite* the static rather than queue —
-     * which is how a constant gets computed at startup instead of
-     * written by hand, and is a property of the wire rather than of
-     * the box, so it shows up in the map file instead of happening
-     * invisibly inside C. The write call exists; teaching delivery to
-     * use it belongs with the load-time check that currently refuses
-     * such a wire. */
+     * This is not the back channel returning, and the distinction is
+     * the whole point. The back channel had a *box* reach out and
+     * write a value with nothing in the wiring showing it, so two
+     * stations could be talking with no arrow between them and the
+     * picture lied. Here the box is untouched: it takes its
+     * arguments, returns one value, remembers nothing, and has no
+     * idea what happens next. **The wire is what says this value
+     * overwrites a static** — visible in the map file, visible in the
+     * dump, drawable on a canvas. A box still may not write a static;
+     * a wire may deliver into one.
+     *
+     * What it buys is a constant that is *computed* rather than
+     * written down. A station that reads a clock, seeded so it runs
+     * once, wired into a downstream station's static port: it runs,
+     * the timestamp lands, and every invocation afterwards reads it.
+     * "Read once at startup and work from that moment" stops needing
+     * a feature and becomes something drawn.
+     *
+     * It goes through the same write an outside caller makes — one
+     * path, taking the station's mutex, which the claim already takes,
+     * so no claim can see a half-written value. **Two arrows into one
+     * static port is last-writer-wins, nondeterministically**, which
+     * is stated as a non-guarantee rather than left as a surprise.
+     */
     if (s->in_ports[port].kind == IN_PORT_NONE)
         die("delivering into a port that has no source yet", station);
-    if (s->in_ports[port].kind != IN_PORT_RING)
-        die("delivering into a port that is not a buffer", station);
+    if (s->in_ports[port].kind == IN_PORT_STATIC) {
+        map_in_port_static_write(m, station, port, value,
+                                 s->in_ports[port].elem_size);
+        return 0;
+    }
 
     /* The claim buffer lives on this thread's stack, sized for one
      * complete input set. It exists so the readiness check allocates

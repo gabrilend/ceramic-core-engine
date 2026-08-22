@@ -58,7 +58,7 @@ longer cut in two.** The record below is kept because the deadlock it
 describes was real and the way out of it is the useful part.
 
 Half of this family waited on 401 and
-[405](../405-statics-mutation.md), which are not children of this issue
+[405](405-statics-mutation.md), which are not children of this issue
 and were expected to stand on it rather than the reverse.
 
 The reason was one sentence: **a port cannot be given room for a static
@@ -214,7 +214,7 @@ because the check it triggers is the ordinary one and an empty ring
 port still answers no.
 
 The statics work proper belongs to [401](401-static-ports.md) and
-[405](../405-statics-mutation.md), which stand on 210b's record.
+[405](405-statics-mutation.md), which stand on 210b's record.
 
 ## Open questions
 
@@ -270,7 +270,7 @@ The statics work proper belongs to [401](401-static-ports.md) and
   storage this keeps and whose exclusivity it drops
 - [401 — Static input values](401-static-ports.md), whose value moves
   onto the port here
-- [405 — Changing a static while it runs](../405-statics-mutation.md),
+- [405 — Changing a static while it runs](405-statics-mutation.md),
   which becomes one case of changing a port
 - [403 — Gatherer slots](403-gatherer-ports.md), the kind
   210a removed

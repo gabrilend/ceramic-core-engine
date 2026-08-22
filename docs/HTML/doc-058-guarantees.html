@@ -32,7 +32,6 @@
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
@@ -97,6 +96,7 @@
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
@@ -298,6 +298,7 @@ for and what removing them cost.</p>
 <tr><td>G10</td><td>A static value belongs to exactly one port.</td><td>Two ports written from one entry in a file are independent from the moment they are written; sharing is drawn as a wire instead, which costs a station and gains something visible in the picture.</td><td>structure</td></tr>
 <tr><td>G11</td><td>~~A box cannot write a static.~~ <strong>Retired.</strong> A map wrapped in its input and output stations <em>is</em> a box, so a box reaching a map is a box reaching a box, and the prohibition was protecting a distinction that no longer exists.</td><td>What it originally bought was G12, and G12 survives without it: a map handle travels as an ordinary value on an ordinary wire, arriving through the input station like anything else from outside, so no process-wide pointer returns. A box that builds stations therefore has a side effect far larger than any other box, and that is now deliberate rather than forbidden &amp;mdash; it is what lets a program restructure itself while it runs.</td><td>structure</td></tr>
 <tr><td>G12</td><td>A process may run any number of maps at once, and they cannot see each other.</td><td>Nothing in the engine is process-wide. Held by a test that runs two and writes into one. This is the guarantee G11 was retired in favour of keeping directly: a box that reaches a map does so through a handle it was <em>given</em> as a value, never through a pointer the process holds, so several maps stay invisible to each other even though boxes can now build them.</td><td>structure</td></tr>
+<tr><td>G13</td><td>A wire may deliver into a static port, and the arriving value <strong>overwrites</strong> the constant rather than queueing.</td><td><strong>Two arrows into one static port is last-writer-wins, nondeterministically</strong> — stated here rather than left as a surprise. What it buys is a constant that is <em>computed</em> rather than written down: a station that runs once, wired into a downstream static port, and every invocation afterwards reads what it produced. It is not the back channel returning — the box is untouched and remembers nothing; the <strong>wire</strong> is what says this value overwrites a static, and a wire is visible in the map file, in the dump, and on a canvas.</td><td>structure</td></tr>
 <tr><td>G7</td><td>Push cycles are legal.</td><td>They must be: since a box cannot remember (B1), a loop through a ring buffer is the only way to carry state. A blanket cycle check would forbid the engine's sole mechanism for state.</td><td>structure</td></tr>
 </table>
 <p>---</p>

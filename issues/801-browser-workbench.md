@@ -262,7 +262,7 @@ that stand outside the engine live.
    it does not perform rather than leaving a reader to assume a clean
    canvas means a loadable map.
 5. Statics: typed into ports, written into the statics section — noting
-   that [401](completed/401-static-ports.md) and [405](405-statics-mutation.md)
+   that [401](completed/401-static-ports.md) and [405](completed/405-statics-mutation.md)
    are retiring the shared table in favour of a value owned by the port
    that reads it, so this should be built against where the format is
    going rather than where it is.

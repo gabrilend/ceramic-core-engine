@@ -32,7 +32,6 @@
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-405-statics-mutation.html" class="here">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
@@ -97,6 +96,7 @@
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-405-statics-mutation.html" class="here">405 — Changing a static value while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
@@ -154,7 +154,7 @@
 <main>
 <h1>405 — Changing a static value while the program runs</h1>
 <h2>Current behavior</h2>
-<p><strong>Mostly done</strong>, and it landed with <a href="done-401-static-ports.html">401</a> because
+<p><strong>Done</strong>, and it landed with <a href="done-401-static-ports.html">401</a> because
 it could not be separated: removing the table breaks a write addressed
 by entry number, and the write has nowhere to live until the value is
 on a port.</p>
@@ -176,13 +176,35 @@ carried the station index, so it stays ignorant of maps.</p>
 <p>Two maps now run in one process and do not see each other's values.
 That is the property this whole change bought, and the one that could
 not be tested at all before; it is a test now.</p>
-<p><strong>Not done: a wire delivering into a static port.</strong> An arrow whose
-destination holds a static is still refused at load time, and a
-delivery into a non-buffer port is still fatal. Both refusals predate
-there being anywhere for such a value to go. The write call now exists
-and takes the right lock, so what is left is teaching delivery to call
-it, removing the load-time check that calls the arrow a mistake, and
-recording last-writer-wins as a stated non-guarantee.</p>
+<p><strong>And a wire may deliver into a static port.</strong> An arriving value
+overwrites the constant rather than queueing into a buffer the port
+does not have, through the <strong>same write an outside caller makes</strong> —
+one path, taking the station's mutex, which the claim already takes,
+so no claim can see a half-written value.</p>
+<p>What it buys is the pattern somebody would otherwise ask for a feature
+to get: a constant that is <em>computed</em> rather than written down. A
+station that runs once, wired into a downstream station's static port,
+and every invocation afterwards reads what it produced. The test does
+exactly that and checks the arithmetic rather than the shape — twenty
+values, each summed against the seven a wire put there rather than the
+zero somebody wrote down.</p>
+<p><strong>It is not the back channel returning</strong>, and that distinction is why
+it is allowed. The back channel had a <em>box</em> reach out and write, with
+nothing in the wiring showing it, so two stations could be talking
+with no arrow between them and the picture lied. The box here is
+untouched: it takes its arguments, returns one value, remembers
+nothing, and has no idea what happens next. The <strong>wire</strong> is what says
+this value overwrites a static, and a wire is visible in the map file,
+in the dump, and on a canvas. A box still may not write a static.</p>
+<p>Two refusals moved rather than being deleted. An arrow onto a port
+with <strong>no source</strong> is still refused — it has nothing to queue into and
+nothing to overwrite — and the message that used to name which of the
+two non-buffer states it found now has only one to name. The refusal
+test that guarded the static case was replaced by the scene proving
+the new behaviour rather than being quietly dropped, because a
+property that stops being true is worth a paragraph.</p>
+<p>Last-writer-wins on two arrows into one static port is stated in
+<a href="doc-058-guarantees.html">058</a> as a non-guarantee.</p>
 <h2>Intended behavior</h2>
 <p><strong>Changing a static is a call on the port that holds it</strong>, made from
 outside the graph, through the same runtime configuration surface that
@@ -256,9 +278,14 @@ the station's mutex.</p>
 5. Keep the racing test, retargeted: many claims against a writer
    alternating a multi-field struct, now through the station's mutex.
    Zero torn reads, last write visible to the next claim.
-6. A test that two maps run in one process at the same time and do not
-   see each other's values — the property this whole change buys, and
-   the one that cannot be tested at all today.</p>
+6. <strong>Done.</strong> Two maps run in one process at the same time and do not
+   see each other's values — the property this whole change bought,
+   and the one that could not be tested at all before.
+7. <strong>Done.</strong> A wire delivering into a static port overwrites the
+   constant, through the same write an outside caller makes. The
+   load-time refusal for such an arrow is gone; the one for an arrow
+   onto a port with no source stays, because that has nothing to
+   overwrite. Last-writer-wins is stated as a non-guarantee.</p>
 <h2>Related</h2>
 <ul>
 <li>Issue 401 — where the value now lives</li>

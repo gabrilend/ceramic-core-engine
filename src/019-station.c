@@ -1195,15 +1195,20 @@ const char *map_bring_up(map_t *m)
             any_arrow |= landed_on[j];
         }
 
-        /* An arrow landing on a port that is not a buffer would have
-         * nowhere to put its value. The complaint names which of the
-         * other two it found, because the fixes differ: a constant
-         * wants the arrow removed or the constant unbound, while a
-         * port with no source wants finishing. */
+        /* An arrow landing on a port with no source would have
+         * nowhere to put its value at all — nothing to queue into and
+         * nothing to overwrite.
+         *
+         * **A static destination stopped being one of these** (issue
+         * 405). A value arriving there overwrites the constant, which
+         * is how a constant gets computed at startup rather than
+         * written down, and is a property of the wire rather than of
+         * the box — so it is visible in the map file instead of
+         * happening invisibly inside C. */
         for (int j = 0; j < s->n_in_ports; j++) {
             unsigned char k = atomic_load_explicit(&s->in_ports[j].kind,
                                                    memory_order_relaxed);
-            if (landed_on[j] && k != IN_PORT_RING) {
+            if (landed_on[j] && k != IN_PORT_RING && k != IN_PORT_STATIC) {
                 faults++;
                 if (used < (int)sizeof said - 128)
                     used += snprintf(said + used, sizeof said - (size_t)used,

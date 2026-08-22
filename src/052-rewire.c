@@ -160,7 +160,15 @@ const char *map_wire(map_t *m, int from_station, int port,
         return said(message);
     }
     in_port_t *dest = &to->in_ports[to_port];
-    if (dest->kind != IN_PORT_RING) {
+    /*
+     * **A static destination is legal now** (issue 405): a value
+     * arriving there overwrites the constant rather than queueing,
+     * which is how a constant gets computed at startup rather than
+     * written down. What remains refused is a port with *no source*,
+     * which has nothing to overwrite and nowhere to queue — the
+     * arriving value would have nowhere to go at all.
+     */
+    if (dest->kind != IN_PORT_RING && dest->kind != IN_PORT_STATIC) {
         /* Named by station and port, because "the destination port"
          * is not something anybody can go and look at. The whole-map
          * check said it this way and this refusal now arrives first,

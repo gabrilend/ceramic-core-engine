@@ -32,7 +32,6 @@
 <a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
-<a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
@@ -97,6 +96,7 @@
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
 <a href="done-404-gather-chains-and-cycles.html">404 — Gather chains and the cycle check</a>
+<a href="done-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
@@ -175,7 +175,7 @@ scope shrank the most.</p>
 <tr><td>402 — struct constants</td><td>complete</td><td>One reader walks field tables and brace text; malformed is fatal at bind.</td></tr>
 <tr><td>403 — gatherer ports</td><td><strong>being removed</strong></td><td>Built and proven; the whole capability goes with the pull path.</td></tr>
 <tr><td>404 — chains and cycles</td><td><strong>being removed</strong></td><td>Goes with it; the push-loop finding outlives the mechanism.</td></tr>
-<tr><td>405 — statics mutation</td><td><strong>reopened</strong></td><td>The locking survives; the ambient map pointer it needed is what forced one map per process.</td></tr>
+<tr><td><a href="done-405-statics-mutation.html">405 — changing a static while it runs</a></td><td>complete</td><td>A write naming a station and a port, size-checked, under the station's own mutex — the lock the claim already takes. The process-wide map pointer went with it, which is what lets two programs run in one process. And a <strong>wire</strong> may now deliver into a static port, overwriting the constant: a constant that is computed rather than written down, visible in the map file because it is a property of the wire rather than of the box.</td></tr>
 <tr><td>406 — phase 4 demo</td><td><strong>needs rewriting</strong></td><td>Four of its five scenes demonstrate the pull path.</td></tr>
 <tr><td>407 — gathering at pickup</td><td>superseded</td><td>Designed a better timing for a path that then ceased to exist.</td></tr>
 <tr><td><a href="issue-408-values-back-into-text.html">408 — values back into text</a></td><td>open, <strong>partly landed</strong></td><td>The mirror of 402's reader, built with 401 because deleting the statics table deleted the strings the dump was echoing. What remains is a hole and a technique: there are no escape rules on either side, so a string constant holding a quote does not round-trip; and both directions are runtime walks that become generated code with the registry work.</td></tr>

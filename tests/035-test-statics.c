@@ -397,6 +397,130 @@ static void test_ports_are_independent(void)
 }
 /* }}} */
 
+/* {{{ static void must_take() */
+static void must_take(const char *refusal, const char *what)
+{
+    if (refusal) {
+        fprintf(stderr, "statics test failed: refused %s: %s\n",
+                what, refusal);
+        exit(1);
+    }
+}
+/* }}} */
+
+/* {{{ static void a_wire_computes_a_constant() */
+/*
+ * **A constant computed at startup rather than written down** (issue
+ * 405).
+ *
+ * A value arriving at a static port overwrites the constant instead
+ * of queueing into a buffer the port does not have. What that buys is
+ * the pattern somebody would otherwise ask the engine for a feature
+ * to get: read a thing once at the beginning, and let everything
+ * afterwards work from that moment. Here it is a station that runs
+ * once, wired into a downstream station's static port.
+ *
+ * **This is not the back channel returning**, and the distinction is
+ * the whole point. The back channel had a *box* reach out and write a
+ * value with nothing in the wiring showing it, so two stations could
+ * be talking with no arrow between them and the picture lied. The box
+ * here is untouched — it takes its arguments, returns one value,
+ * remembers nothing, and has no idea what happens next. **The wire is
+ * what says this value overwrites a static**, and a wire is visible
+ * in the map file, in the dump, and on a canvas.
+ *
+ * The scene: `seven` runs once because it has no inputs, and its
+ * seven lands on the second port of an `add` whose first port is fed
+ * ordinary values. Every sum afterwards is that seven, plus whatever
+ * arrived — which the first port's values prove by coming out
+ * offset by exactly seven each.
+ */
+static _Atomic long computed_sum;
+static _Atomic int computed_runs;
+
+static void tally_computed__call(task_t *t)
+{
+    int v;
+    memcpy(&v, t->in[0], sizeof v);
+    atomic_fetch_add(&computed_sum, v);
+    atomic_fetch_add(&computed_runs, 1);
+}
+
+static void a_wire_computes_a_constant(void)
+{
+    map_t *m = map_create_empty();
+
+    int source = map_add_station(m);
+    map_place_box(m, source, "seven", STATION_PLAIN);
+    must_take(map_name_station(m, source, "source"), "a name");
+
+    int adder = map_add_station(m);
+    map_place_box(m, adder, "add", STATION_PLAIN);
+    must_take(map_name_station(m, adder, "adder"), "a name");
+    /* Port 1 is a constant, and starts as one somebody wrote down. */
+    map_in_port_static_text(m, adder, 1, "0");
+
+    int tally = map_add_station(m);
+    int one_int = (int)sizeof(int);
+    map_place(m, tally, tally_computed__call, STATION_PLAIN, 1, &one_int, 0);
+    must_take(map_name_station(m, tally, "tally"), "a name");
+
+    /* The wire that makes the constant computed. */
+    must_take(map_wire(m, source, 0, adder, 1),
+              "a wire into a static port");
+    must_take(map_wire(m, adder, 0, tally, 0), "a wire to the tally");
+
+    int gate = map_add_station(m);
+    map_place_box(m, gate, "keep", STATION_PLAIN);
+    must_take(map_name_station(m, gate, "gate"), "a name");
+    must_take(map_designate_input(m, gate), "an entrance");
+    must_take(map_wire(m, gate, 0, adder, 0), "the ordinary input");
+
+    int out = map_add_station(m);
+    map_place_box(m, out, "keep", STATION_PLAIN);
+    must_take(map_name_station(m, out, "out"), "a name");
+    must_take(map_designate_output(m, out), "a way out");
+
+    map_start(m, 2);
+    pool_submitter_register(m->pool);
+    must_take(map_bring_up(m), "the program");
+    pool_release(m->pool);
+
+    /* The source ran at bring-up — it has no inputs — so seven is
+     * already sitting on the adder's second port. Wait for it, so
+     * what follows is a fact rather than a schedule. */
+    while (atomic_load(&map_station(m, source)->runs) < 1)
+        usleep(200);
+
+    const int BATCH = 20;
+    for (int i = 0; i < BATCH; i++) {
+        int v = i;
+        must_take(map_deliver_argument(m, gate, 0, &v, sizeof v),
+                  "an argument");
+    }
+
+    pool_submitter_unregister(m->pool);
+    pool_join(m->pool);
+
+    check(atomic_load(&computed_runs) == BATCH,
+          "every value went through the adder");
+    /* Each sum is its input plus the computed seven. */
+    long expected = 0;
+    for (int i = 0; i < BATCH; i++)
+        expected += i + 7;
+    check(atomic_load(&computed_sum) == expected,
+          "and every one of them was added to the seven a wire put "
+          "there, not to the zero somebody wrote down");
+    check(atomic_load(&map_station(m, source)->runs) == 1,
+          "the station that computed the constant ran once, which is "
+          "what makes it a constant");
+
+    map_destroy(m);
+    printf("  a wire computed a constant: %d values, each plus the seven "
+           "a station put on a static port\n", BATCH);
+}
+/* }}} */
+
 /* {{{ test_two_maps_at_once() */
 /*
  * Two maps alive in one process at the same time, not seeing each
@@ -460,5 +584,6 @@ int main(void)
     test_mutation_and_torn_reads();
     test_ports_are_independent();
     test_two_maps_at_once();
+    a_wire_computes_a_constant();
     return 0;
 }

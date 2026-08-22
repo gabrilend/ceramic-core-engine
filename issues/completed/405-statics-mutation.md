@@ -2,7 +2,7 @@
 
 ## Current behavior
 
-**Mostly done**, and it landed with [401](completed/401-static-ports.md) because
+**Done**, and it landed with [401](401-static-ports.md) because
 it could not be separated: removing the table breaks a write addressed
 by entry number, and the write has nowhere to live until the value is
 on a port.
@@ -28,13 +28,39 @@ Two maps now run in one process and do not see each other's values.
 That is the property this whole change bought, and the one that could
 not be tested at all before; it is a test now.
 
-**Not done: a wire delivering into a static port.** An arrow whose
-destination holds a static is still refused at load time, and a
-delivery into a non-buffer port is still fatal. Both refusals predate
-there being anywhere for such a value to go. The write call now exists
-and takes the right lock, so what is left is teaching delivery to call
-it, removing the load-time check that calls the arrow a mistake, and
-recording last-writer-wins as a stated non-guarantee.
+**And a wire may deliver into a static port.** An arriving value
+overwrites the constant rather than queueing into a buffer the port
+does not have, through the **same write an outside caller makes** —
+one path, taking the station's mutex, which the claim already takes,
+so no claim can see a half-written value.
+
+What it buys is the pattern somebody would otherwise ask for a feature
+to get: a constant that is *computed* rather than written down. A
+station that runs once, wired into a downstream station's static port,
+and every invocation afterwards reads what it produced. The test does
+exactly that and checks the arithmetic rather than the shape — twenty
+values, each summed against the seven a wire put there rather than the
+zero somebody wrote down.
+
+**It is not the back channel returning**, and that distinction is why
+it is allowed. The back channel had a *box* reach out and write, with
+nothing in the wiring showing it, so two stations could be talking
+with no arrow between them and the picture lied. The box here is
+untouched: it takes its arguments, returns one value, remembers
+nothing, and has no idea what happens next. The **wire** is what says
+this value overwrites a static, and a wire is visible in the map file,
+in the dump, and on a canvas. A box still may not write a static.
+
+Two refusals moved rather than being deleted. An arrow onto a port
+with **no source** is still refused — it has nothing to queue into and
+nothing to overwrite — and the message that used to name which of the
+two non-buffer states it found now has only one to name. The refusal
+test that guarded the static case was replaced by the scene proving
+the new behaviour rather than being quietly dropped, because a
+property that stops being true is worth a paragraph.
+
+Last-writer-wins on two arrows into one static port is stated in
+[058](../../docs/058-guarantees.md) as a non-guarantee.
 
 ## Intended behavior
 
@@ -122,15 +148,20 @@ the station's mutex.
 5. Keep the racing test, retargeted: many claims against a writer
    alternating a multi-field struct, now through the station's mutex.
    Zero torn reads, last write visible to the next claim.
-6. A test that two maps run in one process at the same time and do not
-   see each other's values — the property this whole change buys, and
-   the one that cannot be tested at all today.
+6. **Done.** Two maps run in one process at the same time and do not
+   see each other's values — the property this whole change bought,
+   and the one that could not be tested at all before.
+7. **Done.** A wire delivering into a static port overwrites the
+   constant, through the same write an outside caller makes. The
+   load-time refusal for such an arrow is gone; the one for an arrow
+   onto a port with no source stays, because that has nothing to
+   overwrite. Last-writer-wins is stated as a non-guarantee.
 
 ## Related
 
 - Issue 401 — where the value now lives
-- [057 — Packaging](../docs/implementation-notes/057-packaging.md),
+- [057 — Packaging](../../docs/implementation-notes/057-packaging.md),
   where the singleton was traced back to this feature
-- [058 — Guarantees](../docs/058-guarantees.md), whose "only one map per
+- [058 — Guarantees](../../docs/058-guarantees.md), whose "only one map per
   process" non-guarantee this deletes
-- [008 — Map file format](../docs/008-map-file-format.md)
+- [008 — Map file format](../../docs/008-map-file-format.md)

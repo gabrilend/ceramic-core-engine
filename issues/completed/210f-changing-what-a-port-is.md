@@ -155,7 +155,7 @@ destroyed.
   buffer is the entire reason this is cheap
 - [210g — One way to build a station](210g-one-way-to-build-a-station.md),
   which offers this operation as part of one surface
-- [405 — Changing a static while it runs](../405-statics-mutation.md),
+- [405 — Changing a static while it runs](405-statics-mutation.md),
   which becomes one case of this
 - [704 — Rewiring while it runs](704-runtime-rewiring.md),
   the same live-editing discipline on the wires

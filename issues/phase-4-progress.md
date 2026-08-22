@@ -25,7 +25,7 @@ scope shrank the most.
 | 402 — struct constants | complete | One reader walks field tables and brace text; malformed is fatal at bind. |
 | 403 — gatherer ports | **being removed** | Built and proven; the whole capability goes with the pull path. |
 | 404 — chains and cycles | **being removed** | Goes with it; the push-loop finding outlives the mechanism. |
-| 405 — statics mutation | **reopened** | The locking survives; the ambient map pointer it needed is what forced one map per process. |
+| [405 — changing a static while it runs](completed/405-statics-mutation.md) | complete | A write naming a station and a port, size-checked, under the station's own mutex — the lock the claim already takes. The process-wide map pointer went with it, which is what lets two programs run in one process. And a **wire** may now deliver into a static port, overwriting the constant: a constant that is computed rather than written down, visible in the map file because it is a property of the wire rather than of the box. |
 | 406 — phase 4 demo | **needs rewriting** | Four of its five scenes demonstrate the pull path. |
 | 407 — gathering at pickup | superseded | Designed a better timing for a path that then ceased to exist. |
 | [408 — values back into text](408-values-back-into-text.md) | open, **partly landed** | The mirror of 402's reader, built with 401 because deleting the statics table deleted the strings the dump was echoing. What remains is a hole and a technique: there are no escape rules on either side, so a string constant holding a quote does not round-trip; and both directions are runtime walks that become generated code with the registry work. |

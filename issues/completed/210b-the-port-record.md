@@ -5,7 +5,7 @@ child stands on: what a port *is*, once there are two live kinds and a
 third state meaning nobody has said yet.
 
 **The statics block is cleared.** This issue was blocked in half on
-[401](401-static-ports.md) and [405](../405-statics-mutation.md): a port
+[401](401-static-ports.md) and [405](405-statics-mutation.md): a port
 could not be given room for a value that lived in a global register,
 and the map file's `$n` form named a table the design had decided to
 delete.
