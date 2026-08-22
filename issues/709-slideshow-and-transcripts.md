@@ -146,14 +146,22 @@ correct trigger for a drawing of a horse.
 
 ### What both need from the generator
 
-[705](705-html-documentation.md) already carries the fix that makes
-this possible and names it as outstanding: discovery is currently a
-fixed list of directories, each read one level deep, and a directory
-the generator was not told about is missing from the site *silently*.
-`llm-transcripts/` is precisely such a directory. Walking the
-documentation roots downward, with a directory that yields no pages
-reported rather than passed over, is the prerequisite for both halves
-of this issue and belongs to 705 rather than here.
+**The prerequisite has landed.** This was written when discovery was
+a fixed list of directories, each read one level deep, so a directory
+the generator was not told about was missing from the site *silently*
+— and `llm-transcripts/` was precisely such a directory. Under
+[705](705-html-documentation.md) discovery now walks each documentation
+root downward, every subdirectory becomes its own section named from
+the directory itself, and the output is swept of pages no source
+produces. Nothing about the generator stands in the way any more.
+
+**What keeps the transcripts off the site is now one deliberate
+line**: the generator's file search carries an explicit exclusion for
+the transcript directory. That is a better state than the one this
+paragraph originally described, because an exclusion is a decision
+somebody can find and reverse, where a directory nobody listed was an
+omission nothing reported. Removing it is where this half of the issue
+starts, and everything after it is rendering rather than plumbing.
 
 That same walk is the whole of the transcript library's inclusion
 policy: whatever is in the directory is on the site after the next
@@ -164,8 +172,9 @@ a shape like before rather than refusing the build.
 
 ## Suggested implementation steps
 
-1. Take the discovery fix from 705 first; without it neither half of
-   this reaches the site.
+1. **Done, in 705.** Discovery walks the documentation roots downward.
+   What is left of this step is deleting the generator's one explicit
+   exclusion of the transcript directory.
 2. The transcript library, because it is the smaller and more certain
    of the two: render, page, and list the five existing logs, folding
    the mechanical blocks.

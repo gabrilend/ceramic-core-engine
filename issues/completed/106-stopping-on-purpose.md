@@ -328,7 +328,7 @@ kept in agreement, and all of them move together:
   returns with a light saying why, on the grounds that both inform
   without punishing. That scene cannot survive this change. It was
   already scheduled for rewriting in
-  [710](../710-demos-after-the-pull-path.md) because the illegal operation
+  [710](710-demos-after-the-pull-path.md) because the illegal operation
   it uses is a gather cycle and gathering is being removed, so it now
   needs rewriting for two independent reasons.
 
@@ -421,7 +421,7 @@ kept in agreement, and all of them move together:
 - [702 — Station statistics](702-station-statistics.md) and
   [701 — Buffer growth reporting](701-buffer-growth-reporting.md),
   which already gather everything the report needs
-- [710 — The demos after the pull path](../710-demos-after-the-pull-path.md),
+- [710 — The demos after the pull path](710-demos-after-the-pull-path.md),
   which now inherits a second reason to rewrite the same scene
 - [006 — Scheduling](../../docs/006-datapath-scheduling.md), which needs a
   section on the ways a program ends

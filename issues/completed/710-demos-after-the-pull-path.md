@@ -1,6 +1,6 @@
 # 710 — The demos after the pull path
 
-> **Superseded by [713 — the demos you can steer](713-demos-you-can-steer.md).**
+> **Superseded by [713 — the demos you can steer](../713-demos-you-can-steer.md).**
 > The three programs this issue repairs were deleted rather than
 > repaired, along with the other four and both presenters. Everything
 > below is kept because it is the only written account of exactly which
@@ -10,7 +10,7 @@
 > replacement plan is what stopped applying, not the analysis.
 
 **The window this issue was written to wait for is now open.**
-[210a](completed/210a-the-pull-path-removed.md) removed the pull path,
+[210a](210a-the-pull-path-removed.md) removed the pull path,
 so the three demos that call it no longer compile — phase 4 fails on
 the slot-conversion call, phase 6 on the gatherer tag, phase 7 on the
 runtime repoint. Each says so plainly and names the missing call,
@@ -26,22 +26,22 @@ a machine that is unfinished.
 
 **What it still waits on is narrower than it was.** Phase 4's rebuilt
 scenes turn on writing a static and watching a chain recalculate,
-which needs the statics work ([401](completed/401-static-ports.md),
-[405](completed/405-statics-mutation.md)) standing on the port record
-([210b](completed/210b-the-port-record.md)). Phase 6's substitution needs the
+which needs the statics work ([401](401-static-ports.md),
+[405](405-statics-mutation.md)) standing on the port record
+([210b](210b-the-port-record.md)). Phase 6's substitution needs the
 same. Phase 7's replacement scene needs only
-[309](completed/309-types-by-width.md), and could go first.
+[309](309-types-by-width.md), and could go first.
 
 ## Current behavior
 
-**All seven demos are deleted** ([713](713-demos-you-can-steer.md)),
+**All seven demos are deleted** ([713](../713-demos-you-can-steer.md)),
 so none of the three repairs below has a subject any more. The account
 that follows describes what stood in the tree until then, and is worth
 reading by whoever builds phase 4's and phase 6's replacement panels,
 because it is the record of which demonstrations were load-bearing.
 
 Three of the seven demos had scenes that demonstrate a capability
-being removed ([056](../docs/implementation-notes/056-no-pull-path.md)).
+being removed ([056](../../docs/implementation-notes/056-no-pull-path.md)).
 
 **Phase 4 is worst: four of its five scenes.** Frozen versus fresh, the
 gather tax, a chain three deep, and the refused cycle. Its source
@@ -111,7 +111,7 @@ exercises statics-with-writes where it exercised gatherers.
 
 Keep the scene; change what is refused. A wire whose types do not match
 is the natural candidate, and under
-[309](completed/309-types-by-width.md) it reads better than a cycle ever did: the
+[309](309-types-by-width.md) it reads better than a cycle ever did: the
 message can name the first field where two layouts diverge rather than
 only reporting that two names differ.
 
@@ -125,7 +125,7 @@ expect to find it* is a lesson about measurement, not about gathering,
 and it cost a real mistake to learn. Whatever replaces that scene
 should carry it.
 
-**The story contract from [707](completed/707-demos-as-word-problems.md).** Every
+**The story contract from [707](707-demos-as-word-problems.md).** Every
 new scene opens with the problem in the engine's own terms, offers one
 analogy never reused inside that demo, prints the mapping, justifies
 every row of it, measures in the story's units beside the engine's, and
@@ -135,7 +135,7 @@ reader care is evidence about the mechanic, not about the story.
 ## Suggested implementation steps
 
 1. Phase 7's scene first, since it needs only
-   [309](completed/309-types-by-width.md) and restores one of the three broken
+   [309](309-types-by-width.md) and restores one of the three broken
    demos immediately. Then wait for the statics work — phases 4 and 6
    demonstrate a mechanism that does not exist yet.
 2. Phase 4 end to end, since it is effectively a new demo rather than
@@ -206,7 +206,7 @@ reader care is evidence about the mechanic, not about the story.
 **Moved elsewhere:**
 
 - *The index convention does not visibly do what it is for.* **Split
-  off into [711](711-the-index-means-reading-order.md), which owns it
+  off into [711](../711-the-index-means-reading-order.md), which owns it
   now.** The rule is settled — **an index means where a file sits in
   the reading order and nothing else**, never that two files are
   related to each other — and what remains is renumbering wherever the
@@ -216,15 +216,15 @@ reader care is evidence about the mechanic, not about the story.
 
 ## Related
 
-- [056 — Why there is no pull path](../docs/implementation-notes/056-no-pull-path.md),
+- [056 — Why there is no pull path](../../docs/implementation-notes/056-no-pull-path.md),
   the change that forces this
-- [406](completed/406-phase-4-demo.md),
-  [606](completed/606-phase-6-demo.md), and
-  [706](completed/706-phase-7-demo.md), each of which names what it
+- [406](406-phase-4-demo.md),
+  [606](606-phase-6-demo.md), and
+  [706](706-phase-7-demo.md), each of which names what it
   needs
-- [707 — The demos told as word problems](completed/707-demos-as-word-problems.md),
+- [707 — The demos told as word problems](707-demos-as-word-problems.md),
   the contract every new scene is held to
-- [004 — Statics and recalculation](../docs/004-datapath-statics.md),
+- [004 — Statics and recalculation](../../docs/004-datapath-statics.md),
   the mechanism phase 4 now demonstrates
-- [309 — Types compared by width](completed/309-types-by-width.md), which gives
+- [309 — Types compared by width](309-types-by-width.md), which gives
   phase 7's refusal a better message than the one it replaces

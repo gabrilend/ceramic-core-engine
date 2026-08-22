@@ -60,7 +60,7 @@ Three of the seven no longer compiled at all. Removing the pull path
 of the engine, and phase four still asked a port to become one, phase
 six still switched on its tag, and phase seven still repointed one on
 a running map. That is what
-[710](710-demos-after-the-pull-path.md) was written to repair, and it
+[710](completed/710-demos-after-the-pull-path.md) was written to repair, and it
 is superseded here: repairing three programs whose shape is being
 replaced is work that would be thrown away twice.
 
@@ -407,7 +407,7 @@ one says what replaced them.
 - [707 — The demos told as word problems](completed/707-demos-as-word-problems.md),
   whose contract this replaces with a spatial one and whose finding
   about justification it keeps
-- [710 — The demos after the pull path](710-demos-after-the-pull-path.md),
+- [710 — The demos after the pull path](completed/710-demos-after-the-pull-path.md),
   **superseded** — the three demos it repairs are deleted here
 - [105](completed/105-phase-1-demo.md),
   [208](completed/208-phase-2-demo.md),

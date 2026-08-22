@@ -4,13 +4,14 @@ Phase 8's goal: tools that stand outside the engine and help somebody
 write a program for it. Everything in the phases beneath makes maps
 run; nothing in them helps anyone compose one except a text editor.
 
-**The phase has not started.** This page exists because every other
-phase has one and the gap kept being rediscovered, not because there
-is progress to report.
+**The phase has started, and it is the drawing half that stands.**
+Stations can be placed and wired on a canvas, and several drawings
+live side by side in the browser's own storage. What none of it does
+yet is produce a file: the canvas is a drawing surface and not a door.
 
 | Issue | State | In one line |
 |---|---|---|
-| [801 — the workbench in the browser](801-browser-workbench.md) | open, unblocked | A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server. |
+| [801 — the workbench in the browser](801-browser-workbench.md) | **in progress** | A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server. Drawing and keeping several drawings are done; the writer that turns one into a map exists in C and is not in the page yet. |
 | [802 — a program you can watch](802-a-program-you-can-watch.md) | open, not started | A build flag makes a program leave a trail as it runs — every station that ran, every value that moved, every buffer that grew — in a ring in shared memory that any number of processes can read. Without the flag the emitting is not compiled at all. Watching must never change what is watched, so a slow reader loses events and is told how many rather than holding the program up. |
 | [803 — the viewer](803-the-viewer.md) | open, waits on 802 | A page that watches a running program and **cannot touch it**: stations lighting as they run, buffers filling, and the page saying so when the trail lost events. Shares nothing with the workbench, which is a door where this is a window. |
 
@@ -32,6 +33,20 @@ is waiting in a buffer
 something a person composing a new map writes — both describe a program
 that has been running — so the canvas reads them and does not offer
 them.
+
+**A linker, briefly, and it was one package.** Getting the project's
+own parser and writer into the page means compiling them to
+WebAssembly, and this was recorded as blocked because the machine had
+no linker for that target. The compiler was already there and already
+knew the target; only the linker that turns its object files into a
+module was missing, and it ships separately in the same LLVM version.
+Worth recording as a shape rather than an incident: *blocked on
+tooling* deserves one check of what the tooling actually is, because
+the difference between a wall and a package is the difference between
+redesigning around it and typing one command. The module is a build
+artifact committed beside the page, so building the engine still needs
+a C compiler and nothing else, and opening the workbench needs no
+compiler at all.
 
 ## The two halves of this phase
 

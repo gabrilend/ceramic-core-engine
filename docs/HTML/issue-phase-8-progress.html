@@ -31,7 +31,6 @@
 <h2>Issues, open</h2>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
-<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
@@ -119,6 +118,7 @@
 <a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
 <a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="done-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
@@ -163,12 +163,13 @@
 <p>Phase 8's goal: tools that stand outside the engine and help somebody
 write a program for it. Everything in the phases beneath makes maps
 run; nothing in them helps anyone compose one except a text editor.</p>
-<p><strong>The phase has not started.</strong> This page exists because every other
-phase has one and the gap kept being rediscovered, not because there
-is progress to report.</p>
+<p><strong>The phase has started, and it is the drawing half that stands.</strong>
+Stations can be placed and wired on a canvas, and several drawings
+live side by side in the browser's own storage. What none of it does
+yet is produce a file: the canvas is a drawing surface and not a door.</p>
 <table>
 <tr><td>Issue</td><td>State</td><td>In one line</td></tr>
-<tr><td><a href="issue-801-browser-workbench.html">801 — the workbench in the browser</a></td><td>open, unblocked</td><td>A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server.</td></tr>
+<tr><td><a href="issue-801-browser-workbench.html">801 — the workbench in the browser</a></td><td><strong>in progress</strong></td><td>A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server. Drawing and keeping several drawings are done; the writer that turns one into a map exists in C and is not in the page yet.</td></tr>
 <tr><td><a href="issue-802-a-program-you-can-watch.html">802 — a program you can watch</a></td><td>open, not started</td><td>A build flag makes a program leave a trail as it runs — every station that ran, every value that moved, every buffer that grew — in a ring in shared memory that any number of processes can read. Without the flag the emitting is not compiled at all. Watching must never change what is watched, so a slow reader loses events and is told how many rather than holding the program up.</td></tr>
 <tr><td><a href="issue-803-the-viewer.html">803 — the viewer</a></td><td>open, waits on 802</td><td>A page that watches a running program and <strong>cannot touch it</strong>: stations lighting as they run, buffers filling, and the page saying so when the trail lost events. Shares nothing with the workbench, which is a door where this is a window.</td></tr>
 </table>
@@ -188,6 +189,19 @@ is waiting in a buffer
 something a person composing a new map writes — both describe a program
 that has been running — so the canvas reads them and does not offer
 them.</p>
+<p><strong>A linker, briefly, and it was one package.</strong> Getting the project's
+own parser and writer into the page means compiling them to
+WebAssembly, and this was recorded as blocked because the machine had
+no linker for that target. The compiler was already there and already
+knew the target; only the linker that turns its object files into a
+module was missing, and it ships separately in the same LLVM version.
+Worth recording as a shape rather than an incident: *blocked on
+tooling* deserves one check of what the tooling actually is, because
+the difference between a wall and a package is the difference between
+redesigning around it and typing one command. The module is a build
+artifact committed beside the page, so building the engine still needs
+a C compiler and nothing else, and opening the workbench needs no
+compiler at all.</p>
 <h2>The two halves of this phase</h2>
 <p><strong>A door and a window, and they share nothing.</strong> The workbench
 composes a map that does not exist yet: everything is alike, nothing is

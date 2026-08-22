@@ -107,7 +107,7 @@ returns if a whole-graph rule ever does.
 4, 6, and 7 call the removed operations. They cannot be rewritten
 first — they are compiled against the engine as it exists — and
 rewriting them last means the launcher demonstrates a machine that is
-gone. [710](../710-demos-after-the-pull-path.md) exists to close that
+gone. [710](710-demos-after-the-pull-path.md) exists to close that
 window and cannot open before this lands.
 
 ## Suggested implementation steps
@@ -172,7 +172,7 @@ files rather than reinterpret them, which is written up above.
   designed a better *when* for a thing that stopped existing
 - [704 — Rewiring while it runs](704-runtime-rewiring.md), whose
   joint-cycle guarantee is the property lost here
-- [710 — The demos after the pull path](../710-demos-after-the-pull-path.md),
+- [710 — The demos after the pull path](710-demos-after-the-pull-path.md),
   which repairs the three demonstrations this breaks
 - [008 — Map file format](../../docs/008-map-file-format.md), where the
   input line's second form is recorded as gone

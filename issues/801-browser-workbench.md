@@ -315,11 +315,36 @@ that stand outside the engine live.
    them, which is what makes it the right thing to produce from a
    drawing.
 
-   What is left is getting it into the page. **This machine has no
-   WebAssembly linker**, so that half is blocked on tooling rather than
-   on design — recorded here rather than worked around, because a
-   JavaScript reimplementation would be the second authority this
-   issue spends three sections refusing to create.
+   What is left is getting it into the page, and **it is no longer
+   blocked.** This was recorded here as blocked on tooling — no
+   WebAssembly linker on the machine — and that turned out to be one
+   package rather than a wall. The compiler already installed knows
+   the WebAssembly target; what was missing was only the linker that
+   turns its object files into a module, which ships separately and
+   is the same LLVM version as the compiler.
+
+   **It costs the clone path nothing**, which is the part worth
+   writing down. The module is a build artifact and is committed
+   beside the page, so somebody opening the workbench needs no
+   compiler at all and somebody building the engine still needs a C
+   compiler and nothing else. Only a person regenerating the module
+   after the format changes needs the linker.
+
+   **It builds without a system library for the target.** The parser,
+   the writer and the text helper between them call about eighteen
+   library functions — allocation, a handful of string operations, and
+   the reporting path — so the module is built freestanding against a
+   small shim rather than against a library for a system the browser
+   does not have. The shim is honest about what a page is: there is no
+   file to open in a browser, so the reading-a-file entry point is not
+   one of the things the page gets.
+
+   A JavaScript reimplementation stays refused, and the reason is
+   sharper now that reading is in scope as well as writing. A second
+   *writer* would only format differently. A second **parser** decides
+   what is legal and what the refusal says, so a page carrying one
+   could tell an author their map is fine and hand them a file the
+   engine rejects, in words the engine never wrote.
 3. **Done.** The drawing is kept in the browser's own storage as it is
    made, several maps side by side, restored when the browser reopens.
    Nothing is sent anywhere, so *nothing on the server* holds exactly

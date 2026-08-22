@@ -186,7 +186,7 @@ sorting on anything.
 
 ## Related
 
-- [710 — The demos after the pull path](710-demos-after-the-pull-path.md),
+- [710 — The demos after the pull path](completed/710-demos-after-the-pull-path.md),
   where this was raised, and which settled the runner suffix
 - [705 — The HTML documentation set](705-html-documentation.md), whose
   navigation would carry the order if it is to be shown rather than

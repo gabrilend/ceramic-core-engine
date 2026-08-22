@@ -31,7 +31,6 @@
 <h2>Issues, open</h2>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html" class="here">709 — The slideshow and the transcript library</a>
-<a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
@@ -119,6 +118,7 @@
 <a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
 <a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="done-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
@@ -281,14 +281,21 @@ searched by a tool. Nothing about it is automated and nothing about it
 is scheduled; it happens when someone is in the mood, which is the
 correct trigger for a drawing of a horse.</p>
 <h3>What both need from the generator</h3>
-<p><a href="issue-705-html-documentation.html">705</a> already carries the fix that makes
-this possible and names it as outstanding: discovery is currently a
-fixed list of directories, each read one level deep, and a directory
-the generator was not told about is missing from the site <em>silently</em>.
-<code>llm-transcripts/</code> is precisely such a directory. Walking the
-documentation roots downward, with a directory that yields no pages
-reported rather than passed over, is the prerequisite for both halves
-of this issue and belongs to 705 rather than here.</p>
+<p><strong>The prerequisite has landed.</strong> This was written when discovery was
+a fixed list of directories, each read one level deep, so a directory
+the generator was not told about was missing from the site <em>silently</em>
+— and <code>llm-transcripts/</code> was precisely such a directory. Under
+<a href="issue-705-html-documentation.html">705</a> discovery now walks each documentation
+root downward, every subdirectory becomes its own section named from
+the directory itself, and the output is swept of pages no source
+produces. Nothing about the generator stands in the way any more.</p>
+<p>**What keeps the transcripts off the site is now one deliberate
+line**: the generator's file search carries an explicit exclusion for
+the transcript directory. That is a better state than the one this
+paragraph originally described, because an exclusion is a decision
+somebody can find and reverse, where a directory nobody listed was an
+omission nothing reported. Removing it is where this half of the issue
+starts, and everything after it is rendering rather than plumbing.</p>
 <p>That same walk is the whole of the transcript library's inclusion
 policy: whatever is in the directory is on the site after the next
 build, with no list in between. The generator therefore needs a title
@@ -296,8 +303,9 @@ and a date for each log without being told them, which the existing
 filenames already carry, and needs to survive a log it has never seen
 a shape like before rather than refusing the build.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Take the discovery fix from 705 first; without it neither half of
-   this reaches the site.
+<p>1. <strong>Done, in 705.</strong> Discovery walks the documentation roots downward.
+   What is left of this step is deleting the generator's one explicit
+   exclusion of the transcript directory.
 2. The transcript library, because it is the smaller and more certain
    of the two: render, page, and list the five existing logs, folding
    the mechanical blocks.

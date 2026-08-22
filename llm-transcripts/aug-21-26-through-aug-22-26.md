@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-22 00:11:52
+Generated on: 2026-08-22 01:03:57
 
 --------------------------------------------------------------------------------
 
@@ -3857,6 +3857,204 @@ Section 3 needs something to run. Options, best first:
 
 I'd do (1) and note it as serving 713 later. Want me to build the example first,
 or write the README against `make test` and add the example after?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 29
+
+ok sounds good let's do it
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 29
+
+Building the example first, so the README has something real to point at.
+
+
+It runs — and the numbers are wrong in a way that's actually the engine
+telling the truth. Let me look at why.
+
+
+The example landed on the project's subtlest documented property — a rejoining
+station pairs whatever each port hands it. Correct, but a bad first impression.
+Let me make it teach that rather than trip on it.
+
+
+Correct, and it teaches the thing it nearly tripped on. Full suite check before
+I commit it.
+
+
+Now the README, to the shape we agreed.
+
+
+Done — and building it turned up that the worst problem wasn't fixable by
+writing.
+
+
+## The report, condensed
+
+
+The structural faults were: **it explained before it showed**; it had **no
+reader in mind**, so it ping-ponged between the person deciding whether to care
+and the person trying to build; the opening example was **four unexplained
+syntaxes at once**; a section literally titled *"the parts worth knowing about"*
+was a junk drawer; and it **summarized the docs instead of routing to them**,
+which guarantees drift.
+
+
+But the worst one was factual. **Nothing in it could be run.** The one
+instruction promising a first look — `./run-demo` — printed an apology,
+because the demos were deleted a while back. I'd written that line without
+checking it.
+
+
+## So the first fix wasn't the README
+
+
+`make example` now exists. Four stations: a number goes in, two branches take it
+at once because nothing connects them, a fourth adds their results and runs only
+once both arrived. About a minute from cloning.
+
+
+**It nearly told a lie on its first run, and that's the part worth your
+attention.** Written to send five values through, it printed a table of answers
+belonging to no input. The branches race, and the station where they meet pairs
+whatever each port hands it — there is no batch, no round, and nothing could
+implement one without a tag riding on every value. Your guarantees page has said
+exactly this all along; the example had to be *run* to notice.
+
+
+So it sends one value, gets the right answer, then spends its closing lines
+explaining what happens if you send more and why that isn't a defect. The
+reader's next instinct is to try exactly that, and finding out by surprise reads
+like a bug rather than like the meaning of independence.
+
+
+## The README
+
+
+150 lines instead of 240. Picture in the first ten, because the central idea is
+a graph and a graph is a thing you look at. Then what's unusual → a command
+that runs it → how to write one → the rule, delivered to someone who has
+already watched it work.
+
+
+Scope limits moved **up** out of the basement, where they read as apology;
+placed early they're a service. The reference section is links, not prose —
+every path checked against the tree rather than typed from memory, which is how
+the dead demo line got in last time.
+
+
+## One thing you should decide
+
+
+I kept your title, **ceramic core engine**, and fixed the "An system" grammar.
+But the rename is only in the README — `CLAUDE.md`, `vision`, the docs, the
+site title, and the directory itself all still say SoraMech. The README now says
+both, which reads as an inconsistency rather than a distinction.
+
+
+Say the word and I'll carry the rename through properly, or revert the title if
+it was a scratch thought.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 30
+
+I want to emphasize that we use multithreading for everything. That this system
+forces it, and does so in the most efficient way in terms of scheduling. Perhaps
+not in terms of real-world performance of course, because there's a bit of
+overhead for every task that isn't present if you do it by hand. But the novel
+construction method enables multithreading for systems that are not naturally
+designed for it, and it lowers the barrier of entry for people who want to
+design things either visually, or with a markup language.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 30
+
+Let me get the per-task cost right before I claim anything about it.
+
+
+Two claims to state precisely: the scheduling one, and its honest cost.
+Rewriting the top of the README around them.
+
+
+211 lines — I've grown back most of what I trimmed, and the delivery-check
+explanation now appears twice. Let me consolidate.
+
+
+Reframed around the thesis. Three things worth flagging about how I stated it.
+
+
+## The scheduling claim, made precise enough to defend
+
+
+I avoided "fastest" and wrote what's actually true and checkable:
+
+
+> **Finding ready work costs nothing, because nothing finds it.** No ready-queue
+> to scan, no work-stealing search, no thread waking to look around. The write
+> that fills a station's last empty port *is* the write that starts it — on
+> the thread already standing there, looking at one station and nothing else.
+
+
+That's the strongest honest form: the decision happens at **the only instant its
+answer can have changed**, on the thread that changed it. It's not a claim about
+wall-clock speed, which is good, because that's not the claim you wanted to make
+either.
+
+
+## The cost, in the same breath rather than a footnote
+
+
+Verified against the code before writing it: every invocation is a `malloc`, a
+copy of each input into the task, a push onto the pool's ring, sometimes a
+worker wake, then a `free`. So:
+
+
+> You stop deciding what runs where, and you pay a fixed cost per step to stop
+> deciding.
+
+
+That framing puts the overhead where it belongs — as what the scheduling
+costs, not as an embarrassment. And it gave the "whether it fits" section the
+case it was missing: **steps too small to pay for themselves.** A box that adds
+two integers loses to a function call and no amount of wiring fixes it.
+
+
+## The barrier-to-entry point needed a "why", not just a claim
+
+
+"Lowers the barrier" is the kind of thing every project says. What makes it true
+here is specific, so I said that instead:
+
+
+> Somebody who could not write correct threaded C can still build a program that
+> saturates a machine, **because the part that is hard to get right is not the
+> part they are writing.**
+
+
+And the sharper version of "enables multithreading for systems not designed for
+it": making an existing pile of functions concurrent isn't rewriting them, it's
+placing them and drawing arrows — and the argument about which lock is held
+where doesn't get *won*, it stops existing, because nothing is shared.
+
+
+## Net
+
+
+198 lines, down thirteen despite the additions. Stating the rule once at the top
+let a later section stop restating it, and a list of "unusual properties" turned
+out to be three sentences already said better above it.
+
+
+The rename question still stands: `CLAUDE.md`, `vision`, the docs, and the
+directory all still say SoraMech, and the README now says both.
 
 
 --------------------------------------------------------------------------------
