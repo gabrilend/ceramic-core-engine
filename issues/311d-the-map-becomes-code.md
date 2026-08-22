@@ -421,10 +421,19 @@ the compiler being needed exactly when new code genuinely arrives.
    refers to the existing copy instead of carrying its own. The binary
    is iteration zero and is treated like every iteration after it.
 
-10. **The map text parser moves into the compiler**, beside the box
-    source parser, which is where it belongs once nothing at run time
-    reads text. The generator already links it; what changes is that
-    the engine stops.
+10. **Done. The map text parser moved into the compiler**, beside the
+    box source parser.
+
+    It had already stopped being part of any program before the file
+    moved: the linker discards what nothing reaches, and nothing in
+    the engine reached it once descriptions were compiled rather than
+    walked. What the move fixed was the tree claiming otherwise. The
+    engine is ten source files now and none of them reads text.
+
+    The build got simpler as a side effect — the parser used to be
+    named separately because it lived in the engine's directory and had
+    two callers, and beside the generator it is picked up like any
+    other generator source.
 
 11. **The table of box names deleted**, its last readers gone: the
     engine's parser (step 9), and the dump's question about whether a
@@ -432,8 +441,13 @@ the compiler being needed exactly when new code genuinely arrives.
     program's stations* rather than about every box ever compiled and
     should be asked of them.
 
-12. [009](../docs/009-datapath-load.md) rewritten around what replaced
-    it.
+12. **Done.** [009](../docs/009-datapath-load.md) rewritten around what
+    replaced it: four movements, only the last of them the engine's,
+    with what it costs and who pays stated rather than implied. Its two
+    passes are gone as a described structure — declaration order still
+    does not matter, but that is now one requirement expressed at build
+    time in the order the calls come out, rather than two passes at
+    startup.
 13. **Done already, and by the stronger comparison**: a program built
     from a compiled map and the same map *read as text* dump
     identically. The hand-written form is already proven identical to

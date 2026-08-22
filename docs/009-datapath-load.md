@@ -1,68 +1,94 @@
 # 009 — Datapath: loading and starting
 
-The binary holds a table of boxes and no map. The map file holds a
-map and no code. This is what happens in the moment between.
+The binary holds boxes and no map. The map file holds a map and no
+code. This is what happens in the moment between.
 
-**Reading a file has no privileges**, and that is the shape of this
-document now. It used to describe a sequence only one mechanism could
-perform — count the stations, allocate the table once, place, wire,
-validate in a phase nothing else could enter, seed, release — with a
-state called *still loading* that nothing else could be in. Every one
-of those has become an ordinary operation
-([212](../issues/completed/212-one-way-to-build-a-program.md)). What is left of
-reading a file is a reader: each line becomes calls anybody could
-make, and then it asks for the program to be brought up like anybody
-would.
+**Nothing here reads the map.** That is the shape of this document
+now, and it is the second time this document has been cut down for the
+same reason: the special thing it described stopped being special.
 
-## Two passes, for one reason
+First, reading a file lost its privileges. It used to be a sequence
+only one mechanism could perform — count the stations, allocate the
+table once, place, wire, validate in a phase nothing else could enter,
+seed, release — with a state called *still loading* that nothing else
+could be in. Every one of those became an ordinary operation
+([212](../issues/completed/212-one-way-to-build-a-program.md)), and
+what was left was a reader making calls anybody could make.
 
-Declaration order in a map file does not matter — an arrow may point at
-a station declared further down. That requires reading the file twice.
+Then the reader itself went
+([311d](../issues/311d-the-map-becomes-code.md)). A description is
+**compiled** into the calls it describes, and those calls are made. So
+there is no reading step to describe at all, and no program built with
+this engine carries a parser.
 
-**The two-pass structure survives only as that sentence**: resolve
-names after every station exists. It is not two kinds of pass any
-more, and neither pass can do anything the construction surface does
-not offer.
+## What happens instead
 
-**First pass: create every station.** For each station line, look its
-box function up in that table. That gives the shim pointer, the
-parameter count, and each parameter's type and size. Allocate the
-station's port array with one ring-buffer port per parameter — the
-default — each sized exactly `sizeof` its parameter, and record the
-station's name — through the operation that names one, **as the
-station is created**, so that the name lands on the program itself.
+A description on disk becomes a running program in four movements, and
+only the last one is the engine's.
 
-The loader used to keep a lookup table of its own for resolving
-arrows, and it does not any more: the names are on the program, so the
-program is what gets asked. That is one fewer allocation and one
-larger thing — every refusal raised from here onwards can say which
-station it is about in the word the file's author typed, instead of
-numbering it.
+**One — the compiler is asked what the description references.** A
+program that grew and then wrote itself down names boxes that arrived
+after it started, and whoever reads it back may never have heard of
+them. Anything missing is found and compiled in first. This is the
+ordinary path rather than a rescue, because a description written by a
+running program is the normal kind of description.
 
-A comparator gets one extra port on the end, typed to match the box's
-return value.
+**Two — the description is compiled.** Its text goes to the generator,
+which turns each station line into a call that adds a station, names
+it, builds it from its box, marks its door and configures its ports,
+and turns each arrow into a call that draws a wire. Then the C
+compiler that built this binary compiles that.
 
-Then apply the input lines. Each one is a call on the port
-configuration operation: a starting depth where the line gave one,
-then a source — a bare dash for none, or text for a constant, copied
-into the port at the port's own type.
+**What is compiled is the description and nothing else.** The boxes it
+names are already in the process — so what comes out declares the
+functions that build stations from them and binds to the ones the
+program published, rather than carrying a second copy of anything.
+Measured on a real one: a whole program's structure in seventeen
+kilobytes, defining no box code and asking the program for three
+station-builders.
 
-**Second pass: resolve the arrows.** By now every station exists and
-can be found by name. For each output line, turn the destination name
-into an index — the one thing here that is a fact about the file
-rather than about the program — and then draw the wire through the
-ordinary wiring operation.
+**Three — the result is loaded and its build function is called.** The
+calls are made. They are the same calls a person writing C would make,
+so a description and a hand-written program are one path with two
+authors rather than two paths that must agree.
 
-**The wire check belongs to that operation, not to loading.** Reading
-a file used to perform a width check of its own before connecting, on
-the grounds that this is the first moment both ends are known. It is,
-and the wiring operation is reached at exactly that moment, so the
-second copy bought nothing and cost something: while it existed, the
-first one could have a hole that no program read from a file would
-ever meet. It had one. A station with no input ports at all — a box
-that takes nothing and returns a value — skipped the width question
-entirely, and only a program built by calling the surface could have
-found out.
+**Four — the program is brought up**, which is the same act any caller
+performs and is described below.
+
+## What this costs, and who pays
+
+Two compiler invocations, about a tenth of a second each: one asking
+what the description wants, one building it.
+
+**A program built from its own descriptions pays none of it**, because
+the build already did the compiling and the built function is simply
+in the binary. The cost falls exactly where it should — on a program
+being handed a description it was not built for, which is the only
+case where there is genuinely new code to make.
+
+**And it buys a fault caught earlier.** A box name answering to
+nothing, and an arrow pointing at a station nobody declared, are both
+refused while the description is still text, so the complaint names
+the line. The engine could never do that: by the time it looked, there
+were no lines left.
+
+**Declaration order still does not matter**, and it costs nothing to
+say so any more. An arrow may point at a station declared further
+down, which used to require reading the file twice. The generator
+emits every station first and every wire afterwards, which is the same
+requirement expressed once, at build time, in the order the calls come
+out.
+
+**The wire check belongs to the wiring operation**, not to loading.
+Reading a file used to perform a width check of its own before
+connecting, on the grounds that this is the first moment both ends are
+known. It is, and the wiring operation is reached at exactly that
+moment, so the second copy bought nothing and cost something: while it
+existed, the first one could have a hole that no program read from a
+file would ever meet. It had one. A station with no input ports at all
+— a box that takes nothing and returns a value — skipped the width
+question entirely, and only a program built by calling the surface
+could have found out.
 
 ## Then the program is brought up, which is a separate act
 
@@ -152,5 +178,6 @@ condition somewhere in the loop, because nothing else will stop it.
 ## Related
 
 - [008 — Map file format](008-map-file-format.md), the input
-- [007 — The build path](007-datapath-build.md), the table this is read against
+- [007 — The build path](007-datapath-build.md), where a description is turned into calls
+- [311d — The map becomes code](../issues/311d-the-map-becomes-code.md), which removed the reader
 - [006 — Scheduling](006-datapath-scheduling.md), what the seed pushes into
