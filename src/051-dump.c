@@ -20,6 +20,7 @@
 #include "049-observe.h"
 #include "026-emitted.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -243,7 +244,36 @@ void map_dump(map_t *m, FILE *out)
                 free(text);
                 break;
             }
-            case IN_PORT_RING:
+            case IN_PORT_RING: {
+                /*
+                 * **Values waiting in the buffer, if any** (issue
+                 * 712). This is the difference between a schematic and
+                 * an image: what the program is shaped like, versus
+                 * what it currently holds. A port with work queued in
+                 * it writes that work down, so the program can be
+                 * picked up again rather than only rebuilt.
+                 *
+                 * In brackets, because braces already mean a struct
+                 * value and a queue is a different kind of thing —
+                 * several values where a constant has one.
+                 */
+                int waiting = in_port_waiting_text(sl, NULL, 0);
+                if (waiting > 0) {
+                    char *held = malloc((size_t)waiting + 1);
+                    if (!held) {
+                        fprintf(stderr, "dump: out of memory writing "
+                                        "waiting values\n");
+                        abort();
+                    }
+                    in_port_waiting_text(sl, held, waiting + 1);
+                    fprintf(out, "  in %d %s[%s]   # %s, %d bytes, %d "
+                                 "waiting\n",
+                            j, depth, held,
+                            sl->type_name ? sl->type_name : "?",
+                            sl->elem_size, atomic_load(&sl->held));
+                    free(held);
+                    break;
+                }
                 /* The default source; the format writes only
                  * exceptions, but the derived facts still deserve
                  * saying — and a non-default depth is an exception, so
@@ -263,6 +293,7 @@ void map_dump(map_t *m, FILE *out)
                             j, sl->type_name ? sl->type_name : "?",
                             sl->elem_size, sl->capacity);
                 break;
+            }
             case IN_PORT_NONE:
                 /*
                  * A port with no source at all, written as a bare dash

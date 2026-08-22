@@ -918,6 +918,29 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
                 }
                 if (!text)
                     continue;   /* a depth and nothing else */
+                /*
+                 * **Values waiting in a buffer** (issue 712), which is
+                 * a different call because it is a different kind of
+                 * statement: a constant says what a port *is*, and
+                 * these say what it currently *holds*.
+                 *
+                 * Emitted last among a station's port lines and made
+                 * as an ordinary delivery, so the readiness check runs
+                 * and the tasks that form are the tasks that would
+                 * have formed in the program this was captured from.
+                 */
+                if (in->is_waiting) {
+                    buf_addstr(w, "    sora_built_take("
+                                  "map_in_port_queue_text(m, at[");
+                    buf_addf(w, "%d], %d, \"", index, in->port);
+                    for (const char *c = text; *c; c++) {
+                        if (*c == '\\')     buf_addstr(w, "\\\\");
+                        else if (*c == '"') buf_addstr(w, "\\\"");
+                        else                buf_addch(w, *c);
+                    }
+                    buf_addstr(w, "\"));\n");
+                    continue;
+                }
                 buf_addstr(w, "    sora_built_take(map_configure_port(m, "
                               "at[");
                 buf_addf(w, "%d], %d, IN_PORT_STATIC, \"", index, in->port);

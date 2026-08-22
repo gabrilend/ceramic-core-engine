@@ -211,6 +211,39 @@ static void handle_in(parse_state_t *st, const char *rest)
                       "unexpected trailing words on an 'in' line — a dash "
                       "means this port has no source, so nothing follows it");
         in->is_none = 1;
+    } else if (ref[0] == '[') {
+        /*
+         * **Values waiting in the buffer** (issue 712), the form that
+         * says what a program holds rather than what it is shaped
+         * like. Everything up to the closing bracket is kept whole:
+         * the values are comma separated and a struct value has
+         * commas inside it, so only something that reads one value at
+         * a time can tell an outer comma from an inner one, and that
+         * is not this.
+         */
+        const char *open_at = strchr(after_port, '[');
+        const char *close_at = open_at ? strrchr(open_at, ']') : NULL;
+        if (!close_at)
+            die_parse(st->path, st->line,
+                      "a list of waiting values opened with '[' and never "
+                      "closed");
+        for (const char *after = close_at + 1; *after; after++)
+            if (*after != ' ' && *after != '\t' && *after != '#')
+                die_parse(st->path, st->line,
+                          "unexpected text after the waiting values");
+            else if (*after == '#')
+                break;
+
+        size_t len = (size_t)(close_at - open_at - 1);
+        char *held = malloc(len + 1);
+        if (!held)
+            die_parse(st->path, st->line, "out of memory");
+        memcpy(held, open_at + 1, len);
+        held[len] = 0;
+
+        in->is_waiting = 1;
+        in->is_static = 0;
+        in->text = held;
     } else if (!ref[0] && in->depth > 0) {
         /*
          * A depth and nothing else: **a buffer this deep**, fed by
@@ -230,7 +263,8 @@ static void handle_in(parse_state_t *st, const char *rest)
         in->text = NULL;
     } else {
         die_parse(st->path, st->line,
-                  "expected '$entry', '= value', '-', or a depth alone; a "
+                  "expected '$entry', '= value', '[values]', '-', or a "
+                  "depth alone; a "
                   "bare station name here meant 'gather from that station', "
                   "and there is no pull path any more");
     }

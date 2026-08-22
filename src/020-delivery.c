@@ -761,6 +761,47 @@ int map_station_try_start(map_t *m, int station)
 }
 /* }}} */
 
+/* {{{ map_station_start_while_ready() — issue 712 */
+/*
+ * **Keep starting while the station stays ready**, which is what the
+ * one rule says should happen and what asking once does not do.
+ *
+ * The gap this closes is narrow and was invisible until a program was
+ * revived from a capture. On the delivery path, asking once is
+ * enough: a value arrives, at most one task can become due, and the
+ * next value asks again. But a port can *accumulate* while another
+ * port has nothing — and then that other port fills all at once, by a
+ * constant being bound to it or by a revival putting a queue back.
+ * At that moment the station is ready several times over, and the
+ * single ask started one task and stranded the rest.
+ *
+ * A station whose every port is a static is ready forever, because a
+ * constant is never consumed — so looping on one would never stop.
+ * It is left alone here: nothing accumulates in a station with no
+ * buffer, so there is never more than one start owed to it, and the
+ * seed sweep already gives it that one.
+ *
+ * Returns how many tasks became due.
+ */
+int map_station_start_while_ready(map_t *m, int station)
+{
+    station_t *s = map_station(m, station);
+
+    int has_ring = 0;
+    for (int j = 0; j < s->n_in_ports; j++)
+        if (atomic_load_explicit(&s->in_ports[j].kind,
+                                 memory_order_relaxed) == IN_PORT_RING)
+            has_ring = 1;
+    if (!has_ring)
+        return map_station_try_start(m, station);
+
+    int started = 0;
+    while (map_station_try_start(m, station))
+        started++;
+    return started;
+}
+/* }}} */
+
 /* {{{ map_deliver_value() */
 int map_deliver_value(map_t *m, int station, int port, const void *value)
 {

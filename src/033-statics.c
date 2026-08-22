@@ -48,6 +48,7 @@
 #include "091-stopping.h"
 
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -570,54 +571,123 @@ void sora_text_put_chars(sora_textbuf_t *tb, const char *chars, int room)
 }
 /* }}} */
 
+/* {{{ static void value_text() */
+/*
+ * One value of this port's type, written down. The bytes are given
+ * rather than taken from the port, because two different things are
+ * written with the same grammar: the constant a static port holds,
+ * and each value waiting in a ring buffer when a running program is
+ * captured (issue 712).
+ *
+ * The port is still needed — it says what shape the bytes are — but
+ * not as the place the bytes come from.
+ */
+static void value_text(const in_port_t *sl, const void *bytes,
+                       const char *string, textbuf_t *tb)
+{
+    where_t w = { -1, -1 };   /* the port is the caller's to name here */
+    {
+        const struct_text_t *si = NULL;
+        switch (classify_port(sl, &si)) {
+        case TN_INT:
+            tb_addf(tb, "%lld", read_integer(bytes, sl->elem_size, &w));
+            break;
+        case TN_UINT:
+            tb_addf(tb, "%llu", read_unsigned(bytes, sl->elem_size, &w));
+            break;
+        case TN_FLOAT:
+            float_text(tb, read_float(bytes, sl->elem_size, &w),
+                       sl->elem_size);
+            break;
+        case TN_STRING: {
+            /* The value is a pointer; the characters live wherever
+             * whoever produced them put them. A constant's are the
+             * port's own, which is what makes handing the pointer out
+             * sound; a queued one's belong to whatever delivered it.
+             * Escaped on the way out (issue 408), so text holding a
+             * quote does not end its own line early. */
+            const char *str = string;
+            if (!str) {
+                const char *from_bytes = NULL;
+                memcpy(&from_bytes, bytes, sizeof from_bytes);
+                str = from_bytes;
+            }
+            write_quoted(tb, str ? str : "", str ? (int)strlen(str) : 0);
+            break;
+        }
+        case TN_STRUCT:
+            si->write(bytes, tb);
+            break;
+        default:
+            tb_addf(tb, "?");
+            break;
+        }
+    }
+}
+/* }}} */
+
 /* {{{ in_port_constant_text() */
 int in_port_constant_text(const in_port_t *sl, char *out, int room)
 {
-    where_t w = { -1, -1 };   /* the port is the caller's to name here */
     textbuf_t tb = { out, room, 0 };
     if (room > 0)
         out[0] = 0;
 
-    if (!sl->constant_set) {
+    if (!sl->constant_set)
         tb_addf(&tb, "?");
-    } else {
-        const struct_text_t *si = NULL;
-        switch (classify_port(sl, &si)) {
-        case TN_INT:
-            tb_addf(&tb, "%lld",
-                    read_integer(sl->constant, sl->elem_size, &w));
-            break;
-        case TN_UINT:
-            tb_addf(&tb, "%llu",
-                    read_unsigned(sl->constant, sl->elem_size, &w));
-            break;
-        case TN_FLOAT:
-            float_text(&tb, read_float(sl->constant, sl->elem_size, &w),
-                       sl->elem_size);
-            break;
-        case TN_STRING: {
-            /* The value is a pointer; the characters are the port's
-             * own, which is what makes handing the pointer out sound.
-             * Escaped on the way out (issue 408), so a constant
-             * holding a quote does not end its own text early. */
-            const char *s = sl->constant_string ? sl->constant_string : "";
-            write_quoted(&tb, s, (int)strlen(s));
-            break;
-        }
-        case TN_STRUCT:
-            si->write(sl->constant, &tb);
-            break;
-        default:
-            tb_addf(&tb, "?");
-            break;
-        }
-    }
+    else
+        value_text(sl, sl->constant, sl->constant_string, &tb);
 
     /* vsnprintf terminates whatever it wrote; an empty buffer had
      * nowhere to be terminated and was handled above. */
     if (room > 0 && tb.used >= room)
         out[room - 1] = 0;
     return tb.used;
+}
+/* }}} */
+
+/* {{{ in_port_waiting_text() — issue 712 */
+/*
+ * **Every value waiting in this port's buffer, written down**, so a
+ * running program can be put on disk and picked up again rather than
+ * only described.
+ *
+ * Comma-separated, in slot order, which is **not** an order the
+ * engine promises anywhere: the guarantees page says plainly that
+ * nothing is promised about the order values leave a port, because a
+ * port has no head and no tail — a reader takes any ready slot near a
+ * hint. So this writes them in the order they are stored, and a
+ * revival delivers them back in that order, which is exactly as
+ * faithful as the engine itself is. Promising more would be inventing
+ * a guarantee at the moment of writing a file.
+ *
+ * Returns how many characters it wanted, in the same contract the
+ * constant writer offers, so a caller asks for the length and then
+ * writes.
+ */
+int in_port_waiting_text(const in_port_t *sl, char *out, int room)
+{
+    textbuf_t tb = { out, room, 0 };
+    if (room > 0)
+        out[0] = 0;
+
+    int written = 0;
+    int capacity = atomic_load(&sl->capacity);
+    for (int i = 0; i < capacity; i++) {
+        void *slot = in_port_slot(sl, i);
+        if (!slot || slot_state_at(slot, sl->elem_size) != SLOT_READY)
+            continue;
+        if (written++)
+            tb_addf(&tb, ", ");
+        /* A queued string's characters are wherever the deliverer put
+         * them, so there is no second pointer to consult; the bytes
+         * in the slot are the pointer. */
+        value_text(sl, slot, NULL, &tb);
+    }
+
+    if (room > 0 && tb.used >= room)
+        out[room - 1] = 0;
+    return written ? tb.used : 0;
 }
 /* }}} */
 
@@ -657,9 +727,32 @@ void in_port_constant_free(in_port_t *sl)
  * that pointer, and freeing what it points at is freeing something a
  * box may still be looking at.
  */
+static void port_text_to_bytes_ending(const in_port_t *sl, const char *text,
+                                      unsigned char *into,
+                                      char **owned_string,
+                                      const where_t *w,
+                                      const char **end);
+
 static void port_text_to_bytes(const in_port_t *sl, const char *text,
                                unsigned char *into, char **owned_string,
                                const where_t *w)
+{
+    port_text_to_bytes_ending(sl, text, into, owned_string, w, NULL);
+}
+
+
+/*
+ * The same reading, saying where it stopped. A list of waiting values
+ * is comma separated and a struct value has commas inside it, so the
+ * only way to find the separator is to read one value and see where
+ * it ended (issue 712). With `end` null this behaves as it always
+ * did: whatever follows the value is trailing text and a fault.
+ */
+static void port_text_to_bytes_ending(const in_port_t *sl, const char *text,
+                                      unsigned char *into,
+                                      char **owned_string,
+                                      const where_t *w,
+                                      const char **end)
 {
     unsigned char *fresh = into;
     char *fresh_string = NULL;
@@ -667,27 +760,30 @@ static void port_text_to_bytes(const in_port_t *sl, const char *text,
     const struct_text_t *si = NULL;
     switch (classify_port(sl, &si)) {
     case TN_INT: {
-        char *end;
-        long long v = strtoll(text, &end, 0);
-        if (end == text)
+        char *stop;
+        long long v = strtoll(text, &stop, 0);
+        if (stop == text)
             die_static(w, "an integer port wants a number");
         write_integer(v, fresh, sl->elem_size, w);
+        if (end) *end = stop;
         break;
     }
     case TN_UINT: {
-        char *end;
-        unsigned long long v = strtoull(text, &end, 0);
-        if (end == text)
+        char *stop;
+        unsigned long long v = strtoull(text, &stop, 0);
+        if (stop == text)
             die_static(w, "an unsigned port wants a number");
         write_unsigned(v, fresh, sl->elem_size, w);
+        if (end) *end = stop;
         break;
     }
     case TN_FLOAT: {
-        char *end;
-        double v = strtod(text, &end);
-        if (end == text)
+        char *stop;
+        double v = strtod(text, &stop);
+        if (stop == text)
             die_static(w, "a floating port wants a number");
         write_float(v, fresh, sl->elem_size, w);
+        if (end) *end = stop;
         break;
     }
     case TN_STRING: {
@@ -706,13 +802,19 @@ static void port_text_to_bytes(const in_port_t *sl, const char *text,
             fresh_string = malloc((size_t)room + 1);
             if (!fresh_string)
                 die_static(w, "out of memory for string storage");
-            read_quoted(text, fresh_string, room, &len, "a string constant", w);
+            const char *stop = read_quoted(text, fresh_string, room, &len,
+                                           "a string constant", w);
+            if (end) *end = stop;
         } else {
             len = (int)strlen(text);
             fresh_string = malloc((size_t)len + 1);
             if (!fresh_string)
                 die_static(w, "out of memory for string storage");
             memcpy(fresh_string, text, (size_t)len);
+            /* Unquoted text runs to the end of what it was given, so
+             * it can only be the last value — which is why a list of
+             * waiting strings has to quote every one of them. */
+            if (end) *end = text + len;
         }
         fresh_string[len] = 0;
         if (sl->elem_size != (int)sizeof(const char *))
@@ -724,7 +826,9 @@ static void port_text_to_bytes(const in_port_t *sl, const char *text,
         if (si->size != sl->elem_size)
             die_static(w, "struct size disagrees with the port");
         const char *after = si->read(text, fresh, w);
-        if (*skip_ws(after) != 0)
+        if (end)
+            *end = after;
+        else if (*skip_ws(after) != 0)
             die_static(w, "trailing text after the struct value");
         break;
     }
@@ -789,7 +893,7 @@ void map_in_port_static_text(map_t *m, int station, int port, const char *text)
      * to push and the loader is still assembling — the seed sweep is
      * what starts a freshly loaded map, deliberately and once. */
     if (m->pool)
-        map_station_try_start(m, station);
+        map_station_start_while_ready(m, station);
 }
 /* }}} */
 
@@ -933,6 +1037,116 @@ const char *map_deliver_command_line(map_t *m, int argc, char **argv)
     }
 
     return no;
+}
+/* }}} */
+
+/* {{{ map_in_port_queue_text() — issue 712 */
+/*
+ * **Values put back into a buffer**, from the text a capture wrote.
+ *
+ * This is the revival half of writing a running program down. The
+ * text is what stood between the brackets on an `in` line: values
+ * separated by commas, read one at a time because a struct value has
+ * commas inside it and only reading one can tell an outer comma from
+ * an inner one.
+ *
+ * **Each value goes in through the ordinary delivery**, which is what
+ * makes a revival faithful rather than approximate. Delivering runs
+ * the readiness check, so a station whose ports refill becomes ready
+ * exactly as it would have, and the tasks that form are the tasks
+ * that would have formed. Nothing is reconstructed; the same door is
+ * used.
+ *
+ * **The order is the order the text gives**, which the engine does
+ * not promise means anything — a port has no head and no tail. A
+ * capture writes slots as it finds them and this puts them back that
+ * way, which is exactly as faithful as the engine is about order.
+ *
+ * Returns NULL, or a refusal naming what went wrong.
+ */
+const char *map_in_port_queue_text(map_t *m, int station, int port,
+                                   const char *text)
+{
+    static _Thread_local char said[256];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said, "station %d is outside the table",
+                 station);
+        return said;
+    }
+    station_t *s = map_station(m, station);
+    if (port < 0 || port >= s->n_in_ports) {
+        snprintf(said, sizeof said, "station %d has no port %d — it has %d",
+                 station, port, s->n_in_ports);
+        return said;
+    }
+    in_port_t *sl = &s->in_ports[port];
+    if (!sl->type_name) {
+        snprintf(said, sizeof said,
+                 "station %d port %d has no declared type, so waiting values "
+                 "have no shape to become", station, port);
+        return said;
+    }
+    if (atomic_load(&sl->kind) != IN_PORT_RING) {
+        snprintf(said, sizeof said,
+                 "station %d port %d is not a buffer, so nothing can be "
+                 "waiting in it", station, port);
+        return said;
+    }
+    if (!text)
+        return "waiting values with no text";
+
+    where_t w = { station, port };
+    const char *p = text;
+
+    for (;;) {
+        while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+            p++;
+        if (!*p)
+            break;
+
+        unsigned char *bytes = calloc(1, (size_t)sl->elem_size);
+        if (!bytes)
+            return "out of memory reading a waiting value";
+
+        char *owned = NULL;
+        const char *end = p;
+        port_text_to_bytes_ending(sl, p, bytes, &owned, &w, &end);
+
+        /* Through the ordinary door, so the readiness check runs and
+         * the station wakes exactly as it would have. `owned` is a
+         * string's characters and is not freed, for the same reason a
+         * delivered argument's are not: the value handed on is a
+         * pointer, and whatever it points at has to outlive every box
+         * that might read it.
+         *
+         * **Nothing is checked about whether it landed**, because a
+         * buffer with nowhere to put a value grows a page rather than
+         * refusing one — so a delivery cannot fail for want of room.
+         * What comes back says whether a *task* became due, which is
+         * a fact about the station and not about this value. Reading
+         * it as success was the first thing written here and it was
+         * wrong for every value that did not complete a station,
+         * which is most of the values a capture holds.
+         */
+        map_deliver_value(m, station, port, bytes);
+        free(bytes);
+
+        p = end;
+        while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+            p++;
+        if (*p == ',') {
+            p++;
+            continue;
+        }
+        if (!*p)
+            break;
+        snprintf(said, sizeof said,
+                 "station %d port %d: expected ',' or the end of the waiting "
+                 "values, and found '%c'", station, port, *p);
+        return said;
+    }
+    return NULL;
 }
 /* }}} */
 

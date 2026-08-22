@@ -175,7 +175,7 @@ letter of redundancy buys an error instead of a wrong answer.
 ## Input lines
 
 **A port is a ring buffer unless a line says otherwise.** There are
-three ways for a line to say otherwise, and all carry the port index:
+four ways for a line to say otherwise, and all carry the port index:
 
 ```
 in 1 $0        port 1 holds the value written at statics entry 0
@@ -183,6 +183,7 @@ in 1 = 5       port 1 holds 5
 in 2 = { 1.5, 2.5, 3.5 }       and a struct is written the same way
 in 3 -         port 3 has no source yet
 in 4 x64 $1    port 4 reads statics entry 1, starting 64 slots deep
+in 5 [7, 9]    port 5 is a buffer with two values waiting in it
 ```
 
 So `split` above has no input lines at all — every port is an ordinary
@@ -206,6 +207,29 @@ wrote.
 
 The `$` is there because `in 1 0` reading as "static entry zero" is not
 something anyone will guess a year from now.
+
+**The fourth form says what the port is *holding*, not what it is.**
+Every other line here describes the program's shape; this one describes
+its contents, which is the difference between a schematic and an image
+of a running program (issue 712). A buffer with work waiting in it
+writes that work down, so the program can be picked up again rather
+than only rebuilt.
+
+Brackets rather than braces, because braces already mean a struct
+value and a queue is a different kind of thing — several values where
+a constant has one. The values are comma separated and a struct value
+has commas inside it, so a reader finds the separator by reading one
+value and seeing where it ended; there is no way to split the line
+first and read afterwards.
+
+**The order is the order the file gives, and it means nothing**, which
+is worth saying plainly rather than leaving to be assumed. A port has
+no head and no tail: [058](058-guarantees.md) promises nothing about
+the order values leave one, because a reader takes whichever ready slot
+it finds near a hint. A capture writes the slots as it finds them and a
+revival puts them back that way, which is exactly as faithful as the
+engine is. A file that appeared to promise an order would be inventing
+a guarantee at the moment of being written.
 
 **The third form is a port with no source at all.** A station can be
 created before it is wired, so a port may be unconfigured — a state,

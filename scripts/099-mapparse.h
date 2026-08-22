@@ -58,6 +58,23 @@ typedef struct desc_input {
      * value and not a third kind of value — a state, in which the
      * station simply never becomes ready. */
     int   is_none;
+    /*
+     * **Values waiting in the buffer**, written `[a, b, c]` (issue
+     * 712). This is the one form that describes what a program
+     * *holds* rather than what it is shaped like — the difference
+     * between a schematic and an image of a running program.
+     *
+     * The text is everything between the brackets, kept whole,
+     * because the values are separated by commas and a struct value
+     * has commas inside it. Whoever consumes this splits it by
+     * reading one value at a time, which is the only way to tell an
+     * outer comma from an inner one.
+     *
+     * Brackets rather than braces because braces already mean a
+     * struct value; a queue is a different kind of thing, several
+     * values where a constant has one.
+     */
+    int   is_waiting;
     /* A starting depth, written `x64` before the source; zero when
      * the line did not say. It sits before the source because the
      * inline value form runs to the end of the line, so nothing can

@@ -10,22 +10,34 @@ revived rather than described and rebuilt.
 
 ## Current behavior
 
-**The dump writes the shape and nothing else.** It walks the live
-station table — never any remembered file text — and writes stations,
-box names, kinds, wiring, and the constants sitting on ports. The map
-file format document says so plainly: *it is a schematic, not a save
-file; it does not hold data that persists between runs.*
+**Work waiting in a buffer is captured and revived.** A dump writes
+what each ring-buffer port is holding, in brackets, and reading it back
+puts those values into the port through the ordinary delivery — so the
+readiness check runs and the tasks that form are the tasks that would
+have formed. A program with work in flight can be written down, picked
+up in a fresh process, and go on from where it was.
 
-**What is therefore lost when a program ends:**
+Proven three ways: work waiting survives the round trip; capturing the
+revived program produces the same text again; and a queue of struct
+values survives with its inner commas intact, which is the case that
+decides whether the format can be read at all.
 
-- every value sitting in a ring buffer, which is all the work in flight
-- every task already built and waiting in the pool
+**A gap in the engine surfaced doing it, and is closed.** A station
+whose buffer had filled while another port was empty started exactly
+one task when that other port finally filled, and stranded the rest.
+The one rule says a station runs whenever every port holds a value, and
+asking once is only enough when values arrive one at a time. Now the
+question is asked until the answer is no — except of a station whose
+every port is a constant, which is ready forever because a constant is
+never consumed.
+
+**What is still lost when a program ends:**
+
+- every task already built and waiting in the pool, unless it drained
 - each iterator's cursor — the station header calls it *the one memory
   a station keeps*
 - the statistics counters
-
-So a program that has been running for an hour and has half its work
-queued up can be described, and cannot be resumed.
+- boxes that arrived while it ran, if the artifact has to stand alone
 
 ## Why this engine can do what most cannot
 
@@ -147,12 +159,24 @@ this shape on the way out of a dying program.
 
 ## Open questions
 
-- **How is the drain's bound expressed?** A clock is the obvious answer
-  and this project has refused one before — the reasoning that keeps a
-  timeout out of the shutdown path applies with equal force here, since
-  any number is wrong on a faster machine and wrong differently on a
-  slower one. A count of idle sweeps, or a number of times the pool was
-  observed unchanged, may be the honest form. Undecided.
+**Answered: how is the drain's bound expressed?** **It is not. The
+bound belongs to whoever asked for the capture, and the reasoning was
+already written down next door.**
+
+The waiting path says it plainly: *it borrows a clock rather than
+inventing one*, because whatever sent the signal already has a timer,
+and that supervisor's clock is the only one in the system that knows
+how long is too long for this deployment. A guess made in the engine is
+wrong on a slow machine and wrong differently on a fast one.
+
+Nothing about a capture changes that. "Quiet" is decidable exactly —
+the pool knows when the queue is empty and every worker is asleep — so
+the only unbounded case is a box that never returns, and no signal
+inside the process can tell that from a box that is merely slow. The
+second interrupt already escapes, and the report already names which
+station each worker was stuck in.
+
+**Outstanding:**
 - **Are the statistics counters restored or reset?** A revived program
   that reports a million runs has not run a million times in this
   process, and a revived program reporting zero has thrown away the

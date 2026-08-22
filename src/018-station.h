@@ -1264,6 +1264,26 @@ int map_in_port_depth(map_t *m, int station, int port);
  */
 int map_station_try_start(map_t *m, int station);
 
+/* {{{ map_station_start_while_ready() — issue 712 */
+/*
+ * Keep starting while the station stays ready, and say how many tasks
+ * became due.
+ *
+ * Asking once is enough on the delivery path — one value arrives, at
+ * most one task can become due. It is not enough when a port fills
+ * *all at once* while another port has values stacked up in it: a
+ * constant being bound, or a revived program putting a captured queue
+ * back. The station is then ready several times over, and asking once
+ * strands the rest.
+ *
+ * A station whose every port is a constant is ready forever, because
+ * a constant is never consumed. Such a station is asked once and left
+ * alone, which is right: nothing accumulates where there is no
+ * buffer.
+ */
+int map_station_start_while_ready(map_t *m, int station);
+/* }}} */
+
 /*
  * The same thing, with a piece of work done inside the station's hold
  * before the check runs (issue 210d).
@@ -1407,6 +1427,37 @@ int   slot_move_at(void *slot, int elem_size, int from, int to);
  * compare-and-swap above is what makes the loser go elsewhere.
  */
 int   slot_state_at(const void *slot, int elem_size);
+
+/* {{{ in_port_waiting_text() — issue 712 */
+/*
+ * Every value waiting in this port's buffer, written down as text,
+ * comma separated. Returns how many characters it wanted — ask with
+ * no room, allocate, ask again — and zero when nothing is waiting.
+ *
+ * The order is slot order, which the engine does not promise means
+ * anything: a port has no head and no tail, and the guarantees page
+ * says nothing is promised about the order values leave one. A
+ * capture writes them as stored and a revival delivers them back that
+ * way, which is exactly as faithful as the engine is.
+ */
+int in_port_waiting_text(const in_port_t *sl, char *out, int room);
+/* }}} */
+
+/* {{{ map_in_port_queue_text() — issue 712 */
+/*
+ * Values put back into a buffer, from the text a capture wrote:
+ * comma separated, read one at a time because a struct value has
+ * commas inside it.
+ *
+ * Each goes in through the ordinary delivery, so the readiness check
+ * runs and the tasks that form are the tasks that would have formed.
+ * Nothing is reconstructed; the same door is used.
+ *
+ * Returns NULL, or a refusal naming what went wrong.
+ */
+const char *map_in_port_queue_text(map_t *m, int station, int port,
+                                   const char *text);
+/* }}} */
 void  slot_set_at(void *slot, int elem_size, int to);
 /* }}} */
 
