@@ -32,7 +32,6 @@
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
-<a href="issue-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
@@ -117,6 +116,7 @@
 <a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
 <a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
@@ -172,7 +172,7 @@ confidence.</p>
 <tr><td>709 — slideshow and transcripts</td><td>open</td><td>An introduction, and the conversation logs as a book.</td></tr>
 <tr><td><a href="issue-710-demos-after-the-pull-path.html">710 — demos after the pull path</a></td><td><strong>superseded</strong></td><td>Every scene that showed pulling is rewritten; the launcher reads a list instead of globbing. The three programs it repairs no longer exist — see 713.</td></tr>
 <tr><td><a href="issue-711-the-index-means-reading-order.html">711 — the index means reading order</a></td><td><strong>rule written, tool built</strong>, order not yet changed</td><td>An index means where a file sits in the reading order and nothing else — stated in the table of contents, where a reader arrives. The renumbering tool takes a desired order, refuses anything missing or duplicated, renames through git and rewrites every reference; its <code>--check</code> mode reports indexed filenames mentioned anywhere that are not files, and found two stale ones in a header on its first run. What is left is the judgement: four places the sequence stops reading well are written down, and moving fifty files should be argued about first.</td></tr>
-<tr><td><a href="issue-712-capturing-a-running-program.html">712 — capturing a running program</a></td><td>open</td><td>Not the schematic but the whole thing: drain the pool, write out every value still sitting in a port, and revive it exactly there. Feasible only because a box may not remember anything between calls, so there is no hidden state to miss.</td></tr>
+<tr><td><a href="done-712-capturing-a-running-program.html">712 — capturing a running program</a></td><td><strong>complete</strong></td><td>Not the schematic but the whole thing: shut the entrance, let the pool drain, write out every value still sitting in a port and every iterator's place in its exits, and revive it exactly there. Feasible only because a box may not remember anything between calls, so there is no hidden state to miss. Two doors, because a program that cannot drain is when a capture is worth most — the second writes anyway and names what it lost, and reading such an artifact is refused unless the caller asks for salvage by a different name. A program that grew boxes captures into a directory carrying its sources, since a description of one otherwise names a function nobody has. Proving it exposed a readiness gap the engine had carried since constants went onto ports.</td></tr>
 <tr><td><a href="issue-713-demos-you-can-steer.html">713 — the demos you can steer</a></td><td>open, <strong>in progress</strong></td><td>The paged demos are deleted and replaced by one live control panel per phase: three regions, levers the reader moves, and a log of what the engine did about it.</td></tr>
 </table>
 <p>**The demos were deleted, and the reason is a disagreement about

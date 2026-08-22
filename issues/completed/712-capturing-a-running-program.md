@@ -122,8 +122,8 @@ program grew code.**
 
 That second case needs the toolchain, and it needs it precisely when
 new code genuinely arrived — which is the rule
-[310](completed/310-boxes-compiled-at-runtime.md) and
-[311d](completed/311d-the-map-becomes-code.md) already set, arrived at
+[310](310-boxes-compiled-at-runtime.md) and
+[311d](311d-the-map-becomes-code.md) already set, arrived at
 independently. A capture does not make the toolchain a new dependency;
 it inherits the one that was already there.
 
@@ -133,9 +133,9 @@ Separate from the artifact and meant for a person: what the buffers
 held and how deep, which stations had run how many times, which box
 functions were added or changed while it ran, and what did not drain.
 The counters and buffer depths that
-[701](completed/701-buffer-growth-reporting.md) and
-[702](completed/702-station-statistics.md) already gather are most of
-it, and [106](completed/106-stopping-on-purpose.md) already writes something of
+[701](701-buffer-growth-reporting.md) and
+[702](702-station-statistics.md) already gather are most of
+it, and [106](106-stopping-on-purpose.md) already writes something of
 this shape on the way out of a dying program.
 
 ## Suggested implementation steps
@@ -155,7 +155,7 @@ this shape on the way out of a dying program.
 
    **Neither invents a bound**, which is the open question below
    answered by not needing an answer. It is
-   [106](completed/106-stopping-on-purpose.md)'s sequence with a
+   [106](106-stopping-on-purpose.md)'s sequence with a
    different ending, and it reuses what was already there: the entrance
    shuts, the pool drains to the last-sleeper rule, and the pool
    already knew which station each worker was inside.
@@ -214,9 +214,26 @@ this shape on the way out of a dying program.
    capture is a directory obviously missing its description rather than
    one whose description names sources that are not there. The first
    cannot be mistaken for whole; the second can.
-7. The report, drawn from counters that already exist.
+7. **Done.** A report beside the description rather than inside it:
+   what each station did, which buffers ran deep and how often they
+   grew, which boxes arrived while the program ran, and whether
+   anything was still inside a box when it was written.
+
+   **Nothing in it is measured for it.** Run counts and produced counts
+   were already kept by [702](702-station-statistics.md),
+   buffer depths and growths by
+   [701](701-buffer-growth-reporting.md), the late arrivals by
+   [310](310-boxes-compiled-at-runtime.md). A report needing
+   its own instrumentation would be a report that changed what it was
+   reporting on.
+
+   Separate from the description on purpose: that is read by a machine
+   and has to mean exactly one thing, and this is read by somebody
+   deciding whether the capture was worth taking.
 
 ## Open questions
+
+**None outstanding.**
 
 **Answered: how is the drain's bound expressed?** **It is not. The
 bound belongs to whoever asked for the capture, and the reasoning was
@@ -236,37 +253,58 @@ second interrupt already escapes, and the report already names which
 station each worker was stuck in.
 
 **Outstanding:**
-- **Are the statistics counters restored or reset?** A revived program
-  that reports a million runs has not run a million times in this
-  process, and a revived program reporting zero has thrown away the
-  history the capture existed to keep. It may want both numbers,
-  which means the report gains a column rather than the engine gaining
-  a decision.
+- **Are the statistics counters restored or reset?** **Reset, and the
+  history is in the report** — which is the answer this question
+  guessed at, arrived at by building rather than by deciding.
+
+  The description does not carry a counter and should not: it says what
+  a program *is*, and how many times something has run is not that. The
+  report beside it says what the program had done. So a revived program
+  honestly reports what it has done in this process, and what it did
+  before is a file somebody can read, which is the shape the question
+  hoped for — the report gained a column and the engine gained no
+  decision.
+
 - **Does a revived program keep its identity for the transcripts and
-  the demos?** Two programs revived from one artifact are the same
-  program twice, and nothing currently says whether that matters.
+  the demos?** **No, because there is nothing to keep.** Nothing in
+  this engine gives a program an identity — no name, no number, nothing
+  that outlives the process. Two programs revived from one artifact are
+  two programs in exactly the way two programs built from one
+  description are.
+
+  So this is not a property being lost in the capture; it is a property
+  that has never existed. If it is ever wanted it is something to add,
+  and the place to add it is wherever transcripts decide what they are
+  transcribing, not here.
+
 - **What does an incomplete artifact do to the round-trip guarantee?**
-  Capture, revive, capture is not expected to produce identical text
-  when the first capture lost work, and the property should be stated
-  as holding only for complete captures rather than quietly failing for
-  the other kind.
+  **Nothing, because the ordinary door will not read one.** The
+  guarantee is that a description written down and read back gives the
+  same program, and it holds for every artifact that door accepts.
+
+  An incomplete capture is refused there by name, and salvaging one is
+  a different act with a different name, so there is no path on which
+  the promise quietly weakens. The question expected the guarantee to
+  need qualifying; refusing turned out to be cheaper than qualifying,
+  and it says the same thing more usefully — to the person holding the
+  file rather than to the person reading the guarantees page.
 
 ## Related
 
-- [703 — Dumping the loaded map](completed/703-map-dump.md), the
+- [703 — Dumping the loaded map](703-map-dump.md), the
   schematic this stands on and does not replace
-- [106 — Stopping on purpose](completed/106-stopping-on-purpose.md), whose
+- [106 — Stopping on purpose](106-stopping-on-purpose.md), whose
   stop-the-world sequence this reuses with a different ending
-- [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
+- [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   which is why a captured program may contain code the binary does not
-- [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md),
+- [311c — Source rides in the binary](311c-source-rides-in-the-binary.md),
   which already puts every box's text in the artifact
-- [311d — The map becomes code](completed/311d-the-map-becomes-code.md), whose
+- [311d — The map becomes code](311d-the-map-becomes-code.md), whose
   rule about when a toolchain is needed this inherits exactly
-- [701 — Buffer growth reporting](completed/701-buffer-growth-reporting.md)
-  and [702 — Station statistics](completed/702-station-statistics.md),
+- [701 — Buffer growth reporting](701-buffer-growth-reporting.md)
+  and [702 — Station statistics](702-station-statistics.md),
   which already gather what the report needs
-- [008 — Map file format](../docs/008-map-file-format.md), which gains
+- [008 — Map file format](../../docs/008-map-file-format.md), which gains
   the queued-value form
-- [058 — Guarantees](../docs/058-guarantees.md), where the round trip
+- [058 — Guarantees](../../docs/058-guarantees.md), where the round trip
   is promised and will need qualifying

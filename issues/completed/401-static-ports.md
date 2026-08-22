@@ -160,7 +160,7 @@ twenty-nine, silently.
 The fix is to keep asking until the answer is no, at every door where a
 port fills all at once: a constant bound, a constant written, and a
 captured queue put back
-([712](../712-capturing-a-running-program.md)).
+([712](712-capturing-a-running-program.md)).
 
 **A station whose every port is a constant is the exception**, and it
 has to be, because a constant is never consumed — such a station is

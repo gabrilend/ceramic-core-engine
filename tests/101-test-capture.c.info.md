@@ -132,8 +132,7 @@ has. The scene finds the late box's file by asking the running program
 what it is filed under, rather than by knowing where the compiler
 happened to put it.
 
-## What it does not cover
-
-The report a person reads — buffer depths, run counts, which boxes
-arrived while it ran — which is the last step on
-[712](../issues/712-capturing-a-running-program.md).
+The same scene checks the report written beside the description: that
+it names and counts the box which arrived while the program ran, and
+says what each station did by the name its author gave it. Nothing in
+the report is measured for it — every number was already being kept.

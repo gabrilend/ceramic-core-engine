@@ -32,7 +32,6 @@
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
-<a href="issue-712-capturing-a-running-program.html" class="here">712 — Capturing a running program</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
@@ -117,6 +116,7 @@
 <a href="done-704-runtime-rewiring.html">704 — Rewiring while it runs</a>
 <a href="done-706-phase-7-demo.html">706 — Phase 7 demo: watching it think</a>
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
+<a href="done-712-capturing-a-running-program.html" class="here">712 — Capturing a running program</a>
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
@@ -338,8 +338,22 @@ this shape on the way out of a dying program.</p>
    capture is a directory obviously missing its description rather than
    one whose description names sources that are not there. The first
    cannot be mistaken for whole; the second can.
-7. The report, drawn from counters that already exist.</p>
+7. <strong>Done.</strong> A report beside the description rather than inside it:
+   what each station did, which buffers ran deep and how often they
+   grew, which boxes arrived while the program ran, and whether
+   anything was still inside a box when it was written.</p>
+<p>   <strong>Nothing in it is measured for it.</strong> Run counts and produced counts
+   were already kept by <a href="done-702-station-statistics.html">702</a>,
+   buffer depths and growths by
+   <a href="done-701-buffer-growth-reporting.html">701</a>, the late arrivals by
+   <a href="done-310-boxes-compiled-at-runtime.html">310</a>. A report needing
+   its own instrumentation would be a report that changed what it was
+   reporting on.</p>
+<p>   Separate from the description on purpose: that is read by a machine
+   and has to mean exactly one thing, and this is read by somebody
+   deciding whether the capture was worth taking.</p>
 <h2>Open questions</h2>
+<p><strong>None outstanding.</strong></p>
 <p><strong>Answered: how is the drain's bound expressed?</strong> **It is not. The
 bound belongs to whoever asked for the capture, and the reasoning was
 already written down next door.**</p>
@@ -356,21 +370,41 @@ second interrupt already escapes, and the report already names which
 station each worker was stuck in.</p>
 <p><strong>Outstanding:</strong></p>
 <ul>
-<li><strong>Are the statistics counters restored or reset?</strong> A revived program</li>
-<p>  that reports a million runs has not run a million times in this
-  process, and a revived program reporting zero has thrown away the
-  history the capture existed to keep. It may want both numbers,
-  which means the report gains a column rather than the engine gaining
-  a decision.</p>
-<li>**Does a revived program keep its identity for the transcripts and</li>
-<p>  the demos?** Two programs revived from one artifact are the same
-  program twice, and nothing currently says whether that matters.</p>
-<li><strong>What does an incomplete artifact do to the round-trip guarantee?</strong></li>
-<p>  Capture, revive, capture is not expected to produce identical text
-  when the first capture lost work, and the property should be stated
-  as holding only for complete captures rather than quietly failing for
-  the other kind.</p>
+<li><strong>Are the statistics counters restored or reset?</strong> **Reset, and the</li>
+<p>  history is in the report** — which is the answer this question
+  guessed at, arrived at by building rather than by deciding.</p>
 </ul>
+<p>  The description does not carry a counter and should not: it says what
+  a program <em>is</em>, and how many times something has run is not that. The
+  report beside it says what the program had done. So a revived program
+  honestly reports what it has done in this process, and what it did
+  before is a file somebody can read, which is the shape the question
+  hoped for — the report gained a column and the engine gained no
+  decision.</p>
+<ul>
+<li>**Does a revived program keep its identity for the transcripts and</li>
+<p>  the demos?<strong> </strong>No, because there is nothing to keep.** Nothing in
+  this engine gives a program an identity — no name, no number, nothing
+  that outlives the process. Two programs revived from one artifact are
+  two programs in exactly the way two programs built from one
+  description are.</p>
+</ul>
+<p>  So this is not a property being lost in the capture; it is a property
+  that has never existed. If it is ever wanted it is something to add,
+  and the place to add it is wherever transcripts decide what they are
+  transcribing, not here.</p>
+<ul>
+<li><strong>What does an incomplete artifact do to the round-trip guarantee?</strong></li>
+<p>  <strong>Nothing, because the ordinary door will not read one.</strong> The
+  guarantee is that a description written down and read back gives the
+  same program, and it holds for every artifact that door accepts.</p>
+</ul>
+<p>  An incomplete capture is refused there by name, and salvaging one is
+  a different act with a different name, so there is no path on which
+  the promise quietly weakens. The question expected the guarantee to
+  need qualifying; refusing turned out to be cheaper than qualifying,
+  and it says the same thing more usefully — to the person holding the
+  file rather than to the person reading the guarantees page.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="done-703-map-dump.html">703 — Dumping the loaded map</a>, the</li>

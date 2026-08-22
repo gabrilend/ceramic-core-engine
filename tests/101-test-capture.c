@@ -875,9 +875,24 @@ static void a_grown_program_captures_whole(void)
     if (h)
         fclose(h);
 
+    /*
+     * And the report a person reads, beside the description rather
+     * than inside it. Nothing here is measured for the report: every
+     * number in it was already being kept.
+     */
+    snprintf(probe, sizeof probe, "%s/report.txt", out_dir);
+    const char *report = slurp(probe);
+    check(strstr(report, "quadruple") != NULL,
+          "the report names the box that arrived while it ran");
+    check(strstr(report, "boxes that arrived while it ran: 1") != NULL,
+          "and counts it, which is the half of what a program is made of "
+          "that no build knows about");
+    check(strstr(report, "four (station 1)") != NULL,
+          "and says what each station did, by the name its author gave it");
+
     map_destroy(m);
-    printf("  a program that grew a box was captured whole, sources and "
-           "all\n");
+    printf("  a program that grew a box was captured whole, with a report "
+           "of what it had done\n");
 }
 /* }}} */
 

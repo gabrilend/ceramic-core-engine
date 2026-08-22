@@ -451,6 +451,115 @@ int sora_capture(map_t *m, const char *path)
 }
 /* }}} */
 
+/* {{{ static int write_capture_report() */
+/*
+ * **What a person wants to know about the program they just put
+ * down**, beside the artifact rather than inside it.
+ *
+ * Separate on purpose. The description is read by a machine and has to
+ * mean exactly one thing; this is read by somebody deciding whether
+ * the capture was worth taking, and answers questions the description
+ * deliberately does not — how hard each station worked, which buffers
+ * ran deep, and which boxes were not there when the program started.
+ *
+ * **Nothing here is measured for this.** Every number was already
+ * being kept: run counts and produced counts by issue 702, buffer
+ * depths and growths by 701, the late arrivals by 310. A report that
+ * needed its own instrumentation would be a report that changed what
+ * it was reporting on.
+ */
+static int write_capture_report(map_t *m, const char *path)
+{
+    FILE *f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "capture: cannot write %s: %s\n",
+                path, strerror(errno));
+        return -1;
+    }
+
+    fprintf(f, "# what this program had done when it was put down.\n");
+    fprintf(f, "# beside the description, not inside it: this is for a\n");
+    fprintf(f, "# person, and the description is for a machine.\n\n");
+
+    long total_runs = 0;
+    for (int i = 0; i < m->n_stations; i++) {
+        station_t *s = map_station(m, i);
+        if (!s->call)
+            continue;
+        total_runs += atomic_load_explicit(&s->runs, memory_order_relaxed);
+    }
+    fprintf(f, "stations: %d, tasks run: %ld\n\n", m->n_stations, total_runs);
+
+    for (int i = 0; i < m->n_stations; i++) {
+        station_t *s = map_station(m, i);
+        if (!s->call)
+            continue;
+        const char *who = (i < m->n_named && m->station_names
+                           && m->station_names[i])
+                        ? m->station_names[i] : "?";
+        fprintf(f, "%s (station %d): %ld run, %ld made due elsewhere\n",
+                who, i,
+                (long)atomic_load_explicit(&s->runs, memory_order_relaxed),
+                (long)atomic_load_explicit(&s->produced,
+                                           memory_order_relaxed));
+
+        for (int j = 0; j < s->n_in_ports; j++) {
+            in_port_t *sl = &s->in_ports[j];
+            if (atomic_load_explicit(&sl->kind, memory_order_relaxed)
+                != IN_PORT_RING)
+                continue;
+            int held = atomic_load_explicit(&sl->held, memory_order_relaxed);
+            if (held == 0 && sl->high_water == 0 && sl->growths == 0)
+                continue;
+            /*
+             * A buffer that grew is one input side outrunning another,
+             * which is the single most useful thing this report says:
+             * it names where a program was unbalanced, and it says so
+             * in slots rather than in a judgement.
+             */
+            fprintf(f, "    port %d: %d waiting, %d deepest, "
+                       "%d slots, grown %d time%s\n",
+                    j, held, sl->high_water,
+                    atomic_load_explicit(&sl->capacity, memory_order_relaxed),
+                    sl->growths, sl->growths == 1 ? "" : "s");
+        }
+    }
+
+    /*
+     * **Which boxes were not there when the program started.** This is
+     * the half of what a program is made of that no build knows about,
+     * and the reason a whole capture is a directory rather than a file.
+     */
+    int late = late_box_count();
+    fprintf(f, "\nboxes that arrived while it ran: %d\n", late);
+    for (int i = 0; i < late; i++) {
+        const box_place_t *row = late_box_at(i);
+        if (row)
+            fprintf(f, "    %s\n", row->address);
+    }
+
+    if (m->pool) {
+        int workers = pool_worker_count(m->pool);
+        int busy = 0;
+        for (int i = 0; i < workers; i++)
+            if (pool_worker_station(m->pool, i) >= 0)
+                busy++;
+        fprintf(f, "\nworkers: %d, still inside a box when written: %d\n",
+                workers, busy);
+        if (busy > 0)
+            fprintf(f, "the description is an incomplete capture and says "
+                       "so at its top.\n");
+    }
+
+    if (fclose(f) != 0) {
+        fprintf(stderr, "capture: cannot finish writing %s: %s\n",
+                path, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+/* }}} */
+
 /* {{{ sora_capture_whole() */
 int sora_capture_whole(map_t *m, const char *dir)
 {
@@ -481,7 +590,19 @@ int sora_capture_whole(map_t *m, const char *dir)
         fprintf(stderr, "capture: path too long: %s\n", dir);
         return -1;
     }
-    return sora_capture(m, path);
+    if (sora_capture(m, path) != 0)
+        return -1;
+
+    /* The report last, because it is the only part nothing depends on
+     * — a capture missing its report is still a program somebody can
+     * build. */
+    char report[1024];
+    if (snprintf(report, sizeof report, "%s/report.txt", dir)
+        >= (int)sizeof report) {
+        fprintf(stderr, "capture: path too long: %s\n", dir);
+        return -1;
+    }
+    return write_capture_report(m, report);
 }
 /* }}} */
 
