@@ -287,6 +287,80 @@ static void test_a_program_is_a_text_file(void)
 }
 /* }}} */
 
+/* {{{ static void a_box_can_be_addressed_three_ways() */
+/*
+ * **A bare name, a basename and a function, or a path and a
+ * function** (issue 311a) — three ways to say which box, and the path
+ * is not a fallback but a more specific way of saying the same thing.
+ *
+ * A bare name is not an address; it is a name in a namespace nobody
+ * wrote down. Naming the file makes it one, and it is the same
+ * information a reader wants anyway when they go looking for what
+ * `double_it` actually does. So both forms are legal at any time and
+ * nobody has to guess which is the real one.
+ *
+ * The scene builds one program naming its boxes all three ways and
+ * checks it runs — and then checks the dump, which writes **whichever
+ * form is unambiguous**: the bare name when it resolves to the same
+ * box, the whole address when it does not.
+ */
+static void a_box_can_be_addressed_three_ways(void)
+{
+    char map_path[512], dump_path[512];
+    snprintf(map_path, sizeof map_path, "%s/addressed.map", work_dir);
+    snprintf(dump_path, sizeof dump_path, "%s/addressed-dump.map", work_dir);
+
+    write_text(map_path,
+        "station source seven p\n"
+        "  out 0 - middle.0\n"
+        /* A basename and a function. */
+        "station middle 029-demo-boxes.c:double_it p\n"
+        "  out 0 - answer.0\n"
+        /* The whole path and a function. */
+        "station answer src/boxes/029-demo-boxes.c:keep p result\n");
+
+    map_t *m = map_load_file(map_path, 2);
+    check(m->n_stations == 3, "all three forms placed a box");
+
+    pool_release(m->pool);
+    pool_join(m->pool);
+
+    int got = 0;
+    check(map_output_take(m, 2, &got, sizeof got) && got == 14,
+          "and the program ran: seven, doubled, kept");
+
+    /* Every station carries the full address, whichever form the file
+     * used to ask for it. */
+    for (int i = 0; i < m->n_stations; i++)
+        check(strstr(map_station(m, i)->box_name,
+                     "src/boxes/029-demo-boxes.c:") != NULL,
+              "each station carries the box's whole address");
+
+    FILE *f = fopen(dump_path, "w");
+    map_dump(m, f);
+    fclose(f);
+    map_destroy(m);
+
+    /* The dump shortened all three back to bare names, because each
+     * resolves uniquely — so a map written briefly stays brief. */
+    char *written = slurp_file(dump_path);
+    check(written && strstr(written, "station middle double_it p") != NULL,
+          "the dump wrote the bare name, which is the unambiguous form");
+    check(written && strstr(written, "029-demo-boxes.c:double_it") == NULL,
+          "and did not write the address it did not need");
+
+    /* And what it wrote reads back. */
+    map_t *again = map_load_file(dump_path, 2);
+    check(again->n_stations == 3, "the shortened dump reads back");
+    pool_release(again->pool);
+    pool_join(again->pool);
+    map_destroy(again);
+
+    printf("  a box addressed three ways placed the same box, and the dump "
+           "wrote the short form\n");
+}
+/* }}} */
+
 /* {{{ static void an_awkward_constant_survives_a_file() */
 /*
  * **The same round trip at program scale** (issue 408): a constant
@@ -456,7 +530,12 @@ static void test_every_refusal(void)
          * loader stop keeping a second copy of this check. What is
          * asserted is the fact, not the sentence: the arrow named a
          * port, and the box has one. */
-        "'double_it' has 1 port",
+        /* The box is named by its **address** now — the file it lives
+         * in and the function within it (issue 311a) — so the
+         * assertion drops the opening quote and keeps the part that
+         * matters. A bare name is not an address, and a refusal that
+         * sends somebody to go and look should say where. */
+        "double_it' has 1 port",
         "an arrow to a port beyond the box was accepted");
 
     expect_death_saying(
@@ -578,6 +657,7 @@ int main(void)
     test_half_built_round_trips();
     test_every_refusal();
     the_keywords_are_not_reserved();
+    a_box_can_be_addressed_three_ways();
     an_awkward_constant_survives_a_file();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);

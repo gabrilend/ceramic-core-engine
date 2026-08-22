@@ -29,7 +29,6 @@
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
-<a href="issue-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
@@ -91,6 +90,7 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
@@ -230,7 +230,39 @@ places, and its kind.</p>
 <pre class="code">
 station adder math.c:add p
 </pre>
-<p><code>adder</code> is this placement. <code>math.c:add</code> is the C function — the file
+<p><code>adder</code> is this placement.</p>
+<p><strong>Three ways to say which box, and the path is not a fallback.</strong> A
+bare function name, a basename and a function, or a path and a
+function:</p>
+<pre class="code">
+station adder add p
+station adder math.c:add p
+station adder src/boxes/math.c:add p
+</pre>
+<p>A bare file name resolves when exactly one box source anywhere in the
+tree is called that. If two are, resolution **refuses and names both
+paths**, and the author writes one out in full. It is not a warning
+and it does not pick one.</p>
+<p>The longer form is a more specific way of saying the same thing rather
+than a rescue, so nobody has to guess which is the real one, and an
+author who prefers paths everywhere is not fighting the format.</p>
+<p><strong>A bare name is not an address</strong> — it is a name in a namespace nobody
+wrote down. Naming the file makes it one, and it is the same
+information a reader wants anyway when they go looking for what <code>add</code>
+actually does.</p>
+<p><strong>The dump writes whichever form is unambiguous</strong>: the bare name when
+it resolves to the same box, the whole address when it does not. That
+is not tidiness — a box compiled while a program ran lives at a
+serial-numbered path in a scratch directory belonging to <em>that</em>
+process, so writing its address down would name somewhere nothing will
+be next time. The bare name is what a later process can act on.</p>
+<p><strong>The basename-first rule has a cost worth naming</strong>: box source
+basenames are a flat global namespace, so two files called <code>math.c</code> in
+different directories cannot both be addressed briefly. That matches
+what the project already does — the file index runs across the whole
+tree rather than per directory, so a single global ordering of
+filenames is already the model.
+ <code>math.c:add</code> is the C function — the file
 it lives in, a colon, and its name. <code>p</code>, <code>c</code>, or <code>i</code> is plain,
 comparator, or iterator.</p>
 <p><strong>The file is named because a bare function name is not an address.</strong>

@@ -118,7 +118,7 @@ worth more than a thing that behaves two ways well.
 
 | issue | what it does |
 |---|---|
-| [311a — Boxes addressed by file](311a-boxes-addressed-by-file.md) | a map names `file:function`; basenames resolve, paths settle ties, and generated symbols escape punctuation so no two files collide |
+| [311a — Boxes addressed by file](completed/311a-boxes-addressed-by-file.md) | a map names `file:function`; basenames resolve, paths settle ties, and generated symbols escape punctuation so no two files collide |
 | [311b — Placement instead of records](311b-placement-instead-of-records.md) | the generator emits a placement function per box; the record and every name the engine carried are deleted |
 | [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md) | each box source emitted as a C array, so the binary carries its own text |
 | [311d — The map becomes code](311d-the-map-becomes-code.md) | the generator turns a map into construction calls; the build includes only what is named; the linker discards the rest |

@@ -1,30 +1,54 @@
 # 311a — Boxes addressed by file
 
-First child of [311](311-the-registry-dissolved.md), and first because
+First child of [311](../311-the-registry-dissolved.md), and first because
 it decides how a box is named and how its generated symbol is spelled.
 Everything else in the family is written against both.
 
 ## Current behavior
 
-**The escaping is built and proven; the map-file half waits, and the
-waiting is structural rather than a matter of effort.**
+**Built, both halves.**
 
-This issue reads as one change and is two. The **symbol scheme** — how
-a box's file and function become one C identifier — is what
-[311b](311b-placement-instead-of-records.md) needs in order to emit a
-placement function per box, and it stands entirely on its own. The
-**map file format** — a station line naming `file:function`, and the
-resolution rules behind it — is a generation-time rule, and the
-generator does not read maps until
-[311d](311d-the-map-becomes-code.md), which waits on the construction
-surface, which waits on 311b. Building the format half now would mean
-putting it in the runtime loader that 311d deletes.
+The **symbol scheme** was done first, and everything else is written
+against it: a symbol comes from the full path, canonicalised, with
+punctuation transcribed into words so that `math.c` and `math_c`
+cannot collapse into one identifier and the linker reject the build
+with a message about a symbol rather than about two files.
 
-So the order is: the scheme, then placement functions, then the
-construction surface, then the map format arrives with the generator's
-map reader.
+The **map file format** is done now. A station line may name a box
+three ways — a bare function name, a basename and a function, or a
+path and a function — and the path is **not a fallback**: it is a more
+specific way of saying the same thing, so nobody has to guess which
+form is the real one and an author who prefers paths everywhere is not
+fighting the format.
 
-### What the scheme turned out to need
+**Both halves of the resolution share one rule.** It is asked at
+generation time, where a name becomes a pointer and where a refusal
+reaches somebody who is still looking at the map; and at run time, for
+placing by name, where the compiled-in rows and the rows that arrived
+while the program ran are searched separately and must agree about
+what a name means. They did not agree, briefly, and the symptom was a
+dump that could not shorten an address it had just written — which is
+why the rule is one function now rather than two loops.
+
+**A collision is fatal and names both paths**, because the author's
+fix is to write one of them out in full and they cannot do that
+without being told which two files are in question.
+
+**A station carries the whole address**, and the dump writes whichever
+form is unambiguous — the bare name when it resolves to the same box,
+the address when it does not. That is not tidiness: a box compiled
+while a program ran lives at a serial-numbered path in a scratch
+directory belonging to *that* process, so writing its address down
+would produce a file naming somewhere nothing will be next time. The
+bare name is what a later process can act on, and it is what makes a
+grown program's dump reloadable.
+
+**What unblocked it** was the generator learning to read maps
+([311d](../311d-the-map-becomes-code.md)). This issue said the format
+half was waiting on that, and it was right; what it did not say is how
+little was left once it arrived.
+
+### What the scheme turned out to need### What the scheme turned out to need
 
 **The escape table in this issue was incomplete, and the gap was
 load-bearing.** It transcribed the dot and the underscore so that
@@ -125,7 +149,7 @@ model here.
 asked. It is not a warning and it does not pick one.
 
 **Resolution happens when the generator reads the map, not when a
-program runs.** [311d](311d-the-map-becomes-code.md) turns a map into
+program runs.** [311d](../311d-the-map-becomes-code.md) turns a map into
 construction calls, so a name becomes a pointer at generation time and
 no name survives into the running program. Everything in this issue is
 therefore a *generation-time* rule, and every refusal it describes
@@ -169,37 +193,59 @@ right: `math` + `_dot_` + `dot` + `_dot_` + `c`.
 **The scheme's job is uniqueness, not recovery.** Nothing decodes a
 symbol back into a name at runtime — a name a person reads comes from
 the string literal a placement function writes onto its station
-([311b](311b-placement-instead-of-records.md)), because these are
+([311b](../311b-placement-instead-of-records.md)), because these are
 static functions whose symbol names may not survive a stripped binary
 at all. Two mechanisms, two jobs, neither doing the other's badly.
 
 ## Suggested implementation steps
 
-1. The map parser — in the generator, which is now its only home —
-   accepts `file:function` on a station line, and refuses a bare
-   function name with a message saying what to write instead. The old
-   form loading into *something* would be worse than it refusing.
-2. Resolution: exact path match when the name contains a separator,
-   otherwise basename search across the known box sources. One match
-   resolves; several refuse and name every candidate.
+1. **Done, and the refusal in this step was overturned by this
+   issue's own later text.** The step wanted a bare function name
+   refused with a message saying what to write instead. The Intended
+   behaviour above says plainly that **both forms are legal at any
+   time** and that the path is not a fallback, and that is what was
+   built: a bare name resolves when it is unambiguous, and nobody has
+   to guess which form is the real one.
+2. **Done**, and in two places that share one function — at
+   generation time, where a name becomes a pointer and a refusal
+   reaches somebody still looking at the map, and at run time for
+   placing by name. They must agree about what a name means and
+   briefly did not; the symptom was a dump that could not shorten an
+   address it had just written.
 3. **Done.** The escaping, with a test over a list of awkward names —
    including `math.c`, `math_c`, `math_dot_c`, a name containing both
    characters, a path, and one of this project's own hyphenated
    sources — asserting the property that distinct names give distinct
    legal identifiers, rather than asserting particular spellings.
-4. The collision check over the whole box source tree. **Note what the
-   decision above did to this step**: two files sharing a basename no
-   longer collide at the symbol level, because the symbol carries the
-   path, so this is no longer a build-breaking condition to detect. It
-   becomes what it always should have been — the question resolution
-   asks when a map addresses a basename briefly, and it belongs with
-   the resolution in step 2.
-5. The dump reads each station's name literal and chooses bare-or-path
-   by asking whether the bare form resolves uniquely.
-6. A test that a map naming an ambiguous basename refuses and names
-   both paths; and a round-trip test on a program containing two boxes
-   whose files share a basename, proving the dump wrote paths where it
-   had to.
+4. **Done, and it required undoing an older refusal.** The generator
+   refused two boxes of one name anywhere in the tree, which was right
+   while a symbol came from the bare function name — two of them
+   produced one identifier and the linker rejected the build with a
+   message about a symbol rather than about two files that should have
+   been told apart.
+
+   A symbol carries the path now, so two such boxes are two functions
+   and refusing them forbids something the C has no problem with. What
+   the repetition costs is that the *bare* name stops being an
+   address, and that question belongs to resolution — where somebody
+   is looking at the map line — rather than to the build, which has no
+   map in front of it. Same file is still a redefinition, because C
+   says so.
+5. **Done.** The dump reads each station's address and writes the bare
+   name when it resolves to the same box.
+
+   It is not tidiness, which is worth recording because it looks like
+   it. A box compiled while a program ran lives at a serial-numbered
+   path in a scratch directory belonging to *that* process, so writing
+   its address down produces a file naming somewhere nothing will be
+   next time. The bare name is what a later process can act on, and it
+   is what keeps a grown program's dump reloadable.
+6. **Done.** Two sources in different directories each defining one
+   function of the same name, and a map asking for it briefly: the
+   generator refuses, names both paths, and writes no output. The same
+   two sources with the line written out in full build, and the
+   generated code calls the placement function belonging to the file
+   that was named.
 
 ## Open questions
 
@@ -207,16 +253,16 @@ None outstanding.
 
 ## Related
 
-- [311 — The registry dissolved](311-the-registry-dissolved.md), the
+- [311 — The registry dissolved](../311-the-registry-dissolved.md), the
   parent
-- [311b — Placement instead of records](311b-placement-instead-of-records.md),
+- [311b — Placement instead of records](../311b-placement-instead-of-records.md),
   which writes the name literal the dump reads
-- [311d — The map becomes code](311d-the-map-becomes-code.md), which is
+- [311d — The map becomes code](../311d-the-map-becomes-code.md), which is
   where resolution actually happens
-- [008 — Map file format](../docs/008-map-file-format.md), which gains
+- [008 — Map file format](../../docs/008-map-file-format.md), which gains
   the new station line and the resolution rule
-- [703 — The map dump](completed/703-map-dump.md), which has to choose
+- [703 — The map dump](703-map-dump.md), which has to choose
   a form
-- [801 — The workbench in the browser](801-browser-workbench.md), whose
+- [801 — The workbench in the browser](../801-browser-workbench.md), whose
   note already anticipated this: *where a function's home matters, the
   file name is typed beside it*

@@ -134,7 +134,12 @@ int main(void)
         fprintf(stderr, "the station the builder made has no box\n");
         return 1;
     }
-    if (!made->box_name || strcmp(made->box_name, "seven") != 0) {
+    /* A station carries the box's **address** — the file it lives in
+     * and the function within it (issue 311a) — so this checks the
+     * function half rather than the whole string. */
+    const char *placed_colon = made->box_name ? strrchr(made->box_name, ':')
+                                              : NULL;
+    if (!placed_colon || strcmp(placed_colon + 1, "seven") != 0) {
         fprintf(stderr, "the station the builder made is running '%s'\n",
                 made->box_name ? made->box_name : "(nothing)");
         return 1;

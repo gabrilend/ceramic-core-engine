@@ -170,8 +170,36 @@ void map_dump(map_t *m, FILE *out)
         const char *door = s->door == DOOR_IN  ? " entry"
                          : s->door == DOOR_OUT ? " result"
                          : "";
+
+        /*
+         * **Whichever form is unambiguous** (issue 311a). A station
+         * carries the box's full address — the file it lives in and
+         * the function within it — and the dump writes the bare
+         * function name when that resolves to the same box, or the
+         * whole address when it does not.
+         *
+         * Not tidiness. A box compiled while the program ran lives at
+         * a serial-numbered path in a scratch directory that belongs
+         * to *that* process, so writing its address down produces a
+         * file naming somewhere nothing will be next time. The bare
+         * name is what a later process can act on: recovery looks for
+         * a source saved under the box's own name, which is exactly
+         * what makes a grown program's dump reloadable.
+         */
+        const char *written_as = s->box_name;
+        if (written_as) {
+            const char *colon = strrchr(written_as, ':');
+            if (colon) {
+                const char *bare = colon + 1;
+                const box_place_t *by_bare = box_place_find(bare);
+                const box_place_t *by_address = box_place_find(written_as);
+                if (by_bare && by_bare == by_address)
+                    written_as = bare;
+            }
+        }
+
         fprintf(out, "%s %c%s   # station %d\n",
-                s->box_name ? s->box_name : "?placed-by-hand?",
+                written_as ? written_as : "?placed-by-hand?",
                 kind_letter(s->kind), door, i);
 
         for (int j = 0; j < s->n_in_ports; j++) {

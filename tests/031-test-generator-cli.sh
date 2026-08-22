@@ -121,4 +121,57 @@ EOF
 grep -q '"follow_up"' "${WORK}/out.c" || fail "the edit did not reach the registry"
 echo "  an edited source regenerates into an updated registry"
 
+
+# --- an ambiguous box name refuses, naming both paths --------------
+#
+# Two sources in different directories, each defining a function of
+# the same name, and a map asking for it by that bare name.
+# Resolution refuses rather than picking one, and names both
+# candidates — because the author's fix is to write one of them out in
+# full and they cannot do that without being told which two files are
+# in question (issue 311a).
+mkdir -p "${WORK}/left" "${WORK}/right"
+cat > "${WORK}/left/twins.c" <<'EOF'
+int twin(int x)
+{
+    return x + 1;
+}
+EOF
+cat > "${WORK}/right/twins.c" <<'EOF'
+int twin(int x)
+{
+    return x + 2;
+}
+EOF
+cat > "${WORK}/ambiguous.map" <<'EOF'
+station only twin p result
+EOF
+
+set +e
+MESSAGE="$("${GENERATOR}" "${WORK}/out4.c" "--map=${WORK}/ambiguous.map" \
+           "${WORK}/left/twins.c" "${WORK}/right/twins.c" 2>&1)"
+STATUS=$?
+set -e
+[[ ${STATUS} -ne 0 ]] || fail "an ambiguous box name was accepted"
+echo "${MESSAGE}" | grep -q "more than" || fail "the refusal does not say it is ambiguous"
+echo "${MESSAGE}" | grep -q "left/twins.c:twin" || fail "the refusal omits the first path"
+echo "${MESSAGE}" | grep -q "right/twins.c:twin" || fail "the refusal omits the second path"
+[[ ! -f "${WORK}/out4.c" ]] || fail "a refused map left output in place"
+echo "  an ambiguous box name refuses and names both paths"
+
+# --- and writing one out in full settles it ------------------------
+#
+# The path is not a fallback; it is a more specific way of saying the
+# same thing. The same two sources and the same shape of map, differing
+# only in how the line addresses the box, builds.
+cat > "${WORK}/settled.map" <<'EOF'
+station only right/twins.c:twin p result
+EOF
+"${GENERATOR}" "${WORK}/out5.c" "--map=${WORK}/settled.map" \
+    "${WORK}/left/twins.c" "${WORK}/right/twins.c" \
+    || fail "a path did not settle the tie"
+grep -q "right_sl_twins_dot_c__twin__place" "${WORK}/out5.c" \
+    || fail "the settled map did not call the right placement function"
+echo "  and writing one path out in full settles it"
+
 rm -rf "${WORK}"

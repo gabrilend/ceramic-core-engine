@@ -712,12 +712,35 @@ void gp_validate(description_t *d)
         }
     }
 
+    /*
+     * **Two boxes of one name in one *file* is a redefinition; in two
+     * files it is not** (issue 311a).
+     *
+     * This used to refuse the second any time the name repeated
+     * anywhere, which was right while a generated symbol came from
+     * the bare function name — two of them produced one identifier
+     * and the linker rejected the build with a message about a symbol
+     * rather than about two files that should have been told apart.
+     *
+     * A symbol carries the box's **path** now, so `left/twins.c:twin`
+     * and `right/twins.c:twin` are two identifiers and two functions,
+     * and refusing them would be forbidding something the C has no
+     * problem with. What the repetition costs is that the *bare* name
+     * stops being an address: a map asking for `twin` briefly has to
+     * be told there are two and write one out in full. That question
+     * belongs to resolution, where somebody is looking at the map
+     * line, rather than to the build, which has no map in front of it.
+     *
+     * Same file is still a redefinition, because C says so.
+     */
     for (int i = 0; i < d->boxes.n; i++) {
         box_t *b = vec_at(&d->boxes, i);
         for (int j = 0; j < i; j++) {
             box_t *other = vec_at(&d->boxes, j);
-            if (strcmp(b->name, other->name) == 0)
-                gp_fail(b->file, b->line, "box '%s' defined twice", b->name);
+            if (strcmp(b->name, other->name) == 0
+                && strcmp(b->file, other->file) == 0)
+                gp_fail(b->file, b->line, "box '%s' defined twice in one "
+                        "file", b->name);
         }
         for (int j = 0; j < b->n_params; j++) {
             param_t *p = &b->params[j];

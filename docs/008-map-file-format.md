@@ -90,7 +90,46 @@ places, and its kind.
 station adder math.c:add p
 ```
 
-`adder` is this placement. `math.c:add` is the C function — the file
+`adder` is this placement.
+
+**Three ways to say which box, and the path is not a fallback.** A
+bare function name, a basename and a function, or a path and a
+function:
+
+```
+station adder add p
+station adder math.c:add p
+station adder src/boxes/math.c:add p
+```
+
+A bare file name resolves when exactly one box source anywhere in the
+tree is called that. If two are, resolution **refuses and names both
+paths**, and the author writes one out in full. It is not a warning
+and it does not pick one.
+
+The longer form is a more specific way of saying the same thing rather
+than a rescue, so nobody has to guess which is the real one, and an
+author who prefers paths everywhere is not fighting the format.
+
+**A bare name is not an address** — it is a name in a namespace nobody
+wrote down. Naming the file makes it one, and it is the same
+information a reader wants anyway when they go looking for what `add`
+actually does.
+
+**The dump writes whichever form is unambiguous**: the bare name when
+it resolves to the same box, the whole address when it does not. That
+is not tidiness — a box compiled while a program ran lives at a
+serial-numbered path in a scratch directory belonging to *that*
+process, so writing its address down would name somewhere nothing will
+be next time. The bare name is what a later process can act on.
+
+**The basename-first rule has a cost worth naming**: box source
+basenames are a flat global namespace, so two files called `math.c` in
+different directories cannot both be addressed briefly. That matches
+what the project already does — the file index runs across the whole
+tree rather than per directory, so a single global ordering of
+filenames is already the model.
+ `math.c:add` is the C function — the file
 it lives in, a colon, and its name. `p`, `c`, or `i` is plain,
 comparator, or iterator.
 

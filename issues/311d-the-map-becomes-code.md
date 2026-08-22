@@ -255,7 +255,7 @@ the compiler being needed exactly when new code genuinely arrives.
 
 - [311 — The registry dissolved](311-the-registry-dissolved.md), the
   parent
-- [311a — Boxes addressed by file](311a-boxes-addressed-by-file.md),
+- [311a — Boxes addressed by file](completed/311a-boxes-addressed-by-file.md),
   whose resolution rules this applies
 - [311b — Placement instead of records](311b-placement-instead-of-records.md),
   whose functions this calls

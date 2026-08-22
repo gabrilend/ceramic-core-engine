@@ -52,10 +52,48 @@ const box_place_t *registry_late_place_find(const char *name);
  * the generator reads maps itself it emits the call directly and this
  * lookup stops existing too (issue 311d).
  */
+/*
+ * **Three ways to say which box, and they are one rule** (issue
+ * 311a): a bare function name; a basename and a function; a path and
+ * a function.
+ *
+ * The path is not a fallback — it is a more specific way of saying
+ * the same thing, so nobody has to guess which form is the real one
+ * and an author who prefers paths everywhere is not fighting the
+ * format.
+ *
+ * One function rather than a loop body, because the compiled-in rows
+ * and the rows that arrived while the program ran are searched
+ * separately and must agree about what a name means. They did not,
+ * briefly, and the symptom was a dump that could not shorten an
+ * address it had just written.
+ */
+int box_place_matches(const box_place_t *row, const char *name)
+{
+    if (!strchr(name, ':'))
+        return strcmp(row->name, name) == 0;
+
+    /*
+     * An address. The whole thing matches exactly, or the part before
+     * the colon is a *basename* — `math.c:add` finding
+     * `src/boxes/math.c:add`. Matching against a suffix of the path is
+     * what makes the brief form work, and requiring the slash before
+     * it is what stops `path.c` matching `mypath.c`.
+     */
+    if (strcmp(row->address, name) == 0)
+        return 1;
+    size_t n = strlen(name);
+    size_t a = strlen(row->address);
+    return a > n && row->address[a - n - 1] == '/'
+           && strcmp(row->address + a - n, name) == 0;
+}
+
 const box_place_t *box_place_find(const char *name)
 {
+    if (!name || !*name)
+        return NULL;
     for (int i = 0; i < registry_n_places; i++)
-        if (strcmp(registry_places[i].name, name) == 0)
+        if (box_place_matches(&registry_places[i], name))
             return &registry_places[i];
     return registry_late_place_find(name);
 }

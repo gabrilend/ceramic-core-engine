@@ -152,7 +152,10 @@ const box_place_t *registry_late_place_find(const char *name)
 {
     for (late_block_t *b = late_head; b; b = b->next)
         for (int i = 0; i < b->n_places; i++)
-            if (strcmp(b->places[i].name, name) == 0)
+            /* The same rule the compiled-in rows are searched by
+             * (issue 311a), so a bare name, a basename and a path all
+             * mean here what they mean there. */
+            if (box_place_matches(&b->places[i], name))
                 return &b->places[i];
     return NULL;
 }
@@ -273,11 +276,11 @@ int registry_unload_box(map_t *m, const char *name)
          */
         for (int b = 0; b < found->n_places; b++)
             if (s->box_name && strcmp(s->box_name,
-                                      found->places[b].name) == 0) {
+                                      found->places[b].address) == 0) {
                 fprintf(stderr,
                         "latebox: station %d places '%s', so its code cannot "
                         "be unloaded — remove the station first\n",
-                        i, found->places[b].name);
+                        i, found->places[b].address);
                 return -1;
             }
     }

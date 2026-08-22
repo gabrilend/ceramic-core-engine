@@ -15,7 +15,7 @@ is progress to report.
 ## What it waits on
 
 **The map file format, which is about to change twice.** Boxes
-addressed by file ([311a](311a-boxes-addressed-by-file.md)) rewrites
+addressed by file ([311a](completed/311a-boxes-addressed-by-file.md)) rewrites
 the station line, and the map becoming code
 ([311d](311d-the-map-becomes-code.md)) changes what reading a map even
 means. The canvas emits that format exactly, so building it against a

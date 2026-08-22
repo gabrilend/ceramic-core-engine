@@ -132,6 +132,15 @@ extern const int            registry_n_places;
 /* Which placement function writes this box's station. Compiled-in
  * rows first, then anything compiled after the program started. */
 const box_place_t *box_place_find(const char *name);
+
+/*
+ * Whether one row is what a name refers to. Three forms, one rule: a
+ * bare function name, a basename and a function, or a path and a
+ * function (issue 311a). Exposed because the compiled-in rows and the
+ * rows that arrived while the program ran are searched separately and
+ * must agree about what a name means.
+ */
+int box_place_matches(const box_place_t *row, const char *name);
 /* }}} */
 
 /* The generated data. Defined in src/generated/registry.c, which the
