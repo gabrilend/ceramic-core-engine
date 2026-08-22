@@ -145,7 +145,10 @@ void map_dump(map_t *m, FILE *out)
      */
     for (int i = 0; i < m->n_stations; i++) {
         station_t *s = map_station(m, i);
-        fprintf(out, "\n%s ", written[i]);
+        /* Announced like every other line kind (issue 607), so that a
+         * station's name never sits where a keyword sits and no word
+         * is ever both. */
+        fprintf(out, "\nstation %s ", written[i]);
         /*
          * The station knows its own name (issue 311b): the generated
          * placement function wrote it as a literal. This used to scan

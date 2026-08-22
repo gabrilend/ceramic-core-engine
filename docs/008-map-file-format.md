@@ -21,29 +21,57 @@ statics
   2 = "config.txt"
   3 = { 5, 2.0, { 0, 0, 0 }, "hey there", 2 }
 
-adder math.c:add p
+station adder math.c:add p
   in 1 $0
   out 0 - printer.0
   out 0 - logger.0
 
-depth compare.c:measure c
+station depth compare.c:measure c
   in 1 $1
   out 0 - shallow.0
   out 1 - exact.0
   out 2 - deep.0
 
-split route.c:spread i
+station split route.c:spread i
   out 0 - poet.0
   out 1 - mailer.0
 
-reader io.c:read_config p
+station reader io.c:read_config p
   in 0 x64 $2
   out 0 - config.0
 
-config io.c:load p
+station config io.c:load p
   in 0 $3
   in 1 -
 ```
+
+## Every line announces itself
+
+Four kinds, and the first word of a line always says which:
+
+| first word | the line is |
+|---|---|
+| `station` | a placement: a name, a box, a kind, and optionally a door |
+| `in` | where one of that station's input ports gets its value |
+| `out` | an arrow leaving one of its output ports |
+| `statics` | the header of the notation section |
+
+**A station line used to be what remained** — anything whose first
+word was none of the other three. That is a negative definition, and a
+negative definition can only narrow: every keyword the format ever
+gained would take another name away from every map already written,
+silently, with the failure appearing as a parse error about something
+else entirely. A station called `in` was told there was an input line
+before any station.
+
+So the first word is always a keyword and the second is always a name.
+**No word is reserved.** A station called `in` is written
+`station in keep p`; one called `station` is written
+`station station keep p`; neither is a special case.
+
+Indentation still means nothing. The attribute lines are indented
+because it reads well, and a file that has been reflowed or pasted
+still parses.
 
 ## Comments
 
@@ -55,11 +83,11 @@ way to carry them.
 
 ## The station line
 
-Three words: the station's name, the box function it places, and its
-kind.
+The keyword, then three words: the station's name, the box function it
+places, and its kind.
 
 ```
-adder math.c:add p
+station adder math.c:add p
 ```
 
 `adder` is this placement. `math.c:add` is the C function — the file
@@ -79,7 +107,7 @@ that. If two are, the reader refuses and names both paths, and the
 author writes one of them out in full:
 
 ```
-adder src/boxes/math.c:add p
+station adder src/boxes/math.c:add p
 ```
 
 Both forms are legal at any time; the path is not a fallback but a
@@ -186,9 +214,9 @@ program:
 `gate` in a file with two `gate` lines cannot say which it means, so
 the reader refuses it.
 
-**A station cannot be called `in`, `out` or `statics`.** The reader
-dispatches on the first word of a line, and those three already mean
-something there.
+**Every name is available.** A station may be called `in`, `out`,
+`statics` or `station`, because a name never occupies the position a
+keyword occupies — see *Every line announces itself* above.
 
 **And the dump makes names unique on the way out.** A program can
 legitimately hold two stations called `gate` — bringing one
@@ -204,9 +232,9 @@ A fourth word on a station line says that this station is where the
 outside delivers, or where the program's results come from:
 
 ```
-gate    keep      p entry     the outside delivers here
-answer  double_it p result    results wait here to be taken
-middle  add       p           an interior station, which is most of them
+station gate    keep      p entry     the outside delivers here
+station answer  double_it p result    results wait here to be taken
+station middle  add       p           an interior station, which is most
 ```
 
 **`entry` and `result` rather than `in` and `out`**, and the reason is

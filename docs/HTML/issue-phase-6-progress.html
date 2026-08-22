@@ -34,6 +34,7 @@
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
@@ -171,6 +172,7 @@ editing a running one stopped being two things.</p>
 <tr><td>604 — load-time validation</td><td><strong>moved out of the loader</strong></td><td>Both were about a pull path; the whole-program remainder becomes a report, not a refusal.</td></tr>
 <tr><td>605 — the seed sweep</td><td><strong>moved, not removed</strong></td><td>Nothing replaced it: construction's own writes are what start a program.</td></tr>
 <tr><td>606 — phase 6 demo</td><td>complete</td><td>One binary, three programs; edits followed; every refusal shown; everything at once.</td></tr>
+<tr><td><a href="issue-607-no-reserved-words.html">607 — no reserved words</a></td><td>complete</td><td>Every line announces itself — <code>station</code>, <code>in</code>, <code>out</code>, <code>statics</code> — so a name never sits where a keyword sits and no word is reserved. The three words were the symptom; the problem was that a station line was defined as <em>what remains</em>, and a negative definition can only narrow.</td></tr>
 </table>
 <h2>What the phase established, and what survived being widened</h2>
 <p><strong>The parser reads and never constructs.</strong> This is the decision that

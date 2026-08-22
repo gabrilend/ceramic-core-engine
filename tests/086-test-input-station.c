@@ -280,9 +280,9 @@ int main(void)
         fprintf(stderr, "cannot write %s\n", path);
         return 1;
     }
-    fputs("gate keep p entry\n"
+    fputs("station gate keep p entry\n"
           "  out 0 - answer.0\n"
-          "answer double_it p result\n", f);
+          "station answer double_it p result\n", f);
     fclose(f);
 
     map_t *loaded = map_load_file(path, 2);
@@ -310,7 +310,7 @@ int main(void)
     char bad[320];
     snprintf(bad, sizeof bad, "%s/bad.map", dir);
     f = fopen(bad, "w");
-    fputs("gate keep p sideways\n", f);
+    fputs("station gate keep p sideways\n", f);
     fclose(f);
 
     pool_release(loaded->pool);

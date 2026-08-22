@@ -76,14 +76,14 @@ static void test_buffer_report_names_the_right_slot(void)
     snprintf(map_path, sizeof map_path, "%s/report.map", work_dir);
     snprintf(report_path, sizeof report_path, "%s/report.txt", work_dir);
     snprintf(map_text, sizeof map_text,
-        "feeder seven p\n"
+        "station feeder seven p\n"
         "  out 0 - pairer.0\n"
         /* Somewhere for results to come from, which every program has
          * to declare (issue 209). The pairer is the station whose
          * value is the point of the graph. */
-        "pairer add p result\n"
+        "station pairer add p result\n"
         "  out 0 - drain.0\n"
-        "drain swallow p\n");
+        "station drain swallow p\n");
     write_text(map_path, map_text);
 
     map_t *m = map_load_file(map_path, 2);
@@ -124,11 +124,11 @@ static void test_station_counts(void)
     snprintf(map_text, sizeof map_text,
         "statics\n"
         "  0 = \"%s\"\n"
-        "head seven p\n"
+        "station head seven p\n"
         "  out 0 - mid.0\n"
-        "mid double_it p result\n"
+        "station mid double_it p result\n"
         "  out 0 - sink.1\n"
-        "sink write_int_file p\n"
+        "station sink write_int_file p\n"
         "  in 0 $0\n", out_path);
     write_text(map_path, map_text);
 
@@ -172,17 +172,17 @@ static void test_round_trip(void)
         "  0 = 5\n"
         "  1 = \"%s\"\n"
         "  2 = 7\n"
-        "first seven p\n"
+        "station first seven p\n"
         "  out 0 - judge.0\n"
-        "judge keep c\n"
+        "station judge keep c\n"
         "  in 1 $0\n"
         "  out 2 - boost.0\n"
-        "boost add p result\n"
+        "station boost add p result\n"
         "  in 1 $2\n"
         "  out 0 - deal.0\n"
-        "deal keep i\n"
+        "station deal keep i\n"
         "  out 0 - sink.1\n"
-        "sink write_int_file p\n"
+        "station sink write_int_file p\n"
         "  in 0 $1\n", out_path);
     write_text(map_path, map_text);
 
@@ -231,13 +231,13 @@ static void test_rewire_mid_run(void)
         "statics\n"
         "  0 = \"%s\"\n"
         "  1 = \"%s\"\n"
-        "head seven p\n"
+        "station head seven p\n"
         "  out 0 - hold.0\n"
-        "hold keep p result\n"
+        "station hold keep p result\n"
         "  out 0 - writer_a.1\n"
-        "writer_a write_int_file p\n"
+        "station writer_a write_int_file p\n"
         "  in 0 $0\n"
-        "writer_b write_int_file p\n"
+        "station writer_b write_int_file p\n"
         "  in 0 $1\n", a_path, b_path);
     write_text(map_path, map_text);
 

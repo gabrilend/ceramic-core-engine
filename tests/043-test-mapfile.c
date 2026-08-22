@@ -184,11 +184,11 @@ static void test_half_built_round_trips(void)
          * Nothing is wired out of it, which is exactly the case the
          * requirement is built to make legible: the declaration is
          * the interface, and what flows through it is separate. */
-        "runner add p result\n"
+        "station runner add p result\n"
         "  in 0 = 3\n"
         "  in 1 = 4\n"
         "\n"
-        "waiting mix p\n"
+        "station waiting mix p\n"
         "  in 0 x64 -\n"
         "  in 1 = 2.5\n");
     write_text(map_path, map_text);
@@ -255,10 +255,10 @@ static void test_a_program_is_a_text_file(void)
         "  0 = \"%s\"\n"
         "  1 = 5\n"
         "\n"
-        "head seven p\n"
+        "station head seven p\n"
         "  out 0 - decide.0\n"
         "\n"
-        "decide keep c\n"
+        "station decide keep c\n"
         "  in 1 $1\n"
         "  out 2 - doubler.0\n"
         "\n"
@@ -266,10 +266,10 @@ static void test_a_program_is_a_text_file(void)
          * station that returns nothing has no output port to be one
          * with (issue 209). Its value goes on to the sink as well —
          * being the way out adds a rule only when nothing is wired. */
-        "doubler double_it p result\n"
+        "station doubler double_it p result\n"
         "  out 0 - sink.1\n"
         "\n"
-        "sink write_int_file p\n"
+        "station sink write_int_file p\n"
         "  in 0 $0\n",
         result_path);
     write_text(map_path, map_text);
@@ -287,24 +287,99 @@ static void test_a_program_is_a_text_file(void)
 }
 /* }}} */
 
+/* {{{ static void the_keywords_are_not_reserved() */
+/*
+ * **No word is a reserved name** (issue 607), which is the property
+ * the `station` keyword exists to buy.
+ *
+ * A station line used to be *what remains* — anything whose first
+ * word was not `in`, `out` or `statics`. A negative definition can
+ * only narrow: every keyword the format ever gained would take
+ * another name away from every map already written, silently, with
+ * the failure showing up as a parse error about something else. A
+ * station called `in` was told there was an input line before any
+ * station.
+ *
+ * Now the first word of a line is always a keyword and the second is
+ * always a name, so the four words that mean something are ordinary
+ * names everywhere else. This builds a program whose stations are
+ * called exactly those four, runs it, writes it down, and reads it
+ * back — because a name that parses and does not round-trip is a name
+ * that only half works.
+ */
+static void the_keywords_are_not_reserved(void)
+{
+    char map_path[512], dump_path[512];
+    snprintf(map_path, sizeof map_path, "%s/keywords.map", work_dir);
+    snprintf(dump_path, sizeof dump_path, "%s/keywords-dump.map", work_dir);
+
+    write_text(map_path,
+        "statics\n"
+        "  0 = 5\n"
+        "\n"
+        "station in seven p\n"
+        "  out 0 - out.0\n"
+        "station out add p result\n"
+        "  in 1 $0\n"
+        "  out 0 - statics.0\n"
+        "station statics double_it p\n"
+        "  out 0 - station.0\n"
+        "station station keep p\n");
+
+    map_t *m = map_load_file(map_path, 2);
+    check(m->n_stations == 4,
+          "four stations named after the four words that mean something");
+    check(strcmp(m->station_names[0], "in") == 0
+          && strcmp(m->station_names[1], "out") == 0
+          && strcmp(m->station_names[2], "statics") == 0
+          && strcmp(m->station_names[3], "station") == 0,
+          "and each kept the name it was given");
+
+    pool_release(m->pool);
+    pool_join(m->pool);
+
+    check(atomic_load(&map_station(m, 3)->runs) == 1,
+          "and the program ran end to end: seven, plus five, doubled, "
+          "kept");
+
+    FILE *f = fopen(dump_path, "w");
+    map_dump(m, f);
+    fclose(f);
+    map_destroy(m);
+
+    /* Written down and read back, which is where a half-working name
+     * would show. */
+    map_t *again = map_load_file(dump_path, 2);
+    check(again->n_stations == 4
+          && strcmp(again->station_names[0], "in") == 0,
+          "and a program named that way survives being written down");
+    pool_release(again->pool);
+    pool_join(again->pool);
+    map_destroy(again);
+
+    printf("  a program whose stations are called in, out, statics and "
+           "station ran and round-tripped\n");
+}
+/* }}} */
+
 /* {{{ the gallery of refusals */
 static void test_every_refusal(void)
 {
     expect_death_saying(
-        "head sevn p\n",
+        "station head sevn p\n",
         "no box named 'sevn'",
         "a misspelled box was accepted");
 
     expect_death_saying(
-        "head seven p\n"
+        "station head seven p\n"
         "  out 0 - nowhere.0\n",
         "arrow to 'nowhere', which does not exist",
         "an arrow into the void was accepted");
 
     expect_death_saying(
-        "head seven p\n"
+        "station head seven p\n"
         "  out 0 - other.5\n"
-        "other double_it p\n",
+        "station other double_it p\n",
         /* The refusal moved into the wiring operation (issue 210g)
          * and gained the box's name on the way, which is what let the
          * loader stop keeping a second copy of this check. What is
@@ -314,9 +389,9 @@ static void test_every_refusal(void)
         "an arrow to a port beyond the box was accepted");
 
     expect_death_saying(
-        "head seven p\n"
+        "station head seven p\n"
         "  out 0 - wrong.1\n"
-        "wrong mix p\n",
+        "station wrong mix p\n",
         /* Both ends, by position and by size (issues 311b, 311c).
          * A type name is not what makes a wire legal or illegal — the
          * width is — so the message points at the two places that
@@ -337,7 +412,7 @@ static void test_every_refusal(void)
         "statics\n"
         "  0 = 5\n"
         "\n"
-        "head seven p\n"
+        "station head seven p\n"
         "  in 3 $0\n",
         /* Likewise the input side: the port check is the
          * configuration surface's now, so the words are the ones it
@@ -346,22 +421,22 @@ static void test_every_refusal(void)
         "an input line beyond the box was accepted");
 
     expect_death_saying(
-        "head seven p\n"
+        "station head seven p\n"
         "  out 0 broken.0\n",
         "expected '-' between port and destination",
         "a malformed out line was accepted");
 
     expect_death_saying(
-        "head seven x\n",
+        "station head seven x\n",
         "kind must be p (plain), c (comparator), or i (iterator)",
         "an unknown kind letter was accepted");
 
     expect_death_saying(
         "statics\n"
         "  0 = 5\n"
-        "head seven p\n"
+        "station head seven p\n"
         "  out 0 - eater.0\n"
-        "eater double_it p\n"
+        "station eater double_it p\n"
         "  in 0 $0\n",
         /* The refusal names which of the two non-buffer states it
          * found, rather than assuming static (issue 210b): an
@@ -376,9 +451,9 @@ static void test_every_refusal(void)
      * meant something real, and reading it as anything else would run
      * a program nobody wrote. */
     expect_death_saying(
-        "puller add p\n"
+        "station puller add p\n"
         "  in 1 fed\n"
-        "fed double_it p\n",
+        "station fed double_it p\n",
         "there is no pull path any more",
         "a gather line from an old map was accepted");
 
@@ -387,17 +462,17 @@ static void test_every_refusal(void)
      * having said where its results come from, and the refusal under
      * test never runs. */
     expect_death_saying(
-        "lonely add p result\n",
+        "station lonely add p result\n",
         "nothing to seed",
         "a map that can never start was accepted");
 
     expect_death_saying(
-        "head seven p\n",
+        "station head seven p\n",
         "never says where its results come from",
         "a program that never says what it produces was accepted");
 
     expect_death_saying(
-        "silent swallow c\n",
+        "station silent swallow c\n",
         "cannot be a comparator",
         "a void comparator was accepted");
 
@@ -417,6 +492,7 @@ int main(void)
     test_a_program_is_a_text_file();
     test_half_built_round_trips();
     test_every_refusal();
+    the_keywords_are_not_reserved();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);
     if (system(command) != 0)

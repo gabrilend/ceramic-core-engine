@@ -75,11 +75,11 @@ static void write_the_part(void)
      */
     static const char text[] =
         "# a part, meant to be used inside something else\n"
-        "way_in keep p entry\n"
+        "station way_in keep p entry\n"
         "  out 0 - middle.0\n"
-        "middle double_it p\n"
+        "station middle double_it p\n"
         "  out 0 - way_out.0\n"
-        "way_out keep p result\n";
+        "station way_out keep p result\n";
 
     snprintf(part_path, sizeof part_path, "%s/part.map", work_dir);
     FILE *f = fopen(part_path, "w");

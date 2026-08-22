@@ -417,9 +417,29 @@ map_description_t *mapfile_parse(const char *path)
         if (!first[0])
             continue;
 
-        /* The keyword dispatch (issue 601): three keywords, the
-         * statics entry while that section is open, and the station
-         * line as what remains. */
+        /*
+         * **The keyword dispatch, and every line kind announces
+         * itself** (issue 607).
+         *
+         * A station line used to be *what remains* — anything whose
+         * first word was not one of three keywords. That is a
+         * negative definition, and a negative definition can only
+         * narrow: every keyword the format ever gains takes another
+         * name away from every map anybody has already written,
+         * silently, with the failure appearing as a parse error about
+         * something else. A station called `in` was told there was an
+         * input line before any station.
+         *
+         * So the station line is announced like the others. The first
+         * word of a line is *always* a keyword and the second is
+         * *always* a name, so no word is ever both — a station called
+         * `in` is `station in keep p`, one called `station` is
+         * `station station keep p`, and neither is a special case.
+         *
+         * The word costs one field on the least numerous line kind: a
+         * map has more input and output lines than station lines, so
+         * the marker lands on the cheaper half.
+         */
         if (strcmp(first, "in") == 0) {
             handle_in(&st, rest);
         } else if (strcmp(first, "out") == 0) {
@@ -429,8 +449,20 @@ map_description_t *mapfile_parse(const char *path)
             st.current = NULL;
         } else if (st.in_statics && isdigit((unsigned char)first[0])) {
             handle_static_entry(&st, line);
+        } else if (strcmp(first, "station") == 0) {
+            char name[128];
+            rest = next_word(rest, name, sizeof name);
+            if (!name[0])
+                die_parse(path, st.line,
+                          "a station line needs a name after 'station'");
+            handle_station(&st, name, rest);
         } else {
-            handle_station(&st, first, rest);
+            /* Names all four rather than saying what this is not,
+             * because a reader who wrote something wrong wants the
+             * list of what is right. */
+            die_parse(path, st.line,
+                      "a line starts with 'station', 'in', 'out' or "
+                      "'statics'");
         }
     }
     fclose(f);

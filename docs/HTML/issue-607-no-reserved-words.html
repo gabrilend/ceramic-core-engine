@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>601 — The map file parser</title>
+<title>607 — No reserved words</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -34,7 +34,7 @@
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
-<a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
+<a href="issue-607-no-reserved-words.html" class="here">607 — No reserved words</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
@@ -105,7 +105,7 @@
 <a href="done-504-iterator.html">504 — The iterator</a>
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
-<a href="done-601-map-file-parser.html" class="here">601 — The map file parser</a>
+<a href="done-601-map-file-parser.html">601 — The map file parser</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -152,86 +152,132 @@
 <a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
 </nav>
 <main>
-<h1>601 — The map file parser</h1>
+<h1>607 — No reserved words</h1>
+<p>A station cannot be called <code>in</code>, <code>out</code> or <code>statics</code>. Found by naming a
+door <code>in</code> and being told there was an input line before any station
+(<a href="done-217-a-program-inside-another.html">217</a>).</p>
+<p>Low priority — the three words are unlikely names and the workaround
+is to pick another. It is written up because **the limitation is a
+symptom rather than the problem**, and the problem is worth naming
+even if nobody ever spends the afternoon.</p>
 <h2>Current behavior</h2>
-<p><strong>Built, and losing one input-line form while gaining another.</strong></p>
-<p><code>in 0 reader</code> — this port pulls from the station named <code>reader</code> — goes
-with the pull path
-(<a href="impl-056-no-pull-path.html">056</a>). A port is
-now a ring buffer or a static, and a station whose value another
-station reads simply has an arrow drawn to it. In its place comes a
-form for a port with <strong>no source at all</strong>, since a station can be
-created before it is wired and the dump writes what is actually there
-rather than a tidied version of it (<a href="done-210-input-port-record.html">210</a>).</p>
-<p>The design decision this issue made is untouched by any of that and is
-the reason it reads well now: **the parser reads and never
-constructs.** It produces a description; something else builds from it.
-That is what lets the loader become a thin reader under
-<a href="done-212-one-way-to-build-a-program.html">212</a> — turning each line into
-one call on a construction surface — rather than having to be
-disentangled from the thing it feeds.</p>
-<p>The remainder describes it as built.</p>
-<p>Built, in its own parser file that reads and never constructs. Line
-oriented, first word dispatching exactly as designed: <code>in</code>, <code>out</code>,
-the <code>statics</code> section header, station lines as the remainder, the
-kind written as one letter so a forgotten threshold line errors
-instead of silently demoting. Statics values ride as raw text to the
-end of the line; the <code>$</code> stays for the reason this issue gives.
-Every malformed shape dies naming file, line, and expectation, each
-proven by a forked child whose dying words are checked. One
-addition the format needed and the design never specified: <code>#</code>
-comments to end of line, without which the dump (issue 703) would
-have nowhere to put derived facts — docs 008 now records it, and the
-first-pass report carries the gap.</p>
+<p><strong>Built. No word is reserved.</strong></p>
+<p>Every line announces itself: <code>station</code>, <code>in</code>, <code>out</code>, <code>statics</code>. The
+first word of a line is always a keyword and the second is always a
+name, so a station may be called <code>in</code>, <code>out</code>, <code>statics</code> or <code>station</code>
+and none of them is a special case. A test builds a program whose four
+stations are called exactly those, runs it end to end, writes it down
+and reads it back — because a name that parses and does not round-trip
+is a name that only half works.</p>
+<p><strong>What changed is the definition rather than the list.</strong> A station
+line used to be <em>what remains</em>, and the three words were only the
+symptom: a negative definition can only narrow, so every keyword the
+format ever gained would have taken another name away from every map
+already written, silently, with the failure appearing as a parse error
+about something else. A line that begins with none of the four is now
+refused naming all four, rather than being treated as a station and
+failing further along.</p>
+<p><strong>Indentation still means nothing</strong>, which was worth keeping. The
+attribute lines are indented because it reads well, and a file that
+has been reflowed or pasted still parses.</p>
+<h3>What stood before</h3>
+<p>A station line was defined negatively, and that is where the
+limitation came from.</p>
+<p>The reader looks at the first word of a line and dispatches:</p>
+<table>
+<tr><td>first word</td><td>the line is</td></tr>
+<tr><td><code>statics</code></td><td>the header of the notation section</td></tr>
+<tr><td><code>in</code></td><td>an input line, attaching to the station above</td></tr>
+<tr><td><code>out</code></td><td>an output line, attaching to the station above</td></tr>
+<tr><td>anything else</td><td><strong>a new station</strong></td></tr>
+</table>
+<p>The last row is the whole difficulty. A station line is *whatever is
+not one of the other three*, so the set of legal station names is the
+set of all words minus a list — and that list can only grow. Every
+keyword the format ever gains takes another name away from every map
+anybody has already written, silently, with the failure showing up as
+a parse error about something else entirely.</p>
+<p>The three words today are a small tax. **A definition that can only
+narrow is the thing to fix**, not the three words.</p>
 <h2>Intended behavior</h2>
-<p>A parser that reads a map file into an in-memory description, doing no
-construction of its own. Building stations from that description is
-issue 602; this issue only reads.</p>
-<p><strong>Line-oriented, first word dispatches.</strong> Three keywords: a station
-line, an <code>in</code> line, an <code>out</code> line, plus a <code>statics</code> section header.
-Three entries in a dispatch table, no grammar, no nesting. Indentation
-is for the reader and means nothing to the parser.</p>
-<p><strong>A station line is three words</strong>: the station's name, the box function
-it places, and its kind as <code>p</code>, <code>c</code>, or <code>i</code>.</p>
-<p>Names rather than numbers because a map is read by people and because
-it makes an error message legible. The names cost one lookup table
-thrown away when loading ends.</p>
-<p><strong>The kind is written rather than inferred.</strong> A comparator <em>is</em>
-inferable — it is the station with one more input port than its
-function has parameters — but that means forgetting the threshold line
-silently demotes a comparator to a plain box that routes everything one
-way. One letter of redundancy buys an error instead of a wrong answer.</p>
-<p><strong>A port is a ring buffer unless a line says otherwise.</strong> Only the
-exceptions are written, and those carry the port index: <code>$n</code> for a
-static, a bare name for a gatherer source. A station with no input
-lines has nothing unusual about it.</p>
-<p>Ring buffers carry no capacity, because they grow on their own.</p>
-<p><strong>The <code>$</code> is technically unnecessary</strong> — a static reference is a number
-and a gatherer source is a name, so they are already distinguishable.
-It stays because <code>in 1 0</code> reading as "static entry zero" is not
-something anyone will guess a year from now.</p>
-<p><strong>An output line names a port and one destination</strong>: which station,
-which port. Repeat the line to fan out. Port numbers stay explicit
-because they mean something — a comparator's three are less, equal and
-greater in that order, and an iterator's are the sequence it walks.</p>
-<p><strong>A syntax error stops the load and names the line.</strong> A parser that
-skips what it does not understand produces a map with a missing wire,
-which surfaces much later as a station that never runs.</p>
+<p>**Every line begins with a word that says what kind of line it is, and
+a name never occupies that position.**</p>
+<pre class="code">
+statics
+  0 = 5
+
+station gate    keep      p entry
+  in 1 = 1000
+  out 0 - other.0
+
+station other   double_it p result
+</pre>
+<p>A station named <code>in</code> is then written <code>station in keep p</code>, and a
+station named <code>station</code> is written <code>station station keep p</code>, and
+neither is a special case — the first word is <em>always</em> a keyword and
+the second is <em>always</em> a name, so no word is ever both.</p>
+<p><strong>What that buys is a definition that cannot narrow.</strong> The grammar
+becomes total: four line kinds, each announced, nothing defined as the
+absence of the others. A keyword added later takes no name away from
+anybody, because names do not live where keywords live.</p>
+<p><strong>It costs one word on the least numerous line kind.</strong> A map has more
+input and output lines than station lines, so putting the marker on
+the station line is the cheaper half — and the alignment it invites
+makes a map easier to read down rather than harder.</p>
+<h3>The alternatives, and why not</h3>
+<p><strong>Mark the attribute lines instead</strong> — <code>  .in 1 = 1000</code>. Exactly as
+total, and the cost lands on the more numerous lines. It reads like a
+configuration format rather than like a description, which is the only
+thing against it, and that is taste rather than an argument.</p>
+<p><strong>Let indentation decide.</strong> Attribute lines are already indented in
+every map anybody has written, so a rule saying *column zero starts a
+station* would cost nothing to adopt. It is rejected for adding
+significance to whitespace: a file that survives being reflowed,
+pasted, or emitted by a tool that trims is worth more than the
+characters saved, and the format's own page currently promises that
+indentation means nothing.</p>
+<p><strong>Look at the second word.</strong> An input line is <code>in</code> followed by a
+<em>number</em>; a station named <code>in</code> is followed by a box name. One token of
+lookahead disambiguates every case that exists today, at no cost to
+any file. It is rejected for what it does to the rule rather than for
+what it costs: <em>the first word decides</em> becomes *the first word
+decides, unless*, and a rule with one exception is where a rule with
+three exceptions comes from. It is the tempting cheap answer and it is
+worth writing down as refused so nobody re-proposes it as new.</p>
+<p><strong>Quote a colliding name</strong> — <code>"in" keep p entry</code>. This does not remove
+the limitation; it adds an escape hatch nobody learns about until they
+have already hit the thing it escapes. The dump would additionally
+have to know when to quote, which is a second rule in a second place.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Read the file into a description: a list of stations with their
-   names, box names, kinds, input overrides, and output lines; plus the
-   statics section as numbered text values.
-2. The keyword dispatch table.
-3. The statics section, with values kept as text — turning them into
-   bytes needs the type, which comes from the registry later.
-4. Error reporting carrying file, line, and what was expected.
-5. Tests over: the worked example from the format document, each
-   malformed line kind, a station with no input lines, a port with
-   several destinations, and a nested struct constant.</p>
+<p>1. <strong>Done.</strong> The reader takes <code>station</code> as a fourth keyword and
+   requires it, so the station line stops being the default case. A
+   line beginning with none of the four is refused naming all four.
+2. <strong>Done.</strong> The dump writes it.
+3. <strong>Done.</strong> Every map text in the tests and under <code>maps/</code> carries it.
+4. <strong>Done.</strong> A program whose four stations are called <code>in</code>, <code>out</code>,
+   <code>statics</code> and <code>station</code> runs end to end and survives being written
+   down and read back.
+5. <strong>Done.</strong> The format's page gains the four line kinds as a table
+   and says why the definition changed. The sentence about
+   indentation stands, because it is still true.</p>
+<h2>Open questions</h2>
+<p><strong>Answered: should the word be <code>station</code> or something shorter?</strong></p>
+<p><code>station</code>. It is the noun the whole project uses, so it needs no
+explaining, and it aligns the three columns after it. <code>at</code>, <code>box</code> and
+<code>s</code> were considered and each would be a second word for a station,
+invented for the one file a person actually reads — which is worse
+than the seven characters by a distance that does not depend on how
+large the map is.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-008-map-file-format.html">008 — Map file format</a></li>
-<li>Issue 602 — what consumes this description</li>
+<li><a href="done-217-a-program-inside-another.html">217 — A program inside another</a>,</li>
+<p>  where the collision was found</p>
+<li><a href="done-601-map-file-parser.html">601 — The map file parser</a>, whose</li>
+<p>  dispatch this changes</p>
+<li><a href="done-703-map-dump.html">703 — The map dump</a>, which writes the</li>
+<p>  other half</p>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, which this</li>
+<p>  rewrites</p>
 </ul>
 
 </main>

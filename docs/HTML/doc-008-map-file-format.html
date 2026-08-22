@@ -34,6 +34,7 @@
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
+<a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
@@ -170,29 +171,52 @@ statics
   2 = <span class="st">"config.txt"</span>
   3 = { 5, 2.0, { 0, 0, 0 }, <span class="st">"hey there"</span>, 2 }
 
-adder math.c:add p
+station adder math.c:add p
   in 1 $0
   out 0 - printer.0
   out 0 - logger.0
 
-depth compare.c:measure c
+station depth compare.c:measure c
   in 1 $1
   out 0 - shallow.0
   out 1 - exact.0
   out 2 - deep.0
 
-split route.c:spread i
+station split route.c:spread i
   out 0 - poet.0
   out 1 - mailer.0
 
-reader io.c:read_config p
+station reader io.c:read_config p
   in 0 x64 $2
   out 0 - config.0
 
-config io.c:load p
+station config io.c:load p
   in 0 $3
   in 1 -
 </pre>
+<h2>Every line announces itself</h2>
+<p>Four kinds, and the first word of a line always says which:</p>
+<table>
+<tr><td>first word</td><td>the line is</td></tr>
+<tr><td><code>station</code></td><td>a placement: a name, a box, a kind, and optionally a door</td></tr>
+<tr><td><code>in</code></td><td>where one of that station's input ports gets its value</td></tr>
+<tr><td><code>out</code></td><td>an arrow leaving one of its output ports</td></tr>
+<tr><td><code>statics</code></td><td>the header of the notation section</td></tr>
+</table>
+<p><strong>A station line used to be what remained</strong> — anything whose first
+word was none of the other three. That is a negative definition, and a
+negative definition can only narrow: every keyword the format ever
+gained would take another name away from every map already written,
+silently, with the failure appearing as a parse error about something
+else entirely. A station called <code>in</code> was told there was an input line
+before any station.</p>
+<p>So the first word is always a keyword and the second is always a name.
+<strong>No word is reserved.</strong> A station called <code>in</code> is written
+<code>station in keep p</code>; one called <code>station</code> is written
+<code>station station keep p</code>; neither is a special case.</p>
+<p>Indentation still means nothing. The attribute lines are indented
+because it reads well, and a file that has been reflowed or pasted
+still parses.</p>
 <h2>Comments</h2>
 <p>A <code>#</code> starts a comment that runs to the end of the line. Added in
 the first build pass: the dump (issue 703) writes derived facts —
@@ -200,10 +224,10 @@ resolved types, element sizes, station indices — as comments beside
 the lines that parse, and the format as originally written had no
 way to carry them.</p>
 <h2>The station line</h2>
-<p>Three words: the station's name, the box function it places, and its
-kind.</p>
+<p>The keyword, then three words: the station's name, the box function it
+places, and its kind.</p>
 <pre class="code">
-adder math.c:add p
+station adder math.c:add p
 </pre>
 <p><code>adder</code> is this placement. <code>math.c:add</code> is the C function — the file
 it lives in, a colon, and its name. <code>p</code>, <code>c</code>, or <code>i</code> is plain,
@@ -219,7 +243,7 @@ resolves if exactly one box source anywhere in the tree is called
 that. If two are, the reader refuses and names both paths, and the
 author writes one of them out in full:</p>
 <pre class="code">
-adder src/boxes/math.c:add p
+station adder src/boxes/math.c:add p
 </pre>
 <p>Both forms are legal at any time; the path is not a fallback but a
 more specific way of saying the same thing. **The dump writes whichever
@@ -305,9 +329,9 @@ program:</p>
 <p><strong>A file may not name two stations the same thing.</strong> An arrow to
 <code>gate</code> in a file with two <code>gate</code> lines cannot say which it means, so
 the reader refuses it.</p>
-<p><strong>A station cannot be called <code>in</code>, <code>out</code> or <code>statics</code>.</strong> The reader
-dispatches on the first word of a line, and those three already mean
-something there.</p>
+<p><strong>Every name is available.</strong> A station may be called <code>in</code>, <code>out</code>,
+<code>statics</code> or <code>station</code>, because a name never occupies the position a
+keyword occupies — see <em>Every line announces itself</em> above.</p>
 <p><strong>And the dump makes names unique on the way out.</strong> A program can
 legitimately hold two stations called <code>gate</code> — bringing one
 description inside another twice produces exactly that — and writing
@@ -319,9 +343,9 @@ names on the running program are untouched.</p>
 <p>A fourth word on a station line says that this station is where the
 outside delivers, or where the program's results come from:</p>
 <pre class="code">
-gate    keep      p entry     the outside delivers here
-answer  double_it p result    results wait here to be taken
-middle  add       p           an interior station, which is most of them
+station gate    keep      p entry     the outside delivers here
+station answer  double_it p result    results wait here to be taken
+station middle  add       p           an interior station, which is most
 </pre>
 <p><strong><code>entry</code> and <code>result</code> rather than <code>in</code> and <code>out</code></strong>, and the reason is
 worth stating because the obvious choice is the wrong one. Those two
