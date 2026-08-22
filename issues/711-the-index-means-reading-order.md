@@ -7,6 +7,75 @@ eventually cares has a plan rather than an argument.
 
 ## Current behavior
 
+**The rule is written down, the tool exists, and the order has not
+been changed yet** — which is the sequence this issue itself
+prescribes, because deciding what should be read after what is the
+actual work and the renaming is the mechanical part.
+
+**The convention is stated** where a reader arrives, in the table of
+contents: an index is where a file sits in the reading order, and
+nothing else. Adjacency is a consequence rather than a purpose; a
+companion takes its source's number because it is the same step; a
+letter suffix is the second half of one step. Issue files are numbered
+differently and deliberately — a phase and a sequence within it, which
+is where a piece of *work* sits in the construction of the software
+rather than where a file sits in the reading of it.
+
+**The tool exists** and does the whole job: it takes a desired order,
+refuses anything missing or listed twice, renames through git so both
+names are in the history, and rewrites every reference in source
+includes, companion documents, issues and prose. Renames are staged
+behind placeholders, because 019 becoming 021 while some 021 becomes
+019 turns the first into the second if done one at a time.
+
+**And it answers a second question that turned out to be worth
+asking**: which indexed filenames are mentioned anywhere in the
+project that are not files. Its first run found two, both in one
+header — the dump was said to live in `050-dump.c` and rewiring in
+`051-rewire.c`, when they are `051` and `052`. Both are now right.
+Everything else it reported was somebody being deliberate: an issue
+describing a rename that already happened, a comment illustrating the
+convention with a file that never existed.
+
+### Where the sequence stops reading well
+
+Read end to end, four things break the order. They are listed so the
+judgement can be argued about rather than made silently, and none of
+them is fixed yet.
+
+**Tools sit between engine files.** The documentation-site generator
+is `054`, between the rewire source and an implementation note; the
+identifier renamer is `079`, between two station tests; the issue and
+link tools are `088` and `089`; this renumberer is `097`. A reader
+following the order meets a build tool in the middle of the engine
+four separate times. These are project tooling, not steps in the
+explanation, and they want to be together and somewhere a reader
+reaches deliberately.
+
+**The generator comes after everything it generates.** The registry
+header is `026` and its test is `030`; the generator that *writes*
+that registry is `065` to `070`. The producer sits forty places after
+the product, so a reader meets a table with no account of where it
+came from and finds the account much later.
+
+**Tests have drifted from what they prove.** The station layer is
+`018` to `020` and its first tests are `021` to `024`, which reads
+exactly right. But the fan-in cost test is `063`, the slot-state test
+is `064`, and destinations, removal, growth, page growth, placement
+and construction are `076` to `082` — all of them about the station
+layer, forty to sixty places away from it. That is the drift toward
+*relatedness by subsystem* this issue names, arriving from the other
+direction: they were numbered when they were written rather than where
+they belong.
+
+**The guarantees page is `058`.** It is the page this project's own
+orientation tells a reader to consult, and the page a change touching
+concurrency answers to. Fifty-eighth is not where that belongs.
+
+### What stood before
+
+
+
 Every file in the project carries an index — `019-station.c`,
 `020-delivery.c` — and the numbers run across the whole tree rather
 than per directory, so the project sorts into one sequence. The next
@@ -70,18 +139,30 @@ sorting on anything.
 
 ## Suggested implementation steps
 
-1. Read the current sequence end to end and write down where it stops
+1. **Done.** Read end to end, with four findings recorded above:
+   tools interleaved with the engine, the generator after everything
+   it generates, tests drifted from what they prove, and the
+   guarantees page at fifty-eight.
+
+   *(The original wording of this step follows.)* Read the current
+   sequence end to end and write down where it stops
    being a reading order — the places a number was chosen for
    adjacency rather than for sequence. That list is the specification
    for everything after it.
-2. The renumbering tool: read the tree, accept a desired order, rename,
+2. **Done.** `scripts/097-renumber.lua`: read the tree, accept a
+   desired order, rename,
    rewrite every reference, update `.file-index-counter`. It must be
    able to report what it *would* do without doing it, because the
    first run of a tool like this is the one nobody trusts.
-3. A check that nothing references a name that no longer exists, run
+3. **Done**, as `--check` on the same tool, and it found two real
+   stale references on its first run. A check that nothing references
+   a name that no longer exists, run
    after the rename — the same sweep the project already expects by
    hand whenever a path changes.
-4. Apply it. One commit, so the before and the after are both in the
+4. **Not done, and deliberately the last thing.** The four findings
+   above are a judgement about how the project is best explained, and
+   they should be argued about before fifty files move. Apply it. One
+   commit, so the before and the after are both in the
    record and the move is reversible.
 5. The documentation site's navigation follows the index afterward, so
    the order is visible rather than merely true.

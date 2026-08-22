@@ -87,7 +87,7 @@ void sora_stats_box_time(task_t *t, long ns);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
-/* The dump (issue 703). Lives in 050-dump.c.                         */
+/* The dump (issue 703). Lives in 051-dump.c.                         */
 /* ------------------------------------------------------------------ */
 
 /* {{{ map_dump() */
@@ -103,7 +103,7 @@ void map_dump(map_t *m, FILE *out);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
-/* Rewiring (issue 704). Lives in 051-rewire.c.                       */
+/* Rewiring (issue 704). Lives in 052-rewire.c.                       */
 /* ------------------------------------------------------------------ */
 
 /* {{{ map_unwire() / map_disconnect() — issues 704, 106 */

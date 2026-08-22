@@ -129,6 +129,7 @@
 <a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 <a href="info-088-complete-issue-lua.html">088-complete-issue.lua — finishing an issue, from outside</a>
 <a href="info-089-repair-doc-links-lua.html">089-repair-doc-links.lua — making the record walkable, from outside</a>
+<a href="info-097-renumber-lua.html">097-renumber.lua — changing the reading order, from outside</a>
 <a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
@@ -158,6 +159,62 @@ other issue waits on this. It is here so the rule is written down
 somewhere before the numbering drifts further, and so that whoever
 eventually cares has a plan rather than an argument.</p>
 <h2>Current behavior</h2>
+<p>**The rule is written down, the tool exists, and the order has not
+been changed yet** — which is the sequence this issue itself
+prescribes, because deciding what should be read after what is the
+actual work and the renaming is the mechanical part.</p>
+<p><strong>The convention is stated</strong> where a reader arrives, in the table of
+contents: an index is where a file sits in the reading order, and
+nothing else. Adjacency is a consequence rather than a purpose; a
+companion takes its source's number because it is the same step; a
+letter suffix is the second half of one step. Issue files are numbered
+differently and deliberately — a phase and a sequence within it, which
+is where a piece of <em>work</em> sits in the construction of the software
+rather than where a file sits in the reading of it.</p>
+<p><strong>The tool exists</strong> and does the whole job: it takes a desired order,
+refuses anything missing or listed twice, renames through git so both
+names are in the history, and rewrites every reference in source
+includes, companion documents, issues and prose. Renames are staged
+behind placeholders, because 019 becoming 021 while some 021 becomes
+019 turns the first into the second if done one at a time.</p>
+<p>**And it answers a second question that turned out to be worth
+asking**: which indexed filenames are mentioned anywhere in the
+project that are not files. Its first run found two, both in one
+header — the dump was said to live in <code>050-dump.c</code> and rewiring in
+<code>051-rewire.c</code>, when they are <code>051</code> and <code>052</code>. Both are now right.
+Everything else it reported was somebody being deliberate: an issue
+describing a rename that already happened, a comment illustrating the
+convention with a file that never existed.</p>
+<h3>Where the sequence stops reading well</h3>
+<p>Read end to end, four things break the order. They are listed so the
+judgement can be argued about rather than made silently, and none of
+them is fixed yet.</p>
+<p><strong>Tools sit between engine files.</strong> The documentation-site generator
+is <code>054</code>, between the rewire source and an implementation note; the
+identifier renamer is <code>079</code>, between two station tests; the issue and
+link tools are <code>088</code> and <code>089</code>; this renumberer is <code>097</code>. A reader
+following the order meets a build tool in the middle of the engine
+four separate times. These are project tooling, not steps in the
+explanation, and they want to be together and somewhere a reader
+reaches deliberately.</p>
+<p><strong>The generator comes after everything it generates.</strong> The registry
+header is <code>026</code> and its test is <code>030</code>; the generator that <em>writes</em>
+that registry is <code>065</code> to <code>070</code>. The producer sits forty places after
+the product, so a reader meets a table with no account of where it
+came from and finds the account much later.</p>
+<p><strong>Tests have drifted from what they prove.</strong> The station layer is
+<code>018</code> to <code>020</code> and its first tests are <code>021</code> to <code>024</code>, which reads
+exactly right. But the fan-in cost test is <code>063</code>, the slot-state test
+is <code>064</code>, and destinations, removal, growth, page growth, placement
+and construction are <code>076</code> to <code>082</code> — all of them about the station
+layer, forty to sixty places away from it. That is the drift toward
+<em>relatedness by subsystem</em> this issue names, arriving from the other
+direction: they were numbered when they were written rather than where
+they belong.</p>
+<p><strong>The guarantees page is <code>058</code>.</strong> It is the page this project's own
+orientation tells a reader to consult, and the page a change touching
+concurrency answers to. Fifty-eighth is not where that belongs.</p>
+<h3>What stood before</h3>
 <p>Every file in the project carries an index — <code>019-station.c</code>,
 <code>020-delivery.c</code> — and the numbers run across the whole tree rather
 than per directory, so the project sorts into one sequence. The next
@@ -209,18 +266,29 @@ after what is a judgement about how the project is best explained, and
 it should be made by reading the sequence end to end rather than by
 sorting on anything.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Read the current sequence end to end and write down where it stops
+<p>1. <strong>Done.</strong> Read end to end, with four findings recorded above:
+   tools interleaved with the engine, the generator after everything
+   it generates, tests drifted from what they prove, and the
+   guarantees page at fifty-eight.</p>
+<p>   *(The original wording of this step follows.)* Read the current
+   sequence end to end and write down where it stops
    being a reading order — the places a number was chosen for
    adjacency rather than for sequence. That list is the specification
    for everything after it.
-2. The renumbering tool: read the tree, accept a desired order, rename,
+2. <strong>Done.</strong> <code>scripts/097-renumber.lua</code>: read the tree, accept a
+   desired order, rename,
    rewrite every reference, update <code>.file-index-counter</code>. It must be
    able to report what it <em>would</em> do without doing it, because the
    first run of a tool like this is the one nobody trusts.
-3. A check that nothing references a name that no longer exists, run
+3. <strong>Done</strong>, as <code>--check</code> on the same tool, and it found two real
+   stale references on its first run. A check that nothing references
+   a name that no longer exists, run
    after the rename — the same sweep the project already expects by
    hand whenever a path changes.
-4. Apply it. One commit, so the before and the after are both in the
+4. <strong>Not done, and deliberately the last thing.</strong> The four findings
+   above are a judgement about how the project is best explained, and
+   they should be argued about before fifty files move. Apply it. One
+   commit, so the before and the after are both in the
    record and the move is reversible.
 5. The documentation site's navigation follows the index afterward, so
    the order is visible rather than merely true.</p>
