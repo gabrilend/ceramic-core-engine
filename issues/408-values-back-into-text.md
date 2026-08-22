@@ -7,14 +7,20 @@ in the other direction.
 
 ## Current behavior
 
-**Both directions exist, as runtime walks over the field tables.** The
-opening of this issue used to say the engine could not turn bytes into
-text; that stopped being true when statics moved onto their ports
-([401](completed/401-static-ports.md)), which could not be done without
-building the writer, because deleting the table deleted the original
-strings the dump had been echoing.
+**Both directions exist, and the escaping hole in them is closed.**
 
 What stands:
+
+- **One escape table, two routines**, so the writer and the reader
+  cannot disagree about what a backslash introduces. Before this a
+  string was written raw and read back by searching for the next
+  quote, so a value holding a **quote** ended its own text early, a
+  value holding a **tab or newline** produced a map file with a line
+  break inside a line, and a byte **above 0x7F** went out as whatever
+  the reader's locale made of it. All three are values the engine
+  holds perfectly well and could not write down — a correctness hole
+  rather than a matter of polish, because the dump claims to
+  round-trip and for those values it did not.
 
 - **The writer mirrors the reader**, walking the same field table in
   the same order, recursing into nested structs, taking every offset
@@ -126,20 +132,38 @@ rebuild that would silently change what raw bytes meant.
 **Taken first, because it is a correctness hole rather than a change
 of technique:**
 
-1. **The escape rules, in both the writer and the reader**: quote,
-   backslash, everything below 0x20 and everything from 0x80 up.
-   Written as one pair of routines with one table between them, so the
-   two cannot disagree about what a backslash introduces. Until the
-   generator emits them (step 5) they are hand-written and shared, and
-   the comment says which of the two arrangements they are in.
-2. **A round-trip test at value scale**, which is the primary test for
-   this issue: for every kind and for the deliberately padded struct,
-   format then read then compare bytes. Include a string holding a
-   quote, a tab, and a byte above 0x7F — the three cases that fail
-   today.
-3. **A round-trip test at program scale**: a dumped program's constants
-   are accepted by the reader unchanged, and the program that comes
-   back is the program that went in.
+1. **Done.** One table and two routines, so the writer and the reader
+   cannot disagree about what a backslash introduces. Five named
+   escapes — quote, backslash, newline, tab, carriage return — because
+   those are the ones a person reading a map should see spelled the
+   way they already know them; everything else below 0x20 and
+   everything from 0x80 up goes as `\xNN`, because a byte with no
+   agreed spelling is better shown as its number than as whatever a
+   terminal invents.
+
+   **The hexadecimal form is exactly two digits, always**, which is a
+   footgun deliberately not inherited: C's own `\x` consumes as many
+   digits as it can find, so `"\x41" "2"` and `"\x412"` mean
+   different things and one of them will not compile. Two digits
+   covers every byte and never runs on into the next character.
+
+   They are hand-written and shared for now; step 5 has the generator
+   emit them into both halves from one description.
+2. **Done.** Four awkward values — a quote, a tab and a newline, a
+   byte above 0x7F, and a backslash — put onto a port as *bytes*,
+   formatted, read back, and compared byte for byte. Bytes rather than
+   text on the way in, so what is round-tripped is a value rather than
+   a spelling.
+3. **Done.** The same trip through a file: a map whose constant holds
+   all three awkward cases is read, the characters compared whole
+   rather than probed, dumped, and read again, with the two dumps
+   identical.
+
+   The failure this would have caught reads as something else
+   entirely, which is why it needed a test at this scale too: a quote
+   inside a constant used to end the constant early, so the rest of
+   the line became words the reader tried to make sense of, and the
+   complaint named whatever it choked on rather than the string.
 
 **Then, with the registry work
 ([311b](311b-placement-instead-of-records.md)), because that is when

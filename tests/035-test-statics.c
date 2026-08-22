@@ -397,6 +397,92 @@ static void test_ports_are_independent(void)
 }
 /* }}} */
 
+/* {{{ static void awkward_values_round_trip() */
+/*
+ * **Format, read, compare bytes** — for the three cases that could
+ * not round-trip at all before (issue 408).
+ *
+ * A string was written out raw and read back by searching for the
+ * next quote. So a value holding a **quote** ended its own text
+ * early; a value holding a **tab or a newline** produced a map file
+ * with a line break inside a line; and a byte **above 0x7F** went out
+ * as whatever the reader's locale made of it. All three are values
+ * the engine holds perfectly well and could not write down, which
+ * makes it a correctness hole rather than a matter of polish — the
+ * dump claims to round-trip, and for those values it did not.
+ *
+ * The test is bytes in, text out, bytes back, compared. Nothing about
+ * the shape, nothing about the spelling: the value that went in has
+ * to be the value that comes out.
+ */
+static void awkward_values_round_trip(void)
+{
+    static const struct {
+        const char *note;
+        record      value;
+    } cases[] = {
+        { "a quote inside the text",
+          { 1, { 1.0f, 2.0f, 3.0f }, "say \"hello\" now", 10 } },
+        { "a tab and a newline",
+          { 2, { 0.5f, 0.5f, 0.5f }, "one\ttwo\nthree", 20 } },
+        { "a byte above 0x7F",
+          { 3, { 9.0f, 8.0f, 7.0f }, "caf\xc3\xa9 \x01\x7f", 30 } },
+        { "a backslash, which introduces everything else",
+          { 4, { 1.5f, 2.5f, 3.5f }, "a\\\\b\\\\c", 40 } },
+    };
+
+    int one_record[1] = { sizeof(record) };
+
+    for (size_t i = 0; i < sizeof cases / sizeof *cases; i++) {
+        /* A hand-placed relay taking one record, given the spelling
+         * and the field table the way a placement function would —
+         * the same harness the struct-constant test uses, because the
+         * demo boxes take no `record` parameter. */
+        map_t *m = map_create(1);
+        map_place(m, 0, relay_record__call, STATION_PLAIN, 1, one_record,
+                  sizeof(record));
+        in_port_t *sl = &map_station(m, 0)->in_ports[0];
+        sl->type_name = "record";
+        sl->fields = struct_find("record");
+
+        /* Bytes straight onto the port, bypassing text entirely, so
+         * what is being round-tripped is a value rather than a
+         * spelling. */
+        sl->kind = IN_PORT_STATIC;
+        sl->constant_set = 1;
+        memcpy(sl->constant, &cases[i].value, sizeof(record));
+
+        /* Out as text. */
+        char text[1024];
+        int wrote = in_port_constant_text(sl, text, sizeof text);
+        check(wrote > 0 && wrote < (int)sizeof text, cases[i].note);
+
+        /* And back in, onto a second port of the same shape. */
+        map_t *back = map_create(1);
+        map_place(back, 0, relay_record__call, STATION_PLAIN, 1, one_record,
+                  sizeof(record));
+        in_port_t *to = &map_station(back, 0)->in_ports[0];
+        to->type_name = "record";
+        to->fields = struct_find("record");
+        map_in_port_static_text(back, 0, 0, text);
+
+        record got;
+        memcpy(&got, to->constant, sizeof got);
+        if (memcmp(&got, &cases[i].value, sizeof got) != 0) {
+            fprintf(stderr, "statics test failed: %s did not survive the "
+                            "round trip\n  wrote: %s\n", cases[i].note, text);
+            exit(1);
+        }
+
+        map_destroy(m);
+        map_destroy(back);
+    }
+
+    printf("  four awkward values formatted, read back, and compared byte "
+           "for byte\n");
+}
+/* }}} */
+
 /* {{{ static void must_take() */
 static void must_take(const char *refusal, const char *what)
 {
@@ -585,5 +671,6 @@ int main(void)
     test_ports_are_independent();
     test_two_maps_at_once();
     a_wire_computes_a_constant();
+    awkward_values_round_trip();
     return 0;
 }

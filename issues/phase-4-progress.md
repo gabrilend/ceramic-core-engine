@@ -28,7 +28,7 @@ scope shrank the most.
 | [405 — changing a static while it runs](completed/405-statics-mutation.md) | complete | A write naming a station and a port, size-checked, under the station's own mutex — the lock the claim already takes. The process-wide map pointer went with it, which is what lets two programs run in one process. And a **wire** may now deliver into a static port, overwriting the constant: a constant that is computed rather than written down, visible in the map file because it is a property of the wire rather than of the box. |
 | 406 — phase 4 demo | **needs rewriting** | Four of its five scenes demonstrate the pull path. |
 | 407 — gathering at pickup | superseded | Designed a better timing for a path that then ceased to exist. |
-| [408 — values back into text](408-values-back-into-text.md) | open, **partly landed** | The mirror of 402's reader, built with 401 because deleting the statics table deleted the strings the dump was echoing. What remains is a hole and a technique: there are no escape rules on either side, so a string constant holding a quote does not round-trip; and both directions are runtime walks that become generated code with the registry work. |
+| [408 — values back into text](408-values-back-into-text.md) | **escaping closed**, generation waits | Both directions exist as walks over the field tables, and the escaping hole in them is shut: one table and two routines, five named escapes and a two-digit hexadecimal form, so a constant holding a quote, a tab or a byte above 0x7F round-trips. It was a correctness hole rather than polish — the dump claims to round-trip and for those values it did not. Moving both halves into generated code waits on the registry work. |
 
 ## What the phase actually established
 

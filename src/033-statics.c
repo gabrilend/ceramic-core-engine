@@ -90,6 +90,124 @@ static void die_static(const where_t *w, const char *what)
 }
 /* }}} */
 
+/* {{{ the escape table, and the two routines that share it — issue 408 */
+/*
+ * **One table, two directions**, so the writer and the reader cannot
+ * disagree about what a backslash introduces.
+ *
+ * Before this, a string was written out raw and read back by
+ * searching for the next quote. A value holding a quote ended its own
+ * text early; a value holding a tab or a newline produced a map file
+ * with a line break inside a line; a byte above 0x7F went out as
+ * whatever the reader's locale made of it. All three are values the
+ * engine will happily hold and could not write down — which makes it
+ * a correctness hole rather than a matter of polish, because the dump
+ * claims to round-trip.
+ *
+ * **Five named escapes and a hexadecimal form**, and the split is
+ * deliberate. The five are the ones a person reading a map should see
+ * spelled the way they already know them. Everything else
+ * unprintable, and everything from 0x80 up, goes as `\xNN` — because
+ * a byte with no agreed spelling is better shown as its number than
+ * as a character somebody's terminal invented.
+ *
+ * **The hexadecimal form is exactly two digits, always.** C's own
+ * `\x` consumes as many as it can find, so `"\x41" "2"` and
+ * `"\x412"` mean different things and one of them is a compile
+ * error — a footgun worth not inheriting. Two digits covers every
+ * byte and never runs on into the next character.
+ */
+static const struct { char spelled; unsigned char is; } escapes[] = {
+    { '"',  '"'  },
+    { '\\', '\\' },
+    { 'n',  '\n' },
+    { 't',  '\t' },
+    { 'r',  '\r' },
+};
+
+/* {{{ static const char *read_quoted() */
+/*
+ * The other direction, reading from `p` — which must be sitting on
+ * the opening quote — into at most `room` bytes, and saying how many
+ * arrived. Returns the position just past the closing quote.
+ *
+ * `what` names the thing being read, so a refusal can say which field
+ * or which port was wrong rather than only that something was.
+ */
+static const char *read_quoted(const char *p, char *out, int room,
+                               int *len_out, const char *what,
+                               const where_t *w)
+{
+    char note[192];
+    if (*p != '"') {
+        snprintf(note, sizeof note, "%s wants a quoted string", what);
+        die_static(w, note);
+    }
+    p++;
+
+    int len = 0;
+    while (*p && *p != '"') {
+        unsigned char c = (unsigned char)*p++;
+        if (c == '\\') {
+            if (!*p) {
+                snprintf(note, sizeof note,
+                         "%s: a backslash at the end of the text", what);
+                die_static(w, note);
+            }
+            char spelled = *p++;
+            int named = 0;
+            for (size_t e = 0; e < sizeof escapes / sizeof *escapes; e++)
+                if (spelled == escapes[e].spelled) {
+                    c = escapes[e].is;
+                    named = 1;
+                    break;
+                }
+            if (!named) {
+                if (spelled != 'x') {
+                    snprintf(note, sizeof note,
+                             "%s: '\\%c' is not an escape this format has",
+                             what, spelled);
+                    die_static(w, note);
+                }
+                int value = 0;
+                for (int d = 0; d < 2; d++) {
+                    char h = *p++;
+                    int digit;
+                    if (h >= '0' && h <= '9')      digit = h - '0';
+                    else if (h >= 'a' && h <= 'f') digit = h - 'a' + 10;
+                    else if (h >= 'A' && h <= 'F') digit = h - 'A' + 10;
+                    else {
+                        snprintf(note, sizeof note,
+                                 "%s: '\\x' wants exactly two hexadecimal "
+                                 "digits", what);
+                        die_static(w, note);
+                        return p;
+                    }
+                    value = value * 16 + digit;
+                }
+                c = (unsigned char)value;
+            }
+        }
+        if (len >= room) {
+            snprintf(note, sizeof note,
+                     "%s holds %d characters and more were given",
+                     what, room);
+            die_static(w, note);
+        }
+        out[len++] = (char)c;
+    }
+
+    if (*p != '"') {
+        snprintf(note, sizeof note, "%s: unterminated string", what);
+        die_static(w, note);
+    }
+    *len_out = len;
+    return p + 1;
+}
+/* }}} */
+/* }}} */
+
+
 /* ------------------------------------------------------------------ */
 /* What a type name fundamentally is, engine-side. This mirrors the  */
 /* generator's own classification — two lists that must agree, which  */
@@ -300,26 +418,16 @@ static const char *parse_struct_text(const struct_info_t *si, const char *p,
             break;
         }
         case FIELD_STRING: {
-            if (*p != '"') {
-                snprintf(note, sizeof note, "field '%s' wants a quoted string", fl->name);
-                die_static(w, note);
-            }
-            const char *start = p + 1;
-            const char *stop = strchr(start, '"');
-            if (!stop) {
-                snprintf(note, sizeof note, "field '%s': unterminated string", fl->name);
-                die_static(w, note);
-            }
-            int len = (int)(stop - start);
-            if (len > fl->array_len - 1) {
-                snprintf(note, sizeof note,
-                         "field '%s' holds %d characters; %d given",
-                         fl->name, fl->array_len - 1, len);
-                die_static(w, note);
-            }
+            /* Through the shared escape routines (issue 408), so a
+             * value holding a quote, a tab, or a byte above 0x7F
+             * reads back as what was written rather than ending its
+             * own text early. */
+            char what[96];
+            snprintf(what, sizeof what, "field '%s'", fl->name);
             memset(out + fl->offset, 0, (size_t)fl->size);
-            memcpy(out + fl->offset, start, (size_t)len);
-            p = stop + 1;
+            int len = 0;
+            p = read_quoted(p, (char *)(out + fl->offset),
+                            fl->array_len - 1, &len, what, w);
             break;
         }
         case FIELD_STRUCT:
@@ -385,6 +493,37 @@ static void tb_addf(textbuf_t *tb, const char *fmt, ...)
 }
 /* }}} */
 
+/* {{{ static void write_quoted() */
+/*
+ * `len` bytes, written as a quoted string with everything escaped
+ * that has to be. The length is given rather than found, because a
+ * value may legitimately contain a zero byte and a char array field
+ * filled exactly to its width has no room for a terminator.
+ */
+static void write_quoted(textbuf_t *tb, const char *bytes, int len)
+{
+    tb_addf(tb, "\"");
+    for (int i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)bytes[i];
+        int named = 0;
+        for (size_t e = 0; e < sizeof escapes / sizeof *escapes; e++)
+            if (c == escapes[e].is) {
+                tb_addf(tb, "\\%c", escapes[e].spelled);
+                named = 1;
+                break;
+            }
+        if (named)
+            continue;
+        if (c < 0x20 || c >= 0x7F)
+            tb_addf(tb, "\\x%02x", c);
+        else
+            tb_addf(tb, "%c", (char)c);
+    }
+    tb_addf(tb, "\"");
+}
+/* }}} */
+
+
 /* {{{ float_text() */
 /*
  * Enough digits that reading the text back gives the same value.
@@ -433,15 +572,15 @@ static void format_struct_text(const struct_info_t *si,
             float_text(tb, read_float(bytes + fl->offset, fl->size, w), fl->size);
             break;
         case FIELD_STRING: {
-            /* A char array inside the struct, written back quoted. The
-             * length is bounded by the array rather than trusted to a
-             * terminator, because a field filled exactly to its width
-             * has no room for one. */
+            /* A char array inside the struct, written back quoted and
+             * escaped (issue 408). The length is bounded by the array
+             * rather than trusted to a terminator, because a field
+             * filled exactly to its width has no room for one. */
             const char *chars = (const char *)(bytes + fl->offset);
             int len = 0;
             while (len < fl->array_len && chars[len])
                 len++;
-            tb_addf(tb, "\"%.*s\"", len, chars);
+            write_quoted(tb, chars, len);
             break;
         }
         case FIELD_STRUCT:
@@ -482,9 +621,11 @@ int in_port_constant_text(const in_port_t *sl, char *out, int room)
             break;
         case TN_STRING: {
             /* The value is a pointer; the characters are the port's
-             * own, which is what makes handing the pointer out sound. */
+             * own, which is what makes handing the pointer out sound.
+             * Escaped on the way out (issue 408), so a constant
+             * holding a quote does not end its own text early. */
             const char *s = sl->constant_string ? sl->constant_string : "";
-            tb_addf(&tb, "\"%s\"", s);
+            write_quoted(&tb, s, (int)strlen(s));
             break;
         }
         case TN_STRUCT:
@@ -576,22 +717,27 @@ static void port_text_to_bytes(const in_port_t *sl, const char *text,
     case TN_STRING: {
         /* The claimed value is a pointer; the characters live on the
          * port for the life of the map, which is what makes handing
-         * the pointer to a box sound. */
-        const char *start = text;
+         * the pointer to a box sound.
+         *
+         * **Quoted text goes through the shared escape routines**
+         * (issue 408). Unquoted text is taken as itself, which is what
+         * lets somebody write `in 0 config.txt` without ceremony — and
+         * is why a value that needs escaping has to be quoted, because
+         * an unquoted backslash is a backslash. */
         int len;
         if (*text == '"') {
-            const char *stop = strchr(text + 1, '"');
-            if (!stop)
-                die_static(w, "unterminated string");
-            start = text + 1;
-            len = (int)(stop - start);
+            int room = (int)strlen(text);
+            fresh_string = malloc((size_t)room + 1);
+            if (!fresh_string)
+                die_static(w, "out of memory for string storage");
+            read_quoted(text, fresh_string, room, &len, "a string constant", w);
         } else {
             len = (int)strlen(text);
+            fresh_string = malloc((size_t)len + 1);
+            if (!fresh_string)
+                die_static(w, "out of memory for string storage");
+            memcpy(fresh_string, text, (size_t)len);
         }
-        fresh_string = malloc((size_t)len + 1);
-        if (!fresh_string)
-            die_static(w, "out of memory for string storage");
-        memcpy(fresh_string, start, (size_t)len);
         fresh_string[len] = 0;
         if (sl->elem_size != (int)sizeof(const char *))
             die_static(w, "a string port that is not pointer-sized");

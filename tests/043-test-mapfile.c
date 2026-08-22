@@ -287,6 +287,77 @@ static void test_a_program_is_a_text_file(void)
 }
 /* }}} */
 
+/* {{{ static void an_awkward_constant_survives_a_file() */
+/*
+ * **The same round trip at program scale** (issue 408): a constant
+ * holding a quote, a tab and a byte above 0x7F, written into a map
+ * file, read, dumped, and read again.
+ *
+ * The value-scale test proves the two routines agree with each other.
+ * This proves they agree *through a file* — which is where the
+ * failure would have shown as something else entirely: a quote inside
+ * a constant used to end the constant early, so the rest of the line
+ * became words the reader tried to make sense of, and the complaint
+ * named whatever it choked on rather than the string.
+ *
+ * The station holding it never runs: its second port is a buffer
+ * nothing feeds. That is deliberate — this is about the text
+ * surviving the trip, and running the box would only test the box.
+ */
+static void an_awkward_constant_survives_a_file(void)
+{
+    char map_path[512], dump1[512], dump2[512];
+    snprintf(map_path, sizeof map_path, "%s/awkward.map", work_dir);
+    snprintf(dump1, sizeof dump1, "%s/awkward-1.map", work_dir);
+    snprintf(dump2, sizeof dump2, "%s/awkward-2.map", work_dir);
+
+    write_text(map_path,
+        "station source seven p result\n"
+        "station holder write_int_file p\n"
+        "  in 0 = \"say \\\"hi\\\" \\tand \\xc3\\xa9 done\"\n");
+
+    map_t *m = map_load_file(map_path, 2);
+
+    /* The characters that came back, compared whole rather than
+     * probed — a value that survives in three places and not in the
+     * fourth is a value that did not survive. */
+    static const char want[] = "say \"hi\" \tand \xc3\xa9 done";
+    const char *got = map_station(m, 1)->in_ports[0].constant_string;
+    check(got != NULL, "the constant was read");
+    if (got && strcmp(got, want) != 0) {
+        fprintf(stderr, "mapfile test failed: the constant came back as "
+                        "'%s', not '%s'\n", got, want);
+        exit(1);
+    }
+
+    FILE *f = fopen(dump1, "w");
+    map_dump(m, f);
+    fclose(f);
+    pool_release(m->pool);
+    pool_join(m->pool);
+    map_destroy(m);
+
+    map_t *again = map_load_file(dump1, 2);
+    f = fopen(dump2, "w");
+    map_dump(again, f);
+    fclose(f);
+    pool_release(again->pool);
+    pool_join(again->pool);
+    map_destroy(again);
+
+    char *a = slurp_file(dump1);
+    char first_copy[8192];
+    snprintf(first_copy, sizeof first_copy, "%s", a ? a : "");
+    char *b = slurp_file(dump2);
+    check(b && strcmp(first_copy, b) == 0,
+          "and dumping the dump is the dump, for a program whose "
+          "constant needs escaping");
+
+    printf("  a constant holding a quote, a tab and a high byte survived "
+           "a file\n");
+}
+/* }}} */
+
 /* {{{ static void the_keywords_are_not_reserved() */
 /*
  * **No word is a reserved name** (issue 607), which is the property
@@ -507,6 +578,7 @@ int main(void)
     test_half_built_round_trips();
     test_every_refusal();
     the_keywords_are_not_reserved();
+    an_awkward_constant_survives_a_file();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);
     if (system(command) != 0)

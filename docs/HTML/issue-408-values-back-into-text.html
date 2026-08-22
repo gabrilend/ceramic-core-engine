@@ -158,13 +158,20 @@ built one generalized reader that walks a field table and brace text
 together and produces correctly laid-out bytes. This is the same walk
 in the other direction.</p>
 <h2>Current behavior</h2>
-<p><strong>Both directions exist, as runtime walks over the field tables.</strong> The
-opening of this issue used to say the engine could not turn bytes into
-text; that stopped being true when statics moved onto their ports
-(<a href="done-401-static-ports.html">401</a>), which could not be done without
-building the writer, because deleting the table deleted the original
-strings the dump had been echoing.</p>
+<p><strong>Both directions exist, and the escaping hole in them is closed.</strong></p>
 <p>What stands:</p>
+<ul>
+<li><strong>One escape table, two routines</strong>, so the writer and the reader</li>
+<p>  cannot disagree about what a backslash introduces. Before this a
+  string was written raw and read back by searching for the next
+  quote, so a value holding a <strong>quote</strong> ended its own text early, a
+  value holding a <strong>tab or newline</strong> produced a map file with a line
+  break inside a line, and a byte <strong>above 0x7F</strong> went out as whatever
+  the reader's locale made of it. All three are values the engine
+  holds perfectly well and could not write down — a correctness hole
+  rather than a matter of polish, because the dump claims to
+  round-trip and for those values it did not.</p>
+</ul>
 <ul>
 <li><strong>The writer mirrors the reader</strong>, walking the same field table in</li>
 <p>  the same order, recursing into nested structs, taking every offset
@@ -261,20 +268,35 @@ rebuild that would silently change what raw bytes meant.</p>
 <h2>Suggested implementation steps</h2>
 <p>**Taken first, because it is a correctness hole rather than a change
 of technique:**</p>
-<p>1. <strong>The escape rules, in both the writer and the reader</strong>: quote,
-   backslash, everything below 0x20 and everything from 0x80 up.
-   Written as one pair of routines with one table between them, so the
-   two cannot disagree about what a backslash introduces. Until the
-   generator emits them (step 5) they are hand-written and shared, and
-   the comment says which of the two arrangements they are in.
-2. <strong>A round-trip test at value scale</strong>, which is the primary test for
-   this issue: for every kind and for the deliberately padded struct,
-   format then read then compare bytes. Include a string holding a
-   quote, a tab, and a byte above 0x7F — the three cases that fail
-   today.
-3. <strong>A round-trip test at program scale</strong>: a dumped program's constants
-   are accepted by the reader unchanged, and the program that comes
-   back is the program that went in.</p>
+<p>1. <strong>Done.</strong> One table and two routines, so the writer and the reader
+   cannot disagree about what a backslash introduces. Five named
+   escapes — quote, backslash, newline, tab, carriage return — because
+   those are the ones a person reading a map should see spelled the
+   way they already know them; everything else below 0x20 and
+   everything from 0x80 up goes as <code>\xNN</code>, because a byte with no
+   agreed spelling is better shown as its number than as whatever a
+   terminal invents.</p>
+<p>   <strong>The hexadecimal form is exactly two digits, always</strong>, which is a
+   footgun deliberately not inherited: C's own <code>\x</code> consumes as many
+   digits as it can find, so <code>"\x41" "2"</code> and <code>"\x412"</code> mean
+   different things and one of them will not compile. Two digits
+   covers every byte and never runs on into the next character.</p>
+<p>   They are hand-written and shared for now; step 5 has the generator
+   emit them into both halves from one description.
+2. <strong>Done.</strong> Four awkward values — a quote, a tab and a newline, a
+   byte above 0x7F, and a backslash — put onto a port as <em>bytes</em>,
+   formatted, read back, and compared byte for byte. Bytes rather than
+   text on the way in, so what is round-tripped is a value rather than
+   a spelling.
+3. <strong>Done.</strong> The same trip through a file: a map whose constant holds
+   all three awkward cases is read, the characters compared whole
+   rather than probed, dumped, and read again, with the two dumps
+   identical.</p>
+<p>   The failure this would have caught reads as something else
+   entirely, which is why it needed a test at this scale too: a quote
+   inside a constant used to end the constant early, so the rest of
+   the line became words the reader tried to make sense of, and the
+   complaint named whatever it choked on rather than the string.</p>
 <p>**Then, with the registry work
 (<a href="issue-311b-placement-instead-of-records.html">311b</a>), because that is when
 field tables stop being walked and start being pointed at:**</p>

@@ -392,6 +392,41 @@ Port numbers stay explicit because they mean something: a comparator's
 ports are less, equal, and greater in that order, and an iterator's are
 the sequence it walks.
 
+## Strings, and what a backslash means
+
+A string constant is quoted, and inside the quotes five characters are
+spelled with a backslash:
+
+| written | is |
+|---|---|
+| `\"` | a quote |
+| `\\` | a backslash |
+| `\n` | a newline |
+| `\t` | a tab |
+| `\r` | a carriage return |
+| `\xNN` | the byte with that hexadecimal value, **exactly two digits** |
+
+Everything below 0x20 and everything from 0x80 up is written in the
+`\xNN` form, so **a map file is seven-bit ASCII end to end** and
+cannot be damaged by anything that handles high bytes carelessly. The
+price is that non-English text stops being readable in the file
+itself; that is a real loss, taken deliberately, in exchange for a
+format that never depends on the encoding of whatever tool is looking
+at it.
+
+**Two digits, always.** C's own `\x` consumes as many digits as it
+can find, which makes `"\x41" "2"` and `"\x412"` mean different
+things and one of them a compile error. Two digits covers every byte
+and never runs on into the next character.
+
+**Unquoted text is taken as itself**, which is what lets somebody
+write `in 0 = config.txt` without ceremony — and is why a value that
+needs escaping has to be quoted, since an unquoted backslash is just a
+backslash.
+
+The reader and the writer share one table, so they cannot disagree
+about what a backslash introduces.
+
 ## The statics table
 
 Entries are numbered and hold a value's shape. Nothing more.

@@ -473,6 +473,35 @@ instead of happening invisibly inside C.</p>
 <p>Port numbers stay explicit because they mean something: a comparator's
 ports are less, equal, and greater in that order, and an iterator's are
 the sequence it walks.</p>
+<h2>Strings, and what a backslash means</h2>
+<p>A string constant is quoted, and inside the quotes five characters are
+spelled with a backslash:</p>
+<table>
+<tr><td>written</td><td>is</td></tr>
+<tr><td><code>\"</code></td><td>a quote</td></tr>
+<tr><td><code>\\</code></td><td>a backslash</td></tr>
+<tr><td><code>\n</code></td><td>a newline</td></tr>
+<tr><td><code>\t</code></td><td>a tab</td></tr>
+<tr><td><code>\r</code></td><td>a carriage return</td></tr>
+<tr><td><code>\xNN</code></td><td>the byte with that hexadecimal value, <strong>exactly two digits</strong></td></tr>
+</table>
+<p>Everything below 0x20 and everything from 0x80 up is written in the
+<code>\xNN</code> form, so <strong>a map file is seven-bit ASCII end to end</strong> and
+cannot be damaged by anything that handles high bytes carelessly. The
+price is that non-English text stops being readable in the file
+itself; that is a real loss, taken deliberately, in exchange for a
+format that never depends on the encoding of whatever tool is looking
+at it.</p>
+<p><strong>Two digits, always.</strong> C's own <code>\x</code> consumes as many digits as it
+can find, which makes <code>"\x41" "2"</code> and <code>"\x412"</code> mean different
+things and one of them a compile error. Two digits covers every byte
+and never runs on into the next character.</p>
+<p><strong>Unquoted text is taken as itself</strong>, which is what lets somebody
+write <code>in 0 = config.txt</code> without ceremony — and is why a value that
+needs escaping has to be quoted, since an unquoted backslash is just a
+backslash.</p>
+<p>The reader and the writer share one table, so they cannot disagree
+about what a backslash introduces.</p>
 <h2>The statics table</h2>
 <p>Entries are numbered and hold a value's shape. Nothing more.</p>
 <pre class="code">
