@@ -181,6 +181,12 @@ $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) $(SURFACE) | $(BUILD)
 $(BUILD)/071-test-gentext: $(DIR)/tests/071-test-gentext.c $(GEN_LIB) | $(BUILD)
 	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $< $(GEN_LIB)
 
+# The map format's round trip is the same kind of test, for the same
+# reason: it exercises the thing that reads and writes descriptions,
+# not the thing that runs them (issue 801).
+$(BUILD)/106-test-mapwrite: $(DIR)/tests/106-test-mapwrite.c $(GEN_LIB) | $(BUILD)
+	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $< $(GEN_LIB)
+
 # Shell-driven tests sit beside the compiled ones — the generator's
 # command-line conduct is proven from the shell.
 TEST_SCRIPTS := $(wildcard $(DIR)/tests/*.sh)

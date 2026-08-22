@@ -287,10 +287,39 @@ that stand outside the engine live.
    the only thing in that output not derived from a document — still
    derived, so the sweep's claim that nothing there is authored in
    place still holds.
-2. Emission: canvas to map file, matching
-   [008](../docs/008-map-file-format.md) exactly, checked by loading
-   the result with the real loader. The writer is the project's own,
-   compiled to WebAssembly, rather than a JavaScript reimplementation.
+2. **Half done, and the half that was done first is the half nobody
+   noticed was missing.**
+
+   This step said to compile the project's own writer rather than
+   reimplement it, and **there was no writer to compile.** The dump
+   walks a *live station table* and says what the engine is actually
+   running — which needs a running program, and somebody drawing a map
+   has a drawing, not a table. Compiling it would have required the
+   engine in the browser, which this issue rules out three sections
+   above.
+
+   So the writer this step needs now exists: a **description** written
+   back out as the text it came from, beside the parser, where
+   descriptions live. That closes a round trip the project has been
+   without since the format was written — text became a description
+   and nothing turned one back — and it is tested by reading a file,
+   writing it, reading that, and comparing the two descriptions rather
+   than the two texts, since files differing only in blank lines
+   describe one program. It is also proven a fixed point: writing what
+   it wrote gives the same text, so a file cannot grow each time it is
+   opened.
+
+   **The two writers answer different questions on purpose.** The dump
+   says what is running; this says what was written down. A description
+   has no capacities, no sizes and no derived facts and cannot invent
+   them, which is what makes it the right thing to produce from a
+   drawing.
+
+   What is left is getting it into the page. **This machine has no
+   WebAssembly linker**, so that half is blocked on tooling rather than
+   on design — recorded here rather than worked around, because a
+   JavaScript reimplementation would be the second authority this
+   issue spends three sections refusing to create.
 3. The shelf: the drawing kept in browser storage as it is made,
    several maps side by side, restored when the browser reopens.
    Early rather than late, because every session after this one is

@@ -158,6 +158,22 @@ typedef struct map_description {
  */
 map_description_t *mapfile_parse(const char *path);
 void mapfile_free(map_description_t *d);
+
+/*
+ * **The other direction** (issue 801): a description written back out
+ * as the text it came from. The caller frees what comes back.
+ *
+ * This is not the dump. The dump walks a *live station table* and says
+ * what the engine is actually running, which needs a running program —
+ * and somebody drawing a map has a drawing, not a table. The two
+ * writers answer different questions on purpose: one says what is
+ * running, this says what was written down.
+ *
+ * A description has no capacities, no sizes and no derived facts, and
+ * cannot invent them, which is what makes it the right thing to
+ * produce from a drawing.
+ */
+char *mapfile_write(const map_description_t *d);
 /* }}} */
 
 
