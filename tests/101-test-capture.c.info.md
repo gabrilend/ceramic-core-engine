@@ -36,6 +36,30 @@ inside it, in a comma-separated list. This is the case that decides
 whether the format can be read at all: only reading one value at a time
 can tell an outer comma from an inner one.
 
+## And three scenes about a question asked once too few times
+
+Proving the revival surfaced a gap in the engine, so the scenes that
+pin it live here beside the work that found it. A station is ready
+whenever every port holds a value, and asking once is enough only while
+values arrive one at a time. Three doors let a port fill **all at
+once**, and each is a different call path into the same question:
+
+**a_deep_buffer_drains_when_the_constant_arrives** — thirty values
+stacked on one port, a constant bound to the other, thirty runs. This
+is the scene that fails loudly if the drain is ever removed.
+
+**writing_a_constant_drains_what_was_waiting** — the constant already
+exists and is changed while the program runs. The write and the first
+check happen inside one lock hold on purpose, so there is no gap
+between the value changing and the question being asked; what this pins
+is that continuing from there strands nothing and starts nothing twice.
+
+**a_station_of_only_constants_runs_once_per_change** — the exception,
+and the reason the drain declines to touch such a station rather than
+relying on a count: a constant is never consumed, so a station made
+only of them is ready forever and a drain would never finish. Once when
+it becomes complete, once more per change.
+
 ## What it does not cover
 
 Draining a running pool before the capture, and a program that grew

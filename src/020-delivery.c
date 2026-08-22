@@ -783,22 +783,37 @@ int map_station_try_start(map_t *m, int station)
  *
  * Returns how many tasks became due.
  */
-int map_station_start_while_ready(map_t *m, int station)
+int map_station_keep_starting(map_t *m, int station)
 {
     station_t *s = map_station(m, station);
 
-    int has_ring = 0;
+    /*
+     * **A station with no buffer is asked once and left alone**, and
+     * that is the whole reason this is split from the ask itself.
+     * A constant is never consumed, so such a station is ready
+     * forever and looping on it would never stop. It gets exactly one
+     * start when it first becomes complete, and exactly one more each
+     * time a constant on it is written — which is what "run again
+     * because something changed" means where there is nothing to
+     * drain.
+     */
     for (int j = 0; j < s->n_in_ports; j++)
         if (atomic_load_explicit(&s->in_ports[j].kind,
                                  memory_order_relaxed) == IN_PORT_RING)
-            has_ring = 1;
-    if (!has_ring)
-        return map_station_try_start(m, station);
+            goto drain;
+    return 0;
 
+drain:;
     int started = 0;
     while (map_station_try_start(m, station))
         started++;
     return started;
+}
+
+int map_station_start_while_ready(map_t *m, int station)
+{
+    int started = map_station_try_start(m, station) ? 1 : 0;
+    return started + map_station_keep_starting(m, station);
 }
 /* }}} */
 

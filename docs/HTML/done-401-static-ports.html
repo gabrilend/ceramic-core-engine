@@ -153,6 +153,7 @@
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
 <a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
+<a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
 <h1>401 — Static input values</h1>
@@ -279,6 +280,30 @@ in its wiring — which is the same argument that moves them onto ports.</p>
 6. A test that the existing behaviors survive: a station driven only by
    its buffer side reads the same static value every run, and an
    all-static station is never woken by delivery.</p>
+<h2>A correction, found later</h2>
+<p>**Binding or writing a constant asked the readiness question once, and
+once is not always enough.** The rule this issue rests on — that
+writing a static runs the ordinary readiness check, which is what makes
+a chain of stations wired through constants into a recalculation graph
+— was implemented as a single ask.</p>
+<p>That is correct while values arrive one at a time, because each arrival
+asks again. It is wrong the moment a port fills <strong>all at once</strong> while
+another port has values stacked up in it. Thirty values waiting on a
+buffer and a constant arriving on the other port means the station is
+ready thirty times over; asking once started one task and stranded
+twenty-nine, silently.</p>
+<p>The fix is to keep asking until the answer is no, at every door where a
+port fills all at once: a constant bound, a constant written, and a
+captured queue put back
+(<a href="issue-712-capturing-a-running-program.html">712</a>).</p>
+<p><strong>A station whose every port is a constant is the exception</strong>, and it
+has to be, because a constant is never consumed — such a station is
+ready forever and a drain on it would never stop. It is asked exactly
+once when it becomes complete and exactly once more per change, which
+is what "run again because something changed" means where there is
+nothing to drain.</p>
+<p>Written down as guarantee T6 on the <a href="doc-058-guarantees.html">guarantees
+page</a>.</p>
 <h2>Related</h2>
 <ul>
 <li>Issue 405 — changing a static value while the program runs, which</li>

@@ -1205,6 +1205,20 @@ void map_in_port_static_write(map_t *m, int station, int port,
     static_write_t job = { sl, bytes, size };
     if (m->pool) {
         map_station_start_after(m, station, static_write_under_lock, &job);
+        /*
+         * **And then keep asking** (issue 712). The call above did the
+         * write and one readiness check inside a single lock hold,
+         * which is what closes the gap between the value changing and
+         * the question being asked. But one check starts one task, and
+         * a station may have a buffer with work stacked up in it that
+         * was waiting for exactly this constant — thirty values on one
+         * port and nothing on the other. Asking once would start one
+         * of them and strand twenty-nine.
+         *
+         * A station with no buffer is not asked again, because the
+         * call above already started it and nothing there accumulates.
+         */
+        map_station_keep_starting(m, station);
     } else {
         pthread_mutex_lock(&s->mutex);
         static_write_under_lock(&job);

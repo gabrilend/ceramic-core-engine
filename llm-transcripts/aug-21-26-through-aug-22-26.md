@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 21:30:28
+Generated on: 2026-08-21 22:02:59
 
 --------------------------------------------------------------------------------
 
@@ -2756,6 +2756,182 @@ of extendability, and it's the trade you picked.
 `607` (reserved words), `408` steps 4–6 (generator-emitted formatters, which
 were waiting on this work and are now unblocked), `711` step 4, `712` (capturing
 a running program), and the phase 7–8 issues.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 18
+
+okay let's add those to the todo list and get started
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 18
+
+Let me set the order and start. First, checking whether 607 is actually
+finished.
+
+
+Now **408** — the runtime walks that were waiting on 311. Let me see what they
+do today.
+
+
+**607 filed.** Now 408 — and reading the runtime walk changes what I think the
+right shape is.
+
+
+This wants building. Let me read the pieces the generated code would call.
+
+
+Now the helper surface generated code will call.
+
+
+Now the exported helpers themselves.
+
+
+Now the generator emits a reader and a writer per struct, reaching fields by
+name.
+
+
+Now the statics reader stops walking and starts calling.
+
+
+The placement functions still hand over the old table. Let me point them at the
+pair.
+
+
+That's the shape I wanted — every field by name, no offsets anywhere. Let me
+check what it did to the binary.
+
+
+**607 and 408 closed.** Next: **712 — capturing a running program**, which the
+311 work makes far more reachable than it was.
+
+
+This is a seven-step feature. Let me look at what the pool already offers for
+the drain.
+
+
+The drain's open question may dissolve rather than need answering. Let me check
+what the stopping path already reports.
+
+
+That answers 712's open question — the reasoning is already written down next
+door. Let me record it and build the format.
+
+
+The engine explicitly promises nothing about order within a port, so a capture
+shouldn't either. Let me build on that.
+
+
+Now the dump writes them, and the format learns the form.
+
+
+Now the reader side — the parser learns the bracket form.
+
+
+Now the engine side — putting values back into a buffer from text.
+
+
+Now the operation that puts a captured queue back.
+
+
+Now the generator emits the call, so a captured description rebuilds its queues.
+
+
+Now the round trip — a program with work in flight, put down and picked up.
+
+
+The program needs an entrance to be startable. Let me restructure the test's
+maps.
+
+
+The buffer grows rather than refusing, so both my check and the test's were
+wrong.
+
+
+Scene 1 passes. Two problems — one is my test, the other may be the engine.
+Let me check the static-binding path.
+
+
+That's a real gap, and a revival is exactly what surfaces it. Let me look at the
+readiness restart.
+
+
+All three scenes pass. Let me check nothing else broke.
+
+
+Three issues down this stretch. Here's where things stand.
+
+
+## Closed
+
+
+**607 — no reserved words.** Was already built; filed into the buildable
+history with its lesson: the three unusable words were the symptom, and the
+problem was that a station line had been defined as *whatever was left over*. A
+negative definition can only narrow, so every keyword added later would have
+taken another name away.
+
+
+**408 — values back into text.** Each struct now gets a reader and a writer of
+its own, reaching **every field by name** — `v.pos` rather than `bytes +
+fields[1].offset`, with each width a `sizeof` at the point of use. No offset is
+stored or computed anywhere, which is a stronger form of the
+compiler-computes-everything promise than a table of correct offsets: there's no
+number left that could be wrong.
+
+
+One step got completed *by not doing it*, and the reason generalises. The plan
+was to emit the escape rules and number handling into every generated type so
+the halves couldn't drift. But none of that varies by type — braces, commas,
+escapes, widths are the same for every struct — so emitting them per type
+would have been one grammar written many times, which is the exact failure the
+step existed to prevent. The split runs the other way: **what varies by type is
+generated, what doesn't is written once and called.**
+
+
+Two things came free: a struct's padding is now deterministic, so two values
+read from the same text compare equal all the way through; and the old field
+table is discarded by the linker from every binary that doesn't explicitly ask.
+
+
+## 712 — capture, three steps of seven
+
+
+A dump can now say what a program is *holding*, not just what it's shaped like.
+Buffers write their waiting values in brackets; reading them back goes through
+the ordinary delivery, so the readiness check runs and the tasks that form are
+the tasks that would have formed.
+
+
+Proven three ways — work survives the round trip, the revived program finishes
+the work it was carrying and gives the answers the first would have, and a queue
+of struct values survives with its inner commas intact.
+
+
+**Two findings worth flagging:**
+
+
+A **real engine gap surfaced** doing it. A station whose buffer filled while
+another port sat empty started exactly one task when that port finally filled,
+and stranded the rest. The one rule says a station runs whenever every port
+holds a value; asking once is only enough when values arrive one at a time. Now
+it's asked until the answer is no. That would have silently lost captured work.
+
+
+And an **open question dissolved** rather than needing an answer. The drain
+needs no bound of its own — the reasoning was already written beside the
+shutdown path: whoever sent the signal already has a timer, and theirs is the
+only clock that knows how long is too long for this deployment.
+
+
+## Remaining on 712
+
+
+The drain itself, iterator cursors, the binary-producing path for a program that
+grew boxes, and the report. Then 711's reading order and the phase 7–8 issues.
 
 
 --------------------------------------------------------------------------------

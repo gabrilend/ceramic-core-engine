@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>104 — Termination: the last worker to sleep looks again</title>
+<title>101-test-capture.c — a running program put down and picked up</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -47,7 +47,7 @@
 <a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
 <a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
 <a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
-<a href="done-104-termination-by-last-sleeper.html" class="here">104 — Termination: the last worker to sleep looks again</a>
+<a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
 <a href="done-105-phase-1-demo.html">105 — Phase 1 demo: the pool under load</a>
 <a href="done-106-stopping-on-purpose.html">106 — Stopping on purpose</a>
 <a href="done-201-station-table.html">201 — The station table</a>
@@ -153,93 +153,42 @@
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
 <a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
-<a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
+<a href="info-101-test-capture-c.html" class="here">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>104 — Termination: the last worker to sleep looks again</h1>
-<h2>Current behavior</h2>
-<p>Built. The worker whose registration brings the sleeping count to the
-worker total looks at the queue one final time; finding nothing, it
-sets the stop flag and wakes everyone, and each worker sees the flag
-and returns on its own — shutdown is a broadcast, never a break-out.
-Finding something instead, it deregisters and takes the work.</p>
-<p>Two departures from the text below, both deliberate:</p>
-<p>The race this issue describes cannot occur in the implementation as
-built, because the check and the registration happen inside a single
-hold of the queue mutex and the condition wait releases that mutex
-atomically — there is no moment between "checked empty" and
-"registered asleep" for another thread to slip through. The re-scan
-therefore survives as the last sleeper's final look rather than as a
-race repair, and the test that was to reproduce the race by delaying a
-worker between the two steps is unwritable: the window does not
-exist. The termination test file documents this where the test would
-have been, and the first-pass report carries the design lesson.</p>
-<p>The rule "nothing outside the pool pushes after startup" gained the
-registration mechanism this issue only hinted at: an outside submitter
-registers a standing promise that more work may come, and termination
-waits until no such promise is held. The sleep test's trickle feeder
-uses it, and dropping the last registration nudges an all-asleep pool
-so termination becomes decidable.</p>
-<p>Proven by chains of wildly uneven lengths that must all run to their
-ends, an empty pool that terminates at once, and two hundred fresh
-pools each running a burst to completion.</p>
-<h2>Intended behavior</h2>
-<p>**The worker whose own registration brings the sleeping count up to the
-worker total re-scans the queue before anyone actually sleeps.**</p>
-<p>If it finds a task, it deregisters itself, wakes everyone, and goes to
-work. If it finds nothing, the program is finished: a stop flag is set,
-every worker is woken, each sees the flag and returns, and the main
-thread joins them.</p>
-<h2>Why the re-scan is not decoration</h2>
-<p>Without it there is a race whose outcome is a silent wrong answer
-rather than a hang, which is strictly worse:</p>
-<p>1. Worker A scans the queue, finds it empty, decides to sleep — and is
-   preempted right there, before registering itself.
-2. Worker B finishes a task, delivers, enqueues a new one, checks the
-   sleeping count to decide whom to wake, sees zero, and wakes nobody.
-3. Worker A resumes and registers itself asleep.</p>
-<p>Every worker is now asleep, the count reads "all of them," and there is
-a task sitting in the queue. A termination check that trusts the count
-alone declares the program finished and exits cleanly, having silently
-not done part of its work.</p>
-<p>With the re-scan, worker A is the one whose registration completed the
-count, so it looks again and finds B's task.</p>
-<h2>Why the negative result is trustworthy</h2>
-<p>When the re-scan does come up empty, the conclusion is sound. The count
-only reaches the worker total when every other worker has already
-finished its task and found nothing — a worker mid-task is not counted
-as sleeping. So there is nobody left who could enqueue anything, and
-the emptiness is permanent rather than momentary.</p>
-<p>The one thing this relies on: nothing outside the pool pushes tasks
-after startup. The seed sweep in phase 6 pushes before the workers are
-released, so it does not violate this. Anything added later that
-submits from outside must either register itself in the count or the
-rule stops holding.</p>
-<h2>Shut down by broadcast, never by breaking out</h2>
-<p>A worker left parked in a wait that no longer receives signals turns
-shutdown into a hang at the join. Set the flag, wake everyone, let each
-one see the flag and return on its own.</p>
-<h2>Suggested implementation steps</h2>
-<p>1. Add a stop flag to the pool, guarded by the queue mutex.
-2. In the sleep path from issue 103, after incrementing the count and
-   before waiting: if the count now equals the worker total, re-scan
-   the queue.
-3. Queue non-empty: decrement, wake everyone, continue the run loop.
-   Queue empty: set the stop flag, wake everyone, return.
-4. Every waking worker checks the stop flag before checking the queue,
-   and returns if it is set.
-5. A test that reproduces the race in step 1's description
-   deliberately, by delaying a worker between its check and its
-   registration. This is the most important test in phase 1, because
-   the failure it guards against looks exactly like success.
-6. A test that a pool given a chain of tasks — each one enqueuing the
-   next — terminates only after the whole chain has run.</p>
-<h2>Related</h2>
-<ul>
-<li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a></li>
-<li>Issue 103 — the sleeping count this reads</li>
-<li>Issue 605 — the seed sweep, the one thing that pushes from outside</li>
-</ul>
+<h1>101-test-capture.c — a running program put down and picked up</h1>
+<p>Proves that a dump is becoming an <strong>image</strong> and not only a schematic.
+A schematic says what a program is shaped like; an image says what it
+currently holds, so it can be revived rather than merely rebuilt.</p>
+<h2>The shape of each scene</h2>
+<p>Every scene fills a station's buffer with work that <strong>cannot run</strong> —
+because a second port of the same station is still empty — and then
+writes the program down. That constraint is not incidental: a station
+runs the instant every port holds a value, so anything that <em>could</em>
+run already has. What waits in a buffer is precisely what is waiting
+for something else, and that is the state worth capturing.</p>
+<p>Each program carries a <code>keep</code> station marked as the entrance, feeding
+nothing. It is there only so the program has a declared entrance and
+is therefore allowed to sit waiting rather than being refused as a
+program that can never start.</p>
+<h2>What each scene proves</h2>
+<p><strong>work_in_flight_survives</strong> — three values queue up, the program is
+written down, and a fresh program reads it back with the same three
+values waiting and nothing consumed on the way. Written down again, the
+text is identical, which extends the round trip the dump has always
+promised to cover what a program holds and not only what it is.</p>
+<p><strong>the_revived_program_finishes_the_work</strong> — the missing port is
+finished on the revived program, and all three pieces of work in flight
+run and produce the answers the first program was waiting to give. A
+capture nobody can go on from is not worth having.</p>
+<p><strong>a_struct_queue_survives</strong> — two struct values, each with commas
+inside it, in a comma-separated list. This is the case that decides
+whether the format can be read at all: only reading one value at a time
+can tell an outer comma from an inner one.</p>
+<h2>What it does not cover</h2>
+<p>Draining a running pool before the capture, and a program that grew
+boxes while it ran. Both are steps of their own on
+<a href="issue-712-capturing-a-running-program.html">712</a>.</p>
 
 </main>
 </div></body></html>

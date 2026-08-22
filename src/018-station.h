@@ -1282,6 +1282,18 @@ int map_station_try_start(map_t *m, int station);
  * buffer.
  */
 int map_station_start_while_ready(map_t *m, int station);
+
+/*
+ * The same drain, for a caller that has already asked once — a
+ * constant being written does the write and the first check inside one
+ * lock hold, deliberately, so that there is no gap between the value
+ * changing and the question being asked. This continues from there.
+ *
+ * A station with no buffer returns zero without asking anything,
+ * because nothing accumulates where there is nothing to accumulate in,
+ * and asking again would start it a second time for one change.
+ */
+int map_station_keep_starting(map_t *m, int station);
 /* }}} */
 
 /*

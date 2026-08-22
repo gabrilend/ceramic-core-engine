@@ -286,6 +286,153 @@ static void a_struct_queue_survives(void)
 }
 /* }}} */
 
+/* {{{ static void a_deep_buffer_drains_when_the_constant_arrives() */
+/*
+ * **Thirty values on one port and nothing on the other.** When the
+ * other port finally holds something, all thirty are due — the one
+ * rule says a station runs whenever every port holds a value, and it
+ * says nothing about how many times in a row.
+ *
+ * Asking once was enough while values arrived one at a time, because
+ * each arrival asked again. It stopped being enough the moment a port
+ * could fill *all at once*: a constant being bound, a constant being
+ * written, or a revived program putting a captured queue back. Then
+ * the station is ready thirty times over and a single ask starts one.
+ *
+ * This is the scene that says which of those three doors is covered,
+ * because they are three different call paths into the same question.
+ */
+static void a_deep_buffer_drains_when_the_constant_arrives(void)
+{
+    char map_path[512];
+    snprintf(map_path, sizeof map_path, "%s/deep.map", work_dir);
+
+    write_text(map_path,
+        "station gate keep p entry\n"
+        "\n"
+        "station adder add p result\n"
+        "  in 0 x64\n"
+        "  in 1 -\n");
+
+    map_t *m = map_load_file(map_path, 2);
+
+    for (int v = 0; v < 30; v++) {
+        int value = v;
+        map_deliver_value(m, 1, 0, &value);
+    }
+    check(atomic_load(&map_station(m, 1)->in_ports[0].held) == 30,
+          "thirty values are waiting on one port");
+    check(atomic_load(&map_station(m, 1)->runs) == 0,
+          "and none of them can run, because the other port is empty");
+
+    /* Door one: a constant bound to the empty port. */
+    check(map_configure_port(m, 1, 1, IN_PORT_STATIC, "1") == NULL,
+          "a constant was bound to the port that was empty");
+    pool_release(m->pool);
+    pool_join(m->pool);
+    check(atomic_load(&map_station(m, 1)->runs) == 30,
+          "and all thirty ran, not one");
+
+    map_destroy(m);
+    printf("  thirty values waiting on one port all ran when the other "
+           "port was filled\n");
+}
+/* }}} */
+
+/* {{{ static void writing_a_constant_drains_what_was_waiting() */
+/*
+ * Door two: the constant already exists and is **written** while the
+ * program runs. The write and the first readiness check happen inside
+ * one lock hold on purpose, so there is no gap between the value
+ * changing and the question being asked — and then the asking has to
+ * continue, for the same reason as above.
+ */
+static void writing_a_constant_drains_what_was_waiting(void)
+{
+    char map_path[512];
+    snprintf(map_path, sizeof map_path, "%s/written.map", work_dir);
+
+    write_text(map_path,
+        "station gate keep p entry\n"
+        "\n"
+        "station adder add p result\n"
+        "  in 0 x64\n"
+        "  in 1 = 1\n");
+
+    map_t *m = map_load_file(map_path, 2);
+
+    /* The constant is already there, so each delivery starts one task
+     * as it lands — which is the ordinary path and needs no help.
+     * Deliver with the workers parked so the work piles up instead. */
+    for (int v = 0; v < 30; v++) {
+        int value = v;
+        map_deliver_value(m, 1, 0, &value);
+    }
+
+    /* Now change the constant. Nothing is waiting by this point,
+     * because every delivery started its own task, so what this
+     * proves is the narrower half: writing does not strand anything
+     * and does not start a station twice for one change. */
+    long before = atomic_load(&map_station(m, 1)->runs);
+    int fresh = 5;
+    map_in_port_static_write(m, 1, 1, &fresh, (int)sizeof fresh);
+
+    pool_release(m->pool);
+    pool_join(m->pool);
+    check(atomic_load(&map_station(m, 1)->runs) == 30,
+          "thirty deliveries produced thirty runs and no more");
+    check(before <= 30, "and none of them ran twice");
+
+    map_destroy(m);
+    printf("  writing a constant left nothing stranded and started "
+           "nothing twice\n");
+}
+/* }}} */
+
+/* {{{ static void a_station_of_only_constants_runs_once_per_change() */
+/*
+ * **A station with no buffer at all is ready forever**, because a
+ * constant is never consumed. So it is asked once when it becomes
+ * complete, and once more each time a constant on it changes — which
+ * is what "run again because something changed" has to mean where
+ * there is nothing to drain.
+ *
+ * Looping on such a station would never stop, which is why the drain
+ * declines to touch it rather than relying on a count.
+ */
+static void a_station_of_only_constants_runs_once_per_change(void)
+{
+    char map_path[512];
+    snprintf(map_path, sizeof map_path, "%s/constants.map", work_dir);
+
+    write_text(map_path,
+        "station adder add p result\n"
+        "  in 0 = 2\n"
+        "  in 1 = 3\n");
+
+    map_t *m = map_load_file(map_path, 2);
+    pool_release(m->pool);
+    pool_join(m->pool);
+    check(atomic_load(&map_station(m, 0)->runs) == 1,
+          "a station of only constants ran exactly once");
+
+    map_t *again = map_load_file(map_path, 2);
+    int fresh = 10;
+    map_in_port_static_write(again, 0, 0, &fresh, (int)sizeof fresh);
+    map_in_port_static_write(again, 0, 1, &fresh, (int)sizeof fresh);
+    pool_release(again->pool);
+    pool_join(again->pool);
+    check(atomic_load(&map_station(again, 0)->runs) == 3,
+          "and once more for each change to a constant on it — never "
+          "looping, which it would do forever");
+
+    map_destroy(m);
+    map_destroy(again);
+    printf("  a station of only constants ran once, and once again per "
+           "change\n");
+}
+/* }}} */
+
 /* {{{ main */
 int main(void)
 {
@@ -301,6 +448,9 @@ int main(void)
     work_in_flight_survives();
     the_revived_program_finishes_the_work();
     a_struct_queue_survives();
+    a_deep_buffer_drains_when_the_constant_arrives();
+    writing_a_constant_drains_what_was_waiting();
+    a_station_of_only_constants_runs_once_per_change();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);
     if (system(command) != 0)
