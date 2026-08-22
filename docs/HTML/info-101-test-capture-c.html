@@ -185,6 +185,40 @@ capture nobody can go on from is not worth having.</p>
 inside it, in a comma-separated list. This is the case that decides
 whether the format can be read at all: only reading one value at a time
 can tell an outer comma from an inner one.</p>
+<h2>And three scenes about a question asked once too few times</h2>
+<p>Proving the revival surfaced a gap in the engine, so the scenes that
+pin it live here beside the work that found it. A station is ready
+whenever every port holds a value, and asking once is enough only while
+values arrive one at a time. Three doors let a port fill **all at
+once**, and each is a different call path into the same question:</p>
+<p><strong>a_deep_buffer_drains_when_the_constant_arrives</strong> — thirty values
+stacked on one port, a constant bound to the other, thirty runs. This
+is the scene that fails loudly if the drain is ever removed.</p>
+<p><strong>writing_a_constant_drains_what_was_waiting</strong> — the constant already
+exists and is changed while the program runs. The write and the first
+check happen inside one lock hold on purpose, so there is no gap
+between the value changing and the question being asked; what this pins
+is that continuing from there strands nothing and starts nothing twice.</p>
+<p><strong>a_station_of_only_constants_runs_once_per_change</strong> — the exception,
+and the reason the drain declines to touch such a station rather than
+relying on a count: a constant is never consumed, so a station made
+only of them is ready forever and a drain would never finish. Once when
+it becomes complete, once more per change.</p>
+<h2>Two scenes about what counts as a change</h2>
+<p><strong>writing_the_same_value_still_counts</strong> — a constant written its own
+value over again runs the station every time. A write is a statement,
+not a report of a difference: whether the bytes match is a fact about
+the previous value, which the caller said nothing about.</p>
+<p>What this catches is the comparison placed <em>before</em> the readiness
+check, which is where somebody would really write it. A comparison
+inside the copy itself does not fail this scene, because the check runs
+either way — worth knowing, because it says the thing being protected
+is the asking and not the copying.</p>
+<p><strong>a_write_drains_whatever_is_waiting</strong> — and the rule is not relaxed
+for constants. Ten values stacked on one buffer, a second buffer empty,
+a constant written: nothing runs, because a port is empty and that is
+the whole of the rule. Four values on the second buffer make four
+pairs, and six stay waiting.</p>
 <h2>What it does not cover</h2>
 <p>Draining a running pool before the capture, and a program that grew
 boxes while it ran. Both are steps of their own on

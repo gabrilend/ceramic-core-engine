@@ -60,6 +60,25 @@ relying on a count: a constant is never consumed, so a station made
 only of them is ready forever and a drain would never finish. Once when
 it becomes complete, once more per change.
 
+## Two scenes about what counts as a change
+
+**writing_the_same_value_still_counts** — a constant written its own
+value over again runs the station every time. A write is a statement,
+not a report of a difference: whether the bytes match is a fact about
+the previous value, which the caller said nothing about.
+
+What this catches is the comparison placed *before* the readiness
+check, which is where somebody would really write it. A comparison
+inside the copy itself does not fail this scene, because the check runs
+either way — worth knowing, because it says the thing being protected
+is the asking and not the copying.
+
+**a_write_drains_whatever_is_waiting** — and the rule is not relaxed
+for constants. Ten values stacked on one buffer, a second buffer empty,
+a constant written: nothing runs, because a port is empty and that is
+the whole of the rule. Four values on the second buffer make four
+pairs, and six stay waiting.
+
 ## What it does not cover
 
 Draining a running pool before the capture, and a program that grew

@@ -1155,6 +1155,24 @@ const char *map_in_port_queue_text(map_t *m, int station, int port,
  * The copy itself, as something the delivery path can be asked to do
  * while it holds the station's mutex (issue 210d). It exists as a
  * separate function only because that is how the work is handed over.
+ *
+ * **It does not compare, and must not.** Writing the value a port
+ * already holds still counts as a write, so the station is asked to
+ * run again. That is not an oversight to be optimized away later:
+ *
+ * A write is a *statement* — the value is now this — rather than a
+ * report of a difference. In a graph of stations wired through
+ * constants, "recompute with this" is what the caller asked for, and
+ * whether the bytes happen to match what was there is a fact about the
+ * previous value, which the caller said nothing about. Skipping would
+ * make the same call do two different things depending on history.
+ *
+ * And a comparison would not even be reliable. A struct arrives here
+ * as raw bytes, holes included, so two writes meaning the same value
+ * can differ in padding the author never touched — and would then be
+ * treated as a change, while a genuine change that happened to leave
+ * the compared bytes alone would not be. A test that is wrong in both
+ * directions is worse than no test.
  */
 typedef struct {
     in_port_t  *port;

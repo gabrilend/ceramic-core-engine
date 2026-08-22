@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 22:02:59
+Generated on: 2026-08-21 22:14:36
 
 --------------------------------------------------------------------------------
 
@@ -2932,6 +2932,104 @@ only clock that knows how long is too long for this deployment.
 
 The drain itself, iterator cursors, the binary-producing path for a program that
 grew boxes, and the report. Then 711's reading order and the phase 7–8 issues.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 19
+
+oh good point. I'm picturing a situation where we have 30 values sitting in a
+ring buffer on input port 0, and input port 1 is a static with no value. Then,
+when the static value is filled in, we'd only enqueue one single task. When
+updating static values, we should recursively check the readiness over and over
+until the system is sufficiently drained such that it can no longer enqueue any
+new tasks. If a box has only static inputs, we should enqueue it once, and do so
+once again if the values are ever modified.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 19
+
+Let me verify the all-static half actually behaves that way — I asserted it
+but didn't test it.
+
+
+The write path has the same gap — the loop only went into the bind path. Let
+me check the seed guard too.
+
+
+Now a test for exactly the three cases you described.
+
+
+All six pass. Let me confirm the new scene actually catches the regression.
+
+
+The tests catch it. Let me record this where the design lives.
+
+
+You caught a real one — and your refinement about the all-static case was the
+half I'd gotten wrong.
+
+
+## What you were right about that I'd missed
+
+
+I'd put the drain only on the **bind** path. Your scenario named the **write**
+path too — a constant that already exists and gets changed while thirty values
+sit waiting — and that was still stranding twenty-nine. Both doors are covered
+now, plus the third one (a revived program putting its captured queue back),
+since all three are the same shape: a port filling all at once.
+
+
+The write path keeps doing its write and its first readiness check inside a
+single lock hold, which is deliberate — it's what closes the gap between the
+value changing and the question being asked. What changed is that the asking
+continues from there.
+
+
+## And your rule for the all-static case is exactly the constraint
+
+
+"Enqueue it once, and once again if the values are ever modified." That isn't
+just a preference — it's forced. A constant is never consumed, so a station
+made only of constants is ready *forever*, and a drain on it would spin without
+end. So the drain declines to touch such a station outright rather than relying
+on a count to stop it.
+
+
+That's now three scenes:
+
+
+| | |
+
+|---|---|
+
+| thirty waiting, constant bound | thirty runs, not one |
+
+| constant written while running | nothing stranded, nothing started twice |
+
+| only constants | once at completion, once per change |
+
+
+Removing the drain fails four checks across two of them, so it stays caught.
+
+
+## Where it's written down
+
+
+This became **guarantee T6** on the guarantees page — *a station that is ready
+several times over starts that many tasks* — and a correction section on the
+ticket that built constants-on-ports. That ticket's rule was right and
+incompletely built: it said writing a constant runs the ordinary readiness
+check, making a chain of stations into a recalculation graph. It did run the
+check. It ran it once.
+
+
+Worth noting where this came from: the bug was invisible until a program was
+revived from a capture, because in ordinary running, values arrive one at a time
+and each arrival asks again. The feature didn't cause the bug — it was the
+first thing that could see it.
 
 
 --------------------------------------------------------------------------------

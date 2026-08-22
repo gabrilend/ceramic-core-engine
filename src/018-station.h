@@ -1355,9 +1355,19 @@ void map_in_port_static_text(map_t *m, int station, int port,
  * a claim copies it yields fields that were never simultaneously
  * true, which is not theoretical and was demonstrated.
  *
+ * **Writing the value the port already holds still counts**, and the
+ * station is asked to run again. A write is a statement — the value
+ * is now this — rather than a report of a difference, so whether the
+ * bytes happen to match is a fact about the previous value, which the
+ * caller said nothing about. Comparing would also be unreliable: a
+ * struct arrives as raw bytes, padding included, so two writes meaning
+ * one value can differ where nobody wrote anything.
+ *
  * Like setting one, writing one runs the readiness check on the
- * station. Writing does not *consume* anything, so a station that was
- * already able to run runs again — which is what makes a chain of
+ * station — and keeps asking while it stays ready, so a buffer with
+ * work stacked up in it drains rather than releasing one task
+ * (issue 712). Writing does not *consume* anything, so a station that
+ * was already able to run runs again — which is what makes a chain of
  * stations wired through static ports recalculate.
  *
  * **A box may no longer write a static, and that is the point of the

@@ -34,6 +34,12 @@
 #include <string.h>
 #include <unistd.h>
 
+/* The box types this test delivers, spelled again here rather than
+ * included: a test links against the engine and the generated file,
+ * not against the box sources, and the widths are what has to agree —
+ * a wire is legal on width alone. */
+typedef struct { float x; float y; float z; } vec3;
+
 static int failures = 0;
 
 /* {{{ static void check() */
@@ -433,6 +439,125 @@ static void a_station_of_only_constants_runs_once_per_change(void)
 }
 /* }}} */
 
+/* {{{ static void writing_the_same_value_still_counts() */
+/*
+ * **Writing the value a port already holds is still a write.**
+ *
+ * A write is a statement — the value is now this — rather than a
+ * report of a difference. In a graph of stations wired through
+ * constants, "recompute with this" is what the caller asked for, and
+ * whether the bytes happen to match what was there is a fact about the
+ * previous value, which the caller said nothing about.
+ *
+ * This scene exists because skipping an identical write is exactly the
+ * kind of thing somebody adds later as an optimization, and it would
+ * make the same call do two different things depending on history.
+ *
+ * **What it catches is the comparison placed before the readiness
+ * check**, which is where it would really be written — and checked by
+ * putting it there and watching this fail. A comparison inside the
+ * copy itself does *not* fail this scene, because the check runs
+ * either way and the station still starts. That is worth knowing: the
+ * thing being protected is the asking, not the copying.
+ *
+ * A comparison would not even be reliable: a struct arrives as raw
+ * bytes with its padding, so two writes meaning one value can differ
+ * where nobody wrote anything, and a genuine change that left the
+ * compared bytes alone would be missed.
+ */
+static void writing_the_same_value_still_counts(void)
+{
+    char map_path[512];
+    snprintf(map_path, sizeof map_path, "%s/unchanged.map", work_dir);
+
+    write_text(map_path,
+        "station adder add p result\n"
+        "  in 0 = 2\n"
+        "  in 1 = 3\n");
+
+    map_t *m = map_load_file(map_path, 2);
+
+    /* Three writes of the value already there. */
+    int same = 3;
+    for (int i = 0; i < 3; i++)
+        map_in_port_static_write(m, 0, 1, &same, (int)sizeof same);
+
+    pool_release(m->pool);
+    pool_join(m->pool);
+
+    /* One for becoming complete, one for each write. */
+    check(atomic_load(&map_station(m, 0)->runs) == 4,
+          "writing the value a port already held ran the station again, "
+          "every time");
+
+    map_destroy(m);
+    printf("  writing a constant its own value over again counted every "
+           "time\n");
+}
+/* }}} */
+
+/* {{{ static void a_write_drains_whatever_is_waiting() */
+/*
+ * The other half of the same rule: after a write, whatever is waiting
+ * runs — **and only if every port has something**, which is the one
+ * rule and is not relaxed here.
+ *
+ * The station has two buffers and a constant. Values stack up on one
+ * buffer while the other stays empty, so nothing can run however many
+ * times the constant is written. When the second buffer finally gets
+ * values, the pairs run and the surplus stays waiting, because the
+ * rule was never about the constant.
+ */
+static void a_write_drains_whatever_is_waiting(void)
+{
+    char map_path[512];
+    snprintf(map_path, sizeof map_path, "%s/stalled.map", work_dir);
+
+    write_text(map_path,
+        "station gate keep p entry\n"
+        "\n"
+        "station maker stamp_record p result\n"
+        "  in 0 x64\n"
+        "  in 1 x64\n"
+        "  in 2 = 7\n");
+
+    map_t *m = map_load_file(map_path, 2);
+
+    /* Ten on the first buffer, nothing on the second. */
+    for (int v = 0; v < 10; v++) {
+        int value = v;
+        map_deliver_value(m, 1, 0, &value);
+    }
+
+    /* Writing the constant cannot start anything: a port is empty, and
+     * that is the whole of the rule. */
+    unsigned long seven = 7;   /* stamp_record's third parameter */
+    map_in_port_static_write(m, 1, 2, &seven, (int)sizeof seven);
+    check(atomic_load(&map_station(m, 1)->runs) == 0,
+          "writing a constant started nothing while a port was empty");
+    check(atomic_load(&map_station(m, 1)->in_ports[0].held) == 10,
+          "and left all ten waiting");
+
+    /* Four on the second buffer: four pairs are due, six wait on. */
+    for (int v = 0; v < 4; v++) {
+        vec3 where = { (float)v, 0.0f, 0.0f };
+        map_deliver_value(m, 1, 1, &where);
+    }
+    pool_release(m->pool);
+    pool_join(m->pool);
+
+    check(atomic_load(&map_station(m, 1)->runs) == 4,
+          "four values on the second buffer paired with four of the ten");
+    check(atomic_load(&map_station(m, 1)->in_ports[0].held) == 6,
+          "and the other six are still waiting, because the rule is every "
+          "port and not merely the constant");
+
+    map_destroy(m);
+    printf("  a write started nothing while a port was empty, and the "
+           "surplus stayed waiting\n");
+}
+/* }}} */
+
 /* {{{ main */
 int main(void)
 {
@@ -451,6 +576,8 @@ int main(void)
     a_deep_buffer_drains_when_the_constant_arrives();
     writing_a_constant_drains_what_was_waiting();
     a_station_of_only_constants_runs_once_per_change();
+    writing_the_same_value_still_counts();
+    a_write_drains_whatever_is_waiting();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);
     if (system(command) != 0)
