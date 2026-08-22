@@ -218,9 +218,20 @@ that live outside the engine, has started.
 
 ## License
 
-Source-available, not open source. Use it freely if you are a person, a
-hobbyist, a student, a researcher, a non-profit, or a small company. If
-your group has a hundred or more people or a million dollars a year of
-revenue, [get in touch](LICENSE.md#getting-a-license) first.
+Copyright © 2026 gabrilend.
 
-Full terms in [LICENSE.md](LICENSE.md).
+**GNU Affero General Public License, version 3** — see [LICENSE](LICENSE).
+
+Use it, study it, change it, share it. The condition is that anyone you
+give it to gets the same freedoms, including the source. The *Affero*
+part is what makes that hold over a network as well: if you run a
+modified version and let people use it remotely, they are entitled to
+the source of what you are running, not only the source of what you
+distributed.
+
+For a program that is an engine other programs are built with, that is
+the clause that matters. Without it a modified engine could power a
+service forever and nobody would ever see the modifications.
+
+If those terms do not suit you, ask — the copyright holder can offer
+different ones.

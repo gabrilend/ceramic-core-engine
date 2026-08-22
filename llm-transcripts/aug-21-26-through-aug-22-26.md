@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 23:29:20
+Generated on: 2026-08-21 23:43:52
 
 --------------------------------------------------------------------------------
 
@@ -3472,6 +3472,122 @@ engine. I reviewed it by hand instead and found two bugs that way — the first
 station named itself `station2`, and a hover style promised something that
 couldn't happen on a layer that ignores the mouse. Both fixed, but the page
 hasn't been run by anything but a browser you're about to point at it.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 26
+
+can you write a license file that'll show up on github that basically says "you
+can use this software if you want but if you're a large corporation then you
+have to pay me first"?
+
+
+also, we probably have enough to write a readme.md file. Can you do so?
+
+
+then, let's add all of phase 8 to the todo list and work on that.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 26
+
+Now the README. Let me pull the current numbers rather than assert any.
+
+
+Both are down. Before phase 8, let me check something 801 step 2 assumes.
+
+
+Clang can target wasm. Let me check it can link one.
+
+
+No `wasm-ld` here — and checking that turned up something bigger about step 2.
+Let me look at what it assumes exists.
+
+
+Now the round trip it makes testable.
+
+
+Round trip passes on every form. Full suite, then commit.
+
+
+Three deliverables. Two caveats on the license, then where phase 8 stands.
+
+
+## LICENSE.md
+
+
+Plain-language summary first, then terms. **Large is a hundred people or a
+million dollars a year** — borrowed from the PolyForm Small Business license
+rather than invented, so a company that's already decided how it feels about
+those numbers has already decided about yours. Both tests rather than one: a
+ten-person company making forty million isn't small, and a three-hundred-person
+co-op making eight hundred thousand isn't large in the way this cares about.
+
+
+The refusing clause is written as an invitation — *"the answer is not going to
+be no"* — plus a twelve-month grace period if you grow past the line while
+already using it.
+
+
+**Two things you should know:**
+
+
+- **I'm not a lawyer and this isn't legal advice.** It's modelled on licenses
+  that are widely used, but if enforceability against a real company ever
+  matters, have someone qualified read it.
+
+- **GitHub won't give it a named badge.** Custom licenses show as "View license"
+  rather than "MIT" or similar. That's the cost of a custom one; using PolyForm
+  Small Business verbatim would get recognized, at the price of it not sounding
+  like you.
+
+
+I used your **GitHub handle, not your email**, as the contact — publishing a
+personal address in a repo felt like your call rather than mine. Easy to change.
+
+
+## README.md
+
+
+Leads with the one rule, since everything else is a consequence and a reader who
+has it can predict most of the rest. Both example maps were **run through the
+real parser** rather than written by eye, and the directory table was checked
+against the directories. It names no counts — a number in a readme is a number
+that goes stale — and points at the command instead.
+
+
+## Phase 8
+
+
+Building step 2 turned up that **the thing it said to compile didn't exist.**
+The plan was to reuse the project's own map writer rather than reimplement it in
+the page. But the only writer was the dump, which walks a *live station table*
+— and someone drawing a map has a drawing, not a table. Using it would have
+meant the whole engine in the browser, which the ticket spends three sections
+refusing.
+
+
+So the missing half now exists: **a description written back out as the text it
+came from**, which closes a round trip the format has been without since it was
+written. Two writers on purpose — the dump says what's *running*, this says
+what was *written down*.
+
+
+Tested by comparing descriptions rather than texts (files differing only in
+blank lines describe one program), plus the stronger claim that the writer is a
+**fixed point**, so a file can't grow each time it's opened.
+
+
+**One blocker, on tooling not design:** this machine has no `wasm-ld`, so the
+writer can't reach the page yet. I recorded it rather than working around it,
+because a JavaScript reimplementation is exactly the second authority the ticket
+exists to avoid.
+
+
+Next in phase 8: the shelf (801 step 3, which the issue says should come early),
+then 802's shared-memory ring.
 
 
 --------------------------------------------------------------------------------
