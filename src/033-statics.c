@@ -26,7 +26,7 @@
  * wire somebody can see.
  *
  * How it does it, in general terms: a port is given text and parses
- * it, at its own registry type, into its own storage — a number for
+ * it, at its own declared type, into its own storage — a number for
  * an int port, a brace walk over the generated field table for a
  * struct port, the characters themselves for a string port. From then
  * on a claim is a memcpy under the station's mutex, beside the ring
@@ -43,7 +43,7 @@
  * and belong beside each other for exactly that reason.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include "091-stopping.h"
 
@@ -773,7 +773,7 @@ void map_in_port_static_text(map_t *m, int station, int port, const char *text)
     in_port_t *sl = &s->in_ports[port];
     if (!sl->type_name)
         die_static(&w,
-                   "the port has no registry type — a constant needs a station "
+                   "the port has no declared type — a constant needs a station "
                    "placed by name, so the text knows what shape to become");
     if (!text || !*text)
         die_static(&w, "a constant with no text");
@@ -854,7 +854,7 @@ const char *map_deliver_argument_text(map_t *m, int station, int port,
     in_port_t *sl = &s->in_ports[port];
     if (!sl->type_name) {
         snprintf(said, sizeof said,
-                 "station %d port %d has no registry type, so text has no "
+                 "station %d port %d has no declared type, so text has no "
                  "shape to become", station, port);
         return said;
     }

@@ -430,8 +430,8 @@ typedef struct out_port {
 
 /*
  * Three-way comparison over raw bytes of two values of one type —
- * the sign of a minus b. Matches the registry's compare functions;
- * declared here generically so this header stays registry-free.
+ * the sign of a minus b. Matches the emitted compare functions;
+ * declared here generically so this header names nothing the generator emits.
  */
 typedef int (*station_compare_t)(const void *a, const void *b);
 
@@ -482,7 +482,7 @@ typedef struct station {
      *
      * **This is not a lookup and never was worth being one.** The dump
      * used to find a station's box by scanning every box record for
-     * one whose call site matched — the registry read backwards, which
+     * one whose call site matched — the emitted table read backwards, which
      * is a linear search to answer a question the station could simply
      * have been told the answer to. The literal costs one pointer per
      * station, the string is read-only data the compiler was going to
@@ -564,7 +564,7 @@ typedef struct station {
 
 
     /* Comparator only: the three-way compare for the box's return
-     * type, resolved from the registry at placement so the delivery
+     * type, resolved by the placement function so the delivery
      * path does a call rather than a lookup (issue 503). */
     station_compare_t compare;
 
@@ -815,7 +815,7 @@ map_t *map_create_empty(void);
  * Place a box at station index: its shim, its kind, one ring-buffer
  * port per element size given, and the byte size of its return value
  * (zero for a sink). Element sizes are hand-supplied here; from
- * phase 3 they come from the registry, derived from the real C.
+ * phase 3 they come from the emitted file, derived from the real C.
  */
 void map_place(map_t *m, int station, task_call_t shim, int kind,
                int n_in_ports, const int *elem_sizes, int out_size);
@@ -1283,7 +1283,7 @@ int map_station_start_after(map_t *m, int station,
  * Give a port a constant, written as text, and make it a static.
  *
  * The text is parsed here into the port's own storage, shaped by the
- * port's registry type — which is why only stations placed by name
+ * port's declared type — which is why only stations placed by name
  * can hold statics: turning `{ 5, 2.0, { 0, 0, 0 }, "hey there", 2 }`
  * into bytes means knowing the field layout, and the type is where
  * that comes from.

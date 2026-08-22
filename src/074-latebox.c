@@ -7,7 +7,7 @@
  *
  * How it does it, in general terms: by running the same two programs
  * the build runs, as programs. The generator turns a box source into
- * a registry source; the compiler turns that into a shared object;
+ * a source for the generator; the compiler turns that into a shared object;
  * the dynamic linker loads it and hands back the arrays it defines.
  * Nothing here re-implements any of that, which is the point — a box
  * added late goes through the identical path a box added early did,
@@ -91,7 +91,7 @@ static int           late_total;
 static int           late_serial; /* names the scratch files apart */
 /* }}} */
 
-/* {{{ registry_late_source_dir() / late_library_dir() */
+/* {{{ late_source_dir() / late_library_dir() */
 /*
  * **Two tiers, and which goes where is not arbitrary.** The project
  * keeps RAM-backed scratch in two places: `/dev/shm` for artifacts
@@ -107,7 +107,7 @@ static int           late_serial; /* names the scratch files apart */
  * one, which is the useful kind of mistake: the rule existed and the
  * reason for it had to be rediscovered.
  */
-const char *registry_late_source_dir(void)
+const char *late_source_dir(void)
 {
     return SORA_RAM_SHARED "/late-boxes";
 }
@@ -118,13 +118,13 @@ static const char *late_library_dir(void)
 }
 /* }}} */
 
-/* {{{ registry_late_count() / registry_late_box() */
-int registry_late_count(void)
+/* {{{ late_box_count() / late_box_at() */
+int late_box_count(void)
 {
     return late_total;
 }
 
-const box_place_t *registry_late_box(int i)
+const box_place_t *late_box_at(int i)
 {
     /* Blocks are newest first, so walking them in order and counting
      * down gives the caller oldest-first, which is the order boxes
@@ -139,16 +139,16 @@ const box_place_t *registry_late_box(int i)
 }
 /* }}} */
 
-/* {{{ registry_late_place_find() */
+/* {{{ late_place_find() */
 /*
  * The placement function for a box that arrived after the program
  * started. Newest first, for the same reason the box lookup is: a
  * name added twice resolves to the newer one, and the older code is
  * still loaded and still callable by anything already placed.
  */
-const box_place_t *registry_late_place_find(const char *name);
+const box_place_t *late_place_find(const char *name);
 
-const box_place_t *registry_late_place_find(const char *name)
+const box_place_t *late_place_find(const char *name)
 {
     for (late_block_t *b = late_head; b; b = b->next)
         for (int i = 0; i < b->n_places; i++)
@@ -222,8 +222,8 @@ static void close_library(void *handle)
 }
 /* }}} */
 
-/* {{{ registry_unload_box() */
-int registry_unload_box(map_t *m, const char *name)
+/* {{{ late_unload_box() */
+int late_unload_box(map_t *m, const char *name)
 {
     if (!m || !name || !*name) {
         fprintf(stderr, "latebox: asked to unload nothing\n");
@@ -301,7 +301,7 @@ int registry_unload_box(map_t *m, const char *name)
 }
 /* }}} */
 
-/* {{{ registry_recover_box() */
+/* {{{ late_recover_box() */
 /*
  * Compile a box back into existence from the source it left behind.
  *
@@ -321,15 +321,15 @@ int registry_unload_box(map_t *m, const char *name)
  * which is the ordinary case of a genuinely misspelled name, and the
  * caller's message for that is the best one in the program.
  */
-const box_place_t *registry_recover_box(const char *name);
+const box_place_t *late_recover_box(const char *name);
 
-const box_place_t *registry_recover_box(const char *name)
+const box_place_t *late_recover_box(const char *name)
 {
     if (!name || !*name)
         return NULL;
 
     char path[512];
-    snprintf(path, sizeof path, "%s/%s.c", registry_late_source_dir(), name);
+    snprintf(path, sizeof path, "%s/%s.c", late_source_dir(), name);
 
     FILE *f = fopen(path, "r");
     if (!f)
@@ -357,7 +357,7 @@ const box_place_t *registry_recover_box(const char *name)
     fprintf(stderr, "latebox: '%s' was not built in; recovering it from %s\n",
             name, path);
 
-    int added = registry_compile_source(text);
+    int added = late_compile_source(text);
     free(text);
     if (added < 0) {
         fprintf(stderr, "latebox: '%s' could not be recovered from its own "
@@ -368,15 +368,15 @@ const box_place_t *registry_recover_box(const char *name)
 }
 /* }}} */
 
-/* {{{ registry_compile_source() */
-int registry_compile_source(const char *c_source)
+/* {{{ late_compile_source() */
+int late_compile_source(const char *c_source)
 {
     if (!c_source || !*c_source) {
         fprintf(stderr, "latebox: asked to compile nothing\n");
         return -1;
     }
 
-    const char *dir = registry_late_source_dir();
+    const char *dir = late_source_dir();
     const char *libdir = late_library_dir();
     if (ensure_dir(SORA_RAM_SHARED) != 0 || ensure_dir(dir) != 0)
         return -1;
@@ -387,7 +387,7 @@ int registry_compile_source(const char *c_source)
     char box_path[512], gen_path[512], lib_path[512], cmd[2048];
     snprintf(box_path, sizeof box_path, "%s/box-%d-%d.c",
              dir, (int)getpid(), serial);
-    snprintf(gen_path, sizeof gen_path, "%s/registry-%d-%d.c",
+    snprintf(gen_path, sizeof gen_path, "%s/emitted-%d-%d.c",
              dir, (int)getpid(), serial);
     snprintf(lib_path, sizeof lib_path, "%s/box-%d-%d.so",
              libdir, (int)getpid(), serial);
@@ -416,7 +416,7 @@ int registry_compile_source(const char *c_source)
              SORA_CC, SORA_INCLUDE, SORA_INCLUDE_LIBS, lib_path, gen_path);
     if (run(cmd) != 0) {
         fprintf(stderr, "latebox: the compiler refused the generated "
-                        "registry for %s\n", box_path);
+                        "generated source for %s\n", box_path);
         return -1;
     }
 
@@ -436,8 +436,8 @@ int registry_compile_source(const char *c_source)
      * a `sizeof` the compiler folded, so there was nothing in them
      * anybody read twice.
      */
-    const box_place_t *places = dlsym(handle, "registry_places");
-    const int *count = dlsym(handle, "registry_n_places");
+    const box_place_t *places = dlsym(handle, "box_places");
+    const int *count = dlsym(handle, "n_box_places");
     if (!places || !count) {
         fprintf(stderr, "latebox: %s defines no placement functions — the "
                         "generator emitted something unexpected\n", lib_path);

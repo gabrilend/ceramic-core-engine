@@ -4,7 +4,7 @@
  * What this is: the half of the generator that writes. Four kinds of
  * output, in the order the engine's header expects to find them: a
  * three-way comparison per orderable return type (issue 305), a shim
- * per box (302), a field table per struct (304), and the registry
+ * per box (302), a field table per struct (304), and the placement functions
  * itself (303).
  *
  * How it does it, in general terms: every size and every offset is
@@ -16,7 +16,7 @@
  *
  * The output is built whole in memory and written to a temporary name,
  * then moved into place only on success. A generator that dies partway
- * must never leave yesterday's registry, or half of today's, where a
+ * must never leave yesterday's emission, or half of today's, where a
  * build can find it (issue 306).
  */
 #include "067-genparse.h"
@@ -80,7 +80,7 @@ static int struct_index_by_name(const description_t *d, const char *type)
  * you compare the bytes (issue 305).
  *
  * A struct return with no author-written comparison simply gets a
- * null in its registry row. The refusal happens at load, when a
+ * null in its row. The refusal happens at load, when a
  * comparator actually asks for one (issue 604), because a box whose
  * value nobody ever compares is perfectly legal.
  */
@@ -214,7 +214,7 @@ static void emit_shims(buf_t *w, const description_t *d)
  * every size a `sizeof`, so a struct with a padding hole reads
  * correctly without this program knowing anything about padding
  * (issue 304). Nested structs point into the shared array declared
- * extern in the registry header.
+ * extern in the emitted-shapes header.
  */
 static void emit_structs(buf_t *w, const description_t *d)
 {
@@ -225,7 +225,7 @@ static void emit_structs(buf_t *w, const description_t *d)
             const field_t *f = &s->fields[j];
             char nested[64];
             if (f->nested)
-                snprintf(nested, sizeof nested, "&registry_structs[%d]",
+                snprintf(nested, sizeof nested, "&struct_layouts[%d]",
                          struct_index(d, f->nested));
             else
                 snprintf(nested, sizeof nested, "NULL");
@@ -239,7 +239,7 @@ static void emit_structs(buf_t *w, const description_t *d)
         buf_line(w, "");
     }
 
-    buf_line(w, "const struct_info_t registry_structs[] = {");
+    buf_line(w, "const struct_info_t struct_layouts[] = {");
     for (int i = 0; i < d->structs.n; i++) {
         const sdef_t *s = vec_at(&d->structs, i);
         buf_line(w, "    { \"%s\", (int)sizeof(%s), %d, %s__fields },",
@@ -248,7 +248,7 @@ static void emit_structs(buf_t *w, const description_t *d)
     if (d->structs.n == 0)
         buf_line(w, "    { NULL, 0, 0, NULL },");
     buf_line(w, "};");
-    buf_line(w, "const int registry_n_structs = %d;", d->structs.n);
+    buf_line(w, "const int n_struct_layouts = %d;", d->structs.n);
     buf_line(w, "");
 }
 /* }}} */
@@ -410,7 +410,7 @@ static void emit_placements(buf_t *w, const description_t *d,
              * searching a table by name (issue 311b). */
             int si = struct_index_by_name(d, b->params[j].type);
             if (si >= 0)
-                buf_line(w, "    s->in_ports[%d].fields = &registry_structs[%d];",
+                buf_line(w, "    s->in_ports[%d].fields = &struct_layouts[%d];",
                          j, si);
         }
         if (!is_void && compare_of[i]) {
@@ -420,7 +420,7 @@ static void emit_placements(buf_t *w, const description_t *d,
                      b->n_params, b->ret);
             if (rsi >= 0)
                 buf_line(w, "        s->in_ports[%d].fields = "
-                            "&registry_structs[%d];", b->n_params, rsi);
+                            "&struct_layouts[%d];", b->n_params, rsi);
             /* Resolved once, here, so the delivery path compares
              * through a pointer the station already holds rather than
              * looking anything up per value. */
@@ -440,7 +440,7 @@ static void emit_placements(buf_t *w, const description_t *d,
      * what keeps every emitted function referenced, which a build with
      * warnings as errors requires.
      */
-    buf_line(w, "const box_place_t registry_places[] = {");
+    buf_line(w, "const box_place_t box_places[] = {");
     for (int i = 0; i < d->boxes.n; i++) {
         const box_t *b = vec_at(&d->boxes, i);
         const char *file = path_within(b->file, root);
@@ -451,7 +451,7 @@ static void emit_placements(buf_t *w, const description_t *d,
     if (d->boxes.n == 0)
         buf_line(w, "    { NULL, NULL, NULL },");
     buf_line(w, "};");
-    buf_line(w, "const int registry_n_places = %d;", d->boxes.n);
+    buf_line(w, "const int n_box_places = %d;", d->boxes.n);
     buf_line(w, "");
 }
 /* }}} */
@@ -797,7 +797,7 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
     buf_line(&w, "#include <stddef.h>");
     buf_line(&w, "#include <string.h>");
     buf_line(&w, "#include <time.h>");
-    buf_line(&w, "#include \"026-registry.h\"");
+    buf_line(&w, "#include \"026-emitted.h\"");
     /* The placement functions call the station layer directly, which
      * is the point of them (issue 311b). */
     buf_line(&w, "#include \"018-station.h\"");

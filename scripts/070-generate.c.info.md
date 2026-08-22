@@ -1,6 +1,6 @@
 # 070-generate.c — the generator's front door
 
-`generate <output.c> <box-source.c>...` writes the registry;
+`generate <output.c> <box-source.c>...` writes the emitted C file;
 `generate --describe <box-source.c>...` prints what the parser saw,
 for diagnosing a build by looking at the findings rather than at the
 emission.

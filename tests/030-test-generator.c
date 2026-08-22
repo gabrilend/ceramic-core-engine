@@ -2,7 +2,7 @@
  * 030-test-generator.c — proves the build path (issues 302–305).
  *
  * What this is: the test that everything the generator emitted tells
- * the truth — that registry sizes equal what sizeof says, that a
+ * the truth — that emitted sizes equal what sizeof says, that a
  * generated shim called with a hand-built task gives the same answer
  * as calling the box directly, that field tables agree with the
  * compiler about offsets, that compare functions order semantically
@@ -14,7 +14,7 @@
  * artifacts against direct calls and direct sizeofs. Nothing here
  * knows how the generator works; it only checks the emitted claims.
  */
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -26,7 +26,7 @@ typedef struct { float x; float y; float z; } vec3;
 typedef struct { char tag; double heavy; int id; } padded;
 typedef struct { int a; vec3 pos; char note[16]; unsigned long stamp; } record;
 
-/* The boxes, external linkage in the registry's translation unit. */
+/* The boxes, external linkage in the emitted file's translation unit. */
 extern int add(int a, int b);
 extern double mix(int count, double factor);
 extern vec3 make_vec3(float x, float y, float z);
@@ -95,7 +95,7 @@ static task_t *build_task(station_t *s, void **values, void *out)
 }
 /* }}} */
 
-/* {{{ test_registry_contents() */
+/* {{{ test_emitted_contents() */
 /*
  * **Every size a placed station holds equals the compiler's own
  * answer**, which is the claim this whole build path rests on and the
@@ -109,12 +109,12 @@ static task_t *build_task(station_t *s, void **values, void *out)
  * twice. Asking a station instead is the same question put to the
  * thing that gets used.
  */
-static void test_registry_contents(void)
+static void test_emitted_contents(void)
 {
     /* Grows as demo boxes are added; the point is that every box in
      * the source is placeable exactly once, which the duplicate check
      * in the generator enforces and the placements below sample. */
-    check(registry_n_places >= 7, "the demo boxes are all placeable");
+    check(n_box_places >= 7, "the demo boxes are all placeable");
 
     station_t *s = placed("add");
     check(s->n_in_ports == 2, "add takes two");
@@ -318,11 +318,11 @@ static void the_binary_carries_its_own_source(void)
 
     /* Found by the path the build knew, and by the bare name a person
      * would type having seen the file. */
-    check(registry_box_source("src/boxes/029-demo-boxes.c") != NULL,
+    check(box_source_text("src/boxes/029-demo-boxes.c") != NULL,
           "a source is found by the path the build knew it as");
-    check(registry_box_source("029-demo-boxes.c") != NULL,
+    check(box_source_text("029-demo-boxes.c") != NULL,
           "and by the bare name somebody would type");
-    check(registry_box_source("no-such-file.c") == NULL,
+    check(box_source_text("no-such-file.c") == NULL,
           "and a name that is not there is not there");
 
     printf("  every box source is carried in the binary, byte for byte\n");
@@ -346,7 +346,7 @@ static void test_map_placed_by_name(void)
 {
     enum { VALUES = 30 };
     map_t *m = map_create(2);
-    /* Sizes come from the registry now — nothing hand-typed. */
+    /* Sizes come from the emitted file now — nothing hand-typed. */
     map_place_box(m, 0, "add", STATION_PLAIN);
     int one_int[1] = { sizeof(int) };
     map_place(m, 1, record_total__call, STATION_PLAIN, 1, one_int, 0);
@@ -368,13 +368,13 @@ static void test_map_placed_by_name(void)
     check(placed_total == expected, "a map placed by name computes correctly");
 
     map_destroy(m);
-    printf("  a station placed by registry name ran a generated shim in anger\n");
+    printf("  a station placed by name ran a generated shim in anger\n");
 }
 /* }}} */
 
 int main(void)
 {
-    test_registry_contents();
+    test_emitted_contents();
     test_shim_equivalence();
     test_field_tables();
     test_compares();

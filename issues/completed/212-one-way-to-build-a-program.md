@@ -470,7 +470,7 @@ rather than drifting into place.
 6. Hand placement stays and becomes the primitive — a generated
    placement function per box writes a station directly, and placing by
    name is that function being called. Built in
-   [311b](../311b-placement-instead-of-records.md).
+   [311b](311b-placement-instead-of-records.md).
 7. **Done.** The operations exist as boxes — add a station, draw a
    wire, write a constant, name a station — each a plain C function
    taking values and returning one, in an ordinary box source the

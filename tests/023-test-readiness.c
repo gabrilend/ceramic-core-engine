@@ -14,7 +14,7 @@
  * exactly once — the property the claim-under-mutex exists for.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include <pthread.h>
 #include <stdint.h>
@@ -281,7 +281,7 @@ static void test_unconfigured_port_never_ready(void)
  * silently, and the person who converted the port finds out never.
  *
  * The station is placed **by name** rather than by hand, because
- * binding a static needs the port's type from the registry and hand
+ * binding a static needs the port type the placement function wrote and hand
  * placement is never given one.
  *
  * Port 1 is starved until after the round trip, so nothing can

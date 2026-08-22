@@ -69,7 +69,7 @@ The generator, and the end of hand-written glue.
 
 Built here: a parser that reads designated box source files and pulls
 out function declarations, struct definitions, and compare functions;
-emission of one shim per box; emission of the registry that maps a name
+emission of one shim per box; emission of the table that maps a name
 to a shim pointer and full type information; emission of a field table
 per struct; emission of compare functions for the primitives.
 
@@ -130,7 +130,7 @@ Described by [005 — Routing](005-routing.md).
 The capstone. The two halves of a program meet for the first time.
 
 Built here: the line-oriented parser; the two-pass loader; the
-name lookup table; type checking of every wire against the registry;
+name lookup table; type checking of every wire against the emitted sizes;
 every load-time validation rule; the seed sweep.
 
 At the end of this phase, a program is a directory of C functions and a

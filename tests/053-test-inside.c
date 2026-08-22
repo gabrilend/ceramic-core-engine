@@ -25,7 +25,7 @@
 #include "040-mapfile.h"
 #include "049-observe.h"
 
-/* The registry header and pthread.h left with the joint-cycle test:
+/* The emitted-shapes header and pthread.h left with the joint-cycle test:
  * it placed boxes by name and raced two threads by hand. Nothing
  * else here does either. */
 #include <stdatomic.h>

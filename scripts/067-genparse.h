@@ -115,7 +115,7 @@ void  gp_free(description_t *d);
 
 /* Reads one box source and appends what it finds. Any problem ends
  * the program naming file and line: a parser that skips what it does
- * not understand produces a registry with a hole in it, which
+ * not understand produces an emitted file with a hole in it, which
  * surfaces much later pointing at the map instead of the real cause. */
 void  gp_parse_file(description_t *d, const char *path);
 

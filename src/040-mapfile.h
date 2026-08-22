@@ -5,7 +5,7 @@
  * C functions and a text file; this header is where the text file
  * side comes in. The parser reads a map into a description and does
  * no construction; the loader walks the description twice, checks
- * every wire against the registry, validates what only the whole map
+ * every wire against the emitted sizes, validates what only the whole map
  * can show, and seeds the first tasks.
  *
  * How it does it, in general terms: parse and build stay separate so
@@ -128,7 +128,7 @@ void mapfile_free(map_description_t *d);
 
 /* {{{ map_load_file() — issues 602–605 */
 /*
- * The whole journey: parse, build every station from the registry
+ * The whole journey: parse, build every station from its placement function
  * (first pass), resolve and type-check every arrow (second pass),
  * validate what needs the whole map, start the pool with its workers
  * parked, and seed. The caller releases the pool when ready:

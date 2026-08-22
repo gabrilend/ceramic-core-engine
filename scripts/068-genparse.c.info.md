@@ -19,5 +19,5 @@ can express. The same backwards-scan finds the trailing identifier in
 every other place a name has to be separated from what precedes it.
 
 The refusals are the point. A parser that quietly skips what it does
-not understand emits a registry with a hole in it, and the hole
+not understand emits a file with a hole in it, and the hole
 surfaces much later as an error pointing at somebody's map.

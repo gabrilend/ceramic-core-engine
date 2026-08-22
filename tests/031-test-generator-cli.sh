@@ -65,7 +65,7 @@ EOF
     || fail "a healthy source was refused"
 grep -q '"widen"' "${WORK}/out.c" || fail "widen missing from emission"
 grep -q '"bundle"' "${WORK}/out.c" || fail "bundle missing from emission"
-grep -q '"sneaky"' "${WORK}/out.c" && fail "a static helper leaked into the registry"
+grep -q '"sneaky"' "${WORK}/out.c" && fail "a static helper leaked into the emitted file"
 echo "  braces in strings, helpers, and multi-type boxes all handled"
 
 # --- describe mode reports what was seen ---------------------------
@@ -106,7 +106,7 @@ echo "  a malformed source stops the build, naming the file"
 
 # --- a failing run leaves nothing behind ---------------------------
 [[ ! -f "${WORK}/out3.c" ]] || fail "a failing run left partial output in place"
-echo "  failure emits nothing — no stale registry possible"
+echo "  failure emits nothing — no stale emission possible"
 
 # --- regeneration follows an edit ----------------------------------
 cat >> "${WORK}/good.c" <<'EOF'
@@ -118,8 +118,8 @@ int follow_up(int x)
 EOF
 "${GENERATOR}" "${WORK}/out.c" "${WORK}/good.c" \
     || fail "regeneration after an edit failed"
-grep -q '"follow_up"' "${WORK}/out.c" || fail "the edit did not reach the registry"
-echo "  an edited source regenerates into an updated registry"
+grep -q '"follow_up"' "${WORK}/out.c" || fail "the edit did not reach the emitted file"
+echo "  an edited source regenerates into an updated emission"
 
 
 # --- an ambiguous box name refuses, naming both paths --------------

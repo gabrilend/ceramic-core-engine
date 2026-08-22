@@ -92,19 +92,24 @@ per box, and it leaves no macros in the source to read around later.
 
 ## No table at all
 
-**This section is where the build path is going, and part of it has
+**This section is where the build path is going, and most of it has
 arrived.** What stands today: the generator emits a placement function
-per box, placing a box routes through it, and nothing reads the box
-record to build a station. What does not: the map file still names a
-box by a bare function name, the generator does not read maps at all,
-and a running program still resolves a name — which is why the record
-and a small table of placement functions still exist.
+per box, placing a box routes through it, **the box record is gone
+entirely**, a map names a box by file and function, and the generator
+reads maps and emits the construction calls they describe.
 
-The rest waits on one thing, and the dependency is deliberate. What
-the generator would emit here *is* construction calls, so writing it
-against an interface the project has decided to replace would make the
-most-read generated file in the project an example of how not to build
-a program, for however long the replacement took.
+What is left is a single table — box name, full address, placement
+function — and the reason it survives is that a *running* program can
+still be asked for a box by name. Three things ask: the engine's own
+map parser, which is on its way out; the loader for a box that arrives
+mid-run, which is looking inside a shared object rather than at this
+table; and the dump, which asks only whether a short name is
+unambiguous.
+
+**That table is also what holds the binary's size down**, because a
+table naming every placement function makes every one of them
+reachable, and reachable code cannot be discarded. Deleting it is worth
+more than any linker setting.
 
 The map file says `"math.c:add"` as text, and something has to turn
 that into a function pointer. **The generator does, while generating.**
@@ -159,19 +164,24 @@ follows a pointer rather than searching by type name. And the name a
 station reports is a string literal its own placement function wrote,
 not an index into anything.
 
-**There is still a record per box, and it is on its way out** —
-parameter arrays, type-name strings, the exact task allocation size.
-Every field of it was read once, at placement, by code that generated
-code could just as well have written, and placement no longer reads
-any of it. What keeps the record alive is that a *running* program can
-still be asked to place a box by name, so something has to be searched;
-when the generator emits the calls instead, nothing will be.
+**The record per box is gone** — parameter arrays, type-name strings,
+the exact task allocation size, the comparison pointer. Every field of
+it was read once, at placement, by code the generator could just as
+well have written; and every number in it was a `sizeof` the compiler
+had already folded, so moving them from a table into a function meant
+they stopped being stored at all.
 
-The backwards lookup from a call site to a name is already gone, and
-it went the way these things go: the last known caller was removed and
-the function refused to disappear, because the check that refuses a
-mismatched wire on a running program had been reaching through it for
-a type's spelling.
+Deleting it needed one observation, which is worth keeping because the
+same shape recurs: **the plan assumed one table where there were two.**
+One answered *what is this box* — sizes, types, the comparison. The
+other answers *which function writes this station*. Only the second is
+needed to resolve a name, so the first could go immediately rather than
+waiting for names to disappear.
+
+The backwards lookup from a call site to a name went the way these
+things go: the last known caller was removed and the function refused
+to disappear, because the check that refuses a mismatched wire on a
+running program had been reaching through it for a type's spelling.
 
 ### Generated symbols escape punctuation, so two files cannot collide
 
@@ -249,7 +259,7 @@ the compiler, and only then writes `sizeof a0`.
 
 So every size comes from exactly one of two places: a `sizeof`
 expression compiled in, or a compiler invoked at runtime. There is no
-third door — and it is the only thing about the old registry that could
+third door — and it is the only thing about the old box record that could
 not be avoided.
 
 ## What the build includes
@@ -273,7 +283,7 @@ the executable's dynamic table cannot be collected, because the reason
 it is there is that code compiled later may look it up by name. So
 `-rdynamic`, which exports everything, quietly makes the whole binary a
 root. The engine's public surface is named instead, in
-[src/098-engine-surface.syms](../src/098-engine-surface.syms), and
+[src/098-engine-surface.syms](../src/098-engine-surface.syms.info.md), and
 handed over as `--dynamic-list`.
 
 **A table naming every box is a root too**, and while one exists it

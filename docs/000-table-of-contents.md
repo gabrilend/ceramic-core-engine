@@ -16,7 +16,7 @@ minimal-soramech/
 │   ├── 004-datapath-statics.md      statics, and writes as events
 │   ├── 005-routing.md              plain, comparator, iterator
 │   ├── 006-datapath-scheduling.md  the pool, sleeping, termination
-│   ├── 007-datapath-build.md       C source to shims and registry
+│   ├── 007-datapath-build.md       C source to shims and placement functions
 │   ├── 008-map-file-format.md      what a map file says
 │   ├── 009-datapath-load.md        map file to running program
 │   ├── 010-roadmap.md              the phases
@@ -130,7 +130,7 @@ schedule. Detail in [010 — Roadmap](010-roadmap.md).
 |---|---|
 | 1 | **The pool** — workers, the task queue, sleeping, termination |
 | 2 | **Stations and the push path** — the first phase where a graph runs |
-| 3 | **The build path** — the generator, shims, the registry |
+| 3 | **The build path** — the generator, shims, placement functions |
 | 4 | **Configuration** — statics on ports, and writing one as an event |
 | 5 | **Routing kinds** — comparators and iterators |
 | 6 | **The map file** — parser, loader, validation, seed. The capstone. |

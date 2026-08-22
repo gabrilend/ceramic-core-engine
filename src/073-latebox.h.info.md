@@ -3,20 +3,20 @@
 The door through which C source becomes a box a running program can
 place.
 
-- **`registry_compile_source(text)`** — compiles C into the running
+- **`late_compile_source(text)`** — compiles C into the running
   program and adds every box it defines. Returns how many were added,
   or −1. A failure adds nothing at all and puts **the compiler's own
   output** on stderr rather than a summary, because the message that
   says what is wrong with a piece of C is the one the compiler wrote.
-- **`registry_late_count()` / `registry_late_box(i)`** — the rows added
+- **`late_box_count()` / `late_box_at(i)`** — the rows added
   since the program started, oldest first. Almost nothing needs these;
   lookup by name goes through `box_place_find`, which walks both the
   generated rows and these.
-- **`registry_late_source_dir()`** — where saved sources go.
+- **`late_source_dir()`** — where saved sources go.
 
 Two functions are declared where they are used rather than here,
-because only one caller each needs them: `registry_late_find` (by
-`box_place_find`) and `registry_recover_box` (by the loader and by
+because only one caller each needs them: `late_place_find` (by
+`box_place_find`) and `late_recover_box` (by the loader and by
 placement).
 
 **Why a signature is not enough**, since it is the obvious idea: a

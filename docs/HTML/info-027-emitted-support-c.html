@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>101 — The task queue: a ring of pointers that doubles</title>
+<title>027-emitted-support.c — the hand-written half of what the generator emits</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -48,7 +48,7 @@
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
 <a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
 <h2>Issues, completed</h2>
-<a href="done-101-task-queue-ring.html" class="here">101 — The task queue: a ring of pointers that doubles</a>
+<a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
 <a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
 <a href="done-103-sleeping-and-waking.html">103 — Sleeping and waking</a>
 <a href="done-104-termination-by-last-sleeper.html">104 — Termination: the last worker to sleep looks again</a>
@@ -134,7 +134,7 @@
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-emitted-h.html">026-emitted.h — the shapes the generator emits, from outside</a>
-<a href="info-027-emitted-support-c.html">027-emitted-support.c — the hand-written half of what the generator emits</a>
+<a href="info-027-emitted-support-c.html" class="here">027-emitted-support.c — the hand-written half of what the generator emits</a>
 <a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
@@ -154,79 +154,14 @@
 <a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
 </nav>
 <main>
-<h1>101 — The task queue: a ring of pointers that doubles</h1>
-<h2>Current behavior</h2>
-<p>Built, in the pool library under <code>libs/</code>. The queue is a ring of task
-pointers guarded by one mutex, doubling when the tail would land on
-the head, with the wrapped portion unwrapped during the copy so the
-contents stay in first-in-first-out order. Push and pop never block;
-pop returns nothing on empty and the sleeping decision lives with the
-workers. The queue additionally records its high-water occupancy and
-growth count, placed early so the phase 1 demo could report measured
-numbers rather than constants. Covered by a growth-order test seeded
-with a wrapped ring and a many-threads push/pop test.</p>
-<h2>Intended behavior</h2>
-<p>A first-in-first-out queue holding pointers to task structs. It is the
-only channel between the thread that discovers work and the thread that
-performs it, and it is the foundation everything else in phase 1 sits
-on.</p>
-<p><strong>The queue holds pointers, not tasks.</strong> Each entry is an address of a
-task struct sitting on its own in the heap. This distinction is what
-makes the rest of the design safe: nothing anywhere in the program
-holds a pointer <em>into</em> the ring, so the ring's storage may be moved
-underneath every thread without producing a single dangling reference.</p>
-<p><strong>Fields:</strong></p>
-<table>
-<tr><td>Field</td><td>Type</td><td>Meaning</td></tr>
-<tr><td>slots</td><td>pointer to an array of pointers</td><td>The ring itself</td></tr>
-<tr><td>capacity</td><td><code>int</code></td><td>How many entries the array holds</td></tr>
-<tr><td>head</td><td><code>int</code></td><td>Where the oldest task sits</td></tr>
-<tr><td>tail</td><td><code>int</code></td><td>Where the next task goes</td></tr>
-<tr><td>mutex</td><td><code>pthread_mutex_t</code></td><td>Guards all four of the above</td></tr>
-</table>
-<p>Both indices wrap at capacity. Order is first-in-first-out, so a task
-that has been waiting cannot be starved by newer arrivals. A stack
-would be faster — the last value written is still in cache — but it can
-delay an old task indefinitely under sustained load, and the engine has
-no way to express urgency to compensate.</p>
-<p><strong>When the ring fills, it doubles.</strong> If advancing the tail would land
-it on the head, the storage is reallocated to twice its size, the
-wrapped-around portion is copied so the queue reads contiguously again,
-and both indices are corrected. All of this happens while the mutex is
-held, so no other thread is inside.</p>
-<p>This is reachable and not theoretical: one station wired to a hundred
-destinations produces a hundred tasks during a single delivery, so the
-queue can go from nearly empty to overflowing in one worker's turn.</p>
-<p><strong>Rejected alternative:</strong> a worker that finds the queue full runs a
-task itself and then retries its enqueue. It is deadlock-free, but it
-delays the enqueue by however long an arbitrary user function takes.
-Growth delays it by a bounded memory copy. Same shape, wildly different
-worst case.</p>
-<p><strong>Task struct lifetime.</strong> Allocated fresh by whoever enqueues it,
-freed by the worker that ran it, after that worker has delivered its
-output. Swapping in a free list later is invisible to everything
-outside the allocate and free calls, so it is not a decision this issue
-owes.</p>
-<h2>Suggested implementation steps</h2>
-<p>1. Create the pool library under <code>libs/</code> with the queue struct, its
-   creation, and its destruction.
-2. Push and pop, both taking the mutex, both operating on the indices.
-   Pop returns nothing when the queue is empty rather than blocking —
-   the sleeping decision belongs to issue 103, not here.
-3. The growth path, inside push, triggered when advancing the tail
-   would collide with the head. Reallocate, unwrap, fix indices.
-4. A test that fills a small queue past its capacity several times over
-   and asserts that everything pushed comes back out, in order, once.
-   The unwrap step is the part that will be wrong first: seed the test
-   with a queue whose contents have wrapped before the growth happens.
-5. A test that pushes and pops from several threads at once and
-   asserts nothing is lost or duplicated.</p>
-<h2>Related</h2>
-<ul>
-<li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a></li>
-<li>Issue 102 — the workers that pop from this</li>
-<li>Issue 103 — what a worker does when the pop comes back empty</li>
-</ul>
+<h1>027-emitted-support.c — the hand-written half of what the generator emits</h1>
+<p>Interface in <code>026-emitted.h.info.md</code>. This file walks the generated
+arrays and never changes when a box does — that division is the whole
+point. Lookups are linear walks: dozens of boxes, load-time only, so
+simplicity beats any table cleverness. Placement-by-name is where the
+comparator's extra threshold port is appended, typed from the box's
+return value, and where a sink asked to be a comparator is refused
+(nothing to compare).</p>
 
 </main>
 </div></body></html>

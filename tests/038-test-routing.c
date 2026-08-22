@@ -8,14 +8,14 @@
  * would not), and an iterator spreads exactly evenly no matter how
  * many threads are enqueuing.
  *
- * How it does it, in general terms: comparator maps place registry
+ * How it does it, in general terms: comparator maps place generated
  * boxes with the extra threshold port bound static or left buffered,
  * with counting sinks on each port; every count is then checked
  * against what the mathematics says. The plain path needs no new
  * test — the whole earlier suite is that test, unchanged.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include <pthread.h>
 #include <stdatomic.h>

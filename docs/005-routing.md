@@ -31,7 +31,7 @@ a fixed threshold, and a static port is always full, so it usually has
 no effect on readiness at all.
 
 Its type is never declared. It must match the box function's return
-type, because that is what it gets compared against, and the registry
+type, because that is what it gets compared against, and the emitted file
 already knows what that is.
 
 **Comparison is three-way.** The engine calls a function returning

@@ -1,7 +1,7 @@
 /*
- * 027-registry-support.c — walking what the generator wrote.
+ * 027-emitted-support.c — walking what the generator wrote.
  *
- * What this is: the hand-written half of the registry — lookups,
+ * What this is: the hand-written half of what the generator emits — lookups,
  * printing, and placement-by-name. The data it walks is generated at
  * build time from the box sources; this file never changes when a
  * box does, which is the entire division of labor.
@@ -11,7 +11,7 @@
  * lookup happens at load time, not on the delivery path; simplicity
  * wins over any table cleverness.
  */
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -24,8 +24,8 @@
  * lookups need them: everything else reaches a box through the row it
  * was already handed.
  */
-const box_place_t *registry_recover_box(const char *name);
-const box_place_t *registry_late_place_find(const char *name);
+const box_place_t *late_recover_box(const char *name);
+const box_place_t *late_place_find(const char *name);
 
 /* {{{ box_place_find() */
 /*
@@ -92,24 +92,24 @@ const box_place_t *box_place_find(const char *name)
 {
     if (!name || !*name)
         return NULL;
-    for (int i = 0; i < registry_n_places; i++)
-        if (box_place_matches(&registry_places[i], name))
-            return &registry_places[i];
-    return registry_late_place_find(name);
+    for (int i = 0; i < n_box_places; i++)
+        if (box_place_matches(&box_places[i], name))
+            return &box_places[i];
+    return late_place_find(name);
 }
 /* }}} */
 
 /* {{{ struct_find() */
 const struct_info_t *struct_find(const char *type_name)
 {
-    for (int i = 0; i < registry_n_structs; i++)
-        if (strcmp(registry_structs[i].name, type_name) == 0)
-            return &registry_structs[i];
+    for (int i = 0; i < n_struct_layouts; i++)
+        if (strcmp(struct_layouts[i].name, type_name) == 0)
+            return &struct_layouts[i];
     return NULL;
 }
 /* }}} */
 
-/* {{{ registry_print() */
+/* {{{ emitted_print() */
 /*
  * **What a program can place, and where each one came from.**
  *
@@ -121,15 +121,15 @@ const struct_info_t *struct_find(const char *type_name)
  * know: which names a program answers to, and which file each one was
  * compiled from.
  */
-void registry_print(FILE *out)
+void emitted_print(FILE *out)
 {
-    fprintf(out, "registry: %d boxes, %d structs\n",
-            registry_n_places, registry_n_structs);
-    for (int i = 0; i < registry_n_places; i++)
-        fprintf(out, "  %-20s %s\n", registry_places[i].name,
-                registry_places[i].address);
-    for (int i = 0; i < registry_n_structs; i++) {
-        const struct_info_t *s = &registry_structs[i];
+    fprintf(out, "emitted: %d boxes, %d structs\n",
+            n_box_places, n_struct_layouts);
+    for (int i = 0; i < n_box_places; i++)
+        fprintf(out, "  %-20s %s\n", box_places[i].name,
+                box_places[i].address);
+    for (int i = 0; i < n_struct_layouts; i++) {
+        const struct_info_t *s = &struct_layouts[i];
         fprintf(out, "  struct %s: %d bytes, %d fields\n",
                 s->name, s->size, s->n_fields);
         for (int f = 0; f < s->n_fields; f++) {
@@ -144,7 +144,7 @@ void registry_print(FILE *out)
 }
 /* }}} */
 
-/* {{{ registry_box_source() */
+/* {{{ box_source_text() */
 /*
  * **The C one box source was compiled from** (issue 311c), by the
  * path the build knew it as.
@@ -155,7 +155,7 @@ void registry_print(FILE *out)
  * the full path is the way to say which, exactly as it is for
  * addressing a box.
  */
-const char *registry_box_source(const char *path)
+const char *box_source_text(const char *path)
 {
     if (!path || !*path)
         return NULL;
@@ -175,13 +175,13 @@ const char *registry_box_source(const char *path)
 }
 /* }}} */
 
-/* {{{ registry_map_build() */
+/* {{{ map_build_find() */
 /*
  * **The compiled form of one description** (issue 311d), by the path
  * the build knew it as or by the bare name somebody would type — the
  * same two ways a box source is found, for the same reason.
  */
-const map_build_t *registry_map_build(const char *path)
+const map_build_t *map_build_find(const char *path)
 {
     if (!path || !*path)
         return NULL;
@@ -236,11 +236,11 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
          * message below is the ordinary answer for a misspelled name,
          * which is the most common mistake a map will ever contain.
          */
-        bp = registry_recover_box(box_name);
+        bp = late_recover_box(box_name);
     }
     if (!bp) {
         fprintf(stderr,
-                "map: no box named '%s' in the registry — misspelled, or its "
+                "map: no box named '%s' anywhere the build could see — misspelled, or its "
                 "source is not under src/boxes/\n", box_name);
         abort();
     }

@@ -66,11 +66,11 @@ CFLAGS += -DSORA_RAM_EXEC='"$(RAM_EXEC)"'
 
 # The generator (phase 3): box sources are whatever sits in
 # src/boxes/ — discovered, never listed, so a box cannot exist that
-# the generator silently does not see. The registry is derived from
+# the generator silently does not see. What it emits is derived from
 # them at build time, lands outside history, and is rebuilt whenever
 # any box source or the generator itself is newer. A failing
 # generator writes nothing into place, so a build can never compile
-# against yesterday's registry.
+# against yesterday's emission.
 #
 # The generator is C (issue 308), compiled here before it is run. It
 # depends on nothing the engine provides, so there is no bootstrap
@@ -96,7 +96,7 @@ GEN_MAPS  := $(DIR)/src/041-mapfile.c
 MAP_SRC   := $(wildcard $(DIR)/maps/*.map)
 MAP_FLAGS := $(patsubst %,--map=%,$(MAP_SRC))
 GENERATOR := $(BUILD)/generate
-GENERATED := $(DIR)/src/generated/registry.c
+GENERATED := $(DIR)/src/generated/emitted.c
 
 $(GENERATOR): $(GEN_SRC) $(GEN_MAPS) | $(BUILD)
 	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $(GEN_SRC) $(GEN_MAPS)
@@ -108,7 +108,7 @@ $(GENERATED): $(BOX_SRC) $(MAP_SRC) $(GENERATOR)
 
 	$(GENERATOR) $(GENERATED) --root=$(DIR) $(MAP_FLAGS) $(BOX_SRC)
 # Everything the engine is made of: the pool from libs/, the station
-# layer and what follows from src/, and the generated registry.
+# layer and what follows from src/, and the generated file.
 # Discovered by wildcard so a new engine file enrolls itself.
 ENGINE_SRC := $(wildcard $(DIR)/libs/*.c) $(wildcard $(DIR)/src/*.c) $(GENERATED)
 

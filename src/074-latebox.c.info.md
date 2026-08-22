@@ -23,12 +23,12 @@ depends on.
 **The source is filed twice**: once under a serial number, which is
 what was handed over, and once per box under that box's own name, which
 is how a **later process** finds it. That is what makes a dump taken
-after somebody added code reloadable — `registry_recover_box` compiles
+after somebody added code reloadable — `late_recover_box` compiles
 it back from the saved source when a name is not found, and says out
 loud that it did, because a fallback nobody was told about is the shape
 this project treats as an error.
 
-**Unloading** (`registry_unload_box`) closes the library a late box
+**Unloading** (`late_unload_box`) closes the library a late box
 came in. Refused while any station in the given map places it; the
 harder half — a worker may be *inside* that code right now — is
 answered by handing the handle to the map's scrapyard, which closes it

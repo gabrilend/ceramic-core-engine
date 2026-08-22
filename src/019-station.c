@@ -77,7 +77,7 @@ static void fail_resource(const char *what)
  * enough padding that the next slot's value is aligned too.
  *
  * The alignment is inferred rather than known, and the inference is
- * the only subtle line in this file. The registry carries every
+ * the only subtle line in this file. The placement functions carry every
  * type's *size* and no type's *alignment* — nothing has needed the
  * latter before, because a plain array of values strided by their own
  * size is aligned for free. Adding a state byte per slot breaks that

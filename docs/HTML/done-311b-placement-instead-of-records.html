@@ -29,7 +29,6 @@
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
-<a href="issue-311b-placement-instead-of-records.html" class="here">311b — Placement instead of records</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
@@ -91,6 +90,7 @@
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
 <a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
+<a href="done-311b-placement-instead-of-records.html" class="here">311b — Placement instead of records</a>
 <a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
@@ -133,8 +133,8 @@
 <a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
-<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
-<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-026-emitted-h.html">026-emitted.h — the shapes the generator emits, from outside</a>
+<a href="info-027-emitted-support-c.html">027-emitted-support.c — the hand-written half of what the generator emits</a>
 <a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
@@ -147,6 +147,7 @@
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
 <a href="info-091-stopping-h.html">091-stopping.h — the ways a program ends, from outside</a>
 <a href="info-092-stopping-c.html">092-stopping.c — the ways a program ends, from inside</a>
+<a href="info-098-engine-surface-syms.html">098-engine-surface.syms — the engine's public surface</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
@@ -160,9 +161,9 @@ writes a station directly. Everything the record held becomes a
 compile-time constant inside it, and the table the records lived in is
 deleted rather than shrunk.</p>
 <h2>Current behavior</h2>
-<p>**Placement now runs through generated functions; the deletions
-wait.** Steps 1 to 3 are done and the record is no longer read to
-build a station.</p>
+<p><strong>Done.</strong> Placement runs through generated functions, the record and
+its table are deleted, and the word that named them is gone from the
+source and the documents.</p>
 <p>What stands:</p>
 <ul>
 <li><strong>A placement function per box</strong>, emitted by the generator, writing</li>
@@ -392,8 +393,31 @@ since nothing on disk describes it either.</p>
    turn text into bytes of the right shape. Replacing it with a class
    the placement function writes directly is a real deletion and its
    own piece of work.
-7. The word <em>registry</em> removed from source and documents, since the
-   thing it named no longer exists in any form. Waits on the same.</p>
+7. <strong>Done, and it did not wait after all.</strong> The step was written as
+   though the word could only go once every table wearing it had gone.
+   Reading the uses showed something else: **one word was doing three
+   unrelated jobs**, and only one of them was the deleted record.</p>
+<ul>
+<li>The <strong>file the generator writes</strong> and the header describing its</li>
+<p>     shapes — never a registry, just emitted material. Now named for
+     what they are.</p>
+<li>The <strong>table of placements</strong> — box name, full address, the function</li>
+<p>     that writes a station. This one does still exist and is
+     <a href="issue-311d-the-map-becomes-code.html">311d</a>'s to remove, but it is not a
+     record of what a box <em>is</em>, so it does not need the old word while
+     it waits.</p>
+<li>The <strong>late-box loader's own machinery</strong> — compiling a source,</li>
+<p>     counting what arrived, unloading it again. That never had anything
+     to do with records at all; it had simply inherited the prefix.</p>
+</ul>
+<p>   Separating them is the whole change. Sixty-odd sentences of prose
+   were rewritten to say which of the three they meant, and each one
+   had to be read rather than substituted, because the same word in two
+   neighbouring paragraphs often meant two different things.</p>
+<p>   The identifier half went through the project's own renaming tool
+   (<a href="info-079-rename-identifiers-lua.html">079</a>), which
+   substitutes placeholders before new names so that no rename can land
+   on the output of another.</p>
 <h2>Open questions</h2>
 <p>None outstanding. The one this issue carried — whether a station should
 remember its box by row number, by name string, or by a backwards scan

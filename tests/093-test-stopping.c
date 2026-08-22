@@ -20,7 +20,7 @@
  * fails on somebody else's laptop and nowhere else.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 #include "049-observe.h"
 #include "091-stopping.h"
 

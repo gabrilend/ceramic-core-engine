@@ -95,7 +95,7 @@ dereference.
 **map_place(map, station index, shim, kind, port count, element
 sizes array, output size)** — put a box at a station: one ring-buffer
 port per element size. Scaffolding until the loader takes over
-(phase 6); sizes come from the registry from phase 3.
+(phase 6); sizes come from the emitted file from phase 3.
 
 **map_configure_port(map, station, port, source, text) → NULL or a
 sentence** — **the one operation that says where a port's values come

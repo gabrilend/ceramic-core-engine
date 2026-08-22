@@ -22,7 +22,7 @@
  * could serve exactly one program.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

@@ -92,7 +92,7 @@ void *vec_at(const vec_t *v, int i);
 /*
  * Collapse runs of whitespace to one space, settle pointer spelling
  * so "const char*" and "const  char  *" become the same text, and
- * trim both ends. The emitted registry compares types by these
+ * trim both ends. The emitted comparisons work on these
  * strings, so the spelling has to be canonical or two spellings of
  * one type become two types.
  */

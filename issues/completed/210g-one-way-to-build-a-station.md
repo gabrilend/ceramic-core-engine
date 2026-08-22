@@ -8,7 +8,7 @@ it.
 
 **Built.** The generator emits a placement function per box and
 by-name placement calls one
-([311b](../311b-placement-instead-of-records.md)), so hand placement is
+([311b](311b-placement-instead-of-records.md)), so hand placement is
 the primitive and there are no longer two contracts that can express
 different programs — and reading a file is now a caller of the
 configuration surface rather than a builder beside it.
@@ -190,7 +190,7 @@ unqualified: a port with no source is an error, full stop.
 1. Hand placement stays and becomes the primitive: a generated
    placement function per box writes a station directly, and by-name
    placement is a table lookup that finds one and calls it. Built in
-   [311b](../311b-placement-instead-of-records.md); this issue is its
+   [311b](311b-placement-instead-of-records.md); this issue is its
    caller rather than its author.
 2. **Done.** One port-configuration operation, with tag conversion
    becoming a case of it and constant-binding reached through it.
@@ -230,7 +230,7 @@ unqualified: a port with no source is an error, full stop.
 
   The question looked like a choice between two doors into the engine
   and it is not.
-  [311b](../311b-placement-instead-of-records.md) has the generator emit a
+  [311b](311b-placement-instead-of-records.md) has the generator emit a
   **placement function** per box — a function that writes a station's
   shim pointer, slot sizes, return size, and comparison directly, with
   every number a `sizeof` the compiler folded. A placement function

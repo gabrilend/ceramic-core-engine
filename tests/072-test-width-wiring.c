@@ -21,7 +21,7 @@
  */
 #include "018-station.h"
 #include "049-observe.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include <fcntl.h>
 #include <stdatomic.h>

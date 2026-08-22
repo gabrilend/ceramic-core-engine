@@ -2,7 +2,7 @@
  * 029-demo-boxes.c — the boxes the tests and demos place in maps.
  *
  * What this is: ordinary C functions, and nothing else. Everything
- * the engine needs to call these by name — shims, the registry,
+ * the engine needs to call these by name — shims, the placement functions,
  * field tables, compare functions — is derived from this file at
  * build time. Writing a function here is the entire act of adding a
  * box; there is no registration and no list to update.

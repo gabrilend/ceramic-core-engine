@@ -29,7 +29,7 @@
  * fails, naming the first line where they part.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 #include "040-mapfile.h"
 #include "049-observe.h"
 #include "073-latebox.h"
@@ -268,7 +268,7 @@ int main(void)
 {
     char dir[256], map_path[320], from_file[320], from_calls[320];
     snprintf(dir, sizeof dir, "%s/one-path-%d",
-             registry_late_source_dir(), (int)getpid());
+             late_source_dir(), (int)getpid());
     char cmd[512];
     snprintf(cmd, sizeof cmd, "mkdir -p %s", dir);
     if (system(cmd) != 0) {

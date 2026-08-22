@@ -1,8 +1,8 @@
 # 069-genemit.c — the description becomes C
 
-`ge_emit` writes four kinds of output in the order the registry header
+`ge_emit` writes four kinds of output in the order the emitted-shapes header
 expects: a three-way comparison per orderable return type, a shim per
-box, a field table per struct, and the registry itself.
+box, a field table per struct, and the table of placements itself.
 
 Every size and every offset is emitted as a `sizeof` or `offsetof`
 expression rather than as a number, so the compiler computes all of
@@ -22,5 +22,5 @@ misaligned.
 
 Output is built whole in memory, written to a temporary name, and
 moved into place only on success — a generator that dies partway must
-never leave yesterday's registry, or half of today's, where a build
+never leave yesterday's emission, or half of today's, where a build
 can find it.

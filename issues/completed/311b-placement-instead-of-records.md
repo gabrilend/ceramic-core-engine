@@ -1,6 +1,6 @@
 # 311b — Placement instead of records
 
-Second child of [311](311-the-registry-dissolved.md). The generator
+Second child of [311](../311-the-registry-dissolved.md). The generator
 stops emitting a record per box and emits a **function** per box that
 writes a station directly. Everything the record held becomes a
 compile-time constant inside it, and the table the records lived in is
@@ -8,9 +8,9 @@ deleted rather than shrunk.
 
 ## Current behavior
 
-**Placement now runs through generated functions; the deletions
-wait.** Steps 1 to 3 are done and the record is no longer read to
-build a station.
+**Done.** Placement runs through generated functions, the record and
+its table are deleted, and the word that named them is gone from the
+source and the documents.
 
 What stands:
 
@@ -114,7 +114,7 @@ spelling now.
 
 **What the remaining steps wait for.** Deleting the record, the table
 and the type-name strings needs there to be no by-name lookup at run
-time at all, and that is [311d](311d-the-map-becomes-code.md)'s doing
+time at all, and that is [311d](../311d-the-map-becomes-code.md)'s doing
 — it emits the calls, so a placement function is reached by being
 called rather than by being found. Until then the record is still
 consulted for the two comparator refusals that want to name a return
@@ -155,14 +155,14 @@ static void place__math_dot_c__add(station_t *s) {
 ```
 
 Every number is a `sizeof` expression, so **guarantee
-[C1](../docs/058-guarantees.md) is untouched** — the compiler still
+[C1](../../docs/058-guarantees.md) is untouched** — the compiler still
 computes every size and the generator still never guesses. The numbers
 move from a table into a function and the compiler folds them into
 immediates. They are not stored anywhere at all.
 
 **There is no table.** An earlier draft of this issue kept a two-column
 one — a name and a placement pointer — for resolving text at run time.
-[311d](311d-the-map-becomes-code.md) removes the need by having the
+[311d](../311d-the-map-becomes-code.md) removes the need by having the
 generator emit the calls, so a placement function is reached by *being
 called*, never by being found.
 
@@ -184,16 +184,16 @@ task size, the by-name struct search, and the backwards lookup from a
 shim pointer to a box name — the station knows its own name now.
 
 **Type and argument names are not carried.** The engine never used a
-parameter name, and under [309](completed/309-types-by-width.md) it does not use
+parameter name, and under [309](309-types-by-width.md) it does not use
 type names either, only widths. Error messages and the dump read them
 out of the source the binary carries
-([311c](completed/311c-source-rides-in-the-binary.md)) — which is the exact text
+([311c](311c-source-rides-in-the-binary.md)) — which is the exact text
 that was compiled, so a name reported can never come from a source that
 has since changed on disk.
 
 ## What this does to hand placement
 
-[210g](completed/210g-one-way-to-build-a-station.md) asks whether placing a
+[210g](210g-one-way-to-build-a-station.md) asks whether placing a
 station by hand — stating shapes directly instead of naming a box —
 survives. **It does, and this issue is what makes the answer easy.**
 
@@ -201,7 +201,7 @@ A placement function *is* hand placement, written by the generator
 instead of by a person. So there are not two doors into the engine;
 there is one door, and by-name placement was only ever a way of finding
 which generated hand-placement to call — a way that
-[311d](311d-the-map-becomes-code.md) now performs at generation time.
+[311d](../311d-the-map-becomes-code.md) now performs at generation time.
 
 That means phase 2's station-table tests keep placing stations without
 constructing any table, which is what they were always doing, and a
@@ -257,7 +257,7 @@ since nothing on disk describes it either.
    pointer are deleted, and the generator no longer emits any of it.
 
    **This did not have to wait on
-   [311d](311d-the-map-becomes-code.md) after all**, and seeing why is
+   [311d](../311d-the-map-becomes-code.md) after all**, and seeing why is
    the useful part. The step was written as though *one* table had to
    survive until nothing resolved a name — and there were two. The
    **record** answered *what is this box*, and the **placement table**
@@ -272,8 +272,32 @@ since nothing on disk describes it either.
    turn text into bytes of the right shape. Replacing it with a class
    the placement function writes directly is a real deletion and its
    own piece of work.
-7. The word *registry* removed from source and documents, since the
-   thing it named no longer exists in any form. Waits on the same.
+7. **Done, and it did not wait after all.** The step was written as
+   though the word could only go once every table wearing it had gone.
+   Reading the uses showed something else: **one word was doing three
+   unrelated jobs**, and only one of them was the deleted record.
+
+   - The **file the generator writes** and the header describing its
+     shapes — never a registry, just emitted material. Now named for
+     what they are.
+   - The **table of placements** — box name, full address, the function
+     that writes a station. This one does still exist and is
+     [311d](../311d-the-map-becomes-code.md)'s to remove, but it is not a
+     record of what a box *is*, so it does not need the old word while
+     it waits.
+   - The **late-box loader's own machinery** — compiling a source,
+     counting what arrived, unloading it again. That never had anything
+     to do with records at all; it had simply inherited the prefix.
+
+   Separating them is the whole change. Sixty-odd sentences of prose
+   were rewritten to say which of the three they meant, and each one
+   had to be read rather than substituted, because the same word in two
+   neighbouring paragraphs often meant two different things.
+
+   The identifier half went through the project's own renaming tool
+   ([079](../../scripts/079-rename-identifiers.lua.info.md)), which
+   substitutes placeholders before new names so that no rename can land
+   on the output of another.
 
 ## Open questions
 
@@ -284,18 +308,18 @@ to scan; the placement function writes the name and the dump reads it.
 
 ## Related
 
-- [311 — The registry dissolved](311-the-registry-dissolved.md), the
+- [311 — The registry dissolved](../311-the-registry-dissolved.md), the
   parent
-- [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md),
+- [311c — Source rides in the binary](311c-source-rides-in-the-binary.md),
   which is where type and argument names go once the engine stops
   carrying them
-- [311d — The map becomes code](311d-the-map-becomes-code.md), which
+- [311d — The map becomes code](../311d-the-map-becomes-code.md), which
   calls these functions and is why no table is needed to find them
-- [303 — Registry emission](completed/303-registry-emission.md), the
+- [303 — Registry emission](303-registry-emission.md), the
   emission this replaces
-- [304 — Struct field tables](completed/304-struct-field-tables.md),
+- [304 — Struct field tables](304-struct-field-tables.md),
   which stop being searched and start being pointed at
-- [210g — One way to build a station](completed/210g-one-way-to-build-a-station.md),
+- [210g — One way to build a station](210g-one-way-to-build-a-station.md),
   whose open question about hand placement this answers
-- [308 — The generator, in C](completed/308-generator-in-c.md), which does the
+- [308 — The generator, in C](308-generator-in-c.md), which does the
   emitting

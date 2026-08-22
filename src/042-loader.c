@@ -2,9 +2,9 @@
  * 042-loader.c — the moment the two halves of a program meet.
  *
  * What this is: the loader (issues 602–605). The binary holds a
- * registry of boxes and no map; the file holds a map and no code.
+ * list of boxes and no map; the file holds a map and no code.
  * This file walks the parsed description twice — create everything,
- * then connect everything — checks every wire against the registry
+ * then connect everything — checks every wire against the emitted sizes
  * at the first moment both ends are known, validates what only the
  * whole map can show, and seeds the first tasks.
  *
@@ -18,13 +18,13 @@
  * person actually touches.
  */
 #include "040-mapfile.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 #include "091-stopping.h"
 
 /* A box added while some earlier process ran; see 073-latebox.h. It
  * is declared here rather than included, because the loader needs one
  * function from that file and nothing else it offers. */
-const box_place_t *registry_recover_box(const char *name);
+const box_place_t *late_recover_box(const char *name);
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,7 +98,7 @@ static int find_station_index(map_description_t *d, const int *at,
 
 /* {{{ first_pass() */
 /*
- * Create every station (issue 602): registry lookup, port array with
+ * Create every station (issue 602): a lookup by name, port array with
  * ring buffers as the default, the comparator's extra port, statics
  * bound from their entries.
  *
@@ -163,7 +163,7 @@ static void first_pass(map_t *m, map_description_t *d, int *at)
              * and this may be that program's dump being reloaded
              * (issue 310). Recovery compiles it back and says out
              * loud that it did. */
-            b = registry_recover_box(s->box);
+            b = late_recover_box(s->box);
         }
         if (!b) {
             /* The most common error a map will ever have; its

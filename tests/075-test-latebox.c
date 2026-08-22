@@ -22,7 +22,7 @@
  * discovers it was a decision rather than an oversight.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 #include "040-mapfile.h"
 #include "049-observe.h"
 #include "073-latebox.h"
@@ -58,7 +58,7 @@ static void a_late_box_runs(void)
         "    return x * 3;\n"
         "}\n";
 
-    int added = registry_compile_source(source);
+    int added = late_compile_source(source);
     check(added == 1, "one box was compiled into the running program");
     if (added != 1)
         return;
@@ -122,7 +122,7 @@ static void a_struct_crosses_intact(void)
         "    return s;\n"
         "}\n";
 
-    check(registry_compile_source(source) == 1,
+    check(late_compile_source(source) == 1,
           "a box returning an unfamiliar struct compiled");
 
     map_t *m = map_create(2);
@@ -154,7 +154,7 @@ static void a_different_width_is_refused(void)
         "    return v / 2.0;\n"
         "}\n";
 
-    check(registry_compile_source(source) == 1, "a double-returning box compiled");
+    check(late_compile_source(source) == 1, "a double-returning box compiled");
 
     map_t *m = map_create(2);
     map_place_box(m, 0, "halve", STATION_PLAIN);   /* -> double, 8 bytes */
@@ -203,7 +203,7 @@ static void a_disagreeing_layout_is_accepted(void)
         "    return s;\n"
         "}\n";
 
-    check(registry_compile_source(source) == 1,
+    check(late_compile_source(source) == 1,
           "a box whose struct disagrees in layout compiled");
 
     map_t *m = map_create(2);
@@ -227,7 +227,7 @@ static void a_disagreeing_layout_is_accepted(void)
  */
 static void the_source_was_saved(void)
 {
-    const char *dir = registry_late_source_dir();
+    const char *dir = late_source_dir();
     check(dir != NULL && *dir, "there is a place saved sources go");
 
     char path[512];
@@ -249,20 +249,20 @@ static void the_source_was_saved(void)
 /* {{{ static void refusals_add_nothing() */
 static void refusals_add_nothing(void)
 {
-    int before = registry_late_count();
+    int before = late_box_count();
 
     /* A source the generator refuses: one field per declaration. */
-    check(registry_compile_source(
+    check(late_compile_source(
               "typedef struct { float x, y; } sloppy;\n") == -1,
           "a source the generator refuses is refused here too");
 
     /* A source the compiler refuses: the generator is happy with the
      * shape of this and the compiler is not. */
-    check(registry_compile_source(
+    check(late_compile_source(
               "int broken(int x)\n{\n    return undefined_thing(x);\n}\n") == -1,
           "a source the compiler refuses is refused here too");
 
-    check(registry_late_count() == before,
+    check(late_box_count() == before,
           "and neither left a row behind — nothing is half-added");
     printf("  two refusals, and the table unchanged after both\n");
 }

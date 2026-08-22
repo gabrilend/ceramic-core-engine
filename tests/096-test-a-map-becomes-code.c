@@ -27,7 +27,7 @@
  * name is looked up while the program runs.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 #include "040-mapfile.h"
 #include "049-observe.h"
 
@@ -94,12 +94,12 @@ int main(void)
     }
 
     /* The build was told about this description, so it is here. */
-    const map_build_t *compiled = registry_map_build("095-doubling.map");
+    const map_build_t *compiled = map_build_find("095-doubling.map");
     check(compiled != NULL,
           "the build compiled the description it was told about");
-    check(registry_map_build("maps/095-doubling.map") != NULL,
+    check(map_build_find("maps/095-doubling.map") != NULL,
           "and it is found by the path the build knew it as");
-    check(registry_map_build("no-such.map") == NULL,
+    check(map_build_find("no-such.map") == NULL,
           "and a description this program was not built with is not there");
     if (!compiled)
         return 1;

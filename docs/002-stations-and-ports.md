@@ -79,7 +79,7 @@ from it.
 | Field | Type | What it is |
 |---|---|---|
 | kind | `unsigned char` | Ring buffer, static, or no source yet. There was another, a gatherer, and [056](implementation-notes/056-no-pull-path.md) is where it went. |
-| elem_size | `int` | Bytes per value. Copied from the registry at load; equals `sizeof` the box function's parameter type. |
+| elem_size | `int` | Bytes per value. Written by the placement function; equals `sizeof` the box function's parameter type. |
 | pages | pointer to a list | The slots, in equal-sized pages. Allocated whatever the kind and never freed until the map is, so changing what a port is costs no allocation and loses nothing that was waiting. Growth appends a page; nothing already there moves. |
 | page_slots | `int` | Slots per page, the same for every page of this port. It is the starting depth, so asking for a deep buffer gives large pages rather than many small ones. |
 | capacity | `int` | How many slots in total, across every page. Ten unless the port was told otherwise. |

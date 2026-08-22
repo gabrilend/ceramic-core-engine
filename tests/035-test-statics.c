@@ -9,14 +9,14 @@
  * that match a compiled initializer exactly, and every malformed
  * shape fatal at bind time.
  *
- * How it does it, in general terms: maps place registry boxes so
+ * How it does it, in general terms: maps place generated boxes so
  * ports know their types, bind statics, and run; death cases fork a
  * child and expect it to abort. The torn-read test hammers a
  * two-field struct from a writer thread while claims stream, and any
  * task seeing fields from two different worlds fails it.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include <pthread.h>
 #include <stdatomic.h>
@@ -176,7 +176,7 @@ static _Atomic int padded_ok;
 
 static void relay_record__call(task_t *t)
 {
-    /* Harness relay so the record static has a registry-typed home:
+    /* Harness relay so the record static has a home with a declared type:
      * claims land here, then flow to the checker. */
     record r;
     memcpy(&r, t->in[0], sizeof r);
@@ -208,7 +208,7 @@ static void test_struct_constant_bytes(void)
     /* nudge takes (vec3, float): use its vec3 port for a struct
      * static... but the full every-kind case wants `record`. Place a
      * harness relay typed by hand for the record, with the type name
-     * granted through a registry-placed twin being unavailable —
+     * granted through a twin placed by name being unavailable —
      * so instead: use stamp_record's vec3 parameter for the nested
      * case and a hand relay for the full record below. */
     int one_record[1] = { sizeof(record) };

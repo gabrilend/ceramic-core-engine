@@ -22,7 +22,7 @@ language does for free, and nothing that knows what a box is.
   emitter can walk them in order.
 - **String helpers** — `gt_normalize_type` collapses whitespace and
   settles pointer spelling so `const char*` and `const  char  *` are
-  one name, which matters because those strings are the registry's
+  one name, which matters because those strings are the emitted file's
   type names and two spellings would be two types. `gt_mangle` turns a
   type name into an identifier fragment. `gt_line_of`, `gt_trim`,
   `gt_all_space`, `gt_is_ident`.

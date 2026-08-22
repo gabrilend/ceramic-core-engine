@@ -1,6 +1,6 @@
 # 009 — Datapath: loading and starting
 
-The binary holds a registry of boxes and no map. The map file holds a
+The binary holds a table of boxes and no map. The map file holds a
 map and no code. This is what happens in the moment between.
 
 **Reading a file has no privileges**, and that is the shape of this
@@ -25,7 +25,7 @@ more, and neither pass can do anything the construction surface does
 not offer.
 
 **First pass: create every station.** For each station line, look its
-box function up in the registry. That gives the shim pointer, the
+box function up in that table. That gives the shim pointer, the
 parameter count, and each parameter's type and size. Allocate the
 station's port array with one ring-buffer port per parameter — the
 default — each sized exactly `sizeof` its parameter, and record the
@@ -152,5 +152,5 @@ condition somewhere in the loop, because nothing else will stop it.
 ## Related
 
 - [008 — Map file format](008-map-file-format.md), the input
-- [007 — The build path](007-datapath-build.md), the registry this is read against
+- [007 — The build path](007-datapath-build.md), the table this is read against
 - [006 — Scheduling](006-datapath-scheduling.md), what the seed pushes into

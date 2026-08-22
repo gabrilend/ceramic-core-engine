@@ -40,7 +40,7 @@ successful rename.
 | *a path* | The project root, if not the one hard-coded at the top. |
 
 Reaches `.c`, `.h`, `.lua`, `.md` and `.map` files. Never reaches the
-generated registry or the published HTML, because both are derived and
+generated C file or the published HTML, because both are derived and
 rewriting a derived file makes it disagree with what derives it.
 
 ## What it prints

@@ -18,7 +18,7 @@
  * comments beside the lines that parse.
  */
 #include "049-observe.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -153,7 +153,7 @@ void map_dump(map_t *m, FILE *out)
          * The station knows its own name (issue 311b): the generated
          * placement function wrote it as a literal. This used to scan
          * every box record for one whose call site matched — the
-         * registry read backwards, a linear search to answer a
+         * emitted table read backwards, a linear search to answer a
          * question the station could just have been told.
          *
          * **A station placed by hand with no name given has none**,

@@ -193,7 +193,7 @@ right: `math` + `_dot_` + `dot` + `_dot_` + `c`.
 **The scheme's job is uniqueness, not recovery.** Nothing decodes a
 symbol back into a name at runtime — a name a person reads comes from
 the string literal a placement function writes onto its station
-([311b](../311b-placement-instead-of-records.md)), because these are
+([311b](311b-placement-instead-of-records.md)), because these are
 static functions whose symbol names may not survive a stripped binary
 at all. Two mechanisms, two jobs, neither doing the other's badly.
 
@@ -255,7 +255,7 @@ None outstanding.
 
 - [311 — The registry dissolved](../311-the-registry-dissolved.md), the
   parent
-- [311b — Placement instead of records](../311b-placement-instead-of-records.md),
+- [311b — Placement instead of records](311b-placement-instead-of-records.md),
   which writes the name literal the dump reads
 - [311d — The map becomes code](../311d-the-map-becomes-code.md), which is
   where resolution actually happens

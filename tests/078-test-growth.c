@@ -18,7 +18,7 @@
  * that no two of them are handed the same one.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 #include "049-observe.h"
 
 #include <pthread.h>

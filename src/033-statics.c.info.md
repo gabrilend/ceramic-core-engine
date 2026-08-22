@@ -23,7 +23,7 @@ which costs a station and gains a wire somebody can see.
 
 **map_in_port_static_text(map, station, port, text)** — give a port a
 constant written as text, and make it a static. Parses into the port's
-own storage, shaped by the port's registry type: a number for
+own storage, shaped by the declared type the placement function wrote onto the port: a number for
 int/unsigned/float ports, a brace walk over the generated field table
 for a struct port, the characters themselves for a `const char *` port
 (claimed as a pointer to storage the port owns). Fatal, naming station,

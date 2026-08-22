@@ -39,14 +39,11 @@ linker `--dynamic-list=src/098-engine-surface.syms` instead: it names
 the two families of function that are genuinely public, exports those,
 and leaves the rest collectable. That file carries the measurements.
 
-It was not needed while generated code held only shims, because a shim
-calls the box and the box is inside the object with it. It became
-needed the moment generated code started building stations, which is
-the point of a placement function (issue 311b).
-
 So the distance between this engine and somebody else's machine grew
-by one linker flag, and the flag is the kind that is easy to omit and
-produces a failure that points somewhere else entirely.
+by two linker settings, and they are the kind that are easy to omit —
+one produces a failure that points somewhere else entirely, and the
+other produces no failure at all, just a program carrying code it never
+runs.
 
 ## First, what kind of library this is
 
@@ -56,11 +53,12 @@ A normal C library is a runtime artifact: you link it, you call it. This
 one has **two halves that live in different times**.
 
 **The build-time half.** A consumer writes their own box functions in C.
-The generator reads those sources and emits a registry — a shim per box,
-a record per box carrying its name, parameter types and sizes, return
-type, exact task size, and a comparison function per comparable type,
-every size written as a `sizeof` expression so the compiler computes it
-and the generator never guesses. **That output cannot be shipped**,
+The generator reads those sources and emits one C file — a shim per
+box, a placement function per box that builds a station for it, a field
+table per struct, a comparison function per comparable type, and each
+source again as text so the binary carries the C it was made from.
+Every size in it is written as a `sizeof` expression, so the compiler
+computes it and the generator never guesses. **That output cannot be shipped**,
 because it is derived from source the library author has never seen. The
 consumer must run the generator over their own code, every build.
 
@@ -98,9 +96,9 @@ Three steps, in this order, every build:
 1. **Generate.** Run the generator over the consumer's box sources,
    emitting one C file. It must rerun whenever any box source or the
    generator itself changes, and it must write nothing on failure — a
-   build that compiles against yesterday's registry is worse than a
+   build that compiles against yesterday's emission is worse than a
    build that stops.
-2. **Compile.** The emitted registry, the consumer's own program, and
+2. **Compile.** The emitted file, the consumer's own program, and
    the engine.
 3. **Link and run.** The program loads a map file, starts the pool, and
    the map runs until the work is done.
@@ -123,7 +121,7 @@ symbol table of a linked test binary, not by guessing.
 | **Two process-wide globals.** The active map (so a box can reach the statics table) and the last load's timing. | One map per process, forever, silently. A host that wants two engines gets one, and the second quietly writes into the first. | Medium. Already the first-pass report's second priority: thread the map through the task instead of parking it in a global. |
 | **Every error calls `abort()`.** | A malformed map file, a missing gather source, or an out-of-memory task kills the host application. A library that can end someone else's process on bad input is not embeddable. | Small in code, large in decision. See below. |
 | **Five headers that include each other by numbered filename.** | The consumer needs two include paths and has to know that the entry point is `018-station.h`. | Small — one public header. |
-| **The generator writes absolute paths** into the emitted registry, which `#include`s each box source whole. | *Settled, and not a blocker.* A consumer states the directories they build from and recompiles if they move; anyone who wants relocation builds their own configuration around it. The emitted registry is already marked do-not-commit, so nothing durable carries a machine's paths. | none — declare it |
+| **The generator writes absolute paths** into the emitted file, which `#include`s each box source whole. | *Settled, and not a blocker.* A consumer states the directories they build from and recompiles if they move; anyone who wants relocation builds their own configuration around it. The emitted file is already marked do-not-commit, so nothing durable carries a machine's paths. | none — declare it |
 | **The pool ends itself when work runs out.** | An embedded engine that quietly shuts down when its queue drains is a surprise. The mechanism to prevent it exists — an outside submitter registration — but it is opt-in and undocumented as a lifecycle concern. | Documentation, plus possibly a named "stay resident" mode. |
 | **No version anywhere.** | Nothing detects an engine and a map file that disagree about the format. | Small: two macros and a check at load. |
 
@@ -157,7 +155,7 @@ the station holding it, so a control socket turning a knob is the same
 act as a wire delivering into that port.
 
 **Ask about boxes** — find a box record by name, find a struct's field
-table, print the registry, name the box that owns a shim.
+table, print what was emitted, name the box that owns a shim.
 
 **The pool on its own** — create, push, pop, release, join, destroy,
 register an outside submitter, ask the worker index and count, read the
@@ -361,7 +359,7 @@ above it. Shipping it alone is nearly free and would prove the layering.
 
 Ordered so that each step is useful even if the next never happens.
 
-1. **Exclude the demo boxes and the generated registry** from whatever
+1. **Exclude the demo boxes and the generated file** from whatever
    gets packaged. One line of intent, and it stops the worst collisions.
 2. **The single public header**, derived rather than written. Immediately
    useful inside the project too, since it settles what is API and what

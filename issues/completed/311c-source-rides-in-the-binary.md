@@ -86,7 +86,7 @@ binary. A program ships as a single file with no tree beside it.
 this is where the source it already had comes from.
 
 **Type and argument names come back for free.**
-[311b](../311b-placement-instead-of-records.md) drops every name string
+[311b](311b-placement-instead-of-records.md) drops every name string
 the engine was carrying, because the engine never used one. Error
 messages and the dump do, and they read them here.
 
@@ -165,7 +165,7 @@ sides.
 That also retires the last thing on the refusal path that reached back
 into a box record for a spelling, which is one fewer reason for those
 records to exist
-([311b](../311b-placement-instead-of-records.md)).
+([311b](311b-placement-instead-of-records.md)).
 
 **And the parser, if it is ever wanted, arrives behind a build
 flag.** Linking it in is a real option — the generator's text
@@ -185,7 +185,7 @@ mistake.
 
 - [311 — The registry dissolved](../311-the-registry-dissolved.md), the
   parent
-- [311b — Placement instead of records](../311b-placement-instead-of-records.md),
+- [311b — Placement instead of records](311b-placement-instead-of-records.md),
   which drops the names this brings back
 - [311d — The map becomes code](../311d-the-map-becomes-code.md), which
   decides how much source there is to embed

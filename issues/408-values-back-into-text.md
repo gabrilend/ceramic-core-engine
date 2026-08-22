@@ -51,7 +51,7 @@ should not be left sitting.
 for both to be generated code per struct instead, with the escape
 rules written once in the generator and emitted into both halves so
 they cannot drift. That half of the work belongs beside
-[311b](311b-placement-instead-of-records.md), which is where field
+[311b](completed/311b-placement-instead-of-records.md), which is where field
 tables stop being searched by name and start being pointed at — the
 same change of technique arriving for the same reason. Doing it before
 that lands means writing an emitter twice.
@@ -166,7 +166,7 @@ of technique:**
    complaint named whatever it choked on rather than the string.
 
 **Then, with the registry work
-([311b](311b-placement-instead-of-records.md)), because that is when
+([311b](completed/311b-placement-instead-of-records.md)), because that is when
 field tables stop being walked and start being pointed at:**
 
 4. Teach the generator to emit a formatter per registered struct,

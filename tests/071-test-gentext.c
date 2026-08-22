@@ -13,7 +13,7 @@
  * point where it has to grow, because growing is where a container
  * gets its bugs, and the string helpers are checked against the exact
  * spellings the old Lua generator produced — those strings are the
- * registry's type names, so two spellings of one type would become
+ * emitted type names, so two spellings of one type would become
  * two types.
  *
  * This test links the generator's own pieces rather than the engine.
@@ -170,7 +170,7 @@ static void test_vec(void)
 
 /* {{{ static void test_strings() */
 /*
- * These spellings are the registry's type names. The old Lua
+ * These spellings are the emitted type names. The old Lua
  * generator produced exactly these, and a wire is checked by
  * comparing them, so a difference here is two spellings of one type
  * becoming two incompatible types.
@@ -215,7 +215,7 @@ static void test_strings(void)
           "non-identifier characters are not");
 
     arena_free(a);
-    printf("  strings: type spellings match what the registry compares\n");
+    printf("  strings: type spellings match what the emitted comparisons use\n");
 }
 /* }}} */
 

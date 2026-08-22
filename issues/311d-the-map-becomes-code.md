@@ -154,7 +154,7 @@ calls it and has to keep it. `-rdynamic` exports *every* global symbol,
 so it declared the whole binary reachable and `--gc-sections` collected
 nothing. The two flags were in direct opposition, and the sweeping one
 won. Naming the families that are genuinely public —
-[src/098-engine-surface.syms](../src/098-engine-surface.syms), handed
+[src/098-engine-surface.syms](../src/098-engine-surface.syms.info.md), handed
 to the linker as `--dynamic-list` — exports the engine and lets
 everything else be thrown away.
 
@@ -244,7 +244,7 @@ the compiler being needed exactly when new code genuinely arrives.
    produces a byte-identical binary for a second full compile, because
    the discarding already happened during the first link.
 6. **Half done.** The export list is narrow now
-   ([src/098-engine-surface.syms](../src/098-engine-surface.syms)) and
+   ([src/098-engine-surface.syms](../src/098-engine-surface.syms.info.md)) and
    every function is in its own section, so the linker collects what
    nothing reaches — 8.6% of one test binary, all of it engine
    internals. **It cannot reach the boxes while the places table
@@ -329,7 +329,7 @@ the compiler being needed exactly when new code genuinely arrives.
   parent
 - [311a — Boxes addressed by file](completed/311a-boxes-addressed-by-file.md),
   whose resolution rules this applies
-- [311b — Placement instead of records](311b-placement-instead-of-records.md),
+- [311b — Placement instead of records](completed/311b-placement-instead-of-records.md),
   whose functions this calls
 - [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md),
   whose embedded text shrinks to what a map actually needs

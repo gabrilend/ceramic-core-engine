@@ -1,6 +1,6 @@
-# 027-registry-support.c — the registry's hand-written half
+# 027-emitted-support.c — the hand-written half of what the generator emits
 
-Interface in `026-registry.h.info.md`. This file walks the generated
+Interface in `026-emitted.h.info.md`. This file walks the generated
 arrays and never changes when a box does — that division is the whole
 point. Lookups are linear walks: dozens of boxes, load-time only, so
 simplicity beats any table cleverness. Placement-by-name is where the

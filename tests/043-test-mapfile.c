@@ -3,7 +3,7 @@
  * (issues 601–605).
  *
  * What this is: the capstone tests. A program becomes a text file:
- * parsed, built against the registry, type-checked wire by wire,
+ * parsed, built against the emitted sizes, type-checked wire by wire,
  * validated whole, seeded, and run to a result on disk. Then every
  * way a map can be wrong is tried, and each must die with the
  * message a person could fix it from.

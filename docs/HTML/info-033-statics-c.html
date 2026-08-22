@@ -29,7 +29,6 @@
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
 <a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
-<a href="issue-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
@@ -91,6 +90,7 @@
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
 <a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
+<a href="done-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
@@ -133,8 +133,8 @@
 <a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
-<a href="info-026-registry-h.html">026-registry.h — the registry, from outside</a>
-<a href="info-027-registry-support-c.html">027-registry-support.c — the registry's hand-written half</a>
+<a href="info-026-emitted-h.html">026-emitted.h — the shapes the generator emits, from outside</a>
+<a href="info-027-emitted-support-c.html">027-emitted-support.c — the hand-written half of what the generator emits</a>
 <a href="info-033-statics-c.html" class="here">033-statics.c — constants on ports, from outside</a>
 <a href="info-040-mapfile-h.html">040-mapfile.h — the map file surface, from outside</a>
 <a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
@@ -147,6 +147,7 @@
 <a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
 <a href="info-091-stopping-h.html">091-stopping.h — the ways a program ends, from outside</a>
 <a href="info-092-stopping-c.html">092-stopping.c — the ways a program ends, from inside</a>
+<a href="info-098-engine-surface-syms.html">098-engine-surface.syms — the engine's public surface</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
 <a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
@@ -173,7 +174,7 @@ which costs a station and gains a wire somebody can see.</p>
 <h2>Functions</h2>
 <p><strong>map_in_port_static_text(map, station, port, text)</strong> — give a port a
 constant written as text, and make it a static. Parses into the port's
-own storage, shaped by the port's registry type: a number for
+own storage, shaped by the declared type the placement function wrote onto the port: a number for
 int/unsigned/float ports, a brace walk over the generated field table
 for a struct port, the characters themselves for a <code>const char *</code> port
 (claimed as a pointer to storage the port owns). Fatal, naming station,

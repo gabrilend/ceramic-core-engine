@@ -42,7 +42,7 @@
  * first-pass report, and the first face is the answer to it.
  */
 #include "049-observe.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 #include "091-stopping.h"
 
 #include <stdio.h>

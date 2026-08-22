@@ -17,7 +17,7 @@
  * this brace.
  *
  * The refusals are the point. A parser that quietly skips what it
- * does not understand emits a registry with a hole in it, and the
+ * does not understand emits a file with a hole in it, and the
  * hole surfaces much later as an error pointing at somebody's map
  * (issue 301).
  */
@@ -47,7 +47,7 @@ void gp_fail(const char *file, int line, const char *fmt, ...)
  * reader will use, keyed by canonical type name. A table rather than
  * a chain of comparisons, like everything else here — and the same
  * set the Lua generator carried, because these strings are the
- * registry's type names and changing one silently changes what a
+ * emitted type names and changing one silently changes what a
  * wire is checked against.
  */
 typedef struct { const char *name; tkind_t kind; } prim_t;

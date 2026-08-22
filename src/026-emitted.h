@@ -1,9 +1,9 @@
 /*
- * 026-registry.h — the joint between the two halves of a program.
+ * 026-emitted.h — the joint between the two halves of a program.
  *
  * What this is: the shapes of what the generator emits. The C half of
  * a program is compiled and knows nothing about maps; a map is text
- * and knows nothing about code. The registry is the only place both
+ * and knows nothing about code. What it emits is the only place both
  * are described, and it is derived entirely from the C — which is
  * what actually runs, and therefore the only source of truth worth
  * having.
@@ -18,8 +18,8 @@
  *
  * Types and lookups here are hand-written; the data is generated.
  */
-#ifndef SORA_REGISTRY_H
-#define SORA_REGISTRY_H
+#ifndef SORA_EMITTED_H
+#define SORA_EMITTED_H
 
 #include <stddef.h>
 #include <stdio.h>
@@ -126,8 +126,8 @@ typedef struct box_place {
     void      (*place)(map_t *m, int station, int kind);
 } box_place_t;
 
-extern const box_place_t    registry_places[];
-extern const int            registry_n_places;
+extern const box_place_t    box_places[];
+extern const int            n_box_places;
 
 /* Which placement function writes this box's station. Compiled-in
  * rows first, then anything compiled after the program started. */
@@ -143,26 +143,26 @@ const box_place_t *box_place_find(const char *name);
 int box_place_matches(const box_place_t *row, const char *name);
 /* }}} */
 
-/* The generated data. Defined in src/generated/registry.c, which the
+/* The generated data. Defined in src/generated/emitted.c, which the
  * generator rewrites on every build where a box source changed. */
-extern const struct_info_t  registry_structs[];
-extern const int            registry_n_structs;
+extern const struct_info_t  struct_layouts[];
+extern const int            n_struct_layouts;
 
 /* {{{ struct_find() */
 const struct_info_t *struct_find(const char *type_name);
 /* }}} */
 
-/* {{{ registry_print() */
+/* {{{ emitted_print() */
 /* Every box, its parameter types and sizes, its return, its task
  * size — so a build problem is diagnosed by reading what was
  * emitted, not by guessing (issue 303). */
-void registry_print(FILE *out);
+void emitted_print(FILE *out);
 /* }}} */
 
 
 /* {{{ map_place_box() */
 /*
- * Place a box at a station by name, sizes drawn from the registry
+ * Place a box at a station by name, sizes drawn from the emitted file
  * instead of typed in by hand — the moment phase 2's hand-supplied
  * element sizes become correct by construction (issue 303). A
  * comparator gets its extra threshold port here, typed to the box's
@@ -201,7 +201,7 @@ extern const int          sora_n_box_sources;
 /* The text of one box source, by the path the build knew it as, or
  * NULL. A bare basename matches too, because that is how a person
  * refers to a file they can see. */
-const char *registry_box_source(const char *path);
+const char *box_source_text(const char *path);
 /* }}} */
 
 /* {{{ maps compiled into code — issue 311d */
@@ -235,7 +235,7 @@ extern const int         sora_n_map_builds;
 /* The build function for one description, by the path the build knew
  * it as, or by the bare name somebody would type. NULL when this
  * program was not built with that map. */
-const map_build_t *registry_map_build(const char *path);
+const map_build_t *map_build_find(const char *path);
 /* }}} */
 
 #endif

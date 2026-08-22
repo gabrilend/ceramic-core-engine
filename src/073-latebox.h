@@ -29,9 +29,9 @@
 #define SORA_LATEBOX_H
 
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 
-/* {{{ registry_compile_source() */
+/* {{{ late_compile_source() */
 /*
  * Compile C source into the running program and add every box it
  * defines to the table.
@@ -50,24 +50,24 @@
  * opens the diagnostic report's destination during startup rather
  * than while dying.
  */
-int registry_compile_source(const char *c_source);
+int late_compile_source(const char *c_source);
 /* }}} */
 
-/* {{{ registry_late_count() / registry_late_box() */
+/* {{{ late_box_count() / late_box_at() */
 /*
  * The boxes added after the program started, in the order they
  * arrived. The compiled-in ones are not included: those are
- * registry_places and have always been reachable directly.
+ * box_places and have always been reachable directly.
  *
  * Lookup by name goes through box_place_find, which walks both, so
  * almost nothing needs these. They exist for a report that wants to
  * say what a program has grown, and for the tests.
  */
-int                registry_late_count(void);
-const box_place_t *registry_late_box(int i);
+int                late_box_count(void);
+const box_place_t *late_box_at(int i);
 /* }}} */
 
-/* {{{ registry_unload_box() */
+/* {{{ late_unload_box() */
 /*
  * Unload a box added while the program ran, freeing the library its
  * code came in.
@@ -94,13 +94,13 @@ const box_place_t *registry_late_box(int i);
  *
  * Returns 0, or -1 with a reason on stderr.
  */
-int registry_unload_box(map_t *m, const char *name);
+int late_unload_box(map_t *m, const char *name);
 /* }}} */
 
-/* {{{ registry_late_source_dir() */
+/* {{{ late_source_dir() */
 /* Where saved sources go, so a reloader can find one from a box's
  * name alone. */
-const char *registry_late_source_dir(void);
+const char *late_source_dir(void);
 /* }}} */
 
 #endif

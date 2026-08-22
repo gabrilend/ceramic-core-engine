@@ -1,10 +1,10 @@
 /*
- * 070-generate.c — the build-time generator: box sources in, registry out.
+ * 070-generate.c — the build-time generator: box sources in, one C file out.
  *
  * What this is: the program that makes "adding a box" mean "writing a
  * function". It reads the C files designated as box sources, finds
  * every function, struct, and compare function in them, and writes one
- * C file containing a shim per box, a registry of names to shims and
+ * C file containing a shim per box, a table of names to shims and
  * full type information, a field table per struct, and a three-way
  * compare per comparable type.
  *
@@ -15,7 +15,7 @@
  * the compiler computes the numbers and this program never guesses
  * about padding or alignment. Output is written to a temporary file
  * and moved into place only on success, so a failing run can never
- * leave a half-registry for the build to compile against.
+ * leave half a file for the build to compile against.
  *
  * Why it is C (issue 308): a program built with this engine should
  * need a C compiler and nothing else. This was a LuaJIT script, which

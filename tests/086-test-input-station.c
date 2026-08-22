@@ -21,7 +21,7 @@
  * surface.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 #include "040-mapfile.h"
 #include "049-observe.h"
 #include "073-latebox.h"
@@ -265,7 +265,7 @@ int main(void)
      * longer reach.
      */
     char dir[256], path[320];
-    snprintf(dir, sizeof dir, "%s/doors-%d", registry_late_source_dir(),
+    snprintf(dir, sizeof dir, "%s/doors-%d", late_source_dir(),
              (int)getpid());
     char cmd[512];
     snprintf(cmd, sizeof cmd, "mkdir -p %s", dir);

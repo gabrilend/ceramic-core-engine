@@ -128,7 +128,7 @@ now the construction surface
 station constructible one way meant hand placement and by-name
 placement stopping being two contracts, and the answer chosen for that
 was a generated placement function per box —
-[311b](../311b-placement-instead-of-records.md)'s work, not this
+[311b](311b-placement-instead-of-records.md)'s work, not this
 family's. The order ran as written: boxes addressed by file, placement
 functions, then the surface, then its callers.
 

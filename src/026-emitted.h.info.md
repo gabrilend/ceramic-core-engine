@@ -1,4 +1,4 @@
-# 026-registry.h — the registry, from outside
+# 026-emitted.h — the shapes the generator emits, from outside
 
 The joint between compiled C and text maps: for every box, its name,
 its shim, and its full type story — all derived from the C that will
@@ -47,10 +47,10 @@ record is gone, and this is the whole of by-name anything.
 
 **struct_find(type name) → struct_info or null**
 
-**registry_print(stream)** — every box and struct, sizes and all,
+**emitted_print(stream)** — every box and struct, sizes and all,
 for reading what was emitted.
 
 **map_place_box(map, station, box name, kind)** — placement by name
-with sizes drawn from the registry; comparators get their extra
+with sizes drawn from the emitted file; comparators get their extra
 threshold port here, typed to the box's return. Aborts loudly on an
 unknown name — the most common map mistake there is.

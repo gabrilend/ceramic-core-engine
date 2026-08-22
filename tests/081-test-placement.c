@@ -24,7 +24,7 @@
  * is resolved onto the station.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -100,7 +100,7 @@ static int place_both_ways(const box_place_t *bp, int kind)
 
 int main(void)
 {
-    if (registry_n_places <= 0) {
+    if (n_box_places <= 0) {
         fprintf(stderr, "no placement functions were emitted at all\n");
         return 1;
     }
@@ -129,8 +129,8 @@ int main(void)
      * would be caught by exactly this.
      */
     int plain = 0;
-    for (int i = 0; i < registry_n_places; i++) {
-        place_both_ways(&registry_places[i], STATION_PLAIN);
+    for (int i = 0; i < n_box_places; i++) {
+        place_both_ways(&box_places[i], STATION_PLAIN);
         plain++;
     }
 
@@ -138,11 +138,11 @@ int main(void)
      * bare name is what a map says today, the address is what it will
      * say, and a row where they disagree would send the two forms to
      * different functions. */
-    for (int i = 0; i < registry_n_places; i++) {
-        const char *addr = registry_places[i].address;
+    for (int i = 0; i < n_box_places; i++) {
+        const char *addr = box_places[i].address;
         const char *colon = strrchr(addr, ':');
-        if (!colon || strcmp(colon + 1, registry_places[i].name) != 0)
-            complain(registry_places[i].name,
+        if (!colon || strcmp(colon + 1, box_places[i].name) != 0)
+            complain(box_places[i].name,
                      "its address names a different function");
     }
 

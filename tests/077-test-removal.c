@@ -17,7 +17,7 @@
  * checked.
  */
 #include "018-station.h"
-#include "026-registry.h"
+#include "026-emitted.h"
 #include "049-observe.h"
 #include "073-latebox.h"
 
@@ -217,7 +217,7 @@ static void an_unplaced_box_unloads(void)
     static const char source[] =
         "int never_placed(int x)\n{\n    return x + 1;\n}\n";
 
-    check(registry_compile_source(source) == 1, "a box was compiled in");
+    check(late_compile_source(source) == 1, "a box was compiled in");
     check(box_place_find("never_placed") != NULL, "and can be found");
 
     map_t *m = map_create(2);
@@ -235,7 +235,7 @@ static void an_unplaced_box_unloads(void)
         map_deliver_value(m, 0, 0, &v);
     }
 
-    int rc = registry_unload_box(m, "never_placed");
+    int rc = late_unload_box(m, "never_placed");
     check(rc == 0, "a box no station places was unloaded");
     check(box_place_find("never_placed") == NULL,
           "and can no longer be found by name");
@@ -243,7 +243,7 @@ static void an_unplaced_box_unloads(void)
     /* A box that IS placed must be refused, because unloading its
      * code while a station names it is exactly the crash this is
      * built to avoid. */
-    check(registry_unload_box(m, "double_it") != 0,
+    check(late_unload_box(m, "double_it") != 0,
           "a box a station places was refused");
 
     pool_submitter_unregister(m->pool);
