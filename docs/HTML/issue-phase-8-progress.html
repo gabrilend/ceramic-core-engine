@@ -34,6 +34,8 @@
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
+<a href="issue-803-the-viewer.html">803 — The viewer</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -165,15 +167,37 @@ phase has one and the gap kept being rediscovered, not because there
 is progress to report.</p>
 <table>
 <tr><td>Issue</td><td>State</td><td>In one line</td></tr>
-<tr><td><a href="issue-801-browser-workbench.html">801 — the workbench in the browser</a></td><td>open, not started</td><td>A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server.</td></tr>
+<tr><td><a href="issue-801-browser-workbench.html">801 — the workbench in the browser</a></td><td>open, unblocked</td><td>A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server.</td></tr>
+<tr><td><a href="issue-802-a-program-you-can-watch.html">802 — a program you can watch</a></td><td>open, not started</td><td>A build flag makes a program leave a trail as it runs — every station that ran, every value that moved, every buffer that grew — in a ring in shared memory that any number of processes can read. Without the flag the emitting is not compiled at all. Watching must never change what is watched, so a slow reader loses events and is told how many rather than holding the program up.</td></tr>
+<tr><td><a href="issue-803-the-viewer.html">803 — the viewer</a></td><td>open, waits on 802</td><td>A page that watches a running program and <strong>cannot touch it</strong>: stations lighting as they run, buffers filling, and the page saying so when the trail lost events. Shares nothing with the workbench, which is a door where this is a window.</td></tr>
 </table>
-<h2>What it waits on</h2>
-<p><strong>The map file format, which is about to change twice.</strong> Boxes
-addressed by file (<a href="done-311a-boxes-addressed-by-file.html">311a</a>) rewrites
-the station line, and the map becoming code
-(<a href="done-311d-the-map-becomes-code.html">311d</a>) changes what reading a map even
-means. The canvas emits that format exactly, so building it against a
-format with two pending changes means drawing it twice.</p>
+<h2>What it waited on, and no longer does</h2>
+<p><strong>The map file format, which was about to change twice.</strong> Boxes
+addressed by file (<a href="done-311a-boxes-addressed-by-file.html">311a</a>)
+rewrote the station line, and the map becoming code
+(<a href="done-311d-the-map-becomes-code.html">311d</a>) changed what reading a
+map even means. The canvas emits that format exactly, so building it
+against a format with two pending changes would have meant drawing it
+twice.</p>
+<p><strong>Both have landed</strong>, and the format gained two things since which the
+canvas has to know about: a station line may carry <code>@N</code> saying where an
+iterator had got to, and an input line may carry <code>[a, b]</code> saying what
+is waiting in a buffer
+(<a href="done-712-capturing-a-running-program.html">712</a>). Neither is
+something a person composing a new map writes — both describe a program
+that has been running — so the canvas reads them and does not offer
+them.</p>
+<h2>The two halves of this phase</h2>
+<p><strong>A door and a window, and they share nothing.</strong> The workbench
+composes a map that does not exist yet: everything is alike, nothing is
+running, and the page's whole job is to let somebody make changes. The
+viewer watches one that is running and cannot reach it at all.</p>
+<p>A drawing layer serving both would have to serve a picture where the
+interesting thing is <em>which station is busy right now</em> and a picture
+where the interesting thing is <em>what somebody is about to connect</em>, and
+one serving both serves neither. What they may share is an
+understanding of the map file format, because there is one format and
+two readers of it would be two things that must agree.</p>
 <h2>What is already decided about this phase</h2>
 <p>**The canvas is an alternative to writing a map file by hand, never a
 prerequisite for it.** If the canvas can ever express something the

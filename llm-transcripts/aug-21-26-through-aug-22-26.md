@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 22:52:23
+Generated on: 2026-08-21 23:08:02
 
 --------------------------------------------------------------------------------
 
@@ -3259,6 +3259,99 @@ toolchain. Step 7, the report.
 Step 6 is largely reachable now: a program already carries the text of every
 source it's made of, including late arrivals, and the compile-at-runtime pipe
 exists. What's missing is emitting a *new* binary rather than a shared object.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 24
+
+ok um, keep working I guess?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 24
+
+Step 6. The pieces mostly exist — a program already carries every source it's
+made of. Let me expose the spill.
+
+
+Now a capture that stands alone: description plus every source it names.
+
+
+All thirteen scenes pass. Let me verify the captured directory is actually what
+it claims — buildable.
+
+
+The test verifies the addresses resolve to spilled files on every run, which is
+the claim. Full suite, then documentation.
+
+
+Step 7 — the report. Let me see what's already gathered.
+
+
+All seven steps done. Let me work through 712's remaining open questions before
+closing it.
+
+
+**712 is complete** — all seven steps, all open questions answered, fourteen
+scenes, suite green.
+
+
+## The last two pieces
+
+
+**Step 6 turned out not to want a binary.** It asked for a program that grew
+boxes to capture into a new executable. What it actually needed was one step
+short: a **directory** holding the description plus every source the program is
+made of, at the paths the description addresses them by. Having the running
+program link a fresh binary would mean carrying the engine's own source in every
+binary so it could be linked again. Building a captured program needs the engine
+— which is what building anything with this engine needs, not a new dependency
+— and the binary that comes out needs no toolchain, which is what was actually
+wanted.
+
+
+**Step 7 is a report beside the description**, not inside it: the two are read
+by different readers. Nothing in it is measured for it — run counts, buffer
+depths, growths and late arrivals were all already kept. Its most useful line is
+a buffer that had to grow, which names where one input side outran another, in
+slots rather than in a judgement.
+
+
+## The three open questions answered themselves
+
+
+- **Counters reset, history in the report** — a description says what a
+  program *is*, and how many times something ran is not that. Exactly the shape
+  the question hoped for, reached by building rather than deciding.
+
+- **A revived program keeps no identity because there is none to keep** —
+  nothing here has ever given a program a name that outlives its process. Not a
+  property lost in the capture; a property that never existed.
+
+- **An incomplete artifact does nothing to the round-trip promise**, because the
+  ordinary door refuses to read one. Refusing was cheaper than qualifying the
+  guarantee, and it says the same thing to the person holding the file rather
+  than to the person reading the guarantees page.
+
+
+## Standing back
+
+
+The thing worth keeping from this ticket is what proving it exposed: a
+**readiness gap the engine had carried since constants moved onto ports**. A
+station whose buffer filled while another port sat empty started one task and
+stranded the rest. Invisible in ordinary running, because values arrive one at a
+time and each arrival asks again — and the capture was the first thing that
+could see it.
+
+
+## What's left in the tree
+
+
+`711` (reading order), `705` (HTML interactive pieces), `709` (slideshow),
+`710`/`713` (demos), `801` (browser workbench).
 
 
 --------------------------------------------------------------------------------

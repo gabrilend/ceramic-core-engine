@@ -10,16 +10,42 @@ is progress to report.
 
 | Issue | State | In one line |
 |---|---|---|
-| [801 — the workbench in the browser](801-browser-workbench.md) | open, not started | A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server. |
+| [801 — the workbench in the browser](801-browser-workbench.md) | open, unblocked | A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server. |
+| [802 — a program you can watch](802-a-program-you-can-watch.md) | open, not started | A build flag makes a program leave a trail as it runs — every station that ran, every value that moved, every buffer that grew — in a ring in shared memory that any number of processes can read. Without the flag the emitting is not compiled at all. Watching must never change what is watched, so a slow reader loses events and is told how many rather than holding the program up. |
+| [803 — the viewer](803-the-viewer.md) | open, waits on 802 | A page that watches a running program and **cannot touch it**: stations lighting as they run, buffers filling, and the page saying so when the trail lost events. Shares nothing with the workbench, which is a door where this is a window. |
 
-## What it waits on
+## What it waited on, and no longer does
 
-**The map file format, which is about to change twice.** Boxes
-addressed by file ([311a](completed/311a-boxes-addressed-by-file.md)) rewrites
-the station line, and the map becoming code
-([311d](completed/311d-the-map-becomes-code.md)) changes what reading a map even
-means. The canvas emits that format exactly, so building it against a
-format with two pending changes means drawing it twice.
+**The map file format, which was about to change twice.** Boxes
+addressed by file ([311a](completed/311a-boxes-addressed-by-file.md))
+rewrote the station line, and the map becoming code
+([311d](completed/311d-the-map-becomes-code.md)) changed what reading a
+map even means. The canvas emits that format exactly, so building it
+against a format with two pending changes would have meant drawing it
+twice.
+
+**Both have landed**, and the format gained two things since which the
+canvas has to know about: a station line may carry `@N` saying where an
+iterator had got to, and an input line may carry `[a, b]` saying what
+is waiting in a buffer
+([712](completed/712-capturing-a-running-program.md)). Neither is
+something a person composing a new map writes — both describe a program
+that has been running — so the canvas reads them and does not offer
+them.
+
+## The two halves of this phase
+
+**A door and a window, and they share nothing.** The workbench
+composes a map that does not exist yet: everything is alike, nothing is
+running, and the page's whole job is to let somebody make changes. The
+viewer watches one that is running and cannot reach it at all.
+
+A drawing layer serving both would have to serve a picture where the
+interesting thing is *which station is busy right now* and a picture
+where the interesting thing is *what somebody is about to connect*, and
+one serving both serves neither. What they may share is an
+understanding of the map file format, because there is one format and
+two readers of it would be two things that must agree.
 
 ## What is already decided about this phase
 

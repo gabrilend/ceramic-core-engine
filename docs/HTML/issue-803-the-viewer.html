@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>009 — Datapath: loading and starting</title>
+<title>803 — The viewer</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -15,7 +15,7 @@
 <a href="doc-006-datapath-scheduling.html">006 — Datapath: scheduling</a>
 <a href="doc-007-datapath-build.html">007 — Datapath: the build</a>
 <a href="doc-008-map-file-format.html">008 — Map file format</a>
-<a href="doc-009-datapath-load.html" class="here">009 — Datapath: loading and starting</a>
+<a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
 <h2>Implementation notes</h2>
@@ -35,7 +35,7 @@
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
-<a href="issue-803-the-viewer.html">803 — The viewer</a>
+<a href="issue-803-the-viewer.html" class="here">803 — The viewer</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -158,157 +158,124 @@
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>009 — Datapath: loading and starting</h1>
-<p>The binary holds boxes and no map. The map file holds a map and no
-code. This is what happens in the moment between.</p>
-<p><strong>Nothing here reads the map.</strong> That is the shape of this document
-now, and it is the second time this document has been cut down for the
-same reason: the special thing it described stopped being special.</p>
-<p>First, reading a file lost its privileges. It used to be a sequence
-only one mechanism could perform — count the stations, allocate the
-table once, place, wire, validate in a phase nothing else could enter,
-seed, release — with a state called <em>still loading</em> that nothing else
-could be in. Every one of those became an ordinary operation
-(<a href="done-212-one-way-to-build-a-program.html">212</a>), and
-what was left was a reader making calls anybody could make.</p>
-<p>Then the reader itself went
-(<a href="done-311d-the-map-becomes-code.html">311d</a>). A description is
-<strong>compiled</strong> into the calls it describes, and those calls are made. So
-there is no reading step to describe at all, and no program built with
-this engine carries a parser.</p>
-<h2>What happens instead</h2>
-<p>A description on disk becomes a running program in four movements, and
-only the last one is the engine's.</p>
-<p><strong>One — the compiler is asked what the description references.</strong> A
-program that grew and then wrote itself down names boxes that arrived
-after it started, and whoever reads it back may never have heard of
-them. Anything missing is found and compiled in first. This is the
-ordinary path rather than a rescue, because a description written by a
-running program is the normal kind of description.</p>
-<p><strong>Two — the description is compiled.</strong> Its text goes to the generator,
-which turns each station line into a call that adds a station, names
-it, builds it from its box, marks its door and configures its ports,
-and turns each arrow into a call that draws a wire. Then the C
-compiler that built this binary compiles that.</p>
-<p><strong>What is compiled is the description and nothing else.</strong> The boxes it
-names are already in the process — so what comes out declares the
-functions that build stations from them and binds to the ones the
-program published, rather than carrying a second copy of anything.
-Measured on a real one: a whole program's structure in seventeen
-kilobytes, defining no box code and asking the program for three
-station-builders.</p>
-<p><strong>Three — the result is loaded and its build function is called.</strong> The
-calls are made. They are the same calls a person writing C would make,
-so a description and a hand-written program are one path with two
-authors rather than two paths that must agree.</p>
-<p><strong>Four — the program is brought up</strong>, which is the same act any caller
-performs and is described below.</p>
-<h2>What this costs, and who pays</h2>
-<p>Two compiler invocations, about a tenth of a second each: one asking
-what the description wants, one building it.</p>
-<p><strong>A program built from its own descriptions pays none of it</strong>, because
-the build already did the compiling and the built function is simply
-in the binary. The cost falls exactly where it should — on a program
-being handed a description it was not built for, which is the only
-case where there is genuinely new code to make.</p>
-<p><strong>And it buys a fault caught earlier.</strong> A box name answering to
-nothing, and an arrow pointing at a station nobody declared, are both
-refused while the description is still text, so the complaint names
-the line. The engine could never do that: by the time it looked, there
-were no lines left.</p>
-<p><strong>Declaration order still does not matter</strong>, and it costs nothing to
-say so any more. An arrow may point at a station declared further
-down, which used to require reading the file twice. The generator
-emits every station first and every wire afterwards, which is the same
-requirement expressed once, at build time, in the order the calls come
-out.</p>
-<p><strong>The wire check belongs to the wiring operation</strong>, not to loading.
-Reading a file used to perform a width check of its own before
-connecting, on the grounds that this is the first moment both ends are
-known. It is, and the wiring operation is reached at exactly that
-moment, so the second copy bought nothing and cost something: while it
-existed, the first one could have a hole that no program read from a
-file would ever meet. It had one. A station with no input ports at all
-— a box that takes nothing and returns a value — skipped the width
-question entirely, and only a program built by calling the surface
-could have found out.</p>
-<h2>Then the program is brought up, which is a separate act</h2>
-<p>Some things are only visible once every station and arrow exists, and
-asking about them is no longer part of reading a file. A caller
-assembles a program by whatever route — reading a file, calling the
-surface, or both — and then says it is finished. That is when the
-whole-program checks run and when everything that can start does.</p>
-<p><strong>It is repeatable</strong>, which is the point rather than a convenience: a
-station added to a running program is checked and started by the next
-call, and one already started is not started twice. There is no
-end-of-file moment to hang a whole-program question on, because
-several files can build one program — but there is still a starting
-gate, and that is where such a question can honestly be asked.</p>
-<p>What it checks:</p>
+<h1>803 — The viewer</h1>
+<p>A page that watches a running program and <strong>cannot touch it</strong>. Stations
+light up as they run, values move along wires, buffers fill and drain,
+and nothing on the page can reach back into what it is looking at.</p>
+<p>It reads the trail <a href="issue-802-a-program-you-can-watch.html">802</a> leaves and
+does nothing else.</p>
+<h2>Current behavior</h2>
+<p><strong>Watching a running program means reading stderr.</strong> The observer
+prints a line when results pile up somewhere nobody is taking them
+from; a dying program writes a diagnostic report
+(<a href="done-106-stopping-on-purpose.html">106</a>); a program put down
+writes one beside its capture
+(<a href="done-712-capturing-a-running-program.html">712</a>). All three are
+text, after the fact, and none of them is a picture.</p>
+<p><strong>And the shape of a program is not visible anywhere while it runs.</strong>
+The dump writes the graph as a list of lines
+(<a href="done-703-map-dump.html">703</a>), which is the same problem the map
+file has: the graph a file describes is not visible in the file.</p>
+<h2>Intended behavior</h2>
+<h3>It only looks</h3>
+<p><strong>Nothing on this page changes anything.</strong> There is no button that
+starts a station, no field that writes a constant, no wire that can be
+drawn. A viewer that could reach in would be a debugger, and a debugger
+is a different thing with different rules — chiefly that its presence
+is allowed to change what it is looking at, which is exactly what
+<a href="issue-802-a-program-you-can-watch.html">802</a> refuses.</p>
+<p>Being unable to touch is what makes it safe to point at a program that
+matters. Somebody watching a live thing should not be one mis-click
+from changing it.</p>
+<h3>It shares nothing with the workbench</h3>
+<p><strong>Decided rather than drifted into</strong>, and the same decision the phase
+already made about the demo panels.</p>
+<p>The workbench (<a href="issue-801-browser-workbench.html">801</a>) is a canvas for
+composing a map that does not exist yet: every station is alike,
+nothing is running, and the page's whole job is to let somebody make
+changes. This is the opposite on all three counts. A shared drawing
+layer would have to serve a picture where the interesting thing is
+<em>which station is busy right now</em> and a picture where the interesting
+thing is <em>what somebody is about to connect</em>, and a layer serving both
+serves neither.</p>
+<p>What may be shared is the <strong>understanding of the map file format</strong>,
+because there is one format and two readers of it would be two things
+that must agree.</p>
+<h3>What it shows</h3>
 <ul>
-<li><strong>An arrow landing on a port that is not a buffer</strong>, which would</li>
-<p>  have nowhere to put its value. Fatal, and now caught earlier still —
-  as the wire is drawn, since wiring applies every rule at any moment.</p>
-<li><strong>A port with no source.</strong> Reported, not refused: that is the</li>
-<p>  ordinary state of a station nobody has finished wiring, and being
-  able to sit in it is what lets a program be assembled a piece at a
-  time.</p>
-<li><strong>Unreachable stations.</strong> A station with buffered inputs that</li>
-<p>  nothing ever writes to will never run. Reported — unless it is a
-  declared entrance, which is precisely a station something outside
-  delivers into.</p>
-<li><strong>A program that never says where its results come from.</strong> Fatal.</li>
-<p>  Bringing a program up is a caller declaring it finished, and a
-  finished program that has not said what it produces has not said
-  what it is for. A station marked as the way out **with nothing
-  wired into it** satisfies this completely — the declaration is the
-  interface, and what flows through it is a separate matter. See
-  <a href="doc-008-map-file-format.html">008</a>.</p>
+<li><strong>The graph</strong>, laid out, from a dump the program was asked for once.</li>
+<li><strong>Each station lighting as it runs</strong>, and dimming as it goes quiet,</li>
+<p>  so a bottleneck is the station that never dims and a dead branch is
+  the one that never lights.</p>
+<li><strong>Each buffer's depth</strong>, because a buffer filling is the single most</li>
+<p>  useful thing to see: it says one input side is outrunning another,
+  which is the fault this engine makes easiest to create and hardest to
+  notice.</p>
+<li><strong>What it missed.</strong> When the trail says events were lost, the page</li>
+<p>  says so, in the picture rather than in a corner. A view quietly
+  missing events is a view somebody will trust.</p>
 </ul>
-<p>Two checks used to live here and can no longer be stated, because
-nothing is pulled: a cycle among gather links, and a port fanning out
-to both a gatherer and a ring buffer. See
-<a href="impl-056-no-pull-path.html">056</a>. A cycle in the push
-direction remains legal — it is how anything repeats — and needs a
-finite companion input to ever stop.</p>
-<h2>The seed</h2>
-<p>Nothing in the engine searches for work. A station is discovered only
-by something writing into it, which means that at the instant the
-program starts, nothing can happen — every station is waiting for a
-delivery, and there is nobody to deliver.</p>
-<p>So the station table is swept, at that gate, and this is the one place
-in the engine that walks it looking for work. Everywhere else a
-station is reached by index, through a wire.</p>
-<p><strong>Enqueue every station that has no ring-buffer inputs.</strong></p>
-<p><em>No ring-buffer inputs</em> means the station has nothing that can ever be
-written into it, so it will never be discovered by delivery. If it is
-going to run at all, it must be started here.</p>
-<p><strong>And the sweep is really the writes finishing.</strong> Binding a static from
-the file is a write, and a write runs the readiness check on the
-station holding it (<a href="doc-004-datapath-statics.html">004</a>). A station with only
-statics is ready the moment its last one is bound, so what looks like a
-separate startup step is the ordinary mechanism arriving at the end of
-construction. Nothing here is special-cased; the same thing happens
-when a station is added to a program that is already running.</p>
-<p>After the sweep, the pool is running and the map propagates on its
-own — until somebody adds a station and brings the program up again,
-which sweeps once more and starts only what it has not already
-started.</p>
-<h2>Termination, from the map's point of view</h2>
-<p>The program ends when the pool has nothing left to run and no worker is
-mid-task — see <a href="doc-006-datapath-scheduling.html">006</a>. For a map, that
-means every value that entered has finished travelling and no station
-is waiting on one that will never come.</p>
-<p>A map that should run indefinitely keeps itself alive by looping: a
-value that comes back around into a ring buffer is a new delivery, and
-a new delivery is new work. Such a map is expected to check a stop
-condition somewhere in the loop, because nothing else will stop it.</p>
+<h3>How it gets the trail into a browser</h3>
+<p>**This is the one genuinely awkward part and it should be admitted
+early.** A page cannot map shared memory. So something has to stand
+between the ring and the page, and what that something is decides how
+much of this issue is about plumbing.</p>
+<p>The obvious answers, in the order they cost:</p>
+<ul>
+<li><strong>A tiny reader that serves the events over a socket the page opens.</strong></li>
+<p>  A separate program, doing nothing but forwarding — which keeps the
+  "cannot touch" property intact by construction, since forwarding is
+  all it can do.</p>
+<li><strong>A file the page polls.</strong> No server, but a page cannot read a local</li>
+<p>  file it was not handed, so somebody has to hand it one repeatedly.</p>
+<li><strong>The reader writes a page.</strong> No live view at all; a snapshot</li>
+<p>  regenerated. Cheapest and weakest.</p>
+</ul>
+<p><strong>Undecided, and it is the first thing to decide</strong>, because the rest of
+the page is the same either way and this determines whether the phase
+gains a running program nobody asked for.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. Read the trail in a program that is not a browser, and print what it
+   sees. This is <a href="issue-802-a-program-you-can-watch.html">802</a>'s test grown up,
+   and it proves the format before anything is drawn.
+2. Decide the bridge, in the open question below.
+3. The graph, drawn from a dump, with no live data in it at all.
+4. The lighting: stations reacting to events, and the page saying so
+   when events were lost.
+5. Buffer depths.
+6. Pointed at a program doing something worth watching — a demo, an
+   example, whatever phase 8's panel turns out to be.</p>
+<h2>Open questions</h2>
+<ul>
+<li><strong>What stands between the shared ring and the page?</strong> The three</li>
+<p>  answers above, and the choice decides whether phase 8 gains a
+  long-running program. Nothing else in this project has one, and that
+  is worth weighing rather than accepting.</p>
+<li>**Does the viewer need the program's dump, or can it learn the graph</li>
+<p>  from the trail alone?** The trail says a station ran and a value
+  moved from one to another, so the shape could be discovered by
+  watching. Discovering it means the picture is incomplete until
+  everything has run at least once, which for a program with a rare
+  branch is a picture that is wrong for a long time. Asking for a dump
+  once is exact and needs a second channel.</p>
+<li><strong>How much history does it hold?</strong> A view of <em>now</em> needs none. A view</li>
+<p>  that answers "what happened just before it wedged" needs some, and
+  the amount is the difference between a dashboard and a recorder.</p>
+<li><strong>Does watching a program that has finished mean anything?</strong> If the</li>
+<p>  trail outlives the process — <a href="issue-802-a-program-you-can-watch.html">802</a>
+  has not decided — then the same page could replay a dead program, and
+  it is worth knowing whether that is one feature or two.</p>
+</ul>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, the input</li>
-<li><a href="doc-007-datapath-build.html">007 — The build path</a>, where a description is turned into calls</li>
-<li><a href="done-311d-the-map-becomes-code.html">311d — The map becomes code</a>, which removed the reader</li>
-<li><a href="doc-006-datapath-scheduling.html">006 — Scheduling</a>, what the seed pushes into</li>
+<li><a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>, the</li>
+<p>  trail this reads and the only thing it depends on</p>
+<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which</li>
+<p>  it shares nothing with, deliberately</p>
+<li><a href="done-703-map-dump.html">703 — The map dump</a>, where the graph</li>
+<p>  comes from</p>
+<li><a href="done-701-buffer-growth-reporting.html">701 — Buffer growth reporting</a>,</li>
+<p>  which is the thing most worth drawing</p>
 </ul>
 
 </main>
