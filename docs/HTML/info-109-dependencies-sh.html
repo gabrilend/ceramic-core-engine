@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>050-observe.c — the engine saying out loud what it already knew</title>
+<title>109-dependencies.sh — what the project needs, and how to get it</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -135,7 +135,7 @@
 <a href="info-097-renumber-lua.html">097-renumber.lua — changing the reading order, from outside</a>
 <a href="info-099-mapparse-h.html">099-mapparse.h — reading a description, from outside</a>
 <a href="info-100-mapparse-c.html">100-mapparse.c — the parser, from inside</a>
-<a href="info-109-dependencies-sh.html">109-dependencies.sh — what the project needs, and how to get it</a>
+<a href="info-109-dependencies-sh.html" class="here">109-dependencies.sh — what the project needs, and how to get it</a>
 <a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
@@ -145,7 +145,7 @@
 <a href="info-040-mapfile-h.html">040-mapfile.h — a description becoming a program, from outside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
 <a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
-<a href="info-050-observe-c.html" class="here">050-observe.c — the engine saying out loud what it already knew</a>
+<a href="info-050-observe-c.html">050-observe.c — the engine saying out loud what it already knew</a>
 <a href="info-051-dump-c.html">051-dump.c — writing a running program back out as a file</a>
 <a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
 <a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
@@ -160,59 +160,95 @@
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>050-observe.c — the engine saying out loud what it already knew</h1>
-<p>The reporting half of phase 7. Nothing here decides anything: the
-numbers have been kept all along — growth counts and high-water marks
-since the station layer was built, run counts riding the delivery
-path, timing from the shims when it is compiled in — and this file
-reads and formats them.</p>
+<h1>109-dependencies.sh — what the project needs, and how to get it</h1>
+<p>The one place that knows what the build wants beyond a C compiler,
+whether this machine has it, and what may be done about it when it
+does not.</p>
+<h2>Usage</h2>
+<p>    ./scripts/109-dependencies.sh [--check] [--local NAME|all] [--yes] [DIR]</p>
 <table>
-<tr><td>Function</td><td>Takes</td><td>Gives</td><td>Does</td></tr>
-<tr><td><code>map_report_buffers</code></td><td>a program, a stream</td><td>nothing</td><td>Which ports have grown and how deep the backlog reached, plus the task queue's own growth.</td></tr>
-<tr><td><code>map_report_stations</code></td><td>a program, a stream, an ordering</td><td>nothing</td><td>Per-station run counts, values produced, and time spent when timing is compiled in.</td></tr>
-<tr><td><code>map_report_shutdown</code></td><td>a program</td><td>nothing</td><td>The parting word: anything that grew far enough to be worth complaining about.</td></tr>
-<tr><td><code>map_observe_start</code></td><td>a program, a path, an interval</td><td>nothing</td><td>Emits a report on a timer, from a thread that is not a worker.</td></tr>
-<tr><td><code>map_observe_stop</code></td><td>a program</td><td>nothing</td><td>Stops it.</td></tr>
-<tr><td><code>sora_stats_box_time</code></td><td>a task, nanoseconds</td><td>nothing</td><td>How long one box took, charged onto the task by its shim.</td></tr>
+<tr><td>Argument</td><td>Meaning</td></tr>
+<tr><td>*(none)*</td><td>Report, then fix what is safe to fix: update stale local copies, fetch cheap missing things, offer the rest.</td></tr>
+<tr><td><code>--check</code></td><td>Report only. Changes nothing. Exits unhappily if something required is absent, so it can gate a build.</td></tr>
+<tr><td><code>--local NAME</code></td><td>Fetch a copy belonging to this project, whether or not the system has one. <code>all</code> for everything that can have one.</td></tr>
+<tr><td><code>--yes</code></td><td>Take every offer without asking. For unattended runs.</td></tr>
+<tr><td><code>DIR</code></td><td>Project root, if not the one hard-coded at the top.</td></tr>
 </table>
-<h2>Reading a machine that is still moving</h2>
-<p><strong>The walk takes no lock</strong>, and the numbers are stale by a moment.
-That is the nature of observing something live, and it is the right
-trade: a report that stopped the engine to be exact would change the
-thing it was measuring.</p>
-<p><strong>The timer thread is not a worker and pushes nothing.</strong> Termination
-is decided by the last worker to fall asleep finding no work, so
-anything that could push after that moment would break it. This
-watches and never contributes.</p>
-<h2>Three piles, three different diagnoses</h2>
-<p>This is the part worth knowing, because the numbers look alike and
-mean opposite things.</p>
-<p><strong>A port backing up</strong> means one input side is outpacing its siblings —
-values arriving faster on one arrow than the station can pair them
-with on another. Memory is absorbing the difference.</p>
-<p><strong>The task queue backing up</strong> means the workers are behind the
-program: more became runnable than there were threads to run it.</p>
-<p><strong>Results backing up</strong> means *nobody is collecting the program's
-results at all*. This one is louder than the other two by design. The
-first two are performance signals worth a line in the teardown report;
-this is a program computing into somewhere nobody is looking, and
-waiting until shutdown to mention it wastes the entire run — so it is
-said from the first doubling, naming the station.</p>
-<h2>The shout at the end</h2>
-<p>A port grown past a threshold gets a complaint at shutdown, per the
-rule that a warning is an error nobody has decided about yet. **The
-number lives here and nowhere else**, deliberately: a threshold quoted
-in a document is one that goes stale silently.</p>
-<p>It counts <strong>pages</strong>, not doublings, and it moved when growth stopped
-doubling and started appending. Sixteen pages is the same backlog four
-doublings used to mean — left where it was, the same complaint would
-have fired whenever a consumer was briefly slow, and a warning that
-cries wolf costs more than it is worth.</p>
-<h2>Naming a station</h2>
-<p>Reports name a station the way a map file named it, or by its index
-when nothing did. A program built by calling the construction surface
-has no names at all, and a report that says <code>?</code> about it is one nobody
-can act on.</p>
+<p><code>make dependencies</code> runs the <code>--check</code> form.</p>
+<h2>The three things it manages</h2>
+<table>
+<tr><td>Tool</td><td>For</td><td>Required</td><td>If missing</td></tr>
+<tr><td>a C compiler</td><td>the engine, the generator, the tests</td><td>yes</td><td>nothing can be done; it says so and stops</td></tr>
+<tr><td>LuaJIT</td><td>regenerating the documentation site</td><td>no</td><td>downloaded and <strong>built from source</strong></td></tr>
+<tr><td>a WebAssembly linker</td><td>regenerating the workbench's browser module</td><td>no</td><td>offered as a <strong>prebuilt download</strong></td></tr>
+</table>
+<p>Neither optional tool is needed to build or run the engine. Both
+regenerate something that is committed in its finished form, so
+somebody who never edits a document and never changes the map format
+never needs either one.</p>
+<h2>The rules, which are deliberately not symmetric</h2>
+<p><strong>A local copy is this project's, and is updated without asking.</strong>
+Agreeing to one was the decision; keeping it current is the
+consequence. A local copy nobody refreshes is worse than none, because
+it is silently different from what the project was tested against.</p>
+<p><strong>A system copy is never touched.</strong> Not upgraded, not patched, not
+moved, at any version, for any reason. It belongs to a package manager,
+and two things writing to one file is how a machine reaches a state
+nobody can explain afterwards. When the version is one this project
+cannot use, the script says so and suggests a local copy — which is the
+most it may do.</p>
+<p>**How something missing gets fetched depends on what fetching it
+honestly costs.** LuaJIT is built from source: one tarball, nothing but
+a C compiler and make, about a minute. The WebAssembly linker is
+downloaded prebuilt, and that exception is stated in the script rather
+than hidden, because building it from source means building LLVM —
+gigabytes of C++ and an hour at best.</p>
+<p><strong>Running it twice does nothing the second time.</strong> This is the property
+protected above the others, since it is what allows the script to sit
+in front of a build.</p>
+<h2>Two questions that look like one</h2>
+<p>Whether a copy is <em>the one we pinned</em> and whether a copy is *good
+enough* are different questions, and the first version of this script
+asked only the first. That compared what a tool reports against what
+the script would build, which for LuaJIT meant comparing a version
+string against a commit hash — never equal, so a working system LuaJIT
+reported as out of date forever.</p>
+<p>So there are two: a <strong>pin</strong>, used when building or downloading a local
+copy, exact so that two machines end up with the same binary; and
+<code>acceptable_version</code>, one test per tool, because the tests are
+different shapes. LuaJIT must be from the 2.1 line. The WebAssembly
+linker must be the same major version as the clang whose output it
+links, which is a number the script looks up rather than one anybody
+can write in a table.</p>
+<h2>Two facts about WebAssembly worth knowing before reading that part</h2>
+<p><strong>gcc cannot target WebAssembly</strong>, so that half of the project is a
+clang job whatever <code>cc</code> points at.</p>
+<p><strong>A linker and the compiler feeding it must match.</strong> Object files carry
+a format version and a linker from a different major refuses them —
+correct behaviour, and a baffling message if you do not expect it. This
+is why a local copy takes the compiler out of the archive as well as
+the linker: from one archive they match by construction, where a
+linker alone would be matched against whatever clang the machine
+happens to have, which is true today and strange after somebody's next
+upgrade.</p>
+<h2>Where things land</h2>
+<p>Everything fetched goes under <code>toolchain/</code>, which git ignores —
+downloaded and derived, so the project's standing rule about derived
+files keeps it out of history, and a local toolchain in history would
+also be a several-hundred-megabyte answer to a question nobody asked
+when cloning.</p>
+<p><code>toolchain/installed</code> is the manifest: one line per fetched tool,
+naming the version and how it arrived. Written only after an install
+succeeds, so an interrupted download cannot leave it claiming something
+that is not there.</p>
+<p>The build prefers <code>toolchain/bin</code> over the system for anything it finds
+there, which is the point of having fetched it.</p>
+<h2>What is not tested</h2>
+<p>The LuaJIT path has been run end to end. **The WebAssembly linker
+download has not** — the archive's layout was checked by reading the
+first entries of it, and the extraction and symlinking below that have
+never executed. Recorded here rather than left for somebody to discover
+at the moment they need it to work.</p>
 
 </main>
 </div></body></html>

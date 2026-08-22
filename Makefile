@@ -116,12 +116,27 @@ ENGINE_SRC := $(wildcard $(DIR)/libs/*.c) $(wildcard $(DIR)/src/*.c) $(GENERATED
 describe: $(GENERATOR)
 	$(GENERATOR) --describe $(BOX_SRC)
 
+# What the build wants that is not a C compiler, and where it is. The
+# script changes nothing in this mode; it reports, and fails if
+# something required is absent. Run it directly, without --check, to
+# have it fetch what is missing.
+.PHONY: dependencies
+dependencies:
+	@$(DIR)/scripts/109-dependencies.sh --check $(DIR)
+
+# A tool this project fetched for itself wins over the system's copy of
+# the same tool, which is the whole point of having fetched it: a local
+# copy exists precisely so that what the build runs stops depending on
+# what somebody's package manager did last week. Falls back to the name
+# alone when there is no local copy, which finds the system's.
+LUAJIT := $(firstword $(wildcard $(DIR)/toolchain/bin/luajit) luajit)
+
 # The HTML documentation set (issue 705): generated from the markdown,
 # never maintained beside it. Regenerated on demand and as part of a
 # full build, so stale HTML cannot ship.
 .PHONY: html
 html:
-	luajit $(DIR)/scripts/054-docs-html.lua $(DIR)
+	$(LUAJIT) $(DIR)/scripts/054-docs-html.lua $(DIR)
 
 # The example a reader is pointed at first. It is built by `all` so it
 # can never quietly stop compiling, and run by `make example`, which is

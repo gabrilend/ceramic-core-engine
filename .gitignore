@@ -6,3 +6,8 @@ tmp
 # Editor droppings.
 *.swp
 *~
+# Tools this project fetched for itself. Downloaded and derived, so the
+# same rule as everything else here applies (issue 306) — and a local
+# toolchain in history would also be a several-hundred-megabyte answer
+# to a question nobody asked when cloning.
+toolchain/
