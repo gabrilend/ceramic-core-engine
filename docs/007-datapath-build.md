@@ -254,12 +254,6 @@ not be avoided.
 
 ## What the build includes
 
-**A map is also a manifest.** Having read it to emit the construction
-calls, the generator knows exactly which box sources the program needs.
-It includes those files whole and emits shims **only** for the
-functions the map names. A program using three boxes out of five
-hundred no longer carries five hundred shims.
-
 **The linker decides what actually ships.** Built with
 `-ffunction-sections -fdata-sections -Wl,--gc-sections`, every function
 lands in its own section and the linker discards every section nothing
@@ -272,6 +266,21 @@ costs nothing but build time.
 hole in it**, worth naming so nobody re-proposes it: linking resolves
 *symbols*, not includes, so a file may call a function it never
 included a header for by declaring it by hand.
+
+**What the linker is allowed to discard is decided by what the program
+exports**, and the two settings pull against each other. A symbol in
+the executable's dynamic table cannot be collected, because the reason
+it is there is that code compiled later may look it up by name. So
+`-rdynamic`, which exports everything, quietly makes the whole binary a
+root. The engine's public surface is named instead, in
+[src/098-engine-surface.syms](../src/098-engine-surface.syms), and
+handed over as `--dynamic-list`.
+
+**A table naming every box is a root too**, and while one exists it
+holds down every placement function and every shim behind them. This is
+why deleting that table is worth more to a shipped program than any
+amount of linker configuration, and why it is what
+[311](../issues/311-the-registry-dissolved.md) is for.
 
 **And the build now checks every box reference.** A map naming a
 function that does not exist, a file that does not exist, or a bare

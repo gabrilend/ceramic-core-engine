@@ -130,12 +130,6 @@ everywhere else in this engine.
 
 ### What the build includes
 
-**The maps a program declares are also a manifest.** Having read them
-to emit the construction calls, the generator knows exactly which box
-sources the program needs. It includes those files whole and emits
-shims **only** for the functions the maps name. A program using three
-boxes out of five hundred no longer carries five hundred shims.
-
 **The linker decides what actually ships.** Built with
 `-ffunction-sections -fdata-sections -Wl,--gc-sections`, every function
 lands in its own section and the linker discards every section nothing
@@ -151,6 +145,40 @@ included a header for by declaring it by hand.
 
 **This spends build time to save binary size, deliberately.** You still
 compile five hundred files; you ship three.
+
+**Exporting is the thing that has to be narrow, and it was not.** A
+symbol in the executable's dynamic table is a collection root by
+definition: the point of exporting it is that code which does not exist
+yet may look it up by name, so the linker can prove nothing about who
+calls it and has to keep it. `-rdynamic` exports *every* global symbol,
+so it declared the whole binary reachable and `--gc-sections` collected
+nothing. The two flags were in direct opposition, and the sweeping one
+won. Naming the families that are genuinely public —
+[src/098-engine-surface.syms](../src/098-engine-surface.syms), handed
+to the linker as `--dynamic-list` — exports the engine and lets
+everything else be thrown away.
+
+**But a table of every box is also a root, and that is the real
+holdfast.** The linker discards what nothing points at; a table naming
+every placement function points at all of them, and through them at
+every shim. So no amount of linker configuration shrinks a program
+while the engine still carries a list of everything it could place.
+
+Measured on one test binary, which is worth keeping because it says
+which half of the problem is which:
+
+| built with | size | |
+|---|---|---|
+| `-rdynamic` | 160,352 | everything is a root |
+| the surface list, table intact | 146,568 | −8.6%, engine internals collected |
+| the surface list, table emptied | 126,392 | −21.2%, boxes collected too |
+
+The table holds 20,176 bytes down on its own — more than narrowing the
+export list recovers. **That is why trimming what the generator emits
+was the wrong lever.** It would have worked, but only by shrinking the
+table as a side effect; deleting the table is what this whole family is
+for, and it gets the same bytes without the generator guessing which
+boxes a program will want.
 
 ### The build checks every box reference
 
@@ -200,9 +228,30 @@ the compiler being needed exactly when new code genuinely arrives.
    line. The parameter count is not checked against the line, because
    a station line does not state one — it says which box, and the box
    says how many ports it has.
-5. Not built. The generator still emits a shim for every box it was
-   given.
-6. Not built.
+5. **Dropped, and the reason is the useful part.** This step had the
+   generator emit shims only for the functions the declared maps name.
+   It would have worked, but it was a guess standing in for a
+   measurement: the generator knows what a map *names*, while the
+   linker knows what the code *reaches* — through hand-written externs
+   and through function pointers taken by name, which is where a
+   name-based guess goes wrong. Step 6 does the same job exactly, and
+   runs anyway.
+
+   Reordering was considered and does not work: the linker's input
+   *is* the shims, so there is nothing to trace through until they
+   exist. Running it twice — emit everything, link, ask
+   `--print-gc-sections` what went, re-emit the survivors, link again —
+   produces a byte-identical binary for a second full compile, because
+   the discarding already happened during the first link.
+6. **Half done.** The export list is narrow now
+   ([src/098-engine-surface.syms](../src/098-engine-surface.syms)) and
+   every function is in its own section, so the linker collects what
+   nothing reaches — 8.6% of one test binary, all of it engine
+   internals. **It cannot reach the boxes while the places table
+   exists**, because that table points at every placement function and
+   a pointed-at function is reachable. The remaining 12.6% arrives when
+   step 7 removes the last reader of that table, and the table with it.
+   The measurements are in *What the build includes* above.
 7. The engine's runtime map parser deleted — **and the parser itself
    kept, as a box.** Nothing in the *engine* parses maps any more, but
    a program that runs other programs needs a box that reads one
@@ -220,6 +269,29 @@ the compiler being needed exactly when new code genuinely arrives.
    closes the triangle.
 
 ## Open questions
+
+**Outstanding:**
+
+- *Should the export list name families or functions?* It names two
+  families today — everything beginning `map_`, which is the
+  construction surface, and everything beginning `sora_`, which is how
+  a box ends the program it is inside. That is the whole set the box
+  sources reach for, checked rather than assumed.
+
+  The narrower alternative is to name the individual functions, which
+  is a far shorter list: an emitted placement function calls exactly
+  one engine function, since the one that hands back a station pointer
+  is `static inline` and gets compiled into the caller. Naming that
+  list would make "what code arriving after the build may call" an
+  exact statement rather than an approximate one, and it would fail
+  loudly the day the emitter reaches for something new.
+
+  **Which is the feature and which is the cost depends on whether the
+  surface has stopped moving**, and it has not — [212](completed/212-one-way-to-build-a-program.md)
+  is still adding to it. A list that breaks on every addition is worth
+  having once the additions stop. The failure mode is mild either way:
+  a shared object needing a symbol the host did not export fails at
+  `dlopen`, naming the symbol it wanted.
 
 **Answered:**
 

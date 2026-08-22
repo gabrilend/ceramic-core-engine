@@ -39,6 +39,13 @@ CC     ?= gcc
 CFLAGS := -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread
 CFLAGS += -I$(DIR)/libs -I$(DIR)/src
 
+# Every function and every piece of static data in a section of its
+# own, so that the linker can throw away the ones nothing reaches
+# (issue 311d). Without this the unit of discard is a whole object
+# file, and one shim in use keeps every shim beside it. The cost is a
+# larger object file during the build and nothing at all afterwards.
+CFLAGS += -ffunction-sections -fdata-sections
+
 # Three build-time facts a program needs at run time, and only if it
 # ever brings in new code (issue 310): which compiler built it, where
 # the generator is, and where the headers that generated code includes
@@ -139,20 +146,35 @@ ramdirs:
 $(BUILD): | ramdirs
 	mkdir -p $(BUILD)
 
-# -rdynamic puts the engine's own symbols in the executable's dynamic
-# table, which a box compiled while the program runs needs (issues 310,
-# 311b). Such a box arrives as a shared object and is dlopened; its
-# generated placement function calls straight into the station layer,
-# and a shared object cannot see a symbol the host did not export.
+# Two linker instructions that only make sense together, and used to
+# be one instruction that cancelled the other out (issue 311d).
 #
-# It was not needed while generated code only held shims — a shim
-# calls the box, and the box is inside the shared object with it. It
-# became needed the moment generated code started *building stations*,
-# which is the whole point of a placement function. Anyone linking a
-# program with this engine inherits the same requirement, which
-# belongs with the rest of the packaging story.
-$(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) | $(BUILD)
-	$(CC) $(CFLAGS) -rdynamic -o $@ $< $(ENGINE_SRC)
+# The engine's own symbols have to appear in the executable's dynamic
+# table, because a box compiled while the program runs arrives as a
+# shared object and is dlopened, its generated placement function calls
+# straight into the station layer, and a shared object cannot see a
+# symbol the host did not export. That was not needed while generated
+# code held only shims — a shim calls the box, and the box is inside
+# the shared object with it. It became needed the moment generated code
+# started *building stations*, which is the whole point of a placement
+# function.
+#
+# But the sweeping form of that instruction, -rdynamic, exports every
+# global symbol in the binary, and an exported symbol is a root the
+# section collector must keep. So -rdynamic silently declared the whole
+# program reachable and --gc-sections collected nothing. Naming the
+# families that are actually public — which is what
+# src/098-engine-surface.syms does, with the measurements in it —
+# exports the engine and lets everything nothing reaches be thrown
+# away.
+#
+# Anyone linking a program with this engine inherits both halves,
+# which belongs with the rest of the packaging story.
+SURFACE := $(DIR)/src/098-engine-surface.syms
+LDFLAGS := -Wl,--dynamic-list=$(SURFACE) -Wl,--gc-sections
+
+$(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) $(SURFACE) | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
 
 # The generator's own unit test links the generator's pieces rather
 # than the engine: it is testing the build tool, not the thing the

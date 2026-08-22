@@ -1,0 +1,63 @@
+# 098-engine-surface.syms — what code arriving after the build may call.
+#
+# What this is: the list of engine symbols kept in the executable's
+# dynamic symbol table. A box or a map compiled while the program runs
+# arrives as a shared object and is opened with dlopen; a shared object
+# can only call a symbol the host executable exported. This file is
+# that export list, and so it is the engine's public surface written
+# down — the first time that boundary has existed anywhere except by
+# accident.
+#
+# How it does it, in general terms: the linker is handed this file as
+# --dynamic-list. Every name matching a pattern here goes into the
+# dynamic table and becomes a root the section collector has to keep.
+# Everything else is fair game for --gc-sections to discard.
+#
+# Why this is not -rdynamic (issue 311d). -rdynamic exports *every*
+# global symbol, and an exported symbol is a collection root by
+# definition: the whole point of exporting it is that code which does
+# not exist yet may look it up by name, so the linker can prove nothing
+# about who calls it and must keep it. -rdynamic therefore declares the
+# entire binary reachable, and --gc-sections then collects nothing. The
+# two flags are in direct opposition and -rdynamic wins.
+#
+# Measured on a five-function model before this file was written: a
+# program placing one box out of three kept one shim under
+# --gc-sections alone, and all three shims plus all three placement
+# functions once -rdynamic was added. With this file it keeps one and
+# still exports the engine.
+#
+# That is what makes "a program using three boxes out of five hundred
+# does not carry five hundred shims" true without the generator having
+# to guess which three. The linker traces reachability through
+# hand-written extern declarations and through function pointers taken
+# by name — the two cases a source parser gets wrong.
+#
+# A symbol listed here survives collection even when nothing compiled
+# into the binary calls it, which is the property the whole idea rests
+# on: a box arriving mid-run calls engine functions that this
+# particular program may never call itself.
+#
+# Why prefixes rather than a list of names. Three families of function
+# can be reached from code that arrives late, and naming the families
+# says which layers are public without a list that has to be re-edited
+# every time one of them gains a function. The narrower alternative —
+# naming the individual functions generated code actually calls, which
+# today is far fewer — is recorded as an open question on 311d rather
+# than taken, because a list that breaks loudly on every addition is
+# only worth having once the surface has stopped moving.
+#
+# Leaving a family out is not a silent loss: a shared object that needs
+# a symbol the host did not export fails at dlopen, naming the symbol.
+
+{
+    # The construction surface. A placement function calls into it to
+    # write a station; a compiled map calls it to build a whole
+    # program; the construction boxes call it on behalf of a map that
+    # is building another map.
+    map_*;
+
+    # Stopping. A box may end the program it is running inside, which
+    # is the one thing a box does that is not pure computation.
+    sora_*;
+};

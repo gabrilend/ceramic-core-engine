@@ -14,19 +14,30 @@ variables mean there can only ever be one map.
 
 ---
 
-## The link line gained a flag, and it is not optional
+## The link line gained two flags, and they are not optional
 
 A program built with this engine must be linked so that the engine's
-own symbols appear in the executable's dynamic table — `-rdynamic` on
-the usual toolchains.
+own symbols appear in the executable's dynamic table, and so that the
+functions nothing reaches are thrown away. Both halves are needed, and
+the obvious way to write the first one cancels the second.
 
-**Why it is not a detail.** A box compiled while the program runs
-arrives as a shared object and is opened at run time. The generator
-emits, alongside its call site, a **placement function** that builds
-the station: it calls straight into the station layer. A shared object
-cannot see a symbol the host executable did not publish, so without
-the flag such a box loads and then fails to resolve, naming a function
-in the engine rather than anything about the box.
+**Why exporting is not a detail.** A box compiled while the program
+runs arrives as a shared object and is opened at run time. The
+generator emits, alongside its call site, a **placement function** that
+builds the station: it calls straight into the station layer. A shared
+object cannot see a symbol the host executable did not publish, so
+without the export such a box loads and then fails to resolve, naming a
+function in the engine rather than anything about the box.
+
+**Why it must be narrow.** A symbol in the dynamic table is a root the
+section collector cannot touch, because the reason it is exported is
+that code which does not exist yet may look it up by name — so the
+linker can prove nothing about who calls it. `-rdynamic` exports every
+global symbol and therefore declares the whole binary reachable, at
+which point `--gc-sections` has nothing left to discard. Hand the
+linker `--dynamic-list=src/098-engine-surface.syms` instead: it names
+the two families of function that are genuinely public, exports those,
+and leaves the rest collectable. That file carries the measurements.
 
 It was not needed while generated code held only shims, because a shim
 calls the box and the box is inside the object with it. It became

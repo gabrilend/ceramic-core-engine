@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 17:41:16
+Generated on: 2026-08-21 19:13:54
 
 --------------------------------------------------------------------------------
 
@@ -1074,6 +1074,800 @@ station-layer tests drifted forty to sixty places from the station layer, and
 the guarantees page at fifty-eight when it's the page your own orientation says
 to read early. That's a judgement about how the project is best explained, and
 it's yours to make before the tool runs.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 4
+
+Let's work on unblocking 311.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 4
+
+Let me read the parent issue properly — the gate is "no by-name lookup at run
+time", and I want to check that against what 310 and the construction boxes
+actually need.
+
+
+This is the crux. Let me see how by-name placement resolves today:
+
+
+Now I can see the real shape. Two tables exist — the **record** (`box_info_t`)
+and the **places** (name → placement function). 311b wants the record gone.
+Let me find what still reads it:
+
+
+The record's readers are mostly tests plus five engine sites. Let me start with
+the one that needs a design decision — the comparator refusals:
+
+
+The placement functions already carry both comparator refusals with better
+messages than the pre-check. That makes the record's last engine use removable.
+Starting the deletion:
+
+
+Now the loader and the late-box path:
+
+
+Engine compiles. Now the late-box path's dlsym, then the tests:
+
+
+The unload check compared shim pointers, which the record held. A station
+carries its box name, so the check becomes a name comparison — conservative in
+the safe direction:
+
+
+The block already fetches places further down — the first dlsym pair was
+purely for the record. Collapsing them:
+
+
+Engine is clean. Now deleting the record itself, and the generator's emission of
+it:
+
+
+`path_within` lived inside the span I removed. Restoring it:
+
+
+The engine and generator are clean — only tests remain. 030 is the big one; it
+validated the record, so it now validates what a placement actually writes:
+
+
+081's whole subject was comparing the record path against the function path. Let
+me see the rest before deciding what survives:
+
+
+The record is gone, everything passes. Let me confirm nothing anywhere still
+references it, then record it:
+
+
+No reader survives. Let me update the companions and the issues, then commit
+this before moving on:
+
+
+Now the second half of the unblocking — **311a's map format**, which waited on
+the generator reading maps. It does now. Let me read its rules:
+
+
+Implementing 311a's three address forms. First, the station carries the full
+address:
+
+
+311a's rule about the dump exists for exactly this reason — the address of a
+late box is a per-process temporary path. Implementing the shortening:
+
+
+The late-box lookup matches bare names only, so the address form falls through.
+Factoring the match so both tables use one rule:
+
+
+Now the build-time half — the generator resolving all three forms, with
+ambiguity fatal at the map line:
+
+
+Now a test that all three forms name the same box, and that the map file can use
+any of them:
+
+
+311a's map-file half is done. Updating the documentation and the issues:
+
+
+Step 1 of 311a contradicts its own Intended behavior — let me note that, and
+add the collision test step 6 asks for:
+
+
+The generator's own duplicate check fires first — and 311a's step 4 says
+exactly that check should stop being build-breaking. Let me look:
+
+
+Both new scenes pass and the suite is green. Updating 311a and 311's parent
+page:
+
+
+311 is unblocked — and further along than expected. Two of its four children
+are complete, and the fork you were holding turned out to be avoidable.
+
+
+## What was actually blocking it
+
+
+The gate was "no by-name lookup at run time", and I'd read that as needing
+shim-trimming first. It didn't. **The step assumed one table where there were
+two:**
+
+
+- the **record** — name, shim, parameter types and sizes, return type, task
+  size, comparison — which answered *what is this box*
+
+- the **places table** — name, address, placement function — which answers
+  *which function writes this station*
+
+
+Only the second is needed to resolve a name. So the record could go immediately,
+and what waits on 311d is one name and one pointer per box rather than
+everything.
+
+
+## What that unlocked
+
+
+**The record is deleted** — type, table, emitter, every reader. It was read
+exactly once, at placement, and never again: a station holds its own shim, slot
+sizes, return size and comparison. Every number in it was a `sizeof` the
+compiler folded, and they moved from a table into a function where the compiler
+folds them into immediates and they aren't stored at all.
+
+
+Three readers went one at a time. The two comparator refusals moved into the
+placement function, where they were already duplicated and where they name a box
+by its full address rather than by whatever bare word a map used. The wire
+refusal had already stopped fetching type spellings when you chose
+position-and-size. And the tests that asked the record what it *held* now ask a
+station what it *got*.
+
+
+**311a is complete.** A map names a box three ways — bare function, basename
+and function, or path and function — and the path is a more specific way of
+saying the same thing rather than a rescue. A collision refuses and names both
+paths.
+
+
+That one required undoing an older refusal, which is the part worth your
+attention: the generator forbade two boxes of one name anywhere in the tree.
+Right while a symbol came from the bare name — two produced one identifier and
+the linker complained about a symbol instead of about two files. A symbol
+carries the path now, so refusing them forbids something C has no problem with.
+What repetition actually costs is that the *bare* name stops being an address,
+and that belongs to resolution rather than to the build.
+
+
+## Where 311 stands now
+
+
+| Child | |
+
+|---|---|
+
+| **311a** — boxes addressed by file | complete |
+
+| **311c** — source rides in the binary | complete |
+
+| **311b** — placement instead of records | the record is gone; removing the word *registry* waits |
+
+| **311d** — the map becomes code | capability built; the removals wait |
+
+
+## The fork, restated
+
+
+Your shim-trimming question is still open but it's now much narrower, and I
+think 311d's own prose answers it against itself. Step 5 says the generator
+should emit shims only for map-named functions. Step 6 says **the linker decides
+what actually ships** — computing exact reachability through includes,
+hand-written externs, and function pointers taken by name, "every case a source
+parser would get wrong."
+
+
+If step 6 is right, step 5 is the wrong shape: the generator should emit
+everything and let the linker discard what nothing reaches. That needs no mode
+and no fork — a program whose maps are compiled in never resolves a name, so
+the linker discards the rest; a program that *does* resolve names at run time
+keeps its symbols because `-rdynamic` already exports them.
+
+
+I stopped short of acting on that because it's dropping a step the issue
+explicitly lists, and that's your call to make rather than mine to infer.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 5
+
+/compact
+
+
+--------------------------------------------------------------------------------
+
+### User Request 6
+
+This session is being continued from a previous conversation that ran out of
+context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+
+1. **Primary Request and Intent:**
+
+
+   The user made a sequence of escalating requests on the `minimal-soramech`
+   project (a C dataflow engine at
+   `/mnt/mtwo/programming/ai-playground/minimal-soramech`):
+
+
+   - **Batch 1**: "Don't worry about it. Can you add the next 5 issue files to
+     your to-do list and keep working until they're done?" → completed 210g,
+     210, 212, 209, 106.
+
+   - **Mid-turn design note**: station tables and thread pools belong to one
+     *processor* (the package with its own memory controller), not a machine or
+     a core; cores within a processor share fast memory; multiple processors can
+     share tables if they can reach the shared memory area, but typically one
+     table per processor.
+
+   - **Batch 2**: "commit the llm-transcript files with the relevant work. They
+     should just ride along. Can you add the next 5 issues to your todo list and
+     start work on them, in the same way you just did the previous 5?" → 217,
+     213, 311c complete; 311d and 311b advanced.
+
+   - **Design answer 1**: error messages should "refer to arguments by index,
+     and size, on both ends of the wire, to highlight the incompatibility,
+     rather than attaching names. Maybe we build the parser in if we supply a
+     --debug or similar flag while the system is being built?"
+
+   - **Design answer 2**: "Adding a box and adding a map should be the same
+     operation, but adding a map is just recursive through a list of boxes (and
+     their wiring, connected after instantiating the boxes) while adding a box
+     is just a list of one." The imported map shares the thread pool and station
+     table.
+
+   - **Batch 3**: asked how to remove the reserved-word limitation in the map
+     markup language ("It's low priority, but still a good thing to consider"),
+     and "Can you add 5 more issues to your todo list and start work on them?"
+     → 607, 405 complete; 408, 711 advanced; 712 not started.
+
+   - **Current**: "Let's work on unblocking 311."
+
+
+2. **Key Technical Concepts:**
+
+   - Dataflow engine: **boxes** (plain C functions), **stations** (one placement
+     of a box, owning ports/mutex/wiring), **tasks** (one invocation).
+
+   - The one rule: a station runs when every input port holds a value; nothing
+     polls.
+
+   - Wires are `{station index, port index}` pairs, valid only inside one
+     station table. Stations never move (shelves, `STATIONS_PER_SHELF 64`).
+
+   - Ports: three kinds — `IN_PORT_RING`, `IN_PORT_STATIC`, `IN_PORT_NONE`.
+     Slots carry per-slot state; growth appends pages.
+
+   - Width-based wire checking (issue 309): a wire is legal when both ends count
+     the same bytes; type names are for messages only.
+
+   - The generator: build-time C program producing shims, placement functions,
+     struct field tables, compare functions, box source text, and (now) compiled
+     map build functions.
+
+   - `-rdynamic` needed so generated code in dlopened objects can call the
+     engine.
+
+   - Exit codes: 0 finished/polite, 65 bad file, 70 bad call, 71 no resource,
+     130 interrupted.
+
+   - Signals blocked in every thread + `sigwait` on the initial thread; one
+     handler only, for the second-interrupt escape.
+
+   - Project conventions: indexed filenames across the whole tree; `.info.md`
+     companion per source; issue files as blueprints not work logs; vimfolds;
+     errors over fallbacks.
+
+
+3. **Files and Code Sections:**
+
+
+   **Created:**
+
+   - `src/091-stopping.h` / `src/092-stopping.c` (+ `.info.md`) — the stopping
+     layer. `sora_prepare(report_path)`, `sora_report_path()`,
+     `sora_wait(map_t*)`, `sora_stop_now(map_t*, int, const char*)`. No handler
+     except `escape_now` installed for the length of a gather.
+
+   - `tests/093-test-stopping.c` (+ `.info.md`) — eight scenes, each signal
+     scene in a forked child with pipe handshake and a `reap()` ceiling.
+
+   - `tests/094-test-a-program-inside-another.c` — five scenes for 217.
+
+   - `tests/096-test-a-map-becomes-code.c` (+ `.info.md`) — compiled map vs
+     read map, identical dumps.
+
+   - `maps/095-doubling.map` — the description the build compiles.
+
+   - `scripts/088-complete-issue.lua` (+ `.info.md`) — moves an issue to
+     `completed/` via `git mv`, delegates link repair.
+
+   - `scripts/089-repair-doc-links.lua` (+ `.info.md`) — repairs every dead
+     markdown link by unique basename. First run fixed 107 dead links across 54
+     files.
+
+   - `scripts/097-renumber.lua` (+ `.info.md`) — renumbering tool with
+     `--check` straggler mode.
+
+   - `docs/implementation-notes/090-one-table-per-processor.md` — the locality
+     note.
+
+   - `issues/217-a-program-inside-another.md`, `issues/607-no-reserved-words.md`
+     (both now completed).
+
+
+   **Heavily modified:**
+
+   - `src/026-registry.h` — `box_info_t`, `registry_boxes`,
+     `registry_n_boxes`, `registry_find` **deleted**, replaced by a fold
+     explaining why. Added `box_source_t`/`registry_box_source`,
+     `map_build_t`/`registry_map_build`, `box_place_matches`.
+
+   - `src/027-registry-support.c` — `box_place_find` now implements three
+     address forms via `box_place_matches`:
+
+     ```c
+
+     int box_place_matches(const box_place_t *row, const char *name)
+
+     {
+
+         if (!strchr(name, ':'))
+
+             return strcmp(row->name, name) == 0;
+
+         if (strcmp(row->address, name) == 0)
+
+             return 1;
+
+         size_t n = strlen(name);
+
+         size_t a = strlen(row->address);
+
+         return a > n && row->address[a - n - 1] == '/'
+
+                && strcmp(row->address + a - n, name) == 0;
+
+     }
+
+     ```
+
+   - `src/042-loader.c` — reduced to a reader. `first_pass(m, d, int *at)`
+     fills a translation table; `second_pass(m, d, const int *at)`;
+     `find_station_index(d, at, name)` searches the description. Added
+     `map_instantiate_file`, `map_instance_entrance/result/free`,
+     `map_add_part`, `map_connect_parts`.
+
+   - `src/019-station.c` — `fail()` → `sora_stop_now(NULL,
+     SORA_EXIT_BAD_CALL, …)`, new `fail_resource()` → exit 71.
+     `map_bring_up` gained the linear "landed on" pass and the
+     required-result-station check. `no_such_port_into()` helper added.
+
+   - `src/020-delivery.c` — a delivery into a static port now calls
+     `map_in_port_static_write` and returns 0.
+
+   - `src/033-statics.c` — `port_text_to_bytes` extracted;
+     `write_quoted`/`read_quoted` + one `escapes[]` table;
+     `map_deliver_argument_text`, `map_deliver_command_line`.
+
+   - `src/041-mapfile.c` — `station` keyword required; refusal names all four
+     keywords.
+
+   - `src/051-dump.c` — unique-name disambiguation (`~2` suffix) and
+     address→bare-name shortening.
+
+   - `src/052-rewire.c` — `map_rewire_connect`/`map_rewire_disconnect`
+     deleted; `map_unwire`/`map_disconnect` added; `map_remove_station` returns
+     `const char *`. Width refusal now: `"%s output %d produces %d bytes and %s
+     input %d takes %d bytes"`.
+
+   - `src/074-latebox.c` — one dlsym pair
+     (`registry_places`/`registry_n_places`); unload check compares
+     `s->box_name` against `places[b].address`.
+
+   - `src/boxes/083-construction-boxes.c` — `part` struct; `program_add`,
+     `program_connect`, `program_set_constant`, `program_set_door`,
+     `program_name_station` all take/return parts; refusals stop the program.
+
+   - `libs/012-pool.c` / `011-pool.h` — `pool_signal_when_finished`,
+     `pool_stop`, `pool_queued`, `pool_worker_station`, `pool_finished`;
+     per-worker `station` field in `pool_epoch`.
+
+   - `scripts/069-genemit.c` — `emit_registry` deleted; `emit_sources`,
+     `emit_maps`, `box_named` added; placement functions write the full address.
+
+   - `scripts/068-genparse.c` — duplicate box name now refused only within one
+     file.
+
+   - `Makefile` — `SORA_ROOT`, `GEN_MAPS`, `MAP_SRC`/`MAP_FLAGS`.
+
+
+4. **Errors and fixes:**
+
+   - **`map_wire` width check hole** — guarded by `if (from->in_ports &&
+     to->in_ports)`, so any input-less source box skipped it. Found by deleting
+     the loader's duplicate check. Fixed; regression scene added to 072.
+
+   - **Second-interrupt escape was nominal** — with signals blocked, a second
+     SIGINT sits pending behind a gather that never returns. Fixed with
+     `escape_now`, the only handler in the engine.
+
+   - **Pool finished before anyone asked to be told** —
+     `pool_signal_when_finished` now raises immediately if `p->stop` is already
+     set.
+
+   - **Three test scenes passed for the wrong reason** — the child released
+     workers before registering a submitter, so the last-sleeper rule ended the
+     program instantly. Fixed by registering before releasing; `pool_finished`
+     added so the trap announces itself.
+
+   - **Station named `in` broke parsing** — led to issue 607 and the `station`
+     keyword.
+
+   - **My own tooling bugs**: 088's repointing rewrote sibling links twice and
+     rewrote completed-directory files in the wrong direction (fixed by
+     placeholders + branching on directory, then by delegating to 089); 097's
+     straggler check needed trailing-`.` stripping and `.html`/issues exclusion.
+
+   - **Duplicated header block** in `033-statics.c` from a bad Python replace
+     — cleaned up.
+
+   - **`gp_read_file` double-prefixed** to `gp_gp_read_file` by a blanket
+     replace — fixed with sed.
+
+   - **`path_within` deleted with `emit_registry`** — restored.
+
+   - **Generator's duplicate-name check fired before map resolution** —
+     relaxed to same-file-only per 311a step 4.
+
+
+   **User feedback that changed direction:**
+
+   - Refusals should name **index and size on both ends**, not type names.
+
+   - **Adding a box and adding a map are one operation** — a map is a list of
+     boxes with wiring, a box is a list of one; a part is never taken apart.
+
+
+5. **Problem Solving:**
+
+   Solved: the loader reduced to a reader; the record deleted; three address
+   forms; the reserved-word limitation; a wire computing a constant; string
+   escaping round-trip; composing as template instantiation. Key insight for
+   unblocking 311: **311b step 6 assumed one table where there were two** —
+   the record answered "what is this box", the places table answers "which
+   function writes this station"; only the second is needed to resolve a name,
+   so the record could go immediately.
+
+
+6. **All user messages:**
+
+   - "rc"
+
+   - (via AskUserQuestion) "Don't worry about it. Can you add the next 5 issue
+     files to your to-do list and keep working until they're done?"
+
+   - "I think station tables should be unique to the processor (the physical
+     device) that the engine is running on. Multiple processors in the same
+     machine can share station tables, so long as they can access the area in
+     shared memory where the stations actually live. My understanding of those
+     multi processor architectures is that they have some memory shared between
+     cores, and some memory shared between processors, but the core shared
+     memory is faster. So typically we'd have one station table per processor
+     anyway. Similarly, the thread pool is local to the processor as well."
+
+   - "commit the llm-transcript files with the relevant work. They should just
+     ride along. Can you add 5 more issues to your todo list and start work on
+     them, in the same way you just did the previous 5? Good job by the way
+     you're a marvel of engineering."
+
+   - (via AskUserQuestion) "need more background on this question." / "I have no
+     idea - more background please? Try and make it concise, focusing only on
+     the technical details, but no code, just datastructures and how they
+     connect."
+
+   - (via AskUserQuestion) "we should make the error messages and reports refer
+     to arguments by index, and size, on both ends of the wire, to highlight the
+     incompatibility, rather than attaching names. Maybe we build the parser in
+     if we supply a --debug or similar flag while the system is being built?"
+
+   - (via AskUserQuestion) "Okay so a map is adding a box to itself. This box
+     has a box_function() and it runs it as normal. This is the default case.
+     Let's say that the running map wants to add a box that is itself a map of
+     boxes. All it does is import that map as boxes to itself, copies the
+     wiring, and connects the input and outputs as requested. The imported map
+     shares a thread pool and station table with the running map. Adding a box
+     and adding a map should be the same operation, but adding a map is just
+     recursive through a list of boxes (and their wiring, connected after
+     instantiating the boxes) while adding a box is just a list of one."
+
+   - "- A station can't be named in, out or statics — the reader dispatches on
+     the first word of a line. Found by naming a door in.\n\nsounds like a
+     limitation of the markup language we're using to describe the data. How
+     would you suggest removing such a limitation? It's low priority, but still
+     a good thing to consider.\n\nCan you add 5 more issues to your todo list
+     and start work on them?"
+
+   - "Let's work on unblocking 311."
+
+
+7. **Pending Tasks:**
+
+   - **311 family**: `311b` (step 7 — remove the word *registry* from source
+     and documents; also the port `type_name` → class tag deletion), `311d`
+     (steps 5, 6, 7, 8 — shim trimming, linker gc-sections, moving the parser
+     out of the engine, rewriting docs 009), `311` (parent, closes when children
+     do).
+
+   - **712** — capturing a running program: not started (from batch 3).
+
+   - **408** steps 4–6 — generator-emitted formatters, waiting on the 311
+     work.
+
+   - **711** step 4 — applying a new reading order; four findings recorded,
+     awaiting the user's judgement.
+
+   - **Open question flagged to user**: shim trimming — whether the generator
+     should emit only map-named shims (breaks by-name placement in tests) or
+     whether the linker alone should trim.
+
+
+8. **Current Work:**
+
+   Immediately before this summary I had just completed and committed **311a —
+   Boxes addressed by file**. The commit `791beae "A map may name a box by its
+   file, and a bare name stops being an address"` landed, and the final command
+   confirmed three issues remain open in the family:
+
+   ```
+
+   311-the-registry-dissolved.md
+
+   311b-placement-instead-of-records.md
+
+   311d-the-map-becomes-code.md
+
+   ```
+
+   The two unblocking moves delivered in this turn were:
+
+   1. **The box record deleted** (commit `5accc90`) — `box_info_t`,
+      `registry_boxes`, `registry_n_boxes`, `registry_find`,
+      `registry_late_find` and `emit_registry` all gone, with every reader
+      rewired. Recorded in 311b: *"**This did not have to wait on [311d] after
+      all**, and seeing why is the useful part. The step was written as though
+      *one* table had to survive until nothing resolved a name — and there
+      were two."*
+
+   2. **311a completed** — three address forms, `box_place_matches` shared by
+      both tables, station carries the full address, dump shortens when
+      unambiguous, generator duplicate check relaxed, collision refusal naming
+      both paths, shell test scenes in `031-test-generator-cli.sh`.
+
+
+   The full test suite passes and the working tree is clean.
+
+
+9. **Optional Next Step:**
+
+   Continue unblocking 311 by working on **311b's remaining step 7** and/or
+   **311d's remaining steps**, which are what the parent 311 now waits on. The
+   user's request was explicit and open: *"Let's work on unblocking 311."*
+
+
+   311b step 7 currently reads: *"The word *registry* removed from source and
+   documents, since the thing it named no longer exists in any form. Waits on
+   the same."* — and with the record gone this is now partly actionable,
+   though the places table still exists until 311d emits every call directly.
+
+
+   Before doing 311d's steps 5–6, the shim-trimming fork I flagged to the user
+   still stands and should be confirmed: *"Every test currently places boxes by
+   name freely — `seven`, `keep`, `double_it` — with no map involved. If the
+   generator emits shims only for map-named boxes, those tests can't place
+   anything. So trimming either needs the test suite to declare its boxes, or
+   needs to stay opt-in for shipped builds only. Worth deciding before I build
+   it."*
+
+
+If you need specific details from before compaction (like exact code snippets,
+error messages, or content you generated), read the full transcript at:
+/home/ritz/.claude/projects/-mnt-mtwo-programming-ai-playground-minimal-soramech/bc2f1355-a646-454d-a731-9aab2bb3e23c.jsonl
+
+Continue the conversation from where it left off without asking the user any
+further questions. Resume directly — do not acknowledge the summary, do not
+recap what was happening, do not preface with "I'll continue" or similar. Pick
+up the last task as if the break never happened.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 7
+
+<local-command-caveat>Caveat: The messages below were generated by the user
+while running local commands. DO NOT respond to these messages or otherwise
+consider them in your response unless the user explicitly asks you
+to.</local-command-caveat>
+
+
+--------------------------------------------------------------------------------
+
+### User Request 8
+
+<command-name>/compact</command-name>
+
+            <command-message>compact</command-message>
+
+            <command-args></command-args>
+
+
+--------------------------------------------------------------------------------
+
+### User Request 9
+
+<local-command-stdout>[2mCompacted [22m</local-command-stdout>
+
+
+--------------------------------------------------------------------------------
+
+### User Request 10
+
+alright so step 5 says the generator should only emit shims for functions we
+actually use, and step 6 says the linker only builds in the functions that we
+actually use. So, maybe we just... run the linker before we build the shims?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 10
+
+Ran the experiment. Your instinct is right about step 5 and step 6 being one
+job, but the order can't invert — and the reason it can't is also the reason
+step 6 doesn't currently work.
+
+
+## Why the linker can't go first
+
+
+The linker's input *is* the shims. Reachability runs `main` → the map's build
+function → a placement function → a shim → the box. Take the shims away
+and there is nothing to trace through; the linker has no opinion about a
+function that was never compiled.
+
+
+You could do it in two passes — emit everything, compile, link, ask
+`--print-gc-sections` what got thrown away, then re-emit only the survivors and
+link again. But the binary from pass one is already the right binary. Discarding
+happened *during* that link. Pass two spends a second full compile to arrive at
+a byte-identical result. The answer only exists after it has already been acted
+on.
+
+
+## What's actually blocking step 6
+
+
+I built a five-function model of the situation — an engine, three shims, three
+placement functions, and a build function that places exactly one — and linked
+it three ways.
+
+
+**With `-ffunction-sections -fdata-sections -Wl,--gc-sections` alone**, one
+symbol survives:
+
+
+```
+
+T shim_alpha
+
+```
+
+
+That is step 5's entire goal, achieved by the linker, for free.
+
+
+**Add `-rdynamic` and every one of them comes back:**
+
+
+```
+
+T shim_alpha   T shim_beta   T shim_gamma
+
+T place_alpha  T place_beta  T place_gamma
+
+```
+
+
+The mechanism: `-rdynamic` writes every global symbol into the executable's
+dynamic symbol table. A symbol in that table is by definition a **collection
+root** — the point of exporting it is that code which does not exist yet may
+look it up by name, so the linker cannot prove anything about who calls it and
+must keep it. `-rdynamic` therefore declares the entire binary reachable. The
+two flags are in direct opposition and `-rdynamic` wins.
+
+
+That's in `Makefile:155`, on the one rule that builds every test binary.
+
+
+## The narrow instrument
+
+
+`-rdynamic` is "export everything." `--dynamic-list=file` is "export these."
+Same model, exporting only what a file names:
+
+
+```
+
+--- exported ---     map_place, map_wire
+
+--- kept in binary --- map_place, map_wire, shim_alpha
+
+```
+
+
+Two properties I checked because the whole idea fails without them:
+
+
+- **A listed symbol that nothing in the binary calls still survives
+  collection.** I put a wire function in the list that no compiled-in code
+  reaches, and it stayed. This is the property that matters — a box arriving
+  mid-run calls engine functions this particular program may never call itself.
+
+- **Wildcards work.** `{ map_*; };` exported both engine functions and still
+  collected the two unreachable shims. So the whole change is potentially one
+  line, not a list somebody has to keep in step.
+
+
+## What this reframes
+
+
+Step 5 isn't a step to reorder — it's a guess at an answer the linker computes
+exactly, and the issue's own step 6 already says so ("every case a source parser
+would get wrong"). The generator knows what the maps *name*; the linker knows
+what the code *reaches*, through hand-written externs and function pointers
+taken by name. Delete step 5, and 311d loses the shim-trimming fork I was
+holding open — no mode, no manifest, no test-suite declaration.
+
+
+The work that replaces it is a different shape than either step: **stop
+exporting everything.**
+
+
+## The one thing I'd want you to pick
+
+
+A generated placement function today calls exactly two engine functions — the
+one that writes a station and the one that hands back a pointer to it. The full
+public surface is about thirty-five.
+
+
+So the export list can be a wildcard on the prefix, which nobody maintains and
+which keeps every future addition working automatically — or it can be the
+two-or-so functions generated code actually calls, which makes "what a box
+compiled at run time may reach into" a written-down boundary for the first time.
+Right now that boundary is "whatever happened to get compiled in," which isn't a
+boundary.
+
+
+The wildcard is less work and never breaks. The named list is a specification,
+and it will break loudly the day the emitter starts calling something new —
+which is either the feature or the cost, depending on whether you want that day
+to be noisy.
 
 
 --------------------------------------------------------------------------------
