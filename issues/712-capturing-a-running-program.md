@@ -38,8 +38,7 @@ never consumed.
 
 - every task already built and waiting in the pool, unless it drained
 - the statistics counters
-- boxes that arrived while it ran, if the artifact has to stand alone
-  without a toolchain
+- nothing, once the capture is taken whole
 
 ## Why this engine can do what most cannot
 
@@ -191,9 +190,30 @@ this shape on the way out of a dying program.
    arrives, a constant written its own value still counting, and a
    station of only constants running once per change rather than
    forever.
-6. The binary-producing path, for a program that added boxes: their
-   source compiled in like any other box, and a test that the revived
-   binary needs no toolchain of its own.
+6. **Done, and it turned out not to produce a binary.** The step said
+   a program that added boxes should capture into a new executable.
+   What it actually needs is one step short of that, and stopping there
+   is the better answer.
+
+   A whole capture is a **directory**: the description, and beside it
+   every source the program is made of, at the paths the description
+   addresses them by. That is what closes the real gap — a description
+   of a grown program is a perfectly good file naming a function
+   nobody has, because the box arrived as text after the build.
+
+   **Producing the executable is then the ordinary build**, and having
+   the running program do it instead would mean carrying the engine's
+   own source in every binary so it could be linked again. Building a
+   captured program needs the engine, which is what building anything
+   with this engine needs — the same dependency a consumer already
+   has, not a new one. And the binary that comes out needs no toolchain
+   of its own, which is what the step asked for, because by then every
+   box is compiled in like any other.
+
+   The sources are written before the description, so a half-written
+   capture is a directory obviously missing its description rather than
+   one whose description names sources that are not there. The first
+   cannot be mistaken for whole; the second can.
 7. The report, drawn from counters that already exist.
 
 ## Open questions

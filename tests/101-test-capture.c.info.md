@@ -117,8 +117,23 @@ through the door with a different name works. The file is written by
 hand rather than captured, so what is under test is the reading and not
 the writing.
 
+## And one about a program that grew
+
+**a_grown_program_captures_whole** — a box arrives after the program
+started, and the program is captured into a directory. A description
+alone would not do: it would be a perfectly good file naming a function
+that exists nowhere on the machine reading it, because the box came as
+text after the build.
+
+So the directory holds the description and every source the program is
+made of — the late arrival and the ones the build compiled in, since a
+capture that stands alone cannot assume which half somebody already
+has. The scene finds the late box's file by asking the running program
+what it is filed under, rather than by knowing where the compiler
+happened to put it.
+
 ## What it does not cover
 
-Draining a running pool before the capture, and a program that grew
-boxes while it ran. Both are steps of their own on
+The report a person reads — buffer depths, run counts, which boxes
+arrived while it ran — which is the last step on
 [712](../issues/712-capturing-a-running-program.md).

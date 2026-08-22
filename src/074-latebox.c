@@ -589,6 +589,37 @@ static void gather_missing_boxes(const char *map_path, const char *list_path)
 }
 /* }}} */
 
+/* {{{ late_spill_sources() — issue 712 */
+/*
+ * **Every source this program is made of, written out under the paths
+ * it was compiled as**, so that a captured program can be built again
+ * somewhere else.
+ *
+ * A program that grew boxes while it ran is made of more than its
+ * build compiled: those arrived as text, were compiled, and are as
+ * much part of what the program *is* as anything the build put in.
+ * A description of such a program names boxes whose source exists
+ * nowhere on the machine that reads it.
+ *
+ * So a capture that is meant to stand alone is a **directory**: the
+ * description, and beside it every source it names, at the paths the
+ * description addresses them by. Building it needs the engine, which
+ * is what building anything with this engine needs — not a new
+ * dependency, the same one a consumer already has.
+ *
+ * Returns how many sources were written, or -1.
+ */
+int late_spill_sources(const char *dir)
+{
+    enum { MAX_SPILLED = 256 };
+    const char *paths[MAX_SPILLED];
+    int n = spill_sources(dir, paths, MAX_SPILLED);
+    for (int i = 0; i < n; i++)
+        free((void *)paths[i]);
+    return n;
+}
+/* }}} */
+
 /* {{{ late_compile_map() */
 const map_build_t *late_compile_map(const char *map_text)
 {

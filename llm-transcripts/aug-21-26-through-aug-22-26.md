@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 22:34:01
+Generated on: 2026-08-21 22:52:23
 
 --------------------------------------------------------------------------------
 
@@ -3163,6 +3163,102 @@ Nine scenes in the capture test, and the suite passes.
 
 Next is step 1, the drain — which is where the "incomplete capture" header
 comes from, and therefore what step 4's remaining half needs.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 23
+
+ok let's keep going
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 23
+
+Step 1 — the drain. Let me see how the stopping layer already reports wedged
+workers, so I compose rather than duplicate.
+
+
+Now the drain and the incompleteness header.
+
+
+Now the three pieces: the drain, the immediate capture, and refusing to revive a
+lossy artifact.
+
+
+Now the reading side refuses a lossy artifact unless asked for salvage.
+
+
+Now the scenes — including one with a worker genuinely wedged.
+
+
+All twelve scenes pass, including the wedged-worker capture. Full suite check.
+
+
+**712 is at five of seven steps.** Twelve scenes in the capture test, full suite
+green.
+
+
+## The drain
+
+
+Two doors, because there are two situations and collapsing them would make the
+more important one lie.
+
+
+**The polite one** shuts the entrance — the only way anything outside pushes
+work in — lets everything in flight finish and deliver, waits for the workers
+to go home, then writes. Complete by construction: nothing was running when it
+was written.
+
+
+**The honest one** writes immediately, whatever is happening, and states what it
+lost — a header naming every station a worker is still inside. A program that
+cannot drain is exactly when a capture is worth most, so the writing has to
+happen anyway.
+
+
+Neither invents a bound, which is the open question **answered by not needing an
+answer**. Quiet is decidable exactly; the only case that never returns is a box
+that never returns, and nothing inside a process can tell that from a box that's
+merely slow. Whoever asked already has a clock.
+
+
+## The refusal
+
+
+Reading a lossy artifact through the ordinary door is fatal. There's a second
+door for salvaging one, with a different name, so whoever uses it has said out
+loud that they know what's missing.
+
+
+The check asks the *file*, not the description — the marker is a comment, and
+a comment is by definition not part of what a file says about a program. That
+distinction is why it lives in the loader rather than the parser.
+
+
+## Proof
+
+
+The wedged-worker scene is the one I'd point at: a worker goes into the box that
+never returns, in a forked child since it stays there for the life of the
+process. The child waits for the worker to actually be *inside* the wedge by
+asking the pool what it's doing, rather than guessing — nothing there invents
+a clock either.
+
+
+## Left on 712
+
+
+Step 6, the binary-producing path for a program that grew boxes — its source
+compiled in like any other box, so the artifact stands alone without a
+toolchain. Step 7, the report.
+
+
+Step 6 is largely reachable now: a program already carries the text of every
+source it's made of, including late arrivals, and the compile-at-runtime pipe
+exists. What's missing is emitting a *new* binary rather than a shared object.
 
 
 --------------------------------------------------------------------------------

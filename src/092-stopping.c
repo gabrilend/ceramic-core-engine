@@ -20,6 +20,7 @@
  */
 #include "091-stopping.h"
 #include "049-observe.h"
+#include "073-latebox.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -447,6 +448,40 @@ int sora_capture(map_t *m, const char *path)
     }
 
     return write_capture(m, path);
+}
+/* }}} */
+
+/* {{{ sora_capture_whole() */
+int sora_capture_whole(map_t *m, const char *dir)
+{
+    if (!m || !dir || !*dir) {
+        fprintf(stderr, "capture: needs a program and somewhere to put it\n");
+        return -1;
+    }
+
+    if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+        fprintf(stderr, "capture: cannot create %s: %s\n",
+                dir, strerror(errno));
+        return -1;
+    }
+
+    /*
+     * The sources first, then the description. A reader meeting a
+     * half-written capture should find a directory that is missing its
+     * description rather than one whose description names sources that
+     * are not there — the first is obviously incomplete and the second
+     * looks whole and is not.
+     */
+    if (late_spill_sources(dir) < 0)
+        return -1;
+
+    char path[1024];
+    if (snprintf(path, sizeof path, "%s/program.map", dir)
+        >= (int)sizeof path) {
+        fprintf(stderr, "capture: path too long: %s\n", dir);
+        return -1;
+    }
+    return sora_capture(m, path);
 }
 /* }}} */
 

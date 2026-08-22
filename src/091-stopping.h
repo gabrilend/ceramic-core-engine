@@ -149,6 +149,33 @@ int sora_wait(map_t *m);
  */
 int sora_capture(map_t *m, const char *path);
 int sora_capture_now(map_t *m, const char *path);
+
+/*
+ * **A capture that stands alone**, into a directory: the description,
+ * and beside it every source the program is made of, at the paths the
+ * description addresses them by.
+ *
+ * The plain capture writes a description and nothing else, which is
+ * enough for a program whose boxes all came from its build — anything
+ * built the same way already has them. It is **not** enough for a
+ * program that grew boxes while it ran: such a program is made of more
+ * than its build compiled, and its description names boxes whose source
+ * exists nowhere on the machine that reads it.
+ *
+ * What this produces is a program somebody can build. Building it
+ * needs the engine, which is what building anything with this engine
+ * needs — the same dependency a consumer already has, not a new one.
+ * The binary that comes out needs no toolchain of its own, because by
+ * then every box is compiled in like any other.
+ *
+ * Sources are written before the description, so a half-written
+ * capture is a directory obviously missing its description rather than
+ * one whose description names sources that are not there — the first
+ * cannot be mistaken for whole and the second can.
+ *
+ * Drains first, exactly as the plain capture does. Returns 0 or -1.
+ */
+int sora_capture_whole(map_t *m, const char *dir);
 /* }}} */
 
 /* {{{ sora_stop_now() — issue 106 */

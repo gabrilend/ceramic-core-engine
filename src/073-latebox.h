@@ -134,6 +134,24 @@ const char *late_source_dir(void);
 const map_build_t *late_compile_map(const char *map_text);
 /* }}} */
 
+/* {{{ late_spill_sources() — issue 712 */
+/*
+ * Write every source this program is made of into a directory, under
+ * the paths it was compiled as — what the build put in, and everything
+ * that has arrived since.
+ *
+ * This is what lets a captured program be built again somewhere else.
+ * A program that grew boxes is made of more than its build compiled,
+ * and a description of one names boxes whose source exists nowhere on
+ * the machine that reads it. Written beside the description, at the
+ * paths the description addresses them by, the two together are a
+ * program somebody can build.
+ *
+ * Returns how many were written, or -1 with a reason on stderr.
+ */
+int late_spill_sources(const char *dir);
+/* }}} */
+
 /* {{{ late_source_text() — issue 311d */
 /*
  * **The C one late-arriving source was compiled from**, by the path

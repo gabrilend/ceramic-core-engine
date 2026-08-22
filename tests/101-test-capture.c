@@ -27,6 +27,7 @@
 #include "026-emitted.h"
 #include "040-mapfile.h"
 #include "049-observe.h"
+#include "073-latebox.h"
 #include "091-stopping.h"
 
 #include <stdatomic.h>
@@ -54,7 +55,7 @@ static void check(int ok, const char *what)
 }
 /* }}} */
 
-static char work_dir[256];
+static char work_dir[128];
 
 /* {{{ static void write_text() */
 static void write_text(const char *path, const char *text)
@@ -793,6 +794,93 @@ static void reviving_a_lossy_capture_is_refused(const char *self)
 }
 /* }}} */
 
+/* {{{ static void a_grown_program_captures_whole() */
+/*
+ * **A program that grew boxes cannot be captured as a description
+ * alone**, and this is the scene that says why in one place.
+ *
+ * Such a program is made of more than its build compiled. Its
+ * description names a box whose source exists nowhere on the machine
+ * that reads it — so the description is a perfectly good file naming a
+ * function nobody has.
+ *
+ * The whole capture is therefore a **directory**: the description, and
+ * beside it every source the program is made of, at the paths the
+ * description addresses them by. Building that needs the engine, which
+ * is what building anything with this engine needs; the binary that
+ * comes out needs no toolchain of its own, because by then every box
+ * is compiled in like any other.
+ */
+static void a_grown_program_captures_whole(void)
+{
+    static const char source[] =
+        "int quadruple(int x)\n"
+        "{\n"
+        "    return x * 4;\n"
+        "}\n";
+
+    check(late_compile_source(source) == 1,
+          "a box arrived after the program started");
+
+    char map_path[512], out_dir[192], described[512], probe[1024];
+    snprintf(map_path, sizeof map_path, "%s/grown.map", work_dir);
+    snprintf(out_dir, sizeof out_dir, "%s/whole", work_dir);
+
+    write_text(map_path,
+        "station gate keep p entry\n"
+        "  out 0 - four.0\n"
+        "\n"
+        "station four quadruple p result\n");
+
+    map_t *m = map_load_file(map_path, 2);
+    int value = 3;
+    map_deliver_argument(m, 0, 0, &value, (int)sizeof value);
+
+    check(sora_capture_whole(m, out_dir) == 0,
+          "the grown program was captured whole");
+
+    /* The description is there. */
+    snprintf(described, sizeof described, "%s/program.map", out_dir);
+    FILE *f = fopen(described, "r");
+    check(f != NULL, "and the directory holds its description");
+    if (f)
+        fclose(f);
+
+    /* And so is the source of the box the build never saw. Found by
+     * asking the running program what that box is filed under, rather
+     * than by knowing where the compiler happened to put it. */
+    const box_place_t *row = box_place_find("quadruple");
+    check(row != NULL, "the late box is placeable by name");
+    if (row) {
+        const char *colon = strrchr(row->address, ':');
+        check(colon != NULL, "and its address names a file");
+        if (colon) {
+            snprintf(probe, sizeof probe, "%s/%.*s", out_dir,
+                     (int)(colon - row->address), row->address);
+            FILE *g = fopen(probe, "r");
+            check(g != NULL,
+                  "and that file was written into the capture, so the "
+                  "description does not name a function nobody has");
+            if (g)
+                fclose(g);
+        }
+    }
+
+    /* The sources the build compiled in are there too, because a
+     * capture that stands alone cannot assume which half of itself
+     * somebody already has. */
+    snprintf(probe, sizeof probe, "%s/src/boxes/029-demo-boxes.c", out_dir);
+    FILE *h = fopen(probe, "r");
+    check(h != NULL, "along with the sources the build compiled in");
+    if (h)
+        fclose(h);
+
+    map_destroy(m);
+    printf("  a program that grew a box was captured whole, sources and "
+           "all\n");
+}
+/* }}} */
+
 /* {{{ main */
 int main(int argc, char **argv)
 {
@@ -825,6 +913,7 @@ int main(int argc, char **argv)
     draining_produces_a_complete_capture();
     an_incomplete_capture_says_so_and_is_refused();
     reviving_a_lossy_capture_is_refused(self);
+    a_grown_program_captures_whole();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);
     if (system(command) != 0)
