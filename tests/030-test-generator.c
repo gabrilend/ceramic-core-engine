@@ -43,16 +43,52 @@ static void check(int ok, const char *what)
 }
 /* }}} */
 
+/* {{{ placed() */
+/*
+ * **A station, placed by name**, which is where a box's shape can be
+ * read now that the record is gone (issue 311b).
+ *
+ * The record held a shim, a parameter count, a size per parameter and
+ * a return size, and this file used to read them from it. Every one
+ * of those is written onto a station by the box's placement function,
+ * from a `sizeof` the compiler folded — so asking a station is asking
+ * the same question of the thing that actually gets used, rather than
+ * of a copy kept beside it.
+ */
+static map_t *placed_map;
+
+static station_t *placed_as(const char *box_name, int kind)
+{
+    if (!placed_map)
+        placed_map = map_create_empty();
+    int at = map_add_station(placed_map);
+    map_place_box(placed_map, at, box_name, kind);
+    return map_station(placed_map, at);
+}
+
+static station_t *placed(const char *box_name)
+{
+    return placed_as(box_name, STATION_PLAIN);
+}
+
+/* A comparator, which is the only placement that resolves a
+ * comparison onto the station — a plain station has no use for one. */
+static station_t *placed_comparator(const char *box_name)
+{
+    return placed_as(box_name, STATION_COMPARATOR);
+}
+/* }}} */
+
 /* {{{ build_task() */
 /* A hand-built task: the values are pointed at, not copied — enough
  * for calling a shim directly, which only reads in[] and writes out. */
-static task_t *build_task(const box_info_t *b, void **values, void *out)
+static task_t *build_task(station_t *s, void **values, void *out)
 {
     static task_t t;
-    t.call = b->shim;
+    t.call = s->call;
     t.station = 0;
     t.port = 0;
-    t.n_in = b->n_params;
+    t.n_in = s->n_in_ports;
     t.in = values;
     t.out = out;
     return &t;
@@ -60,51 +96,67 @@ static task_t *build_task(const box_info_t *b, void **values, void *out)
 /* }}} */
 
 /* {{{ test_registry_contents() */
+/*
+ * **Every size a placed station holds equals the compiler's own
+ * answer**, which is the claim this whole build path rests on and the
+ * one that must never quietly stop being true.
+ *
+ * It used to ask the box *record* — a table the generator emitted
+ * beside the placement functions — and the record is gone (issue
+ * 311b). It was read once, at placement, and never again: a station
+ * holds its own shim, its own slot sizes, its own return size and its
+ * own comparison, so the record was a copy of numbers nobody consulted
+ * twice. Asking a station instead is the same question put to the
+ * thing that gets used.
+ */
 static void test_registry_contents(void)
 {
     /* Grows as demo boxes are added; the point is that every box in
-     * the source is here exactly once, which the duplicate check in
-     * the generator enforces and the finds below sample. */
-    check(registry_n_boxes >= 7, "the demo boxes are all registered");
+     * the source is placeable exactly once, which the duplicate check
+     * in the generator enforces and the placements below sample. */
+    check(registry_n_places >= 7, "the demo boxes are all placeable");
 
-    const box_info_t *b = registry_find("add");
-    check(b != NULL, "add present");
-    check(b->n_params == 2, "add takes two");
-    check(b->params[0].size == (int)sizeof(int), "add param 0 size");
-    check(strcmp(b->params[0].type_name, "int") == 0, "add param 0 type name");
-    check(b->return_size == (int)sizeof(int), "add return size");
-    check(b->task_size == sizeof(task_t) + 2 * sizeof(void *)
-                        + 2 * sizeof(int) + sizeof(int),
-          "add task size is exact");
+    station_t *s = placed("add");
+    check(s->n_in_ports == 2, "add takes two");
+    check(s->in_ports[0].elem_size == (int)sizeof(int), "add port 0 size");
+    check(strcmp(s->in_ports[0].type_name, "int") == 0, "add port 0 type");
+    check(s->out_size == (int)sizeof(int), "add return size");
 
-    b = registry_find("mix");
-    check(b && b->params[1].size == (int)sizeof(double), "mix double size");
+    s = placed("mix");
+    check(s->in_ports[1].elem_size == (int)sizeof(double),
+          "mix double size");
 
-    b = registry_find("stamp_record");
-    check(b && b->return_size == (int)sizeof(record),
+    s = placed("stamp_record");
+    check(s->out_size == (int)sizeof(record),
           "record return size from real C");
 
-    b = registry_find("swallow");
-    check(b && b->return_size == 0 && b->compare == NULL,
+    s = placed("swallow");
+    check(s->out_size == 0 && s->compare == NULL,
           "a sink has no return and no compare");
 
-    check(registry_find("vec3__compare") == NULL,
+    check(box_place_find("vec3__compare") == NULL,
           "a compare function is not a box");
-    check(registry_find("no_such_box") == NULL, "absent name is null");
+    check(box_place_find("no_such_box") == NULL, "absent name is null");
 
-    printf("  registry sizes all equal sizeof of the real types\n");
+    printf("  every size a placed station holds equals sizeof of the real "
+           "type\n");
 }
 /* }}} */
 
 /* {{{ test_shim_equivalence() */
+/*
+ * **The shim comes off a placed station**, which is where it lives
+ * (issue 311b). It used to come off the box record, and a station is
+ * the only thing that ever held it in anger.
+ */
 static void test_shim_equivalence(void)
 {
     /* Two of one type. */
     {
         int a = 41, b = 1, out = 0;
         void *in[2] = { &a, &b };
-        const box_info_t *info = registry_find("add");
-        info->shim(build_task(info, in, &out));
+        station_t *s = placed("add");
+        s->call(build_task(s, in, &out));
         check(out == add(41, 1), "add shim equals direct call");
     }
     /* Two different types. */
@@ -112,8 +164,8 @@ static void test_shim_equivalence(void)
         int count = 6;
         double factor = 7.5, out = 0;
         void *in[2] = { &count, &factor };
-        const box_info_t *info = registry_find("mix");
-        info->shim(build_task(info, in, &out));
+        station_t *s = placed("mix");
+        s->call(build_task(s, in, &out));
         check(out == mix(6, 7.5), "mix shim equals direct call");
     }
     /* Returning a struct. */
@@ -121,8 +173,8 @@ static void test_shim_equivalence(void)
         float x = 1, y = 2, z = 3;
         vec3 out;
         void *in[3] = { &x, &y, &z };
-        const box_info_t *info = registry_find("make_vec3");
-        info->shim(build_task(info, in, &out));
+        station_t *s = placed("make_vec3");
+        s->call(build_task(s, in, &out));
         vec3 direct = make_vec3(1, 2, 3);
         check(memcmp(&out, &direct, sizeof out) == 0,
               "make_vec3 shim equals direct call");
@@ -131,8 +183,8 @@ static void test_shim_equivalence(void)
     {
         int x = 9;
         void *in[1] = { &x };
-        const box_info_t *info = registry_find("swallow");
-        info->shim(build_task(info, in, NULL));
+        station_t *s = placed("swallow");
+        s->call(build_task(s, in, NULL));
         /* Surviving the call with a null out is the whole test. */
     }
     printf("  four shim shapes match their boxes exactly\n");
@@ -167,8 +219,15 @@ static void test_field_tables(void)
 /* {{{ test_compares() */
 static void test_compares(void)
 {
+    /*
+     * **The comparison comes off a placed station**, which is where
+     * it is resolved to (issue 311b) — the delivery path compares
+     * through a pointer the station holds rather than looking
+     * anything up per value, and a comparator has to be placed as one
+     * for that pointer to be written.
+     */
     /* Primitive: signed ordering, not byte ordering. */
-    const box_info_t *b = registry_find("add");
+    station_t *b = placed_comparator("add");
     check(b->compare != NULL, "int return has a compare");
     int neg = -5, pos = 3, same = -5;
     check(b->compare(&neg, &pos) == -1, "-5 < 3 (bytes would disagree)");
@@ -176,7 +235,7 @@ static void test_compares(void)
     check(b->compare(&neg, &same) == 0, "equal ints");
 
     /* Floating point: negative versus positive, and zero. */
-    b = registry_find("magnitude_squared");
+    b = placed_comparator("magnitude_squared");
     check(b->compare != NULL, "float return has a compare");
     float fn = -2.0f, fp = 0.5f, fz = 0.0f, fz2 = -0.0f;
     check(b->compare(&fn, &fp) == -1, "-2.0 < 0.5 (raw bytes read it backwards)");
@@ -184,7 +243,7 @@ static void test_compares(void)
 
     /* Author-written struct compare, ordering on magnitude — not on
      * the first field, so byte order and field order both disagree. */
-    b = registry_find("make_vec3");
+    b = placed_comparator("make_vec3");
     check(b->compare != NULL, "vec3 return found its author compare");
     vec3 small = { 9.0f, 0.0f, 0.0f };   /* first field large, magnitude 81 */
     vec3 large = { 1.0f, 8.0f, 8.0f };   /* first field small, magnitude 129 */

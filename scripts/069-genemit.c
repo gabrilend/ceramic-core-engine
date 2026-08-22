@@ -253,65 +253,25 @@ static void emit_structs(buf_t *w, const description_t *d)
 }
 /* }}} */
 
-/* {{{ static void emit_registry() */
+/* {{{ the box record's emitter, deleted — issue 311b */
 /*
- * The registry itself (issue 303). Type names ride along as text
- * because "4 bytes versus 4 bytes" is not an error message anybody
- * can act on — the engine runs on the sizes and reports the names.
+ * **A record per box was emitted here and is not any more.**
+ *
+ * It held a name, a shim pointer, parameter type names and sizes, a
+ * return type and size, the exact task allocation, and a comparison
+ * function — and a station was built by reading it once at placement
+ * and copying out the parts a station keeps.
+ *
+ * Every one of those is written straight onto the station by that
+ * box's placement function now, from a `sizeof` the compiler folds
+ * into an immediate. The record was a copy of numbers nobody read
+ * twice, and emitting it meant the generator produced two
+ * descriptions of one box that had to agree.
+ *
+ * What survives is the placement table below: a name, an address, and
+ * a function pointer. Once the generator reads maps itself it emits
+ * the calls directly and that goes too (issue 311d).
  */
-static void emit_registry(buf_t *w, const description_t *d,
-                          const char **compare_of)
-{
-    for (int i = 0; i < d->boxes.n; i++) {
-        const box_t *b = vec_at(&d->boxes, i);
-        if (b->n_params == 0)
-            continue;
-        buf_line(w, "static const box_param_t %s__params[] = {", b->name);
-        for (int j = 0; j < b->n_params; j++)
-            buf_line(w, "    { \"%s\", (int)sizeof(%s) },",
-                     b->params[j].type, b->params[j].type);
-        buf_line(w, "};");
-    }
-    buf_line(w, "");
-
-    buf_line(w, "const box_info_t registry_boxes[] = {");
-    for (int i = 0; i < d->boxes.n; i++) {
-        const box_t *b = vec_at(&d->boxes, i);
-        int is_void = strcmp(b->ret, "void") == 0;
-
-        char params_ref[256];
-        if (b->n_params > 0)
-            snprintf(params_ref, sizeof params_ref, "%s__params", b->name);
-        else
-            snprintf(params_ref, sizeof params_ref, "NULL");
-
-        char ret_size[128];
-        if (is_void)
-            snprintf(ret_size, sizeof ret_size, "0");
-        else
-            snprintf(ret_size, sizeof ret_size, "(int)sizeof(%s)", b->ret);
-
-        buf_line(w, "    { \"%s\", %s__call, %d, %s, \"%s\", %s,",
-                 b->name, b->name, b->n_params, params_ref, b->ret, ret_size);
-
-        /* The exact allocation for one invocation, spelled out so the
-         * compiler adds it up: the task header, the pointer array,
-         * every argument, and the return value. */
-        buf_addstr(w, "      sizeof(task_t)");
-        buf_addf(w, " + %d * sizeof(void *)", b->n_params);
-        for (int j = 0; j < b->n_params; j++)
-            buf_addf(w, " + sizeof(%s)", b->params[j].type);
-        if (!is_void)
-            buf_addf(w, " + sizeof(%s)", b->ret);
-        buf_line(w, ", %s },",
-                 (!is_void && compare_of[i]) ? compare_of[i] : "NULL");
-    }
-    if (d->boxes.n == 0)
-        buf_line(w, "    { NULL, NULL, 0, NULL, NULL, 0, 0, NULL },");
-    buf_line(w, "};");
-    buf_line(w, "const int registry_n_boxes = %d;", d->boxes.n);
-    buf_line(w, "");
-}
 /* }}} */
 
 /* {{{ static const char *path_within() */
@@ -817,7 +777,6 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
     emit_compares(&w, d, compare_of);
     emit_shims(&w, d);
     emit_structs(&w, d);
-    emit_registry(&w, d, compare_of);
     /* Emitted beside the record rather than instead of it, so the two
      * can be compared before either is trusted (issue 311b). */
     emit_placements(&w, d, compare_of, d->arena, root);

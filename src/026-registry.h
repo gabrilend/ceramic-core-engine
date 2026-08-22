@@ -66,22 +66,39 @@ struct struct_info {
 };
 /* }}} */
 
-/* {{{ struct box_param / box_info */
-typedef struct box_param {
-    const char *type_name;
-    int         size;
-} box_param_t;
-
-typedef struct box_info {
-    const char         *name;         /* as it appears in a map */
-    task_call_t         shim;         /* the generated call site */
-    int                 n_params;
-    const box_param_t  *params;       /* in declaration order */
-    const char         *return_type;  /* "void" for a sink */
-    int                 return_size;  /* 0 for a sink */
-    size_t              task_size;    /* exact allocation for one invocation */
-    compare_fn_t        compare;      /* for the return type, or null */
-} box_info_t;
+/* {{{ the box record, deleted — issue 311b */
+/*
+ * **There was a record per box here and it is gone.**
+ *
+ * It held a name, a shim pointer, a parameter count, an array of
+ * parameter type names and sizes, a return type name and size, the
+ * exact task allocation, and a comparison function. A station was
+ * built by reading it once at placement and copying out the parts a
+ * station keeps.
+ *
+ * The observation that removed it: **the record was read exactly
+ * once, at placement, and never again.** Nothing in a running engine
+ * consulted it — a station holds its own shim, its own slot sizes,
+ * its own return size and its own comparison, and the station header
+ * is deliberately free of any reference back. So the record existed
+ * only to be read at the one moment generated code could just as well
+ * do the writing, which is what a placement function does.
+ *
+ * Every number in it was a `sizeof` the compiler folded. They did not
+ * become guesses by moving: they moved from a table into a function
+ * and the compiler folds them into immediates, so they are not stored
+ * anywhere at all. Guarantee C1 is untouched.
+ *
+ * The last three things that still read it went one at a time. The
+ * two comparator refusals moved into the placement function, where
+ * they were already duplicated and where they name the box by its
+ * full address rather than by whatever bare word a map used. The wire
+ * refusal stopped fetching a return type's spelling, because a
+ * refusal now names both ends by position and size — a name is not
+ * what makes a wire legal. And the tests that asked the record what
+ * it held now ask a *station* what it got, which is the thing that
+ * matters and the thing that is used.
+ */
 /* }}} */
 
 /* {{{ struct box_place — issue 311b */
@@ -119,17 +136,8 @@ const box_place_t *box_place_find(const char *name);
 
 /* The generated data. Defined in src/generated/registry.c, which the
  * generator rewrites on every build where a box source changed. */
-extern const box_info_t     registry_boxes[];
-extern const int            registry_n_boxes;
 extern const struct_info_t  registry_structs[];
 extern const int            registry_n_structs;
-
-/* {{{ registry_find() */
-/* The lookup a map name goes through. Null when absent — and the
- * caller's error message is the most common one a map author will
- * ever see, so it had better name the name. */
-const box_info_t *registry_find(const char *name);
-/* }}} */
 
 /* {{{ struct_find() */
 const struct_info_t *struct_find(const char *type_name);

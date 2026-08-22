@@ -160,23 +160,33 @@ actually run, which is why maps never need to mention a type.</p>
 <h2>Data structures</h2>
 <p><strong>box_param</strong> — <code>{ type_name: text, size: int }</code>, one per parameter,
 in declaration order.</p>
-<p><strong>box_info</strong> — one box:</p>
-<table>
-<tr><td>field</td><td>type</td><td>meaning</td></tr>
-<tr><td>name</td><td>text</td><td>As it appears in a map.</td></tr>
-<tr><td>shim</td><td>function pointer</td><td>The generated per-box call site.</td></tr>
-<tr><td>n_params, params</td><td>int + array</td><td>The parameter story.</td></tr>
-<tr><td>return_type, return_size</td><td>text + int</td><td>"void" and 0 for a sink.</td></tr>
-<tr><td>task_size</td><td><code>size_t</code></td><td>Exact allocation for one invocation.</td></tr>
-<tr><td>compare</td><td>function pointer or null</td><td>Three-way compare for the return type.</td></tr>
-</table>
+<p><strong>the box record — deleted (issue 311b).</strong> It held a name, a shim
+pointer, a parameter count, an array of parameter type names and
+sizes, a return type name and size, the exact task allocation, and a
+comparison function.</p>
+<p><strong>It was read exactly once, at placement, and never again.</strong> A station
+holds its own shim, its own slot sizes, its own return size and its
+own comparison, and the station header is deliberately free of any
+reference back — so the record existed only to be read at the one
+moment generated code could just as well do the writing. That is what
+a placement function does.</p>
+<p>Every number in it was a <code>sizeof</code> the compiler folded. They did not
+become guesses by moving: they moved from a table into a function,
+where the compiler folds them into immediates and they are not stored
+at all. Guarantee C1 is untouched.</p>
 <p><strong>field_info / struct_info</strong> — per-struct field tables: name, offset
 (offsetof), size, kind (int/uint/float/string/struct), nested table
 pointer, string length. What lets the statics reader turn brace text
 into bytes without a parser per type.</p>
 <h2>Functions</h2>
-<p><strong>registry_find(name) → box_info or null</strong> — the lookup every map
-name goes through.</p>
+<p><strong>box_place_find(name) → placement row or null</strong> — the lookup every
+map name goes through, and now the only one. Compiled-in rows first,
+then anything that arrived after the program started: a box the
+program was built with wins over one added afterwards under the same
+name, so bringing in new code can never quietly replace something a
+map already depends on.</p>
+<p>That ordering rule was the record's before it was this one's. The
+record is gone, and this is the whole of by-name anything.</p>
 <p><strong>struct_find(type name) → struct_info or null</strong></p>
 <p><strong>registry_print(stream)</strong> — every box and struct, sizes and all,
 for reading what was emitted.</p>

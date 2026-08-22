@@ -203,6 +203,51 @@ machine, which makes two generated files impossible to compare. The
 generator now takes the project root and shortens against it. A box
 compiled at run time has no project root to be relative to and keeps
 its own path, which is already unique.</p>
+<p><strong>The record is deleted.</strong> The type, the table, the parameter arrays
+with their type names and sizes, the return type name, the stored task
+size, the comparison pointer — all of it. The generator no longer
+emits it and nothing reads it.</p>
+<p>The three things that still did went one at a time, and each one is
+worth naming because each was a different kind of dependency:</p>
+<ul>
+<li><strong>The two comparator refusals</strong> moved into the placement function,</li>
+<p>  where they were already duplicated. A box that returns nothing
+  cannot be a comparator; a box whose return type has no comparison
+  cannot be one, because routing on raw bytes would produce an answer
+  and it would be wrong. Both are now refused wherever a box is placed
+  from rather than only through the by-name door — and the generated
+  version says <em>more</em>, naming the box by its full address rather than
+  by whatever bare word a map happened to use.</p>
+<li><strong>The wire refusal</strong> stopped fetching a return type's spelling, once</li>
+<p>  a refused wire began naming both ends by position and by size. A
+  name is not what makes a wire legal; the width is.</p>
+<li><strong>The tests that asked the record what it held</strong> now ask a</li>
+<p>  <em>station</em> what it got, which is the thing that is actually used. The
+  numbers are identical — they are the same <code>sizeof</code> expressions — but
+  the question is now put to the thing the engine runs on rather than
+  to a copy kept beside it.</p>
+</ul>
+<p><strong>The late-box path lost a symbol pair.</strong> A box compiled while the
+program runs used to have its record and its placements fetched
+separately out of the loaded object; now there is one table to fetch.
+Its unload check changed shape with it: it compared shim pointers,
+which the record held, and compares the name a station was placed as
+instead. That is conservative in exactly one direction and the
+direction is safe — two blocks holding a box of the same name would
+each refuse to unload while the other's station stands, and refusing
+an unload that could have gone ahead costs a library staying loaded
+while allowing one that could not is the crash the check exists to
+prevent.</p>
+<p><strong>And one test scene retired with its subject.</strong> Every box used to be
+placed twice as a comparator — once by name and once by function — and
+the ones that cannot be comparators were skipped by asking the record.
+There is no way to ask in advance any more, because both refusals live
+inside the placement function and fire when it is called. Comparator
+placement is proven where comparators are used; the refusals are
+proven in the map file's gallery. What survives is the claim worth
+keeping: a name and the function it resolves to build the same
+station, so a generator pairing one box's name with another's
+placement function is caught.</p>
 <p><strong>One reason for the record to exist has gone.</strong> The wire refusal used
 to reach back into a box record for a return type's <em>spelling</em>, so it
 could say "box returns int (4 bytes), port takes double (8 bytes)".
@@ -329,10 +374,24 @@ since nothing on disk describes it either.</p>
    by-name search is a test asking the emitted tables about
    themselves, which is a different thing from the engine needing a
    lookup.
-6. The record type, the table, the parameter arrays, the type-name
-   strings, and the stored task size deleted. **Waits on
-   <a href="issue-311d-the-map-becomes-code.html">311d</a>**: while a running program
-   still resolves a name, something has to be searched.
+6. <strong>Done.</strong> The record type, the table, the parameter arrays, the
+   record's type-name strings, the stored task size and the comparison
+   pointer are deleted, and the generator no longer emits any of it.</p>
+<p>   **This did not have to wait on
+   <a href="issue-311d-the-map-becomes-code.html">311d</a> after all**, and seeing why is
+   the useful part. The step was written as though <em>one</em> table had to
+   survive until nothing resolved a name — and there were two. The
+   <strong>record</strong> answered <em>what is this box</em>, and the <strong>placement table</strong>
+   answers <em>which function writes this station</em>. Only the second is
+   needed to resolve a name, and it is one name and one pointer per
+   box. So the record could go now and the placement table goes with
+   311d, which is a smaller thing than the step assumed.</p>
+<p>   What is <em>not</em> deleted is the type name on each <strong>port</strong>, which is a
+   different string from the record's. The constant reader classifies
+   a port by it — int, unsigned, float, string, struct — in order to
+   turn text into bytes of the right shape. Replacing it with a class
+   the placement function writes directly is a real deletion and its
+   own piece of work.
 7. The word <em>registry</em> removed from source and documents, since the
    thing it named no longer exists in any form. Waits on the same.</p>
 <h2>Open questions</h2>

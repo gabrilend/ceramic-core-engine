@@ -77,8 +77,6 @@
  */
 typedef struct late_block {
     struct late_block *next;
-    const box_info_t  *boxes;
-    int                n_boxes;
     /* The placement functions this object brought with it (issue
      * 311b). A box compiled while the program runs has to be
      * placeable the same way as one compiled into it, which means the
@@ -126,16 +124,16 @@ int registry_late_count(void)
     return late_total;
 }
 
-const box_info_t *registry_late_box(int i)
+const box_place_t *registry_late_box(int i)
 {
     /* Blocks are newest first, so walking them in order and counting
      * down gives the caller oldest-first, which is the order boxes
      * were added and the only order that means anything. */
     int remaining = late_total - i;
     for (late_block_t *b = late_head; b; b = b->next) {
-        if (remaining <= b->n_boxes)
-            return &b->boxes[remaining - 1];
-        remaining -= b->n_boxes;
+        if (remaining <= b->n_places)
+            return &b->places[remaining - 1];
+        remaining -= b->n_places;
     }
     return NULL;
 }
@@ -160,24 +158,6 @@ const box_place_t *registry_late_place_find(const char *name)
 }
 /* }}} */
 
-/* {{{ registry_late_find() */
-/*
- * Called by registry_find after it has walked the generated rows.
- * Newest first, so a name added twice resolves to the newer one —
- * which is the only useful answer, since the older row's code is
- * still loaded and still callable by anything already placed.
- */
-const box_info_t *registry_late_find(const char *name);
-
-const box_info_t *registry_late_find(const char *name)
-{
-    for (late_block_t *b = late_head; b; b = b->next)
-        for (int i = 0; i < b->n_boxes; i++)
-            if (strcmp(b->boxes[i].name, name) == 0)
-                return &b->boxes[i];
-    return NULL;
-}
-/* }}} */
 
 /* {{{ static int ensure_dir() */
 static int ensure_dir(const char *path)
@@ -253,8 +233,8 @@ int registry_unload_box(map_t *m, const char *name)
     late_block_t **link = &late_head;
     late_block_t *found = NULL;
     for (; *link; link = &(*link)->next) {
-        for (int i = 0; i < (*link)->n_boxes; i++)
-            if (strcmp((*link)->boxes[i].name, name) == 0) {
+        for (int i = 0; i < (*link)->n_places; i++)
+            if (strcmp((*link)->places[i].name, name) == 0) {
                 found = *link;
                 break;
             }
@@ -277,12 +257,27 @@ int registry_unload_box(map_t *m, const char *name)
         station_t *s = map_station(m, i);
         if (!s->call)
             continue;
-        for (int b = 0; b < found->n_boxes; b++)
-            if (s->call == found->boxes[b].shim) {
+        /*
+         * **By the name the station was placed as** (issue 311b),
+         * rather than by comparing shim pointers. The record that
+         * held those pointers is gone; a station carries the name
+         * literal its own placement function wrote, which is the same
+         * fact arrived at from the other side.
+         *
+         * It is conservative in exactly one direction, and that
+         * direction is the safe one: two blocks holding a box of the
+         * same name would each refuse to unload while the other's
+         * station stands. Refusing an unload that could have gone
+         * ahead costs a library staying loaded; allowing one that
+         * could not is the crash this check exists to prevent.
+         */
+        for (int b = 0; b < found->n_places; b++)
+            if (s->box_name && strcmp(s->box_name,
+                                      found->places[b].name) == 0) {
                 fprintf(stderr,
                         "latebox: station %d places '%s', so its code cannot "
                         "be unloaded — remove the station first\n",
-                        i, found->boxes[b].name);
+                        i, found->places[b].name);
                 return -1;
             }
     }
@@ -294,7 +289,7 @@ int registry_unload_box(map_t *m, const char *name)
      * code right now, and the counter that answers that is the same
      * one a replaced destination set uses (issue 214).
      */
-    late_total -= found->n_boxes;
+    late_total -= found->n_places;
     *link = found->next;
     void *handle = found->handle;
     free(found);
@@ -323,9 +318,9 @@ int registry_unload_box(map_t *m, const char *name)
  * which is the ordinary case of a genuinely misspelled name, and the
  * caller's message for that is the best one in the program.
  */
-const box_info_t *registry_recover_box(const char *name);
+const box_place_t *registry_recover_box(const char *name);
 
-const box_info_t *registry_recover_box(const char *name)
+const box_place_t *registry_recover_box(const char *name)
 {
     if (!name || !*name)
         return NULL;
@@ -366,7 +361,7 @@ const box_info_t *registry_recover_box(const char *name)
                         "saved source\n", name);
         return NULL;
     }
-    return registry_find(name);
+    return box_place_find(name);
 }
 /* }}} */
 
@@ -428,14 +423,21 @@ int registry_compile_source(const char *c_source)
         return -1;
     }
 
-    /* The generated file defines exactly the two symbols the build's
-     * own registry defines, so the loaded object hands back its rows
-     * the same way the compiled-in ones are reached. */
-    const box_info_t *boxes = dlsym(handle, "registry_boxes");
-    const int *count = dlsym(handle, "registry_n_boxes");
-    if (!boxes || !count) {
-        fprintf(stderr, "latebox: %s defines no registry — the generator "
-                        "emitted something unexpected\n", lib_path);
+    /*
+     * **One pair of symbols now, where there were two** (issue 311b).
+     * The generated file used to define a table of box records beside
+     * the placement functions, and this fetched both — the records to
+     * learn what the new box was, the placements to be able to put one
+     * anywhere. The records are gone: every number they held is
+     * written straight onto a station by the placement function, from
+     * a `sizeof` the compiler folded, so there was nothing in them
+     * anybody read twice.
+     */
+    const box_place_t *places = dlsym(handle, "registry_places");
+    const int *count = dlsym(handle, "registry_n_places");
+    if (!places || !count) {
+        fprintf(stderr, "latebox: %s defines no placement functions — the "
+                        "generator emitted something unexpected\n", lib_path);
         dlclose(handle);
         return -1;
     }
@@ -452,26 +454,9 @@ int registry_compile_source(const char *c_source)
         dlclose(handle);
         return -1;
     }
-    block->boxes   = boxes;
-    block->n_boxes = *count;
-    block->handle  = handle;
-
-    /* The placement rows, from the same object by the same means. A
-     * generator that emitted boxes always emits these beside them, so
-     * their absence is the generator having produced something
-     * unexpected rather than an older object being tolerated. */
-    const box_place_t *places = dlsym(handle, "registry_places");
-    const int *n_places = dlsym(handle, "registry_n_places");
-    if (!places || !n_places) {
-        fprintf(stderr, "latebox: %s defines boxes but no placement "
-                        "functions — the generator emitted something "
-                        "unexpected\n", lib_path);
-        free(block);
-        dlclose(handle);
-        return -1;
-    }
     block->places   = places;
-    block->n_places = *n_places;
+    block->n_places = *count;
+    block->handle   = handle;
 
     /* Published last, and by one write, so a reader walking the list
      * either sees this block complete or does not see it at all. */
@@ -491,12 +476,12 @@ int registry_compile_source(const char *c_source)
      */
     for (int i = 0; i < *count; i++) {
         char by_name[512];
-        snprintf(by_name, sizeof by_name, "%s/%s.c", dir, boxes[i].name);
+        snprintf(by_name, sizeof by_name, "%s/%s.c", dir, places[i].name);
         if (write_text(by_name, c_source) != 0)
             fprintf(stderr, "latebox: '%s' is loaded but its source could "
                             "not be filed under its own name; a dump taken "
                             "now will not reload in a fresh process\n",
-                    boxes[i].name);
+                    places[i].name);
     }
 
     return *count;

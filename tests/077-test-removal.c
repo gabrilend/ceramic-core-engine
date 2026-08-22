@@ -218,7 +218,7 @@ static void an_unplaced_box_unloads(void)
         "int never_placed(int x)\n{\n    return x + 1;\n}\n";
 
     check(registry_compile_source(source) == 1, "a box was compiled in");
-    check(registry_find("never_placed") != NULL, "and can be found");
+    check(box_place_find("never_placed") != NULL, "and can be found");
 
     map_t *m = map_create(2);
     map_place_box(m, 0, "double_it", STATION_PLAIN);
@@ -237,7 +237,7 @@ static void an_unplaced_box_unloads(void)
 
     int rc = registry_unload_box(m, "never_placed");
     check(rc == 0, "a box no station places was unloaded");
-    check(registry_find("never_placed") == NULL,
+    check(box_place_find("never_placed") == NULL,
           "and can no longer be found by name");
 
     /* A box that IS placed must be refused, because unloading its

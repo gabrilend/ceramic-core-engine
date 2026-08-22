@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 17:00:47
+Generated on: 2026-08-21 17:41:16
 
 --------------------------------------------------------------------------------
 
@@ -859,6 +859,221 @@ involved. If the generator emits shims only for map-named boxes, those tests
 can't place anything. So trimming either needs the test suite to declare its
 boxes through maps, or needs to stay opt-in for shipped builds only. Worth
 deciding before I build it.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 3
+
+  - A station can't be named in, out or statics — the reader dispatches on the
+    first word of a line. Found by naming a door in.
+
+
+sounds like a limitation of the markup language we're using to describe the
+data. How would you suggest removing such a limitation? It's low priority, but
+still a good thing to consider.
+
+
+Can you add 5 more issues to your todo list and start work on them?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 3
+
+Good question — and the answer is worth writing down rather than leaving in a
+commit message. Let me survey what's actually unblocked first:
+
+
+Here's my analysis of the format limitation, written up as its own issue before
+I touch anything:
+
+
+Here are the five, and my answer to your format question is the first of them:
+
+
+| # | Issue | What's left |
+
+|---|---|---|
+
+| 1 | **607** — no reserved words | new, from your question: make the station line stop being the default case |
+
+| 2 | **405** — statics mutation | verify what stands and close it |
+
+| 3 | **408** — values back into text | escape rules in both directions, round-trip tests |
+
+| 4 | **711** — the index means reading order | a renumbering tool, then apply it |
+
+| 5 | **712** — capturing a running program | values in flight survive a dump and come back |
+
+
+The 311 family stays parked — all of it waits on the shim-trimming fork I
+flagged, which is still yours to call. Starting on 607:
+
+
+Now the test that the limitation is actually gone — a station called `in`,
+`out`, `statics` and `station`:
+
+
+Now the format document, and closing 607:
+
+
+One of five. Now 405 — its notes say "mostly done", so let me check what
+actually remains:
+
+
+405's remaining piece is a wire delivering into a static port. Let me find the
+delivery path:
+
+
+Now the change — a delivery into a static port overwrites it rather than
+queueing:
+
+
+That refusal is now obsolete. Retiring it with a note, and proving the new
+behaviour instead:
+
+
+Now the non-guarantee 405 asks for, and closing it:
+
+
+Two of five. Now 408 — its remaining steps are the escape rules and two
+round-trip tests:
+
+
+Confirmed the hole — the writer emits string bytes raw and the reader finds
+the closing quote with a plain search. Building the one shared table:
+
+
+The helpers reference things defined later. Splitting them to where each one's
+dependencies exist:
+
+
+Both helpers compile. Now pointing the four string sites at them:
+
+
+Now the round-trip tests — the three cases that failed before:
+
+
+Now the program-scale round trip — a map whose constant contains the awkward
+bytes:
+
+
+My escaping was wrong in the test's map text. Fixing it precisely:
+
+
+All three of 408's remaining steps are done. Updating the issue and the format
+document:
+
+
+Now 711 — the numbering convention. Let me read what it asks for:
+
+
+The actual work in 711 is deciding an order; the tool is mechanical. Building
+the tool first, since renumbering by hand is what leaves stragglers:
+
+
+Now testing it against the current order — which should be a no-op if the tool
+is honest:
+
+
+The tool works — fed the current order it compacts the gaps. Let me add step
+3's straggler check, then do the read-through:
+
+
+The check immediately found a real stale reference. Let me tighten it so the
+signal isn't buried:
+
+
+Seven mentions, and three are genuinely wrong — including two in a header that
+points at the wrong files:
+
+
+Only those two were real — the rest are historical references to deleted
+files. Now the convention itself, which 711 names as its first problem:
+
+
+Now the read-through 711 asks for — where the sequence stops reading well:
+
+
+Four of five addressed. Tests pass, tree is clean. Here's where this batch
+stands.
+
+
+## Your format question, answered and built
+
+
+The three reserved words were the **symptom**. The problem was that a station
+line was defined *negatively* — anything whose first word wasn't a keyword —
+and a negative definition can only narrow. Every keyword the format ever gained
+would silently take another name away from every map already written.
+
+
+So every line announces itself now: `station`, `in`, `out`, `statics`. The first
+word is always a keyword, the second always a name, so no word is ever both. A
+station called `in` is `station in keep p`; one called `station` is `station
+station keep p`. There's a test that builds a program whose four stations are
+called exactly those, runs it, writes it down and reads it back.
+
+
+Three alternatives are recorded as refused so nobody re-proposes them: marking
+the *attribute* lines instead (equally total, reads like a config format),
+letting indentation decide (free, but a reflowed or pasted file stops parsing),
+and looking at the second token (free and needs no file changes — but turns
+*the first word decides* into *the first word decides, unless*, which is where
+three exceptions come from).
+
+
+## The five
+
+
+| Issue | |
+
+|---|---|
+
+| **607** — no reserved words | complete |
+
+| **405** — statics mutation | complete |
+
+| **408** — values back into text | escaping hole closed; generation waits on 311 |
+
+| **711** — the index means reading order | rule written, tool built; the order itself not yet changed |
+
+| **712** — capturing a running program | not started |
+
+
+## Two things worth your attention
+
+
+**405's last piece turned out to be a real capability.** A wire may now deliver
+into a static port, overwriting the constant. That gives you a constant that's
+*computed* — a station that runs once, wired into a downstream static port,
+and everything after reads what it produced. It is emphatically not the back
+channel returning: the box is untouched and remembers nothing; the **wire** is
+what says this value overwrites a static, and a wire is visible in the map file,
+in the dump, and on a canvas.
+
+
+**408 was a correctness hole, not polish.** A constant holding a quote ended its
+own text early; a tab put a line break inside a line; a byte above 0x7F went out
+as whatever the locale made of it. The dump claims to round-trip and for those
+values it didn't.
+
+
+## Two decisions waiting on you
+
+
+**The shim-trimming fork** still parks the whole 311 family — and 408's
+remaining steps now sit behind it too.
+
+
+**The reading order.** I deliberately stopped before moving fifty files. The
+four findings are written into 711: tools sitting between engine files four
+times over, the generator arriving forty places after the registry it writes,
+station-layer tests drifted forty to sixty places from the station layer, and
+the guarantees page at fifty-eight when it's the page your own orientation says
+to read early. That's a judgement about how the project is best explained, and
+it's yours to make before the tool runs.
 
 
 --------------------------------------------------------------------------------

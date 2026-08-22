@@ -10,13 +10,13 @@ place.
   says what is wrong with a piece of C is the one the compiler wrote.
 - **`registry_late_count()` / `registry_late_box(i)`** — the rows added
   since the program started, oldest first. Almost nothing needs these;
-  lookup by name goes through `registry_find`, which walks both the
+  lookup by name goes through `box_place_find`, which walks both the
   generated rows and these.
 - **`registry_late_source_dir()`** — where saved sources go.
 
 Two functions are declared where they are used rather than here,
 because only one caller each needs them: `registry_late_find` (by
-`registry_find`) and `registry_recover_box` (by the loader and by
+`box_place_find`) and `registry_recover_box` (by the loader and by
 placement).
 
 **Why a signature is not enough**, since it is the obvious idea: a

@@ -55,16 +55,16 @@ int registry_compile_source(const char *c_source);
 
 /* {{{ registry_late_count() / registry_late_box() */
 /*
- * The rows added after the program started, in the order they
- * arrived. The generated rows are not included: those are
- * registry_boxes and have always been reachable directly.
+ * The boxes added after the program started, in the order they
+ * arrived. The compiled-in ones are not included: those are
+ * registry_places and have always been reachable directly.
  *
- * Lookup by name goes through registry_find, which walks both, so
+ * Lookup by name goes through box_place_find, which walks both, so
  * almost nothing needs these. They exist for a report that wants to
  * say what a program has grown, and for the tests.
  */
-int               registry_late_count(void);
-const box_info_t *registry_late_box(int i);
+int                registry_late_count(void);
+const box_place_t *registry_late_box(int i);
 /* }}} */
 
 /* {{{ registry_unload_box() */

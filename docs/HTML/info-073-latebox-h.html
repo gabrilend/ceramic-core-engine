@@ -164,13 +164,13 @@ place.</p>
   says what is wrong with a piece of C is the one the compiler wrote.</p>
 <li><strong><code>registry_late_count()</code> / <code>registry_late_box(i)</code></strong> — the rows added</li>
 <p>  since the program started, oldest first. Almost nothing needs these;
-  lookup by name goes through <code>registry_find</code>, which walks both the
+  lookup by name goes through <code>box_place_find</code>, which walks both the
   generated rows and these.</p>
 <li><strong><code>registry_late_source_dir()</code></strong> — where saved sources go.</li>
 </ul>
 <p>Two functions are declared where they are used rather than here,
 because only one caller each needs them: <code>registry_late_find</code> (by
-<code>registry_find</code>) and <code>registry_recover_box</code> (by the loader and by
+<code>box_place_find</code>) and <code>registry_recover_box</code> (by the loader and by
 placement).</p>
 <p><strong>Why a signature is not enough</strong>, since it is the obvious idea: a
 signature gives names. It cannot give sizes and offsets, which are what

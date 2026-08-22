@@ -70,19 +70,26 @@ static void identical_shapes_wire(void)
     /* The wire the whole issue is about: triple out, vec3 in. */
     map_connect(m, 0, 0, 1, 0);
 
-    const box_info_t *producer = registry_find("as_triple");
-    const box_info_t *consumer = registry_find("magnitude_squared");
-    check(producer && consumer, "both boxes are in the registry");
-    if (!producer || !consumer) {
-        map_destroy(m);
-        return;
-    }
+    /*
+     * **Asked of the two stations**, which is where these facts live
+     * now that the box record is gone (issue 311b). A station carries
+     * its own return size and its ports carry their own type names,
+     * written by the placement function from numbers the compiler
+     * folded — so this is the same question put to the thing that
+     * actually gets wired.
+     */
+    station_t *producer = map_station(m, 0);
+    station_t *consumer = map_station(m, 1);
 
-    check(strcmp(producer->return_type, "triple") == 0
-          && strcmp(consumer->params[0].type_name, "vec3") == 0,
-          "the two ends really do carry different type names");
-    check(producer->return_size == consumer->params[0].size,
-          "and identical widths, which is what the check now looks at");
+    check(strcmp(consumer->in_ports[0].type_name, "vec3") == 0,
+          "the receiving end is spelled vec3");
+    check(producer->out_size == consumer->in_ports[0].elem_size,
+          "and the two ends count the same bytes, which is what the "
+          "check looks at");
+    check(producer->out_size == (int)sizeof(triple)
+          && (int)sizeof(triple) == (int)sizeof(vec3),
+          "while the two type names are different ones of the same "
+          "width, which is the whole point");
 
     /* Feed it and see the value arrive intact. 3-4-5 gives 50. */
     map_start(m, 2);

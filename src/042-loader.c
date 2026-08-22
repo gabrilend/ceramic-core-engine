@@ -24,7 +24,7 @@
 /* A box added while some earlier process ran; see 073-latebox.h. It
  * is declared here rather than included, because the loader needs one
  * function from that file and nothing else it offers. */
-const box_info_t *registry_recover_box(const char *name);
+const box_place_t *registry_recover_box(const char *name);
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -152,7 +152,11 @@ static void first_pass(map_t *m, map_description_t *d, int *at)
         if (named)
             die_load(d->path, s->line, s->name, named);
 
-        const box_info_t *b = registry_find(s->box);
+        /* **Existence is asked of the placement table** (issue
+         * 311b), which is the only table left: the record that used
+         * to answer this held a copy of numbers the placement
+         * function writes directly and nobody read twice. */
+        const box_place_t *b = box_place_find(s->box);
         if (!b) {
             /* Before giving up: a box added while some earlier
              * process ran left its source behind under its own name,
@@ -556,7 +560,7 @@ const char *map_add_part(map_t *m, const char *what, map_part_t *out)
     if (!what || !*what)
         return "adding a part with no name";
 
-    const box_info_t *box = registry_find(what);
+    const box_place_t *box = box_place_find(what);
     FILE *described = fopen(what, "r");
     if (described)
         fclose(described);

@@ -88,18 +88,9 @@ static int same_station(const char *box, const station_t *a,
  */
 static int place_both_ways(const box_place_t *bp, int kind)
 {
-    const box_info_t *rec = registry_find(bp->name);
-    if (!rec) {
-        complain(bp->name, "the table names a box the registry does not");
-        return 0;
-    }
-    if (kind == STATION_COMPARATOR
-        && (rec->return_size == 0 || rec->compare == NULL))
-        return 0;
-
     map_t *m = map_create(2);
-    map_place_box(m, 0, bp->name, kind);     /* through the record */
-    bp->place(m, 1, kind);                   /* through the function */
+    map_place_box(m, 0, bp->name, kind);     /* found by name */
+    bp->place(m, 1, kind);                   /* called directly */
 
     int ok = same_station(bp->name, map_station(m, 0), map_station(m, 1));
     map_destroy(m);
@@ -114,12 +105,33 @@ int main(void)
         return 1;
     }
 
-    int plain = 0, comparators = 0;
+    /*
+     * **The comparator half of this test is gone, and the reason is
+     * that its subject went** (issue 311b).
+     *
+     * It used to place every box as a comparator too, skipping the
+     * ones that cannot be one — a box returning nothing, or one whose
+     * return type has no comparison. It knew which those were by
+     * asking the box *record*, and the record has been deleted: every
+     * number it held is written straight onto a station by the
+     * placement function, so it was a copy nobody read twice.
+     *
+     * There is no longer any way to ask in advance, because the two
+     * refusals live inside the placement function and fire when it is
+     * called — which is right, and means a test cannot probe without
+     * ending the program. Comparator placement is proven where
+     * comparators are used, in the routing tests; the two refusals are
+     * proven in the map file's gallery of refusals.
+     *
+     * What survives here is the claim worth keeping: **a name and the
+     * function it resolves to build the same station.** A generator
+     * that paired one box's name with another's placement function
+     * would be caught by exactly this.
+     */
+    int plain = 0;
     for (int i = 0; i < registry_n_places; i++) {
         place_both_ways(&registry_places[i], STATION_PLAIN);
         plain++;
-        if (place_both_ways(&registry_places[i], STATION_COMPARATOR))
-            comparators++;
     }
 
     /* The table's two names must agree about which box they mean: the
@@ -138,8 +150,7 @@ int main(void)
         fprintf(stderr, "%d placement differences\n", failures);
         return 1;
     }
-    printf("  %d boxes placed both ways, field for field identical\n", plain);
-    printf("  %d of them placed as comparators too, with the extra port "
-           "and the comparison matching\n", comparators);
+    printf("  %d boxes placed by name and by function, field for field "
+           "identical\n", plain);
     return 0;
 }

@@ -9,15 +9,23 @@ actually run, which is why maps never need to mention a type.
 **box_param** — `{ type_name: text, size: int }`, one per parameter,
 in declaration order.
 
-**box_info** — one box:
-| field | type | meaning |
-|---|---|---|
-| name | text | As it appears in a map. |
-| shim | function pointer | The generated per-box call site. |
-| n_params, params | int + array | The parameter story. |
-| return_type, return_size | text + int | "void" and 0 for a sink. |
-| task_size | `size_t` | Exact allocation for one invocation. |
-| compare | function pointer or null | Three-way compare for the return type. |
+**the box record — deleted (issue 311b).** It held a name, a shim
+pointer, a parameter count, an array of parameter type names and
+sizes, a return type name and size, the exact task allocation, and a
+comparison function.
+
+**It was read exactly once, at placement, and never again.** A station
+holds its own shim, its own slot sizes, its own return size and its
+own comparison, and the station header is deliberately free of any
+reference back — so the record existed only to be read at the one
+moment generated code could just as well do the writing. That is what
+a placement function does.
+
+Every number in it was a `sizeof` the compiler folded. They did not
+become guesses by moving: they moved from a table into a function,
+where the compiler folds them into immediates and they are not stored
+at all. Guarantee C1 is untouched.
+
 
 **field_info / struct_info** — per-struct field tables: name, offset
 (offsetof), size, kind (int/uint/float/string/struct), nested table
@@ -26,8 +34,16 @@ into bytes without a parser per type.
 
 ## Functions
 
-**registry_find(name) → box_info or null** — the lookup every map
-name goes through.
+**box_place_find(name) → placement row or null** — the lookup every
+map name goes through, and now the only one. Compiled-in rows first,
+then anything that arrived after the program started: a box the
+program was built with wins over one added afterwards under the same
+name, so bringing in new code can never quietly replace something a
+map already depends on.
+
+That ordering rule was the record's before it was this one's. The
+record is gone, and this is the whole of by-name anything.
+
 
 **struct_find(type name) → struct_info or null**
 

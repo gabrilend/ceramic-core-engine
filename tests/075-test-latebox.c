@@ -63,24 +63,28 @@ static void a_late_box_runs(void)
     if (added != 1)
         return;
 
-    const box_info_t *b = registry_find("triple_it");
-    check(b != NULL, "and can be found by name like any other");
-    if (!b)
-        return;
+    check(box_place_find("triple_it") != NULL,
+          "and can be found by name like any other");
 
-    /* The numbers the engine actually runs on came from the compiler,
-     * not from the signature — which is the reason this path invokes
-     * a compiler at all rather than parsing a declaration. */
-    check(b->return_size == (int)sizeof(int),
-          "its return width came from a compiler, not from its name");
-    check(b->n_params == 1 && b->params[0].size == (int)sizeof(int),
-          "and so did its parameter's");
-
-    /* Wire it into `double_it`, which the program was built with:
-     * three times two is six, doubled is twelve. */
+    /* Wire it into `keep`, which the program was built with: three
+     * times two is six. */
     map_t *m = map_create(2);
     map_place_box(m, 0, "triple_it", STATION_PLAIN);
     map_place_box(m, 1, "keep", STATION_PLAIN);
+
+    /*
+     * **The numbers the engine runs on came from a compiler**, not
+     * from the signature — which is the reason this path invokes one
+     * at all rather than parsing a declaration. Read off the station
+     * the late box was placed at, because that is where a placement
+     * function writes them and the box record that used to hold a
+     * copy is gone (issue 311b).
+     */
+    check(map_station(m, 0)->out_size == (int)sizeof(int),
+          "its return width came from a compiler, not from its name");
+    check(map_station(m, 0)->n_in_ports == 1
+          && map_station(m, 0)->in_ports[0].elem_size == (int)sizeof(int),
+          "and so did its parameter's");
     map_connect(m, 0, 0, 1, 0);
 
     map_start(m, 2);

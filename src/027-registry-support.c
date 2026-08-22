@@ -24,27 +24,8 @@
  * lookups need them: everything else reaches a box through the row it
  * was already handed.
  */
-const box_info_t  *registry_late_find(const char *name);
-const box_info_t  *registry_recover_box(const char *name);
+const box_place_t *registry_recover_box(const char *name);
 const box_place_t *registry_late_place_find(const char *name);
-
-/* {{{ registry_find() */
-/*
- * The generated rows first, then anything compiled in later. That
- * order is deliberate: a box the program was built with wins over one
- * added afterwards under the same name, so bringing in new code can
- * never quietly replace something a map already depends on. Replacing
- * a name that was never built in works, and shadowing one that was
- * does not.
- */
-const box_info_t *registry_find(const char *name)
-{
-    for (int i = 0; i < registry_n_boxes; i++)
-        if (strcmp(registry_boxes[i].name, name) == 0)
-            return &registry_boxes[i];
-    return registry_late_find(name);
-}
-/* }}} */
 
 /* {{{ box_place_find() */
 /*
@@ -52,11 +33,24 @@ const box_info_t *registry_find(const char *name)
  * (issue 311b). Compiled-in rows first, then anything that arrived
  * after the program started.
  *
- * **This is the whole of by-name placement.** A placement function is
- * hand placement written by the generator, so naming a box is only a
- * way of finding which one to call — and once the generator reads
- * maps itself it emits the call directly and this lookup stops
- * existing (issue 311d).
+ * That order is deliberate and it was the record's rule before it was
+ * this one's: a box the program was built with wins over one added
+ * afterwards under the same name, so bringing in new code can never
+ * quietly replace something a map already depends on. Replacing a
+ * name that was never built in works; shadowing one that was does not.
+ *
+ * **This is the whole of by-name placement, and now the whole of
+ * by-name anything** (issue 311b). The record that used to sit beside
+ * this table is gone: it held a name, a shim, parameter sizes and type
+ * names, a return type, a task size and a comparison — and every one
+ * of those is written directly onto the station by the placement
+ * function, from a `sizeof` the compiler folded, so the record was a
+ * copy of numbers nobody read twice.
+ *
+ * A placement function is hand placement written by the generator, so
+ * naming a box is only a way of finding which one to call — and once
+ * the generator reads maps itself it emits the call directly and this
+ * lookup stops existing too (issue 311d).
  */
 const box_place_t *box_place_find(const char *name)
 {
@@ -78,20 +72,24 @@ const struct_info_t *struct_find(const char *type_name)
 /* }}} */
 
 /* {{{ registry_print() */
+/*
+ * **What a program can place, and where each one came from.**
+ *
+ * It used to print every field of every box record — parameter types
+ * and sizes, the return type, the task size, whether a comparison
+ * existed. None of that is carried any more (issue 311b): the numbers
+ * are folded into placement functions and the names live in the box
+ * source the binary carries. What is left to print is what is left to
+ * know: which names a program answers to, and which file each one was
+ * compiled from.
+ */
 void registry_print(FILE *out)
 {
     fprintf(out, "registry: %d boxes, %d structs\n",
-            registry_n_boxes, registry_n_structs);
-    for (int i = 0; i < registry_n_boxes; i++) {
-        const box_info_t *b = &registry_boxes[i];
-        fprintf(out, "  %-16s (", b->name);
-        for (int p = 0; p < b->n_params; p++)
-            fprintf(out, "%s%s:%d", p ? ", " : "",
-                    b->params[p].type_name, b->params[p].size);
-        fprintf(out, ") -> %s:%d  task %zu bytes  compare %s\n",
-                b->return_type, b->return_size, b->task_size,
-                b->compare ? "yes" : "no");
-    }
+            registry_n_places, registry_n_structs);
+    for (int i = 0; i < registry_n_places; i++)
+        fprintf(out, "  %-20s %s\n", registry_places[i].name,
+                registry_places[i].address);
     for (int i = 0; i < registry_n_structs; i++) {
         const struct_info_t *s = &registry_structs[i];
         fprintf(out, "  struct %s: %d bytes, %d fields\n",
@@ -185,8 +183,8 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
         abort();
     }
 
-    const box_info_t *b = registry_find(box_name);
-    if (!b) {
+    const box_place_t *bp = box_place_find(box_name);
+    if (!bp) {
         /*
          * Before giving up: a box added while some *earlier* process
          * ran left its source behind under its own name, and this may
@@ -200,62 +198,35 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
          * message below is the ordinary answer for a misspelled name,
          * which is the most common mistake a map will ever contain.
          */
-        b = registry_recover_box(box_name);
+        bp = registry_recover_box(box_name);
     }
-    if (!b) {
+    if (!bp) {
         fprintf(stderr,
                 "map: no box named '%s' in the registry — misspelled, or its "
                 "source is not under src/boxes/\n", box_name);
         abort();
     }
 
-    /* A comparator carries one extra port at the end of the array,
-     * holding the value to compare against, typed to match the box's
-     * return value because that is what it will be compared with
-     * (issue 502). The shim is handed only the real parameters; the
-     * readiness walk sees all of them and does not care. */
-    int extra = (kind == STATION_COMPARATOR) ? 1 : 0;
-    if (extra && b->return_size == 0) {
-        fprintf(stderr,
-                "map: '%s' cannot be a comparator — it returns nothing, so "
-                "there is nothing to compare\n", box_name);
-        abort();
-    }
-    if (extra && b->compare == NULL) {
-        /* Routing on raw bytes would produce an answer, and it would
-         * be wrong (issue 503). The refusal names the type, because
-         * the fix is writing that type's __compare. Issue 503 wanted
-         * this at build time; the generator never sees the map, so
-         * placement is the earliest moment it can land — noted there
-         * and in issue 604. */
-        fprintf(stderr,
-                "map: '%s' cannot be a comparator — its return type '%s' has "
-                "no compare function; write %s__compare in a box source\n",
-                box_name, b->return_type, b->return_type);
-        abort();
-    }
-
     /*
      * **The station is written by the generated placement function**
-     * (issue 311b), not from the record above. Every number in it is a
+     * (issue 311b), and by nothing else. Every number in it is a
      * `sizeof` the compiler folded into an immediate, so the sizes are
      * not read from anywhere at run time — they were computed while
      * the box was being compiled and never stored.
      *
-     * The record is still consulted for the two comparator refusals
-     * above, because they want a sentence naming the return type. The
-     * placement function carries its own copies of both refusals for
-     * the same reason, which is why routing through it loses nothing:
-     * this path checks first only because it can say the box's name
-     * the way the map wrote it.
+     * **The two comparator refusals moved out of here** and into that
+     * function, where they were already duplicated. A box that returns
+     * nothing cannot be a comparator, because there is nothing to
+     * compare; a box whose return type has no comparison cannot be
+     * one, because routing on raw bytes would produce an answer and it
+     * would be wrong (issue 503). Both are refused wherever a box is
+     * placed from rather than only through this door, and the
+     * generated version says *more* — it names the box by its full
+     * address rather than by the bare word a map happened to use.
+     *
+     * That was the last thing this path did with the box record, and
+     * with it gone the record has no readers left.
      */
-    const box_place_t *bp = box_place_find(box_name);
-    if (!bp) {
-        fprintf(stderr,
-                "map: '%s' has a record but no placement function — the "
-                "generator emitted one without the other\n", box_name);
-        abort();
-    }
     bp->place(m, station, kind);
 
     /*
