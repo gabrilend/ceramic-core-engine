@@ -330,9 +330,27 @@ static void emit_placements(buf_t *w, const description_t *d,
         const char *file = path_within(b->file, root);
         char *sym = gt_box_symbol(a, file, b->name);
 
+        /* **Not static, and that is the whole of issue 311d step 7.**
+         * A station-builder used to be private, which made it
+         * invisible from outside the program and therefore impossible
+         * for anything compiled later to bind to. A map arriving
+         * mid-run is compiled into a shared object that calls these by
+         * name; a shared object can only bind to a name the thing it
+         * was loaded into published, so the program has to publish
+         * them.
+         *
+         * One symbol per box is enough. It holds the box's shim and
+         * the box body behind it, so the published list stays short
+         * while the code stays reachable.
+         *
+         * The cost is admitted where it lands: a published symbol is a
+         * root the section collector may not touch, so a program keeps
+         * the boxes it was built with rather than shedding the ones it
+         * never places. Extendable at run time is a requirement of
+         * this engine; small was never one. */
         buf_line(w, "/* places %s:%s */", file, b->name);
-        buf_line(w, "static void %s__place(map_t *m, int station, int kind)",
-                 sym);
+        buf_line(w, "void %s__place(map_t *m, int station, int kind);", sym);
+        buf_line(w, "void %s__place(map_t *m, int station, int kind)", sym);
         buf_line(w, "{");
 
         /* A comparator carries one extra port holding the value to

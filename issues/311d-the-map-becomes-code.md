@@ -65,12 +65,13 @@ agree and become one path with two authors.
 ### What has not happened
 
 Everything that *removes* something. The engine still carries the map
-parser and still reads descriptions at run time; the generator emits a
-shim for every box it was given rather than only for the ones a map
-names; the linker is not yet told to discard what nothing reaches. Each
-of those is a step below, and each of them changes what other parts of
-the project are allowed to do — so they are separated from the step
-that makes the capability exist.
+parser and still reads descriptions at run time, so there are two
+implementations of one job; the table of box names is still there
+holding every station-builder reachable; and a box arriving late is
+opened privately, so nothing arriving after it can bind to it. Each of
+those is a step below, and each changes what other parts of the project
+are allowed to do — so they are separated from the step that made the
+capability exist.
 
 ### What stood before
 
@@ -128,6 +129,42 @@ Two acts that look similar and are not:
 So the compiler enters only when new *code* appears, which is the rule
 everywhere else in this engine.
 
+### One pipe, and the binary is iteration zero
+
+**A program is compiled iteratively, and the build is only the first
+iteration.** The loader for a box arriving mid-run already writes the
+source out, runs the generator, runs the same compiler that built the
+binary, and opens the result. That is a compiler with a C compiler as
+its back end, and nothing about it is specific to a single function.
+
+So a map arriving later goes through the same pipe, and the shape is
+the same at every scale:
+
+| what arrives | what happens |
+|---|---|
+| a station placing a box already present | pointers and indices, no compiler |
+| a wire, a constant, a door | the same |
+| a box function nobody has compiled | generator, compiler, load |
+| a whole map | generator, compiler, load |
+
+**Somebody adding a box does not need to know whether it is a map of
+boxes.** They hand over source; a station appears running it. Whether
+that source was one function or a description of fifty stations wired
+together changes nothing they can observe, which is the same claim
+[217](completed/217-a-program-inside-another.md) makes from the other
+direction.
+
+**Nothing is compiled twice.** An arrival whose path and bytes match
+something already in the process refers to the existing copy. That
+needs the existing copy to be *bindable*, which is why the
+station-builders stop being private: a shared object can only bind to a
+name the thing it was loaded into published.
+
+**Which is where the binary stops being special.** Treating iteration
+zero differently — self-contained copies for the boxes the build
+compiled in, shared copies for everything after — would be the
+complication, dressed as an optimization.
+
 ### What the build includes
 
 **The linker decides what actually ships.** Built with
@@ -143,8 +180,21 @@ hole in it**, worth naming so nobody re-proposes it: linking resolves
 *symbols*, not includes, so a file may call a function it never
 included a header for by declaring it by hand.
 
-**This spends build time to save binary size, deliberately.** You still
-compile five hundred files; you ship three.
+**What it does not discard is the boxes, and that is a choice rather
+than a limit.** Publishing a station-builder so that code compiled
+later can bind to it also makes it a root the collector may not touch.
+So a program keeps the boxes it was built with, and shedding the unused
+ones is given up — measured at 21,658 bytes of code on one test
+binary.
+
+It is given up because **extendable at run time is a requirement of
+this system and small was never one.** A program that could only be
+extended by boxes it already happened to contain would be extendable in
+name only, and the engine is supposed to be incurious about what runs
+inside it.
+
+The engine's own internals still shed, which is the 8.6% in the table
+above; what stays is the boxes.
 
 **Exporting is the thing that has to be narrow, and it was not.** A
 symbol in the executable's dynamic table is a collection root by
@@ -167,18 +217,28 @@ while the engine still carries a list of everything it could place.
 Measured on one test binary, which is worth keeping because it says
 which half of the problem is which:
 
-| built with | size | |
-|---|---|---|
-| `-rdynamic` | 160,352 | everything is a root |
-| the surface list, table intact | 146,568 | −8.6%, engine internals collected |
-| the surface list, table emptied | 126,392 | −21.2%, boxes collected too |
+| published | code | whole file | |
+|---|---|---|---|
+| everything (`-rdynamic`) | 126,225 | 160,264 | every symbol is a root |
+| the surface, and the station-builders | 117,400 | 146,520 | engine internals collected |
+| the surface only | 95,742 | 129,832 | the boxes collected too |
 
-The table holds 20,176 bytes down on its own — more than narrowing the
-export list recovers. **That is why trimming what the generator emits
-was the wrong lever.** It would have worked, but only by shrinking the
-table as a side effect; deleting the table is what this whole family is
-for, and it gets the same bytes without the generator guessing which
-boxes a program will want.
+Read the last two rows as the choice rather than as a loss. **21,658
+bytes of code is what a program pays to stay extendable** — for
+publishing the station-builders, so that a map compiled later can bind
+to a box compiled now. A program that published only the construction
+surface would be smaller and could be extended only by boxes carrying
+their own copy of everything they touch.
+
+The middle row is also what the program measures *today*, because the
+table of box names is still holding those same functions reachable. So
+publishing them costs nothing yet; what it does is keep them held after
+the table goes.
+
+**And this is why trimming what the generator emits was the wrong
+lever.** It would have shrunk the table as a side effect, which is a
+roundabout way of doing what deleting the table does directly — and
+without the generator having to guess which boxes a program will want.
 
 ### The build checks every box reference
 
@@ -252,48 +312,97 @@ the compiler being needed exactly when new code genuinely arrives.
    a pointed-at function is reachable. The remaining 12.6% arrives when
    step 7 removes the last reader of that table, and the table with it.
    The measurements are in *What the build includes* above.
-7. The engine's runtime map parser deleted — **and the parser itself
-   kept, as a box.** Nothing in the *engine* parses maps any more, but
-   a program that runs other programs needs a box that reads one
-   ([212](completed/212-one-way-to-build-a-program.md)), so the parsing functions
-   move out of the engine and into a box source. The generator, which
-   is becoming a C program in [308](completed/308-generator-in-c.md), links the
-   same implementation. One parser, two callers, and neither of them
-   the engine.
-8. [009](../docs/009-datapath-load.md) rewritten around what replaced
-   it.
-9. **Done**, and by the stronger comparison: a program built from a
-   compiled map and the same map *read as text* dump identically. The
-   hand-written form is already proven identical to the read form
-   ([212](completed/212-one-way-to-build-a-program.md)), so this
-   closes the triangle.
+7. **Station-builders stop being private, and late arrivals open
+   globally.** A generated station-builder is `static` today, which is
+   what makes it invisible from outside and therefore un-bindable by
+   anything compiled later. It joins the published list, one symbol per
+   box — and that one symbol holds its shim and the box body behind it,
+   so the published list stays short while the code stays reachable.
+   A box arriving late is opened privately today; opened globally
+   instead, the *next* arrival binds to it with no lookup at all.
+
+   Measured before writing this: a second shared object naming a
+   function it does not define binds straight to the first one's copy,
+   with the host uninvolved. A shared object naming a function that
+   lives in the executable binds only if the executable published it,
+   and fails at load naming the symbol otherwise.
+
+8. **One table of source text, in RAM.** The sources the build
+   compiled in ([311c](completed/311c-source-rides-in-the-binary.md))
+   and every source that has arrived since, together, keyed by the path
+   the box was addressed as. It is what lets a running program be
+   written out as a complete map file, and it is what the identity
+   check in step 9 reads.
+
+   **This is not the deleted table coming back.** It holds *text*. It
+   answers nothing about what a box is, roots no code, and nothing
+   consults it to build a station.
+
+9. **A map compiles at run time, through the pipe that already exists.**
+   The loader for a box arriving mid-run already writes the source out,
+   runs the generator binary, runs the same compiler that built the
+   binary, and opens the result. A map goes through the same pipe: the
+   generator turns it into a station-building function exactly as it
+   does at build time, and the result is opened and called.
+
+   **The engine's own walk from description to program is deleted, not
+   moved.** Two implementations of one job existed — resolve each name
+   against a table and call the construction functions, or emit those
+   same calls and compile them — and only the second survives. That is
+   the mechanism this whole family is removing, and relocating it into
+   a box would have kept it.
+
+   **An arrival already compiled is not compiled again.** Same path,
+   same bytes, according to the table in step 8, and the emitted code
+   refers to the existing copy instead of carrying its own. The binary
+   is iteration zero and is treated like every iteration after it.
+
+10. **The map text parser moves into the compiler**, beside the box
+    source parser, which is where it belongs once nothing at run time
+    reads text. The generator already links it; what changes is that
+    the engine stops.
+
+11. **The table of box names deleted**, its last readers gone: the
+    engine's parser (step 9), and the dump's question about whether a
+    short name is unambiguous, which is a question about *this
+    program's stations* rather than about every box ever compiled and
+    should be asked of them.
+
+12. [009](../docs/009-datapath-load.md) rewritten around what replaced
+    it.
+13. **Done already, and by the stronger comparison**: a program built
+    from a compiled map and the same map *read as text* dump
+    identically. The hand-written form is already proven identical to
+    the read form
+    ([212](completed/212-one-way-to-build-a-program.md)), so this
+    closes the triangle. It keeps its proof once reading text means
+    compiling it, because what is compared is the program, not the
+    route it arrived by.
 
 ## Open questions
 
-**Outstanding:**
-
-- *Should the export list name families or functions?* It names two
-  families today — everything beginning `map_`, which is the
-  construction surface, and everything beginning `sora_`, which is how
-  a box ends the program it is inside. That is the whole set the box
-  sources reach for, checked rather than assumed.
-
-  The narrower alternative is to name the individual functions, which
-  is a far shorter list: an emitted placement function calls exactly
-  one engine function, since the one that hands back a station pointer
-  is `static inline` and gets compiled into the caller. Naming that
-  list would make "what code arriving after the build may call" an
-  exact statement rather than an approximate one, and it would fail
-  loudly the day the emitter reaches for something new.
-
-  **Which is the feature and which is the cost depends on whether the
-  surface has stopped moving**, and it has not — [212](completed/212-one-way-to-build-a-program.md)
-  is still adding to it. A list that breaks on every addition is worth
-  having once the additions stop. The failure mode is mild either way:
-  a shared object needing a symbol the host did not export fails at
-  `dlopen`, naming the symbol it wanted.
-
 **Answered:**
+
+- *Should the export list name families or functions?* **Families, and
+  there turned out to be a third one nobody had counted.**
+
+  It named two: the construction surface, and how a box ends the
+  program it is inside. Those are what the box sources reach for,
+  checked rather than assumed. The narrower alternative was to name
+  individual functions, since an emitted station-builder calls exactly
+  one engine function — the one that hands back a station pointer is
+  compiled into its caller rather than called.
+
+  What settles it against the narrow list is that the published set
+  stopped being *what generated code calls* and became *what code
+  compiled later may bind to*, which is a larger and less predictable
+  thing: every station-builder, so that a map arriving next year can
+  place a box this build compiled. A list of individual names would
+  have to be regenerated per build, which makes it a derived artifact
+  rather than a statement somebody wrote.
+
+  The failure mode stays mild either way: a shared object needing an
+  unpublished symbol fails at `dlopen`, naming the symbol it wanted.
 
 - *Can the build now check wires, and should it?* **It could, and it
   does not. Wires are a run-time concern, checked when a wire is drawn

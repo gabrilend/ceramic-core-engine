@@ -161,7 +161,7 @@ table** — the list a shared object consults when it needs to call back
 into the program that opened it.</p>
 <h2>What it is for</h2>
 <p>A box or a map compiled while the program runs arrives as a shared
-object and is opened with <code>dlopen</code>. Its generated placement function
+object and is opened with <code>dlopen</code>. Its generated station-builder
 calls straight into the station layer. A shared object cannot see a
 symbol the host executable did not publish, so without this list such a
 box loads and then fails to resolve, naming an engine function rather
@@ -182,14 +182,33 @@ for rather than assumed:</p>
 <table>
 <tr><td>pattern</td><td>what it covers</td></tr>
 <tr><td><code>map_*</code></td><td>the construction surface — placing a station, drawing a wire, naming a door, marking an entrance or a result</td></tr>
-<tr><td><code>sora_*</code></td><td>stopping — a box ending the program it is running inside</td></tr>
+<tr><td><code>sora_*</code></td><td>stopping — a box ending the program it is running inside — <strong>and every generated station-builder</strong>, whose symbol carries its box's full path under the same prefix</td></tr>
 </table>
+<p>The station-builders are there for a different reason than everything
+else. Not because the engine calls them, but because **a map compiled
+next year has to bind to a box compiled today**, and a shared object can
+only bind to a name the program it was loaded into published.</p>
+<p>That is also where the cost lands. A published symbol is a root the
+collector may never touch, and a station-builder holds its shim and the
+box body behind it, so a program keeps every box it was built with:</p>
+<table>
+<tr><td>published</td><td>code</td></tr>
+<tr><td>everything (<code>-rdynamic</code>)</td><td>126,225</td></tr>
+<tr><td>the surface, and the station-builders</td><td>117,400</td></tr>
+<tr><td>the surface only</td><td>95,742</td></tr>
+</table>
+<p>21,658 bytes is what staying extendable costs on that binary. A program
+publishing only the construction surface would be smaller and could be
+extended only by boxes carrying their own copy of everything they
+touch, which is extendable in name only.</p>
 <p>Leaving a family out fails loudly: a shared object needing an
 unpublished symbol fails at <code>dlopen</code>, naming the symbol it wanted.</p>
 <h2>What it does not reach</h2>
-<p>A table naming every box makes every placement function reachable, and
+<p>A table naming every box makes every station-builder reachable, and
 through them every shim. While such a table exists no linker setting
-shrinks a program much. See
+shrinks a program much — so the middle row above is what a binary
+measures today either way, and publishing the station-builders is what
+keeps them held once the table goes. See
 <a href="issue-311-the-registry-dissolved.html">311</a>, which is the work of
 removing it, and
 <a href="issue-311d-the-map-becomes-code.html">311d</a>, which carries the

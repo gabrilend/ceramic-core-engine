@@ -21,15 +21,23 @@
  * resolving a row is never disturbed, because nothing it is looking
  * at moves.
  *
- * What is deliberately absent: unloading. A shared object is never
- * closed, so a box added at run time stays for the life of the
- * process. Doing it safely means waiting until no worker is inside
- * the code being freed, which is the retire-sweep-free mechanism
- * issue 214 builds for destination arrays and issue 216 needs for
- * stations. It should be built once and shared by all three rather
- * than three times; until then this leaks a library per compile,
- * which is bounded by how often somebody adds code and is stated
- * rather than hidden.
+ * Unloading exists but is asked for rather than automatic: a caller
+ * names a box and its library is closed, after checking that no
+ * station in the map is still placed from it. Nothing sweeps or
+ * refcounts, so a library nobody asks about stays for the life of the
+ * process — bounded by how often somebody adds code, and stated rather
+ * than hidden. Doing it automatically means waiting until no worker is
+ * inside the code being freed, which is the retire-sweep-free
+ * mechanism issue 214 builds for destination arrays and issue 216
+ * needs for stations; it should be built once and shared by all three
+ * rather than three times.
+ *
+ * **Libraries are opened globally** (issue 311d), so a box arriving
+ * later can bind to one that arrived earlier instead of carrying its
+ * own copy. That is what makes this an iterative compiler rather than
+ * a sequence of unrelated compilations, and it is why the previous
+ * paragraph matters more than it used to: something bound to may still
+ * be bound to.
  */
 #include "073-latebox.h"
 
@@ -420,7 +428,33 @@ int late_compile_source(const char *c_source)
         return -1;
     }
 
-    void *handle = dlopen(lib_path, RTLD_NOW | RTLD_LOCAL);
+    /*
+     * **Opened globally, so that the next arrival can bind to this
+     * one** (issue 311d step 7). Privately was the old setting, and it
+     * meant every arrival was an island: a second one naming a
+     * function the first had already compiled had to carry its own
+     * copy, because it could not see the first one's.
+     *
+     * Global costs nothing here and needs no table. When a later
+     * shared object names a function it does not define, the dynamic
+     * linker binds it against what is already loaded — which is a
+     * lookup by name that the operating system already maintains for
+     * every process, that this project does not have to write, test,
+     * or keep in step with anything.
+     *
+     * Measured before it was relied on: a second object naming a
+     * function it does not define binds straight to the first object's
+     * copy, with this process uninvolved.
+     *
+     * What it means for names is worth stating plainly, because global
+     * scope is usually where somebody gets hurt: two arrivals defining
+     * the same symbol resolve to the first. That is correct here
+     * rather than dangerous, because generated symbols carry the box's
+     * full path, so two boxes only collide when they are the same box
+     * from the same file — and a box is forbidden to remember anything
+     * between calls, so two copies of one box are indistinguishable.
+     */
+    void *handle = dlopen(lib_path, RTLD_NOW | RTLD_GLOBAL);
     if (!handle) {
         fprintf(stderr, "latebox: cannot load %s: %s\n", lib_path, dlerror());
         return -1;

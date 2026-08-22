@@ -27,6 +27,7 @@
 #include "049-observe.h"
 #include "073-latebox.h"
 
+#include <dlfcn.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -268,6 +269,102 @@ static void refusals_add_nothing(void)
 }
 /* }}} */
 
+/* {{{ static void a_second_arrival_binds_to_the_first() */
+/*
+ * **Nothing is compiled twice** (issue 311d step 7). The first source
+ * defines a function; the second names it without defining it, and
+ * expects to find it already in the process.
+ *
+ * This is the whole of what opening globally buys. Privately, every
+ * arrival was an island: the second source would fail to load, naming
+ * the symbol it could not find, and the only way to make it work
+ * would be to carry another copy of the first function.
+ *
+ * There is no lookup here and no table. When a shared object names a
+ * function it does not define, the dynamic linker binds it against
+ * what is already loaded — a lookup by name the operating system
+ * maintains for every process anyway.
+ *
+ * The generator ignores the bodyless declaration and makes a box only
+ * of the function that has a body, which is why the second source can
+ * refer to the first at all.
+ */
+static void a_second_arrival_binds_to_the_first(void)
+{
+    static const char first[] =
+        "int shared_ancestor(int x)\n"
+        "{\n"
+        "    return x * 10;\n"
+        "}\n";
+
+    /* Declared, never defined. If this does not bind, the load fails
+     * and the count below is zero. */
+    static const char second[] =
+        "int shared_ancestor(int x);\n"
+        "\n"
+        "int leans_on_the_ancestor(int x)\n"
+        "{\n"
+        "    return shared_ancestor(x) + 1;\n"
+        "}\n";
+
+    check(late_compile_source(first) == 1,
+          "a box arrived carrying a function");
+    check(late_compile_source(second) == 1,
+          "and a second box arrived naming it without carrying it");
+
+    map_t *m = map_create(1);
+    map_place_box(m, 0, "leans_on_the_ancestor", STATION_PLAIN);
+    map_start(m, 1);
+    int four = 4;
+    map_deliver_value(m, 0, 0, &four);
+    pool_release(m->pool);
+    pool_join(m->pool);
+    check(atomic_load(&map_station(m, 0)->runs) == 1,
+          "and running it reached the first one's copy");
+    map_destroy(m);
+
+    printf("  a box arriving second bound to a box arriving first, "
+           "with no copy and no lookup\n");
+}
+/* }}} */
+
+/* {{{ static void the_program_publishes_its_station_builders() */
+/*
+ * **A map compiled next year has to bind to a box compiled today**
+ * (issue 311d step 7), and it can only bind to a name this program
+ * published. Station-builders used to be private to the generated
+ * file, which made them unreachable from outside no matter what the
+ * link line said.
+ *
+ * The name is the box's full path with its punctuation transcribed,
+ * which is what keeps two files of the same basename from colliding.
+ * It is written out here rather than derived, so that renumbering the
+ * demo box source breaks this test loudly instead of quietly proving
+ * nothing.
+ *
+ * Asking the *running program* for it, rather than reading the symbol
+ * table of the file on disk, is the point: this is the same question
+ * the dynamic linker asks when it binds a shared object, answered the
+ * same way.
+ */
+static void the_program_publishes_its_station_builders(void)
+{
+    void *self = dlopen(NULL, RTLD_NOW);
+    check(self != NULL, "the running program can be asked about itself");
+    if (!self)
+        return;
+
+    void *builder = dlsym(self,
+        "sora_box_src_sl_boxes_sl_029_dsh_demo_dsh_boxes_dot_c__add__place");
+    check(builder != NULL,
+          "and it publishes the function that builds a station for a box "
+          "it was compiled with");
+
+    dlclose(self);
+    printf("  code compiled later can reach the boxes compiled now\n");
+}
+/* }}} */
+
 /* {{{ static void a_dump_reloads_in_a_fresh_process() */
 /*
  * The claim that makes a late box a real box: a program that grew one
@@ -366,6 +463,8 @@ int main(int argc, char **argv)
     a_different_width_is_refused();
     a_disagreeing_layout_is_accepted();
     refusals_add_nothing();
+    a_second_arrival_binds_to_the_first();
+    the_program_publishes_its_station_builders();
     a_dump_reloads_in_a_fresh_process(argv[0]);
 
     if (failures) {

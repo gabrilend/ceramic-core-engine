@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 19:13:54
+Generated on: 2026-08-21 20:24:49
 
 --------------------------------------------------------------------------------
 
@@ -1868,6 +1868,527 @@ The wildcard is less work and never breaks. The named list is a specification,
 and it will break loudly the day the emitter starts calling something new —
 which is either the feature or the cost, depending on whether you want that day
 to be noisy.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 11
+
+um... okay... so, what's blocking 311? If nothing, can you start working on it?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 11
+
+Nothing is blocking. Both remaining children are actionable: 311b has one step
+left, 311d has four. Starting.
+
+
+Now the Makefile.
+
+
+The linker change works, but measuring it turned up something that changes the
+plan. Let me get the number.
+
+
+Confirmed, with numbers. Let me record them and commit this half.
+
+
+Now step 7 — the engine's runtime map parser. Let me survey what depends on it
+before moving anything.
+
+
+Step 7 of 311d needs a design decision I'll put to you. Meanwhile 311b's last
+step is fully independent — doing that now.
+
+
+All tests pass. Now the prose — 86 uses of the word in comments, which need
+reading rather than substituting.
+
+
+Now the remaining prose in the documents, phrase by phrase.
+
+
+Two documents still describe the box record as existing. Fixing those.
+
+
+All documentation links resolve. Now closing 311b.
+
+
+Two commits landed. **311b is complete** — three of 311's four children are
+done, and only 311d remains.
+
+
+**The export surface** (`f89574b`). The engine's public names now live in a
+written-down list handed to the linker, instead of the one-word form that
+published everything. Measured on one test binary: 160,352 bytes → 146,568.
+
+
+That measurement turned up the finding that reshaped the rest: **the linker
+cannot discard what a table points at.** A table naming every placement function
+makes every one of them reachable, and through them every shim. Emptying that
+table takes the same binary to 126,392 — more weight than narrowing the
+exports recovered. So trimming what the generator emits was never the lever, and
+step 5 of 311d is dropped rather than reordered, with the reasoning recorded in
+its place.
+
+
+**The rename** (`d0114f8`). One word had been standing in for three unrelated
+things, which is why the step looked like it had to wait:
+
+
+- the **file the generator writes** and the header of its shapes — emitted
+  material, never a lookup
+
+- the **table of placements** — box name, address, and the function that
+  builds a station; answers *which function writes this*, not *what is this box*
+
+- the **late-arrival machinery** — compiling and unloading code that shows up
+  mid-run, which had inherited the prefix from a neighbour and never had
+  anything to do with records
+
+
+Identifiers went through the project's own renaming tool; the sixty-odd
+sentences of prose had to be read one at a time, because the same word in
+neighbouring paragraphs often meant two different things. Two documents were
+still describing a box record that no longer exists and now describe what
+replaced it. Full suite passes, documentation regenerates with no dead links.
+
+
+Everything that doesn't depend on your answer is done. What's left in 311d is
+one move, and it hits a constraint the issue didn't anticipate:
+
+
+The engine is assembled by wildcard — every C file in the source directory is
+compiled into every program. So "the parser leaves the engine" has to mean it
+physically leaves that directory. But the parser has **two** callers, not one:
+the generator links the same implementation so it can read a map at build time.
+That rules out the obvious version of the plan, which was to make its internals
+private inside a box source — private functions are invisible to the generator
+that needs them.
+
+
+**[Asked the user]**
+
+
+*Q1 — Parser home:* The map parser has to stop being part of the engine, but
+the generator still needs to link it. Where should it live?
+
+- A third directory beside the engine — The text-to-description parser moves
+  to its own directory, so the engine's wildcard stops sweeping it up. It keeps
+  ordinary external linkage, so both the build-time generator and a run-time box
+  can call the same code. Costs one directory and one line in the build; makes
+  the layering visible in the tree — engine, boxes, and a parser that belongs
+  to neither.
+
+- Leave the files, delete the callers — Nothing moves. The engine simply stops
+  calling the parser, and a box calls it instead. Because every function is now
+  in its own section and the export list is narrow, a program that never reads a
+  map at run time discards the parser at link time — so the claim 'a shipped
+  program carries no parser' becomes true by reachability rather than by
+  directory. Cheapest by far, but the tree no longer shows the layering.
+
+- Split it — reader out, builder in — Only the half that turns text into a
+  description leaves. The half that turns a description into a running program
+  stays in the engine, because building a program from a description is what the
+  engine does whether the description came from text, from generated code, or
+  from another program. This is the smallest thing that is actually a parser,
+  and it draws the line at text rather than at files.
+
+→ *(no answer recorded)*
+
+
+What would you like to clarify?
+
+
+For context on where the question comes from — the engine is assembled by a
+wildcard over one directory, so every C file sitting there gets compiled into
+every program built with it. The map parser sits there today. It has two
+callers: the generator reads a map at build time to emit the construction calls,
+and the engine reads a map at startup. 311d's step 7 removes the second caller,
+and the question is only about where the code itself should sit afterwards,
+given the first caller still needs it.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 12
+
+the parser should be part of the compilation process. We're essentially building
+a JIT compiler, with one large pass done at build time, and any JIT compilation
+happening at runtime if we add new boxes, and then only if we add box stations
+with box functions that we haven't seen before. What's your instinct on that?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 12
+
+Let me check two things before answering, because they decide whether your
+framing is already half-built.
+
+
+Checked, and your framing is already half-built — which is the strongest
+argument for it.
+
+
+The late-box path today does exactly the pipeline you're describing, for one
+function: write the source out, **run the generator binary** (its path baked in
+at build time), **run the compiler** (the same `cc` that built the binary, so
+its answer to `sizeof` is the same answer), then `dlopen` the result. That's a
+JIT with the C compiler as the back end. It exists, it's tested, and nothing
+about it is specific to a single box.
+
+
+## My instinct: yes, and it's a stronger claim than the issue makes
+
+
+311d's step 7 says the parser should be *kept, as a box*. Under your framing
+that's wrong, and wrong in a way worth catching before I build it — because it
+preserves **two ways to turn a description into a running program**:
+
+
+- the **interpreter**: parse the text, resolve each name against a table, call
+  the construction functions
+
+- the **compiler**: parse the text, emit those same calls as C, compile, load
+
+
+Both exist right now. Step 7 as written keeps the first one alive and just
+relocates it. Your framing says it shouldn't survive at all. A program that runs
+other programs doesn't need a *parsing* box — it needs a *compiling* box, and
+the body of that box is the four steps the late-box loader already performs.
+
+
+So the parser goes where the compiler is, and the engine's description-walking
+half isn't moved, it's **deleted**. That's a mechanism removed rather than
+relocated, which is the difference between the two readings.
+
+
+## What that does to the table question
+
+
+This is the part I didn't see until your framing made it obvious. The table
+survives today because a running program has to answer *"which function builds a
+station for `add`?"*
+
+
+Under a JIT there's already something that answers that, and it isn't a table. A
+late-compiled map's build function refers to `add`'s placement function **by
+symbol**. When the shared object is opened, the dynamic linker binds it. **The
+dynamic linker is the name lookup** — the one the operating system already
+maintains, that every process already carries, that nothing in this project has
+to write, test, or keep in step.
+
+
+The engine's own table can go entirely.
+
+
+## And the cost, which is real and worth saying plainly
+
+
+A symbol only binds at `dlopen` if it was **exported**, and an exported symbol
+is a collection root — so a program that keeps the door open for new code has
+to keep the code that new code might call. Extensible programs don't shed their
+boxes.
+
+
+That isn't a compromise, it's the honest price, and it lands exactly where it
+should: **the export list becomes the policy knob.** A program that ships as one
+artifact and compiles nothing exports only the construction surface and sheds
+every box it doesn't place. A program that expects to be handed maps later also
+exports its placement functions and keeps them. Same engine, same build, one
+file deciding which kind of program this is.
+
+
+That file already exists — I wrote it two commits ago for a narrower reason,
+and it turns out to be the right place for this decision too.
+
+
+## Where your "only if we haven't seen it" condition lands
+
+
+Three costs, and the condition separates them cleanly:
+
+
+| what you're adding | what it costs |
+
+|---|---|
+
+| a station running a box already in the binary | pointer and index work, no compiler |
+
+| a wire, a constant, a door | the same — these are edits to RAM |
+
+| a box function nobody has compiled yet | generator, `cc`, `dlopen` — roughly a tenth of a second |
+
+
+That middle row is why the condition matters. Compiling is fine as the price of
+*loading a program*; it would be absurd as the price of *adding a station*. The
+engine already draws that line correctly — editing a running program's
+structures never involves a name.
+
+
+## The question I'd want answered before building it
+
+
+If the export list decides whether a program can be extended at run time, that's
+a **build-time** decision about a **run-time** capability, made in a file that
+sits beside the source rather than beside the map.
+
+
+Does that feel right to you, or should a program's willingness to accept new
+code be something the map itself declares — with the build reading the map, as
+it now does, and deciding what to export from what it finds there?
+
+
+The first is one file a person edits and can reason about whole. The second
+means you never state the same fact twice, but it makes the export list a
+derived artifact, and derived artifacts are the ones that go stale when somebody
+edits the thing they were derived from.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 13
+
+look, the user doesn't care about parsers. They just want to add a box. They
+might not even know the box is a map of boxes. They shouldn't need to care. The
+system should of course be extendable at run time because the system is agnostic
+to what is running within it. It's just, boxes all the way down, with box
+functions and input and output stations and ring buffers and one single thread
+pool. We should simplify when we can, and only complexify if we need to in order
+to meet the requirements of the system.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 13
+
+You're right, and the question was wrong — I offered two ways to configure
+something that shouldn't be configurable. Dropping it.
+
+
+And it turns out extendability costs nothing, for a reason already sitting in
+the project.
+
+
+## Why there's no trade here
+
+
+I'd assumed a map arriving at run time would have to **bind** to the boxes
+already in the binary — its build function calling `add`'s station-builder by
+symbol, which means exporting every station-builder, which means keeping every
+one of them.
+
+
+It doesn't have to. The binary already carries the full text of every box source
+it was made from. So a map arriving later gets **compiled with its own copies**
+of whatever boxes it names, pulled from the text the binary is carrying. The new
+shared object needs nothing from the host but the construction surface — the
+same two families already exported.
+
+
+Two copies of one box are indistinguishable, and that isn't luck. It's the rule
+that defines what a box is: takes its arguments by value, returns one value,
+**not permitted to remember anything between calls**. A thing with no memory has
+no identity to preserve, so duplicating it is free in the only sense that
+matters. The rule that makes the engine's concurrency simple is the same rule
+that makes this simple.
+
+
+So: no table, no knob, no declaration, every program extendable, and a shipped
+program still sheds the boxes it never places.
+
+
+## What the person adding a box does
+
+
+Hands over source. Something reads it, compiles it, loads it, and there's now a
+station running it.
+
+
+Whether that source was one function or a description of fifty stations wired
+together changes nothing they can observe — which is what you said earlier
+about adding a box and adding a map being one operation, arriving here by a
+different road. The engine underneath is the same in both cases: box functions,
+input and output stations, ring buffers, one thread pool.
+
+
+## What I'm building, then
+
+
+**The interpreter dies rather than moving.** The engine's walk from description
+to program — resolve each name against a table, call the construction
+functions — has a second implementation that already does the same job through
+the compiler. Keeping both was the thing 311d's step 7 was quietly proposing.
+
+
+- the map text parser moves into the compiler, where the box source parser
+  already is
+
+- the engine's description-walking half is deleted, not relocated
+
+- the run-time path becomes one pipe with one shape: **source in → generator
+  → `cc` → load**, whether the source is one function or a whole map
+
+- the table goes, and nothing replaces it
+
+
+The cost I'll pay honestly rather than hide: the tests that read a map at run
+time will do so by compiling it, which is a tenth of a second each rather than
+instant. That's the real price of the system having one mechanism instead of
+two, and it should show up in the tests rather than be arranged around.
+
+
+One thing I'll leave alone unless it bites: two maps naming the same box get two
+compiled copies. Caching by source text would fix it and I'm not building that,
+because nothing has measured a problem yet.
+
+
+Starting with the blueprint, then the move.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 14
+
+  One thing I'll leave alone unless it bites: two maps naming the same box get
+  two compiled copies. Caching by source text would fix it and I'm not building
+  that, because nothing has measured a problem yet.
+
+
+we already have the source-text built into the binary for the functions that
+were named at compile time. For functions that weren't, they should be
+accessible in RAM, ready to be dumped into a map file if we need to. I don't
+think it makes sense to have two compiled copies, just have the linker refer to
+the already built functions? I mean... we're compiling in an iterative fashion,
+right? So if a function has the same path and is byte identical to a function we
+already compiled, the linker should just point the new box at the old binary,
+right?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 14
+
+Let me test the mechanism rather than assert it — whether a second late
+arrival can bind to a first.
+
+
+One correction to check first — my own export pattern may already cover the
+placement functions.
+
+
+Both halves measured. Your instinct holds, and needs less machinery than I
+expected — with one place it doesn't reach.
+
+
+## Late-to-late binding is free
+
+
+A second arrival referencing `add` without defining it binds straight to the
+first arrival's copy:
+
+
+```
+
+first loaded, add(2,3)=5
+
+second bound to the first copy, add(4,5)=9
+
+```
+
+
+No table, no lookup, no involvement from the host at all. The only change needed
+is opening the first one **globally** instead of privately — the loader
+currently opens boxes private, which is what would prevent this. One flag.
+
+
+## Where it stops: the binary's own copies
+
+
+```
+
+--- only the construction surface exported ---
+
+  late arrival could NOT bind: undefined symbol: add
+
+--- everything exported ---
+
+  second bound to the first copy, add(4,5)=9
+
+```
+
+
+Binding to a function inside the executable requires that function to be
+published, and a published function is one the linker may never discard. The
+station-builders are currently `static` in the generated file, which is exactly
+why they're invisible from outside.
+
+
+So it's not that your scheme fails — it's that it needs the executable to
+publish its boxes, and publishing means keeping them.
+
+
+## And your own framing settles it
+
+
+If we're compiling iteratively, **the binary is just iteration zero.** There's
+nothing special about it except that it happened first. Treating it differently
+from iteration one — self-contained copies for the exe's boxes, shared copies
+for everything after — *is* the complexity, dressed up as an optimization.
+
+
+So: publish the station-builders. One symbol per box, not three, because that
+symbol pulls in its shim and the box body behind it — the code is kept but the
+published list stays short.
+
+
+What it costs is worth stating rather than burying: **20,176 bytes on the test
+binary I measured**, which is the shedding of unused boxes. The engine's own
+internals still shed — that's the 8.6% already banked. What's given up is a
+program dropping boxes it was built with but never places, and it's given up
+because "extendable at run time" is a requirement of the system and "small" was
+never one.
+
+
+## The source in RAM
+
+
+Straightforwardly right, and it does double duty. One table, keyed by path,
+holding text: the sources the build compiled in, plus every source that arrived
+later. It's what makes a running program dumpable to a complete map file, and
+it's also what the identity check reads — same path, same bytes, already
+compiled, don't compile it again.
+
+
+Worth noting because it's the thing 311 is deleting and this could look like it
+coming back: that table holds **text**. It roots no code, answers nothing about
+what a box *is*, and nothing consults it to build a station. It's the process's
+memory of what it was made from.
+
+
+## So, building
+
+
+- the map parser moves into the compiler, beside the box source parser
+
+- the engine's description-walking half is deleted rather than relocated — one
+  pipe, source in → generator → `cc` → load, whether the source is one
+  function or fifty stations
+
+- station-builders stop being private and go in the published list
+
+- one table of source text, compiled-in and late arrivals together, in RAM
+
+- an arrival whose path and bytes match something already compiled binds instead
+  of recompiling; late arrivals open globally so the next one can find them
+
+- the box-name table goes, and nothing replaces it
+
+
+Blueprint into 311d first, then the move.
 
 
 --------------------------------------------------------------------------------

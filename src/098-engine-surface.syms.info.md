@@ -8,7 +8,7 @@ into the program that opened it.
 ## What it is for
 
 A box or a map compiled while the program runs arrives as a shared
-object and is opened with `dlopen`. Its generated placement function
+object and is opened with `dlopen`. Its generated station-builder
 calls straight into the station layer. A shared object cannot see a
 symbol the host executable did not publish, so without this list such a
 box loads and then fails to resolve, naming an engine function rather
@@ -35,16 +35,38 @@ for rather than assumed:
 | pattern | what it covers |
 |---|---|
 | `map_*` | the construction surface — placing a station, drawing a wire, naming a door, marking an entrance or a result |
-| `sora_*` | stopping — a box ending the program it is running inside |
+| `sora_*` | stopping — a box ending the program it is running inside — **and every generated station-builder**, whose symbol carries its box's full path under the same prefix |
+
+The station-builders are there for a different reason than everything
+else. Not because the engine calls them, but because **a map compiled
+next year has to bind to a box compiled today**, and a shared object can
+only bind to a name the program it was loaded into published.
+
+That is also where the cost lands. A published symbol is a root the
+collector may never touch, and a station-builder holds its shim and the
+box body behind it, so a program keeps every box it was built with:
+
+| published | code |
+|---|---|
+| everything (`-rdynamic`) | 126,225 |
+| the surface, and the station-builders | 117,400 |
+| the surface only | 95,742 |
+
+21,658 bytes is what staying extendable costs on that binary. A program
+publishing only the construction surface would be smaller and could be
+extended only by boxes carrying their own copy of everything they
+touch, which is extendable in name only.
 
 Leaving a family out fails loudly: a shared object needing an
 unpublished symbol fails at `dlopen`, naming the symbol it wanted.
 
 ## What it does not reach
 
-A table naming every box makes every placement function reachable, and
+A table naming every box makes every station-builder reachable, and
 through them every shim. While such a table exists no linker setting
-shrinks a program much. See
+shrinks a program much — so the middle row above is what a binary
+measures today either way, and publishing the station-builders is what
+keeps them held once the table goes. See
 [311](../issues/311-the-registry-dissolved.md), which is the work of
 removing it, and
 [311d](../issues/311d-the-map-becomes-code.md), which carries the
