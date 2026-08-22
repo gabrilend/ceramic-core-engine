@@ -168,6 +168,12 @@ place.</p>
   lookup by name goes through <code>box_place_find</code>, which walks both the
   generated rows and these.</p>
 <li><strong><code>late_source_dir()</code></strong> — where saved sources go.</li>
+<li><strong><code>late_source_text(path)</code></strong> — the C a late arrival was compiled</li>
+<p>  from, by the path it was compiled under, or NULL. Points into the
+  loaded object rather than copying, so it lives as long as that object
+  does. Reach for <code>box_source_text</code> instead, which asks the build first
+  and this second: whether a box arrived early or late is not part of
+  the question.</p>
 </ul>
 <p>Two functions are declared where they are used rather than here,
 because only one caller each needs them: <code>late_place_find</code> (by

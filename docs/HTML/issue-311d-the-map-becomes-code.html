@@ -422,7 +422,7 @@ the compiler being needed exactly when new code genuinely arrives.</p>
    a pointed-at function is reachable. The remaining 12.6% arrives when
    step 7 removes the last reader of that table, and the table with it.
    The measurements are in <em>What the build includes</em> above.
-7. **Station-builders stop being private, and late arrivals open
+7. **Done. Station-builders stop being private, and late arrivals open
    globally.** A generated station-builder is <code>static</code> today, which is
    what makes it invisible from outside and therefore un-bindable by
    anything compiled later. It joins the published list, one symbol per
@@ -435,8 +435,8 @@ the compiler being needed exactly when new code genuinely arrives.</p>
    with the host uninvolved. A shared object naming a function that
    lives in the executable binds only if the executable published it,
    and fails at load naming the symbol otherwise.</p>
-<p>8. <strong>One table of source text, in RAM.</strong> The sources the build
-   compiled in (<a href="done-311c-source-rides-in-the-binary.html">311c</a>)
+<p>8. **Done. One question, asked over everything the program is made
+   of.** The sources the build compiled in (<a href="done-311c-source-rides-in-the-binary.html">311c</a>)
    and every source that has arrived since, together, keyed by the path
    the box was addressed as. It is what lets a running program be
    written out as a complete map file, and it is what the identity
@@ -444,6 +444,12 @@ the compiler being needed exactly when new code genuinely arrives.</p>
 <p>   <strong>This is not the deleted table coming back.</strong> It holds <em>text</em>. It
    answers nothing about what a box is, roots no code, and nothing
    consults it to build a station.</p>
+<p>   It needed no new storage either, which is the part worth keeping. A
+   loaded object already carries its own source as a C array, for the
+   same reason the program's own generated file does, so the arrival
+   brings the text with it and the lookup points into the object rather
+   than copying anything. What was added is the second half of one
+   question, not a second table.</p>
 <p>9. <strong>A map compiles at run time, through the pipe that already exists.</strong>
    The loader for a box arriving mid-run already writes the source out,
    runs the generator binary, runs the same compiler that built the

@@ -91,6 +91,19 @@ typedef struct late_block {
      * same generated function doing the writing. */
     const box_place_t *places;
     int                n_places;
+    /* And the source it was compiled from, as text (issue 311d). The
+     * generator emits this for every object it writes, so a loaded
+     * one carries its own C exactly as the program's own generated
+     * file does. Nothing is copied and nothing is allocated: these
+     * point into the loaded object and live as long as it does.
+     *
+     * Two things read it. A person or a capture wanting to write out
+     * what a grown program is now made of, which cannot be answered
+     * from the build alone once boxes have arrived. And the check that
+     * refuses to compile the same source twice — same path, same
+     * bytes, already here. */
+    const box_source_t *sources;
+    int                 n_sources;
     void              *handle;
 } late_block_t;
 
@@ -165,6 +178,37 @@ const box_place_t *late_place_find(const char *name)
              * mean here what they mean there. */
             if (box_place_matches(&b->places[i], name))
                 return &b->places[i];
+    return NULL;
+}
+/* }}} */
+
+/* {{{ late_source_text() */
+/*
+ * The C a late-arriving source was compiled from, by the path it was
+ * compiled under. Newest first, for the same reason the box lookup is:
+ * a path compiled twice reports the newer text, which is what somebody
+ * asking "what is running now" means by the question.
+ *
+ * Full path first and basename second, matching how a box is
+ * addressed, so that a person can type what they can see.
+ */
+const char *late_source_text(const char *path)
+{
+    if (!path || !*path)
+        return NULL;
+
+    for (late_block_t *b = late_head; b; b = b->next)
+        for (int i = 0; i < b->n_sources; i++)
+            if (strcmp(b->sources[i].path, path) == 0)
+                return b->sources[i].text;
+
+    for (late_block_t *b = late_head; b; b = b->next)
+        for (int i = 0; i < b->n_sources; i++) {
+            const char *slash = strrchr(b->sources[i].path, '/');
+            const char *base = slash ? slash + 1 : b->sources[i].path;
+            if (strcmp(base, path) == 0)
+                return b->sources[i].text;
+        }
     return NULL;
 }
 /* }}} */
@@ -494,6 +538,19 @@ int late_compile_source(const char *c_source)
     block->places   = places;
     block->n_places = *count;
     block->handle   = handle;
+
+    /* The source text the object carries (issue 311d). Absent is not
+     * an error the way absent placement functions are: an object built
+     * by an older generator has boxes but no text, and refusing to
+     * load it would trade a working box for a missing document. What
+     * it costs is that this source cannot be written back out, and the
+     * lookup answers NULL rather than pretending. */
+    const box_source_t *sources = dlsym(handle, "sora_box_sources");
+    const int *n_sources = dlsym(handle, "sora_n_box_sources");
+    if (sources && n_sources && *n_sources > 0) {
+        block->sources   = sources;
+        block->n_sources = *n_sources;
+    }
 
     /* Published last, and by one write, so a reader walking the list
      * either sees this block complete or does not see it at all. */

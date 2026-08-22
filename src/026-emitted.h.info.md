@@ -54,3 +54,21 @@ for reading what was emitted.
 with sizes drawn from the emitted file; comparators get their extra
 threshold port here, typed to the box's return. Aborts loudly on an
 unknown name — the most common map mistake there is.
+
+**box_source_text(path) → the C it was compiled from, or null** — by
+full path or by basename, the two ways a box is addressed. Asks what
+the build compiled in first, then what has arrived since, so a program
+that has been handed code can still say what all of it is made of
+rather than only what it was born with. The build wins a tie, because
+the answer should describe the program rather than the last thing that
+happened to it.
+
+It copies nothing: what comes back points into the binary, or into a
+loaded object, and lives as long as that does.
+
+Two things read it — writing a grown program back out as something
+that can be built again, and refusing to compile a source that is
+already here under the same path with the same bytes.
+
+**map_build_find(path) → the compiled form of one description** — the
+same two ways of naming, for the same reason.

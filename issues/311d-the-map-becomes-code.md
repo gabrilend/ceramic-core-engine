@@ -312,7 +312,7 @@ the compiler being needed exactly when new code genuinely arrives.
    a pointed-at function is reachable. The remaining 12.6% arrives when
    step 7 removes the last reader of that table, and the table with it.
    The measurements are in *What the build includes* above.
-7. **Station-builders stop being private, and late arrivals open
+7. **Done. Station-builders stop being private, and late arrivals open
    globally.** A generated station-builder is `static` today, which is
    what makes it invisible from outside and therefore un-bindable by
    anything compiled later. It joins the published list, one symbol per
@@ -327,8 +327,8 @@ the compiler being needed exactly when new code genuinely arrives.
    lives in the executable binds only if the executable published it,
    and fails at load naming the symbol otherwise.
 
-8. **One table of source text, in RAM.** The sources the build
-   compiled in ([311c](completed/311c-source-rides-in-the-binary.md))
+8. **Done. One question, asked over everything the program is made
+   of.** The sources the build compiled in ([311c](completed/311c-source-rides-in-the-binary.md))
    and every source that has arrived since, together, keyed by the path
    the box was addressed as. It is what lets a running program be
    written out as a complete map file, and it is what the identity
@@ -337,6 +337,13 @@ the compiler being needed exactly when new code genuinely arrives.
    **This is not the deleted table coming back.** It holds *text*. It
    answers nothing about what a box is, roots no code, and nothing
    consults it to build a station.
+
+   It needed no new storage either, which is the part worth keeping. A
+   loaded object already carries its own source as a C array, for the
+   same reason the program's own generated file does, so the arrival
+   brings the text with it and the lookup points into the object rather
+   than copying anything. What was added is the second half of one
+   question, not a second table.
 
 9. **A map compiles at run time, through the pipe that already exists.**
    The loader for a box arriving mid-run already writes the source out,

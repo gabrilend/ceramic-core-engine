@@ -13,6 +13,12 @@ place.
   lookup by name goes through `box_place_find`, which walks both the
   generated rows and these.
 - **`late_source_dir()`** — where saved sources go.
+- **`late_source_text(path)`** — the C a late arrival was compiled
+  from, by the path it was compiled under, or NULL. Points into the
+  loaded object rather than copying, so it lives as long as that object
+  does. Reach for `box_source_text` instead, which asks the build first
+  and this second: whether a box arrived early or late is not part of
+  the question.
 
 Two functions are declared where they are used rather than here,
 because only one caller each needs them: `late_place_find` (by

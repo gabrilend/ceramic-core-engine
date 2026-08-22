@@ -26,6 +26,7 @@
  */
 const box_place_t *late_recover_box(const char *name);
 const box_place_t *late_place_find(const char *name);
+const char        *late_source_text(const char *path);
 
 /* {{{ box_place_find() */
 /*
@@ -171,7 +172,20 @@ const char *box_source_text(const char *path)
         if (strcmp(base, path) == 0)
             return sora_box_sources[i].text;
     }
-    return NULL;
+
+    /*
+     * **And then what has arrived since** (issue 311d). The build is
+     * only the first iteration; a program that has been handed code
+     * since is made of more than the build compiled, and asking what
+     * it is made of has to get all of it.
+     *
+     * The build is asked first so that a source compiled in wins over
+     * a later one of the same path — the compiled-in copy is what the
+     * program's own stations were built from, and the answer should
+     * describe the program rather than the last thing that happened
+     * to it.
+     */
+    return late_source_text(path);
 }
 /* }}} */
 

@@ -103,4 +103,23 @@ int late_unload_box(map_t *m, const char *name);
 const char *late_source_dir(void);
 /* }}} */
 
+/* {{{ late_source_text() — issue 311d */
+/*
+ * **The C one late-arriving source was compiled from**, by the path
+ * it was compiled under, or NULL.
+ *
+ * The text is not copied here and nothing allocates: a loaded object
+ * carries its own source as a C array
+ * ([311c](../issues/completed/311c-source-rides-in-the-binary.md)),
+ * exactly as the program's own generated file does, so this returns a
+ * pointer into the loaded object and lives as long as it does.
+ *
+ * Callers should reach for `box_source_text` instead, which asks this
+ * after asking what the build compiled in. Two lookups exist because
+ * the two tables live in different objects; one question is asked, and
+ * whether a box arrived early or late is not part of it.
+ */
+const char *late_source_text(const char *path);
+/* }}} */
+
 #endif

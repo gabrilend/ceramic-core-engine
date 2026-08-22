@@ -365,6 +365,68 @@ static void the_program_publishes_its_station_builders(void)
 }
 /* }}} */
 
+/* {{{ static void a_grown_program_knows_what_it_is_made_of() */
+/*
+ * **One question, asked once, over everything the program is made of**
+ * (issue 311d step 8). The build compiled some sources in and carries
+ * their text; more have arrived since. Asking what a program is made
+ * of has to get all of it, or the answer describes the build rather
+ * than the program.
+ *
+ * Nothing is copied to make this work. A loaded object carries its own
+ * source as a C array exactly as the program's generated file does, so
+ * what comes back points into the loaded object.
+ *
+ * This is also the check that stops the same source being compiled
+ * twice: same path, same bytes, already here.
+ */
+static void a_grown_program_knows_what_it_is_made_of(void)
+{
+    static const char source[] =
+        "int knows_itself(int x)\n"
+        "{\n"
+        "    return x - 1;\n"
+        "}\n";
+
+    check(late_compile_source(source) == 1, "a box arrived");
+
+    const box_place_t *row = box_place_find("knows_itself");
+    check(row != NULL, "and can be placed by name");
+    if (!row)
+        return;
+
+    /* The address a station is placed from is `<path>:<function>`, and
+     * the path half is what the source is filed under. */
+    const char *colon = strrchr(row->address, ':');
+    check(colon != NULL, "its address names the file it came from");
+    if (!colon)
+        return;
+
+    char path[512];
+    size_t n = (size_t)(colon - row->address);
+    check(n < sizeof path, "and that path is a reasonable length");
+    if (n >= sizeof path)
+        return;
+    memcpy(path, row->address, n);
+    path[n] = '\0';
+
+    const char *text = box_source_text(path);
+    check(text != NULL,
+          "and the same question that answers for a compiled-in source "
+          "answers for this one");
+    check(text && strcmp(text, source) == 0,
+          "with the bytes that were handed over, unchanged");
+
+    /* The compiled-in half of the same question still answers, which
+     * is what makes it one question rather than two. */
+    check(box_source_text("029-demo-boxes.c") != NULL,
+          "while a source the build compiled in still answers too");
+
+    printf("  a program that grew can say what all of it is made of, "
+           "build and arrivals alike\n");
+}
+/* }}} */
+
 /* {{{ static void a_dump_reloads_in_a_fresh_process() */
 /*
  * The claim that makes a late box a real box: a program that grew one
@@ -465,6 +527,7 @@ int main(int argc, char **argv)
     refusals_add_nothing();
     a_second_arrival_binds_to_the_first();
     the_program_publishes_its_station_builders();
+    a_grown_program_knows_what_it_is_made_of();
     a_dump_reloads_in_a_fresh_process(argv[0]);
 
     if (failures) {
