@@ -28,7 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
@@ -98,6 +97,7 @@
 <a href="done-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="done-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
 <a href="done-502-comparator.html">502 — The comparator</a>
 <a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
@@ -181,7 +181,7 @@ scope shrank the most.</p>
 <tr><td><a href="done-405-statics-mutation.html">405 — changing a static while it runs</a></td><td>complete</td><td>A write naming a station and a port, size-checked, under the station's own mutex — the lock the claim already takes. The process-wide map pointer went with it, which is what lets two programs run in one process. And a <strong>wire</strong> may now deliver into a static port, overwriting the constant: a constant that is computed rather than written down, visible in the map file because it is a property of the wire rather than of the box.</td></tr>
 <tr><td>406 — phase 4 demo</td><td><strong>needs rewriting</strong></td><td>Four of its five scenes demonstrate the pull path.</td></tr>
 <tr><td>407 — gathering at pickup</td><td>superseded</td><td>Designed a better timing for a path that then ceased to exist.</td></tr>
-<tr><td><a href="issue-408-values-back-into-text.html">408 — values back into text</a></td><td><strong>escaping closed</strong>, generation waits</td><td>Both directions exist as walks over the field tables, and the escaping hole in them is shut: one table and two routines, five named escapes and a two-digit hexadecimal form, so a constant holding a quote, a tab or a byte above 0x7F round-trips. It was a correctness hole rather than polish — the dump claims to round-trip and for those values it did not. Moving both halves into generated code waits on the registry work.</td></tr>
+<tr><td><a href="done-408-values-back-into-text.html">408 — values back into text</a></td><td><strong>complete</strong></td><td>A reader and a writer per struct, generated, each reaching every field <strong>by name</strong> with its width a <code>sizeof</code> at the point of use — so no offset is stored anywhere and none is computed, which is a stronger form of the compiler-computes-everything guarantee than a table of correct offsets. The escaping hole closed earlier: five named escapes and a two-digit hexadecimal form, so a constant holding a quote, a tab or a byte above 0x7F round-trips. One step was done by not doing it — the grammar was to be emitted per type, and since it does not vary by type that would have been one grammar written N times; it is written once in the engine and called. The field table it replaced is now discarded by the linker from every binary that does not ask for it.</td></tr>
 </table>
 <h2>What the phase actually established</h2>
 <p><strong>Statics were right and are staying</strong>, with one correction: a value

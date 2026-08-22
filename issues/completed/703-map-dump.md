@@ -11,7 +11,7 @@ parsed bytes. Once a static's value lives on the port that reads it
 string — only bytes and a field table describing their shape. So the
 dump needs a formatter that walks a field table and produces text, the
 exact mirror of the reader that walks one and produces bytes
-([408](../408-values-back-into-text.md)).
+([408](408-values-back-into-text.md)).
 
 Three smaller changes: the gather in-lines and the gather-depth comment
 go with the pull path

@@ -1,13 +1,14 @@
 # 408 — Values back into text
 
-The mirror of [402](completed/402-struct-constants.md). That issue
+The mirror of [402](402-struct-constants.md). That issue
 built one generalized reader that walks a field table and brace text
 together and produces correctly laid-out bytes. This is the same walk
 in the other direction.
 
 ## Current behavior
 
-**Both directions exist, and the escaping hole in them is closed.**
+**Done.** Both directions are generated per type, every field reached
+by name, and the shared grammar written once.
 
 What stands:
 
@@ -36,28 +37,25 @@ What stands:
   what it now *is*. The old table-and-number form printed what the file
   had said, which was a hole admitted in its own comment.
 
-**What is left is one correctness hole and one change of technique.**
+- **Both directions are generated per type**, reaching each field by
+  name with its width a `sizeof` at the point of use. Nothing walks a
+  field table any more, in either direction, and a port points at its
+  type's pair of routines rather than at a description of its fields.
 
-**The hole: there are no escape rules, on either side.** The writer
-emits a string constant as its characters between two quotes, and the
-reader has no notion of a backslash. So a string containing a quote, a
-backslash, or a control character does not round-trip — it produces a
-map file that reads back as something else or fails to parse, and
-nothing anywhere says so. This is not a restructuring; it is a value
-the engine will silently corrupt, and it is the reason this issue
-should not be left sitting.
+- **The shared grammar is written once and called**, not emitted per
+  type, because it is the same for every struct. That is the reverse
+  of what this issue originally proposed, and it is the safer half of
+  the same idea: what varies by type is generated, what does not is
+  written once.
 
-**The technique: both directions are runtime walks**, and the plan is
-for both to be generated code per struct instead, with the escape
-rules written once in the generator and emitted into both halves so
-they cannot drift. That half of the work belongs beside
-[311b](completed/311b-placement-instead-of-records.md), which is where field
-tables stop being searched by name and start being pointed at — the
-same change of technique arriving for the same reason. Doing it before
-that lands means writing an emitter twice.
+- **A struct's padding is deterministic.** The value is built in a
+  local of the real type, zeroed before anything is written, and
+  copied out whole — so two values read from the same text are the
+  same bytes, holes included.
 
-So the issue splits cleanly: **fix the escaping now, move the
-generation with the registry work.**
+- **And the field table is gone from every binary that does not ask
+  for it**, discarded by the linker now that nothing on a working path
+  reads it.
 
 ## Intended behavior
 
@@ -66,14 +64,14 @@ registered struct the generator writes two routines — one that reads
 the brace text into bytes, one that writes the bytes back out as brace
 text — with every offset and every field kind resolved when the engine
 is built rather than dispatched on while it runs. This replaces the
-generic walk [402](completed/402-struct-constants.md) built, and it is
+generic walk [402](402-struct-constants.md) built, and it is
 the larger change, chosen because it puts each type's text grammar in
 exactly one place, written by the only thing that knows the type
 concretely.
 
 **What the field table is left doing.** It keeps names and sizes,
 which is what the registry's own description routine and the
-width-based type comparison of [309](completed/309-types-by-width.md) ask of it.
+width-based type comparison of [309](309-types-by-width.md) ask of it.
 Nothing walks it to read or write a value any more; the two callers
 that do so today are the statics reader, which is being replaced, and
 the registry's describe-yourself printout, which only wants names.
@@ -166,16 +164,52 @@ of technique:**
    complaint named whatever it choked on rather than the string.
 
 **Then, with the registry work
-([311b](completed/311b-placement-instead-of-records.md)), because that is when
+([311b](311b-placement-instead-of-records.md)), because that is when
 field tables stop being walked and start being pointed at:**
 
-4. Teach the generator to emit a formatter per registered struct,
-   recursing into nested types by calling the nested type's own
-   emitted routine rather than by walking anything.
-5. Move the escape rules into the generator, emitted into both halves
-   from one description, so they cannot drift apart later.
-6. Move reading into generated code too, and retire the field-table
-   walk in the statics reader once nothing calls it.
+4. **Done, and stronger than this step asked for.** A reader and a
+   writer are emitted per struct, and a nested struct is handled by
+   calling that struct's own routine rather than by following a chain
+   of table pointers.
+
+   What the step described was generated code doing the same
+   arithmetic the walk did, with the numbers folded in. What was built
+   reaches **every field by name** — `v.pos` rather than
+   `bytes + fields[1].offset` — with its width a `sizeof` at the point
+   of use. So no offset is stored anywhere and none is computed, which
+   is a stronger form of guarantee C1 than a table of correct offsets:
+   there is no number left to be wrong.
+
+   A side effect worth keeping: the value is built in a local of the
+   real type, zeroed first and copied out whole. So a struct's padding
+   is the same bytes every time, and two values that read from the
+   same text compare equal byte for byte. Before, the holes held
+   whatever was there.
+
+5. **Done, by not doing it.** The step said to emit the escape rules
+   into both halves from one description in the generator. They are
+   emitted into neither, and that is the better answer: **the grammar
+   does not vary by type.** Braces, commas, escapes, number widths and
+   every refusal are the same for every struct, so emitting them per
+   type would be one grammar written N times and N places for it to
+   drift — the exact failure the step existed to prevent.
+
+   So the split runs the other way from how it was written: **the part
+   that varies by type is generated, and the part that does not is
+   written once in the engine and called.** Ten small routines,
+   published so generated code can reach them.
+
+6. **Done.** The two generalized walks are deleted, and the field
+   table went with them in practice: the linker discards it from every
+   binary that does not explicitly ask, because nothing on any working
+   path reads it any more. It survives only in the test that exists to
+   prove offsets come from the compiler.
+
+   The port stopped pointing at a table and started pointing at a pair
+   of functions — the same change the box record went through
+   ([311b](311b-placement-instead-of-records.md)), arriving
+   at the last place in the engine where something walked a table it
+   had been handed.
 
 **Already done, recorded so nobody does them twice:**
 
@@ -217,13 +251,13 @@ field tables stop being walked and start being pointed at:**
 
 ## Related
 
-- [402 — Struct constants](completed/402-struct-constants.md), the
+- [402 — Struct constants](402-struct-constants.md), the
   reader this mirrors, whose field-table walk and error style this
   follows
-- [304 — Struct field tables](completed/304-struct-field-tables.md),
+- [304 — Struct field tables](304-struct-field-tables.md),
   which emits the offsets and kinds both directions read
-- [401 — Static input values](completed/401-static-ports.md), which creates the
+- [401 — Static input values](401-static-ports.md), which creates the
   need by removing the retained text
-- [703 — The map dump](completed/703-map-dump.md), the first caller
-- [209 — The output station](completed/209-map-output-collection.md), where a
+- [703 — The map dump](703-map-dump.md), the first caller
+- [209 — The output station](209-map-output-collection.md), where a
   program's results are text for the same reason

@@ -148,6 +148,106 @@ int box_place_matches(const box_place_t *row, const char *name);
 extern const struct_info_t  struct_layouts[];
 extern const int            n_struct_layouts;
 
+/* {{{ writing a value down and reading it back — issue 408 */
+/*
+ * **Each struct gets a reader and a writer of its own, emitted.**
+ *
+ * There used to be one generalized walk in each direction, stepping a
+ * field table and the text together: for every field, read an offset,
+ * a size and a kind out of a table, switch on the kind, and do the
+ * arithmetic. That is the one place left in the engine where a port
+ * pointed at a table and something walked it, and the rest of the
+ * engine stopped working that way when placement functions replaced
+ * the box record (issue 311b).
+ *
+ * What replaces it is straight-line code per type, where every field
+ * is reached **by name** and its size is a `sizeof` at the point of
+ * use. No offsets are stored or computed anywhere: the compiler
+ * places the fields and the generated code names them, which is a
+ * stronger version of guarantee C1 than a table of offsets, because
+ * there is no number to be wrong.
+ *
+ * A nested struct is read by calling that struct's own reader. So the
+ * recursion is in the code rather than in a chain of table pointers.
+ *
+ * The grammar itself is not emitted per type — the helpers below are
+ * shared, so the escape rules and the number widths exist once and
+ * cannot drift between one struct's reader and another's.
+ */
+
+/*
+ * Where a fault was, threaded through so a refusal can name somewhere
+ * a person can go and look. A station and a port, because that is an
+ * address; the messages used to name an entry number, which named a
+ * row in a table rather than anything in the program.
+ */
+typedef struct sora_where {
+    int station;
+    int port;
+} sora_where_t;
+
+/*
+ * A growing piece of text that never overflows and always reports how
+ * much it wanted, so a caller that was cut short can tell, and ask
+ * again with more room. The same contract snprintf offers.
+ */
+typedef struct sora_textbuf {
+    char *out;
+    int   room;
+    int   used;
+} sora_textbuf_t;
+
+/* Reading. Each returns where it stopped; each refuses fatally,
+ * naming the station, the port and the field. */
+const char *sora_text_expect(const char *p, char c, const sora_where_t *w,
+                             const char *what);
+const char *sora_text_signed(const char *p, void *out, int size,
+                             const sora_where_t *w, const char *field);
+const char *sora_text_unsigned(const char *p, void *out, int size,
+                               const sora_where_t *w, const char *field);
+const char *sora_text_floating(const char *p, void *out, int size,
+                               const sora_where_t *w, const char *field);
+/* A char array, filled to `room` bytes and zero-padded. Bounded by
+ * the array rather than by a terminator, because a field filled
+ * exactly to its width has no room for one. */
+const char *sora_text_chars(const char *p, char *out, int room,
+                            const sora_where_t *w, const char *field);
+
+/* Writing. What comes out is what would go back in. */
+void sora_text_put(sora_textbuf_t *tb, const char *literal);
+void sora_text_put_signed(sora_textbuf_t *tb, const void *bytes, int size);
+void sora_text_put_unsigned(sora_textbuf_t *tb, const void *bytes, int size);
+void sora_text_put_floating(sora_textbuf_t *tb, const void *bytes, int size);
+void sora_text_put_chars(sora_textbuf_t *tb, const char *chars, int room);
+
+/*
+ * One struct's two directions. A port holding a struct constant is
+ * handed this pair at placement, the same way it is handed everything
+ * else it needs, so writing a constant down follows a pointer instead
+ * of searching anything.
+ */
+typedef struct struct_text {
+    const char *name;
+    /*
+     * How many bytes the reader will write. Carried so that a port
+     * whose width disagrees with the type is refused before the write
+     * rather than overrun by it — the one thing the pair cannot check
+     * for itself, since it is handed a destination and told nothing
+     * about how much room is there.
+     */
+    int         size;
+    const char *(*read)(const char *p, void *out, const sora_where_t *w);
+    void        (*write)(const void *bytes, sora_textbuf_t *tb);
+} struct_text_t;
+
+extern const struct_text_t struct_texts[];
+extern const int           n_struct_texts;
+
+/* One type's pair by name, or NULL. Wanted at placement and by a
+ * caller building a port by hand; nothing on the delivery path asks. */
+const struct_text_t *struct_text_find(const char *type_name);
+/* }}} */
+
 /* {{{ struct_find() */
 const struct_info_t *struct_find(const char *type_name);
 /* }}} */

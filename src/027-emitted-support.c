@@ -100,6 +100,25 @@ const box_place_t *box_place_find(const char *name)
 }
 /* }}} */
 
+/* {{{ struct_text_find() */
+/*
+ * One type's reader and writer, by name (issue 408). Asked at
+ * placement, so that a port holding a struct constant is *handed* its
+ * pair — the same way a station is handed its shim and its comparison
+ * — and nothing searches anything afterwards.
+ */
+const struct_text_t *struct_text_find(const char *type_name)
+{
+    if (!type_name)
+        return NULL;
+    for (int i = 0; i < n_struct_texts; i++)
+        if (struct_texts[i].name
+            && strcmp(struct_texts[i].name, type_name) == 0)
+            return &struct_texts[i];
+    return NULL;
+}
+/* }}} */
+
 /* {{{ struct_find() */
 const struct_info_t *struct_find(const char *type_name)
 {

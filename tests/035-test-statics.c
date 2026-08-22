@@ -230,7 +230,7 @@ static void test_struct_constant_bytes(void)
      * always had, arriving where it can be seen.
      */
     map_station(m, 0)->in_ports[0].type_name = "record";
-    map_station(m, 0)->in_ports[0].fields = struct_find("record");
+    map_station(m, 0)->in_ports[0].text = struct_text_find("record");
     map_place(m, 1, check_record__call, STATION_PLAIN, 1, one_record, 0);
     map_connect(m, 0, 0, 1, 0);
 
@@ -443,7 +443,7 @@ static void awkward_values_round_trip(void)
                   sizeof(record));
         in_port_t *sl = &map_station(m, 0)->in_ports[0];
         sl->type_name = "record";
-        sl->fields = struct_find("record");
+        sl->text = struct_text_find("record");
 
         /* Bytes straight onto the port, bypassing text entirely, so
          * what is being round-tripped is a value rather than a
@@ -463,7 +463,7 @@ static void awkward_values_round_trip(void)
                   sizeof(record));
         in_port_t *to = &map_station(back, 0)->in_ports[0];
         to->type_name = "record";
-        to->fields = struct_find("record");
+        to->text = struct_text_find("record");
         map_in_port_static_text(back, 0, 0, text);
 
         record got;

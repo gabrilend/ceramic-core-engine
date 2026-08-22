@@ -191,7 +191,7 @@ anything, which is the whole of what can be checked.
 6. Leave the field tables where they are. Nothing here consults them,
    and two other things do: the reader that turns brace text into bytes
    ([402](402-struct-constants.md)) and the writer that will
-   turn bytes back into text ([408](../408-values-back-into-text.md)).
+   turn bytes back into text ([408](408-values-back-into-text.md)).
 
 ## Open questions
 

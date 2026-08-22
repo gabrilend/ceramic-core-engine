@@ -53,15 +53,12 @@
 #include <string.h>
 
 /*
- * Where an error happened, threaded through the recursive walk. It is
- * a station and a port because that is an address somebody can go and
- * look at; the messages used to name an entry number, which named a
- * row in a table rather than anything in the program.
+ * Where an error happened. Published as sora_where_t (issue 408),
+ * because generated readers name the same place, and spelled `where_t`
+ * here so the file that has always used the short name still reads
+ * the way it did.
  */
-typedef struct where {
-    int station;
-    int port;
-} where_t;
+typedef sora_where_t where_t;
 
 /* {{{ die_static() */
 static void die_static(const where_t *w, const char *what)
@@ -222,11 +219,11 @@ typedef enum {
 /* {{{ classify_port() */
 /*
  * What kind of thing this port holds, and — when it is a struct —
- * where its field table is.
+ * where its reader and writer are.
  *
- * **The struct is not searched for.** The port was handed its field
- * table's address at placement, because the placement function knew
- * the type concretely (issue 311b); this used to scan every emitted
+ * **The struct is not searched for.** The port was handed the address
+ * of its pair at placement, because the placement function knew the
+ * type concretely (issues 311b, 408); this used to scan every emitted
  * struct table looking for a matching name.
  *
  * The primitives are still told apart by their spelling, and that is
@@ -237,7 +234,7 @@ typedef enum {
  * to know whether those bytes are a number, and which kind.
  */
 static type_class_t classify_port(const in_port_t *sl,
-                                  const struct_info_t **out_struct)
+                                  const struct_text_t **out_struct)
 {
     const char *tn = sl->type_name ? sl->type_name : "";
     static const char *const ints[] = {
@@ -261,8 +258,8 @@ static type_class_t classify_port(const in_port_t *sl,
     for (int i = 0; strings[i]; i++)
         if (strcmp(tn, strings[i]) == 0) return TN_STRING;
 
-    if (sl->fields) {
-        if (out_struct) *out_struct = sl->fields;
+    if (sl->text) {
+        if (out_struct) *out_struct = sl->text;
         return TN_STRUCT;
     }
     return TN_UNKNOWN;
@@ -360,101 +357,6 @@ static const char *skip_ws(const char *p)
 }
 /* }}} */
 
-/* {{{ parse_struct_text() */
-/*
- * One generalized reader walking a field table and brace text
- * together (issue 402) — instead of a parser emitted per struct.
- * Grammar: '{' value (',' value)* '}', where a value is a number, a
- * quoted string into a char array, or a nested brace group recursing
- * into the nested field table. Counts must match exactly: too many,
- * too few, or the wrong shape are all fatal here, naming station,
- * port and field, because they are silent corruption if caught any
- * later.
- */
-static const char *parse_struct_text(const struct_info_t *si, const char *p,
-                                     unsigned char *out, const where_t *w)
-{
-    p = skip_ws(p);
-    if (*p != '{')
-        die_static(w, "expected '{' to open a struct value");
-    p = skip_ws(p + 1);
-
-    for (int f = 0; f < si->n_fields; f++) {
-        const field_info_t *fl = &si->fields[f];
-        char note[128];
-
-        switch (fl->kind) {
-        case FIELD_INT: {
-            char *end;
-            long long v = strtoll(p, &end, 0);
-            if (end == p) {
-                snprintf(note, sizeof note, "field '%s' wants a number", fl->name);
-                die_static(w, note);
-            }
-            write_integer(v, out + fl->offset, fl->size, w);
-            p = end;
-            break;
-        }
-        case FIELD_UINT: {
-            char *end;
-            unsigned long long v = strtoull(p, &end, 0);
-            if (end == p) {
-                snprintf(note, sizeof note, "field '%s' wants a number", fl->name);
-                die_static(w, note);
-            }
-            write_unsigned(v, out + fl->offset, fl->size, w);
-            p = end;
-            break;
-        }
-        case FIELD_FLOAT: {
-            char *end;
-            double v = strtod(p, &end);
-            if (end == p) {
-                snprintf(note, sizeof note, "field '%s' wants a number", fl->name);
-                die_static(w, note);
-            }
-            write_float(v, out + fl->offset, fl->size, w);
-            p = end;
-            break;
-        }
-        case FIELD_STRING: {
-            /* Through the shared escape routines (issue 408), so a
-             * value holding a quote, a tab, or a byte above 0x7F
-             * reads back as what was written rather than ending its
-             * own text early. */
-            char what[96];
-            snprintf(what, sizeof what, "field '%s'", fl->name);
-            memset(out + fl->offset, 0, (size_t)fl->size);
-            int len = 0;
-            p = read_quoted(p, (char *)(out + fl->offset),
-                            fl->array_len - 1, &len, what, w);
-            break;
-        }
-        case FIELD_STRUCT:
-            p = parse_struct_text(fl->nested, p, out + fl->offset, w);
-            break;
-        default:
-            die_static(w, "a field kind the reader does not know");
-        }
-
-        p = skip_ws(p);
-        if (f < si->n_fields - 1) {
-            if (*p != ',') {
-                snprintf(note, sizeof note,
-                         "expected ',' after field '%s' — too few values?", fl->name);
-                die_static(w, note);
-            }
-            p = skip_ws(p + 1);
-        }
-    }
-
-    if (*p == ',')
-        die_static(w, "too many values for this struct");
-    if (*p != '}')
-        die_static(w, "expected '}' to close the struct value");
-    return p + 1;
-}
-/* }}} */
 
 /* ------------------------------------------------------------------ */
 /* Turning a value back into words (issue 401). The exact mirror of   */
@@ -469,11 +371,9 @@ static const char *parse_struct_text(const struct_info_t *si, const char *p,
  * was cut short and ask again with a bigger buffer, the same contract
  * snprintf offers.
  */
-typedef struct textbuf {
-    char *out;
-    int   room;
-    int   used;
-} textbuf_t;
+typedef sora_textbuf_t textbuf_t;
+
+static void tb_addf(textbuf_t *tb, const char *fmt, ...);
 
 static void tb_addf(textbuf_t *tb, const char *fmt, ...)
 {
@@ -545,52 +445,128 @@ static void float_text(textbuf_t *tb, double v, int size)
 }
 /* }}} */
 
-/* {{{ format_struct_text() */
-/*
- * The mirror of parse_struct_text: '{' value (',' value)* '}', walking
- * the same field table in the same order, so what comes out is what
- * would go back in.
- */
-static void format_struct_text(const struct_info_t *si,
-                               const unsigned char *bytes,
-                               textbuf_t *tb, const where_t *w)
-{
-    tb_addf(tb, "{ ");
-    for (int f = 0; f < si->n_fields; f++) {
-        const field_info_t *fl = &si->fields[f];
-        if (f)
-            tb_addf(tb, ", ");
 
-        switch (fl->kind) {
-        case FIELD_INT:
-            tb_addf(tb, "%lld", read_integer(bytes + fl->offset, fl->size, w));
-            break;
-        case FIELD_UINT:
-            tb_addf(tb, "%llu", read_unsigned(bytes + fl->offset, fl->size, w));
-            break;
-        case FIELD_FLOAT:
-            float_text(tb, read_float(bytes + fl->offset, fl->size, w), fl->size);
-            break;
-        case FIELD_STRING: {
-            /* A char array inside the struct, written back quoted and
-             * escaped (issue 408). The length is bounded by the array
-             * rather than trusted to a terminator, because a field
-             * filled exactly to its width has no room for one. */
-            const char *chars = (const char *)(bytes + fl->offset);
-            int len = 0;
-            while (len < fl->array_len && chars[len])
-                len++;
-            write_quoted(tb, chars, len);
-            break;
-        }
-        case FIELD_STRUCT:
-            format_struct_text(fl->nested, bytes + fl->offset, tb, w);
-            break;
-        default:
-            die_static(w, "a field kind the writer does not know");
-        }
+/* {{{ the helpers a generated reader and writer call — issue 408 */
+/*
+ * **One grammar, shared; one routine per struct, emitted.**
+ *
+ * A struct's reader and writer are generated now, reaching each field
+ * by name with its size a `sizeof` at the point of use. What is *not*
+ * generated is any of this: the escape rules, the number widths, the
+ * refusals. Those are the same for every struct, so emitting them per
+ * type would be one grammar written N times and N places for it to
+ * drift.
+ *
+ * So the shape is the opposite of what it looks like at first glance:
+ * the part that varies by type is generated, and the part that does
+ * not is written once, here, and called.
+ */
+const char *sora_text_expect(const char *p, char c, const sora_where_t *w,
+                             const char *what)
+{
+    p = skip_ws(p);
+    if (*p != c) {
+        char note[192];
+        snprintf(note, sizeof note, "expected '%c' %s", c, what);
+        die_static(w, note);
     }
-    tb_addf(tb, " }");
+    return skip_ws(p + 1);
+}
+
+const char *sora_text_signed(const char *p, void *out, int size,
+                             const sora_where_t *w, const char *field)
+{
+    p = skip_ws(p);
+    char *end;
+    long long v = strtoll(p, &end, 0);
+    if (end == p) {
+        char note[192];
+        snprintf(note, sizeof note, "field '%s' wants a number", field);
+        die_static(w, note);
+    }
+    write_integer(v, (unsigned char *)out, size, w);
+    return skip_ws(end);
+}
+
+const char *sora_text_unsigned(const char *p, void *out, int size,
+                               const sora_where_t *w, const char *field)
+{
+    p = skip_ws(p);
+    char *end;
+    unsigned long long v = strtoull(p, &end, 0);
+    if (end == p) {
+        char note[192];
+        snprintf(note, sizeof note, "field '%s' wants a number", field);
+        die_static(w, note);
+    }
+    write_unsigned(v, (unsigned char *)out, size, w);
+    return skip_ws(end);
+}
+
+const char *sora_text_floating(const char *p, void *out, int size,
+                               const sora_where_t *w, const char *field)
+{
+    p = skip_ws(p);
+    char *end;
+    double v = strtod(p, &end);
+    if (end == p) {
+        char note[192];
+        snprintf(note, sizeof note, "field '%s' wants a number", field);
+        die_static(w, note);
+    }
+    write_float(v, (unsigned char *)out, size, w);
+    return skip_ws(end);
+}
+
+const char *sora_text_chars(const char *p, char *out, int room,
+                            const sora_where_t *w, const char *field)
+{
+    char note[192];
+    snprintf(note, sizeof note, "field '%s'", field);
+
+    p = skip_ws(p);
+    int len = 0;
+    p = read_quoted(p, out, room, &len, note, w);
+    /* Zero-padded to the full width rather than only terminated, so
+     * that two structs holding the same text are the same bytes and a
+     * comparison over raw bytes means what it looks like it means. */
+    for (int i = len; i < room; i++)
+        out[i] = '\0';
+    return skip_ws(p);
+}
+
+void sora_text_put(sora_textbuf_t *tb, const char *literal)
+{
+    tb_addf(tb, "%s", literal);
+}
+
+void sora_text_put_signed(sora_textbuf_t *tb, const void *bytes, int size)
+{
+    where_t w = { -1, -1 };
+    tb_addf(tb, "%lld", read_integer((const unsigned char *)bytes, size, &w));
+}
+
+void sora_text_put_unsigned(sora_textbuf_t *tb, const void *bytes, int size)
+{
+    where_t w = { -1, -1 };
+    tb_addf(tb, "%llu", read_unsigned((const unsigned char *)bytes, size, &w));
+}
+
+void sora_text_put_floating(sora_textbuf_t *tb, const void *bytes, int size)
+{
+    where_t w = { -1, -1 };
+    float_text(tb, read_float((const unsigned char *)bytes, size, &w), size);
+}
+
+void sora_text_put_chars(sora_textbuf_t *tb, const char *chars, int room)
+{
+    /* Bounded by the array rather than trusted to a terminator,
+     * because a field filled exactly to its width has no room for
+     * one. */
+    int len = 0;
+    while (len < room && chars[len])
+        len++;
+    write_quoted(tb, chars, len);
 }
 /* }}} */
 
@@ -605,7 +581,7 @@ int in_port_constant_text(const in_port_t *sl, char *out, int room)
     if (!sl->constant_set) {
         tb_addf(&tb, "?");
     } else {
-        const struct_info_t *si = NULL;
+        const struct_text_t *si = NULL;
         switch (classify_port(sl, &si)) {
         case TN_INT:
             tb_addf(&tb, "%lld",
@@ -629,7 +605,7 @@ int in_port_constant_text(const in_port_t *sl, char *out, int room)
             break;
         }
         case TN_STRUCT:
-            format_struct_text(si, sl->constant, &tb, &w);
+            si->write(sl->constant, &tb);
             break;
         default:
             tb_addf(&tb, "?");
@@ -688,7 +664,7 @@ static void port_text_to_bytes(const in_port_t *sl, const char *text,
     unsigned char *fresh = into;
     char *fresh_string = NULL;
 
-    const struct_info_t *si = NULL;
+    const struct_text_t *si = NULL;
     switch (classify_port(sl, &si)) {
     case TN_INT: {
         char *end;
@@ -747,7 +723,7 @@ static void port_text_to_bytes(const in_port_t *sl, const char *text,
     case TN_STRUCT: {
         if (si->size != sl->elem_size)
             die_static(w, "struct size disagrees with the port");
-        const char *after = parse_struct_text(si, text, fresh, w);
+        const char *after = si->read(text, fresh, w);
         if (*skip_ws(after) != 0)
             die_static(w, "trailing text after the struct value");
         break;

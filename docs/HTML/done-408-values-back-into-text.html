@@ -28,7 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-408-values-back-into-text.html" class="here">408 — Values back into text</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
@@ -98,6 +97,7 @@
 <a href="done-405-statics-mutation.html">405 — Changing a static value while the program runs</a>
 <a href="done-406-phase-4-demo.html">406 — Phase 4 demo: values that are current, not merely correct</a>
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
+<a href="done-408-values-back-into-text.html" class="here">408 — Values back into text</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
 <a href="done-502-comparator.html">502 — The comparator</a>
 <a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
@@ -161,7 +161,8 @@ built one generalized reader that walks a field table and brace text
 together and produces correctly laid-out bytes. This is the same walk
 in the other direction.</p>
 <h2>Current behavior</h2>
-<p><strong>Both directions exist, and the escaping hole in them is closed.</strong></p>
+<p><strong>Done.</strong> Both directions are generated per type, every field reached
+by name, and the shared grammar written once.</p>
 <p>What stands:</p>
 <ul>
 <li><strong>One escape table, two routines</strong>, so the writer and the reader</li>
@@ -190,25 +191,30 @@ in the other direction.</p>
 <p>  what it now <em>is</em>. The old table-and-number form printed what the file
   had said, which was a hole admitted in its own comment.</p>
 </ul>
-<p><strong>What is left is one correctness hole and one change of technique.</strong></p>
-<p><strong>The hole: there are no escape rules, on either side.</strong> The writer
-emits a string constant as its characters between two quotes, and the
-reader has no notion of a backslash. So a string containing a quote, a
-backslash, or a control character does not round-trip — it produces a
-map file that reads back as something else or fails to parse, and
-nothing anywhere says so. This is not a restructuring; it is a value
-the engine will silently corrupt, and it is the reason this issue
-should not be left sitting.</p>
-<p><strong>The technique: both directions are runtime walks</strong>, and the plan is
-for both to be generated code per struct instead, with the escape
-rules written once in the generator and emitted into both halves so
-they cannot drift. That half of the work belongs beside
-<a href="done-311b-placement-instead-of-records.html">311b</a>, which is where field
-tables stop being searched by name and start being pointed at — the
-same change of technique arriving for the same reason. Doing it before
-that lands means writing an emitter twice.</p>
-<p>So the issue splits cleanly: **fix the escaping now, move the
-generation with the registry work.**</p>
+<ul>
+<li><strong>Both directions are generated per type</strong>, reaching each field by</li>
+<p>  name with its width a <code>sizeof</code> at the point of use. Nothing walks a
+  field table any more, in either direction, and a port points at its
+  type's pair of routines rather than at a description of its fields.</p>
+</ul>
+<ul>
+<li><strong>The shared grammar is written once and called</strong>, not emitted per</li>
+<p>  type, because it is the same for every struct. That is the reverse
+  of what this issue originally proposed, and it is the safer half of
+  the same idea: what varies by type is generated, what does not is
+  written once.</p>
+</ul>
+<ul>
+<li><strong>A struct's padding is deterministic.</strong> The value is built in a</li>
+<p>  local of the real type, zeroed before anything is written, and
+  copied out whole — so two values read from the same text are the
+  same bytes, holes included.</p>
+</ul>
+<ul>
+<li>**And the field table is gone from every binary that does not ask</li>
+<p>  for it**, discarded by the linker now that nothing on a working path
+  reads it.</p>
+</ul>
 <h2>Intended behavior</h2>
 <p><strong>Both directions are emitted per type by the generator.</strong> For each
 registered struct the generator writes two routines — one that reads
@@ -303,13 +309,43 @@ of technique:**</p>
 <p>**Then, with the registry work
 (<a href="done-311b-placement-instead-of-records.html">311b</a>), because that is when
 field tables stop being walked and start being pointed at:**</p>
-<p>4. Teach the generator to emit a formatter per registered struct,
-   recursing into nested types by calling the nested type's own
-   emitted routine rather than by walking anything.
-5. Move the escape rules into the generator, emitted into both halves
-   from one description, so they cannot drift apart later.
-6. Move reading into generated code too, and retire the field-table
-   walk in the statics reader once nothing calls it.</p>
+<p>4. <strong>Done, and stronger than this step asked for.</strong> A reader and a
+   writer are emitted per struct, and a nested struct is handled by
+   calling that struct's own routine rather than by following a chain
+   of table pointers.</p>
+<p>   What the step described was generated code doing the same
+   arithmetic the walk did, with the numbers folded in. What was built
+   reaches <strong>every field by name</strong> — <code>v.pos</code> rather than
+   <code>bytes + fields[1].offset</code> — with its width a <code>sizeof</code> at the point
+   of use. So no offset is stored anywhere and none is computed, which
+   is a stronger form of guarantee C1 than a table of correct offsets:
+   there is no number left to be wrong.</p>
+<p>   A side effect worth keeping: the value is built in a local of the
+   real type, zeroed first and copied out whole. So a struct's padding
+   is the same bytes every time, and two values that read from the
+   same text compare equal byte for byte. Before, the holes held
+   whatever was there.</p>
+<p>5. <strong>Done, by not doing it.</strong> The step said to emit the escape rules
+   into both halves from one description in the generator. They are
+   emitted into neither, and that is the better answer: **the grammar
+   does not vary by type.** Braces, commas, escapes, number widths and
+   every refusal are the same for every struct, so emitting them per
+   type would be one grammar written N times and N places for it to
+   drift — the exact failure the step existed to prevent.</p>
+<p>   So the split runs the other way from how it was written: **the part
+   that varies by type is generated, and the part that does not is
+   written once in the engine and called.** Ten small routines,
+   published so generated code can reach them.</p>
+<p>6. <strong>Done.</strong> The two generalized walks are deleted, and the field
+   table went with them in practice: the linker discards it from every
+   binary that does not explicitly ask, because nothing on any working
+   path reads it any more. It survives only in the test that exists to
+   prove offsets come from the compiler.</p>
+<p>   The port stopped pointing at a table and started pointing at a pair
+   of functions — the same change the box record went through
+   (<a href="done-311b-placement-instead-of-records.html">311b</a>), arriving
+   at the last place in the engine where something walked a table it
+   had been handed.</p>
 <p><strong>Already done, recorded so nobody does them twice:</strong></p>
 <p>7. ~~The floating-point decision~~ — seventeen significant digits for a
    double, nine for a float, with the reasoning as a comment beside the

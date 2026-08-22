@@ -349,9 +349,9 @@ typedef struct in_port {
     const char *type_name;
 
     /*
-     * Which fields this port's type has, and where each one sits —
-     * the address of a generated table, written by the placement
-     * function because it knows the type concretely (issue 311b).
+     * How a value of this port's type is written down and read back —
+     * the address of a generated pair, written by the placement
+     * function because it knows the type concretely (issues 311b, 408).
      *
      * Null unless the type is a struct, and null on a hand-placed
      * station, which is why the reader still checks before following
@@ -359,11 +359,19 @@ typedef struct in_port {
      * whose name matched, which was a lookup performed to answer a
      * question the placement already knew.
      *
-     * Declared as an incomplete type because the field table belongs
-     * to the build path and this header must not depend on it — the
+     * **It used to be a table of fields and is now two functions.**
+     * The table said where each field sits and how wide it is, and a
+     * generalized walk stepped it against the text. The generated pair
+     * reaches each field by name instead, so there is no offset stored
+     * anywhere and none computed — which is a stronger form of
+     * guarantee C1 than a correct number that has to be carried
+     * around.
+     *
+     * Declared as an incomplete type because the pair belongs to the
+     * build path and this header must not depend on it — the
      * dependency runs the other way.
      */
-    const struct struct_info *fields;
+    const struct struct_text *text;
 
     /* The growth story, written by issue 203 and read by phase 7:
      * how many times this buffer has doubled, and the deepest the

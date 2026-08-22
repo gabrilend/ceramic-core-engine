@@ -296,6 +296,155 @@ static const char *path_within(const char *file, const char *root)
 }
 /* }}} */
 
+/* {{{ static void emit_struct_text() */
+/*
+ * **A reader and a writer per struct, emitted** (issue 408), replacing
+ * the two generalized walks that stepped a field table and the text
+ * together.
+ *
+ * The difference that matters is not speed. It is that **every field
+ * is reached by name**: `v.here` rather than `bytes + fields[1].offset`.
+ * So no offset is stored anywhere, none is computed anywhere, and
+ * there is no number that can be wrong — the compiler places the
+ * fields and this names them. That is a stronger form of guarantee C1
+ * than a table of offsets, which is a correct number that still has to
+ * be carried around and read back.
+ *
+ * A nested struct is read by calling that struct's own reader, so the
+ * recursion is in the code rather than in a chain of table pointers.
+ * Emitted in declaration order, and the parser guarantees a nested
+ * struct is defined before it is used, so a forward declaration is
+ * never needed.
+ *
+ * **The grammar is not emitted.** Braces, commas, escapes, number
+ * widths and every refusal live once in the engine and are called from
+ * here, because they are the same for every struct and writing them
+ * per type would be one grammar in N places to drift.
+ */
+static void emit_struct_text(buf_t *w, const description_t *d)
+{
+    for (int i = 0; i < d->structs.n; i++) {
+        const sdef_t *s = vec_at(&d->structs, i);
+
+        /* Reading. Into a local of the real type, then copied out
+         * whole, so the caller never sees a half-filled value and
+         * every assignment along the way is a typed one. */
+        buf_line(w, "/* reads a %s out of brace text */", s->name);
+        buf_line(w, "static const char *%s__read(const char *p, void *out,",
+                 s->name);
+        buf_line(w, "        const sora_where_t *w)");
+        buf_line(w, "{");
+        buf_line(w, "    %s v;", s->name);
+        /* Zeroed first, so a padding hole is the same bytes every
+         * time and two values that read the same compare the same. */
+        buf_line(w, "    memset(&v, 0, sizeof v);");
+        buf_line(w, "    p = sora_text_expect(p, '{', w, "
+                    "\"to open a %s\");", s->name);
+        for (int j = 0; j < s->n_fields; j++) {
+            const field_t *f = &s->fields[j];
+            if (j)
+                buf_line(w, "    p = sora_text_expect(p, ',', w, "
+                            "\"between fields of a %s\");", s->name);
+            switch (f->kind) {
+            case TKIND_INT:
+                buf_line(w, "    p = sora_text_signed(p, &v.%s, "
+                            "(int)sizeof v.%s, w, \"%s\");",
+                         f->name, f->name, f->name);
+                break;
+            case TKIND_UINT:
+                buf_line(w, "    p = sora_text_unsigned(p, &v.%s, "
+                            "(int)sizeof v.%s, w, \"%s\");",
+                         f->name, f->name, f->name);
+                break;
+            case TKIND_FLOAT:
+                buf_line(w, "    p = sora_text_floating(p, &v.%s, "
+                            "(int)sizeof v.%s, w, \"%s\");",
+                         f->name, f->name, f->name);
+                break;
+            case TKIND_STRING:
+                buf_line(w, "    p = sora_text_chars(p, v.%s, "
+                            "(int)sizeof v.%s, w, \"%s\");",
+                         f->name, f->name, f->name);
+                break;
+            case TKIND_STRUCT:
+                buf_line(w, "    p = %s__read(p, &v.%s, w);",
+                         f->nested->name, f->name);
+                break;
+            default:
+                fprintf(stderr, "generator: %s.%s has a kind the text "
+                                "emitter does not know\n", s->name, f->name);
+                exit(65);
+            }
+        }
+        buf_line(w, "    p = sora_text_expect(p, '}', w, "
+                    "\"to close a %s\");", s->name);
+        buf_line(w, "    memcpy(out, &v, sizeof v);");
+        buf_line(w, "    return p;");
+        buf_line(w, "}");
+        buf_line(w, "");
+
+        /* Writing, the same walk in the other direction and in the
+         * same order, so what comes out is what would go back in. */
+        buf_line(w, "/* writes a %s down as brace text */", s->name);
+        buf_line(w, "static void %s__write(const void *bytes, "
+                    "sora_textbuf_t *tb)", s->name);
+        buf_line(w, "{");
+        buf_line(w, "    %s v;", s->name);
+        buf_line(w, "    memcpy(&v, bytes, sizeof v);");
+        buf_line(w, "    sora_text_put(tb, \"{ \");");
+        for (int j = 0; j < s->n_fields; j++) {
+            const field_t *f = &s->fields[j];
+            if (j)
+                buf_line(w, "    sora_text_put(tb, \", \");");
+            switch (f->kind) {
+            case TKIND_INT:
+                buf_line(w, "    sora_text_put_signed(tb, &v.%s, "
+                            "(int)sizeof v.%s);", f->name, f->name);
+                break;
+            case TKIND_UINT:
+                buf_line(w, "    sora_text_put_unsigned(tb, &v.%s, "
+                            "(int)sizeof v.%s);", f->name, f->name);
+                break;
+            case TKIND_FLOAT:
+                buf_line(w, "    sora_text_put_floating(tb, &v.%s, "
+                            "(int)sizeof v.%s);", f->name, f->name);
+                break;
+            case TKIND_STRING:
+                buf_line(w, "    sora_text_put_chars(tb, v.%s, "
+                            "(int)sizeof v.%s);", f->name, f->name);
+                break;
+            case TKIND_STRUCT:
+                buf_line(w, "    %s__write(&v.%s, tb);",
+                         f->nested->name, f->name);
+                break;
+            default:
+                break;
+            }
+        }
+        buf_line(w, "    sora_text_put(tb, \" }\");");
+        buf_line(w, "}");
+        buf_line(w, "");
+    }
+
+    buf_line(w, "/* Which pair belongs to which type. A port holding a "
+                "struct constant is");
+    buf_line(w, " * handed its own pair at placement, so writing one down "
+                "follows a");
+    buf_line(w, " * pointer rather than searching anything (issue 408). */");
+    buf_line(w, "const struct_text_t struct_texts[] = {");
+    for (int i = 0; i < d->structs.n; i++) {
+        const sdef_t *s = vec_at(&d->structs, i);
+        buf_line(w, "    { \"%s\", (int)sizeof(%s), %s__read, %s__write },",
+                 s->name, s->name, s->name, s->name);
+    }
+    if (d->structs.n == 0)
+        buf_line(w, "    { NULL, 0, NULL, NULL },");
+    buf_line(w, "};");
+    buf_line(w, "const int n_struct_texts = %d;", d->structs.n);
+    buf_line(w, "");
+}
+/* }}} */
+
 /* {{{ static void emit_placements() */
 /*
  * One **placement function** per box (issue 311b), emitted beside the
@@ -421,14 +570,14 @@ static void emit_placements(buf_t *w, const description_t *d,
         for (int j = 0; j < b->n_params; j++) {
             buf_line(w, "    s->in_ports[%d].type_name = \"%s\";",
                      j, b->params[j].type);
-            /* The layout, handed over rather than looked for. A
-             * written-out constant needs to know which field sits at
-             * which offset, and the placement function knows the type
-             * concretely — so the port is given the address instead of
-             * searching a table by name (issue 311b). */
+            /* How this type is written down and read back, handed
+             * over rather than looked for. The placement function
+             * knows the type concretely, so the port is given the
+             * address of its pair instead of searching a table by
+             * name (issues 311b, 408). */
             int si = struct_index_by_name(d, b->params[j].type);
             if (si >= 0)
-                buf_line(w, "    s->in_ports[%d].fields = &struct_layouts[%d];",
+                buf_line(w, "    s->in_ports[%d].text = &struct_texts[%d];",
                          j, si);
         }
         if (!is_void && compare_of[i]) {
@@ -437,8 +586,8 @@ static void emit_placements(buf_t *w, const description_t *d,
             buf_line(w, "        s->in_ports[%d].type_name = \"%s\";",
                      b->n_params, b->ret);
             if (rsi >= 0)
-                buf_line(w, "        s->in_ports[%d].fields = "
-                            "&struct_layouts[%d];", b->n_params, rsi);
+                buf_line(w, "        s->in_ports[%d].text = "
+                            "&struct_texts[%d];", b->n_params, rsi);
             /* Resolved once, here, so the delivery path compares
              * through a pointer the station already holds rather than
              * looking anything up per value. */
@@ -467,7 +616,7 @@ static void emit_placements(buf_t *w, const description_t *d,
                  b->name, file, b->name, sym);
     }
     if (d->boxes.n == 0)
-        buf_line(w, "    { NULL, NULL, NULL },");
+        buf_line(w, "    { NULL, 0, NULL, NULL },");
     buf_line(w, "};");
     buf_line(w, "const int n_box_places = %d;", d->boxes.n);
     buf_line(w, "");
@@ -966,6 +1115,7 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
         emit_compares(&w, d, compare_of);
         emit_shims(&w, d);
         emit_structs(&w, d);
+        emit_struct_text(&w, d);
         emit_placements(&w, d, compare_of, d->arena, root);
     }
 
