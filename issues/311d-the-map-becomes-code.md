@@ -345,8 +345,8 @@ the compiler being needed exactly when new code genuinely arrives.
    than copying anything. What was added is the second half of one
    question, not a second table.
 
-9. **Half done. A map compiles at run time, through the pipe that
-   already exists.**
+9. **Done. A map compiles at run time, through the pipe that already
+   exists, and the engine's own walk is deleted.**
 
    Built and proven: a description handed to a running program is
    written out, turned into the calls it describes by the generator,
@@ -365,9 +365,44 @@ the compiler being needed exactly when new code genuinely arrives.
    text, the same map compiled at build time, and the same map compiled
    while the program ran, all dumped and compared byte for byte.
 
-   **Not done: the deletion.** The engine still reads descriptions at
-   run time, so the two implementations still coexist. That is the rest
-   of this step, below.
+   **And the walk is gone.** Reading a description into a program is
+   now compiling it and calling what comes back, so there is one way a
+   description becomes a program and the engine is a caller of it
+   rather than a second implementation. Three functions went with it —
+   the two passes and the search that translated a description's
+   station names into places.
+
+   The linker noticed immediately: `mapfile_parse` is absent from every
+   test binary, because nothing in the engine reaches it any more. **No
+   program built with this engine carries a map parser**, and that
+   became true by deleting callers rather than by moving files.
+
+   Three things changed shape and each is worth knowing:
+
+   - **Two refusals moved into the compiler and gained a line number.**
+     A box name that answers to nothing, and an arrow pointing at a
+     station nobody declared, are caught while the description is still
+     text — so the complaint can say *which line*, which the engine
+     never could, because by the time it looked there were no lines
+     left.
+   - **A refusal from a built description is a malformed input, not a
+     bad call.** It said bad-call while the hand-written reader said
+     bad-file for the same fault, so one description gave two different
+     exit codes depending on which route had read it. There is one
+     route now.
+   - **Fetching a box the program does not hold is ordinary, not a
+     rescue.** A program that grew and wrote itself down names boxes
+     that arrived after it started; whoever reads that back has to
+     compile them first. The compiler is asked what a description
+     references — reading text being its job — and anything missing is
+     recovered and compiled before the description is.
+
+   **What it costs, measured rather than estimated.** Each description
+   read at run time now spends two compiler invocations, one to ask
+   what it references and one to build it. The test that reads ten of
+   them takes 1.7 seconds; the whole suite takes 7.4. A program built
+   from its own descriptions pays none of this, because it never reads
+   one.
    The loader for a box arriving mid-run already writes the source out,
    runs the generator binary, runs the same compiler that built the
    binary, and opens the result. A map goes through the same pipe: the

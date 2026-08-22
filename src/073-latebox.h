@@ -125,11 +125,13 @@ const char *late_source_dir(void);
  * description naming a box this program does not hold fails at load,
  * naming the symbol it wanted.
  *
- * Returns the build function, or NULL with a reason on stderr. The
- * function belongs to a library that stays loaded, so it may be kept
- * and called again.
+ * Returns the row describing what was compiled — its path, how many
+ * stations it declares, and the function that builds it — or NULL with
+ * a reason on stderr. The row and its function belong to a library
+ * that stays loaded, so they may be kept and used again, on any
+ * program.
  */
-void (*late_compile_map(const char *map_text))(map_t *m);
+const map_build_t *late_compile_map(const char *map_text);
 /* }}} */
 
 /* {{{ late_source_text() — issue 311d */

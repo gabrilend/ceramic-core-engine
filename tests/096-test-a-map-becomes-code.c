@@ -119,7 +119,7 @@ int main(void)
     /* And the same description, as the calls the build compiled it
      * into. Nothing here parses anything. */
     map_t *built = map_create_empty();
-    compiled->build(built);
+    compiled->build(built, NULL, 0);
     map_start(built, 2);
     const char *no = map_bring_up(built);
     if (no) {
@@ -142,14 +142,14 @@ int main(void)
      * are published at all.
      */
     char *description = slurp(SORA_ROOT "/maps/095-doubling.map");
-    void (*compiled_now)(map_t *) = late_compile_map(description);
+    const map_build_t *compiled_now = late_compile_map(description);
     check(compiled_now != NULL,
           "a description handed to the running program compiled into it");
 
     map_t *late = NULL;
     if (compiled_now) {
         late = map_create_empty();
-        compiled_now(late);
+        compiled_now->build(late, NULL, 0);
         map_start(late, 2);
         const char *refused = map_bring_up(late);
         if (refused) {
@@ -216,9 +216,9 @@ int main(void)
      * — the same claim instantiating from text makes.
      */
     map_t *twice = map_create_empty();
-    compiled->build(twice);
+    compiled->build(twice, NULL, 0);
     int after_first = twice->n_stations;
-    compiled->build(twice);
+    compiled->build(twice, NULL, 0);
     check(twice->n_stations == 2 * after_first,
           "building a compiled description twice made two of everything");
 

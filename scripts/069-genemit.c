@@ -556,6 +556,23 @@ static const box_t *box_named(const description_t *d, const char *name,
 }
 /* }}} */
 
+/* {{{ static int map_station_count() */
+/*
+ * How many stations one description declares. Read from the file
+ * again rather than remembered from the pass above, because the two
+ * uses are far apart in the emitted output and a number carried
+ * between them would be one more thing that can be carried wrongly.
+ * Parsing a description is cheap and this is a build-time program.
+ */
+static int map_station_count(const char *path)
+{
+    map_description_t *md = mapfile_parse(path);
+    int n = md->n_stations;
+    mapfile_free(md);
+    return n;
+}
+/* }}} */
+
 /* {{{ static void emit_maps() */
 /*
  * **A map compiled into the calls it describes** (issue 311d).
@@ -591,7 +608,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
 {
     if (n_maps == 0) {
         buf_line(w, "/* No maps were named to this build (issue 311d). */");
-        buf_line(w, "const map_build_t sora_map_builds[] = { { 0, 0 } };");
+        buf_line(w, "const map_build_t sora_map_builds[] = { { 0, 0, 0 } };");
         buf_line(w, "const int sora_n_map_builds = 0;");
         buf_line(w, "");
         return;
@@ -658,12 +675,20 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
     }
 
     buf_line(w, "/* A refusal from a generated build ends the program");
-    buf_line(w, " * (issue 106): it is an invalid operation, and the caller");
-    buf_line(w, " * is generated code with nothing better to decide. */");
+    buf_line(w, " * (issue 106), and it ends it as a **malformed input**");
+    buf_line(w, " * rather than a bad call. This code was written from a");
+    buf_line(w, " * description, and every refusal it can produce traces");
+    buf_line(w, " * back to a line of that description — a wire between");
+    buf_line(w, " * two widths, an arrow to a port past the end of a box.");
+    buf_line(w, " * It said bad-call while a hand-written loader said");
+    buf_line(w, " * bad-file for the same faults, so one description");
+    buf_line(w, " * produced two different exit codes depending on which");
+    buf_line(w, " * route had read it. There is one route now, and the");
+    buf_line(w, " * fault is in the file either way (issue 311d). */");
     buf_line(w, "static void sora_built_take(const char *refusal)");
     buf_line(w, "{");
     buf_line(w, "    if (refusal)");
-    buf_line(w, "        sora_stop_now(0, SORA_EXIT_BAD_CALL, refusal);");
+    buf_line(w, "        sora_stop_now(0, SORA_EXIT_BAD_FILE, refusal);");
     buf_line(w, "}");
     buf_line(w, "");
 
@@ -672,8 +697,26 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
         const char *shortened = path_within(maps[mi], root);
         char *sym = gt_box_symbol(a, shortened, "build");
 
+        /*
+         * **It reports where each station landed**, because a
+         * description brought inside a program that already has
+         * stations is a template being instantiated, and the parent
+         * has to be able to find the copy's doors (issue 217).
+         *
+         * Where a station lands is not an offset and cannot be
+         * recovered by counting: adding one hands back a *freed* place
+         * before it grows the table, so a program that has had
+         * removals gets whatever holes exist, in whatever order. And
+         * the order matters — the doors are wanted in the order the
+         * description declares them, not in table order.
+         *
+         * `landed` may be null, which is the ordinary case of building
+         * a whole program and not caring where anything went. The
+         * count comes back either way, so a caller can ask before it
+         * allocates.
+         */
         buf_line(w, "/* builds %s */", shortened);
-        buf_line(w, "static void %s(map_t *m)", sym);
+        buf_line(w, "static int %s(map_t *m, int *landed, int cap)", sym);
         buf_line(w, "{");
         buf_line(w, "    int at[%d];", md->n_stations > 0 ? md->n_stations : 1);
 
@@ -761,6 +804,11 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
             }
         }
 
+        buf_line(w, "    if (landed)");
+        buf_line(w, "        for (int i = 0; i < %d && i < cap; i++)",
+                 md->n_stations);
+        buf_line(w, "            landed[i] = at[i];");
+        buf_line(w, "    return %d;", md->n_stations);
         buf_line(w, "}");
         buf_line(w, "");
         mapfile_free(md);
@@ -771,7 +819,8 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
     for (int mi = 0; mi < n_maps; mi++) {
         const char *shortened = path_within(maps[mi], root);
         char *sym = gt_box_symbol(a, shortened, "build");
-        buf_line(w, "    { \"%s\", %s },", shortened, sym);
+        buf_line(w, "    { \"%s\", %d, %s },", shortened,
+                 map_station_count(maps[mi]), sym);
     }
     buf_line(w, "};");
     buf_line(w, "const int sora_n_map_builds = %d;", n_maps);

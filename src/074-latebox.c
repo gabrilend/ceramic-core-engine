@@ -539,8 +539,58 @@ static int spill_sources(const char *dir, const char **paths, int cap)
 }
 /* }}} */
 
+/* {{{ static int gather_missing_boxes() */
+/*
+ * **A description may name a box this program does not hold**, and
+ * getting it is the ordinary path rather than a rescue (issue 311d).
+ *
+ * A program that grew and then wrote itself down names boxes that
+ * arrived after it started. Whoever reads that description back —
+ * usually a different process, which was never told those boxes exist
+ * — has to compile them before the description can be compiled
+ * against them.
+ *
+ * The compiler is asked what the description references, because
+ * reading text is its job and the engine does not do it any more.
+ * Each name is looked for; anything missing is recovered from the
+ * source that was filed under it when it was first compiled, and
+ * compiled in. Only then is the description itself compiled, by which
+ * point every name answers.
+ *
+ * A name that answers to nothing anywhere is left alone deliberately.
+ * The refusal belongs to the compiler, which will name the
+ * description and the line — and this cannot, because it does not
+ * know which line asked.
+ */
+static void gather_missing_boxes(const char *map_path, const char *list_path)
+{
+    char cmd[2048];
+    snprintf(cmd, sizeof cmd, "%s --map-boxes %s > %s",
+             SORA_GENERATOR, map_path, list_path);
+    if (run(cmd) != 0)
+        return;   /* the compiler will say what is wrong with it */
+
+    FILE *f = fopen(list_path, "r");
+    if (!f)
+        return;
+
+    char name[256];
+    while (fgets(name, sizeof name, f)) {
+        size_t n = strlen(name);
+        while (n > 0 && (name[n - 1] == '\n' || name[n - 1] == '\r'))
+            name[--n] = '\0';
+        if (n == 0)
+            continue;
+        if (box_place_find(name))
+            continue;
+        late_recover_box(name);
+    }
+    fclose(f);
+}
+/* }}} */
+
 /* {{{ late_compile_map() */
-void (*late_compile_map(const char *map_text))(map_t *m)
+const map_build_t *late_compile_map(const char *map_text)
 {
     if (!map_text || !*map_text) {
         fprintf(stderr, "latebox: an empty description describes nothing\n");
@@ -574,6 +624,16 @@ void (*late_compile_map(const char *map_text))(map_t *m)
         return NULL;
     if (ensure_dir(src_root) != 0)
         return NULL;
+
+    /*
+     * Anything the description names that is not here yet is compiled
+     * in first, so that spilling the sources below writes it out with
+     * the rest and the compiler can resolve every name.
+     */
+    char list_path[512];
+    snprintf(list_path, sizeof list_path, "%s/names-%d-%d.txt",
+             dir, (int)getpid(), serial);
+    gather_missing_boxes(map_path, list_path);
 
     enum { MAX_SPILLED = 256 };
     const char *spilled[MAX_SPILLED];
@@ -634,7 +694,7 @@ void (*late_compile_map(const char *map_text))(map_t *m)
         dlclose(handle);
         return NULL;
     }
-    return builds[0].build;
+    return &builds[0];
 }
 /* }}} */
 

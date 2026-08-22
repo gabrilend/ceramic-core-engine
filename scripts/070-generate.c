@@ -41,6 +41,9 @@
  *     pointer points, which for a static is the port's own storage).
  */
 #include "067-genparse.h"
+/* The map reader, so this can say what a description references
+ * without the engine having to read text (issue 311d). */
+#include "040-mapfile.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,6 +59,7 @@ static void usage(void)
     fprintf(stderr, "usage: generate <output.c> [--root=DIR] "
                     "[--map=FILE]... [--external-boxes] <box.c>...\n");
     fprintf(stderr, "       generate --describe <box.c>...\n");
+    fprintf(stderr, "       generate --map-boxes <map>\n");
     exit(65);
 }
 /* }}} */
@@ -67,6 +71,31 @@ int main(int argc, char **argv)
         usage();
 
     int describe_only = strcmp(argv[1], "--describe") == 0;
+
+    /*
+     * **Which boxes a description names**, one per line, and nothing
+     * else (issue 311d). A program handed a description at run time
+     * has to know what it asks for before it can compile it, because
+     * a box it does not hold has to be found and compiled first —
+     * that is the ordinary path for a description written by a
+     * program that had grown, not a rescue.
+     *
+     * It lives here rather than in the engine because reading text is
+     * the compiler's job and the engine does not do it any more. What
+     * comes back is exactly what the description said, unresolved:
+     * whoever asked knows how to look a name up and this program does
+     * not know what they hold.
+     */
+    if (strcmp(argv[1], "--map-boxes") == 0) {
+        if (argc != 3)
+            usage();
+        map_description_t *md = mapfile_parse(argv[2]);
+        for (desc_station_t *st = md->stations; st; st = st->next)
+            printf("%s\n", st->box);
+        mapfile_free(md);
+        return 0;
+    }
+
     const char *out_path = describe_only ? NULL : argv[1];
 
     /*

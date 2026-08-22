@@ -510,15 +510,29 @@ static void the_keywords_are_not_reserved(void)
 /* {{{ the gallery of refusals */
 static void test_every_refusal(void)
 {
+    /*
+     * **The first two refusals moved into the compiler, and gained
+     * the line number on the way** (issue 311d). A description is
+     * compiled into the calls it describes rather than walked, so a
+     * name that answers to nothing and an arrow pointing at a station
+     * nobody declared are both caught while the description is still
+     * text — and the complaint can say which line, which the engine
+     * never could because by then there were no lines left.
+     *
+     * The refusals below them did not move, because they are not
+     * about the text: a port beyond the end of a box and a wire
+     * between two different widths are refused by the operations that
+     * draw them, wherever those are called from.
+     */
     expect_death_saying(
         "station head sevn p\n",
-        "no box named 'sevn'",
+        "nothing this build was given answers to 'sevn'",
         "a misspelled box was accepted");
 
     expect_death_saying(
         "station head seven p\n"
         "  out 0 - nowhere.0\n",
-        "arrow to 'nowhere', which does not exist",
+        "arrow to 'nowhere', which this map does not declare",
         "an arrow into the void was accepted");
 
     expect_death_saying(

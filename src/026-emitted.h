@@ -226,7 +226,27 @@ const char *box_source_text(const char *path);
  */
 typedef struct map_build {
     const char *path;
-    void      (*build)(map_t *m);
+    /*
+     * How many stations the description declares. Known when it was
+     * compiled, so a caller that needs to record where they land can
+     * size its table before building rather than guessing or building
+     * twice.
+     */
+    int         n_stations;
+    /*
+     * Builds the description into `m` and returns how many stations it
+     * declares. When `landed` is not null, where each of those
+     * stations went is written into it, in the order the description
+     * declared them, up to `cap`.
+     *
+     * **Where a station lands cannot be recovered by counting.**
+     * Adding one hands back a freed place before it grows the table,
+     * so a program that has had removals gets whatever holes exist in
+     * whatever order. A parent bringing a description inside itself
+     * needs this to find the copy's doors (issue 217); a caller
+     * building a whole program passes null and ignores the count.
+     */
+    int       (*build)(map_t *m, int *landed, int cap);
 } map_build_t;
 
 extern const map_build_t sora_map_builds[];

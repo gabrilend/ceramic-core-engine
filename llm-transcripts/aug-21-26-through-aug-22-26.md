@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 20:24:49
+Generated on: 2026-08-21 20:55:43
 
 --------------------------------------------------------------------------------
 
@@ -2389,6 +2389,145 @@ memory of what it was made from.
 
 
 Blueprint into 311d first, then the move.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 15
+
+ok sounds good let's keep going.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 15
+
+Blueprint first.
+
+
+Blueprint is down. Now step 7 — station-builders published, late arrivals
+opened globally.
+
+
+All pass — that error is a deliberate scene. Verifying the mechanism actually
+landed.
+
+
+Confirming the first scene actually catches the regression — flipping the flag
+back.
+
+
+My earlier numbers were taken without debug info; let me redo the comparison
+consistently.
+
+
+Now consistent. Let me correct the recorded numbers — my earlier ones were
+measured without debug info and aren't comparable to the build.
+
+
+Step 8 — one table of source text over both kinds.
+
+
+Now the single lookup that asks both.
+
+
+Now a scene that proves it — asking a grown program what it's made of.
+
+
+Four commits in. Step 9 is the substantial one — let me look at what the
+generator emits for a map today.
+
+
+Now the generator gains a mode where the boxes are already in the process.
+
+
+Now the emission itself.
+
+
+The runtime side. Let me check the build-function type first.
+
+
+Now the implementation.
+
+
+This test already compares two routes; the run-time compile makes a third.
+
+
+Zero boxes defined in the loaded object, three bound from the host. Let me fix
+the now-stale note about warning counts and run everything.
+
+
+Five commits. Here's where 311 stands.
+
+
+## Done
+
+
+| | |
+
+|---|---|
+
+| **311a** boxes addressed by file | complete |
+
+| **311b** placement instead of records | **complete this session** |
+
+| **311c** source rides in the binary | complete |
+
+| **311d** the map becomes code | steps 7, 8, 9-first-half |
+
+
+**The export surface** — the engine's public names are written down and handed
+to the linker, instead of the one-word form that published everything and
+thereby made the whole binary undiscardable.
+
+
+**The rename** — one word had been standing in for three unrelated things,
+which is exactly why the step looked like it had to wait: the file the generator
+writes, the table of placements, and the machinery for code arriving mid-run,
+which had only inherited the prefix from a neighbour.
+
+
+**Binding** — station-builders stop being private and code arriving later
+opens globally, so a second arrival binds to the first with no lookup and no
+table. The system's own loader is the name lookup.
+
+
+**One question about source** — what the build compiled in and what has
+arrived since, answered together. It needed no new storage: a loaded library
+already carries its own text, so the arrival brings its paperwork with it.
+
+
+**A map compiles at run time.** The measurement that says it's the right shape:
+the loaded library defines *zero* box code — no call wrappers, no
+station-builders — and asks the program for the three it needs. Seventeen
+kilobytes for a whole program's structure.
+
+
+Three routes to one program now — read as text, compiled at build, compiled
+while running — dumped and compared byte for byte. The two compiled forms are
+compared against *each other*, since that's the comparison that catches them
+drifting while both still loosely match the text.
+
+
+## What's left, and one thing worth your eye
+
+
+Steps 10–12: the parser moves into the compiler, the box-name table goes, and
+the loading document gets rewritten around what replaced it. Plus the deletion
+half of step 9 — the engine's own reader.
+
+
+The deletion is where I'd want a word from you first, because it isn't free.
+Nine test files read a map at run time, and several exist *to test map reading*.
+Under one mechanism they'd each spend a compiler invocation — about a tenth of
+a second — where they currently spend nothing.
+
+
+I think that's correct and should show in the tests rather than be arranged
+around: it's the honest price of the system having one way to do this instead of
+two, and hiding it would mean keeping the second way alive just for the test
+suite. But it does turn a fast suite into a slower one, and that's a cost you'll
+feel every time you run it, not me.
 
 
 --------------------------------------------------------------------------------
