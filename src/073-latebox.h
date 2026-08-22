@@ -103,6 +103,35 @@ int late_unload_box(map_t *m, const char *name);
 const char *late_source_dir(void);
 /* }}} */
 
+/* {{{ late_compile_map() — issue 311d */
+/*
+ * **A description handed to a running program, compiled into it.**
+ *
+ * The text goes through the same pipe a box source does — write it
+ * out, run the generator, run the compiler that built this binary,
+ * load the result — and comes back as the function that builds it.
+ * Call that function on any program to get the stations and wiring the
+ * description asked for.
+ *
+ * **Nothing is compiled twice.** The boxes the description names are
+ * already in this process, so what is compiled is the description and
+ * nothing else: no second copy of any box, no call wrappers, no field
+ * tables. The generated code declares the functions that build
+ * stations for those boxes and binds to the ones this program
+ * published.
+ *
+ * Which is why a program has to publish them, and does — see
+ * [098-engine-surface.syms](098-engine-surface.syms.info.md). A
+ * description naming a box this program does not hold fails at load,
+ * naming the symbol it wanted.
+ *
+ * Returns the build function, or NULL with a reason on stderr. The
+ * function belongs to a library that stays loaded, so it may be kept
+ * and called again.
+ */
+void (*late_compile_map(const char *map_text))(map_t *m);
+/* }}} */
+
 /* {{{ late_source_text() — issue 311d */
 /*
  * **The C one late-arriving source was compiled from**, by the path

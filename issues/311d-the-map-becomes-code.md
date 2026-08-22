@@ -345,7 +345,29 @@ the compiler being needed exactly when new code genuinely arrives.
    than copying anything. What was added is the second half of one
    question, not a second table.
 
-9. **A map compiles at run time, through the pipe that already exists.**
+9. **Half done. A map compiles at run time, through the pipe that
+   already exists.**
+
+   Built and proven: a description handed to a running program is
+   written out, turned into the calls it describes by the generator,
+   compiled by the compiler that built the binary, and loaded. The
+   generator gained one flag — *the boxes are already in the process
+   that will load this* — which changes only the emission, never the
+   resolution, so a misspelled box is refused with the same message and
+   the same map line as at build time.
+
+   What comes out carries **no box code at all**: measured on the first
+   one, zero call wrappers and zero station-builders defined, three
+   station-builders bound from the program it was loaded into. The
+   description and nothing else.
+
+   The three routes are compared rather than described: a map read as
+   text, the same map compiled at build time, and the same map compiled
+   while the program ran, all dumped and compared byte for byte.
+
+   **Not done: the deletion.** The engine still reads descriptions at
+   run time, so the two implementations still coexist. That is the rest
+   of this step, below.
    The loader for a box arriving mid-run already writes the source out,
    runs the generator binary, runs the same compiler that built the
    binary, and opens the result. A map goes through the same pipe: the

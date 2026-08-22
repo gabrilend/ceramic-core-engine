@@ -12,6 +12,15 @@ place.
   since the program started, oldest first. Almost nothing needs these;
   lookup by name goes through `box_place_find`, which walks both the
   generated rows and these.
+- **`late_compile_map(text)`** → the function that builds it, or NULL.
+  A description handed to a running program, compiled into it through
+  the same pipe a box source goes through. What gets compiled is the
+  description **and nothing else** — the boxes it names are already
+  here, so the emitted code declares the functions that build their
+  stations and binds to the ones this program published. Naming a box
+  the program does not hold fails at load, naming the symbol. The
+  returned function belongs to a library that stays loaded and may be
+  called again, on any program.
 - **`late_source_dir()`** — where saved sources go.
 - **`late_source_text(path)`** — the C a late arrival was compiled
   from, by the path it was compiled under, or NULL. Points into the

@@ -48,13 +48,13 @@
 
 void ge_emit(const description_t *d, const char **sources, int n_sources,
              const char **maps, int n_maps,
-             const char *out_path, const char *root);
+             const char *out_path, const char *root, int external_boxes);
 
 /* {{{ static void usage() */
 static void usage(void)
 {
     fprintf(stderr, "usage: generate <output.c> [--root=DIR] "
-                    "[--map=FILE]... <box.c>...\n");
+                    "[--map=FILE]... [--external-boxes] <box.c>...\n");
     fprintf(stderr, "       generate --describe <box.c>...\n");
     exit(65);
 }
@@ -97,13 +97,45 @@ int main(int argc, char **argv)
      */
     const char *maps[argc > 2 ? argc - 2 : 1];
     int n_maps = 0;
+    /*
+     * **The boxes are already in the process that will load this**
+     * (issue 311d). Set when a map is being compiled for a program
+     * that is already running: that program was built with these
+     * boxes, published the functions that build stations from them,
+     * and can bind what is emitted here to what it already holds.
+     *
+     * So the emitted file declares those functions rather than
+     * defining them, and carries nothing else — no call wrappers, no
+     * field tables, no second copy of any box. Naming a box that is
+     * not actually there fails at load, naming the symbol.
+     *
+     * Resolution is untouched by this. The sources are still parsed
+     * and names are still resolved against them, so a misspelled box
+     * is refused here with the same message and the same map line as
+     * at build time. Only the emission differs, which is the whole
+     * point: one way for a name to be wrong, not two.
+     */
+    int external_boxes = 0;
     for (int i = 2; i < argc; i++) {
         if (strncmp(argv[i], "--root=", 7) == 0)
             root = argv[i] + 7;
         else if (strncmp(argv[i], "--map=", 6) == 0)
             maps[n_maps++] = argv[i] + 6;
+        else if (strcmp(argv[i], "--external-boxes") == 0)
+            external_boxes = 1;
         else
             sources[n_sources++] = argv[i];
+    }
+
+    /* A map compiled against boxes that are already loaded is the only
+     * reason to emit nothing but build functions, so asking for one
+     * without the other is a mistake worth naming rather than a
+     * quietly empty file. */
+    if (external_boxes && n_maps <= 0) {
+        fprintf(stderr, "generate: --external-boxes says the boxes are "
+                        "already loaded, which only means something when "
+                        "there is a map to build from them\n");
+        return 64;
     }
 
     if (n_sources <= 0)
@@ -118,7 +150,8 @@ int main(int argc, char **argv)
     if (describe_only)
         gp_describe(&d);
     else
-        ge_emit(&d, sources, n_sources, maps, n_maps, out_path, root);
+        ge_emit(&d, sources, n_sources, maps, n_maps, out_path, root,
+                external_boxes);
 
     gp_free(&d);
     return 0;

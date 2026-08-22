@@ -420,6 +420,224 @@ const box_place_t *late_recover_box(const char *name)
 }
 /* }}} */
 
+/* {{{ static int ensure_path_dirs() */
+/*
+ * Create every directory leading to a file path, the way `mkdir -p`
+ * does. Needed because the sources a program carries are filed under
+ * the paths the build knew them by — `src/boxes/029-demo-boxes.c` —
+ * and writing them back out under those same paths is what lets the
+ * generator resolve a description's box names exactly as it did at
+ * build time. Flattening them would work until two directories held a
+ * file of the same name, which is the case the addressing rules exist
+ * for in the first place.
+ */
+static int ensure_path_dirs(const char *path)
+{
+    char work[1024];
+    size_t n = strlen(path);
+    if (n >= sizeof work) {
+        fprintf(stderr, "latebox: path too long: %s\n", path);
+        return -1;
+    }
+    memcpy(work, path, n + 1);
+
+    for (char *p = work + 1; *p; p++) {
+        if (*p != '/')
+            continue;
+        *p = '\0';
+        if (mkdir(work, 0755) != 0 && errno != EEXIST) {
+            fprintf(stderr, "latebox: cannot create %s: %s\n",
+                    work, strerror(errno));
+            return -1;
+        }
+        *p = '/';
+    }
+    return 0;
+}
+/* }}} */
+
+/* {{{ static int spill_sources() */
+/*
+ * Write every source this program is made of into a directory, under
+ * the path it was compiled as. The generator is then pointed at that
+ * directory as its root, so what it reads is byte for byte what this
+ * program was built from and every name resolves the way it did then.
+ *
+ * **This is a copy of text, not of code.** Nothing here is compiled;
+ * the sources exist so the generator can answer "which box does this
+ * line mean" with the same answer it gave at build time, and the
+ * emitted file that results carries none of them.
+ *
+ * Both halves of what a program is made of go out — what the build
+ * compiled in and what has arrived since — because a description may
+ * name either, and the distinction is not one a person writing a
+ * description should have to know about.
+ *
+ * Returns how many were written, or -1.
+ */
+static int spill_sources(const char *dir, const char **paths, int cap)
+{
+    int n = 0;
+    char full[1024];
+
+    for (int i = 0; i < sora_n_box_sources; i++) {
+        if (n >= cap)
+            break;
+        if (snprintf(full, sizeof full, "%s/%s",
+                     dir, sora_box_sources[i].path) >= (int)sizeof full) {
+            fprintf(stderr, "latebox: path too long: %s\n",
+                    sora_box_sources[i].path);
+            return -1;
+        }
+        if (ensure_path_dirs(full) != 0)
+            return -1;
+        if (write_text(full, sora_box_sources[i].text) != 0)
+            return -1;
+        paths[n] = strdup(full);
+        if (!paths[n]) {
+            fprintf(stderr, "latebox: out of memory\n");
+            return -1;
+        }
+        n++;
+    }
+
+    /* And what has arrived since. Oldest blocks last in this walk, so
+     * a path compiled twice is written by the newest first and then
+     * overwritten by the older — which would be backwards, so the
+     * newest wins by being written last. Walking the list in reverse
+     * is not worth the bookkeeping: skipping a path already written is
+     * the same answer and reads as what it is. */
+    for (late_block_t *b = late_head; b; b = b->next) {
+        for (int i = 0; i < b->n_sources; i++) {
+            if (n >= cap)
+                break;
+            int already = 0;
+            for (int k = 0; k < n && !already; k++)
+                if (strstr(paths[k], b->sources[i].path))
+                    already = 1;
+            if (already)
+                continue;
+            if (snprintf(full, sizeof full, "%s/%s",
+                         dir, b->sources[i].path) >= (int)sizeof full) {
+                fprintf(stderr, "latebox: path too long: %s\n",
+                        b->sources[i].path);
+                return -1;
+            }
+            if (ensure_path_dirs(full) != 0)
+                return -1;
+            if (write_text(full, b->sources[i].text) != 0)
+                return -1;
+            paths[n] = strdup(full);
+            if (!paths[n]) {
+                fprintf(stderr, "latebox: out of memory\n");
+                return -1;
+            }
+            n++;
+        }
+    }
+    return n;
+}
+/* }}} */
+
+/* {{{ late_compile_map() */
+void (*late_compile_map(const char *map_text))(map_t *m)
+{
+    if (!map_text || !*map_text) {
+        fprintf(stderr, "latebox: an empty description describes nothing\n");
+        return NULL;
+    }
+
+    const char *dir = late_source_dir();
+    const char *libdir = late_library_dir();
+    if (ensure_dir(SORA_RAM_SHARED) != 0 || ensure_dir(dir) != 0)
+        return NULL;
+    if (ensure_dir(SORA_RAM_EXEC) != 0 || ensure_dir(libdir) != 0)
+        return NULL;
+
+    int serial = late_serial++;
+    char map_path[512], src_root[512], gen_path[512], lib_path[512];
+    char cmd[8192];
+    snprintf(map_path, sizeof map_path, "%s/map-%d-%d.map",
+             dir, (int)getpid(), serial);
+    snprintf(src_root, sizeof src_root, "%s/sources-%d-%d",
+             dir, (int)getpid(), serial);
+    snprintf(gen_path, sizeof gen_path, "%s/built-%d-%d.c",
+             dir, (int)getpid(), serial);
+    snprintf(lib_path, sizeof lib_path, "%s/built-%d-%d.so",
+             libdir, (int)getpid(), serial);
+
+    /* Saved before anything is done with it, for the same reason a box
+     * source is: a dump may be taken at any moment, including while
+     * something is going wrong, and a failure path is the worst
+     * possible time to discover something needed saving. */
+    if (write_text(map_path, map_text) != 0)
+        return NULL;
+    if (ensure_dir(src_root) != 0)
+        return NULL;
+
+    enum { MAX_SPILLED = 256 };
+    const char *spilled[MAX_SPILLED];
+    int n_spilled = spill_sources(src_root, spilled, MAX_SPILLED);
+    if (n_spilled <= 0) {
+        fprintf(stderr, "latebox: this program carries no source text, so a "
+                        "description's box names cannot be resolved\n");
+        return NULL;
+    }
+
+    /*
+     * **--external-boxes is the whole difference from compiling a
+     * box.** It says the boxes are already in the process that will
+     * load this, so the emitted file declares the functions that build
+     * their stations rather than defining them, and carries no second
+     * copy of anything.
+     */
+    int at = snprintf(cmd, sizeof cmd,
+                      "%s %s --root=%s --map=%s --external-boxes",
+                      SORA_GENERATOR, gen_path, src_root, map_path);
+    for (int i = 0; i < n_spilled && at < (int)sizeof cmd; i++)
+        at += snprintf(cmd + at, sizeof cmd - (size_t)at, " %s", spilled[i]);
+    if (at >= (int)sizeof cmd) {
+        fprintf(stderr, "latebox: too many sources to name on one command "
+                        "line\n");
+        return NULL;
+    }
+    if (run(cmd) != 0) {
+        fprintf(stderr, "latebox: the generator refused %s\n", map_path);
+        return NULL;
+    }
+
+    snprintf(cmd, sizeof cmd,
+             "%s -std=gnu11 -O2 -fPIC -shared -I%s -I%s -o %s %s",
+             SORA_CC, SORA_INCLUDE, SORA_INCLUDE_LIBS, lib_path, gen_path);
+    if (run(cmd) != 0) {
+        fprintf(stderr, "latebox: the compiler refused the code generated "
+                        "for %s\n", map_path);
+        return NULL;
+    }
+
+    /* Globally, like a box, so a description compiled after this one
+     * can bind to anything this one brought. */
+    void *handle = dlopen(lib_path, RTLD_NOW | RTLD_GLOBAL);
+    if (!handle) {
+        /* The failure worth naming: a description naming a box this
+         * program does not hold arrives here as an unresolved symbol,
+         * and the message names it. */
+        fprintf(stderr, "latebox: cannot load %s: %s\n", lib_path, dlerror());
+        return NULL;
+    }
+
+    const map_build_t *builds = dlsym(handle, "sora_map_builds");
+    const int *count = dlsym(handle, "sora_n_map_builds");
+    if (!builds || !count || *count <= 0) {
+        fprintf(stderr, "latebox: %s builds no description — the generator "
+                        "emitted something unexpected\n", lib_path);
+        dlclose(handle);
+        return NULL;
+    }
+    return builds[0].build;
+}
+/* }}} */
+
 /* {{{ late_compile_source() */
 int late_compile_source(const char *c_source)
 {

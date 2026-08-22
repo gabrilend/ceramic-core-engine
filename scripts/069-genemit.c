@@ -586,7 +586,8 @@ static const box_t *box_named(const description_t *d, const char *name,
  * same program rather than two similar ones.
  */
 static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
-                      const char **maps, int n_maps, const char *root)
+                      const char **maps, int n_maps, const char *root,
+                      int external_boxes)
 {
     if (n_maps == 0) {
         buf_line(w, "/* No maps were named to this build (issue 311d). */");
@@ -602,6 +603,60 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
      * call. Emitted only when there are maps, because a build with
      * warnings as errors rejects a function nobody calls.
      */
+    /*
+     * **When the boxes are already in the process, say so rather than
+     * carrying them** (issue 311d). Every station-builder a map calls
+     * is declared here and defined elsewhere — in the program this
+     * file is about to be loaded into, which was built with those
+     * boxes and published the functions that build stations from them.
+     *
+     * Declared once each, in the order the maps name them, skipping
+     * repeats: a name declared twice is legal C but reads as though
+     * something is uncertain about it.
+     *
+     * Naming a box the loading program does not actually hold fails at
+     * load, naming the symbol. That is later than the build-time
+     * refusal and it is the honest place for it: whether a function is
+     * present in a program is not a question this generator can answer
+     * about a program it is not part of.
+     */
+    if (external_boxes) {
+        buf_line(w, "/* Built into the program this will be loaded into,");
+        buf_line(w, " * which published them so this could bind (issue 311d). */");
+        for (int mi = 0; mi < n_maps; mi++) {
+            map_description_t *md = mapfile_parse(maps[mi]);
+            for (desc_station_t *st = md->stations; st; st = st->next) {
+                const box_t *b = box_named(d, st->box, root, maps[mi],
+                                           st->line);
+                char *place = gt_box_symbol(a, path_within(b->file, root),
+                                            b->name);
+                int said = 0;
+                for (int pm = 0; pm <= mi && !said; pm++) {
+                    map_description_t *earlier = pm == mi
+                                              ? md : mapfile_parse(maps[pm]);
+                    for (desc_station_t *e = earlier->stations;
+                         e && !said; e = e->next) {
+                        if (pm == mi && e == st)
+                            break;
+                        const box_t *eb = box_named(d, e->box, root,
+                                                    maps[pm], e->line);
+                        char *esym = gt_box_symbol(a,
+                                        path_within(eb->file, root), eb->name);
+                        if (strcmp(esym, place) == 0)
+                            said = 1;
+                    }
+                    if (pm != mi)
+                        mapfile_free(earlier);
+                }
+                if (!said)
+                    buf_line(w, "void %s__place(map_t *m, int station, "
+                                "int kind);", place);
+            }
+            mapfile_free(md);
+        }
+        buf_line(w, "");
+    }
+
     buf_line(w, "/* A refusal from a generated build ends the program");
     buf_line(w, " * (issue 106): it is an invalid operation, and the caller");
     buf_line(w, " * is generated code with nothing better to decide. */");
@@ -727,7 +782,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
 /* {{{ ge_emit() */
 void ge_emit(const description_t *d, const char **sources, int n_sources,
              const char **maps, int n_maps,
-             const char *out_path, const char *root);
+             const char *out_path, const char *root, int external_boxes);
 
 /* {{{ static void emit_sources() */
 /*
@@ -804,7 +859,7 @@ static void emit_sources(buf_t *w, arena_t *a, const char **sources,
 
 void ge_emit(const description_t *d, const char **sources, int n_sources,
              const char **maps, int n_maps,
-             const char *out_path, const char *root)
+             const char *out_path, const char *root, int external_boxes)
 {
     buf_t w;
     buf_init(&w);
@@ -830,11 +885,25 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
      * description through the reader (issue 217). */
     buf_line(&w, "#include \"040-mapfile.h\"");
     buf_line(&w, "");
-    buf_line(&w, "/* The box sources, included whole: their types become visible, and");
-    buf_line(&w, " * the compiler can inline each box into its shim. */");
-    for (int i = 0; i < n_sources; i++)
-        buf_line(&w, "#include \"%s\"", sources[i]);
-    buf_line(&w, "");
+
+    /*
+     * **Everything below this line exists to make boxes**, and a map
+     * compiled for a program that already has them needs none of it
+     * (issue 311d). No box source included, so no second copy of any
+     * box compiled; no call wrappers, no field tables, no comparisons,
+     * and no source text, because the loading program is already
+     * carrying all of that.
+     *
+     * What is left is the build functions and the table naming them,
+     * which is the entire useful content of a compiled map.
+     */
+    if (!external_boxes) {
+        buf_line(&w, "/* The box sources, included whole: their types become visible, and");
+        buf_line(&w, " * the compiler can inline each box into its shim. */");
+        for (int i = 0; i < n_sources; i++)
+            buf_line(&w, "#include \"%s\"", sources[i]);
+        buf_line(&w, "");
+    }
 
     const char **compare_of = calloc((size_t)(d->boxes.n + 1),
                                      sizeof *compare_of);
@@ -843,15 +912,15 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
         exit(71);
     }
 
-    emit_sources(&w, d->arena, sources, n_sources, root);
-    emit_compares(&w, d, compare_of);
-    emit_shims(&w, d);
-    emit_structs(&w, d);
-    /* Emitted beside the record rather than instead of it, so the two
-     * can be compared before either is trusted (issue 311b). */
-    emit_placements(&w, d, compare_of, d->arena, root);
+    if (!external_boxes) {
+        emit_sources(&w, d->arena, sources, n_sources, root);
+        emit_compares(&w, d, compare_of);
+        emit_shims(&w, d);
+        emit_structs(&w, d);
+        emit_placements(&w, d, compare_of, d->arena, root);
+    }
 
-    emit_maps(&w, d, d->arena, maps, n_maps, root);
+    emit_maps(&w, d, d->arena, maps, n_maps, root, external_boxes);
 
     free(compare_of);
 
