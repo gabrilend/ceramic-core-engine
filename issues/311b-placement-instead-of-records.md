@@ -55,6 +55,15 @@ generator now takes the project root and shortens against it. A box
 compiled at run time has no project root to be relative to and keeps
 its own path, which is already unique.
 
+**One reason for the record to exist has gone.** The wire refusal used
+to reach back into a box record for a return type's *spelling*, so it
+could say "box returns int (4 bytes), port takes double (8 bytes)".
+It does not any more: a refusal names both ends by position and by
+size, because a name is not what makes a wire legal — the width is —
+so a message built around names sends a reader to look at the thing
+that is not the disagreement. Nothing on any refusal path fetches a
+spelling now.
+
 **What the remaining steps wait for.** Deleting the record, the table
 and the type-name strings needs there to be no by-name lookup at run
 time at all, and that is [311d](311d-the-map-becomes-code.md)'s doing
@@ -188,8 +197,13 @@ since nothing on disk describes it either.
    it to improve a message that appears only when somebody has already
    made a mistake is the worst trade available. A refusal is rare
    enough to pay for its own message.
-5. Struct field tables written onto ports at placement, and the by-name
-   struct search deleted.
+5. **Done.** A struct port is handed its field table by the placement
+   function, so reading a written-out constant follows a pointer
+   rather than searching every emitted table for a matching name. The
+   engine resolves no struct by name anywhere; what still calls the
+   by-name search is a test asking the emitted tables about
+   themselves, which is a different thing from the engine needing a
+   lookup.
 6. The record type, the table, the parameter arrays, the type-name
    strings, and the stored task size deleted. **Waits on
    [311d](311d-the-map-becomes-code.md)**: while a running program
