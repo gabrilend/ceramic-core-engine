@@ -2,7 +2,7 @@
 
 A station cannot be called `in`, `out` or `statics`. Found by naming a
 door `in` and being told there was an input line before any station
-([217](completed/217-a-program-inside-another.md)).
+([217](217-a-program-inside-another.md)).
 
 Low priority — the three words are unlikely names and the workaround
 is to pick another. It is written up because **the limitation is a
@@ -147,11 +147,11 @@ large the map is.
 
 ## Related
 
-- [217 — A program inside another](completed/217-a-program-inside-another.md),
+- [217 — A program inside another](217-a-program-inside-another.md),
   where the collision was found
-- [601 — The map file parser](completed/601-map-file-parser.md), whose
+- [601 — The map file parser](601-map-file-parser.md), whose
   dispatch this changes
-- [703 — The map dump](completed/703-map-dump.md), which writes the
+- [703 — The map dump](703-map-dump.md), which writes the
   other half
-- [008 — Map file format](../docs/008-map-file-format.md), which this
+- [008 — Map file format](../../docs/008-map-file-format.md), which this
   rewrites

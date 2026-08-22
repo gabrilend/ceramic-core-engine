@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 21:24:17
+Generated on: 2026-08-21 21:30:28
 
 --------------------------------------------------------------------------------
 
@@ -2672,6 +2672,90 @@ generator's buffer library into every program.
 My read is that step 11 should be **dropped and the reason recorded**, the same
 way step 5 was: it was written to serve a premise that later work replaced. But
 that's deleting a step you're owed, so it's yours to say.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 17
+
+don't know, don't care
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 17
+
+Making the call then: dropping it, with the reason recorded.
+
+
+**311 is done.** All four children complete, nine commits, full suite passing.
+
+
+## What it came to
+
+
+A description becomes a running program one way now: hand it to the generator,
+which turns it into the calls it describes; compile those with the same compiler
+that built the binary; load and call. Same pipe whether it's one function or
+fifty stations, at build time or mid-run. No program built with this engine
+carries a parser.
+
+
+The record of what every box *is* is gone entirely — every number in it was a
+`sizeof` the compiler had already folded, so they moved from a table into a
+function and stopped being stored at all.
+
+
+## The thing worth keeping from it
+
+
+The original draft said a running program would hold **no name and no lookup**.
+That died, and it died on something you said rather than on a technical
+obstacle: the engine is agnostic about what runs inside it, so a program must be
+extendable while it runs. A program that can be handed a description next year
+has to let it reach a box compiled today — which means publishing names.
+
+
+So names didn't disappear. They moved into the operating system's symbol table,
+which every process already carries and nothing here maintains. That's the
+lookup.
+
+
+Two of the twelve steps in the last child got **dropped rather than done**, both
+because work below them moved the ground:
+
+
+- trimming what the generator emits was a guess at an answer the linker computes
+  exactly, and runs anyway
+
+- deleting the last small table was written to serve the premise above; once
+  that was spent, what the table does is map a short name to an address — 1.6
+  KB, holding no code alive, answering something nothing else answers
+
+
+Both are recorded with the reasoning, because a step nobody can find the reason
+for is a step somebody does later.
+
+
+## What it cost, stated plainly
+
+
+A description read while a program runs spends two compiler invocations, roughly
+a tenth of a second each. The ten-map test went to 1.7s, the suite to 7.4s. A
+program built from its own descriptions pays nothing.
+
+
+And a program keeps the boxes it was built with — 21,658 bytes on the binary I
+measured — because a published name can never be discarded. That's the price
+of extendability, and it's the trade you picked.
+
+
+## Still open in the tree
+
+
+`607` (reserved words), `408` steps 4–6 (generator-emitted formatters, which
+were waiting on this work and are now unblocked), `711` step 4, `712` (capturing
+a running program), and the phase 7–8 issues.
 
 
 --------------------------------------------------------------------------------
