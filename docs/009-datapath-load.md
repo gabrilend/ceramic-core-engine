@@ -16,7 +16,7 @@ could be in. Every one of those became an ordinary operation
 what was left was a reader making calls anybody could make.
 
 Then the reader itself went
-([311d](../issues/311d-the-map-becomes-code.md)). A description is
+([311d](../issues/completed/311d-the-map-becomes-code.md)). A description is
 **compiled** into the calls it describes, and those calls are made. So
 there is no reading step to describe at all, and no program built with
 this engine carries a parser.
@@ -179,5 +179,5 @@ condition somewhere in the loop, because nothing else will stop it.
 
 - [008 — Map file format](008-map-file-format.md), the input
 - [007 — The build path](007-datapath-build.md), where a description is turned into calls
-- [311d — The map becomes code](../issues/311d-the-map-becomes-code.md), which removed the reader
+- [311d — The map becomes code](../issues/completed/311d-the-map-becomes-code.md), which removed the reader
 - [006 — Scheduling](006-datapath-scheduling.md), what the seed pushes into

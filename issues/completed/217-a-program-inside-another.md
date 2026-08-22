@@ -320,7 +320,7 @@ operation:
 - **A description produced by another program** is that same case
   arriving from somewhere else.
 - **A description the generator has already turned into code**
-  ([311d](../311d-the-map-becomes-code.md)) is the interesting one: the
+  ([311d](311d-the-map-becomes-code.md)) is the interesting one: the
   name resolves to a generated function rather than to a parse tree,
   and instantiating means calling it. The caller cannot tell, which is
   the point — and it is why the operation takes a *name* rather than a
@@ -341,7 +341,7 @@ find, not what the operation is.
   which makes adding a run of stations ordinary
 - [210g — One way to build a station](210g-one-way-to-build-a-station.md),
   which made reading a file a sequence of ordinary calls
-- [311d — The map becomes code](../311d-the-map-becomes-code.md), where a
+- [311d — The map becomes code](311d-the-map-becomes-code.md), where a
   description stops being parsed at run time
 - [008 — Map file format](../../docs/008-map-file-format.md), which gains
   whatever answers the dump question

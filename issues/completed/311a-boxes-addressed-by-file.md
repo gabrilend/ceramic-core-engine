@@ -1,6 +1,6 @@
 # 311a — Boxes addressed by file
 
-First child of [311](../311-the-registry-dissolved.md), and first because
+First child of [311](311-the-registry-dissolved.md), and first because
 it decides how a box is named and how its generated symbol is spelled.
 Everything else in the family is written against both.
 
@@ -44,7 +44,7 @@ bare name is what a later process can act on, and it is what makes a
 grown program's dump reloadable.
 
 **What unblocked it** was the generator learning to read maps
-([311d](../311d-the-map-becomes-code.md)). This issue said the format
+([311d](311d-the-map-becomes-code.md)). This issue said the format
 half was waiting on that, and it was right; what it did not say is how
 little was left once it arrived.
 
@@ -149,7 +149,7 @@ model here.
 asked. It is not a warning and it does not pick one.
 
 **Resolution happens when the generator reads the map, not when a
-program runs.** [311d](../311d-the-map-becomes-code.md) turns a map into
+program runs.** [311d](311d-the-map-becomes-code.md) turns a map into
 construction calls, so a name becomes a pointer at generation time and
 no name survives into the running program. Everything in this issue is
 therefore a *generation-time* rule, and every refusal it describes
@@ -253,11 +253,11 @@ None outstanding.
 
 ## Related
 
-- [311 — The registry dissolved](../311-the-registry-dissolved.md), the
+- [311 — The registry dissolved](311-the-registry-dissolved.md), the
   parent
 - [311b — Placement instead of records](311b-placement-instead-of-records.md),
   which writes the name literal the dump reads
-- [311d — The map becomes code](../311d-the-map-becomes-code.md), which is
+- [311d — The map becomes code](311d-the-map-becomes-code.md), which is
   where resolution actually happens
 - [008 — Map file format](../../docs/008-map-file-format.md), which gains
   the new station line and the resolution rule

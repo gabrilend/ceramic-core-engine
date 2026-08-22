@@ -1,6 +1,6 @@
 # 311b — Placement instead of records
 
-Second child of [311](../311-the-registry-dissolved.md). The generator
+Second child of [311](311-the-registry-dissolved.md). The generator
 stops emitting a record per box and emits a **function** per box that
 writes a station directly. Everything the record held becomes a
 compile-time constant inside it, and the table the records lived in is
@@ -114,7 +114,7 @@ spelling now.
 
 **What the remaining steps wait for.** Deleting the record, the table
 and the type-name strings needs there to be no by-name lookup at run
-time at all, and that is [311d](../311d-the-map-becomes-code.md)'s doing
+time at all, and that is [311d](311d-the-map-becomes-code.md)'s doing
 — it emits the calls, so a placement function is reached by being
 called rather than by being found. Until then the record is still
 consulted for the two comparator refusals that want to name a return
@@ -162,7 +162,7 @@ immediates. They are not stored anywhere at all.
 
 **There is no table.** An earlier draft of this issue kept a two-column
 one — a name and a placement pointer — for resolving text at run time.
-[311d](../311d-the-map-becomes-code.md) removes the need by having the
+[311d](311d-the-map-becomes-code.md) removes the need by having the
 generator emit the calls, so a placement function is reached by *being
 called*, never by being found.
 
@@ -201,7 +201,7 @@ A placement function *is* hand placement, written by the generator
 instead of by a person. So there are not two doors into the engine;
 there is one door, and by-name placement was only ever a way of finding
 which generated hand-placement to call — a way that
-[311d](../311d-the-map-becomes-code.md) now performs at generation time.
+[311d](311d-the-map-becomes-code.md) now performs at generation time.
 
 That means phase 2's station-table tests keep placing stations without
 constructing any table, which is what they were always doing, and a
@@ -257,7 +257,7 @@ since nothing on disk describes it either.
    pointer are deleted, and the generator no longer emits any of it.
 
    **This did not have to wait on
-   [311d](../311d-the-map-becomes-code.md) after all**, and seeing why is
+   [311d](311d-the-map-becomes-code.md) after all**, and seeing why is
    the useful part. The step was written as though *one* table had to
    survive until nothing resolved a name — and there were two. The
    **record** answered *what is this box*, and the **placement table**
@@ -282,7 +282,7 @@ since nothing on disk describes it either.
      what they are.
    - The **table of placements** — box name, full address, the function
      that writes a station. This one does still exist and is
-     [311d](../311d-the-map-becomes-code.md)'s to remove, but it is not a
+     [311d](311d-the-map-becomes-code.md)'s to remove, but it is not a
      record of what a box *is*, so it does not need the old word while
      it waits.
    - The **late-box loader's own machinery** — compiling a source,
@@ -308,12 +308,12 @@ to scan; the placement function writes the name and the dump reads it.
 
 ## Related
 
-- [311 — The registry dissolved](../311-the-registry-dissolved.md), the
+- [311 — The registry dissolved](311-the-registry-dissolved.md), the
   parent
 - [311c — Source rides in the binary](311c-source-rides-in-the-binary.md),
   which is where type and argument names go once the engine stops
   carrying them
-- [311d — The map becomes code](../311d-the-map-becomes-code.md), which
+- [311d — The map becomes code](311d-the-map-becomes-code.md), which
   calls these functions and is why no table is needed to find them
 - [303 — Registry emission](303-registry-emission.md), the
   emission this replaces

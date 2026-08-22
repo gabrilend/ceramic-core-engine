@@ -290,7 +290,7 @@ handed over as `--dynamic-list`.
 holds down every placement function and every shim behind them. This is
 why deleting that table is worth more to a shipped program than any
 amount of linker configuration, and why it is what
-[311](../issues/311-the-registry-dissolved.md) is for.
+[311](../issues/completed/311-the-registry-dissolved.md) is for.
 
 **And the build now checks every box reference.** A map naming a
 function that does not exist, a file that does not exist, or a bare

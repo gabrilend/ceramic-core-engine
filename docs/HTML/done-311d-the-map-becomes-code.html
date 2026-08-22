@@ -28,8 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
-<a href="issue-311d-the-map-becomes-code.html" class="here">311d — The map becomes code</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
@@ -89,9 +87,11 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="done-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
+<a href="done-311d-the-map-becomes-code.html" class="here">311d — The map becomes code</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
@@ -156,7 +156,7 @@
 </nav>
 <main>
 <h1>311d — The map becomes code</h1>
-<p>Fourth child of <a href="issue-311-the-registry-dissolved.html">311</a>, and the one that
+<p>Fourth child of <a href="done-311-the-registry-dissolved.html">311</a>, and the one that
 removes the last name from a running program. The generator reads a map
 and emits the construction calls it describes, so a map file is a
 <strong>blueprint for the compilation</strong> rather than something a program parses
@@ -178,8 +178,9 @@ never gets removed. <strong>The other three children do not wait</strong>; this 
 sits behind the construction surface, and that is accepted as the cost
 of emitting against the final interface only.</p>
 <h2>Current behavior</h2>
-<p>**A map is compiled into the calls it describes, and nothing has been
-deleted yet.**</p>
+<p><strong>Done.</strong> A description is compiled into the calls it describes,
+whether at build time or while a program runs, and the engine's own
+way of reading one is deleted.</p>
 <p>The generator is told which descriptions the build should compile —
 discovered from a directory, never listed, the same rule box sources
 have always had. For each one it emits a function that builds it:
@@ -209,15 +210,11 @@ compared byte for byte. Not equivalent — the same. The generated
 function calls the same construction surface a person calling C would,
 so reading a map and compiling one stop being two paths that must
 agree and become one path with two authors.</p>
-<h3>What has not happened</h3>
-<p>Everything that <em>removes</em> something. The engine still carries the map
-parser and still reads descriptions at run time, so there are two
-implementations of one job; the table of box names is still there
-holding every station-builder reachable; and a box arriving late is
-opened privately, so nothing arriving after it can bind to it. Each of
-those is a step below, and each changes what other parts of the project
-are allowed to do — so they are separated from the step that made the
-capability exist.</p>
+<h3>What is left, on purpose</h3>
+<p>One table, of 1.6 kilobytes, mapping a short box name to a full
+address. It holds no code alive and answers a question nothing else
+answers. Step 11 below says why it stays and what it would cost to
+remove.</p>
 <h3>What stood before</h3>
 <p>The generator globbed the box source directory and emitted a shim for
 every function it found. The build had never seen a map file, so it
@@ -529,11 +526,33 @@ the compiler being needed exactly when new code genuinely arrives.</p>
     named separately because it lived in the engine's directory and had
     two callers, and beside the generator it is picked up like any
     other generator source.</p>
-<p>11. <strong>The table of box names deleted</strong>, its last readers gone: the
-    engine's parser (step 9), and the dump's question about whether a
-    short name is unambiguous, which is a question about *this
-    program's stations* rather than about every box ever compiled and
-    should be asked of them.</p>
+<p>11. **Dropped, like step 5, and for the same kind of reason: the work
+    below it moved the ground.**</p>
+<p>    The step existed to serve the parent's claim that a running program
+    holds no name and no lookup. **That claim was spent before this
+    step was reached.** Extendability requires publishing the functions
+    that build stations, so that a description compiled next year can
+    bind to a box compiled today — and a program that publishes
+    twenty-two symbol names does hold names. The dynamic symbol table
+    <em>is</em> a lookup, maintained by the operating system.</p>
+<p>    **So the question became what the table still does that the
+    published names do not**, and the answer is: it maps a <em>short name</em>
+    to an <em>address</em>. It is the namespace <a href="done-311a-boxes-addressed-by-file.html">311a</a>
+    said existed but that nobody had written down. The dynamic linker
+    cannot do that job — it resolves an exact symbol or nothing.</p>
+<p>    What it costs is now almost nothing, and measurably so: 528 bytes
+    of rows and 1,134 bytes of strings, and <strong>it holds no code alive</strong>,
+    because the station-builders it points at are roots already.</p>
+<p>    What deleting it would cost is real: either every caller writing C
+    spells out a full address — 117 places across 17 files — or the
+    rule for turning an address into a symbol gets a second
+    implementation inside the engine, which is a rule that must never
+    drift between two copies.</p>
+<p>    A table that costs 1.6 kilobytes, roots nothing, and answers a
+    question nothing else answers is not the thing this family was
+    written to remove. What it was written to remove — a record of what
+    every box <em>is</em>, read once and never again, holding every box in the
+    binary alive — is gone.</p>
 <p>12. <strong>Done.</strong> <a href="doc-009-datapath-load.html">009</a> rewritten around what
     replaced it: four movements, only the last of them the engine's,
     with what it costs and who pays stated rather than implied. Its two
@@ -598,7 +617,7 @@ the compiler being needed exactly when new code genuinely arrives.</p>
   moment the graph is actually built.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
+<li><a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
 <p>  parent</p>
 <li><a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>,</li>
 <p>  whose resolution rules this applies</p>

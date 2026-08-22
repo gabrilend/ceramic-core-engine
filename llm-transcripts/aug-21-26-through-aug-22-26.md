@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 20:55:43
+Generated on: 2026-08-21 21:24:17
 
 --------------------------------------------------------------------------------
 
@@ -2528,6 +2528,150 @@ around: it's the honest price of the system having one way to do this instead of
 two, and hiding it would mean keeping the second way alive just for the test
 suite. But it does turn a fast suite into a slower one, and that's a cost you'll
 feel every time you run it, not me.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 16
+
+um ok let's keep going
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 16
+
+Instantiating a description needs to know where its stations landed, so the
+built function reports it.
+
+
+Now the deletion — the engine's own walk replaced by compiling.
+
+
+I made an error there — the built function always builds, so it can't be asked
+for a count first. The count belongs on the row.
+
+
+Several refusals moved into the compiler and got better. Let me see which.
+
+
+The exit code changed — and thinking about why says the old one was wrong.
+
+
+The fresh-process reload needs the box recovered before the description
+compiles. The compiler has to say what a description references.
+
+
+Now the runtime brings in what it doesn't have, before compiling.
+
+
+All green with the walk deleted. Let me measure what it cost, since I said it
+would.
+
+
+The engine no longer calls the parser at all. Let me check whether the linker
+has already noticed.
+
+
+Step 10 — the file still sits in the engine's directory even though nothing
+there uses it.
+
+
+Step 11 — the table. Let me size what depends on it.
+
+
+Before I delete the table, let me check what it still costs — because the
+ground moved under that step.
+
+
+1.6 KB, and it no longer roots anything. Let me finish step 12 first, then put
+that finding to you.
+
+
+Eight commits. **311d is one step from done** — and that last step is one I
+want to stop on, because the ground moved under it.
+
+
+## Since the last report
+
+
+**The engine stopped reading descriptions.** There were two ways to turn a
+description into a program — walk it and make the calls, or write those calls
+out and compile them. Only the second survives.
+
+
+The linker noticed before anything else did: the parser is absent from every
+test binary, discarded the moment nothing reached it. **No program built with
+this engine carries a parser**, and that became true by deleting callers, not by
+moving files.
+
+
+Three things changed shape, each an improvement rather than a consequence to
+absorb:
+
+
+- **Two refusals moved into the compiler and gained a line number** — a box
+  name answering to nothing, an arrow pointing at a station nobody declared.
+  Caught while the description is still text, so the complaint can say *which
+  line*. The engine never could; by the time it looked there were no lines left.
+
+- **A refusal from a built description is now a malformed input, not a bad
+  call.** It had been saying bad-call while the hand-written reader said
+  bad-file for the identical fault — one description, two exit codes,
+  depending on which route read it.
+
+- **Fetching a box the program doesn't hold became ordinary.** A program that
+  grew and wrote itself down names boxes that arrived after it started. The
+  compiler is asked what a description references — reading text being its job
+  now — and anything missing is compiled first.
+
+
+**The parser moved in with the compiler**, and the build got simpler: it used to
+be named separately because it had two callers; beside the generator it's just
+another generator source.
+
+
+**The loading document lost its subject for the second time**, and now describes
+four movements with only the last belonging to the engine.
+
+
+The price, measured: two compiler invocations per description read at run time.
+The ten-map test takes 1.7s, the whole suite 7.4s. A program built from its own
+descriptions pays nothing.
+
+
+## The last step, and why I stopped
+
+
+Step 11 deletes the table mapping box names to station-builders. Two things I
+found while doing the rest make me want your call first.
+
+
+**It costs almost nothing now.** 528 bytes of rows and 1,134 of strings — and
+critically, **it no longer holds any code alive**, because the station-builders
+are published anyway for extendability.
+
+
+**And its premise expired.** 311's parent says *"a running program holds no
+name, no lookup."* But you chose extendability, which requires publishing names
+— this binary publishes 22 of them, and the dynamic symbol table is a lookup.
+The claim was already spent before I got to this step.
+
+
+What the table actually does now is map a **short name to an address** — it's
+the namespace that 311a said existed but nobody had written down. The dynamic
+linker can't do that job; it needs an exact symbol.
+
+
+Deleting it means either 117 call sites across 17 test files spelling out
+`src/boxes/029-demo-boxes.c:seven`, or putting the name-mangling rule into the
+engine — a second copy of a rule that must never drift, or dragging the
+generator's buffer library into every program.
+
+
+My read is that step 11 should be **dropped and the reason recorded**, the same
+way step 5 was: it was written to serve a premise that later work replaced. But
+that's deleting a step you're owed, so it's yours to say.
 
 
 --------------------------------------------------------------------------------

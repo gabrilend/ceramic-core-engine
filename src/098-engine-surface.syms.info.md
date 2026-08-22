@@ -67,9 +67,9 @@ through them every shim. While such a table exists no linker setting
 shrinks a program much — so the middle row above is what a binary
 measures today either way, and publishing the station-builders is what
 keeps them held once the table goes. See
-[311](../issues/311-the-registry-dissolved.md), which is the work of
+[311](../issues/completed/311-the-registry-dissolved.md), which is the work of
 removing it, and
-[311d](../issues/311d-the-map-becomes-code.md), which carries the
+[311d](../issues/completed/311d-the-map-becomes-code.md), which carries the
 measurements.
 
 ## Related

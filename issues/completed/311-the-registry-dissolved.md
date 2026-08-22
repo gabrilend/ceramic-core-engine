@@ -1,10 +1,28 @@
 # 311 — The registry dissolved
 
-**This is a parent issue.** The table that told the engine about every
-box goes away entirely. Not shrinks — goes. A running program holds no
-name, no lookup, and no record of what a box is; it holds stations with
+**This is a parent issue, and it is done.** The table that told the
+engine about every box is gone entirely. Not shrunk — gone. A running
+program holds no record of what a box is; it holds stations with
 function pointers in them, and the text that used to be resolved at run
 time is resolved by the generator instead.
+
+**One claim in the original draft did not survive, and the reason is
+the most useful thing in this family.** It said a running program would
+hold *no name and no lookup*. That turned out to be incompatible with a
+requirement nobody had written down yet: **the engine is agnostic about
+what runs inside it, so a program must be extendable while it runs.** A
+program that can be handed a description next year has to let that
+description bind to a box compiled today, which means publishing the
+functions that build stations from those boxes — and a program that
+publishes names holds names.
+
+So names did not disappear. They moved into the operating system's own
+symbol table, which every process already carries, which nothing here
+has to write or maintain, and which is the lookup. What remains of this
+project's own is 1.6 kilobytes mapping a short name to a full address —
+the namespace [311a](311a-boxes-addressed-by-file.md)
+established but nobody had written down. It holds no code alive. See
+[311d](311d-the-map-becomes-code.md) step 11 for why it stays.
 
 The change reaches the map file format, the generator, the build, and
 the runtime-compilation path, so it divides into children rather than
@@ -108,20 +126,33 @@ program runs is the in-RAM structure, not the file.
 | a box arriving mid-run | when the source arrives | yes |
 | a capture, re-run | when the artifact is compiled | yes |
 
-**One mechanism — generator, compiler, load — in every row.** No
-configuration, no declaration that switches behaviour, no second code
-path in the engine, and no table anywhere. That rigidity is the point:
-this is the minimal implementation, and a thing that behaves one way is
+**One mechanism — generator, compiler, load — in every row**, and it
+was built. No configuration, no declaration that switches behaviour,
+and no second code path in the engine. That rigidity is the point: this
+is the minimal implementation, and a thing that behaves one way is
 worth more than a thing that behaves two ways well.
+
+**What proves the row above is one mechanism**: a description read as
+text, the same description compiled at build time, and the same one
+compiled while the program ran are dumped and compared byte for byte —
+and the two compiled forms are compared against *each other*, because
+that is the comparison that catches them drifting while both still
+match the text loosely.
+
+**And the row about a box arriving mid-run is the same code as the row
+about a map.** Compiling a description reuses the loader written for a
+single function: write the source out, run the generator, run the
+compiler that built this binary, open the result. Somebody adding a box
+does not need to know whether it is a map of boxes.
 
 ## The four changes
 
 | issue | what it does |
 |---|---|
-| [311a — Boxes addressed by file](completed/311a-boxes-addressed-by-file.md) | a map names `file:function`; basenames resolve, paths settle ties, and generated symbols escape punctuation so no two files collide |
-| [311b — Placement instead of records](completed/311b-placement-instead-of-records.md) | the generator emits a placement function per box; the record and every name the engine carried are deleted |
-| [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md) | each box source emitted as a C array, so the binary carries its own text |
-| [311d — The map becomes code](311d-the-map-becomes-code.md) | the generator turns a map into construction calls; the build includes only what is named; the linker discards the rest |
+| [311a — Boxes addressed by file](311a-boxes-addressed-by-file.md) | a map names `file:function`; basenames resolve, paths settle ties, and generated symbols escape punctuation so no two files collide |
+| [311b — Placement instead of records](311b-placement-instead-of-records.md) | the generator emits a placement function per box; the record is deleted, and the word that named it stops standing in for three different things |
+| [311c — Source rides in the binary](311c-source-rides-in-the-binary.md) | each box source emitted as a C array, so the binary carries its own text |
+| [311d — The map becomes code](311d-the-map-becomes-code.md) | the generator turns a description into construction calls, at build time and while running; the engine's own way of reading one is deleted, and the parser leaves with it |
 
 **311a comes first** because the addressing decides how a box is named
 and how its symbol is spelled, and everything else is written against
@@ -129,7 +160,7 @@ that. 311b and 311c are independent of each other. **311d needs both**,
 since it emits calls to placement functions that 311b defines.
 
 **311d additionally waits on
-[212](completed/212-one-way-to-build-a-program.md), and the first three do
+[212](212-one-way-to-build-a-program.md), and the first three do
 not.** What 311d emits is construction calls, and emitting them
 against an interface the project has decided to replace would make the
 most-read generated file in the project an example of how *not* to
@@ -147,12 +178,12 @@ runs other programs is a map**, not a tool. It reads a description,
 compiles what the description names, starts a fresh map, and feeds it
 through its input station — using the construction surface as boxes,
 which is what this engine is for. See
-[212](completed/212-one-way-to-build-a-program.md), where composing and starting
+[212](212-one-way-to-build-a-program.md), where composing and starting
 are separated.
 
 ## What this does not give up
 
-**Guarantee [C1](../docs/058-guarantees.md) survives untouched** —
+**Guarantee [C1](../../docs/058-guarantees.md) survives untouched** —
 every size and offset is still computed by the C compiler, never by the
 generator, still emitted as `sizeof` and `offsetof` expressions. They
 move from a table into a function; they do not become guesses.
@@ -170,26 +201,26 @@ points into.
 
 **Argument and type names are not carried at all.** The engine never
 used a parameter name, and under
-[309](completed/309-types-by-width.md) it does not use type names either, only
+[309](309-types-by-width.md) it does not use type names either, only
 widths. Error messages and the dump read them from the source the
 binary now carries.
 
 ## Related
 
-- [308 — The generator, in C](completed/308-generator-in-c.md), which emits all
+- [308 — The generator, in C](308-generator-in-c.md), which emits all
   of this and gains both the placement functions and the map compiler
-- [309 — Types compared by width](completed/309-types-by-width.md), which is why
+- [309 — Types compared by width](309-types-by-width.md), which is why
   type names can be dropped from what the engine carries
-- [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
+- [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   the same generator-compiler-load path at the scale of one function
-- [303 — Registry emission](completed/303-registry-emission.md), the
+- [303 — Registry emission](303-registry-emission.md), the
   table this deletes
-- [304 — Struct field tables](completed/304-struct-field-tables.md),
+- [304 — Struct field tables](304-struct-field-tables.md),
   which stop being searched by name and start being pointed at
-- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   whose construction surface the generated code calls
-- [007 — The build path](../docs/007-datapath-build.md) and
-  [008 — Map file format](../docs/008-map-file-format.md), both of
+- [007 — The build path](../../docs/007-datapath-build.md) and
+  [008 — Map file format](../../docs/008-map-file-format.md), both of
   which this rewrites
-- [009 — Loading](../docs/009-datapath-load.md), which describes a
+- [009 — Loading](../../docs/009-datapath-load.md), which describes a
   runtime parser that stops existing

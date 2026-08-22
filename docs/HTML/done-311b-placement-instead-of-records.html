@@ -28,8 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>
-<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
@@ -89,9 +87,11 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>
 <a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="done-311b-placement-instead-of-records.html" class="here">311b — Placement instead of records</a>
 <a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
+<a href="done-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
@@ -156,7 +156,7 @@
 </nav>
 <main>
 <h1>311b — Placement instead of records</h1>
-<p>Second child of <a href="issue-311-the-registry-dissolved.html">311</a>. The generator
+<p>Second child of <a href="done-311-the-registry-dissolved.html">311</a>. The generator
 stops emitting a record per box and emits a <strong>function</strong> per box that
 writes a station directly. Everything the record held becomes a
 compile-time constant inside it, and the table the records lived in is
@@ -260,7 +260,7 @@ that is not the disagreement. Nothing on any refusal path fetches a
 spelling now.</p>
 <p><strong>What the remaining steps wait for.</strong> Deleting the record, the table
 and the type-name strings needs there to be no by-name lookup at run
-time at all, and that is <a href="issue-311d-the-map-becomes-code.html">311d</a>'s doing
+time at all, and that is <a href="done-311d-the-map-becomes-code.html">311d</a>'s doing
 — it emits the calls, so a placement function is reached by being
 called rather than by being found. Until then the record is still
 consulted for the two comparator refusals that want to name a return
@@ -299,7 +299,7 @@ move from a table into a function and the compiler folds them into
 immediates. They are not stored anywhere at all.</p>
 <p><strong>There is no table.</strong> An earlier draft of this issue kept a two-column
 one — a name and a placement pointer — for resolving text at run time.
-<a href="issue-311d-the-map-becomes-code.html">311d</a> removes the need by having the
+<a href="done-311d-the-map-becomes-code.html">311d</a> removes the need by having the
 generator emit the calls, so a placement function is reached by *being
 called*, never by being found.</p>
 <p>**A station carries the name it was placed as, and that is not a
@@ -331,7 +331,7 @@ survives. <strong>It does, and this issue is what makes the answer easy.</strong
 instead of by a person. So there are not two doors into the engine;
 there is one door, and by-name placement was only ever a way of finding
 which generated hand-placement to call — a way that
-<a href="issue-311d-the-map-becomes-code.html">311d</a> now performs at generation time.</p>
+<a href="done-311d-the-map-becomes-code.html">311d</a> now performs at generation time.</p>
 <p>That means phase 2's station-table tests keep placing stations without
 constructing any table, which is what they were always doing, and a
 test of the station table stays a test of only the station table.</p>
@@ -380,7 +380,7 @@ since nothing on disk describes it either.</p>
    record's type-name strings, the stored task size and the comparison
    pointer are deleted, and the generator no longer emits any of it.</p>
 <p>   **This did not have to wait on
-   <a href="issue-311d-the-map-becomes-code.html">311d</a> after all**, and seeing why is
+   <a href="done-311d-the-map-becomes-code.html">311d</a> after all**, and seeing why is
    the useful part. The step was written as though <em>one</em> table had to
    survive until nothing resolved a name — and there were two. The
    <strong>record</strong> answered <em>what is this box</em>, and the <strong>placement table</strong>
@@ -404,7 +404,7 @@ since nothing on disk describes it either.</p>
      what they are.</p>
 <li>The <strong>table of placements</strong> — box name, full address, the function</li>
 <p>     that writes a station. This one does still exist and is
-     <a href="issue-311d-the-map-becomes-code.html">311d</a>'s to remove, but it is not a
+     <a href="done-311d-the-map-becomes-code.html">311d</a>'s to remove, but it is not a
      record of what a box <em>is</em>, so it does not need the old word while
      it waits.</p>
 <li>The <strong>late-box loader's own machinery</strong> — compiling a source,</li>
@@ -426,12 +426,12 @@ remember its box by row number, by name string, or by a backwards scan
 to scan; the placement function writes the name and the dump reads it.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="issue-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
+<li><a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
 <p>  parent</p>
 <li><a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,</li>
 <p>  which is where type and argument names go once the engine stops
   carrying them</p>
-<li><a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>, which</li>
+<li><a href="done-311d-the-map-becomes-code.html">311d — The map becomes code</a>, which</li>
 <p>  calls these functions and is why no table is needed to find them</p>
 <li><a href="done-303-registry-emission.html">303 — Registry emission</a>, the</li>
 <p>  emission this replaces</p>

@@ -110,7 +110,7 @@ program grew code.**
 That second case needs the toolchain, and it needs it precisely when
 new code genuinely arrived — which is the rule
 [310](completed/310-boxes-compiled-at-runtime.md) and
-[311d](311d-the-map-becomes-code.md) already set, arrived at
+[311d](completed/311d-the-map-becomes-code.md) already set, arrived at
 independently. A capture does not make the toolchain a new dependency;
 it inherits the one that was already there.
 
@@ -178,7 +178,7 @@ this shape on the way out of a dying program.
   which is why a captured program may contain code the binary does not
 - [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md),
   which already puts every box's text in the artifact
-- [311d — The map becomes code](311d-the-map-becomes-code.md), whose
+- [311d — The map becomes code](completed/311d-the-map-becomes-code.md), whose
   rule about when a toolchain is needed this inherits exactly
 - [701 — Buffer growth reporting](completed/701-buffer-growth-reporting.md)
   and [702 — Station statistics](completed/702-station-statistics.md),

@@ -42,4 +42,4 @@ whole of it, and it is why a build tool can hold this.
 
 - [100-mapparse.c](100-mapparse.c.info.md), the parser from inside
 - [008 — Map file format](../docs/008-map-file-format.md)
-- [311d — The map becomes code](../issues/311d-the-map-becomes-code.md)
+- [311d — The map becomes code](../issues/completed/311d-the-map-becomes-code.md)

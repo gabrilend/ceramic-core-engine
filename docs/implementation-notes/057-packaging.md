@@ -63,7 +63,9 @@ because it is derived from source the library author has never seen. The
 consumer must run the generator over their own code, every build.
 
 **The runtime half.** The pool, the station table, delivery, gathering,
-statics, routing, the map file parser and loader, the observer. About
+statics, routing, the door a description comes in through, the
+observer. **Not the map file parser** — that belongs to the compiler
+now and is not linked into anything anybody runs (issue 311d). About
 4,300 lines including headers today — run `wc -l libs/*.c libs/*.h
 src/*.c src/*.h` for the current figure. This half is ordinary compiled
 code and could be a static archive tomorrow.
@@ -118,7 +120,7 @@ symbol table of a linked test binary, not by guessing.
 | **Engine symbols are common words.** `map_create`, `map_connect`, `map_start`, `map_destroy`, `pool_create`, `pool_push`, `pool_join` and about thirty more are exported unprefixed. | Any host program with its own notion of a map or a pool fails to link, with a duplicate-symbol error naming a function they never wrote. | Mechanical rename, ~40 symbols, touches source, interface files, docs, and issue text. Half a day, done carefully. |
 | **Internals are exported too.** `task_build`, `station_out_port`, `static_claim`, `gather_claim`, `map_statics_free`, `sora_stats_box_time` are joints between engine files, not API. | They collide like anything else, and they invite a consumer to call them. | Free, if the amalgamation shape below is taken. |
 | **The demo boxes export `add`, `mix`, `keep`, `nudge`, `seven`, `swallow`, `magnitude_squared`.** | These are example code, and `add` is the single most collidable symbol in C. | Exclude `src/boxes/` from the packaged library. Trivial, but it must be deliberate — the build currently wildcards it in. |
-| **Two process-wide globals.** The active map (so a box can reach the statics table) and the last load's timing. | One map per process, forever, silently. A host that wants two engines gets one, and the second quietly writes into the first. | Medium. Already the first-pass report's second priority: thread the map through the task instead of parking it in a global. |
+| **One process-wide global.** The active map, so a box can reach the statics table. There were two; the other recorded where the last load's time went, broken into stages that stopped existing, and it went with them. | One map per process, forever, silently. A host that wants two engines gets one, and the second quietly writes into the first. | Medium. Already the first-pass report's second priority: thread the map through the task instead of parking it in a global. |
 | **Every error calls `abort()`.** | A malformed map file, a missing gather source, or an out-of-memory task kills the host application. A library that can end someone else's process on bad input is not embeddable. | Small in code, large in decision. See below. |
 | **Five headers that include each other by numbered filename.** | The consumer needs two include paths and has to know that the entry point is `018-station.h`. | Small — one public header. |
 | **The generator writes absolute paths** into the emitted file, which `#include`s each box source whole. | *Settled, and not a blocker.* A consumer states the directories they build from and recompiles if they move; anyone who wants relocation builds their own configuration around it. The emitted file is already marked do-not-commit, so nothing durable carries a machine's paths. | none — declare it |
@@ -302,7 +304,7 @@ thing: **the compiler invocation lives in one place in the source**, so
 adding a second is a local edit.
 
 **And the toolchain is not a tax on every program.** Since
-[311d](../../issues/311d-the-map-becomes-code.md) makes a map a build
+[311d](../../issues/completed/311d-the-map-becomes-code.md) makes a map a build
 input, a program whose map names only boxes the binary already carries
 never invokes a compiler at all — it ships as one file, source text
 included, and runs on a machine with no toolchain on it. The compiler

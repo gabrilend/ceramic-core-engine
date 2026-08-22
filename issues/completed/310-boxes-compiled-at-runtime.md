@@ -120,7 +120,7 @@ already there, and readers resolving a row are never disturbed. That is
 the fourth or fifth use of the same pattern in this engine, and by now
 it should be a shared piece rather than a fifth hand-rolled one.
 
-[311](../311-the-registry-dissolved.md) shrinks that table to two columns
+[311](311-the-registry-dissolved.md) shrinks that table to two columns
 — a name and a placement function — which makes growing it cheaper than
 this issue assumed and changes nothing about the shape.
 
@@ -242,7 +242,7 @@ would eventually disagree with the first about what a box is.
   script that builds the dependencies from source into a local place,
   written once the system is finished rather than designed around now.
 
-  **[311d](../311d-the-map-becomes-code.md) narrows when that bites.** A
+  **[311d](311d-the-map-becomes-code.md) narrows when that bites.** A
   program whose map names only boxes the binary already carries never
   invokes a compiler at all and ships as one file. The toolchain is
   required precisely when new code is genuinely arriving, which is the
@@ -320,7 +320,7 @@ would eventually disagree with the first about what a box is.
   makes the parser callable at runtime rather than only at build time
 - [309 — Types compared by width](309-types-by-width.md), a hard
   prerequisite — by-name comparison makes this corrupt silently
-- [311 — The registry dissolved](../311-the-registry-dissolved.md), which
+- [311 — The registry dissolved](311-the-registry-dissolved.md), which
   shrinks the table this makes growable to a name and a pointer, and
   narrows when a toolchain is needed at all
 - [303 — The registry](303-registry-emission.md), the table

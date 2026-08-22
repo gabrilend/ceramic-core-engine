@@ -6,7 +6,7 @@ and emits the construction calls it describes, so a map file is a
 **blueprint for the compilation** rather than something a program parses
 while it runs.
 
-**This waits for [212](completed/212-one-way-to-build-a-program.md), and the
+**This waits for [212](212-one-way-to-build-a-program.md), and the
 dependency is deliberately kept hard.** What the generator emits *is*
 construction calls, so writing it against the placement and wiring
 functions that exist today would mean writing generated code that
@@ -25,8 +25,9 @@ of emitting against the final interface only.
 
 ## Current behavior
 
-**A map is compiled into the calls it describes, and nothing has been
-deleted yet.**
+**Done.** A description is compiled into the calls it describes,
+whether at build time or while a program runs, and the engine's own
+way of reading one is deleted.
 
 The generator is told which descriptions the build should compile —
 discovered from a directory, never listed, the same rule box sources
@@ -53,7 +54,7 @@ station landed rather than assuming they are numbered from zero,
 because adding a station hands back a freed place before it grows the
 table. Building one compiled description twice into one program gives
 two independent copies, which is the same claim instantiating from
-text makes ([217](completed/217-a-program-inside-another.md)).
+text makes ([217](217-a-program-inside-another.md)).
 
 **And the two paths are proven to be one.** A description read as text
 and the same description compiled into C are dumped and the text
@@ -62,16 +63,12 @@ function calls the same construction surface a person calling C would,
 so reading a map and compiling one stop being two paths that must
 agree and become one path with two authors.
 
-### What has not happened
+### What is left, on purpose
 
-Everything that *removes* something. The engine still carries the map
-parser and still reads descriptions at run time, so there are two
-implementations of one job; the table of box names is still there
-holding every station-builder reachable; and a box arriving late is
-opened privately, so nothing arriving after it can bind to it. Each of
-those is a step below, and each changes what other parts of the project
-are allowed to do — so they are separated from the step that made the
-capability exist.
+One table, of 1.6 kilobytes, mapping a short box name to a full
+address. It holds no code alive and answers a question nothing else
+answers. Step 11 below says why it stays and what it would cost to
+remove.
 
 ### What stood before
 
@@ -151,7 +148,7 @@ the same at every scale:
 boxes.** They hand over source; a station appears running it. Whether
 that source was one function or a description of fifty stations wired
 together changes nothing they can observe, which is the same claim
-[217](completed/217-a-program-inside-another.md) makes from the other
+[217](217-a-program-inside-another.md) makes from the other
 direction.
 
 **Nothing is compiled twice.** An arrival whose path and bytes match
@@ -204,7 +201,7 @@ calls it and has to keep it. `-rdynamic` exports *every* global symbol,
 so it declared the whole binary reachable and `--gc-sections` collected
 nothing. The two flags were in direct opposition, and the sweeping one
 won. Naming the families that are genuinely public —
-[src/098-engine-surface.syms](../src/098-engine-surface.syms.info.md), handed
+[src/098-engine-surface.syms](../../src/098-engine-surface.syms.info.md), handed
 to the linker as `--dynamic-list` — exports the engine and lets
 everything else be thrown away.
 
@@ -257,9 +254,9 @@ never seen a map.
   a program that runs other programs. That is not a tool and not a mode:
   it is a map whose boxes read a description, compile what it names,
   start a fresh map, and feed it through its input station. See
-  [212](completed/212-one-way-to-build-a-program.md).
+  [212](212-one-way-to-build-a-program.md).
 - **A box arriving mid-run** → compiled when the source arrives, which
-  is [310](completed/310-boxes-compiled-at-runtime.md)'s path.
+  is [310](310-boxes-compiled-at-runtime.md)'s path.
 
 The last two are the same mechanism at different scale, and both are
 the compiler being needed exactly when new code genuinely arrives.
@@ -304,7 +301,7 @@ the compiler being needed exactly when new code genuinely arrives.
    produces a byte-identical binary for a second full compile, because
    the discarding already happened during the first link.
 6. **Half done.** The export list is narrow now
-   ([src/098-engine-surface.syms](../src/098-engine-surface.syms.info.md)) and
+   ([src/098-engine-surface.syms](../../src/098-engine-surface.syms.info.md)) and
    every function is in its own section, so the linker collects what
    nothing reaches — 8.6% of one test binary, all of it engine
    internals. **It cannot reach the boxes while the places table
@@ -328,7 +325,7 @@ the compiler being needed exactly when new code genuinely arrives.
    and fails at load naming the symbol otherwise.
 
 8. **Done. One question, asked over everything the program is made
-   of.** The sources the build compiled in ([311c](completed/311c-source-rides-in-the-binary.md))
+   of.** The sources the build compiled in ([311c](311c-source-rides-in-the-binary.md))
    and every source that has arrived since, together, keyed by the path
    the box was addressed as. It is what lets a running program be
    written out as a complete map file, and it is what the identity
@@ -435,13 +432,40 @@ the compiler being needed exactly when new code genuinely arrives.
     two callers, and beside the generator it is picked up like any
     other generator source.
 
-11. **The table of box names deleted**, its last readers gone: the
-    engine's parser (step 9), and the dump's question about whether a
-    short name is unambiguous, which is a question about *this
-    program's stations* rather than about every box ever compiled and
-    should be asked of them.
+11. **Dropped, like step 5, and for the same kind of reason: the work
+    below it moved the ground.**
 
-12. **Done.** [009](../docs/009-datapath-load.md) rewritten around what
+    The step existed to serve the parent's claim that a running program
+    holds no name and no lookup. **That claim was spent before this
+    step was reached.** Extendability requires publishing the functions
+    that build stations, so that a description compiled next year can
+    bind to a box compiled today — and a program that publishes
+    twenty-two symbol names does hold names. The dynamic symbol table
+    *is* a lookup, maintained by the operating system.
+
+    **So the question became what the table still does that the
+    published names do not**, and the answer is: it maps a *short name*
+    to an *address*. It is the namespace [311a](311a-boxes-addressed-by-file.md)
+    said existed but that nobody had written down. The dynamic linker
+    cannot do that job — it resolves an exact symbol or nothing.
+
+    What it costs is now almost nothing, and measurably so: 528 bytes
+    of rows and 1,134 bytes of strings, and **it holds no code alive**,
+    because the station-builders it points at are roots already.
+
+    What deleting it would cost is real: either every caller writing C
+    spells out a full address — 117 places across 17 files — or the
+    rule for turning an address into a symbol gets a second
+    implementation inside the engine, which is a rule that must never
+    drift between two copies.
+
+    A table that costs 1.6 kilobytes, roots nothing, and answers a
+    question nothing else answers is not the thing this family was
+    written to remove. What it was written to remove — a record of what
+    every box *is*, read once and never again, holding every box in the
+    binary alive — is gone.
+
+12. **Done.** [009](../../docs/009-datapath-load.md) rewritten around what
     replaced it: four movements, only the last of them the engine's,
     with what it costs and who pays stated rather than implied. Its two
     passes are gone as a described structure — declaration order still
@@ -452,7 +476,7 @@ the compiler being needed exactly when new code genuinely arrives.
     from a compiled map and the same map *read as text* dump
     identically. The hand-written form is already proven identical to
     the read form
-    ([212](completed/212-one-way-to-build-a-program.md)), so this
+    ([212](212-one-way-to-build-a-program.md)), so this
     closes the triangle. It keeps its proof once reading text means
     compiling it, because what is compared is the program, not the
     route it arrived by.
@@ -502,7 +526,7 @@ the compiler being needed exactly when new code genuinely arrives.
   yet is written `in 2 -` and is an ordinary state; a station that can
   never become ready is not an error; a program assembled from nothing
   and wired one arrow at a time is the thing
-  [212](completed/212-one-way-to-build-a-program.md) exists to allow.
+  [212](212-one-way-to-build-a-program.md) exists to allow.
 
   A build that refused a half-wired map would be refusing exactly the
   program somebody is in the middle of writing. So the generator stays
@@ -514,20 +538,20 @@ the compiler being needed exactly when new code genuinely arrives.
 
 - [311 — The registry dissolved](311-the-registry-dissolved.md), the
   parent
-- [311a — Boxes addressed by file](completed/311a-boxes-addressed-by-file.md),
+- [311a — Boxes addressed by file](311a-boxes-addressed-by-file.md),
   whose resolution rules this applies
-- [311b — Placement instead of records](completed/311b-placement-instead-of-records.md),
+- [311b — Placement instead of records](311b-placement-instead-of-records.md),
   whose functions this calls
-- [311c — Source rides in the binary](completed/311c-source-rides-in-the-binary.md),
+- [311c — Source rides in the binary](311c-source-rides-in-the-binary.md),
   whose embedded text shrinks to what a map actually needs
-- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   where composing and starting are separated, and where a program that
   runs other programs turns out to be a map rather than a tool
-- [310 — Boxes compiled while the program runs](completed/310-boxes-compiled-at-runtime.md),
+- [310 — Boxes compiled while the program runs](310-boxes-compiled-at-runtime.md),
   the same path at the scale of one function
-- [602 — The loader, first pass](completed/602-loader-first-pass.md)
-  and [603 — The loader, second pass](completed/603-loader-second-pass.md),
+- [602 — The loader, first pass](602-loader-first-pass.md)
+  and [603 — The loader, second pass](603-loader-second-pass.md),
   which move into the generator
-- [007 — The build path](../docs/007-datapath-build.md) and
-  [009 — Loading](../docs/009-datapath-load.md), both of which this
+- [007 — The build path](../../docs/007-datapath-build.md) and
+  [009 — Loading](../../docs/009-datapath-load.md), both of which this
   rewrites

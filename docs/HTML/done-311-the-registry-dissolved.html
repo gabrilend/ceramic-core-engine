@@ -28,8 +28,6 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
-<a href="issue-311-the-registry-dissolved.html" class="here">311 — The registry dissolved</a>
-<a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="issue-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="issue-607-no-reserved-words.html">607 — No reserved words</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
@@ -89,9 +87,11 @@
 <a href="done-308-generator-in-c.html">308 — The generator, in C</a>
 <a href="done-309-types-by-width.html">309 — Types compared by width, not by name</a>
 <a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>
+<a href="done-311-the-registry-dissolved.html" class="here">311 — The registry dissolved</a>
 <a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>
 <a href="done-311b-placement-instead-of-records.html">311b — Placement instead of records</a>
 <a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>
+<a href="done-311d-the-map-becomes-code.html">311d — The map becomes code</a>
 <a href="done-401-static-ports.html">401 — Static input values</a>
 <a href="done-402-struct-constants.html">402 — Struct constants in the statics table</a>
 <a href="done-403-gatherer-ports.html">403 — Gatherer ports and inline gathering</a>
@@ -156,11 +156,27 @@
 </nav>
 <main>
 <h1>311 — The registry dissolved</h1>
-<p><strong>This is a parent issue.</strong> The table that told the engine about every
-box goes away entirely. Not shrinks — goes. A running program holds no
-name, no lookup, and no record of what a box is; it holds stations with
+<p><strong>This is a parent issue, and it is done.</strong> The table that told the
+engine about every box is gone entirely. Not shrunk — gone. A running
+program holds no record of what a box is; it holds stations with
 function pointers in them, and the text that used to be resolved at run
 time is resolved by the generator instead.</p>
+<p>**One claim in the original draft did not survive, and the reason is
+the most useful thing in this family.** It said a running program would
+hold <em>no name and no lookup</em>. That turned out to be incompatible with a
+requirement nobody had written down yet: **the engine is agnostic about
+what runs inside it, so a program must be extendable while it runs.** A
+program that can be handed a description next year has to let that
+description bind to a box compiled today, which means publishing the
+functions that build stations from those boxes — and a program that
+publishes names holds names.</p>
+<p>So names did not disappear. They moved into the operating system's own
+symbol table, which every process already carries, which nothing here
+has to write or maintain, and which is the lookup. What remains of this
+project's own is 1.6 kilobytes mapping a short name to a full address —
+the namespace <a href="done-311a-boxes-addressed-by-file.html">311a</a>
+established but nobody had written down. It holds no code alive. See
+<a href="done-311d-the-map-becomes-code.html">311d</a> step 11 for why it stays.</p>
 <p>The change reaches the map file format, the generator, the build, and
 the runtime-compilation path, so it divides into children rather than
 being one ticket.</p>
@@ -244,18 +260,29 @@ program runs is the in-RAM structure, not the file.</p>
 <tr><td>a box arriving mid-run</td><td>when the source arrives</td><td>yes</td></tr>
 <tr><td>a capture, re-run</td><td>when the artifact is compiled</td><td>yes</td></tr>
 </table>
-<p><strong>One mechanism — generator, compiler, load — in every row.</strong> No
-configuration, no declaration that switches behaviour, no second code
-path in the engine, and no table anywhere. That rigidity is the point:
-this is the minimal implementation, and a thing that behaves one way is
+<p><strong>One mechanism — generator, compiler, load — in every row</strong>, and it
+was built. No configuration, no declaration that switches behaviour,
+and no second code path in the engine. That rigidity is the point: this
+is the minimal implementation, and a thing that behaves one way is
 worth more than a thing that behaves two ways well.</p>
+<p><strong>What proves the row above is one mechanism</strong>: a description read as
+text, the same description compiled at build time, and the same one
+compiled while the program ran are dumped and compared byte for byte —
+and the two compiled forms are compared against <em>each other</em>, because
+that is the comparison that catches them drifting while both still
+match the text loosely.</p>
+<p>**And the row about a box arriving mid-run is the same code as the row
+about a map.** Compiling a description reuses the loader written for a
+single function: write the source out, run the generator, run the
+compiler that built this binary, open the result. Somebody adding a box
+does not need to know whether it is a map of boxes.</p>
 <h2>The four changes</h2>
 <table>
 <tr><td>issue</td><td>what it does</td></tr>
 <tr><td><a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a></td><td>a map names <code>file:function</code>; basenames resolve, paths settle ties, and generated symbols escape punctuation so no two files collide</td></tr>
-<tr><td><a href="done-311b-placement-instead-of-records.html">311b — Placement instead of records</a></td><td>the generator emits a placement function per box; the record and every name the engine carried are deleted</td></tr>
+<tr><td><a href="done-311b-placement-instead-of-records.html">311b — Placement instead of records</a></td><td>the generator emits a placement function per box; the record is deleted, and the word that named it stops standing in for three different things</td></tr>
 <tr><td><a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a></td><td>each box source emitted as a C array, so the binary carries its own text</td></tr>
-<tr><td><a href="issue-311d-the-map-becomes-code.html">311d — The map becomes code</a></td><td>the generator turns a map into construction calls; the build includes only what is named; the linker discards the rest</td></tr>
+<tr><td><a href="done-311d-the-map-becomes-code.html">311d — The map becomes code</a></td><td>the generator turns a description into construction calls, at build time and while running; the engine's own way of reading one is deleted, and the parser leaves with it</td></tr>
 </table>
 <p><strong>311a comes first</strong> because the addressing decides how a box is named
 and how its symbol is spelled, and everything else is written against
