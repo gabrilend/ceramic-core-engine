@@ -1,7 +1,8 @@
 # ceramic core engine
 
 Build a program out of small C functions and a file saying what feeds
-what. The wiring is the scheduler.
+what. **Every one of them runs on every core, and there is no way to
+opt out.**
 
 ```
    in ─┬─ twice ──┐
@@ -13,17 +14,60 @@ what. The wiring is the scheduler.
 time. `total` has two inputs, so it runs when both have arrived. Nobody
 wrote either of those facts down — they are what the picture *is*.
 
-## What's unusual about it
+## Multithreaded whether you meant it or not
 
-- **No main loop and no scheduler.** Not a small one, not a hidden one.
-  A station runs when its inputs are full, and the check that notices
-  is the tail end of somebody else's write.
-- **Nothing polls or scans.** There is no queue being watched, no list
-  of ready work, no thread looking for something to do.
-- **You never tell it a type.** Every size it runs on is a `sizeof` the
-  C compiler evaluated. The map file mentions no types at all,
-  deliberately — a file that carried one could disagree with the
-  compiler, and then one of them would be wrong.
+There is one rule, and it is the whole scheduler:
+
+> A station runs when, and only when, every one of its input ports
+> holds a value.
+
+There is no sequential mode. Every invocation of every station is a
+task on a pool of workers, so a program is concurrent from its first
+line by construction rather than by anybody choosing it. A chain of
+stations is a pipeline; a fan-out is parallelism; neither needed a
+keyword, a thread, or a lock you can hold wrongly.
+
+**Nothing you write is threaded.** A box is an ordinary C function that
+takes arguments and returns a value and knows nothing about any of
+this. The parallelism is not in it and never was — it is in the wiring,
+which is a different file.
+
+So making an existing pile of functions concurrent is not rewriting
+them. It is placing them and drawing arrows. Code nobody designed for
+threads becomes multithreaded by being put in a graph, and the argument
+about which lock is held where does not get won — it stops existing,
+because nothing is shared.
+
+**And the concurrency is designed rather than coded.** It is expressed
+in a markup file you can read, or drawn on a canvas. Somebody who could
+not write correct threaded C can still build a program that saturates a
+machine, because the part that is hard to get right is not the part
+they are writing.
+
+## The scheduling is free. The tasks are not.
+
+**Finding ready work costs nothing, because nothing finds it.** There
+is no ready-queue to scan, no work-stealing search, no thread waking to
+look around, no polling of any kind. The write that fills a station's
+last empty port is the write that starts it: the check is the tail of a
+delivery, on the thread that was already standing there, and it looks
+at one station's ports and nothing else.
+
+That is as little as a scheduling decision can cost. It happens at the
+only instant its answer can have changed, on the thread that changed
+it, and it never examines a station that did not just receive a value.
+
+**What it is not is free per task**, and that is the trade rather than
+a footnote. Every invocation allocates, copies each input value into
+the task, pushes it onto the pool's ring, sometimes wakes a sleeper,
+and frees at the end. Calling `add(a, b)` by hand does none of that.
+For work measured in nanoseconds this loses to a plain function call
+and always will — the overhead buys the scheduling and is paid whether
+or not the parallelism was worth having.
+
+So: **you stop deciding what runs where, and you pay a fixed cost per
+step to stop deciding.** Worth it when a step does real work, and not
+when it does not.
 
 ## See it run
 
@@ -81,24 +125,17 @@ station's exit 0 into `twice`'s input 0. `in 1 = 10` parks a constant
 on input 1.
 
 **Then build.** The generator reads the C, asks the compiler for every
-size, and turns the map into the construction calls it describes. No
-step tells the engine anything it could have worked out.
+size, and turns the map into the construction calls it describes.
 
-## The one rule
+**You never tell it a type.** Every size the engine runs on is a
+`sizeof` the C compiler evaluated, and the map mentions no types at
+all — a file that carried one could disagree with the compiler, and
+then one of them would be wrong.
 
-> A station runs when, and only when, every one of its input ports
-> holds a value.
+## What follows from the rule
 
-That is the whole scheduler. The check happens at the end of a
-delivery: whoever wrote a value into a port looks at that station's
-other ports, and if all of them are full, takes one from each and
-builds a task.
+Things that sound unrelated to it and are not:
 
-Everything else follows from it, including the things that sound
-unrelated:
-
-- **Concurrency nobody writes.** Two stations with no path between them
-  are independent by construction.
 - **A box you can reason about alone.** Forbidden to remember anything,
   it is a function of its arguments and cannot be in a bad state.
 - **Two copies of a box are the same box**, which is what makes
@@ -107,7 +144,7 @@ unrelated:
   because with no hidden state anywhere, everything a program is lives
   in a graph that can be walked.
 
-And one thing that surprises everybody: **a station pairs whatever its
+And the one that surprises everybody: **a station pairs whatever its
 ports hand it.** There is no batch and no round. Two branches that
 rejoin can pair one value's result with another's — which is not a
 defect but the same independence that let them run at once. Things that
@@ -117,13 +154,20 @@ states it exactly.
 
 ## Whether it fits
 
-**Good fit:** work that decomposes into small pure steps with data
-flowing between them. Pipelines, transforms, fan-out-and-rejoin,
-anything where you would otherwise be writing thread plumbing by hand.
+**Good fit:** work that decomposes into steps that each do enough to be
+worth a task. Pipelines, transforms, fan-out-and-rejoin — anything
+where you would otherwise be writing thread plumbing by hand, and
+anything already written as plain functions that you now want running
+on more than one core.
 
-**Bad fit:** work that does not want to be shaped as "run when every
-input is present." If you are fighting that sentence, fighting it will
-be worse than not using this.
+**Bad fit:** steps too small to pay for themselves. A box that adds two
+integers costs more in task overhead than it saves in parallelism, and
+no amount of wiring fixes that — make the boxes bigger or do it by
+hand.
+
+**Also bad fit:** work that does not want to be shaped as "run when
+every input is present." If you are fighting that sentence, fighting it
+will be worse than not using this.
 
 **Also not:** a language bridge. The larger SoraMech project, on this
 repository's `original` branch, bridges between languages. This one
@@ -142,6 +186,7 @@ live outside the engine, has started.
 | [`docs/058-guarantees.md`](docs/058-guarantees.md) | every promise the runtime makes, numbered, with what each one costs. |
 | [`issues/completed/`](issues/completed/) | **the real documentation.** Blueprints, not work logs: what stood before, what should stand after, why the alternatives were refused. The project is meant to be rebuildable by working through them in order. |
 | [`src/`](src/) | the engine. Every file has a `.info.md` beside it — read that first unless you are debugging that exact file. |
+| [`example/`](example/) | the program `make example` runs, commented at length. |
 | `workbench/` | a canvas for drawing a map in a browser. Early. |
 
 Filenames carry a number that runs across the whole project rather than
