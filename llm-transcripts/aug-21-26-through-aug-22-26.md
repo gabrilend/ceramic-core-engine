@@ -1,6 +1,6 @@
 # Conversation Summary: bc2f1355-a646-454d-a731-9aab2bb3e23c
 
-Generated on: 2026-08-21 23:08:02
+Generated on: 2026-08-21 23:29:20
 
 --------------------------------------------------------------------------------
 
@@ -3352,6 +3352,126 @@ could see it.
 
 `711` (reading order), `705` (HTML interactive pieces), `709` (slideshow),
 `710`/`713` (demos), `801` (browser workbench).
+
+
+--------------------------------------------------------------------------------
+
+### User Request 25
+
+can we add a cli flag that is basically "this compiled system is viewable" which
+adds a signal that is emitted at each important event that can be picked up by
+arbitrary processes? for debug purposes, or just for watching a program running
+dashboard style. Then, we should make a separate workbench system that only
+views a system that's running, and doesn't do anything else. This could be a web
+app, or a native viewer, or even a CLI program, but for our purposes let's build
+it for the browser. We should not use the same machinery as the workbench but it
+can go in phase 8 as well. Once that issue file is built, let's work on 801
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 25
+
+Two issues then — the emitting half and the viewer are built by different
+hands and only one of them is a browser. Let me see what phase 8 holds.
+
+
+801's stated blockers are both complete now. Let me check the observe layer
+before writing the new issues.
+
+
+Now the two issues.
+
+
+Both issues are down. Now **801** — let me read the rest of it before
+building.
+
+
+The generator deletes anything in the output it didn't produce, so the workbench
+must be copied in rather than authored there. Let me check the site's look
+first.
+
+
+Good — dark, with wire-blue and box-amber as the two accents. Building the
+canvas.
+
+
+Now the site generator has to carry it in rather than sweep it away.
+
+
+Node is broken on this machine — that's likely what you hit. Let me review
+carefully instead; I found two real bugs reading it back.
+
+
+Now the front door, so the page is reachable.
+
+
+Let me make a self-contained copy so you can actually try the interaction.
+
+
+Two issues written and the first step of 801 built. The preview above is live
+— try it.
+
+
+## The two new issues
+
+
+**802 — a program you can watch.** A build flag makes the engine leave a trail
+as it runs, in a ring in shared memory any number of processes can read. Without
+the flag the emitting isn't compiled at all, which is the shape timing already
+chose: *a measurement apparatus whose cost is unmeasured is a rumour, and one
+that cannot be removed is a tax.*
+
+
+The constraint everything follows from: **watching must never change what is
+watched.** No lock a reader can hold, no buffer a reader can fill, no handshake.
+A slow reader loses events and is told how many — losing them is correct,
+because the alternative is a reader that can slow the program by being slow, and
+being told is what stops a view quietly missing things somebody would trust it
+about.
+
+
+A ring in shared memory was chosen for what it *doesn't* need: no socket, no
+port, no protocol, no dependency, no second thread. A reader opens a file and
+maps it.
+
+
+**803 — the viewer.** A page that watches and cannot touch. It shares nothing
+with the workbench, deliberately: a canvas composing a map treats every station
+alike and exists to let somebody change things; a view of a running program
+cares which station is busy right now and can change nothing. A layer serving
+both serves neither.
+
+
+Its first open question is the awkward one, and I put it up front rather than
+buried: **a page cannot map shared memory**, so something has to stand between.
+That choice decides whether phase 8 gains a long-running program, which nothing
+else in this project has.
+
+
+## 801, step one
+
+
+Also: phase 8's stated blocker is gone — both format changes it waited on have
+landed.
+
+
+**What building it settled**, now written into the ticket: a station on the page
+carries a fact the map file deliberately doesn't — how many input ports it
+has. That comes from the C, and the format has never said it, because a map
+carrying an arity would be a second source of truth able to disagree with the
+compiler. So the author says instead, which makes it **layout rather than
+program** — it belongs in the companion file, never in the map. Same for an
+iterator's exits, and pointedly not for a comparator's, since having three is
+what being one *means*.
+
+
+One note: **node is broken on this machine** (`undefined symbol:
+sqlite3session_attach`), so I couldn't syntax-check the script with a real
+engine. I reviewed it by hand instead and found two bugs that way — the first
+station named itself `station2`, and a hover style promised something that
+couldn't happen on a layer that ignores the mouse. Both fixed, but the page
+hasn't been run by anything but a browser you're about to point at it.
 
 
 --------------------------------------------------------------------------------
