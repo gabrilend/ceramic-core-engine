@@ -1,237 +1,153 @@
-# minimal soramech
+# ceramic core engine
 
-An engine for building programs out of small C functions wired
-together, where **the wiring decides what runs and when**. There is no
-main loop and no scheduler anybody writes. You describe a shape, and
-the shape executes itself across every core on the machine.
+Build a program out of small C functions and a file saying what feeds
+what. The wiring is the scheduler.
 
 ```
-station reader   read_line   p entry
-  out 0 - parse.0
-
-station parse    to_number   p
-  out 0 - total.0
-
-station total    add         p result
-  in 1 = 0
+   in ─┬─ twice ──┐
+       │          ├─ total
+       └─ plus ───┘
 ```
 
-That is a program. Three C functions, none of which knows the others
-exist, and a file saying what feeds what.
+`twice` and `plus` have no path between them, so they run at the same
+time. `total` has two inputs, so it runs when both have arrived. Nobody
+wrote either of those facts down — they are what the picture *is*.
 
----
+## What's unusual about it
 
-## The three nouns
+- **No main loop and no scheduler.** Not a small one, not a hidden one.
+  A station runs when its inputs are full, and the check that notices
+  is the tail end of somebody else's write.
+- **Nothing polls or scans.** There is no queue being watched, no list
+  of ready work, no thread looking for something to do.
+- **You never tell it a type.** Every size it runs on is a `sizeof` the
+  C compiler evaluated. The map file mentions no types at all,
+  deliberately — a file that carried one could disagree with the
+  compiler, and then one of them would be wrong.
 
-The whole engine is these, and it is worth knowing them before
-anything else.
-
-- **A box** is a plain C function. It takes its arguments by value,
-  returns one value, and **is not permitted to remember anything
-  between calls.** No statics, no globals, no handles kept between
-  invocations.
-- **A station** is one placement of a box in a map. It owns the buffers
-  holding values waiting to be fed to that box, the lock guarding them,
-  and the list of places its output goes. The same box can appear at
-  several stations, each with its own buffers and wiring.
-- **A task** is one invocation — a copy of each input value plus a
-  pointer to the code that will run.
-
-Their lifetimes decrease in that order: a box is compiled into the
-binary, a station lives as long as the program, a task lives for one
-call.
-
-## The one rule
-
-> **A station runs when, and only when, every one of its input ports
-> holds a value.**
-
-Nothing polls. Nothing scans for work that is ready. The check is the
-tail end of a write: whoever delivered a value into a port looks at
-that station's other ports, and if all of them are occupied, takes one
-value from each and builds a task.
-
-That is the entire scheduler. Everything else in this repository is
-consequences of it.
-
-## What the rule buys
-
-**Concurrency you do not write.** Two stations with no path between
-them are independent by construction, so they run at once without
-anybody deciding they may. A fan-out is parallelism. A chain is a
-pipeline. Neither needed a keyword.
-
-**A box you can reason about alone.** Because it may not remember
-anything, a box is a function of its arguments and nothing else. It
-cannot be in a bad state, because it has no state. Two copies of one
-box are indistinguishable, which is not a curiosity — it is what makes
-[compiling one while the program runs](#code-arriving-late) safe.
-
-**A program that can be written down and picked up again.** With no
-hidden state anywhere, everything a program *is* lives in the graph,
-and the graph can be walked. That is why a running program can be
-[captured whole](#putting-a-program-down) and revived with its work
-still in flight.
-
----
-
-## Building it
+## See it run
 
 ```sh
-make          # build the test binaries and the documentation site
-make test     # build, then run everything
-./run-demo    # run a phase demo
+make example
 ```
 
-It needs **a C compiler and nothing else**. Regenerating the
-documentation site additionally needs LuaJIT, which is project tooling
-rather than something a consumer walks past.
+About a minute from cloning. It builds the engine and runs the picture
+above, then explains a thing it would otherwise have gotten away with
+lying about.
 
-For current counts — lines, tests, boxes — run `wc -l libs/* src/*` and
-`make test` rather than trusting a number written here, which is a
-number that goes stale.
+```sh
+make test      # everything, ~7 seconds
+```
 
-## Writing a program
+Needs **a C compiler and nothing else.** Regenerating the documentation
+site also wants LuaJIT, which is project tooling rather than something
+on the path you walk to build a program.
 
-**Write a C function.** No registration, no macro, no header to edit.
+## Writing one
+
+**A box is a plain C function.** No registration, no macro, no header
+to edit. Drop it in `src/boxes/`.
 
 ```c
 int add(int a, int b) { return a + b; }
 ```
 
-**Write a map naming it.** The station line says what the station is
-called, which box it places, and its kind — `p` plain, `c` comparator,
-`i` iterator.
+It takes its arguments by value, returns one value, and **may not
+remember anything between calls** — no statics, no globals, nothing
+kept. That rule is load-bearing; see below.
+
+**A map says where the boxes go and what feeds what.** This is
+[`maps/107-example.map`](maps/107-example.map), the one the example
+runs:
 
 ```
-station sum add p result
+station in keep p entry
+  out 0 - twice.0
+  out 0 - plus.0
+
+station twice double_it p
+  out 0 - total.0
+
+station plus add p
   in 1 = 10
-  out 0 - print.0
+  out 0 - total.1
+
+station total add p result
 ```
 
-**Build.** The generator reads the C, works out every size the engine
-needs by asking the compiler for it, and turns the map into the
-construction calls it describes.
+A station line is a name, the box it places, and a kind — `p` plain,
+`c` comparator, `i` iterator. `out 0 - twice.0` runs a wire from this
+station's exit 0 into `twice`'s input 0. `in 1 = 10` parks a constant
+on input 1.
 
-There is no step where you tell the engine about a type. The map file
-mentions none, deliberately: a map that carried a type would be a
-second source of truth able to disagree with the compiler, and one of
-them would be wrong.
+**Then build.** The generator reads the C, asks the compiler for every
+size, and turns the map into the construction calls it describes. No
+step tells the engine anything it could have worked out.
 
----
+## The one rule
 
-## The parts worth knowing about
+> A station runs when, and only when, every one of its input ports
+> holds a value.
 
-### Sizes come from the compiler, always
+That is the whole scheduler. The check happens at the end of a
+delivery: whoever wrote a value into a port looks at that station's
+other ports, and if all of them are full, takes one from each and
+builds a task.
 
-`sizeof` is a compile-time operator. A running C program has no types
-at all — the compiler erases them — so you cannot hand one the text
-`vec3` and get 12 back. Every size and offset the engine runs on is
-therefore emitted as a `sizeof` or `offsetof` expression that the C
-compiler evaluates. Nothing guesses about padding, and nothing can.
+Everything else follows from it, including the things that sound
+unrelated:
 
-This is the constraint the build path is shaped around, and it is why
-there is a generator at all.
+- **Concurrency nobody writes.** Two stations with no path between them
+  are independent by construction.
+- **A box you can reason about alone.** Forbidden to remember anything,
+  it is a function of its arguments and cannot be in a bad state.
+- **Two copies of a box are the same box**, which is what makes
+  compiling one *while the program runs* safe.
+- **A running program can be written to disk and picked up again**,
+  because with no hidden state anywhere, everything a program is lives
+  in a graph that can be walked.
 
-### A map is compiled, not interpreted
+And one thing that surprises everybody: **a station pairs whatever its
+ports hand it.** There is no batch and no round. Two branches that
+rejoin can pair one value's result with another's — which is not a
+defect but the same independence that let them run at once. Things that
+must stay together have to *be* one value. `make example` says this at
+more length, and [`docs/058-guarantees.md`](docs/058-guarantees.md)
+states it exactly.
 
-A description becomes the calls it describes, and those calls are made.
-There is one way a description becomes a program, at build time and
-while running alike: **generator → compiler → load**.
+## Whether it fits
 
-No program built with this engine carries a map parser. Reading text is
-the compiler's job.
+**Good fit:** work that decomposes into small pure steps with data
+flowing between them. Pipelines, transforms, fan-out-and-rejoin,
+anything where you would otherwise be writing thread plumbing by hand.
 
-### Code arriving late
+**Bad fit:** work that does not want to be shaped as "run when every
+input is present." If you are fighting that sentence, fighting it will
+be worse than not using this.
 
-Hand a running program some C and it gains a box: the source is written
-out, the generator runs, the compiler that built the binary compiles
-it, and the result is loaded. The *same* compiler, on purpose — that is
-what gives a program exactly one answer to `sizeof` by construction
-rather than by checking.
+**Also not:** a language bridge. The larger SoraMech project, on this
+repository's `original` branch, bridges between languages. This one
+deliberately cannot, and dropping the bridge is what buys the focus on
+the runtime underneath.
 
-A description handed to a running program goes through the same pipe.
-Somebody adding a box does not need to know whether it is a map of
-boxes.
+**And not finished.** Phases 1 through 7 stand; phase 8, the tools that
+live outside the engine, has started.
 
-### Putting a program down
-
-A running program can be written to disk with its work still in its
-hands — every value waiting in a buffer, every iterator's place in its
-exits — and picked up again in a fresh process, going on from where it
-was.
-
-Two doors, because there are two situations. The polite one shuts the
-entrance, lets everything in flight finish, and writes something
-complete by construction. The other writes immediately, whatever is
-happening, and **says what it lost** — because a program that cannot
-drain is exactly when a capture is worth most. Reading a lossy artifact
-is refused unless you ask for salvage by name.
-
-### Seeing inside
-
-Buffer growth is reported rather than silently absorbed. Per-station
-counters locate a bottleneck instead of leaving it to be guessed at. A
-running map can be dumped back out as a map that reads in again, and
-rewired while it runs.
-
----
-
-## How this repository is organized
+## Where to go from here
 
 | | |
 |---|---|
-| `vision` | why the project is shaped this way. Read first. |
-| `docs/` | the documentation, and a generated HTML mirror of it under `docs/HTML/` |
-| `src/` | the engine. Every file has a companion `.info.md` — read that before the source unless you are debugging that specific file. |
-| `src/boxes/` | example box functions |
-| `libs/` | the thread pool |
-| `scripts/` | the generator, the map parser, and project tooling |
-| `tests/` | one binary per concern |
-| `issues/` | open blueprints; `issues/completed/` is the buildable history |
-| `maps/` | descriptions the build compiles in |
-| `workbench/` | a canvas for drawing a map in a browser |
-
-**The issue files are the real documentation.** They are blueprints
-rather than work logs: each says what stood before, what should stand
-after, and why the alternatives were refused. The project is meant to
-be reconstructible by working through `issues/completed/` in order.
+| [`vision`](vision) | why it is shaped this way. Start here if the ideas interest you more than the code. |
+| [`docs/`](docs/) | the documentation, in reading order. `docs/HTML/` is a generated site of the same thing. |
+| [`docs/058-guarantees.md`](docs/058-guarantees.md) | every promise the runtime makes, numbered, with what each one costs. |
+| [`issues/completed/`](issues/completed/) | **the real documentation.** Blueprints, not work logs: what stood before, what should stand after, why the alternatives were refused. The project is meant to be rebuildable by working through them in order. |
+| [`src/`](src/) | the engine. Every file has a `.info.md` beside it — read that first unless you are debugging that exact file. |
+| `workbench/` | a canvas for drawing a map in a browser. Early. |
 
 Filenames carry a number that runs across the whole project rather than
 per directory, so the tree reads in one order.
 
----
-
-## What this is not
-
-**It is not a general-purpose task framework.** The one rule is the
-whole scheduler, and if your work does not fit "run when every input is
-present" then fighting it will be worse than not using it.
-
-**It is not a language bridge.** The larger SoraMech project — on the
-`original` branch of this repository — bridges between languages. This
-one deliberately cannot, and dropping the bridge is what buys focus on
-the runtime underneath it.
-
-**It is not finished.** Phases 1 through 7 stand. Phase 8, the tools
-that live outside the engine, has started.
-
 ## License
 
-Copyright © 2026 gabrilend.
-
-**GNU Affero General Public License, version 3** — see [LICENSE](LICENSE).
-
-Use it, study it, change it, share it. The condition is that anyone you
-give it to gets the same freedoms, including the source. The *Affero*
-part is what makes that hold over a network as well: if you run a
-modified version and let people use it remotely, they are entitled to
-the source of what you are running, not only the source of what you
-distributed.
-
-For a program that is an engine other programs are built with, that is
-the clause that matters. Without it a modified engine could power a
-service forever and nobody would ever see the modifications.
-
-If those terms do not suit you, ask — the copyright holder can offer
-different ones.
+Copyright © 2026 gabrilend. **GNU Affero General Public License v3** —
+see [LICENSE](LICENSE). Ask if you need different terms.
