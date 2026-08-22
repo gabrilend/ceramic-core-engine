@@ -320,10 +320,31 @@ that stand outside the engine live.
    on design — recorded here rather than worked around, because a
    JavaScript reimplementation would be the second authority this
    issue spends three sections refusing to create.
-3. The shelf: the drawing kept in browser storage as it is made,
-   several maps side by side, restored when the browser reopens.
-   Early rather than late, because every session after this one is
-   spent testing on a drawing worth not losing.
+3. **Done.** The drawing is kept in the browser's own storage as it is
+   made, several maps side by side, restored when the browser reopens.
+   Nothing is sent anywhere, so *nothing on the server* holds exactly
+   as written.
+
+   **The map on the canvas is one of the shelf's entries**, not
+   something beside them, which is the whole design of this part:
+   switching away cannot be a decision about whether the current work
+   survives, because there is no current work living somewhere the
+   rest does not.
+
+   Saved on every edit rather than on a timer, because a timer is a
+   window in which work is not saved yet, and that is the window a
+   browser crashes in. Storage that is full or forbidden is said once,
+   where a person is looking — a page that quietly stopped saving is a
+   page somebody trusts until they lose a day.
+
+   Two things this got wrong first, both found by reading it back
+   rather than by running it: discarding a map to the *left* of the one
+   being drawn shifted every index after it, so clamping the current
+   index quietly moved somebody onto a different map — the one thing a
+   shelf must never do. And a saved shelf from an older version can be
+   missing a field this one expects, which is filled in rather than
+   refused, because somebody's saved work is not the place to be strict
+   about a schema.
 4. Validation as wires are drawn — the drawing-shaped rules only, from
    the divided list above, with the page saying plainly which checks
    it does not perform rather than leaving a reader to assume a clean

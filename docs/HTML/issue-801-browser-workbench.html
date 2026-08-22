@@ -163,6 +163,25 @@
 <p>First issue of phase 8. Everything before it makes programs run; this
 is the first thing that helps somebody <em>write</em> one.</p>
 <h2>Current behavior</h2>
+<p><strong>The canvas exists and does nothing but let you draw.</strong> Stations are
+placed, named, given a kind and the name of a box function; ports are
+added and removed; wires are drawn from an exit to an input. There is
+no validation, no download, no simulation, and no storage — each of
+those is a step below, and each reads the drawing rather than replacing
+it.</p>
+<p><strong>A station carries one fact the map file does not</strong>, and finding that
+out was the useful part of building this. How many input ports a
+station has comes from the C — the box function's parameter list — and
+the format deliberately never says, because a map that carried a type
+or an arity would be a second source of truth that could disagree with
+the compiler. The page holds no C, so the author says instead, and that
+number is <strong>layout rather than program</strong>: it belongs in the companion
+file beside the map and never in the map itself.</p>
+<p>The same is true of an iterator's exit count, and not of a comparator's
+— a comparator has three because being a comparator is what having
+three means.</p>
+<p><strong>Everything else about writing a map is unchanged</strong>, and the rest of
+this section is what that means.</p>
 <p>Writing a map means writing a text file by hand.</p>
 <p>The format is deliberately friendly to that — names rather than
 numbers, only the exceptional input lines written, no capacities, no
@@ -365,14 +384,51 @@ picture. Each is small beside the engine and none of them belongs in
 the phase about seeing inside a running program. Phase 8 is where tools
 that stand outside the engine live.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The canvas alone: place, name, choose kind, type a function name,
-   wire, with no validation at all. The interaction has to feel right
-   before anything is built on it, and it is the part with no prior
-   art in this project.
-2. Emission: canvas to map file, matching
-   <a href="doc-008-map-file-format.html">008</a> exactly, checked by loading
-   the result with the real loader. The writer is the project's own,
-   compiled to WebAssembly, rather than a JavaScript reimplementation.
+<p>1. <strong>Done.</strong> The canvas alone: place, name, choose kind, type a
+   function name, set how many ports, wire. No validation at all.</p>
+<p>   What the building of it settled: a drawing is two lists and a
+   counter, and the screen is a rendering of them rather than the place
+   they live — a screen that is the source of truth is a screen
+   somebody has to keep in step by hand. A station's identity is a
+   number never reused, so a wire names its ends without caring where
+   anything sits in an array, which is the same reason a wire in the
+   engine is a pair of indices rather than a pair of pointers.</p>
+<p>   Where a port <em>sits</em> is asked of the screen, because it is the one
+   thing the model genuinely does not know: it depends on how tall a
+   station rendered.</p>
+<p>   It is carried into the site rather than generated, which makes it
+   the only thing in that output not derived from a document — still
+   derived, so the sweep's claim that nothing there is authored in
+   place still holds.
+2. **Half done, and the half that was done first is the half nobody
+   noticed was missing.**</p>
+<p>   This step said to compile the project's own writer rather than
+   reimplement it, and <strong>there was no writer to compile.</strong> The dump
+   walks a <em>live station table</em> and says what the engine is actually
+   running — which needs a running program, and somebody drawing a map
+   has a drawing, not a table. Compiling it would have required the
+   engine in the browser, which this issue rules out three sections
+   above.</p>
+<p>   So the writer this step needs now exists: a <strong>description</strong> written
+   back out as the text it came from, beside the parser, where
+   descriptions live. That closes a round trip the project has been
+   without since the format was written — text became a description
+   and nothing turned one back — and it is tested by reading a file,
+   writing it, reading that, and comparing the two descriptions rather
+   than the two texts, since files differing only in blank lines
+   describe one program. It is also proven a fixed point: writing what
+   it wrote gives the same text, so a file cannot grow each time it is
+   opened.</p>
+<p>   <strong>The two writers answer different questions on purpose.</strong> The dump
+   says what is running; this says what was written down. A description
+   has no capacities, no sizes and no derived facts and cannot invent
+   them, which is what makes it the right thing to produce from a
+   drawing.</p>
+<p>   What is left is getting it into the page. **This machine has no
+   WebAssembly linker**, so that half is blocked on tooling rather than
+   on design — recorded here rather than worked around, because a
+   JavaScript reimplementation would be the second authority this
+   issue spends three sections refusing to create.
 3. The shelf: the drawing kept in browser storage as it is made,
    several maps side by side, restored when the browser reopens.
    Early rather than late, because every session after this one is

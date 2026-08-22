@@ -30,6 +30,56 @@
 }
 #hint { margin: 6px 0 0; font-size: 12px; color: var(--dim); }
 
+/* {{{ the shelf */
+/*
+ * Every map being worked on, side by side. The one on the canvas is
+ * one of these rather than something beside them, so switching away is
+ * not a decision about whether the current work survives.
+ */
+#shelf {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 22px;
+  border-bottom: 1px solid #2a2e36;
+  background: var(--panel);
+  flex-shrink: 0; overflow-x: auto;
+  font: 12px 'DejaVu Sans Mono', Menlo, monospace;
+}
+#shelf .label {
+  color: var(--dim); text-transform: uppercase;
+  letter-spacing: 1px; font-size: 10px; flex-shrink: 0;
+}
+#shelf-list { display: flex; gap: 6px; }
+
+.tab {
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 4px;
+  border: 1px solid #2a2e36; background: var(--bg);
+  color: var(--dim); white-space: nowrap;
+}
+.tab.here { border-color: var(--box); color: var(--ink); }
+.tab .pick { cursor: pointer; }
+.tab input {
+  background: transparent; border: none; color: inherit;
+  font: inherit; padding: 0;
+  /* Width is set from the name's length as it is typed, so this is a
+   * floor rather than the answer. */
+  min-width: 4ch;
+}
+.tab input:focus { outline: none; color: var(--box); }
+.tab .drop {
+  background: none; border: none; color: var(--dim);
+  cursor: pointer; font: inherit; padding: 0 1px;
+}
+.tab .drop:hover { color: var(--warn); }
+
+#shelf-new {
+  background: none; border: 1px dashed #2a2e36; border-radius: 4px;
+  color: var(--dim); cursor: pointer; font: inherit;
+  padding: 3px 8px; flex-shrink: 0;
+}
+#shelf-new:hover { color: var(--wire); border-color: var(--wire); }
+/* }}} */
+
 /*
  * The canvas fills what is left and scrolls in both directions. A
  * station's position is where the author put it, so nothing here

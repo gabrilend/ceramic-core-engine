@@ -20,18 +20,111 @@
  * it belongs in the companion file beside the map, never in the map.
  */
 
-// {{{ the drawing
+// {{{ the shelf, and the drawing that is one of its entries
 /*
- * Two lists and a counter. A station's identity is a number that is
- * never reused, so a wire can name its ends without caring where
- * anything sits in an array — the same reason a wire in the engine is
- * a pair of indices rather than a pair of pointers.
+ * **The map on the canvas is one of the shelf's entries, not something
+ * beside them.** That is the whole design of this part: switching away
+ * cannot be a decision about whether the current work survives,
+ * because there is no current work in a different place from the rest.
+ *
+ * A drawing is two lists and a counter. A station's identity is a
+ * number that is never reused, so a wire can name its ends without
+ * caring where anything sits in an array — the same reason a wire in
+ * the engine is a pair of indices rather than a pair of pointers.
  */
-const drawing = {
-  stations: [],
-  wires: [],
-  nextId: 1,
-};
+function emptyDrawing() {
+  return { stations: [], wires: [], nextId: 1 };
+}
+
+const shelf = { maps: [], at: 0 };
+let drawing = emptyDrawing();
+
+/*
+ * Written to the browser's own storage as the work happens, so a tab
+ * closed by accident costs nothing. **Nothing is sent anywhere**, which
+ * is what lets "nothing on the server" stay true as written.
+ *
+ * Saved on every edit rather than on a timer: a drawing is small, and
+ * a timer is a window in which work is not saved yet — which is the
+ * window somebody's browser crashes in.
+ */
+const SHELF_KEY = 'soramech.workbench.shelf';
+
+function remember() {
+  shelf.maps[shelf.at].drawing = drawing;
+  try {
+    localStorage.setItem(SHELF_KEY, JSON.stringify(shelf));
+  } catch (e) {
+    /* Storage can be full or forbidden. Said once, in the place a
+     * person is looking, rather than swallowed — a page that quietly
+     * stopped saving is a page somebody trusts until they lose a
+     * day. */
+    const tally = document.getElementById('tally');
+    if (tally) tally.textContent = 'not saving: ' + e.name;
+  }
+}
+
+function recall() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(SHELF_KEY));
+  } catch (e) {
+    saved = null;
+  }
+  if (saved && Array.isArray(saved.maps) && saved.maps.length) {
+    shelf.maps = saved.maps;
+    shelf.at = Math.min(saved.at || 0, saved.maps.length - 1);
+  } else {
+    shelf.maps = [{ name: 'first', drawing: emptyDrawing() }];
+    shelf.at = 0;
+  }
+  drawing = shelf.maps[shelf.at].drawing;
+  /* An older shelf may predate a field this version expects. Filled in
+   * rather than refused: somebody's saved work is not the place to be
+   * strict about a schema. */
+  if (!drawing.stations) drawing.stations = [];
+  if (!drawing.wires) drawing.wires = [];
+  if (!drawing.nextId) drawing.nextId = 1;
+}
+
+function switchTo(index) {
+  remember();
+  shelf.at = index;
+  drawing = shelf.maps[index].drawing;
+  render();
+}
+
+function newMap() {
+  remember();
+  shelf.maps.push({ name: 'map ' + (shelf.maps.length + 1),
+                    drawing: emptyDrawing() });
+  shelf.at = shelf.maps.length - 1;
+  drawing = shelf.maps[shelf.at].drawing;
+  render();
+}
+
+function dropMap(index) {
+  shelf.maps.splice(index, 1);
+
+  /* The shelf is never empty: discarding the last one leaves a fresh
+   * blank rather than a page with nothing to draw on. */
+  if (!shelf.maps.length)
+    shelf.maps.push({ name: 'first', drawing: emptyDrawing() });
+
+  /* **Which map is being drawn is followed, not clamped.** Dropping
+   * something to the left of it shifts every index after that point
+   * down by one, so keeping the same number would quietly move
+   * somebody onto a different map — the one thing a shelf must never
+   * do. Clamping was the first thing written here and it was wrong for
+   * exactly that case. */
+  if (index < shelf.at)
+    shelf.at -= 1;
+  shelf.at = Math.max(0, Math.min(shelf.at, shelf.maps.length - 1));
+
+  drawing = shelf.maps[shelf.at].drawing;
+  render();
+}
+// }}}
 
 /* How many exits a kind has. A plain station has one; a comparator has
  * three, which is the whole of what makes it a comparator; an iterator
@@ -90,9 +183,54 @@ function render() {
   stationsLayer.replaceChildren();
   for (const s of drawing.stations) stationsLayer.appendChild(draw(s));
   renderWires();
+  renderShelf();
   tally.textContent =
     `${drawing.stations.length} station${drawing.stations.length === 1 ? '' : 's'}, ` +
     `${drawing.wires.length} wire${drawing.wires.length === 1 ? '' : 's'}`;
+  remember();
+}
+
+/*
+ * The shelf, redrawn with everything else. A tab is a name you can
+ * type into and a way to leave; the one being drawn is marked rather
+ * than removed from the list, because it is one of them.
+ */
+const shelfList = document.getElementById('shelf-list');
+
+function renderShelf() {
+  shelfList.replaceChildren();
+  shelf.maps.forEach((entry, index) => {
+    const tab = document.createElement('span');
+    tab.className = 'tab' + (index === shelf.at ? ' here' : '');
+
+    const name = document.createElement('input');
+    name.value = entry.name;
+    /* Sized to what it holds, in character widths, so a long name is
+     * not hidden behind a fixed box and a short one does not sit in
+     * a field of space. The `size` attribute would do this and cannot,
+     * because the stylesheet gives the field a width. */
+    name.style.width = Math.max(4, entry.name.length + 1) + 'ch';
+    name.addEventListener('input', () => {
+      entry.name = name.value;
+      name.style.width = Math.max(4, name.value.length + 1) + 'ch';
+      remember();
+    });
+    /* Clicking a tab you are not on switches to it; clicking the one
+     * you are on puts the cursor in its name, which is what a click on
+     * a name already looks like it will do. */
+    name.addEventListener('focus', () => {
+      if (index !== shelf.at) switchTo(index);
+    });
+
+    const drop = document.createElement('button');
+    drop.className = 'drop';
+    drop.textContent = '\u00d7';
+    drop.title = 'discard this map';
+    drop.addEventListener('click', () => dropMap(index));
+
+    tab.append(name, drop);
+    shelfList.appendChild(tab);
+  });
 }
 
 function draw(s) {
@@ -109,7 +247,7 @@ function draw(s) {
   const name = document.createElement('input');
   name.value = s.name;
   name.title = 'what this station is called in the map';
-  name.addEventListener('input', () => { s.name = name.value; });
+  name.addEventListener('input', () => { s.name = name.value; remember(); });
 
   const kind = document.createElement('select');
   for (const [letter, what] of [['p', 'plain'], ['c', 'comparator'],
@@ -146,7 +284,9 @@ function draw(s) {
   box.placeholder = 'file.c:function';
   box.title = 'the box this station places. the page cannot tell you ' +
               'whether it exists — that answer needs a compiler';
-  box.addEventListener('input', () => { s.box = box.value; });
+  /* Typing does not re-render, because rebuilding the field would
+   * take the cursor out of it. It still has to be saved. */
+  box.addEventListener('input', () => { s.box = box.value; remember(); });
   boxRow.appendChild(box);
   el.appendChild(boxRow);
   // }}}
@@ -339,6 +479,9 @@ window.addEventListener('mouseup', event => {
       `.station[data-id="${dragging.station.s.id}"]`);
     if (el) el.classList.remove('holding');
     dragging.station = null;
+    /* Moving does not re-render — the element is nudged directly, so
+     * the drag stays smooth — so where it landed is saved here. */
+    remember();
   }
   if (dragging.wire) {
     const over = event.target.closest && event.target.closest('.port');
@@ -363,4 +506,7 @@ canvas.addEventListener('dblclick', event => {
 });
 // }}}
 
+document.getElementById('shelf-new').addEventListener('click', newMap);
+
+recall();
 render();
