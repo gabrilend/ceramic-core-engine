@@ -174,6 +174,23 @@ letter of redundancy buys an error instead of a wrong answer.
 
 ## Input lines
 
+**And an optional `@N` says where an iterator had got to.** An
+iterator takes its exits in turn, and which one is next is **the one
+memory a station keeps** — the only thing about a station that is
+neither its shape nor a value sitting on a port.
+
+```
+station spread split i @2      the next value takes exit 2
+station spread split i result @2      either order; both read the same
+```
+
+It is written only when it says something: zero is where an iterator
+starts, and no other kind of station has a position to be in. A
+capture that reset it would produce a file of exactly the right shape
+whose next value went to an exit it was never going to — which is the
+worst way for a written-down program to be wrong, because nothing
+about the file looks incorrect.
+
 **A port is a ring buffer unless a line says otherwise.** There are
 four ways for a line to say otherwise, and all carry the port index:
 

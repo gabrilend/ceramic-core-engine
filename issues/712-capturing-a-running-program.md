@@ -10,7 +10,10 @@ revived rather than described and rebuilt.
 
 ## Current behavior
 
-**Work waiting in a buffer is captured and revived.** A dump writes
+**Everything a program holds except the pool is captured and
+revived** — the values waiting in every buffer, and each iterator's
+place in its exits, which the station header calls *the one memory a
+station keeps*. A dump writes
 what each ring-buffer port is holding, in brackets, and reading it back
 puts those values into the port through the ordinary delivery — so the
 readiness check runs and the tasks that form are the tasks that would
@@ -34,8 +37,6 @@ never consumed.
 **What is still lost when a program ends:**
 
 - every task already built and waiting in the pool, unless it drained
-- each iterator's cursor — the station header calls it *the one memory
-  a station keeps*
 - the statistics counters
 - boxes that arrived while it ran, if the artifact has to stand alone
 
@@ -139,19 +140,36 @@ this shape on the way out of a dying program.
 
 ## Suggested implementation steps
 
-1. The drain: stop building tasks, wait for quiet, with the bound and
-   the list of what was still busy. Most of this is
-   [106](completed/106-stopping-on-purpose.md)'s sequence with a different ending.
-2. The map format's queued-value form, in the reader and the writer
-   together.
-3. Capture of buffer contents and iterator cursors, appended to what
-   the dump already writes.
-4. Revival: a load that fills ports rather than leaving them empty, and
-   that refuses loudly on an artifact marked incomplete unless the
-   caller says it accepts one.
-5. A round trip with values in flight: run a program until its buffers
-   are deep, capture, revive, and prove the second run produces exactly
-   what the first would have.
+1. The drain: stop building tasks, wait for quiet, and say what was
+   still busy. Most of this is
+   [106](completed/106-stopping-on-purpose.md)'s sequence with a
+   different ending — the entrance already shuts, the pool already
+   drains to the last-sleeper rule, and the report that names which
+   station each worker is stuck in already exists.
+2. **Done.** The waiting-value form, `in 5 [7, 9]`, in the reader and
+   the writer together, and on the format's own page. Brackets because
+   braces already mean a struct value; a queue is a different kind of
+   thing.
+3. **Done.** Each ring port is asked what it is holding, and each
+   iterator where it had got to — written on the station line as `@N`,
+   only when it says something, and refused on anything that is not an
+   iterator because there is nothing for it to mean.
+4. **Done for the ordinary case.** Reading a description back puts the
+   values into their ports through the ordinary delivery, so the
+   readiness check runs and nothing is reconstructed. Refusing an
+   artifact marked incomplete waits on there being such a mark, which
+   is step 1.
+5. **Done for values in flight**, not yet for a running pool. Work
+   waiting survives the round trip; the revived program finishes the
+   work it was carrying and produces the answers the first would have;
+   a queue of struct values survives with its inner commas intact; and
+   an iterator comes back pointing where it had got to.
+
+   Three more scenes came out of it, pinning the readiness rule that
+   the revival exposed — thirty values draining when a constant
+   arrives, a constant written its own value still counting, and a
+   station of only constants running once per change rather than
+   forever.
 6. The binary-producing path, for a program that added boxes: their
    source compiled in like any other box, and a test that the revived
    binary needs no toolchain of its own.

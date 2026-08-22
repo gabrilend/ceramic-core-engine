@@ -358,16 +358,19 @@ static void handle_static_entry(parse_state_t *st, const char *line_text)
 static void handle_station(parse_state_t *st, const char *name,
                            const char *rest)
 {
-    char box[128], kind_word[8], door_word[16], extra[8];
+    char box[128], kind_word[8], door_word[16], extra[16], beyond[8];
     rest = next_word(rest, box, sizeof box);
     rest = next_word(rest, kind_word, sizeof kind_word);
     rest = next_word(rest, door_word, sizeof door_word);
-    next_word(rest, extra, sizeof extra);
+    rest = next_word(rest, extra, sizeof extra);
+    next_word(rest, beyond, sizeof beyond);
 
     if (!box[0] || !kind_word[0])
         die_parse(st->path, st->line,
                   "a station line is three words: name, box function, kind (p/c/i)");
-    if (extra[0])
+    /* Two optional words may follow the kind — a door and an
+     * iterator's position — so a third is one too many. */
+    if (beyond[0])
         die_parse(st->path, st->line, "unexpected trailing words on a station line");
 
     /* The kind is written rather than inferred: forgetting a
@@ -394,14 +397,54 @@ static void handle_station(parse_state_t *st, const char *name,
      * in one place and a whole station in another is the kind of
      * ambiguity that reads fine and round-trips wrong.
      */
+    /*
+     * **And an optional `@N`, which is where an iterator is pointing**
+     * (issue 712) — the one memory a station keeps. Every other word
+     * on this line says what the station *is*; this says where it had
+     * got to, which is what makes a written-down program an image
+     * rather than only a schematic.
+     *
+     * Either order, because there is no reading of `result @2` that
+     * differs from `@2 result` and making somebody remember which
+     * comes first buys nothing.
+     */
     int door = DOOR_NONE;
-    if (door_word[0]) {
-        if (strcmp(door_word, "entry") == 0)       door = DOOR_IN;
-        else if (strcmp(door_word, "result") == 0) door = DOOR_OUT;
+    int cursor = 0;
+    const char *trailing[2] = { door_word, extra };
+    for (int t = 0; t < 2; t++) {
+        const char *word = trailing[t];
+        if (!word[0])
+            continue;
+        if (word[0] == '@') {
+            if (cursor)
+                die_parse(st->path, st->line,
+                          "a station line says '@' twice, and a station has "
+                          "one place it had got to");
+            if (kind != STATION_ITERATOR)
+                die_parse(st->path, st->line,
+                          "'@' says where an iterator is pointing, and this "
+                          "station is not one — only kind 'i' takes its "
+                          "exits in turn");
+            if (!parse_number(word + 1, &cursor) || cursor < 0)
+                die_parse(st->path, st->line,
+                          "expected an exit number after '@'");
+            /* A cursor of zero is where an iterator starts, so the
+             * dump never writes it and a file saying so has said
+             * nothing. Recorded as one anyway rather than refused:
+             * writing it down is not wrong, only redundant. */
+            continue;
+        }
+        if (door != DOOR_NONE)
+            die_parse(st->path, st->line,
+                      "a station line names a door twice, and a station is "
+                      "one door or neither");
+        if (strcmp(word, "entry") == 0)       door = DOOR_IN;
+        else if (strcmp(word, "result") == 0) door = DOOR_OUT;
         else
             die_parse(st->path, st->line,
                       "after the kind, only 'entry' (the outside delivers "
-                      "here) or 'result' (results come from here)");
+                      "here), 'result' (results come from here), or '@N' "
+                      "(where an iterator had got to)");
     }
 
     for (desc_station_t *s = st->d->stations; s; s = s->next)
@@ -413,6 +456,7 @@ static void handle_station(parse_state_t *st, const char *name,
     s->box = copy_string(box, st->path, st->line);
     s->kind = kind;
     s->door = door;
+    s->cursor = cursor;
     s->line = st->line;
 
     *st->station_tail = s;

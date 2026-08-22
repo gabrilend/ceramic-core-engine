@@ -113,6 +113,17 @@ typedef struct desc_station {
      * depth followed by a dash fell into.
      */
     int   door;
+    /*
+     * **Where an iterator had got to**, written `@N` (issue 712). The
+     * one memory a station keeps: an iterator takes its exits in turn,
+     * and reviving one pointing at the wrong exit sends the next value
+     * somewhere it was never going.
+     *
+     * Zero on every other kind of station and on an iterator that has
+     * not moved, which is where one starts — so the dump writes it
+     * only when it says something.
+     */
+    int   cursor;
     char *name;
     char *box;
     int   kind;

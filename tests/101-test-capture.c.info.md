@@ -79,6 +79,19 @@ a constant written: nothing runs, because a port is empty and that is
 the whole of the rule. Four values on the second buffer make four
 pairs, and six stay waiting.
 
+## And the one memory a station keeps
+
+**an_iterator_remembers_where_it_was** — an iterator takes its exits in
+turn, and which one is next is the only thing about a station that is
+neither its shape nor a value sitting on a port. Two values go through
+a three-exit iterator, the program is written down, and the revived one
+is pointing at the third exit.
+
+A capture that reset it would produce a file of exactly the right shape
+whose next value went somewhere it was never going — the worst way for
+a written-down program to be wrong, because nothing about the file
+looks incorrect.
+
 ## What it does not cover
 
 Draining a running pool before the capture, and a program that grew

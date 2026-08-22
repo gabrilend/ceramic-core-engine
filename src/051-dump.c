@@ -199,9 +199,19 @@ void map_dump(map_t *m, FILE *out)
             }
         }
 
-        fprintf(out, "%s %c%s   # station %d\n",
+        /*
+         * **Where an iterator had got to** (issue 712), written only
+         * when it says something: zero is where one starts, and every
+         * other kind of station has no position to be in. The format
+         * writes exceptions, and a cursor at the beginning is not one.
+         */
+        char at[16] = "";
+        if (s->kind == STATION_ITERATOR && s->cursor != 0)
+            snprintf(at, sizeof at, " @%d", s->cursor);
+
+        fprintf(out, "%s %c%s%s   # station %d\n",
                 written_as ? written_as : "?placed-by-hand?",
-                kind_letter(s->kind), door, i);
+                kind_letter(s->kind), door, at, i);
 
         for (int j = 0; j < s->n_in_ports; j++) {
             in_port_t *sl = &s->in_ports[j];

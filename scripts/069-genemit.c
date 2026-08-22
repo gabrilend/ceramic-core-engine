@@ -883,6 +883,12 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
             buf_line(w, "    sora_built_take(map_name_station(m, at[%d], "
                         "\"%s\"));", index, s->name);
             buf_line(w, "    %s__place(m, at[%d], %s);", place, index, kind);
+            /* Where an iterator had got to, if it had got anywhere
+             * (issue 712). Emitted after the box is placed, because
+             * placement is what gives the station its exits. */
+            if (s->cursor > 0)
+                buf_line(w, "    sora_built_take(map_station_set_cursor(m, "
+                            "at[%d], %d));", index, s->cursor);
             if (s->door == DOOR_IN)
                 buf_line(w, "    sora_built_take(map_designate_input(m, "
                             "at[%d]));", index);

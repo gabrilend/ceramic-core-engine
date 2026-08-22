@@ -164,7 +164,10 @@ written out whole, and restarted with every value back where it was.</p>
 the sense Smalltalk and Emacs use the word: a program frozen and
 revived rather than described and rebuilt.</p>
 <h2>Current behavior</h2>
-<p><strong>Work waiting in a buffer is captured and revived.</strong> A dump writes
+<p>**Everything a program holds except the pool is captured and
+revived** — the values waiting in every buffer, and each iterator's
+place in its exits, which the station header calls *the one memory a
+station keeps*. A dump writes
 what each ring-buffer port is holding, in brackets, and reading it back
 puts those values into the port through the ordinary delivery — so the
 readiness check runs and the tasks that form are the tasks that would
@@ -185,8 +188,6 @@ never consumed.</p>
 <p><strong>What is still lost when a program ends:</strong></p>
 <ul>
 <li>every task already built and waiting in the pool, unless it drained</li>
-<li>each iterator's cursor — the station header calls it *the one memory</li>
-<p>  a station keeps*</p>
 <li>the statistics counters</li>
 <li>boxes that arrived while it ran, if the artifact has to stand alone</li>
 </ul>
@@ -271,19 +272,35 @@ The counters and buffer depths that
 it, and <a href="done-106-stopping-on-purpose.html">106</a> already writes something of
 this shape on the way out of a dying program.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The drain: stop building tasks, wait for quiet, with the bound and
-   the list of what was still busy. Most of this is
-   <a href="done-106-stopping-on-purpose.html">106</a>'s sequence with a different ending.
-2. The map format's queued-value form, in the reader and the writer
-   together.
-3. Capture of buffer contents and iterator cursors, appended to what
-   the dump already writes.
-4. Revival: a load that fills ports rather than leaving them empty, and
-   that refuses loudly on an artifact marked incomplete unless the
-   caller says it accepts one.
-5. A round trip with values in flight: run a program until its buffers
-   are deep, capture, revive, and prove the second run produces exactly
-   what the first would have.
+<p>1. The drain: stop building tasks, wait for quiet, and say what was
+   still busy. Most of this is
+   <a href="done-106-stopping-on-purpose.html">106</a>'s sequence with a
+   different ending — the entrance already shuts, the pool already
+   drains to the last-sleeper rule, and the report that names which
+   station each worker is stuck in already exists.
+2. <strong>Done.</strong> The waiting-value form, <code>in 5 [7, 9]</code>, in the reader and
+   the writer together, and on the format's own page. Brackets because
+   braces already mean a struct value; a queue is a different kind of
+   thing.
+3. <strong>Done.</strong> Each ring port is asked what it is holding, and each
+   iterator where it had got to — written on the station line as <code>@N</code>,
+   only when it says something, and refused on anything that is not an
+   iterator because there is nothing for it to mean.
+4. <strong>Done for the ordinary case.</strong> Reading a description back puts the
+   values into their ports through the ordinary delivery, so the
+   readiness check runs and nothing is reconstructed. Refusing an
+   artifact marked incomplete waits on there being such a mark, which
+   is step 1.
+5. <strong>Done for values in flight</strong>, not yet for a running pool. Work
+   waiting survives the round trip; the revived program finishes the
+   work it was carrying and produces the answers the first would have;
+   a queue of struct values survives with its inner commas intact; and
+   an iterator comes back pointing where it had got to.</p>
+<p>   Three more scenes came out of it, pinning the readiness rule that
+   the revival exposed — thirty values draining when a constant
+   arrives, a constant written its own value still counting, and a
+   station of only constants running once per change rather than
+   forever.
 6. The binary-producing path, for a program that added boxes: their
    source compiled in like any other box, and a test that the revived
    binary needs no toolchain of its own.

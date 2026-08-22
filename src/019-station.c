@@ -825,6 +825,48 @@ const char *map_name_station(map_t *m, int station, const char *name)
 }
 /* }}} */
 
+/* {{{ map_station_set_cursor() — issue 712 */
+/*
+ * **Put an iterator back where it had got to.**
+ *
+ * An iterator takes its exits in turn, and which one is next is the
+ * one memory a station keeps. A program written down mid-run and
+ * revived with its iterators reset would send the next value to an
+ * exit it was never going to — the shape would be right and the
+ * behaviour wrong, which is the worst kind of wrong for a capture to
+ * be.
+ *
+ * Refused on anything else, because there is nothing for it to mean:
+ * a plain station has one exit and a comparator chooses by comparing,
+ * so neither has a position to be in.
+ */
+const char *map_station_set_cursor(map_t *m, int station, int at)
+{
+    static _Thread_local char said[192];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said, "station %d is outside the table",
+                 station);
+        return said;
+    }
+    station_t *s = map_station(m, station);
+    if (s->kind != STATION_ITERATOR) {
+        snprintf(said, sizeof said,
+                 "station %d is not an iterator, so it has no exit it is "
+                 "pointing at", station);
+        return said;
+    }
+    if (at < 0 || (s->n_out_ports > 0 && at >= s->n_out_ports)) {
+        snprintf(said, sizeof said,
+                 "station %d has %d exits, so it cannot be pointing at "
+                 "number %d", station, s->n_out_ports, at);
+        return said;
+    }
+    s->cursor = at;
+    return NULL;
+}
+/* }}} */
+
 /* {{{ map_designate_output() */
 /*
  * **Say that this station is a place the program's results come

@@ -558,6 +558,71 @@ static void a_write_drains_whatever_is_waiting(void)
 }
 /* }}} */
 
+/* {{{ static void an_iterator_remembers_where_it_was() */
+/*
+ * **The one memory a station keeps.** An iterator takes its exits in
+ * turn, and which one is next is the only thing about a station that
+ * is not either its shape or the values sitting on it.
+ *
+ * A capture that reset it would produce a program of the right shape
+ * that sent the next value to an exit it was never going to — right
+ * schematic, wrong behaviour, which is the worst way for a capture to
+ * be wrong, because nothing about the file looks incorrect.
+ */
+static void an_iterator_remembers_where_it_was(void)
+{
+    char map_path[512], dump_path[512], again_path[512];
+    snprintf(map_path, sizeof map_path, "%s/spread.map", work_dir);
+    snprintf(dump_path, sizeof dump_path, "%s/spread-captured.map", work_dir);
+    snprintf(again_path, sizeof again_path, "%s/spread-again.map", work_dir);
+
+    /* One iterator with three exits, each landing somewhere that
+     * keeps what it is given. */
+    write_text(map_path,
+        "station gate keep p entry\n"
+        "\n"
+        "station spread double_it i\n"
+        "  out 0 - first.0\n"
+        "  out 1 - second.0\n"
+        "  out 2 - third.0\n"
+        "\n"
+        "station first keep p result\n"
+        "station second keep p\n"
+        "station third keep p\n");
+
+    map_t *m = map_load_file(map_path, 2);
+
+    /* Two values through it, so the next exit is the third. */
+    for (int v = 0; v < 2; v++) {
+        int value = v;
+        map_deliver_value(m, 1, 0, &value);
+    }
+    pool_release(m->pool);
+    pool_join(m->pool);
+    check(map_station(m, 1)->cursor == 2,
+          "after two values the iterator is pointing at its third exit");
+
+    dump_to(m, dump_path);
+    check(strstr(slurp(dump_path), "@2") != NULL,
+          "and the capture wrote where it had got to");
+
+    map_t *revived = map_load_file(dump_path, 2);
+    check(map_station(revived, 1)->cursor == 2,
+          "the revived program's iterator is pointing at the same exit");
+
+    dump_to(revived, again_path);
+    check(strcmp(slurp(dump_path), slurp(again_path)) == 0,
+          "and writing it down again produced the same text");
+
+    map_destroy(m);
+    pool_release(revived->pool);
+    pool_join(revived->pool);
+    map_destroy(revived);
+
+    printf("  an iterator was revived pointing where it had got to\n");
+}
+/* }}} */
+
 /* {{{ main */
 int main(void)
 {
@@ -578,6 +643,7 @@ int main(void)
     a_station_of_only_constants_runs_once_per_change();
     writing_the_same_value_still_counts();
     a_write_drains_whatever_is_waiting();
+    an_iterator_remembers_where_it_was();
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);
     if (system(command) != 0)

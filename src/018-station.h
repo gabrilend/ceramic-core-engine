@@ -1000,6 +1000,22 @@ const char *map_bring_up(map_t *m);
  */
 const char *map_designate_output(map_t *m, int station);
 
+/* {{{ map_station_set_cursor() — issue 712 */
+/*
+ * Put an iterator back where it had got to: which of its exits the
+ * next value takes.
+ *
+ * This is the one memory a station keeps, so a program written down
+ * mid-run and revived with its iterators reset would send the next
+ * value to an exit it was never going to — right shape, wrong
+ * behaviour, which is the worst way for a capture to be wrong.
+ *
+ * Refused on anything that is not an iterator, because there is
+ * nothing for it to mean: a plain station has one exit and a
+ * comparator chooses by comparing.
+ */
+const char *map_station_set_cursor(map_t *m, int station, int at);
+
 /*
  * The other door: the station the outside is allowed to deliver to.
  *
