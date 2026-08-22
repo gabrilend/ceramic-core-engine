@@ -32,11 +32,6 @@ const box_place_t *late_recover_box(const char *name);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-
-/* Where the most recent load's time went (issue 606's breakdown). */
-map_load_timing_t map_load_last_timing;
-
 
 /* {{{ die_load() */
 static void die_load(const char *path, int line, const char *station,

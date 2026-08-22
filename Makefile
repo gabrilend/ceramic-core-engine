@@ -82,13 +82,11 @@ BOX_SRC   := $(wildcard $(DIR)/src/boxes/*.c)
 GEN_SRC   := $(wildcard $(DIR)/scripts/*.c)
 GEN_LIB   := $(filter-out $(DIR)/scripts/070-generate.c,$(GEN_SRC))
 
-# The map reader, linked into the generator so it can compile a
-# description into the calls it describes (issue 311d). It parses text
-# into a description and touches nothing else of the engine — three
-# enumerations for the station kinds and the door marks — which is why
-# a build tool can hold it. Its eventual home is the generator alone;
-# until the engine stops reading maps at run time it has two callers.
-GEN_MAPS  := $(DIR)/src/041-mapfile.c
+# The map reader used to be named here separately, because it lived in
+# src/ and had two callers — the generator and the engine. The engine
+# stopped reading descriptions (issue 311d), so it moved in beside the
+# rest of the generator and is picked up by the wildcard above like
+# anything else there. Nothing links it into a program any more.
 
 # Which maps this build compiles into the binary. Discovered, never
 # listed, so a map cannot exist that the build silently does not see —
@@ -98,8 +96,8 @@ MAP_FLAGS := $(patsubst %,--map=%,$(MAP_SRC))
 GENERATOR := $(BUILD)/generate
 GENERATED := $(DIR)/src/generated/emitted.c
 
-$(GENERATOR): $(GEN_SRC) $(GEN_MAPS) | $(BUILD)
-	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $(GEN_SRC) $(GEN_MAPS)
+$(GENERATOR): $(GEN_SRC) | $(BUILD)
+	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $(GEN_SRC)
 
 # Maps join the dependency list, so editing one regenerates (issue
 # 311d step 3).
@@ -180,8 +178,8 @@ $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) $(SURFACE) | $(BUILD)
 # than the engine: it is testing the build tool, not the thing the
 # tool builds. An explicit rule beats the pattern rule above, so this
 # one file compiles differently without excluding it from the sweep.
-$(BUILD)/071-test-gentext: $(DIR)/tests/071-test-gentext.c $(GEN_LIB) $(GEN_MAPS) | $(BUILD)
-	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $< $(GEN_LIB) $(GEN_MAPS)
+$(BUILD)/071-test-gentext: $(DIR)/tests/071-test-gentext.c $(GEN_LIB) | $(BUILD)
+	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $< $(GEN_LIB)
 
 # Shell-driven tests sit beside the compiled ones — the generator's
 # command-line conduct is proven from the shell.

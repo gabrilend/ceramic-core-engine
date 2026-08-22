@@ -1,12 +1,20 @@
 /*
- * 041-mapfile.c — reading what a map says, believing none of it yet.
+ * 100-mapparse.c — reading what a map says, believing none of it yet.
  *
  * What this is: the map file parser (issue 601). It turns text into
  * a description — stations, their box names and kinds, their input
  * overrides, their arrows, and the statics — and does no
- * construction of any sort. Whether any of it makes sense is the
- * loader's question; whether it is well-formed is answered here,
- * fatally, naming file, line, and expectation.
+ * construction of any sort. Whether any of it makes sense is answered
+ * by the calls the description becomes; whether it is well-formed is
+ * answered here, fatally, naming file, line, and expectation.
+ *
+ * **It is part of the compiler** (issue 311d). A running program does
+ * not read descriptions: it hands them to the generator, which turns
+ * them into the construction calls they describe, and those are
+ * compiled and loaded like any other code. So nothing links this into
+ * a program anybody runs, and the file moved out of the engine's
+ * directory to say so — it had already stopped being linked in, since
+ * the linker discards what nothing reaches.
  *
  * How it does it, in general terms: line-oriented, first word
  * dispatches. Three keywords (statics, in, out) and the station line
@@ -15,7 +23,7 @@
  * writes derived facts as comments, so the format must be able to
  * carry them; the format document records the addition.
  */
-#include "040-mapfile.h"
+#include "099-mapparse.h"
 
 #include <ctype.h>
 #include <stdio.h>

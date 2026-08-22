@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>040-mapfile.h — the map file surface, from outside</title>
+<title>040-mapfile.h — a description becoming a program, from outside</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -130,14 +130,15 @@
 <a href="info-088-complete-issue-lua.html">088-complete-issue.lua — finishing an issue, from outside</a>
 <a href="info-089-repair-doc-links-lua.html">089-repair-doc-links.lua — making the record walkable, from outside</a>
 <a href="info-097-renumber-lua.html">097-renumber.lua — changing the reading order, from outside</a>
+<a href="info-099-mapparse-h.html">099-mapparse.h — reading a description, from outside</a>
+<a href="info-100-mapparse-c.html">100-mapparse.c — the parser, from inside</a>
 <a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
 <a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
 <a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
 <a href="info-026-emitted-h.html">026-emitted.h — the shapes the generator emits, from outside</a>
 <a href="info-027-emitted-support-c.html">027-emitted-support.c — the hand-written half of what the generator emits</a>
 <a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
-<a href="info-040-mapfile-h.html" class="here">040-mapfile.h — the map file surface, from outside</a>
-<a href="info-041-mapfile-c.html">041-mapfile.c — the parser, from inside</a>
+<a href="info-040-mapfile-h.html" class="here">040-mapfile.h — a description becoming a program, from outside</a>
 <a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
 <a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
 <a href="info-050-observe-c.html">050-observe.c — the engine saying out loud what it already knew</a>
@@ -154,31 +155,37 @@
 <a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
 </nav>
 <main>
-<h1>040-mapfile.h — the map file surface, from outside</h1>
+<h1>040-mapfile.h — a description becoming a program, from outside</h1>
 <p>A program is a directory of C functions and a text file. This is the
-text file's door.</p>
-<h2>Data structures</h2>
-<p><strong>map_description</strong> — what the file said, nothing constructed:
-stations (name, box name, kind, input overrides, output arrows, all
-with line numbers), the statics entries as raw text, the file path.
-Public so the parser can be tested without building anything.</p>
+door the text file comes in through — **and it comes in by being
+compiled, not by being read** (issue 311d).</p>
+<p>The text goes to the generator, which turns it into the construction
+calls it describes; the compiler that built this binary compiles them;
+the result is loaded and called. So there is exactly one way a
+description becomes a program, and everything here is a caller of that
+way rather than a second implementation of it.</p>
+<p>The parser itself lives with the compiler now
+(<a href="info-099-mapparse-h.html">099-mapparse.h</a>) and is not part
+of any program built with this engine.</p>
+<p><strong>What it costs.</strong> Reading a description while a program runs spends
+two compiler invocations — one asking what the description references,
+so anything missing can be fetched and compiled first, and one
+building it. Roughly a tenth of a second each. A program built from
+its own descriptions never reads one and never pays it.</p>
 <h2>Functions</h2>
-<p><strong>mapfile_parse(path) → description</strong> — read a map file. Line
-oriented; first word dispatches (<code>statics</code>, <code>in</code>, <code>out</code>, station
-line); <code>#</code> comments; indentation meaningless. Any malformed line is
-fatal naming file, line, and what was expected.</p>
-<p><strong>mapfile_free(description)</strong></p>
 <p><strong>map_load_file(path, worker count) → map</strong> — the whole journey, and
 every structural step of it is a call anybody could make (issues 210g,
-212): parse; first pass (a station per station line, named as it is
-created, its box placed by name, its door marked, one configuration
-call per port line); second pass (each arrow's destination name turned
-into an index — the one thing here that is a fact about the file
-rather than about the program — then the ordinary wiring operation,
-which applies the width check and every other rule); pool started with
-workers parked; then the program brought up, which is where the
-whole-program checks live and where the first tasks are made. Caller
-releases the pool, joins it, destroys the map.</p>
+212): the description is compiled into a function that builds it, and
+that function creates each station, names it, places its box, marks
+its door, configures each port and then draws every arrow — calling
+the same construction surface a person writing C would. Then the pool
+is started with its workers parked, and the program is brought up,
+which is where the whole-program checks live and where the first tasks
+are made. Caller releases the pool, joins it, destroys the map.</p>
+<p>Two refusals happen earlier than they used to and say more: a box name
+that answers to nothing, and an arrow pointing at a station nobody
+declared, are both caught while the description is still text, so the
+complaint names the line.</p>
 <p>This caller adds exactly one policy of its own: a <em>file</em> somebody
 asked to be run that starts nothing and declares no entrance is
 refused, because it would do nothing at all.</p>

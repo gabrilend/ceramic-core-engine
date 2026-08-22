@@ -22,7 +22,7 @@
 #include "067-genparse.h"
 /* The map reader, so the generator can compile a description into
  * the calls it describes (issue 311d). */
-#include "040-mapfile.h"
+#include "099-mapparse.h"
 
 #include <stdio.h>
 #include <stdlib.h>

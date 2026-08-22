@@ -1,35 +1,41 @@
-# 040-mapfile.h — the map file surface, from outside
+# 040-mapfile.h — a description becoming a program, from outside
 
 A program is a directory of C functions and a text file. This is the
-text file's door.
+door the text file comes in through — **and it comes in by being
+compiled, not by being read** (issue 311d).
 
-## Data structures
+The text goes to the generator, which turns it into the construction
+calls it describes; the compiler that built this binary compiles them;
+the result is loaded and called. So there is exactly one way a
+description becomes a program, and everything here is a caller of that
+way rather than a second implementation of it.
 
-**map_description** — what the file said, nothing constructed:
-stations (name, box name, kind, input overrides, output arrows, all
-with line numbers), the statics entries as raw text, the file path.
-Public so the parser can be tested without building anything.
+The parser itself lives with the compiler now
+([099-mapparse.h](../scripts/099-mapparse.h.info.md)) and is not part
+of any program built with this engine.
+
+**What it costs.** Reading a description while a program runs spends
+two compiler invocations — one asking what the description references,
+so anything missing can be fetched and compiled first, and one
+building it. Roughly a tenth of a second each. A program built from
+its own descriptions never reads one and never pays it.
 
 ## Functions
 
-**mapfile_parse(path) → description** — read a map file. Line
-oriented; first word dispatches (`statics`, `in`, `out`, station
-line); `#` comments; indentation meaningless. Any malformed line is
-fatal naming file, line, and what was expected.
-
-**mapfile_free(description)**
-
 **map_load_file(path, worker count) → map** — the whole journey, and
 every structural step of it is a call anybody could make (issues 210g,
-212): parse; first pass (a station per station line, named as it is
-created, its box placed by name, its door marked, one configuration
-call per port line); second pass (each arrow's destination name turned
-into an index — the one thing here that is a fact about the file
-rather than about the program — then the ordinary wiring operation,
-which applies the width check and every other rule); pool started with
-workers parked; then the program brought up, which is where the
-whole-program checks live and where the first tasks are made. Caller
-releases the pool, joins it, destroys the map.
+212): the description is compiled into a function that builds it, and
+that function creates each station, names it, places its box, marks
+its door, configures each port and then draws every arrow — calling
+the same construction surface a person writing C would. Then the pool
+is started with its workers parked, and the program is brought up,
+which is where the whole-program checks live and where the first tasks
+are made. Caller releases the pool, joins it, destroys the map.
+
+Two refusals happen earlier than they used to and say more: a box name
+that answers to nothing, and an arrow pointing at a station nobody
+declared, are both caught while the description is still text, so the
+complaint names the line.
 
 This caller adds exactly one policy of its own: a *file* somebody
 asked to be run that starts nothing and declares no entrance is

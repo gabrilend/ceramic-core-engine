@@ -43,7 +43,7 @@
 #include "067-genparse.h"
 /* The map reader, so this can say what a description references
  * without the engine having to read text (issue 311d). */
-#include "040-mapfile.h"
+#include "099-mapparse.h"
 
 #include <stdio.h>
 #include <stdlib.h>
