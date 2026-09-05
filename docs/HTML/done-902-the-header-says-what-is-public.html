@@ -41,6 +41,7 @@
 <a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
+<a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -217,23 +218,20 @@ that one part of the engine can reach another, and after
 file as their callers.</p>
 <p>Eight of them are called by tests, which is what
 <a href="done-903-everything-else-goes-private.html">903</a> has to answer for.</p>
-<h3>The completed issues learn to state a signature</h3>
-<p>This is where the rewriting promised by <a href="done-901-the-engine-becomes-one-file.html">901</a>
-happens, because the surface is settled here and not before.</p>
-<p>Every completed issue that built an engine function gains one short
-section — <strong>what it adds to the header</strong> — naming each function it built
-and the signature that function has in <code>cera.h</code>. Where an issue
-currently says which file something went into, that line goes: there is
-one file, and saying so seventy times is saying nothing.</p>
-<p>The point is not tidiness. This project's standard is that it can be
-rebuilt by working through <code>issues/completed/</code> in order, and a blueprint
-that names a behaviour without naming the call that provides it leaves
-the reader to invent a signature. Recording it makes the completed
-issues, read in order, into the derivation of <code>cera.h</code> — which is the
-thing note 057 wanted a script to derive and is better held by the
-documents that decided each piece.</p>
-<p>An issue that built no callable function — a demo, a removal, a
-decision — gains nothing and is left alone.</p>
+<h3>The completed issues learn to state a signature — moved out</h3>
+<p>This was to be part of this issue: every completed blueprint gaining a
+short section naming the calls it produced and their signatures, so that
+working through <code>issues/completed/</code> in order is enough to rebuild the
+project.</p>
+<p><strong>It is <a href="issue-909-the-blueprints-name-their-calls.html">909</a> instead</strong>, and
+the reason is worth keeping. Crediting an issue with the calls it names
+returns six issues out of seventy-four, because the house style
+describes a function in English rather than by its name — which is the
+style working, not failing. The mapping cannot be derived from the text;
+it has to be decided one blueprint at a time.</p>
+<p>What this issue did produce is the list itself: all 101 calls with their
+signatures, generated from the header into <code>src/cera.h.info.md</code>, which
+is the thing 909 has to reconcile blueprints against.</p>
 <h2>Suggested implementation steps</h2>
 <p>1. <strong>Sort the declarations.</strong> Take every declaration in <code>cera.h</code> and put
    it in one of three groups: called by generated code, called by a
@@ -249,9 +247,10 @@ decision — gains nothing and is left alone.</p>
 4. <strong>Check the header against the export list.</strong> Anything the linker
    publishes that the header does not declare is one of the two files
    being wrong, and which one has to be decided rather than patched.
-5. <strong>Write the signatures back into the completed issues</strong>, one section
-   each, for every issue that built a call that survived into the
-   header.</p>
+5. <strong>Generate the full list of calls and signatures</strong> from the header
+   into the interface document, so it is derived rather than typed.
+   Writing them back into the individual blueprints is
+   <a href="issue-909-the-blueprints-name-their-calls.html">909</a>.</p>
 <h2>Open questions</h2>
 <ul>
 <li><strong>Does the export list stay a separate file?</strong> It names families by</li>

@@ -41,6 +41,7 @@
 <a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
+<a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -171,6 +172,7 @@ translation unit as its callers can be <code>static</code>.</p>
 <tr><td><a href="done-903-everything-else-goes-private.html">903 — everything else goes private</a></td><td><strong>complete</strong></td><td>123 exported symbols became 100, and a test checks it on every run — the list was derived from the header rather than written, and the test was proven by being made to fail. Seven white-box tests now compile inside the engine.</td></tr>
 <tr><td><a href="done-904-the-old-files-are-removed.html">904 — the old files are removed</a></td><td><strong>complete</strong></td><td>Gone, with their eighteen interface files and the <code>libs/</code> directory. The <code>#line</code> directives went rather than being re-pointed, and the two include paths became one.</td></tr>
 <tr><td><a href="done-905-the-prefix.html">905 — the prefix</a></td><td><strong>complete</strong></td><td>Every one of the 100 exported symbols begins <code>cera_</code>. 3,008 renames and 706 respellings across 52 files, and not one byte of test output changed. The linker's export list collapsed to a single line.</td></tr>
+<tr><td><a href="issue-909-the-blueprints-name-their-calls.html">909 — the blueprints name their calls</a></td><td>open, <strong>split out of 902</strong></td><td>Every completed blueprint saying which calls it produced. Cannot be derived — the house style keeps function names out of prose, so six issues in seventy-four name one — and so has to be decided a blueprint at a time.</td></tr>
 <tr><td><a href="issue-906-an-error-reaches-the-host.html">906 — an error reaches the host</a></td><td>open</td><td>An installable handler called with the message before the engine dies. The engine still dies.</td></tr>
 <tr><td><a href="issue-907-built-outside-the-tree.html">907 — built outside the tree</a></td><td>open</td><td>The capstone: <code>make test</code> builds a program with this engine in a scratch directory that cannot see this repository, and runs it.</td></tr>
 <tr><td><a href="issue-908-two-maps-in-one-process.html">908 — two maps in one process</a></td><td>open, <strong>not on the critical path</strong></td><td>The process-wide active map, threaded through the task instead. Or, failing that, written down where somebody will read it.</td></tr>
@@ -223,7 +225,7 @@ adds a way for a host to <em>hear</em> about a refusal, and deliberately no way
 to survive one. An error code a caller may ignore is a fallback wearing
 a return type.</p>
 <h2>Where the phase stands</h2>
-<p><strong>Five of eight done, and the engine can now leave.</strong> It is two files,
+<p><strong>Five of nine done, and the engine can now leave.</strong> It is two files,
 it publishes 100 symbols and every one of them says whose they are,
 nothing else escapes at all, and a test checks that on every run.</p>
 <p>What is left is not about shape:</p>
@@ -236,8 +238,11 @@ nothing else escapes at all, and a test checks that on every run.</p>
 <li><strong><a href="issue-908-two-maps-in-one-process.html">908</a></strong> — one process-wide variable</li>
 <p>  means one map, silently.</p>
 </ul>
+<p>And <a href="issue-909-the-blueprints-name-their-calls.html">909</a>, which is about the
+record rather than the engine: the blueprints do not say what the calls
+they describe are called.</p>
 <p>907 is the one that matters most, because it is the only one that can
-prove the other seven.</p>
+prove the rest.</p>
 <h2>The engine has one name and two spellings of it</h2>
 <p>Asking which prefix to use produced the observation that ends the
 question:</p>

@@ -17,6 +17,7 @@ translation unit as its callers can be `static`.
 | [903 — everything else goes private](completed/903-everything-else-goes-private.md) | **complete** | 123 exported symbols became 100, and a test checks it on every run — the list was derived from the header rather than written, and the test was proven by being made to fail. Seven white-box tests now compile inside the engine. |
 | [904 — the old files are removed](completed/904-the-old-files-are-removed.md) | **complete** | Gone, with their eighteen interface files and the `libs/` directory. The `#line` directives went rather than being re-pointed, and the two include paths became one. |
 | [905 — the prefix](completed/905-the-prefix.md) | **complete** | Every one of the 100 exported symbols begins `cera_`. 3,008 renames and 706 respellings across 52 files, and not one byte of test output changed. The linker's export list collapsed to a single line. |
+| [909 — the blueprints name their calls](909-the-blueprints-name-their-calls.md) | open, **split out of 902** | Every completed blueprint saying which calls it produced. Cannot be derived — the house style keeps function names out of prose, so six issues in seventy-four name one — and so has to be decided a blueprint at a time. |
 | [906 — an error reaches the host](906-an-error-reaches-the-host.md) | open | An installable handler called with the message before the engine dies. The engine still dies. |
 | [907 — built outside the tree](907-built-outside-the-tree.md) | open | The capstone: `make test` builds a program with this engine in a scratch directory that cannot see this repository, and runs it. |
 | [908 — two maps in one process](908-two-maps-in-one-process.md) | open, **not on the critical path** | The process-wide active map, threaded through the task instead. Or, failing that, written down where somebody will read it. |
@@ -82,7 +83,7 @@ a return type.
 
 ## Where the phase stands
 
-**Five of eight done, and the engine can now leave.** It is two files,
+**Five of nine done, and the engine can now leave.** It is two files,
 it publishes 100 symbols and every one of them says whose they are,
 nothing else escapes at all, and a test checks that on every run.
 
@@ -96,8 +97,12 @@ What is left is not about shape:
 - **[908](908-two-maps-in-one-process.md)** — one process-wide variable
   means one map, silently.
 
+And [909](909-the-blueprints-name-their-calls.md), which is about the
+record rather than the engine: the blueprints do not say what the calls
+they describe are called.
+
 907 is the one that matters most, because it is the only one that can
-prove the other seven.
+prove the rest.
 
 ## The engine has one name and two spellings of it
 

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>070-generate.c — the generator's front door</title>
+<title>909 — The blueprints name their calls</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -41,7 +41,7 @@
 <a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
-<a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
+<a href="issue-909-the-blueprints-name-their-calls.html" class="here">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -138,7 +138,7 @@
 <a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
 <a href="info-068-genparse-c.html">068-genparse.c — reading a box source, from inside</a>
 <a href="info-069-genemit-c.html">069-genemit.c — the description becomes C</a>
-<a href="info-070-generate-c.html" class="here">070-generate.c — the generator's front door</a>
+<a href="info-070-generate-c.html">070-generate.c — the generator's front door</a>
 <a href="info-079-rename-identifiers-lua.html">079-rename-identifiers.lua — changing what things are called</a>
 <a href="info-088-complete-issue-lua.html">088-complete-issue.lua — finishing an issue, from outside</a>
 <a href="info-089-repair-doc-links-lua.html">089-repair-doc-links.lua — making the record walkable, from outside</a>
@@ -156,22 +156,70 @@
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>070-generate.c — the generator's front door</h1>
-<p><code>generate &lt;output.c&gt; &lt;box-source.c&gt;...</code> writes the emitted C file;
-<code>generate --describe &lt;box-source.c&gt;...</code> prints what the parser saw,
-for diagnosing a build by looking at the findings rather than at the
-emission.</p>
-<p>It parses every source, validates once, and then either describes or
-emits. That is the whole of it; the work is next door.</p>
-<p><strong>Why it is C rather than a script.</strong> A program built with this engine
-should need a C compiler and nothing else. This was a LuaJIT script,
-which meant every consumer inherited a build dependency on an
-interpreter that nothing at run time ever used. The generator depends
-on nothing the engine provides, so it compiles before anything else in
-the build exists and there is no bootstrap problem to solve.</p>
-<p>Regenerating this project's own HTML documentation still needs LuaJIT.
-That is project tooling, not on the path a consumer walks to build a
-program.</p>
+<h1>909 — The blueprints name their calls</h1>
+<p>Split out of <a href="done-902-the-header-says-what-is-public.html">902</a>,
+which promised this and delivered the header instead. Filed separately
+rather than left inside a completed ticket, because a ticket with
+deferred work in it is not complete and saying otherwise is the kind of
+lie that is only discovered by somebody relying on it.</p>
+<h2>Current behaviour</h2>
+<p><strong>The complete public surface exists in one place and is derived</strong> —
+<code>src/cera.h.info.md</code> carries all 101 calls in seven sections, generated
+from the header, so it cannot drift from what the engine actually
+publishes.</p>
+<p>**What does not exist is the other direction: which blueprint produced
+which call.** Someone working through <code>issues/completed/</code> in order to
+rebuild this project reaches the end of a ticket knowing what behaviour
+was wanted and not what it is called.</p>
+<h3>Why the obvious derivation does not work</h3>
+<p>Crediting an issue with the calls it names was tried and returns almost
+nothing: <strong>six issues out of seventy-four name a call at all</strong>, and
+three of those are phase 9's own.</p>
+<p>That is not an accident and not a defect in the issues. It is this
+project's house style working exactly as intended — describe a function
+in English rather than by its name, because a name is not something a
+reader can reason about. The blueprints say *a station is added to a
+running program and started by the ordinary readiness check*, which is
+the right sentence, and they do not say which call does it.</p>
+<p>So the mapping cannot be extracted. It has to be decided, one blueprint
+at a time, by somebody who reads the blueprint and knows the header.</p>
+<h2>Intended behaviour</h2>
+<p>**Each completed issue that produced a call says so, once, in a short
+section at the end**, naming the calls and their signatures as declared
+in <code>cera.h</code>.</p>
+<p>The section is an addition to the blueprint, not a replacement for its
+prose. The English stays exactly as it is — it is what makes the ticket
+readable — and the table underneath is what makes it buildable.</p>
+<h3>What each entry has to distinguish</h3>
+<p><strong>Produced</strong> and <strong>mentioned</strong> are different, and a table that blurs
+them is worse than none, because a reader trusts a table more than a
+paragraph. An issue that changed how an existing call behaves is not the
+issue that introduced it, and both facts are worth having.</p>
+<h3>Where it must not go</h3>
+<p><strong>Not into the tickets that only discuss calls in passing.</strong> Phase 9's
+own three name a great many calls as examples of what was moved or
+renamed, and none of them produced any of those calls.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. <strong>Start from the header's seven sections</strong>, which map onto phases
+   closely enough to narrow each call to two or three candidate
+   blueprints before any reading is needed.
+2. <strong>Read the candidates and assign.</strong> This is the work, and there is no
+   way around it being the work.
+3. <strong>Generate the tables from the assignment</strong>, so the signatures come
+   from the header rather than being typed, and re-running the
+   generation after a rename updates every table.
+4. <strong>Report the calls nothing claims.</strong> A call no blueprint produced is
+   either a gap in the record or a function that arrived without a
+   ticket, and both are worth knowing about before the list is called
+   finished.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="done-902-the-header-says-what-is-public.html">902</a>, which promised</li>
+<p>  this and settled the surface it needs</p>
+<li><a href="done-905-the-prefix.html">905</a>, which fixed the names, so the</li>
+<p>  tables can be written once rather than twice</p>
+<li><code>src/cera.h.info.md</code>, the derived list this has to be reconciled with</li>
+</ul>
 
 </main>
 </div></body></html>

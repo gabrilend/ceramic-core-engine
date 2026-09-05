@@ -41,6 +41,7 @@
 <a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
+<a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -226,6 +227,141 @@ symbol is a root the collector may never touch and exporting everything
 declares the whole binary reachable. See
 <a href="info-098-engine-surface-syms.html">098-engine-surface.syms</a>, which
 carries the measurements.</p>
+<h2>Every call, and how it is declared</h2>
+<p>Generated from the header itself. One hundred calls in seven
+sections, in the order the header presents them — the pool knows
+nothing of stations, stations nothing of the generator, and each
+<em>101 calls.</em> Anything not here is private, and <code>tests/112-test-public-surface.sh</code> fails if the engine publishes something this list does not name.</p>
+<p>section stands on the ones above it.</p>
+<h3>011 — The pool</h3>
+<table>
+<tr><td>call</td><td>declared as</td></tr>
+<tr><td><code>cera_pool_create</code></td><td><code>cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *finish_ctx)</code></td></tr>
+<tr><td><code>cera_pool_push</code></td><td><code>void cera_pool_push(cera_pool_t *p, cera_task_t *t)</code></td></tr>
+<tr><td><code>cera_pool_pop</code></td><td><code>cera_task_t *cera_pool_pop(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_release</code></td><td><code>void cera_pool_release(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_join</code></td><td><code>void cera_pool_join(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_destroy</code></td><td><code>void cera_pool_destroy(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_submitter_register</code></td><td><code>void cera_pool_submitter_register(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_submitter_unregister</code></td><td><code>void cera_pool_submitter_unregister(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_worker_index</code></td><td><code>int cera_pool_worker_index(void)</code></td></tr>
+<tr><td><code>cera_pool_worker_count</code></td><td><code>int cera_pool_worker_count(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_worker_epoch</code></td><td><code>uint64_t cera_pool_worker_epoch(cera_pool_t *p, int worker)</code></td></tr>
+<tr><td><code>cera_pool_signal_when_finished</code></td><td><code>void cera_pool_signal_when_finished(cera_pool_t *p, int signo)</code></td></tr>
+<tr><td><code>cera_pool_stop</code></td><td><code>void cera_pool_stop(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_queued</code></td><td><code>int cera_pool_queued(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_worker_station</code></td><td><code>int cera_pool_worker_station(cera_pool_t *p, int worker)</code></td></tr>
+<tr><td><code>cera_pool_finished</code></td><td><code>int cera_pool_finished(cera_pool_t *p)</code></td></tr>
+<tr><td><code>cera_pool_queue_stats</code></td><td><code>void cera_pool_queue_stats(cera_pool_t *p, int *capacity, int *high_water, int *growths)</code></td></tr>
+</table>
+<h3>018 — Stations, ports and wires</h3>
+<table>
+<tr><td>call</td><td>declared as</td></tr>
+<tr><td><code>cera_map_station</code></td><td><code>static inline cera_station_t *cera_map_station(cera_map_t *m, int n)</code></td></tr>
+<tr><td><code>cera_map_add_station</code></td><td><code>int cera_map_add_station(cera_map_t *m)</code></td></tr>
+<tr><td><code>cera_map_create</code></td><td><code>cera_map_t *cera_map_create(int n_stations)</code></td></tr>
+<tr><td><code>cera_map_create_empty</code></td><td><code>cera_map_t *cera_map_create_empty(void)</code></td></tr>
+<tr><td><code>cera_map_place</code></td><td><code>void cera_map_place(cera_map_t *m, int station, cera_task_call_t shim, int kind, int n_in_ports, const int *elem_sizes, int out_size)</code></td></tr>
+<tr><td><code>cera_map_in_port_start_depth</code></td><td><code>const char *cera_map_in_port_start_depth(cera_map_t *m, int station, int port, int slots)</code></td></tr>
+<tr><td><code>cera_map_in_port_convert</code></td><td><code>void cera_map_in_port_convert(cera_map_t *m, int station, int port, int kind)</code></td></tr>
+<tr><td><code>cera_map_configure_port</code></td><td><code>const char *cera_map_configure_port(cera_map_t *m, int station, int port, int source, const char *text)</code></td></tr>
+<tr><td><code>cera_map_check_sources</code></td><td><code>const char *cera_map_check_sources(cera_map_t *m)</code></td></tr>
+<tr><td><code>cera_map_bring_up</code></td><td><code>const char *cera_map_bring_up(cera_map_t *m)</code></td></tr>
+<tr><td><code>cera_map_designate_output</code></td><td><code>const char *cera_map_designate_output(cera_map_t *m, int station)</code></td></tr>
+<tr><td><code>cera_map_station_set_cursor</code></td><td><code>const char *cera_map_station_set_cursor(cera_map_t *m, int station, int at)</code></td></tr>
+<tr><td><code>cera_map_designate_input</code></td><td><code>const char *cera_map_designate_input(cera_map_t *m, int station)</code></td></tr>
+<tr><td><code>cera_map_start_beside</code></td><td><code>cera_map_t *cera_map_start_beside(cera_map_t *parent)</code></td></tr>
+<tr><td><code>cera_map_deliver_argument</code></td><td><code>const char *cera_map_deliver_argument(cera_map_t *m, int station, int port, const void *value, int size)</code></td></tr>
+<tr><td><code>cera_map_deliver_argument_text</code></td><td><code>const char *cera_map_deliver_argument_text(cera_map_t *m, int station, int port, const char *text)</code></td></tr>
+<tr><td><code>cera_map_deliver_command_line</code></td><td><code>const char *cera_map_deliver_command_line(cera_map_t *m, int argc, char **argv)</code></td></tr>
+<tr><td><code>cera_map_output_waiting</code></td><td><code>int cera_map_output_waiting(cera_map_t *m, int station)</code></td></tr>
+<tr><td><code>cera_map_output_take</code></td><td><code>int cera_map_output_take(cera_map_t *m, int station, void *into, int size)</code></td></tr>
+<tr><td><code>cera_map_name_station</code></td><td><code>const char *cera_map_name_station(cera_map_t *m, int station, const char *name)</code></td></tr>
+<tr><td><code>cera_map_wire</code></td><td><code>const char *cera_map_wire(cera_map_t *m, int from_station, int port, int to_station, int to_port)</code></td></tr>
+<tr><td><code>cera_map_remove_station</code></td><td><code>const char *cera_map_remove_station(cera_map_t *m, int station)</code></td></tr>
+<tr><td><code>cera_map_connect</code></td><td><code>void cera_map_connect(cera_map_t *m, int from_station, int port, int to_station, int to_port)</code></td></tr>
+<tr><td><code>cera_map_start</code></td><td><code>void cera_map_start(cera_map_t *m, int n_workers)</code></td></tr>
+<tr><td><code>cera_map_destroy</code></td><td><code>void cera_map_destroy(cera_map_t *m)</code></td></tr>
+<tr><td><code>cera_map_deliver_value</code></td><td><code>int cera_map_deliver_value(cera_map_t *m, int station, int port, const void *value)</code></td></tr>
+<tr><td><code>cera_map_in_port_depth</code></td><td><code>int cera_map_in_port_depth(cera_map_t *m, int station, int port)</code></td></tr>
+<tr><td><code>cera_map_station_try_start</code></td><td><code>int cera_map_station_try_start(cera_map_t *m, int station)</code></td></tr>
+<tr><td><code>cera_map_station_start_while_ready</code></td><td><code>int cera_map_station_start_while_ready(cera_map_t *m, int station)</code></td></tr>
+<tr><td><code>cera_map_station_keep_starting</code></td><td><code>int cera_map_station_keep_starting(cera_map_t *m, int station)</code></td></tr>
+<tr><td><code>cera_map_station_start_after</code></td><td><code>int cera_map_station_start_after(cera_map_t *m, int station, void (*while_locked)(void *), void *ctx)</code></td></tr>
+<tr><td><code>cera_map_in_port_static_text</code></td><td><code>void cera_map_in_port_static_text(cera_map_t *m, int station, int port, const char *text)</code></td></tr>
+<tr><td><code>cera_map_in_port_static_write</code></td><td><code>void cera_map_in_port_static_write(cera_map_t *m, int station, int port, const void *bytes, int size)</code></td></tr>
+<tr><td><code>cera_map_in_port_queue_text</code></td><td><code>const char *cera_map_in_port_queue_text(cera_map_t *m, int station, int port, const char *text)</code></td></tr>
+</table>
+<h3>026 — Generated code, and values as text</h3>
+<table>
+<tr><td>call</td><td>declared as</td></tr>
+<tr><td><code>cera_box_place_find</code></td><td><code>const cera_box_place_t *cera_box_place_find(const char *name)</code></td></tr>
+<tr><td><code>cera_text_expect</code></td><td><code>const char *cera_text_expect(const char *p, char c, const cera_where_t *w, const char *what)</code></td></tr>
+<tr><td><code>cera_text_signed</code></td><td><code>const char *cera_text_signed(const char *p, void *out, int size, const cera_where_t *w, const char *field)</code></td></tr>
+<tr><td><code>cera_text_unsigned</code></td><td><code>const char *cera_text_unsigned(const char *p, void *out, int size, const cera_where_t *w, const char *field)</code></td></tr>
+<tr><td><code>cera_text_floating</code></td><td><code>const char *cera_text_floating(const char *p, void *out, int size, const cera_where_t *w, const char *field)</code></td></tr>
+<tr><td><code>cera_text_chars</code></td><td><code>const char *cera_text_chars(const char *p, char *out, int room, const cera_where_t *w, const char *field)</code></td></tr>
+<tr><td><code>cera_text_put</code></td><td><code>void cera_text_put(cera_textbuf_t *tb, const char *literal)</code></td></tr>
+<tr><td><code>cera_text_put_signed</code></td><td><code>void cera_text_put_signed(cera_textbuf_t *tb, const void *bytes, int size)</code></td></tr>
+<tr><td><code>cera_text_put_unsigned</code></td><td><code>void cera_text_put_unsigned(cera_textbuf_t *tb, const void *bytes, int size)</code></td></tr>
+<tr><td><code>cera_text_put_floating</code></td><td><code>void cera_text_put_floating(cera_textbuf_t *tb, const void *bytes, int size)</code></td></tr>
+<tr><td><code>cera_text_put_chars</code></td><td><code>void cera_text_put_chars(cera_textbuf_t *tb, const char *chars, int room)</code></td></tr>
+<tr><td><code>cera_struct_text_find</code></td><td><code>const cera_struct_text_t *cera_struct_text_find(const char *type_name)</code></td></tr>
+<tr><td><code>cera_struct_find</code></td><td><code>const cera_struct_info_t *cera_struct_find(const char *type_name)</code></td></tr>
+<tr><td><code>cera_emitted_print</code></td><td><code>void cera_emitted_print(FILE *out)</code></td></tr>
+<tr><td><code>cera_map_place_box</code></td><td><code>void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int kind)</code></td></tr>
+<tr><td><code>cera_box_source_text</code></td><td><code>const char *cera_box_source_text(const char *path)</code></td></tr>
+<tr><td><code>cera_map_build_find</code></td><td><code>const cera_map_build_t *cera_map_build_find(const char *path)</code></td></tr>
+</table>
+<h3>040 — Descriptions, and a map inside a map</h3>
+<table>
+<tr><td>call</td><td>declared as</td></tr>
+<tr><td><code>cera_map_load_file</code></td><td><code>cera_map_t *cera_map_load_file(const char *path, int n_workers)</code></td></tr>
+<tr><td><code>cera_map_load_salvage</code></td><td><code>cera_map_t *cera_map_load_salvage(const char *path, int n_workers)</code></td></tr>
+<tr><td><code>cera_map_seed_count</code></td><td><code>int cera_map_seed_count(cera_map_t *m)</code></td></tr>
+<tr><td><code>cera_map_instantiate_file</code></td><td><code>cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path)</code></td></tr>
+<tr><td><code>cera_map_instance_entrance</code></td><td><code>int cera_map_instance_entrance(cera_map_t *m, const cera_map_instance_t *in, int nth)</code></td></tr>
+<tr><td><code>cera_map_instance_result</code></td><td><code>int cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int nth)</code></td></tr>
+<tr><td><code>cera_map_instance_free</code></td><td><code>void cera_map_instance_free(cera_map_instance_t *in)</code></td></tr>
+<tr><td><code>cera_map_add_part</code></td><td><code>const char *cera_map_add_part(cera_map_t *m, const char *what, cera_map_part_t *out)</code></td></tr>
+<tr><td><code>cera_map_connect_parts</code></td><td><code>const char *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, int from_port, cera_map_part_t to, int to_port)</code></td></tr>
+</table>
+<h3>049 — Watching, dumping, rewiring</h3>
+<table>
+<tr><td>call</td><td>declared as</td></tr>
+<tr><td><code>cera_map_report_buffers</code></td><td><code>void cera_map_report_buffers(cera_map_t *m, FILE *out)</code></td></tr>
+<tr><td><code>cera_map_report_stations</code></td><td><code>void cera_map_report_stations(cera_map_t *m, FILE *out, int order)</code></td></tr>
+<tr><td><code>cera_map_observe_start</code></td><td><code>void cera_map_observe_start(cera_map_t *m, const char *path, int interval_ms)</code></td></tr>
+<tr><td><code>cera_map_observe_stop</code></td><td><code>void cera_map_observe_stop(cera_map_t *m)</code></td></tr>
+<tr><td><code>cera_map_report_shutdown</code></td><td><code>void cera_map_report_shutdown(cera_map_t *m)</code></td></tr>
+<tr><td><code>cera_stats_box_time</code></td><td><code>void cera_stats_box_time(cera_task_t *t, long ns)</code></td></tr>
+<tr><td><code>cera_map_dump</code></td><td><code>void cera_map_dump(cera_map_t *m, FILE *out)</code></td></tr>
+<tr><td><code>cera_map_unwire</code></td><td><code>const char *cera_map_unwire(cera_map_t *m, int from_station, int port, int to_station, int to_port)</code></td></tr>
+<tr><td><code>cera_map_disconnect</code></td><td><code>void cera_map_disconnect(cera_map_t *m, int from_station, int port, int to_station, int to_port)</code></td></tr>
+</table>
+<h3>073 — Code that arrives after the build</h3>
+<table>
+<tr><td>call</td><td>declared as</td></tr>
+<tr><td><code>cera_late_compile_source</code></td><td><code>int cera_late_compile_source(const char *c_source)</code></td></tr>
+<tr><td><code>cera_late_box_count</code></td><td><code>int cera_late_box_count(void)</code></td></tr>
+<tr><td><code>cera_late_box_at</code></td><td><code>const cera_box_place_t *cera_late_box_at(int i)</code></td></tr>
+<tr><td><code>cera_late_unload_box</code></td><td><code>int cera_late_unload_box(cera_map_t *m, const char *name)</code></td></tr>
+<tr><td><code>cera_late_source_dir</code></td><td><code>const char *cera_late_source_dir(void)</code></td></tr>
+<tr><td><code>cera_late_compile_map</code></td><td><code>const cera_map_build_t *cera_late_compile_map(const char *map_text)</code></td></tr>
+<tr><td><code>cera_late_spill_sources</code></td><td><code>int cera_late_spill_sources(const char *dir)</code></td></tr>
+<tr><td><code>cera_late_source_text</code></td><td><code>const char *cera_late_source_text(const char *path)</code></td></tr>
+</table>
+<h3>091 — Ending a program, and putting one down</h3>
+<table>
+<tr><td>call</td><td>declared as</td></tr>
+<tr><td><code>cera_prepare</code></td><td><code>void cera_prepare(const char *report_path)</code></td></tr>
+<tr><td><code>cera_report_path</code></td><td><code>const char *cera_report_path(void)</code></td></tr>
+<tr><td><code>cera_wait</code></td><td><code>int cera_wait(cera_map_t *m)</code></td></tr>
+<tr><td><code>cera_capture</code></td><td><code>int cera_capture(cera_map_t *m, const char *path)</code></td></tr>
+<tr><td><code>cera_capture_now</code></td><td><code>int cera_capture_now(cera_map_t *m, const char *path)</code></td></tr>
+<tr><td><code>cera_capture_whole</code></td><td><code>int cera_capture_whole(cera_map_t *m, const char *dir)</code></td></tr>
+<tr><td><code>cera_stop_now</code></td><td><code>void cera_stop_now(cera_map_t *m, int exit_code, const char *why)</code></td></tr>
+</table>
 <h2>Related</h2>
 <ul>
 <li><a href="info-cera-c.html">cera.c</a> — the implementation</li>

@@ -76,27 +76,23 @@ file as their callers.
 Eight of them are called by tests, which is what
 [903](903-everything-else-goes-private.md) has to answer for.
 
-### The completed issues learn to state a signature
+### The completed issues learn to state a signature — moved out
 
-This is where the rewriting promised by [901](901-the-engine-becomes-one-file.md)
-happens, because the surface is settled here and not before.
+This was to be part of this issue: every completed blueprint gaining a
+short section naming the calls it produced and their signatures, so that
+working through `issues/completed/` in order is enough to rebuild the
+project.
 
-Every completed issue that built an engine function gains one short
-section — **what it adds to the header** — naming each function it built
-and the signature that function has in `cera.h`. Where an issue
-currently says which file something went into, that line goes: there is
-one file, and saying so seventy times is saying nothing.
+**It is [909](../909-the-blueprints-name-their-calls.md) instead**, and
+the reason is worth keeping. Crediting an issue with the calls it names
+returns six issues out of seventy-four, because the house style
+describes a function in English rather than by its name — which is the
+style working, not failing. The mapping cannot be derived from the text;
+it has to be decided one blueprint at a time.
 
-The point is not tidiness. This project's standard is that it can be
-rebuilt by working through `issues/completed/` in order, and a blueprint
-that names a behaviour without naming the call that provides it leaves
-the reader to invent a signature. Recording it makes the completed
-issues, read in order, into the derivation of `cera.h` — which is the
-thing note 057 wanted a script to derive and is better held by the
-documents that decided each piece.
-
-An issue that built no callable function — a demo, a removal, a
-decision — gains nothing and is left alone.
+What this issue did produce is the list itself: all 101 calls with their
+signatures, generated from the header into `src/cera.h.info.md`, which
+is the thing 909 has to reconcile blueprints against.
 
 ## Suggested implementation steps
 
@@ -114,9 +110,10 @@ decision — gains nothing and is left alone.
 4. **Check the header against the export list.** Anything the linker
    publishes that the header does not declare is one of the two files
    being wrong, and which one has to be decided rather than patched.
-5. **Write the signatures back into the completed issues**, one section
-   each, for every issue that built a call that survived into the
-   header.
+5. **Generate the full list of calls and signatures** from the header
+   into the interface document, so it is derived rather than typed.
+   Writing them back into the individual blueprints is
+   [909](../909-the-blueprints-name-their-calls.md).
 
 ## Open questions
 
