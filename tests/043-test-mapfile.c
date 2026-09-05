@@ -14,8 +14,7 @@
  * captures its dying words, and demands both the death and the
  * words.
  */
-#include "040-mapfile.h"
-#include "049-observe.h"
+#include "cera.h"
 
 #include <stdio.h>
 #include <stdlib.h>

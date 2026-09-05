@@ -21,9 +21,7 @@
  * only honest claim is that it drains — not that it is empty at any
  * particular moment.
  */
-#include "018-station.h"
-#include "026-emitted.h"
-#include "049-observe.h"
+#include "cera.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

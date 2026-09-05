@@ -1097,20 +1097,23 @@ void ge_emit(const description_t *d, const char **sources, int n_sources,
     buf_line(&w, "#include <stddef.h>");
     buf_line(&w, "#include <string.h>");
     buf_line(&w, "#include <time.h>");
-    buf_line(&w, "#include \"026-emitted.h\"");
-    /* The placement functions call the station layer directly, which
-     * is the point of them (issue 311b). */
-    buf_line(&w, "#include \"018-station.h\"");
     buf_line(&w, "#include <stdio.h>");
     buf_line(&w, "#include <stdlib.h>");
-    buf_line(&w, "#include \"049-observe.h\"");
-    /* A box that edits a program stops the program when it is refused
-     * (issue 106), so the box sources included below need to see the
-     * call that does the stopping. */
-    buf_line(&w, "#include \"091-stopping.h\"");
-    /* A box that brings a described part inside a program reads that
-     * description through the reader (issue 217). */
-    buf_line(&w, "#include \"040-mapfile.h\"");
+    /*
+     * One include, where there were five (issue 901). Generated code
+     * reaches for most of the engine: the placement functions call the
+     * station layer directly, which is the point of them (issue 311b);
+     * a box that edits a program stops the program when it is refused
+     * (issue 106); a box that brings a described part inside a program
+     * reads that description through the reader (issue 217); and the
+     * emitted tables and the reports are wanted throughout.
+     *
+     * Five separate headers said which of those a given emission
+     * needed, which was a distinction nothing acted on — every
+     * emission included all five. The engine is one header now, so the
+     * question does not arise.
+     */
+    buf_line(&w, "#include \"cera.h\"");
     buf_line(&w, "");
 
     /*

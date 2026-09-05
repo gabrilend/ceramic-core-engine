@@ -16,10 +16,7 @@
  * version number on every wire, and this is where that claim is
  * checked.
  */
-#include "018-station.h"
-#include "026-emitted.h"
-#include "049-observe.h"
-#include "073-latebox.h"
+#include "cera.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

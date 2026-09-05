@@ -37,6 +37,10 @@ minimal-soramech/
 │   └── first-pass-report.md        lessons, contradictions, and gaps
 │                                   from building it all once
 ├── src/                            the engine
+│   ├── cera.c                      the whole runtime, one translation
+│   │                               unit — the numbers inside it are the
+│   │                               reading order the filenames used to be
+│   └── cera.h                      everything a program may call
 ├── libs/                           the pool, and anything reusable
 ├── issues/                         one file per unit of work
 │   └── completed/
@@ -136,6 +140,7 @@ schedule. Detail in [010 — Roadmap](010-roadmap.md).
 | 6 | **The map file** — parser, loader, validation, seed. The capstone. |
 | 7 | **Seeing inside it** — diagnostics, runtime editing, the HTML docs |
 | 8 | **The workbench** — drawing a map in a browser instead of typing it |
+| 9 | **The engine leaves home** — one file and one header, so it can be built somewhere else |
 
 ## Notes
 

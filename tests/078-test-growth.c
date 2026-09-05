@@ -17,9 +17,7 @@
  * afterwards; and has many threads ask for a place at once, checking
  * that no two of them are handed the same one.
  */
-#include "018-station.h"
-#include "026-emitted.h"
-#include "049-observe.h"
+#include "cera.h"
 
 #include <pthread.h>
 #include <stdatomic.h>

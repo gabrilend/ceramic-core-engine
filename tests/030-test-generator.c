@@ -14,7 +14,7 @@
  * artifacts against direct calls and direct sizeofs. Nothing here
  * knows how the generator works; it only checks the emitted claims.
  */
-#include "026-emitted.h"
+#include "cera.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

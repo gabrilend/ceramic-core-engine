@@ -13,8 +13,7 @@
  * must equal the number of complete pairs with every value counted
  * exactly once — the property the claim-under-mutex exists for.
  */
-#include "018-station.h"
-#include "026-emitted.h"
+#include "cera.h"
 
 #include <pthread.h>
 #include <stdint.h>

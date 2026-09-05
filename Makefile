@@ -105,10 +105,25 @@ $(GENERATED): $(BOX_SRC) $(MAP_SRC) $(GENERATOR)
 	mkdir -p $(DIR)/src/generated
 
 	$(GENERATOR) $(GENERATED) --root=$(DIR) $(MAP_FLAGS) $(BOX_SRC)
-# Everything the engine is made of: the pool from libs/, the station
-# layer and what follows from src/, and the generated file.
-# Discovered by wildcard so a new engine file enrolls itself.
-ENGINE_SRC := $(wildcard $(DIR)/libs/*.c) $(wildcard $(DIR)/src/*.c) $(GENERATED)
+# Everything the engine is made of: one file, and the generated one
+# (issue 901). This used to be two wildcards over libs/ and src/, which
+# discovered engine files so that a new one enrolled itself. There is
+# nothing left to discover — an engine file cannot be added because
+# there is one, and a new part of the runtime is a new section inside
+# it.
+#
+# The generated file stays separate and always will: it is derived at
+# build time from box sources this engine's author has never seen, so
+# it cannot be inside cera.c. That is what makes the header a real
+# boundary rather than a courtesy — everything generated code calls has
+# to be public whether anyone likes it or not.
+#
+# The numbered sources cera.c was made from are still on disk and are
+# compiled by nothing. They go in issue 904, once the two builds have
+# been shown to produce identical output.
+CERA_C     := $(DIR)/src/cera.c
+CERA_H     := $(DIR)/src/cera.h
+ENGINE_SRC := $(CERA_C) $(GENERATED)
 
 # What the parser saw, for diagnosing a build problem by looking at
 # the description rather than the emission.
@@ -144,7 +159,7 @@ html:
 # exists to do.
 EXAMPLE := $(BUILD)/108-hello-graph
 
-$(EXAMPLE): $(DIR)/example/108-hello-graph.c $(ENGINE_SRC) $(SURFACE) | $(BUILD)
+$(EXAMPLE): $(DIR)/example/108-hello-graph.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
 
 .PHONY: example
@@ -199,7 +214,7 @@ $(BUILD): | ramdirs
 SURFACE := $(DIR)/src/098-engine-surface.syms
 LDFLAGS := -Wl,--dynamic-list=$(SURFACE) -Wl,--gc-sections
 
-$(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) $(SURFACE) | $(BUILD)
+$(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
 
 # The generator's own unit test links the generator's pieces rather

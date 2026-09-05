@@ -20,10 +20,7 @@
  * second instance's entrance, and reads the second's result. Nothing
  * in the parent names anything inside either instance.
  */
-#include "018-station.h"
-#include "026-emitted.h"
-#include "040-mapfile.h"
-#include "049-observe.h"
+#include "cera.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

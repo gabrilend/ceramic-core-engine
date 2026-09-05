@@ -26,11 +26,7 @@
  * fails the build rather than somebody else's startup, and no box
  * name is looked up while the program runs.
  */
-#include "018-station.h"
-#include "026-emitted.h"
-#include "040-mapfile.h"
-#include "049-observe.h"
-#include "073-latebox.h"
+#include "cera.h"
 
 #include <stdio.h>
 #include <stdlib.h>

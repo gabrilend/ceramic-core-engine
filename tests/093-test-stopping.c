@@ -19,10 +19,7 @@
  * unpleasant, and one short enough to be pleasant is a race that
  * fails on somebody else's laptop and nowhere else.
  */
-#include "018-station.h"
-#include "026-emitted.h"
-#include "049-observe.h"
-#include "091-stopping.h"
+#include "cera.h"
 
 #include <fcntl.h>
 #include <signal.h>

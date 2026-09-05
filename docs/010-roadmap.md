@@ -206,6 +206,39 @@ something the format cannot, the format is what needs fixing.
 
 ---
 
+## Phase 9 — The engine leaves home
+
+Everything above makes programs run inside this repository. This phase
+is the engine becoming something somebody else can take away.
+
+Built here: the whole engine as one translation unit and one header —
+`src/cera.c` and `src/cera.h` — with the numbered sources deleted once
+the output has been compared byte for byte; a header narrowed to what
+generated code binds to and what a consumer calls; every remaining
+definition marked `static`, which is the step the rest exists for,
+because a function in the same translation unit as its callers is not a
+linker symbol at all; one prefix on what is left visible; an installable
+handler that lets a host hear about a refusal without letting it survive
+one; and a test that builds a program with this engine in a directory
+that cannot see this repository.
+
+The two names carry no index, which is the project's one deliberate
+exception to the numbering. They are the deliverable, and an entry point
+called `018-station.h` announcing the eighteenth thing to read in
+somebody else's tree is precisely the awkwardness this phase removes.
+The reading order moves inside `cera.c`, held by a banner at each seam.
+
+Depends on everything, which is what makes it last: the surface it
+publishes is only knowable once there is nothing further to add to it.
+
+Described by [057 — Packaging the engine as a library](implementation-notes/057-packaging.md),
+whose survey this phase executes with one change — the amalgamation
+becomes the source rather than something a script derives from the
+numbered files, so there is one copy of the engine rather than one copy
+and a derivation that can drift from it.
+
+---
+
 ## Where the numbers live
 
 This document deliberately contains no counts, sizes, or thresholds.

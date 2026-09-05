@@ -22,8 +22,7 @@
  * they do not, and the round trip compared byte for byte, which is
  * the strongest equality there is.
  */
-#include "040-mapfile.h"
-#include "049-observe.h"
+#include "cera.h"
 
 /* The emitted-shapes header and pthread.h left with the joint-cycle test:
  * it placed boxes by name and raced two threads by hand. Nothing

@@ -14,8 +14,7 @@
  * against what the mathematics says. The plain path needs no new
  * test — the whole earlier suite is that test, unchanged.
  */
-#include "018-station.h"
-#include "026-emitted.h"
+#include "cera.h"
 
 #include <pthread.h>
 #include <stdatomic.h>

@@ -21,11 +21,7 @@
  * rather than by shape, and a test that pins it is how somebody later
  * discovers it was a decision rather than an oversight.
  */
-#include "018-station.h"
-#include "026-emitted.h"
-#include "040-mapfile.h"
-#include "049-observe.h"
-#include "073-latebox.h"
+#include "cera.h"
 
 #include <dlfcn.h>
 #include <stdatomic.h>

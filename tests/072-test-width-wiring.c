@@ -19,9 +19,7 @@
  * caring about the name, so the shapes have to be real types the
  * generator saw, not something this file made up.
  */
-#include "018-station.h"
-#include "049-observe.h"
-#include "026-emitted.h"
+#include "cera.h"
 
 #include <fcntl.h>
 #include <stdatomic.h>

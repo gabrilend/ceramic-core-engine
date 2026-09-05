@@ -23,12 +23,7 @@
  * capture, and a program that grew boxes while it ran. Both are steps
  * of their own on the issue.
  */
-#include "018-station.h"
-#include "026-emitted.h"
-#include "040-mapfile.h"
-#include "049-observe.h"
-#include "073-latebox.h"
-#include "091-stopping.h"
+#include "cera.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

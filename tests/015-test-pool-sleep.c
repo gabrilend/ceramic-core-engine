@@ -12,7 +12,7 @@
  * is issue 104's one concession to work arriving after startup.
  * Process CPU time is then compared against elapsed wall time.
  */
-#include "011-pool.h"
+#include "cera.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

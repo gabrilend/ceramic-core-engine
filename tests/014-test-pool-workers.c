@@ -11,7 +11,7 @@
  * and the pool is left to terminate itself. Each task marks its own
  * slot in a ledger; the ledger must read "exactly once" everywhere.
  */
-#include "011-pool.h"
+#include "cera.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

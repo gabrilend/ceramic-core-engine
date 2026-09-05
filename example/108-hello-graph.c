@@ -25,9 +25,7 @@
  * avoided it would be an example that lied about what independence
  * means.
  */
-#include "018-station.h"
-#include "026-emitted.h"
-#include "040-mapfile.h"
+#include "cera.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
