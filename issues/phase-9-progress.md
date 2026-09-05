@@ -16,7 +16,7 @@ translation unit as its callers can be `static`.
 | [902 — the header says what is public](902-the-header-says-what-is-public.md) | open | Narrow the header to what generated code binds to and what a consumer calls; everything else moves into the body. This is also where the completed issues learn to state a signature. |
 | [903 — everything else goes private](903-everything-else-goes-private.md) | open | Every definition not in the header becomes `static`. The white-box tests move inside the translation unit. This is the step the whole phase exists for. |
 | [904 — the old files are removed](904-the-old-files-are-removed.md) | open | The eighteen numbered sources and their interface files go, once the output has been compared byte for byte. |
-| [905 — the prefix](905-the-prefix.md) | open, **blocked on a decision** | One prefix on every public name. Which prefix is an open question with three candidates and no default; asking is step one. |
+| [905 — the prefix](905-the-prefix.md) | open, **unblocked** | One prefix on every public name, and the name is `cera_`. The question of which prefix turned out not to be a question — see below. |
 | [906 — an error reaches the host](906-an-error-reaches-the-host.md) | open | An installable handler called with the message before the engine dies. The engine still dies. |
 | [907 — built outside the tree](907-built-outside-the-tree.md) | open | The capstone: `make test` builds a program with this engine in a scratch directory that cannot see this repository, and runs it. |
 | [908 — two maps in one process](908-two-maps-in-one-process.md) | open, **not on the critical path** | The process-wide active map, threaded through the task instead. Or, failing that, written down where somebody will read it. |
@@ -80,8 +80,36 @@ adds a way for a host to *hear* about a refusal, and deliberately no way
 to survive one. An error code a caller may ignore is a fallback wearing
 a return type.
 
+## The engine has one name and two spellings of it
+
+Asking which prefix to use produced the observation that ends the
+question:
+
+```
+soramech
+ceramic
+```
+
+**The same word.** Identical consonants in order — S, R, M, K — every
+vowel reduced to almost nothing, and a silent `h` on the end. Four of
+the letters line up outright when the two are stacked.
+
+So this engine was never renamed when it was distilled out of the larger
+project onto this branch. It was **respelled**, and the respelling was
+half-finished and nobody noticed, because a half-finished respelling
+does not feel like a collision — there was only ever one name to
+collide with.
+
+What that leaves is not a choice between names but a choice of spelling,
+and the answer follows from the files rather than from anybody's taste:
+a consumer holds `cera.h`, writes `#include "cera.h"`, and should not
+then have to call something spelled `sora_`. The include and the call
+agree, or the consumer's first line hands them a puzzle.
+
+[905](905-the-prefix.md) is unblocked and its cost is unchanged — it was
+never the price of deciding, it was the price of the respelling having
+been half-done for months.
+
 ## What is not decided
 
-**The prefix.** Three candidates, no default, and a one-shot decision
-because applying the second one costs what the first did. See
-[905](905-the-prefix.md), which cannot start until it is answered.
+Nothing in this phase, currently.

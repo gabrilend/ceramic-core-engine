@@ -13,6 +13,10 @@ Two prefixes are already in use and neither covers the surface.
 station-builder, and appears in every include guard. `map_` and `pool_`
 are layer names that read as prefixes without being one.
 
+And the two spellings of the engine's own name have been sitting beside
+each other unremarked — see below, where that turns out to be the whole
+of what this issue was actually about.
+
 ## Intended behaviour
 
 **One prefix on every public name**, applied once and grepped for
@@ -20,19 +24,41 @@ stragglers — including in the documents and the issue files, which name
 these calls in prose and would otherwise describe an engine that no
 longer answers to those names.
 
-### The open question, which has to be answered before a line changes
+### The question dissolved rather than being answered
 
-**Which prefix.** Three candidates, and this is a one-shot decision
-because the second application costs what the first did:
+It was asked as a choice between two names and it is not one.
 
-| candidate | for | against |
-|---|---|---|
-| `cera_` | matches the files, matches what the readme calls the thing — the ceramic core engine; short | `sora_` is already on ~15 symbols and in every include guard, so this renames those too |
-| `sora_` | already used; renames fewer symbols; the project's own name for itself in code | the project's front door does not say "sora" anywhere; the name is inherited from the larger project this was distilled out of |
-| both | leave `sora_` where it is, add `cera_` to the rest | two prefixes is no prefix — a consumer cannot tell which family a call is in, and neither can grep |
+```
+soramech
+ceramic
+```
 
-**Ask before starting.** Nothing below can begin until this is answered,
-and answering it wrongly is a day of work twice.
+**Same word.** The consonants are identical and in order — S, R, M, K —
+the vowels are all reduced to almost nothing, and the trailing `h` is
+silent. Read down the columns: positions three, four, five and seven are
+the same letters outright, and the first pair only differ in which
+letter English uses to spell that sound.
+
+So the engine was never renamed when it was distilled onto this branch.
+It was **respelled**, and nobody noticed, including the people doing it.
+`sora_` and `cera_` have been two spellings of one prefix the whole time,
+which is why the project could carry both without anything feeling wrong
+— there was no collision to feel, because there were not two names.
+
+That reframes what is being decided. Not *which name*, since there is
+one, but **which spelling of it a consumer meets**, which is a much
+smaller question with a much clearer answer:
+
+**`cera_`, because it is what the file says.** A consumer holds two
+files called `cera.c` and `cera.h`, writes `#include "cera.h"`, and then
+calls something. If that something is `sora_map_create`, they have been
+handed a spelling mismatch on their first line and no way to know it is
+not a second library. If it is `cera_map_create`, the include and the
+call agree and there is nothing to explain.
+
+The cost — renaming the fifteen-odd symbols already spelled `sora_`, and
+every include guard — is not a cost of choosing between names. It is the
+cost of the respelling having been half-done for months.
 
 ### What the rename touches
 
@@ -56,12 +82,14 @@ already.
 
 ## Suggested implementation steps
 
-1. **Answer the open question.**
-2. **Rename in the header first**, since it is the list.
-3. **Follow it into `cera.c`, the generator, the tests, the example.**
-4. **Grep the whole tree** for the old names — including prose, which a
-   compiler will never check.
-5. **Collapse the export list** to the single pattern the prefix now
+1. **Rename in the header first**, since it is the list.
+2. **Follow it into `cera.c`, the generator, the tests, the example.**
+3. **Grep the whole tree** for the old names — including prose, which a
+   compiler will never check. The include guards go too: `SORA_STATION_H`
+   and its siblings are already gone into `CERA_H`, but the generated
+   code and the documents still say `sora_` in places a compiler will
+   never read.
+4. **Collapse the export list** to the single pattern the prefix now
    allows, and decide whether it remains a file.
 
 ## Related
