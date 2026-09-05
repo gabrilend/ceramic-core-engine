@@ -17,8 +17,14 @@ English words it never asked for — `map_create`, `map_start`,
 `pool_push` — and would fail to link if it had its own notion of a map.
 
 One file makes private the default and public a deliberate act, the act
-being a declaration in `cera.h`. That property cannot decay: a function
-added next year is private unless somebody writes it into the header.
+being a declaration in `cera.h`. **That property cannot decay**, and not
+because anybody is careful: `tests/112-test-public-surface.sh` compiles
+this file alone, asks the object what it publishes, and fails naming
+anything published without being declared. A function added next year is
+private unless somebody writes it into the header, and the build says so
+if they meant to and forgot.
+
+The engine exported 123 symbols before this and exports 100 now.
 
 The cost is that any change recompiles the whole engine, which at this
 size is a fraction of a second and is paid by the consumer's build
@@ -45,6 +51,24 @@ file, each opening with a banner naming what it was:
 
 A `#line` directive at every seam keeps compiler errors and debugger
 backtraces pointing at the original numbered source.
+
+## The joints
+
+Near the top, under a banner, sit the declarations of everything this
+file does not publish — the slot state machine, the pages a ring grows
+by, the constant a port holds, the text the dump prints through, the
+output port lookup and its destination sets, task construction, the
+pool's own callback, the scrapyard, the box-table matcher. They are
+declared there rather than left to definition order because the sections
+call each other in both directions: delivery reaches a slot the station
+layer defines, and the station layer builds a task delivery owns.
+
+**Two of them are reached only by tests.** The white-box tests compile
+as one unit with this file, so who calls a joint depends on which unit
+is being built — and when this file is built alone, the ordinal form of
+a slot move and the scrapyard's count have no caller at all. They are
+marked as expected-to-be-unused rather than deleted, because deleting
+one is a decision about the engine rather than about moving it.
 
 ## Two things the merge had to be careful about
 

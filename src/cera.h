@@ -1431,28 +1431,6 @@ const char *map_wire(map_t *m, int from_station, int port,
                      int to_station, int to_port);
 /* }}} */
 
-/* {{{ map_connect() — issues 201, 205, 207 */
-/*
- * Wire: from a station's output port to a destination station's port.
- * Ports are created on first use, in index order. Repeat with the
- * same port to fan out.
- */
-/* {{{ out_port_dests() / dest_set_build() / dest_set_retire() — issue 214 */
-/*
- * out_port_dests reads a port's current set. One atomic load, no lock,
- * and the pointer it returns is to something nobody will modify.
- * Null means the port is wired nowhere.
- *
- * dest_set_build makes a new set from an existing one plus or minus
- * one wire; it allocates and never edits what it was given.
- *
- * dest_set_retire files a replaced set in the map's scrapyard. It
- * takes the scrap lock and nothing else.
- */
-dest_set_t *out_port_dests(const out_port_t *p);
-dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
-                           int add_port, int drop_station, int drop_port);
-
 /*
  * **The scrapyard takes anything.** Hand it a pointer and the
  * function that frees it, and it holds on until no worker can still
@@ -1467,10 +1445,6 @@ dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
  * map_retire sweeps before filing, so a program that changes shape
  * forever reclaims as it goes rather than growing forever.
  */
-void        map_retire(map_t *m, void *p, void (*free_fn)(void *));
-void        map_scrap_sweep(map_t *m);
-int         map_scrap_count(map_t *m);
-void        map_scrap_free_all(map_t *m);
 /* }}} */
 
 /* {{{ map_remove_station() — issue 216 */
@@ -1535,15 +1509,6 @@ void map_destroy(map_t *m);
  * the statistics read as "the deliverer produced one".
  */
 int map_deliver_value(map_t *m, int station, int port, const void *value);
-/* }}} */
-
-/* {{{ map_deliver() — issue 205 */
-/*
- * The delivery walk: the pool's finish hook. Takes a finished task,
- * chooses the outgoing port by the station's kind, and walks that
- * port's destinations delivering the output value to each.
- */
-void map_deliver(void *ctx, task_t *t);
 /* }}} */
 
 /* {{{ map_in_port_depth() — issue 208 */
@@ -1712,70 +1677,6 @@ void map_in_port_static_write(map_t *m, int station, int port,
 /* surface a map author touches.                                      */
 /* ------------------------------------------------------------------ */
 
-/* {{{ in_port_slot() / in_port_slot_move() — issue 210c */
-/*
- * One slot, and the one way its state ever changes.
- *
- * in_port_slot returns where slot `index`'s value bytes live. The value
- * comes first in a slot and its state sits after it, so that the
- * value keeps the alignment the allocator gave the array — a state
- * byte in front would push every value off by one, which on some
- * machines is a fault and on the rest is slow.
- *
- * in_port_slot_move is the whole state machine: a compare-and-swap from
- * one named state to another, returning whether this caller won it.
- * There is one primitive rather than four named transitions because
- * the rule worth enforcing is *this exact state became that exact
- * state*, and naming the pair at the call site is what makes a
- * reader of the delivery path able to see the machine running. A
- * transition from a state a slot is not in simply fails, which is
- * what makes an illegal move impossible rather than merely
- * discouraged.
- *
- * Two callers race for one slot and exactly one of them wins. The
- * loser is not blocked and does not retry in place — it goes and
- * looks at another slot, which is the property the whole design is
- * for.
- */
-void *in_port_slot(const in_port_t *sl, int index);
-int   in_port_slot_move(const in_port_t *sl, int index, int from, int to);
-
-/*
- * The same transition on a slot the caller has already located.
- * The scan walks pages and therefore holds the address already; going
- * back through an ordinal would make it resolve a page per candidate,
- * which is a walk down the page list for every slot it looks at
- * (issue 210e).
- */
-int   slot_move_at(void *slot, int elem_size, int from, int to);
-
-/*
- * Reading a slot's state, and setting it without a compare-and-swap.
- *
- * Only for transitions whose mover is already unique: a claimer under
- * the station's mutex taking a *ready* slot (other claimers excluded
- * by the lock, and a writer never touches a ready one), or an owner
- * moving a slot it holds in *reserved* or *claimed*. Everywhere else —
- * which means a writer racing another writer for an empty slot — the
- * compare-and-swap above is what makes the loser go elsewhere.
- */
-int   slot_state_at(const void *slot, int elem_size);
-
-/* {{{ in_port_waiting_text() — issue 712 */
-/*
- * Every value waiting in this port's buffer, written down as text,
- * comma separated. Returns how many characters it wanted — ask with
- * no room, allocate, ask again — and zero when nothing is waiting.
- *
- * The order is slot order, which the engine does not promise means
- * anything: a port has no head and no tail, and the guarantees page
- * says nothing is promised about the order values leave one. A
- * capture writes them as stored and a revival delivers them back that
- * way, which is exactly as faithful as the engine is.
- */
-int in_port_waiting_text(const in_port_t *sl, char *out, int room);
-/* }}} */
-
 /* {{{ map_in_port_queue_text() — issue 712 */
 /*
  * Values put back into a buffer, from the text a capture wrote:
@@ -1791,84 +1692,6 @@ int in_port_waiting_text(const in_port_t *sl, char *out, int room);
 const char *map_in_port_queue_text(map_t *m, int station, int port,
                                    const char *text);
 /* }}} */
-void  slot_set_at(void *slot, int elem_size, int to);
-/* }}} */
-
-/* {{{ in_port_add_page() / in_port_free_pages() — issue 210e */
-/*
- * Growing a ring buffer, and the one act that gives it its first page
- * as well — they are the same thing, which is what paging buys.
- * `in_port_add_page` appends one page of `page_slots` slots, all
- * empty, and adds them to the capacity; nothing already there moves.
- * Callers hold the station's mutex, so two threads meeting a full
- * buffer add one page between them rather than one each.
- *
- * `in_port_free_pages` drops the whole list, for teardown and for the
- * one moment a port's page size legitimately changes — its starting
- * depth, which may only be set while the port is empty.
- */
-in_port_page_t *in_port_add_page(in_port_t *sl);
-void            in_port_free_pages(in_port_t *sl);
-/* }}} */
-
-/* {{{ in_port_kind_name() — issue 210b */
-/*
- * What a port's tag is called, in the words a person would use. Every
- * refusal that turns somebody away from a port has to say which of the
- * three it found, because "not a buffer" describes two different
- * situations with two different fixes: a static already holds a value
- * and has no room to queue another, while an unconfigured port is one
- * nobody has finished wiring. One table, so a fourth tag would be a
- * row rather than three edits nobody finds.
- */
-const char *in_port_kind_name(unsigned char kind);
-/* }}} */
-
-/* {{{ station_out_port() */
-/* The port at an index, or null if never wired — which delivery
- * reads as "discard". */
-out_port_t *station_out_port(station_t *s, int index);
-/* }}} */
-
-/* {{{ in_port_constant_free() — teardown joint */
-/* A port's constant and, for a string, the characters it points at.
- * Owned by the port and freed with the map. */
-void in_port_constant_free(in_port_t *sl);
-/* }}} */
-
-/* {{{ in_port_constant_text() — issue 401 */
-/*
- * A port's constant, turned back into the text a map file would use.
- * Writes at most `room` bytes including the terminator, and returns
- * how many characters it wanted — so a caller can tell it was cut
- * short.
- *
- * This is the exact mirror of the reader that walks a field table
- * turning text into bytes, and it exists because the dump lost its
- * source of words. The statics table used to keep the original string
- * a file gave it, and the dump wrote that string back out; with the
- * value living on the port and no text retained anywhere, there is
- * nothing to echo and the bytes have to be spoken.
- *
- * It is one piece of work with more than one caller in waiting: the
- * dump, anything showing a value to a person, and eventually a
- * program's results — which are text for the same reason a static is,
- * because text resolves its layout when it is read and so survives a
- * rebuild that would silently change what raw bytes meant.
- */
-int in_port_constant_text(const in_port_t *sl, char *out, int room);
-/* }}} */
-
-/* {{{ task_build() — the one way a task comes into existence */
-/*
- * Exposed so the seed sweep (issue 605) creates its first tasks
- * through the same path delivery uses — one way, not two. The claimed
- * buffer carries one value per port, of every kind: statics are
- * claimed under the station's mutex beside the ring pops now (issue
- * 401), so nothing is left to resolve here.
- */
-task_t *task_build(map_t *m, int station_index,
-                   const unsigned char *claimed, int port);
 /* }}} */
 
 
@@ -2015,16 +1838,6 @@ extern const int            n_box_places;
 /* Which placement function writes this box's station. Compiled-in
  * rows first, then anything compiled after the program started. */
 const box_place_t *box_place_find(const char *name);
-
-/*
- * Whether one row is what a name refers to. Three forms, one rule: a
- * bare function name, a basename and a function, or a path and a
- * function (issue 311a). Exposed because the compiled-in rows and the
- * rows that arrived while the program ran are searched separately and
- * must agree about what a name means.
- */
-int box_place_matches(const box_place_t *row, const char *name);
-/* }}} */
 
 /* The generated data. Defined in src/generated/emitted.c, which the
  * generator rewrites on every build where a box source changed. */

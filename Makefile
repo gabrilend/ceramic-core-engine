@@ -217,6 +217,26 @@ LDFLAGS := -Wl,--dynamic-list=$(SURFACE) -Wl,--gc-sections
 $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
 
+# The white-box tests, which examine the engine's own machinery rather
+# than only what a program built with it calls — slots, pages,
+# destination sets, the constants a port holds (issue 903).
+#
+# Those functions are private, and a private function cannot be reached
+# from another translation unit no matter what is declared. So these
+# tests include cera.c and are compiled as one unit with it. The engine
+# is therefore NOT on their link line: it is already inside them, and
+# putting it in both places is every symbol defined twice.
+#
+# A static pattern rule, which beats the general rule above for exactly
+# these names and leaves every other test alone.
+WHITEBOX := 021-test-station-table 035-test-statics 064-test-slot-states \
+            072-test-width-wiring 076-test-destinations 077-test-removal \
+            080-test-page-growth
+WHITEBOX_BINS := $(patsubst %,$(BUILD)/%,$(WHITEBOX))
+
+$(WHITEBOX_BINS): $(BUILD)/%: $(DIR)/tests/%.c $(CERA_C) $(CERA_H) $(GENERATED) $(SURFACE) | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $< $(GENERATED) $(LDFLAGS)
+
 # The generator's own unit test links the generator's pieces rather
 # than the engine: it is testing the build tool, not the thing the
 # tool builds. An explicit rule beats the pattern rule above, so this

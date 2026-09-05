@@ -29,6 +29,8 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
+<a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
+<a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
@@ -36,6 +38,11 @@
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
+<a href="issue-904-the-old-files-are-removed.html">904 — The old files are removed</a>
+<a href="issue-905-the-prefix.html">905 — The prefix</a>
+<a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
+<a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
+<a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -44,6 +51,7 @@
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
 <a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
+<a href="issue-phase-9-progress.html">Phase 9 progress — the engine leaves home</a>
 <h2>Issues, completed</h2>
 <a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
 <a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
@@ -120,6 +128,9 @@
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
 <a href="done-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
+<a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
+<a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
@@ -155,6 +166,8 @@
 <a href="info-098-engine-surface-syms.html">098-engine-surface.syms — the engine's public surface</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
+<a href="info-cera-c.html">cera.c — the engine, entire</a>
+<a href="info-cera-h.html">cera.h — the engine's interface</a>
 <a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
 <a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
@@ -236,18 +249,25 @@ knowing it exists is mostly useful so that nobody reinvents it badly.</p>
 <h2>Boxes</h2>
 <table>
 <tr><td>#</td><td>always true</td><td>what it costs</td><td>held by</td></tr>
-<tr><td>B1</td><td>A box cannot remember anything between calls.</td><td>State has to live on the wires: to count, you route a box's output back into its own input.</td><td><strong>discipline</strong></td></tr>
+<tr><td>B1</td><td>A box cannot remember anything between calls. <strong>A station can.</strong></td><td>The memory is a value sitting on a <strong>static port</strong>, and the only way a box reaches it is by <strong>returning a value that a wire carries into it</strong> — usually the station's own output arrow pointing back at its own static input port. So state belongs to the <em>placement</em>, not to the function: one box at three stations is three memories. And it is <strong>drawn</strong>: an accumulator is visible in the map file as an arrow, rather than hidden inside C where no picture shows it.</td><td>structure</td></tr>
 <tr><td>B2</td><td>A box receives private copies of its arguments, never shared pointers.</td><td>Every value is copied at least once per invocation.</td><td>structure</td></tr>
-<tr><td>B3</td><td>Two invocations of the same station may run simultaneously on different threads.</td><td>Follows from B1 — anything a box stored would be shared between them.</td><td>structure</td></tr>
+<tr><td>B3</td><td>Two invocations of the same station may run simultaneously on different threads.</td><td>Follows from B1 — the box stores nothing, so two invocations share nothing. <strong>A station's memory does not endanger this</strong>: it lives on a port and is written by the delivery path under the station's mutex (G6), never by C code executing inside the box, so two simultaneous invocations cannot race over it. Each simply reads whatever was there when its own inputs were claimed, which is T3 working exactly as written.</td><td>structure</td></tr>
 <tr><td>B4</td><td>A box never blocks.</td><td>Nothing may wait on a value, a lock, or a device. A worker that cannot progress is a worker not running the ten things that are ready.</td><td><strong>discipline</strong></td></tr>
 <tr><td>B5</td><td>A box that returns void is a sink; the engine needs no support for it.</td><td>A sink's output is simply not delivered anywhere.</td><td>structure</td></tr>
 </table>
 <p>B1 and B4 are the two load-bearing guarantees held by nothing but
 discipline, and almost everything else rests on them. B1 is what makes
 B3 safe, and B3 is what makes the whole engine parallel. B4 is what
-makes deadlock impossible (see P6). A single box with a <code>static</code> counter
-or a blocking socket read quietly withdraws both, and no part of the
-system will say so.</p>
+makes deadlock impossible (see P6). A single box with a <code>static</code>
+counter or a blocking socket read quietly withdraws both, and no part
+of the system will say so.</p>
+<p><strong>The counter is the point, and B1 does not forbid counting.</strong> What it
+forbids is the box keeping the count. The station keeps it, on a
+static port, written by a wire from the box's own output — so the box
+stays a function of its arguments and the memory stays somewhere the
+engine can see, lock, dump and revive. Somebody who reaches for a C
+<code>static</code> is reaching past a mechanism that already exists and is
+safer, and the <em>not guaranteed</em> section says what they lose by it.</p>
 <p>---</p>
 <h2>Stations and wiring</h2>
 <table>
@@ -308,7 +328,7 @@ for and what removing them cost.</p>
 <tr><td>G11</td><td>~~A box cannot write a static.~~ <strong>Retired.</strong> A map wrapped in its input and output stations <em>is</em> a box, so a box reaching a map is a box reaching a box, and the prohibition was protecting a distinction that no longer exists.</td><td>What it originally bought was G12, and G12 survives without it: a map handle travels as an ordinary value on an ordinary wire, arriving through the input station like anything else from outside, so no process-wide pointer returns. A box that builds stations therefore has a side effect far larger than any other box, and that is now deliberate rather than forbidden &amp;mdash; it is what lets a program restructure itself while it runs.</td><td>structure</td></tr>
 <tr><td>G12</td><td>A process may run any number of maps at once, and they cannot see each other.</td><td>Nothing in the engine is process-wide. Held by a test that runs two and writes into one. This is the guarantee G11 was retired in favour of keeping directly: a box that reaches a map does so through a handle it was <em>given</em> as a value, never through a pointer the process holds, so several maps stay invisible to each other even though boxes can now build them.</td><td>structure</td></tr>
 <tr><td>G13</td><td>A wire may deliver into a static port, and the arriving value <strong>overwrites</strong> the constant rather than queueing.</td><td><strong>Two arrows into one static port is last-writer-wins, nondeterministically</strong> — stated here rather than left as a surprise. What it buys is a constant that is <em>computed</em> rather than written down: a station that runs once, wired into a downstream static port, and every invocation afterwards reads what it produced. It is not the back channel returning — the box is untouched and remembers nothing; the <strong>wire</strong> is what says this value overwrites a static, and a wire is visible in the map file, in the dump, and on a canvas.</td><td>structure</td></tr>
-<tr><td>G7</td><td>Push cycles are legal.</td><td>They must be: since a box cannot remember (B1), a loop through a ring buffer is the only way to carry state. A blanket cycle check would forbid the engine's sole mechanism for state.</td><td>structure</td></tr>
+<tr><td>G7</td><td>Push cycles are legal.</td><td>They must be: a box cannot remember (B1), so <strong>every</strong> way of carrying state is a cycle. A loop through a ring buffer carries it as a queued value; an arrow from a station's output back into its own static port carries it as a remembered one (G13). A blanket cycle check would forbid both, which is to say all of the engine's mechanisms for state.</td><td>structure</td></tr>
 </table>
 <p>---</p>
 <h2>The build path</h2>
@@ -482,6 +502,33 @@ invocations depend on runs once, not a million times. Under the pull
 path this was the other way round, and the change is a saving rather
 than a loss: a shared computation is computed once and read by
 everyone.</p>
+<p>**A <code>static</code> inside a box source is not how a station remembers, and
+it is not safe.** B1 says a box may not keep state and the engine
+provides the supported way to keep it — a value on a static port, put
+there by a wire from the box's output. Nothing checks a box source for
+<code>static</code> storage, so somebody can write one anyway, and three things
+go wrong at once.</p>
+<p>**Two invocations of one station run simultaneously (B3) and would
+share it.** The engine builds a task the moment a station's inputs are
+present and hands it to whichever worker is free, so two calls to the
+same C function can be inside it on two cores. A <code>static</code> counter
+incremented by both is a plain data race, and no lock in the engine
+covers it: the station's mutex guards its <em>ports</em>, and it is released
+before the box is ever called. The supported mechanism has no such
+problem, because the write happens on the delivery path under that
+same mutex rather than inside the box.</p>
+<p><strong>Capture would not carry it</strong> (issue 712). A capture writes every
+value sitting on a port and every iterator's place in its exits, which
+is the whole state of a program whose memory lives where the engine
+put it. A <code>static</code> inside a C function is invisible to that walk, so
+the artifact would look complete and the revived program would have
+silently forgotten. State kept the supported way is captured without
+the capture needing to know it was memory rather than a constant.</p>
+<p><strong>And it would not be in the picture.</strong> An accumulator built the
+supported way appears in the map file, in the dump and on a canvas as
+an arrow returning to its own station. One built with a <code>static</code>
+appears nowhere at all, and the drawing of the program is then a
+drawing of something else.</p>
 <p><strong>B1 and B4 are unenforced.</strong> The two guarantees the most is built on
 are the two that nothing checks. A linter that refused <code>static</code> storage
 and blocking calls inside box sources would move both from discipline to

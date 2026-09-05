@@ -29,6 +29,8 @@
 <h2>Notes</h2>
 <a href="note-first-pass-report.html">First-pass report — lessons learned while building</a>
 <h2>Issues, open</h2>
+<a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
+<a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
@@ -36,6 +38,11 @@
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
+<a href="issue-904-the-old-files-are-removed.html">904 — The old files are removed</a>
+<a href="issue-905-the-prefix.html">905 — The prefix</a>
+<a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
+<a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
+<a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
 <a href="issue-phase-1-progress.html" class="here">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -44,6 +51,7 @@
 <a href="issue-phase-6-progress.html">Phase 6 progress — the map file</a>
 <a href="issue-phase-7-progress.html">Phase 7 progress — seeing inside it</a>
 <a href="issue-phase-8-progress.html">Phase 8 progress — the workbench</a>
+<a href="issue-phase-9-progress.html">Phase 9 progress — the engine leaves home</a>
 <h2>Issues, completed</h2>
 <a href="done-101-task-queue-ring.html">101 — The task queue: a ring of pointers that doubles</a>
 <a href="done-102-workers-and-run-loop.html">102 — Worker threads and the run loop</a>
@@ -120,6 +128,9 @@
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
 <a href="done-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
+<a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
+<a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
 <h2>Interfaces</h2>
 <a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
 <a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
@@ -155,6 +166,8 @@
 <a href="info-098-engine-surface-syms.html">098-engine-surface.syms — the engine's public surface</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
+<a href="info-cera-c.html">cera.c — the engine, entire</a>
+<a href="info-cera-h.html">cera.h — the engine's interface</a>
 <a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
 <a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
@@ -173,6 +186,8 @@ above it in the project stands on this.</p>
 <tr><td>104 — termination by last sleeper</td><td>complete</td><td>Last sleeper's final look decides; broadcast shutdown; outside submitters registered.</td></tr>
 <tr><td>105 — phase 1 demo</td><td>complete</td><td>Four measured scenes: growth, termination tail, idle cost, throughput ceiling.</td></tr>
 <tr><td><a href="done-106-stopping-on-purpose.html">106 — stopping on purpose</a></td><td>complete</td><td>Three signals answered by a thread that <em>waits</em> for one rather than handling it, so the reports may take locks; the pool's own ending arrives at the same waiting point as one more signal. A refusal is fatal rather than ignorable.</td></tr>
+<tr><td><a href="issue-107-several-queues-a-station-may-name.html">107 — several queues, and a station may name one</a></td><td>open</td><td>The single ring becomes several, and a station may say which one its tasks are delivered into. <strong>A station that says nothing changes nothing</strong> — one default queue, served by everybody, in today's order. A queue is a <em>destination</em> and the engine is deliberately kept ignorant of what one is, so that later it can be another socket, a graphics processor, a machine across a network, or something that is not a computer. Queues may overlap in who serves them, which is how specializations and priority lanes layer without knowing about each other. Weakens first-in-first-out from global to per-queue plus a source order.</td></tr>
+<tr><td><a href="issue-108-choosing-where-a-box-runs.html">108 — choosing where a box runs</a></td><td>open</td><td>A station may name the processors it will run on — cores, packages, NUMA nodes, cache domains, workers — joined by <em>and</em>, <em>or</em> and <em>not</em>, on an <code>on</code> line in the map file. Builds on 107: a placement is more entries in the worker's queue array, not an arrangement of its own. Workers grow homes they <strong>announce themselves</strong>, since there is no main thread to hand them one. This is where U1 is genuinely sold, because widening a placement is what a placement forbids.</td></tr>
 </table>
 <p><strong>Phase 1 reopened at the far end, and closed again.</strong> Everything
 built here still stands untouched — the new work added no mechanism to
@@ -209,6 +224,43 @@ phase 2 is for.</p>
 function with four aspects rather than four functions, and landed as a
 unit in the 101 commit; the issues were then proven and closed one at
 a time by their tests. The first-pass report carries the lesson.</p>
+<p>**And it is open again, this time at the mechanism rather than around
+it.** Two issues, and the order between them was worked out after both
+were written. 107 splits the one queue into several and lets a station
+name the one its tasks are delivered into. 108 asks the pool to obey a
+placement, and turns out to be a way of <em>computing</em> which servers a
+queue has from a description of hardware — a notation over 107 rather
+than a mechanism beside it, which is why it takes the higher number
+despite having been thought of first.</p>
+<p><strong>The default is the whole design.</strong> A station names nothing, and
+nothing changes: one queue, served by every worker, in today's order,
+on today's mutex. An earlier draft made a worker deliver into its own
+queue by default, on a cache-locality argument, and that was wrong —
+it assumes a destination is a thread in this process, which is exactly
+the assumption the structure exists to avoid. A queue is a
+<strong>destination</strong>, and a destination should be free to become another
+socket, a graphics processor, a machine across a network, or something
+that is not a computer at all. Locality is one thing a destination can
+happen to express, opted into, never assumed.</p>
+<p><strong>What it costs is global first-in-first-out</strong>, which becomes
+per-queue order plus the order of each server's source array. And
+because queues may overlap in who serves them, a specialization and a
+priority lane and a socket are the same structure with different
+membership — none of them needs its own code, and none of them has to
+know the others exist.</p>
+<p><strong>The interesting cost appears only when somebody uses it</strong>: a server
+may sleep while a queue it does not subscribe to holds work. In 107
+that never happens by default, since the default queue is served by
+everybody. In 108 it is unavoidable, because widening a placement is
+precisely what a placement forbids — so that is where the guarantee is
+actually sold.</p>
+<p>**Neither 107 nor 108 has been started, and neither should be without
+asking first.** Both carry a note at the top saying so. They are
+blueprints under discussion rather than plans agreed on: 107 has
+already had its central default reversed once and its vocabulary is
+still unsettled, and 108 has had two decisions reversed and leaves
+seven questions open. Nothing in either has been built — every file
+touched while writing them is a document.</p>
 
 </main>
 </div></body></html>

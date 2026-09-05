@@ -19,7 +19,24 @@
  * caring about the name, so the shapes have to be real types the
  * generator saw, not something this file made up.
  */
-#include "cera.h"
+/*
+ * This test reaches into the engine's own machinery — slots, pages,
+ * destination sets, the constants a port holds — rather than only
+ * calling what a program built with this engine calls. So it includes
+ * the engine's *source* and is compiled as one unit with it (issue
+ * 903). Those functions are private, and a private function cannot be
+ * called from another translation unit no matter what is declared.
+ *
+ * A white-box test belongs inside the thing it examines. The
+ * alternative was keeping the machinery public so this file could
+ * reach it, which makes the test suite the reason a consumer's link
+ * fails, and leaves private-by-default depending on nobody ever
+ * writing another test like this one.
+ *
+ * The build rule for these does not also put the engine on the link
+ * line: it is already here, and doing both is every symbol twice.
+ */
+#include "cera.c"
 
 #include <fcntl.h>
 #include <stdatomic.h>

@@ -23,20 +23,25 @@ The numbers are kept because they are the reading order: the pool knows
 nothing of stations, stations know nothing of the generator, and each
 section stands on the ones above it.
 
-## What is in here that should not be
+## What is in here, and what is not
 
-**Everything.** A declaration is in this file because one engine file
-needed to reach another, not because anybody outside should. The
-construction surface a consumer uses and the joint by which delivery
-reaches a slot in a ring sit here with equal standing, and nothing
-states which is which.
+**100 symbols, and the engine exports exactly those 100.** Not "roughly
+these" — checked on every test run by
+`tests/112-test-public-surface.sh`, which compiles the engine alone,
+asks the object file what it publishes, and fails naming anything that
+is published without being declared here.
 
-Narrowing this to a real public surface is
-[902](../issues/902-the-header-says-what-is-public.md); making
-everything else `static` is
-[903](../issues/903-everything-else-goes-private.md). Until then, treat
-the sections as the guide to what to reach for and expect the list to
-shrink.
+That is the property this file exists for: **private by default, public
+only by a deliberate act**, the act being a line in this file. It
+cannot decay, because breaking it means writing a function and
+forgetting one word, and something checks.
+
+**What is not here** is how the engine reaches itself — the slot state
+machine, the pages a ring grows by, the constant a port holds, the text
+the dump prints through, the output port lookup and its destination
+sets, task construction, the pool's own callback, the scrapyard, the
+box-table matcher. Twenty-three of them, in `cera.c` under a banner
+saying so, with the documentation they always had.
 
 ## The one thing that is already known about the boundary
 
@@ -51,8 +56,12 @@ eleven calls that turn a value into text and back.
 A box or map compiled *while the program runs* binds to those same names
 through the executable's dynamic symbol table, which is what
 [098-engine-surface.syms](098-engine-surface.syms.info.md) publishes.
-That file and this one describe the same boundary and do not yet agree
-about it; making them agree is part of 902.
+That file and this one describe the same boundary from two directions —
+what a shared object may bind to, and what a program may call. They
+agree today by both naming the same families; after
+[905](../issues/905-the-prefix.md) gives every public name one prefix,
+the linker's list collapses to a single pattern and the question of
+whether it needs to be a file at all can finally be asked.
 
 ## Using it
 
@@ -69,4 +78,6 @@ explains why the obvious way to write the first cancels the second.
 
 - [cera.c](cera.c.info.md) — the implementation
 - [901](../issues/completed/901-the-engine-becomes-one-file.md) — why there is one file
+- [902](../issues/completed/902-the-header-says-what-is-public.md) — what is in this file, and why
+- [903](../issues/completed/903-everything-else-goes-private.md) — what is not, and what checks
 - [057 — Packaging](../docs/implementation-notes/057-packaging.md)
