@@ -63,7 +63,7 @@
 /* A station needs a shim to be placed. This one never runs: every
  * test below reaches for the station's slots directly and nothing is
  * ever delivered, so no task is ever built. */
-static void unused__call(task_t *t)
+static void unused__call(cera_task_t *t)
 {
     (void)t;
     fprintf(stderr, "slot states: a box ran, and none should have\n");
@@ -72,18 +72,18 @@ static void unused__call(task_t *t)
 /* }}} */
 
 /* {{{ a station's first port, for reaching its slots */
-static map_t *bare_map(int slots, int elem_size)
+static cera_map_t *bare_map(int slots, int elem_size)
 {
-    map_t *m = map_create(1);
+    cera_map_t *m = cera_map_create(1);
     int sizes[1] = { elem_size };
-    map_place(m, 0, unused__call, STATION_PLAIN, 1, sizes, 0);
-    map_in_port_start_depth(m, 0, 0, slots);
+    cera_map_place(m, 0, unused__call, CERA_STATION_PLAIN, 1, sizes, 0);
+    cera_map_in_port_start_depth(m, 0, 0, slots);
     return m;
 }
 
-static in_port_t *first_port(map_t *m)
+static cera_in_port_t *first_port(cera_map_t *m)
 {
-    return &map_station(m, 0)->in_ports[0];
+    return &cera_map_station(m, 0)->in_ports[0];
 }
 /* }}} */
 
@@ -111,7 +111,7 @@ static in_port_t *first_port(map_t *m)
 enum { RACERS = 16, ARENA_SLOTS = 4096 };
 
 typedef struct racer {
-    in_port_t      *port;
+    cera_in_port_t      *port;
     _Atomic int *go;
     int          won;        /* this thread's own tally */
 } racer_t;
@@ -126,15 +126,15 @@ static void *racer_main(void *arg)
         ;
 
     for (int c = 0; c < ARENA_SLOTS; c++)
-        if (in_port_slot_move(r->port, c, SLOT_EMPTY, SLOT_RESERVED))
+        if (in_port_slot_move(r->port, c, CERA_SLOT_EMPTY, CERA_SLOT_RESERVED))
             r->won++;
     return NULL;
 }
 
 static void test_one_winner(void)
 {
-    map_t *m = bare_map(ARENA_SLOTS, (int)sizeof(int));
-    in_port_t *port = first_port(m);
+    cera_map_t *m = bare_map(ARENA_SLOTS, (int)sizeof(int));
+    cera_in_port_t *port = first_port(m);
 
     _Atomic int go = 0;
     pthread_t threads[RACERS];
@@ -166,13 +166,13 @@ static void test_one_winner(void)
      * asked directly. Every one of them must refuse to be taken from
      * empty now, because none of them is empty any more. */
     for (int c = 0; c < ARENA_SLOTS; c++) {
-        if (in_port_slot_move(port, c, SLOT_EMPTY, SLOT_RESERVED)) {
+        if (in_port_slot_move(port, c, CERA_SLOT_EMPTY, CERA_SLOT_RESERVED)) {
             fprintf(stderr, "slot %d was still empty afterwards\n", c);
             exit(1);
         }
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  %d threads over %d slots: every slot won exactly once\n",
            RACERS, ARENA_SLOTS);
 }
@@ -191,22 +191,22 @@ static void test_one_winner(void)
 static void test_illegal_moves_refused(void)
 {
     static const int states[4] = {
-        SLOT_EMPTY, SLOT_RESERVED, SLOT_READY, SLOT_CLAIMED,
+        CERA_SLOT_EMPTY, CERA_SLOT_RESERVED, CERA_SLOT_READY, CERA_SLOT_CLAIMED,
     };
     static const char *const names[4] = {
         "empty", "reserved", "ready", "claimed",
     };
 
-    map_t *m = bare_map(4, (int)sizeof(int));
-    in_port_t *port = first_port(m);
+    cera_map_t *m = bare_map(4, (int)sizeof(int));
+    cera_in_port_t *port = first_port(m);
     int refused = 0;
 
     for (int held = 0; held < 4; held++) {
         /* Put the slot into the state under examination. Slot 0 is
          * empty to begin with and is returned to empty at the end of
          * each pass, so this one move is always legal. */
-        if (held != SLOT_EMPTY
-            && !in_port_slot_move(port, 0, SLOT_EMPTY, states[held])) {
+        if (held != CERA_SLOT_EMPTY
+            && !in_port_slot_move(port, 0, CERA_SLOT_EMPTY, states[held])) {
             fprintf(stderr, "could not place the slot into %s\n", names[held]);
             exit(1);
         }
@@ -228,15 +228,15 @@ static void test_illegal_moves_refused(void)
             }
         }
 
-        if (held != SLOT_EMPTY
-            && !in_port_slot_move(port, 0, states[held], SLOT_EMPTY)) {
+        if (held != CERA_SLOT_EMPTY
+            && !in_port_slot_move(port, 0, states[held], CERA_SLOT_EMPTY)) {
             fprintf(stderr, "could not return the slot to empty from %s\n",
                     names[held]);
             exit(1);
         }
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  %d moves from a state the slot was not in, %d refused\n",
            refused, refused);
 }
@@ -262,7 +262,7 @@ static void test_illegal_moves_refused(void)
 enum { PRODUCERS = 4, CONSUMERS = 4, PER_PRODUCER = 25000, SLOTS = 8 };
 enum { TOTAL_VALUES = PRODUCERS * PER_PRODUCER };
 
-static in_port_t     *arena;
+static cera_in_port_t     *arena;
 static _Atomic int produced_count;
 static _Atomic int consumed_count;
 static _Atomic int seen[TOTAL_VALUES];
@@ -277,10 +277,10 @@ static void *producer_main(void *arg)
          * simply refuses, and this thread tries the next one — no
          * blocking, no retry in place. */
         for (int c = 0; ; c = (c + 1) % SLOTS) {
-            if (!in_port_slot_move(arena, c, SLOT_EMPTY, SLOT_RESERVED))
+            if (!in_port_slot_move(arena, c, CERA_SLOT_EMPTY, CERA_SLOT_RESERVED))
                 continue;
             memcpy(in_port_slot(arena, c), &value, sizeof value);
-            if (!in_port_slot_move(arena, c, SLOT_RESERVED, SLOT_READY)) {
+            if (!in_port_slot_move(arena, c, CERA_SLOT_RESERVED, CERA_SLOT_READY)) {
                 fprintf(stderr, "a reserved slot was taken from its writer\n");
                 exit(1);
             }
@@ -298,11 +298,11 @@ static void *consumer_main(void *arg)
         if (consumed_count >= TOTAL_VALUES)
             return NULL;
         for (int c = 0; c < SLOTS; c++) {
-            if (!in_port_slot_move(arena, c, SLOT_READY, SLOT_CLAIMED))
+            if (!in_port_slot_move(arena, c, CERA_SLOT_READY, CERA_SLOT_CLAIMED))
                 continue;
             int value;
             memcpy(&value, in_port_slot(arena, c), sizeof value);
-            if (!in_port_slot_move(arena, c, SLOT_CLAIMED, SLOT_EMPTY)) {
+            if (!in_port_slot_move(arena, c, CERA_SLOT_CLAIMED, CERA_SLOT_EMPTY)) {
                 fprintf(stderr, "a claimed slot was taken from its reader\n");
                 exit(1);
             }
@@ -319,7 +319,7 @@ static void *consumer_main(void *arg)
 
 static void test_free_for_all(void)
 {
-    map_t *m = bare_map(SLOTS, (int)sizeof(int));
+    cera_map_t *m = bare_map(SLOTS, (int)sizeof(int));
     arena = first_port(m);
 
     produced_count = 0;
@@ -350,7 +350,7 @@ static void test_free_for_all(void)
         }
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  %d values through %d slots, %d writers against %d readers, "
            "no lock: each out exactly once\n",
            TOTAL_VALUES, SLOTS, PRODUCERS, CONSUMERS);

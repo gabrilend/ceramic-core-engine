@@ -78,9 +78,13 @@ task struct. The box function never sees it. Two tasks assembled a
 moment apart therefore get different ports, decided by the enqueuing
 thread under the lock, and no two invocations can ever collide over it.
 
-It is not really an exception to "a box cannot remember." It is the
-station remembering on the box's behalf, at a moment when only one
-thread can be looking.
+The cursor is the station remembering rather than the box, which is
+how memory works everywhere in this engine — what makes it a special
+case is only *where* it is kept. Ordinary station memory is a value on
+a static port, arrived at by a wire, and a map author draws it. The
+cursor is a field the engine keeps and advances under the station's
+mutex, because it must be decided at the instant a task is built and
+there is no value for a wire to carry.
 
 **An iterator distributes fairly but does not deliver in order.** The
 port is chosen when the task is created, not when it finishes. If the

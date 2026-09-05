@@ -25,12 +25,12 @@ static _Atomic int ran_before_release;
 static _Atomic int release_flag;
 
 typedef struct counting_task {
-    task_t base;
+    cera_task_t base;
     int    id;
 } counting_task_t;
 
 /* {{{ count_once() */
-static void count_once(task_t *t)
+static void count_once(cera_task_t *t)
 {
     counting_task_t *c = (counting_task_t *)t;
     /* A task running while the gate is still shut would mean the
@@ -44,19 +44,19 @@ static void count_once(task_t *t)
 
 int main(void)
 {
-    pool_t *p = pool_create(4, NULL, NULL);
+    cera_pool_t *p = cera_pool_create(4, NULL, NULL);
 
     for (int i = 0; i < TASKS; i++) {
         counting_task_t *c = malloc(sizeof *c);
         if (!c) abort();
         c->base.call = count_once;
         c->id = i;
-        pool_push(p, &c->base);
+        cera_pool_push(p, &c->base);
     }
 
     release_flag = 1;
-    pool_release(p);
-    pool_join(p);
+    cera_pool_release(p);
+    cera_pool_join(p);
 
     if (ran_before_release) {
         fprintf(stderr, "a task ran before the pool was released\n");
@@ -73,12 +73,12 @@ int main(void)
         }
     }
 
-    if (pool_worker_count(p) != 4) {
-        fprintf(stderr, "asked for 4 workers, got %d\n", pool_worker_count(p));
+    if (cera_pool_worker_count(p) != 4) {
+        fprintf(stderr, "asked for 4 workers, got %d\n", cera_pool_worker_count(p));
         exit(1);
     }
 
-    pool_destroy(p);
+    cera_pool_destroy(p);
     printf("  %d tasks each ran exactly once across 4 workers\n", TASKS);
     return 0;
 }

@@ -144,7 +144,7 @@ issue rests on.
 **One placement function per box, emitted by the generator.**
 
 ```c
-static void place__math_dot_c__add(station_t *s) {
+static void place__math_dot_c__add(cera_station_t *s) {
     s->box_name = "math.c:add";      /* a literal, for the dump */
     s->call     = add__call;
     s->slots[0].elem_size = sizeof(int);

@@ -97,10 +97,10 @@ all.
 and emits the construction calls directly:
 
 ```c
-void build_program(map_t *m) {
-    map_place(m, 0, place__math_dot_c__add,   PLAIN);
-    map_place(m, 1, place__io_dot_c__print,   PLAIN);
-    map_wire (m, 0, /*out*/0, /*to*/1, /*port*/0);
+void build_program(cera_map_t *m) {
+    cera_map_place(m, 0, place__math_dot_c__add,   PLAIN);
+    cera_map_place(m, 1, place__io_dot_c__print,   PLAIN);
+    cera_map_wire (m, 0, /*out*/0, /*to*/1, /*port*/0);
     map_set_static(m, 0, /*port*/1, 5);
 }
 ```

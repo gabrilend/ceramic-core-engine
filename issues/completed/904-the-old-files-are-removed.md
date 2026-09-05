@@ -2,15 +2,42 @@
 
 ## Current behaviour
 
-**The engine exists twice.** `cera.c` and `cera.h` are built and tested
-— the whole test suite runs from them and the example runs from them —
-while the eleven numbered bodies and seven numbered headers they were
-made from are still on disk, compiled by nothing. Two copies of the engine
-means an edit can land in the one nothing builds, and be believed.
+**Done. One engine on disk.** The eleven numbered bodies, the seven
+numbered headers and their eighteen interface files are gone, and
+`libs/` went with its last file. What is left in `src/` is `cera.c`,
+`cera.h`, their two interface files, the linker's export list, the box
+sources and the generated file.
 
-This state is deliberate and temporary. It exists so that the move can
-be checked by comparison rather than by reading, and it must not
-outlive the comparison.
+**The `#line` directives went too, rather than being re-pointed.** They
+named the numbered sources, and a directive naming a file that does not
+exist is worse than none because a debugger believes it. Re-pointing
+them at `cera.c` would have meant computing each section's true offset
+and keeping it right forever; removing them makes the compiler count
+from the top of the file, which is the same answer and cannot go stale.
+The section banners are what carries the reading order now, and they
+were always the part doing the work.
+
+**The two include paths became one.** `libs/` for the pool and `src/`
+for everything above it are one directory now, so the flag that named
+the second is gone from the build and from the command the engine hands
+its own compiler when a box arrives at run time. A consumer adds one
+include path, or none if the two files sit beside their own source.
+
+### What the grep found
+
+One thing that mattered and several that did not. The generator's map
+parser included the station header for two enumerations and would have
+stopped compiling — caught by the build, immediately, which is the
+failure mode to want.
+
+The rest were prose: three documents using a deleted file as the
+example when explaining the numbering rule, which is not a broken build
+but is a reader sent to look for something that is not there. Those now
+name files that exist.
+
+The eighteen freed indices stay free. A number is a position in a
+reading order and a reused one makes two things claim one position; the
+gap is the record that something stood there.
 
 ## Intended behaviour
 

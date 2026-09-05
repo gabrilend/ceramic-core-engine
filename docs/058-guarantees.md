@@ -90,18 +90,28 @@ knowing it exists is mostly useful so that nobody reinvents it badly.
 
 | # | always true | what it costs | held by |
 |---|---|---|---|
-| B1 | A box cannot remember anything between calls. | State has to live on the wires: to count, you route a box's output back into its own input. | **discipline** |
+| B1 | A box cannot remember anything between calls. **A station can.** | The memory is a value sitting on a **static port**, and the only way a box reaches it is by **returning a value that a wire carries into it** — usually the station's own output arrow pointing back at its own static input port. So state belongs to the *placement*, not to the function: one box at three stations is three memories. And it is **drawn**: an accumulator is visible in the map file as an arrow, rather than hidden inside C where no picture shows it. | structure |
 | B2 | A box receives private copies of its arguments, never shared pointers. | Every value is copied at least once per invocation. | structure |
-| B3 | Two invocations of the same station may run simultaneously on different threads. | Follows from B1 — anything a box stored would be shared between them. | structure |
+| B3 | Two invocations of the same station may run simultaneously on different threads. | Follows from B1 — the box stores nothing, so two invocations share nothing. **A station's memory does not endanger this**: it lives on a port and is written by the delivery path under the station's mutex (G6), never by C code executing inside the box, so two simultaneous invocations cannot race over it. Each simply reads whatever was there when its own inputs were claimed, which is T3 working exactly as written. | structure |
 | B4 | A box never blocks. | Nothing may wait on a value, a lock, or a device. A worker that cannot progress is a worker not running the ten things that are ready. | **discipline** |
 | B5 | A box that returns void is a sink; the engine needs no support for it. | A sink's output is simply not delivered anywhere. | structure |
 
 B1 and B4 are the two load-bearing guarantees held by nothing but
 discipline, and almost everything else rests on them. B1 is what makes
 B3 safe, and B3 is what makes the whole engine parallel. B4 is what
-makes deadlock impossible (see P6). A single box with a `static` counter
-or a blocking socket read quietly withdraws both, and no part of the
-system will say so.
+makes deadlock impossible (see P6). A single box with a `static`
+counter or a blocking socket read quietly withdraws both, and no part
+of the system will say so.
+
+**The counter is the point, and B1 does not forbid counting.** What it
+forbids is the box keeping the count. The station keeps it, on a
+static port, written by a wire from the box's own output — so the box
+stays a function of its arguments and the memory stays somewhere the
+engine can see, lock, dump and revive. Somebody who reaches for a C
+`static` is reaching past a mechanism that already exists and is
+safer, and the *not guaranteed* section says what they lose by it.
+
+
 
 ---
 
@@ -172,7 +182,7 @@ for and what removing them cost.
 | G11 | ~~A box cannot write a static.~~ **Retired.** A map wrapped in its input and output stations *is* a box, so a box reaching a map is a box reaching a box, and the prohibition was protecting a distinction that no longer exists. | What it originally bought was G12, and G12 survives without it: a map handle travels as an ordinary value on an ordinary wire, arriving through the input station like anything else from outside, so no process-wide pointer returns. A box that builds stations therefore has a side effect far larger than any other box, and that is now deliberate rather than forbidden &mdash; it is what lets a program restructure itself while it runs. | structure |
 | G12 | A process may run any number of maps at once, and they cannot see each other. | Nothing in the engine is process-wide. Held by a test that runs two and writes into one. This is the guarantee G11 was retired in favour of keeping directly: a box that reaches a map does so through a handle it was *given* as a value, never through a pointer the process holds, so several maps stay invisible to each other even though boxes can now build them. | structure |
 | G13 | A wire may deliver into a static port, and the arriving value **overwrites** the constant rather than queueing. | **Two arrows into one static port is last-writer-wins, nondeterministically** — stated here rather than left as a surprise. What it buys is a constant that is *computed* rather than written down: a station that runs once, wired into a downstream static port, and every invocation afterwards reads what it produced. It is not the back channel returning — the box is untouched and remembers nothing; the **wire** is what says this value overwrites a static, and a wire is visible in the map file, in the dump, and on a canvas. | structure |
-| G7 | Push cycles are legal. | They must be: since a box cannot remember (B1), a loop through a ring buffer is the only way to carry state. A blanket cycle check would forbid the engine's sole mechanism for state. | structure |
+| G7 | Push cycles are legal. | They must be: a box cannot remember (B1), so **every** way of carrying state is a cycle. A loop through a ring buffer carries it as a queued value; an arrow from a station's output back into its own static port carries it as a remembered one (G13). A blanket cycle check would forbid both, which is to say all of the engine's mechanisms for state. | structure |
 
 ---
 
@@ -377,6 +387,38 @@ invocations depend on runs once, not a million times. Under the pull
 path this was the other way round, and the change is a saving rather
 than a loss: a shared computation is computed once and read by
 everyone.
+
+**A `static` inside a box source is not how a station remembers, and
+it is not safe.** B1 says a box may not keep state and the engine
+provides the supported way to keep it — a value on a static port, put
+there by a wire from the box's output. Nothing checks a box source for
+`static` storage, so somebody can write one anyway, and three things
+go wrong at once.
+
+**Two invocations of one station run simultaneously (B3) and would
+share it.** The engine builds a task the moment a station's inputs are
+present and hands it to whichever worker is free, so two calls to the
+same C function can be inside it on two cores. A `static` counter
+incremented by both is a plain data race, and no lock in the engine
+covers it: the station's mutex guards its *ports*, and it is released
+before the box is ever called. The supported mechanism has no such
+problem, because the write happens on the delivery path under that
+same mutex rather than inside the box.
+
+**Capture would not carry it** (issue 712). A capture writes every
+value sitting on a port and every iterator's place in its exits, which
+is the whole state of a program whose memory lives where the engine
+put it. A `static` inside a C function is invisible to that walk, so
+the artifact would look complete and the revived program would have
+silently forgotten. State kept the supported way is captured without
+the capture needing to know it was memory rather than a constant.
+
+**And it would not be in the picture.** An accumulator built the
+supported way appears in the map file, in the dump and on a canvas as
+an arrow returning to its own station. One built with a `static`
+appears nowhere at all, and the drawing of the program is then a
+drawing of something else.
+
 
 **B1 and B4 are unenforced.** The two guarantees the most is built on
 are the two that nothing checks. A linter that refused `static` storage

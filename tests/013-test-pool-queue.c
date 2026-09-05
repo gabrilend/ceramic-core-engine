@@ -25,12 +25,12 @@
 
 /* A task that exists only to be counted. The queue never calls it. */
 typedef struct numbered_task {
-    task_t base;
+    cera_task_t base;
     int    id;
 } numbered_task_t;
 
 /* {{{ never_called() */
-static void never_called(task_t *t)
+static void never_called(cera_task_t *t)
 {
     (void)t;
     fprintf(stderr, "queue test: a parked pool ran a task\n");
@@ -57,14 +57,14 @@ static numbered_task_t *make_numbered(int id)
  */
 static void test_order_across_growth(void)
 {
-    pool_t *p = pool_create(1, NULL, NULL);
+    cera_pool_t *p = cera_pool_create(1, NULL, NULL);
 
     /* Wrap the ring: advance head and tail together so the contents
      * straddle the array's end before any growth happens. */
     for (int i = 0; i < 5; i++)
-        pool_push(p, &make_numbered(1000 + i)->base);
+        cera_pool_push(p, &make_numbered(1000 + i)->base);
     for (int i = 0; i < 5; i++) {
-        numbered_task_t *n = (numbered_task_t *)pool_pop(p);
+        numbered_task_t *n = (numbered_task_t *)cera_pool_pop(p);
         if (!n || n->id != 1000 + i) {
             fprintf(stderr, "wrap seeding broke order\n");
             exit(1);
@@ -75,10 +75,10 @@ static void test_order_across_growth(void)
     /* Now the real run: push several capacities' worth. */
     enum { COUNT = 1000 };
     for (int i = 0; i < COUNT; i++)
-        pool_push(p, &make_numbered(i)->base);
+        cera_pool_push(p, &make_numbered(i)->base);
 
     int capacity, high_water, growths;
-    pool_queue_stats(p, &capacity, &high_water, &growths);
+    cera_pool_queue_stats(p, &capacity, &high_water, &growths);
     if (growths < 3) {
         fprintf(stderr, "expected several growths, saw %d\n", growths);
         exit(1);
@@ -90,7 +90,7 @@ static void test_order_across_growth(void)
     }
 
     for (int i = 0; i < COUNT; i++) {
-        numbered_task_t *n = (numbered_task_t *)pool_pop(p);
+        numbered_task_t *n = (numbered_task_t *)cera_pool_pop(p);
         if (!n) {
             fprintf(stderr, "queue ran dry at %d of %d\n", i, COUNT);
             exit(1);
@@ -101,12 +101,12 @@ static void test_order_across_growth(void)
         }
         free(n);
     }
-    if (pool_pop(p) != NULL) {
+    if (cera_pool_pop(p) != NULL) {
         fprintf(stderr, "queue held more than was pushed\n");
         exit(1);
     }
 
-    pool_destroy(p);
+    cera_pool_destroy(p);
     printf("  order across growth: ok (capacity %d, %d growths)\n",
            capacity, growths);
 }
@@ -115,7 +115,7 @@ static void test_order_across_growth(void)
 /* Shared state for the concurrency test. `seen` counts how many
  * times each id came back out; every slot must end at exactly one. */
 enum { PUSHERS = 4, POPPERS = 4, PER_PUSHER = 5000 };
-static pool_t *shared_pool;
+static cera_pool_t *shared_pool;
 static int seen[PUSHERS * PER_PUSHER];
 static pthread_mutex_t seen_mutex = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic int total_popped;
@@ -125,7 +125,7 @@ static void *pusher_main(void *arg)
 {
     int base = (int)(long)arg * PER_PUSHER;
     for (int i = 0; i < PER_PUSHER; i++)
-        pool_push(shared_pool, &make_numbered(base + i)->base);
+        cera_pool_push(shared_pool, &make_numbered(base + i)->base);
     return NULL;
 }
 /* }}} */
@@ -137,7 +137,7 @@ static void *popper_main(void *arg)
     /* Poppers spin until every id is accounted for; an empty pop is
      * just a pusher that has not caught up yet. */
     while (total_popped < PUSHERS * PER_PUSHER) {
-        numbered_task_t *n = (numbered_task_t *)pool_pop(shared_pool);
+        numbered_task_t *n = (numbered_task_t *)cera_pool_pop(shared_pool);
         if (!n)
             continue;
         pthread_mutex_lock(&seen_mutex);
@@ -153,7 +153,7 @@ static void *popper_main(void *arg)
 /* {{{ test_concurrent_push_pop() */
 static void test_concurrent_push_pop(void)
 {
-    shared_pool = pool_create(1, NULL, NULL);
+    shared_pool = cera_pool_create(1, NULL, NULL);
 
     pthread_t pushers[PUSHERS], poppers[POPPERS];
     for (long i = 0; i < POPPERS; i++)
@@ -173,7 +173,7 @@ static void test_concurrent_push_pop(void)
         }
     }
 
-    pool_destroy(shared_pool);
+    cera_pool_destroy(shared_pool);
     printf("  concurrent push/pop of %d tasks: nothing lost, nothing doubled\n",
            PUSHERS * PER_PUSHER);
 }

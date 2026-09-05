@@ -85,17 +85,17 @@ static void test_buffer_report_names_the_right_slot(void)
         "station drain swallow p\n");
     write_text(map_path, map_text);
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
     /* Flood the pairer's first port from outside; its second side
      * never arrives, so the buffer must grow. */
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
     for (int i = 0; i < 200; i++)
-        map_deliver_value(m, 1, 0, &i);
+        cera_map_deliver_value(m, 1, 0, &i);
 
     FILE *out = fopen(report_path, "w");
-    map_report_buffers(m, out);
-    map_report_stations(m, out, REPORT_BY_COUNT);
+    cera_map_report_buffers(m, out);
+    cera_map_report_stations(m, out, CERA_REPORT_BY_COUNT);
     fclose(out);
 
     char *report = slurp(report_path);
@@ -105,10 +105,10 @@ static void test_buffer_report_names_the_right_slot(void)
 
     /* Unstick the pairer so the map can finish. */
     for (int i = 0; i < 201; i++)
-        map_deliver_value(m, 1, 1, &i);
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+        cera_map_deliver_value(m, 1, 1, &i);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
     printf("  the buffer report pointed at the right port by name\n");
 }
 /* }}} */
@@ -131,22 +131,22 @@ static void test_station_counts(void)
         "  in 0 $0\n", out_path);
     write_text(map_path, map_text);
 
-    map_t *m = map_load_file(map_path, 2);
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
-    check(map_station(m, 0)->runs == 1 && map_station(m, 1)->runs == 1
-          && map_station(m, 2)->runs == 1, "each station ran exactly once");
-    check(map_station(m, 0)->produced == 1 && map_station(m, 1)->produced == 1,
+    check(cera_map_station(m, 0)->runs == 1 && cera_map_station(m, 1)->runs == 1
+          && cera_map_station(m, 2)->runs == 1, "each station ran exactly once");
+    check(cera_map_station(m, 0)->produced == 1 && cera_map_station(m, 1)->produced == 1,
           "each producer made one task due downstream");
 
     FILE *out = fopen(report_path, "w");
-    map_report_stations(m, out, REPORT_BY_COUNT);
+    cera_map_report_stations(m, out, CERA_REPORT_BY_COUNT);
     fclose(out);
     char *report = slurp(report_path);
     check(strstr(report, "head") && strstr(report, "runs 1"),
           "the report speaks names and counts");
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  run and production counts are exact and named\n");
 }
 /* }}} */
@@ -187,21 +187,21 @@ static void test_round_trip(void)
 
     /* Load, dump before running (so capacities are virgin), then
      * load the dump and dump again: byte-identical or bust. */
-    map_t *m1 = map_load_file(map_path, 2);
+    cera_map_t *m1 = cera_map_load_file(map_path, 2);
     FILE *d1 = fopen(dump1_path, "w");
-    map_dump(m1, d1);
+    cera_map_dump(m1, d1);
     fclose(d1);
-    pool_release(m1->pool);
-    pool_join(m1->pool);
-    map_destroy(m1);
+    cera_pool_release(m1->pool);
+    cera_pool_join(m1->pool);
+    cera_map_destroy(m1);
 
-    map_t *m2 = map_load_file(dump1_path, 2);
+    cera_map_t *m2 = cera_map_load_file(dump1_path, 2);
     FILE *d2 = fopen(dump2_path, "w");
-    map_dump(m2, d2);
+    cera_map_dump(m2, d2);
     fclose(d2);
-    pool_release(m2->pool);
-    pool_join(m2->pool);
-    map_destroy(m2);
+    cera_pool_release(m2->pool);
+    cera_pool_join(m2->pool);
+    cera_map_destroy(m2);
 
     char *first = slurp(dump1_path);
     char *second = slurp(dump2_path);
@@ -242,9 +242,9 @@ static void test_rewire_mid_run(void)
 
     unlink(a_path);
     unlink(b_path);
-    map_t *m = map_load_file(map_path, 2);
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     /* Let the seeded seven travel the old wire to completion. */
     usleep(50000);
@@ -253,14 +253,14 @@ static void test_rewire_mid_run(void)
     /* The move: disconnect hold->writer_a, connect hold->writer_b —
      * while the map runs. Station indices follow file order: head 0,
      * hold 1, writer_a 2, writer_b 3. */
-    check(map_unwire(m, 1, 0, 2, 1) == NULL, "the old wire came out");
-    check(map_wire(m, 1, 0, 3, 1) == NULL, "the new wire went in");
+    check(cera_map_unwire(m, 1, 0, 2, 1) == NULL, "the old wire came out");
+    check(cera_map_wire(m, 1, 0, 3, 1) == NULL, "the new wire went in");
 
     int w = 222;
-    map_deliver_value(m, 1, 0, &w);
+    cera_map_deliver_value(m, 1, 0, &w);
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
     FILE *fa = fopen(a_path, "r");
     FILE *fb = fopen(b_path, "r");
@@ -269,7 +269,7 @@ static void test_rewire_mid_run(void)
     if (fb) { if (fscanf(fb, "%d", &b) != 1) b = -1; fclose(fb); }
     check(a == 7, "the seeded value went down the old wire before the move");
     check(b == 222, "the value after the rewire went down the new one");
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a wire moved mid-run; nothing lost, behaviour bent at the seam\n");
 }
 /* }}} */

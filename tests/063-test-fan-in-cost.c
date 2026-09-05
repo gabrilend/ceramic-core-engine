@@ -91,7 +91,7 @@ static _Atomic long sink_runs;
  * the reading includes a consumer that actually looks at what it was
  * handed rather than one the compiler could reason away.
  */
-static void bulk_sink__call(task_t *t)
+static void bulk_sink__call(cera_task_t *t)
 {
     long sum = 0;
     for (int i = 0; i < t->n_in; i++) {
@@ -105,7 +105,7 @@ static void bulk_sink__call(task_t *t)
 /* }}} */
 
 /* {{{ small_sink__call() */
-static void small_sink__call(task_t *t)
+static void small_sink__call(cera_task_t *t)
 {
     long sum = 0;
     for (int i = 0; i < t->n_in; i++)
@@ -122,7 +122,7 @@ static void small_sink__call(task_t *t)
  * contention is the whole measurement.
  */
 typedef struct producer {
-    map_t *map;
+    cera_map_t *map;
     int    port;
     int    elem_size;
     /* The gate: every producer spins until this turns one. A spin
@@ -143,10 +143,10 @@ static void *producer_thread(void *arg)
             bulk_t b;
             memset(&b, 0, sizeof b);
             b.serial = 1;
-            map_deliver_value(p->map, 0, p->port, &b);
+            cera_map_deliver_value(p->map, 0, p->port, &b);
         } else {
             int v = 1;
-            map_deliver_value(p->map, 0, p->port, &v);
+            cera_map_deliver_value(p->map, 0, p->port, &v);
         }
     }
     return NULL;
@@ -169,15 +169,15 @@ static double now_ns(void)
  * of how many values the run happened to use and so stays comparable
  * if those constants are ever tuned.
  */
-static double measure(const char *label, task_call_t shim, int elem_size)
+static double measure(const char *label, cera_task_call_t shim, int elem_size)
 {
-    map_t *m = map_create(1);
+    cera_map_t *m = cera_map_create(1);
     int sizes[PORTS];
     for (int i = 0; i < PORTS; i++)
         sizes[i] = elem_size;
     /* A sink: zero output size, so delivery stops here and the
      * measurement is of the inbound path alone. */
-    map_place(m, 0, shim, STATION_PLAIN, PORTS, sizes, 0);
+    cera_map_place(m, 0, shim, CERA_STATION_PLAIN, PORTS, sizes, 0);
 
     /* Deep enough that no port can ever grow during the run, and this
      * matters more than it looks. The first reading taken here had the
@@ -206,9 +206,9 @@ static double measure(const char *label, task_call_t shim, int elem_size)
      * The extra couple of slots are slack, so a producer can run a
      * little ahead of its slowest sibling without ever filling up. */
     for (int i = 0; i < PORTS; i++)
-        map_in_port_start_depth(m, 0, i, VALUES_PER_PORT + 2);
+        cera_map_in_port_start_depth(m, 0, i, VALUES_PER_PORT + 2);
 
-    map_start(m, WORKERS);
+    cera_map_start(m, WORKERS);
 
     sink_total = 0;
     sink_runs = 0;
@@ -232,8 +232,8 @@ static double measure(const char *label, task_call_t shim, int elem_size)
 
     /* The tasks were built during the timed section and are sitting in
      * the queue; running them is not part of the reading. */
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     /* Every port received the same count, so every port's values are
      * consumed by the same number of complete input sets. Nothing may
@@ -252,7 +252,7 @@ static double measure(const char *label, task_call_t shim, int elem_size)
         exit(1);
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
 
     long deliveries = (long)VALUES_PER_PORT * PORTS;
     return elapsed / (double)deliveries;

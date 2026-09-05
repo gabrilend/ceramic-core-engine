@@ -55,36 +55,36 @@ static void check(int ok, const char *what)
  * the same question of the thing that actually gets used, rather than
  * of a copy kept beside it.
  */
-static map_t *placed_map;
+static cera_map_t *placed_map;
 
-static station_t *placed_as(const char *box_name, int kind)
+static cera_station_t *placed_as(const char *box_name, int kind)
 {
     if (!placed_map)
-        placed_map = map_create_empty();
-    int at = map_add_station(placed_map);
-    map_place_box(placed_map, at, box_name, kind);
-    return map_station(placed_map, at);
+        placed_map = cera_map_create_empty();
+    int at = cera_map_add_station(placed_map);
+    cera_map_place_box(placed_map, at, box_name, kind);
+    return cera_map_station(placed_map, at);
 }
 
-static station_t *placed(const char *box_name)
+static cera_station_t *placed(const char *box_name)
 {
-    return placed_as(box_name, STATION_PLAIN);
+    return placed_as(box_name, CERA_STATION_PLAIN);
 }
 
 /* A comparator, which is the only placement that resolves a
  * comparison onto the station — a plain station has no use for one. */
-static station_t *placed_comparator(const char *box_name)
+static cera_station_t *placed_comparator(const char *box_name)
 {
-    return placed_as(box_name, STATION_COMPARATOR);
+    return placed_as(box_name, CERA_STATION_COMPARATOR);
 }
 /* }}} */
 
 /* {{{ build_task() */
 /* A hand-built task: the values are pointed at, not copied — enough
  * for calling a shim directly, which only reads in[] and writes out. */
-static task_t *build_task(station_t *s, void **values, void *out)
+static cera_task_t *build_task(cera_station_t *s, void **values, void *out)
 {
-    static task_t t;
+    static cera_task_t t;
     t.call = s->call;
     t.station = 0;
     t.port = 0;
@@ -116,7 +116,7 @@ static void test_emitted_contents(void)
      * in the generator enforces and the placements below sample. */
     check(n_box_places >= 7, "the demo boxes are all placeable");
 
-    station_t *s = placed("add");
+    cera_station_t *s = placed("add");
     check(s->n_in_ports == 2, "add takes two");
     check(s->in_ports[0].elem_size == (int)sizeof(int), "add port 0 size");
     check(strcmp(s->in_ports[0].type_name, "int") == 0, "add port 0 type");
@@ -134,9 +134,9 @@ static void test_emitted_contents(void)
     check(s->out_size == 0 && s->compare == NULL,
           "a sink has no return and no compare");
 
-    check(box_place_find("vec3__compare") == NULL,
+    check(cera_box_place_find("vec3__compare") == NULL,
           "a compare function is not a box");
-    check(box_place_find("no_such_box") == NULL, "absent name is null");
+    check(cera_box_place_find("no_such_box") == NULL, "absent name is null");
 
     printf("  every size a placed station holds equals sizeof of the real "
            "type\n");
@@ -155,7 +155,7 @@ static void test_shim_equivalence(void)
     {
         int a = 41, b = 1, out = 0;
         void *in[2] = { &a, &b };
-        station_t *s = placed("add");
+        cera_station_t *s = placed("add");
         s->call(build_task(s, in, &out));
         check(out == add(41, 1), "add shim equals direct call");
     }
@@ -164,7 +164,7 @@ static void test_shim_equivalence(void)
         int count = 6;
         double factor = 7.5, out = 0;
         void *in[2] = { &count, &factor };
-        station_t *s = placed("mix");
+        cera_station_t *s = placed("mix");
         s->call(build_task(s, in, &out));
         check(out == mix(6, 7.5), "mix shim equals direct call");
     }
@@ -173,7 +173,7 @@ static void test_shim_equivalence(void)
         float x = 1, y = 2, z = 3;
         vec3 out;
         void *in[3] = { &x, &y, &z };
-        station_t *s = placed("make_vec3");
+        cera_station_t *s = placed("make_vec3");
         s->call(build_task(s, in, &out));
         vec3 direct = make_vec3(1, 2, 3);
         check(memcmp(&out, &direct, sizeof out) == 0,
@@ -183,7 +183,7 @@ static void test_shim_equivalence(void)
     {
         int x = 9;
         void *in[1] = { &x };
-        station_t *s = placed("swallow");
+        cera_station_t *s = placed("swallow");
         s->call(build_task(s, in, NULL));
         /* Surviving the call with a null out is the whole test. */
     }
@@ -194,22 +194,22 @@ static void test_shim_equivalence(void)
 /* {{{ test_field_tables() */
 static void test_field_tables(void)
 {
-    const struct_info_t *s = struct_find("padded");
+    const cera_struct_info_t *s = cera_struct_find("padded");
     check(s != NULL, "padded present");
     check(s->size == (int)sizeof(padded), "padded size");
     check(s->fields[1].offset == (int)offsetof(padded, heavy),
           "the double lands after the padding hole, where the compiler says");
     check(s->fields[2].offset == (int)offsetof(padded, id), "id offset");
 
-    s = struct_find("record");
+    s = cera_struct_find("record");
     check(s != NULL, "record present");
     check(s->n_fields == 4, "record field count");
-    check(s->fields[1].kind == FIELD_STRUCT, "nested vec3 is a struct field");
-    check(s->fields[1].nested == struct_find("vec3"),
+    check(s->fields[1].kind == CERA_FIELD_STRUCT, "nested vec3 is a struct field");
+    check(s->fields[1].nested == cera_struct_find("vec3"),
           "nested field points at the vec3 table");
-    check(s->fields[2].kind == FIELD_STRING && s->fields[2].array_len == 16,
+    check(s->fields[2].kind == CERA_FIELD_STRING && s->fields[2].array_len == 16,
           "the note is a fixed string of sixteen");
-    check(s->fields[3].kind == FIELD_UINT, "the stamp is unsigned");
+    check(s->fields[3].kind == CERA_FIELD_UINT, "the stamp is unsigned");
     check(s->fields[3].offset == (int)offsetof(record, stamp), "stamp offset");
 
     printf("  field tables agree with the compiler about every offset\n");
@@ -227,7 +227,7 @@ static void test_compares(void)
      * for that pointer to be written.
      */
     /* Primitive: signed ordering, not byte ordering. */
-    station_t *b = placed_comparator("add");
+    cera_station_t *b = placed_comparator("add");
     check(b->compare != NULL, "int return has a compare");
     int neg = -5, pos = 3, same = -5;
     check(b->compare(&neg, &pos) == -1, "-5 < 3 (bytes would disagree)");
@@ -278,15 +278,15 @@ static void test_compares(void)
  */
 static void the_binary_carries_its_own_source(void)
 {
-    check(sora_n_box_sources > 0,
+    check(cera_n_box_sources > 0,
           "the program carries at least one box source");
 
-    for (int i = 0; i < sora_n_box_sources; i++) {
-        const char *path = sora_box_sources[i].path;
-        const char *carried = sora_box_sources[i].text;
+    for (int i = 0; i < cera_n_box_sources; i++) {
+        const char *path = cera_box_sources[i].path;
+        const char *carried = cera_box_sources[i].text;
 
         char full[512];
-        snprintf(full, sizeof full, "%s/%s", SORA_ROOT, path);
+        snprintf(full, sizeof full, "%s/%s", CERA_ROOT, path);
         FILE *f = fopen(full, "rb");
         if (!f) {
             fprintf(stderr, "generator test failed: cannot open %s to "
@@ -318,11 +318,11 @@ static void the_binary_carries_its_own_source(void)
 
     /* Found by the path the build knew, and by the bare name a person
      * would type having seen the file. */
-    check(box_source_text("src/boxes/029-demo-boxes.c") != NULL,
+    check(cera_box_source_text("src/boxes/029-demo-boxes.c") != NULL,
           "a source is found by the path the build knew it as");
-    check(box_source_text("029-demo-boxes.c") != NULL,
+    check(cera_box_source_text("029-demo-boxes.c") != NULL,
           "and by the bare name somebody would type");
-    check(box_source_text("no-such-file.c") == NULL,
+    check(cera_box_source_text("no-such-file.c") == NULL,
           "and a name that is not there is not there");
 
     printf("  every box source is carried in the binary, byte for byte\n");
@@ -335,7 +335,7 @@ static _Atomic long placed_total;
 /* One local hand shim survives here as harness instrumentation: a
  * recording sink needs to reach this test's counter, which no
  * generated box can see. */
-static void record_total__call(task_t *t)
+static void record_total__call(cera_task_t *t)
 {
     int x;
     memcpy(&x, t->in[0], sizeof x);
@@ -345,29 +345,29 @@ static void record_total__call(task_t *t)
 static void test_map_placed_by_name(void)
 {
     enum { VALUES = 30 };
-    map_t *m = map_create(2);
+    cera_map_t *m = cera_map_create(2);
     /* Sizes come from the emitted file now — nothing hand-typed. */
-    map_place_box(m, 0, "add", STATION_PLAIN);
+    cera_map_place_box(m, 0, "add", CERA_STATION_PLAIN);
     int one_int[1] = { sizeof(int) };
-    map_place(m, 1, record_total__call, STATION_PLAIN, 1, one_int, 0);
-    map_connect(m, 0, 0, 1, 0);
-    map_start(m, 4);
+    cera_map_place(m, 1, record_total__call, CERA_STATION_PLAIN, 1, one_int, 0);
+    cera_map_connect(m, 0, 0, 1, 0);
+    cera_map_start(m, 4);
 
     placed_total = 0;
     for (int i = 0; i < VALUES; i++) {
         int a = i, b = 100;
-        map_deliver_value(m, 0, 0, &a);
-        map_deliver_value(m, 0, 1, &b);
+        cera_map_deliver_value(m, 0, 0, &a);
+        cera_map_deliver_value(m, 0, 1, &b);
     }
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     long expected = 0;
     for (int i = 0; i < VALUES; i++)
         expected += i + 100;
     check(placed_total == expected, "a map placed by name computes correctly");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a station placed by name ran a generated shim in anger\n");
 }
 /* }}} */

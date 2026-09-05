@@ -35,7 +35,7 @@ The generator reads the file, sees the declaration, and writes out:
 
 ```c
 /* generated from: int add(int a, int b) */
-void add__call(task_t *t) {
+void add__call(cera_task_t *t) {
     int a = *(int *)t->in[0];
     int b = *(int *)t->in[1];
     int r = add(a, b);
@@ -46,7 +46,7 @@ void add__call(task_t *t) {
 Every generated shim has the same shape:
 
 ```c
-typedef void (*box_call_t)(task_t *t);
+typedef void (*box_call_t)(cera_task_t *t);
 ```
 
 Different insides, identical signature. So one table holds all of them,
@@ -54,7 +54,7 @@ a station stores one of these pointers, and the whole engine contains
 exactly one call site:
 
 ```c
-task_t *t = pop_task();
+cera_task_t *t = pop_task();
 t->call(t);
 deliver_output(t);
 ```
@@ -119,10 +119,10 @@ program parses while it runs, so the generator reads it and emits the
 construction calls it describes:
 
 ```c
-void build_program(map_t *m) {
-    map_place(m, 0, place__math_dot_c__add,   PLAIN);
-    map_place(m, 1, place__io_dot_c__print,   PLAIN);
-    map_wire (m, 0, /*out*/0, /*to*/1, /*port*/0);
+void build_program(cera_map_t *m) {
+    cera_map_place(m, 0, place__math_dot_c__add,   PLAIN);
+    cera_map_place(m, 1, place__io_dot_c__print,   PLAIN);
+    cera_map_wire (m, 0, /*out*/0, /*to*/1, /*port*/0);
     map_set_static(m, 0, /*port*/1, 5);
 }
 ```
@@ -136,14 +136,14 @@ since it calls the same construction surface a person would.
 constant the compiler folded:
 
 ```c
-static void sora_box_src_sl_boxes_sl_math_dot_c__add__place(
-        map_t *m, int station, int kind) {
-    int extra = (kind == STATION_COMPARATOR) ? 1 : 0;
+static void cera_box_src_sl_boxes_sl_math_dot_c__add__place(
+        cera_map_t *m, int station, int kind) {
+    int extra = (kind == CERA_STATION_COMPARATOR) ? 1 : 0;
     int sizes[] = { (int)sizeof(int), (int)sizeof(int), (int)sizeof(int) };
-    map_place(m, station, add__call, kind, 2 + extra, sizes,
+    cera_map_place(m, station, add__call, kind, 2 + extra, sizes,
               (int)sizeof(int));
 
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     s->box_name = "add";             /* a literal, for the dump */
     s->in_ports[0].type_name = "int";
     s->in_ports[1].type_name = "int";

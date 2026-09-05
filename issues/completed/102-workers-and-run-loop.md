@@ -7,7 +7,7 @@ at a starting gate; a separate release call opens the gate, which is
 the window where a map will later be seeded. Each worker loops: take
 the oldest task, run its call, hand it to the finish hook (delivery's
 reserved seat, null for now), free it, repeat. Thread count obeys the
-creation argument, then the SORAMECH_WORKERS environment variable,
+creation argument, then the CERAMIC_WORKERS environment variable,
 then one per online processor. Each worker knows its own index through
 a thread-local read. The empty-queue case went straight to sleeping
 rather than passing through the planned busy-return placeholder,

@@ -85,8 +85,8 @@ static void add(out_t *o, const char *fmt, ...)
 /* {{{ static char kind_letter() */
 static char kind_letter(int kind)
 {
-    if (kind == STATION_COMPARATOR) return 'c';
-    if (kind == STATION_ITERATOR)   return 'i';
+    if (kind == CERA_STATION_COMPARATOR) return 'c';
+    if (kind == CERA_STATION_ITERATOR)   return 'i';
     return 'p';
 }
 /* }}} */
@@ -112,11 +112,11 @@ char *mapfile_write(const map_description_t *d)
 
     for (desc_station_t *s = d->stations; s; s = s->next) {
         add(&o, "station %s %s %c", s->name, s->box, kind_letter(s->kind));
-        if (s->door == DOOR_IN)       add(&o, " entry");
-        else if (s->door == DOOR_OUT) add(&o, " result");
+        if (s->door == CERA_DOOR_IN)       add(&o, " entry");
+        else if (s->door == CERA_DOOR_OUT) add(&o, " result");
         /* Where an iterator had got to, written only when it says
          * something: zero is where one starts. */
-        if (s->kind == STATION_ITERATOR && s->cursor > 0)
+        if (s->kind == CERA_STATION_ITERATOR && s->cursor > 0)
             add(&o, " @%d", s->cursor);
         add(&o, "\n");
 

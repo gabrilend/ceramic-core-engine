@@ -14,7 +14,8 @@ multi-threaded by default rather than by effort.
 
 **A box** is a plain C function you write. It takes its arguments by
 value and returns one value. It is not permitted to remember anything
-between calls.
+between calls — **the station it is placed at does the remembering**,
+by holding a value the box's own output is wired back into.
 
 **A station** is one placement of a box in a map. It owns the buffers
 that hold values waiting to be fed to that box, the mutex that guards

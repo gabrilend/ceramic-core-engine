@@ -48,15 +48,26 @@ registered, all of it invisible to any walk of the program's own
 structures.
 
 **This engine forbids exactly that.** The first of its three nouns says
-a box *is not permitted to remember anything between calls*. There is
-no hidden state to miss, by construction — everything a program is
-lives in the graph, and the graph is already walkable, because the dump
-already walks it.
+a box *is not permitted to remember anything between calls* — and where
+a program does remember, the memory belongs to a **station**: a value
+sitting on a static port, put there by a wire from a box's output.
+That is on the graph, and the graph is already walkable, because the
+dump already walks it. So a program that counts, accumulates, or holds
+a configuration captures the same way as one that does none of those,
+without capture having to know which of its port values were meant as
+memory and which as constants.
 
 That rule was written for other reasons entirely. It turns out to be
 what makes this feasible, and that is worth recording: **the constraint
 that made boxes simple is the same one that makes a program
 serializable.**
+
+**The one thing a capture cannot carry is the unsupported kind**: a C
+`static` inside a box source, which nothing checks for and which is
+invisible to any walk of the program. That is one of three reasons
+against writing one, listed in
+[058](../../docs/058-guarantees.md); it is not a hole in this feature
+so much as the feature naming what it relies on.
 
 ## Intended behavior
 

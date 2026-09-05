@@ -69,10 +69,12 @@ recording while it is in hand.
 ## The check applies only to gather wires
 
 **A cycle in the push direction is legal and necessary.** Since a box
-cannot remember anything, a loop through a ring buffer is the only way
-to build a counter: the value goes out, comes back around, and arrives
-as the next run's input. A blanket cycle check would forbid the sole
-mechanism the engine has for carrying state.
+cannot remember anything, every way of carrying state is a cycle: a
+loop through a ring buffer carries it as a queued value, and an arrow
+from a station's output back into its own static port carries it as a
+remembered one. Either way the value goes out, comes back around, and
+is there for the next run. A blanket cycle check would forbid both,
+which is to say all of the mechanisms the engine has for state.
 
 The difference is that a push cycle passes through a buffer and the
 call ends. A gather cycle is a call that never returns.

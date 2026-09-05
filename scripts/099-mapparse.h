@@ -20,10 +20,10 @@
  * kinds and the door marks — and nothing else. That is what makes it
  * something a build tool can hold.
  */
-#ifndef SORA_MAPPARSE_H
-#define SORA_MAPPARSE_H
+#ifndef CERA_MAPPARSE_H
+#define CERA_MAPPARSE_H
 
-#include "018-station.h"
+#include "cera.h"
 
 /* {{{ the description — what the file said, nothing more */
 /*

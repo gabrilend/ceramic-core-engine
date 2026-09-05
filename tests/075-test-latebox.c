@@ -55,19 +55,19 @@ static void a_late_box_runs(void)
         "    return x * 3;\n"
         "}\n";
 
-    int added = late_compile_source(source);
+    int added = cera_late_compile_source(source);
     check(added == 1, "one box was compiled into the running program");
     if (added != 1)
         return;
 
-    check(box_place_find("triple_it") != NULL,
+    check(cera_box_place_find("triple_it") != NULL,
           "and can be found by name like any other");
 
     /* Wire it into `keep`, which the program was built with: three
      * times two is six. */
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "triple_it", STATION_PLAIN);
-    map_place_box(m, 1, "keep", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "triple_it", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
 
     /*
      * **The numbers the engine runs on came from a compiler**, not
@@ -77,24 +77,24 @@ static void a_late_box_runs(void)
      * function writes them and the box record that used to hold a
      * copy is gone (issue 311b).
      */
-    check(map_station(m, 0)->out_size == (int)sizeof(int),
+    check(cera_map_station(m, 0)->out_size == (int)sizeof(int),
           "its return width came from a compiler, not from its name");
-    check(map_station(m, 0)->n_in_ports == 1
-          && map_station(m, 0)->in_ports[0].elem_size == (int)sizeof(int),
+    check(cera_map_station(m, 0)->n_in_ports == 1
+          && cera_map_station(m, 0)->in_ports[0].elem_size == (int)sizeof(int),
           "and so did its parameter's");
-    map_connect(m, 0, 0, 1, 0);
+    cera_map_connect(m, 0, 0, 1, 0);
 
-    map_start(m, 2);
+    cera_map_start(m, 2);
     int two = 2;
-    map_deliver_value(m, 0, 0, &two);
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_map_deliver_value(m, 0, 0, &two);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
-    check(atomic_load(&map_station(m, 0)->runs) == 1, "the new box ran");
-    check(atomic_load(&map_station(m, 1)->runs) == 1,
+    check(atomic_load(&cera_map_station(m, 0)->runs) == 1, "the new box ran");
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 1,
           "and what it produced reached a box the program was built with");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a box written after the program started ran and delivered\n");
 }
 /* }}} */
@@ -119,25 +119,25 @@ static void a_struct_crosses_intact(void)
         "    return s;\n"
         "}\n";
 
-    check(late_compile_source(source) == 1,
+    check(cera_late_compile_source(source) == 1,
           "a box returning an unfamiliar struct compiled");
 
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "build_same", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "build_same", CERA_STATION_PLAIN);
     /* magnitude_squared takes a vec3 — same three floats, different
      * name, and a name this program has known since it was built. */
-    map_place_box(m, 1, "magnitude_squared", STATION_PLAIN);
-    map_connect(m, 0, 0, 1, 0);
+    cera_map_place_box(m, 1, "magnitude_squared", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 1, 0);
 
-    map_start(m, 2);
+    cera_map_start(m, 2);
     float one = 1.0f;
-    map_deliver_value(m, 0, 0, &one);
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_map_deliver_value(m, 0, 0, &one);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
-    check(atomic_load(&map_station(m, 1)->runs) == 1,
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 1,
           "a struct compiled minutes ago crossed into one compiled at build");
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  an unfamiliar struct of the same shape wired and arrived\n");
 }
 /* }}} */
@@ -151,20 +151,20 @@ static void a_different_width_is_refused(void)
         "    return v / 2.0;\n"
         "}\n";
 
-    check(late_compile_source(source) == 1, "a double-returning box compiled");
+    check(cera_late_compile_source(source) == 1, "a double-returning box compiled");
 
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "halve", STATION_PLAIN);   /* -> double, 8 bytes */
-    map_place_box(m, 1, "keep", STATION_PLAIN);    /* takes int, 4 bytes */
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "halve", CERA_STATION_PLAIN);   /* -> double, 8 bytes */
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);    /* takes int, 4 bytes */
 
     /* Through the face that hands the refusal back, which is one of
      * the two that survive: the third printed it and returned a code
      * a caller could ignore (issue 106). */
-    check(map_wire(m, 0, 0, 1, 0) != NULL,
+    check(cera_map_wire(m, 0, 0, 1, 0) != NULL,
           "eight bytes into a four-byte port was refused, as it would be "
           "for a box the program was built with");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a late box of the wrong width was refused by the same rule\n");
 }
 /* }}} */
@@ -200,18 +200,18 @@ static void a_disagreeing_layout_is_accepted(void)
         "    return s;\n"
         "}\n";
 
-    check(late_compile_source(source) == 1,
+    check(cera_late_compile_source(source) == 1,
           "a box whose struct disagrees in layout compiled");
 
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "build_scrambled", STATION_PLAIN);
-    map_place_box(m, 1, "magnitude_squared", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "build_scrambled", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "magnitude_squared", CERA_STATION_PLAIN);
 
-    check(map_wire(m, 0, 0, 1, 0) == NULL,
+    check(cera_map_wire(m, 0, 0, 1, 0) == NULL,
           "a disagreeing layout of the same width was ACCEPTED — this is "
           "the cost of checking widths, not a bug");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a disagreeing layout wired anyway, which is the stated cost\n");
 }
 /* }}} */
@@ -224,7 +224,7 @@ static void a_disagreeing_layout_is_accepted(void)
  */
 static void the_source_was_saved(void)
 {
-    const char *dir = late_source_dir();
+    const char *dir = cera_late_source_dir();
     check(dir != NULL && *dir, "there is a place saved sources go");
 
     char path[512];
@@ -246,20 +246,20 @@ static void the_source_was_saved(void)
 /* {{{ static void refusals_add_nothing() */
 static void refusals_add_nothing(void)
 {
-    int before = late_box_count();
+    int before = cera_late_box_count();
 
     /* A source the generator refuses: one field per declaration. */
-    check(late_compile_source(
+    check(cera_late_compile_source(
               "typedef struct { float x, y; } sloppy;\n") == -1,
           "a source the generator refuses is refused here too");
 
     /* A source the compiler refuses: the generator is happy with the
      * shape of this and the compiler is not. */
-    check(late_compile_source(
+    check(cera_late_compile_source(
               "int broken(int x)\n{\n    return undefined_thing(x);\n}\n") == -1,
           "a source the compiler refuses is refused here too");
 
-    check(late_box_count() == before,
+    check(cera_late_box_count() == before,
           "and neither left a row behind — nothing is half-added");
     printf("  two refusals, and the table unchanged after both\n");
 }
@@ -303,21 +303,21 @@ static void a_second_arrival_binds_to_the_first(void)
         "    return shared_ancestor(x) + 1;\n"
         "}\n";
 
-    check(late_compile_source(first) == 1,
+    check(cera_late_compile_source(first) == 1,
           "a box arrived carrying a function");
-    check(late_compile_source(second) == 1,
+    check(cera_late_compile_source(second) == 1,
           "and a second box arrived naming it without carrying it");
 
-    map_t *m = map_create(1);
-    map_place_box(m, 0, "leans_on_the_ancestor", STATION_PLAIN);
-    map_start(m, 1);
+    cera_map_t *m = cera_map_create(1);
+    cera_map_place_box(m, 0, "leans_on_the_ancestor", CERA_STATION_PLAIN);
+    cera_map_start(m, 1);
     int four = 4;
-    map_deliver_value(m, 0, 0, &four);
-    pool_release(m->pool);
-    pool_join(m->pool);
-    check(atomic_load(&map_station(m, 0)->runs) == 1,
+    cera_map_deliver_value(m, 0, 0, &four);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    check(atomic_load(&cera_map_station(m, 0)->runs) == 1,
           "and running it reached the first one's copy");
-    map_destroy(m);
+    cera_map_destroy(m);
 
     printf("  a box arriving second bound to a box arriving first, "
            "with no copy and no lookup\n");
@@ -351,7 +351,7 @@ static void the_program_publishes_its_station_builders(void)
         return;
 
     void *builder = dlsym(self,
-        "sora_box_src_sl_boxes_sl_029_dsh_demo_dsh_boxes_dot_c__add__place");
+        "cera_box_src_sl_boxes_sl_029_dsh_demo_dsh_boxes_dot_c__add__place");
     check(builder != NULL,
           "and it publishes the function that builds a station for a box "
           "it was compiled with");
@@ -384,9 +384,9 @@ static void a_grown_program_knows_what_it_is_made_of(void)
         "    return x - 1;\n"
         "}\n";
 
-    check(late_compile_source(source) == 1, "a box arrived");
+    check(cera_late_compile_source(source) == 1, "a box arrived");
 
-    const box_place_t *row = box_place_find("knows_itself");
+    const cera_box_place_t *row = cera_box_place_find("knows_itself");
     check(row != NULL, "and can be placed by name");
     if (!row)
         return;
@@ -406,7 +406,7 @@ static void a_grown_program_knows_what_it_is_made_of(void)
     memcpy(path, row->address, n);
     path[n] = '\0';
 
-    const char *text = box_source_text(path);
+    const char *text = cera_box_source_text(path);
     check(text != NULL,
           "and the same question that answers for a compiled-in source "
           "answers for this one");
@@ -415,7 +415,7 @@ static void a_grown_program_knows_what_it_is_made_of(void)
 
     /* The compiled-in half of the same question still answers, which
      * is what makes it one question rather than two. */
-    check(box_source_text("029-demo-boxes.c") != NULL,
+    check(cera_box_source_text("029-demo-boxes.c") != NULL,
           "while a source the build compiled in still answers too");
 
     printf("  a program that grew can say what all of it is made of, "
@@ -469,16 +469,16 @@ static void a_dump_reloads_in_a_fresh_process(const char *self)
         fclose(w);
     }
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
     FILE *f = fopen(dump_path, "w");
     check(f != NULL, "the grown program could be dumped");
     if (f) {
-        map_dump(m, f);
+        cera_map_dump(m, f);
         fclose(f);
     }
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
 
     char cmd[1024];
     snprintf(cmd, sizeof cmd, "%s --reload %s", self, dump_path);
@@ -497,13 +497,13 @@ static void a_dump_reloads_in_a_fresh_process(const char *self)
  */
 static int reload_only(const char *map_path)
 {
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
     if (!m)
         return 1;
-    pool_release(m->pool);
-    pool_join(m->pool);
-    long ran = atomic_load(&map_station(m, 1)->runs);
-    map_destroy(m);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    long ran = atomic_load(&cera_map_station(m, 1)->runs);
+    cera_map_destroy(m);
     return ran == 1 ? 0 : 1;
 }
 /* }}} */

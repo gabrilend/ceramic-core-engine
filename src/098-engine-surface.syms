@@ -46,9 +46,16 @@
 # on: a box arriving mid-run calls engine functions that this
 # particular program may never call itself.
 #
-# Why prefixes rather than a list of names. Naming families says which
-# layers are public without a list that has to be re-edited every time
-# one of them gains a function. The narrower alternative — naming the
+# Why this is still a file, now that it holds one line. The pattern
+# could be written straight into the link command. What could not be
+# written there is everything above and below it — why the narrow form
+# is needed, what the sweeping form costs, and what the measurements
+# were. A flag in a build file with thirty lines of comment around it
+# is this file with extra steps.
+#
+# Why a prefix rather than a list of names. Naming a family says which
+# layer is public without a list that has to be re-edited every time it
+# gains a function. The narrower alternative — naming the
 # individual functions — was considered and refused, because the set is
 # not "what generated code calls" but "what code compiled later may
 # bind to", and that includes one symbol per box. Such a list would
@@ -59,22 +66,28 @@
 # a symbol the host did not export fails at dlopen, naming the symbol.
 
 {
-    # The construction surface. A station-builder calls into it to
-    # write a station; a compiled map calls it to build a whole
-    # program; the construction boxes call it on behalf of a map that
-    # is building another map.
-    map_*;
-
-    # Two things share this prefix, and both belong here.
+    # One pattern, because there is one prefix (issue 905).
     #
-    # Stopping — a box may end the program it is running inside, which
-    # is the one thing a box does that is not pure computation.
+    # This was two families — the construction surface under one name
+    # and stopping under another — and they were two because the engine
+    # was carrying two spellings of its own name without anybody
+    # noticing that soramech and ceramic are the same word. Respelling
+    # it consistently collapsed the list to this.
     #
-    # And every generated station-builder, whose symbol carries the
-    # box's full path under this prefix. Those are published for a
-    # different reason than everything else in this file: not because
-    # the engine calls them, but because **a map compiled next year has
-    # to be able to bind to a box compiled today**. A shared object can
+    # What the one pattern covers is still two different reasons, and
+    # they are worth keeping apart in the reading even though the
+    # linker cannot tell them apart:
+    #
+    # The engine's own public calls, which a box or a compiled map
+    # arriving at run time calls back into — placing a station, drawing
+    # a wire, naming a door, marking an entrance or a result, ending
+    # the program it is running inside.
+    #
+    # And every generated station-builder, whose symbol carries its
+    # box's full path under the same prefix. Those are published for a
+    # different reason than everything else here: not because the
+    # engine calls them, but because **a map compiled next year has to
+    # be able to bind to a box compiled today**. A shared object can
     # only bind to a name the program it was loaded into published, so
     # a program that publishes no station-builders can only be extended
     # by boxes carrying their own copies of everything they touch.
@@ -88,5 +101,5 @@
     # Extendable at run time is a requirement of this engine; small was
     # never one, and a program extendable only by boxes it already
     # contained would be extendable in name only.
-    sora_*;
+    cera_*;
 };

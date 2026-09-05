@@ -31,7 +31,6 @@
  * Was libs/011-pool.h. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/libs/011-pool.h"
 /*
  * 011-pool.h — the thread pool's public face.
  *
@@ -74,11 +73,11 @@
  * embedding this struct first in a larger one; the pool cannot tell
  * and does not care.
  */
-typedef struct task task_t;
-typedef void (*task_call_t)(task_t *t);
+typedef struct task cera_task_t;
+typedef void (*cera_task_call_t)(cera_task_t *t);
 
 struct task {
-    task_call_t call;     /* the shim to run */
+    cera_task_call_t call;     /* the shim to run */
     /*
      * **Which program this task belongs to** (issue 212), carried the
      * same way `station` and `port` are — ferried without being
@@ -116,7 +115,7 @@ struct task {
     long        box_ns;
 };
 
-typedef struct pool pool_t;
+typedef struct pool cera_pool_t;
 
 /*
  * The finish hook is delivery's reserved seat (issue 205). After a
@@ -125,58 +124,58 @@ typedef struct pool pool_t;
  * it", which is all phase 1 needs. The hook is how the pool stays
  * ignorant of stations while still carrying their values forward.
  */
-typedef void (*pool_finish_t)(void *ctx, task_t *t);
+typedef void (*cera_pool_finish_t)(void *ctx, cera_task_t *t);
 
-/* {{{ pool_create() — issues 101, 102 */
+/* {{{ cera_pool_create() — issues 101, 102 */
 /*
- * n_workers <= 0 means: use the SORAMECH_WORKERS environment variable
+ * n_workers <= 0 means: use the CERAMIC_WORKERS environment variable
  * if set, otherwise one worker per online processor. Workers are
  * spawned immediately but parked at a starting barrier; nothing runs
- * until pool_release. That gap is where a map is seeded (issue 605).
+ * until cera_pool_release. That gap is where a map is seeded (issue 605).
  */
-pool_t *pool_create(int n_workers, pool_finish_t finish, void *finish_ctx);
+cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *finish_ctx);
 /* }}} */
 
-/* {{{ pool_push() — issues 101, 103 */
+/* {{{ cera_pool_push() — issues 101, 103 */
 /*
  * Enqueue one task. Grows the ring if it is full (a bounded memory
  * copy, never a wait on user code) and wakes every sleeping worker.
  * The task must have been allocated with malloc; the worker that runs
  * it frees it.
  */
-void pool_push(pool_t *p, task_t *t);
+void cera_pool_push(cera_pool_t *p, cera_task_t *t);
 /* }}} */
 
-/* {{{ pool_pop() — issue 101 */
+/* {{{ cera_pool_pop() — issue 101 */
 /*
  * Dequeue the oldest task, or return null when the queue is empty.
  * Never blocks: the decision to sleep on empty belongs to the worker
  * run loop (issue 103), not to the queue.
  */
-task_t *pool_pop(pool_t *p);
+cera_task_t *cera_pool_pop(cera_pool_t *p);
 /* }}} */
 
-/* {{{ pool_release() — issue 102 */
+/* {{{ cera_pool_release() — issue 102 */
 /* Release the workers past the starting barrier. Called once. */
-void pool_release(pool_t *p);
+void cera_pool_release(cera_pool_t *p);
 /* }}} */
 
-/* {{{ pool_join() — issue 104 */
+/* {{{ cera_pool_join() — issue 104 */
 /*
  * Wait until the pool has terminated itself — every task run, every
  * worker returned. Termination is decided by the last worker to fall
  * asleep re-checking the queue (issue 104), so this is a wait for
  * genuine completion, not a deadline.
  */
-void pool_join(pool_t *p);
+void cera_pool_join(cera_pool_t *p);
 /* }}} */
 
-/* {{{ pool_destroy() — issue 101 */
+/* {{{ cera_pool_destroy() — issue 101 */
 /* Free the pool. If workers were started, join them first. */
-void pool_destroy(pool_t *p);
+void cera_pool_destroy(cera_pool_t *p);
 /* }}} */
 
-/* {{{ pool_submitter_register() / pool_submitter_unregister() — issue 104 */
+/* {{{ cera_pool_submitter_register() / cera_pool_submitter_unregister() — issue 104 */
 /*
  * The termination rule assumes nothing outside the pool pushes tasks
  * after the workers are released. Anything that does — a trickle-feed
@@ -185,24 +184,24 @@ void pool_destroy(pool_t *p);
  * two of its pushes. Unregistering the last outside submitter nudges
  * the workers so a fully-asleep pool re-evaluates termination.
  */
-void pool_submitter_register(pool_t *p);
-void pool_submitter_unregister(pool_t *p);
+void cera_pool_submitter_register(cera_pool_t *p);
+void cera_pool_submitter_unregister(cera_pool_t *p);
 /* }}} */
 
-/* {{{ pool_worker_index() — issue 102 */
+/* {{{ cera_pool_worker_index() — issue 102 */
 /*
  * The index of the worker running the calling thread, or -1 when
  * called from a thread that is not a worker. Costs a thread-local
  * read; exists so phase 7 can attribute statistics per worker.
  */
-int pool_worker_index(void);
+int cera_pool_worker_index(void);
 /* }}} */
 
-/* {{{ pool_worker_count() — issue 102 */
+/* {{{ cera_pool_worker_count() — issue 102 */
 /* How many workers this pool actually has, after defaulting. */
-int pool_worker_count(pool_t *p);
+int cera_pool_worker_count(cera_pool_t *p);
 
-/* {{{ pool_worker_epoch() — issue 214 */
+/* {{{ cera_pool_worker_epoch() — issue 214 */
 /*
  * A worker's epoch: **odd while it is inside a task, even while it is
  * not.** Bumped once at the start of a whole task and once at the end,
@@ -221,12 +220,12 @@ int pool_worker_count(pool_t *p);
  * therefore even, so it passes without ever having to move — which is
  * what would otherwise deadlock a sweep against a quiet pool.
  */
-uint64_t pool_worker_epoch(pool_t *p, int worker);
+uint64_t cera_pool_worker_epoch(cera_pool_t *p, int worker);
 /* }}} */
 
 /* {{{ stopping on purpose — issue 106 */
 /*
- * **pool_signal_when_finished(pool, signal)** — raise this signal,
+ * **cera_pool_signal_when_finished(pool, signal)** — raise this signal,
  * once, when the pool decides by itself that the work has run out.
  *
  * The thread that wants to know a program is over is usually also
@@ -241,16 +240,16 @@ uint64_t pool_worker_epoch(pool_t *p, int worker);
  * default, so a pool that raised one unasked would end every program
  * that did not expect it.
  *
- * **pool_stop(pool)** — stop starting new things, which is what
+ * **cera_pool_stop(pool)** — stop starting new things, which is what
  * halting honestly means. A worker inside a box finishes that box,
  * because there is no safe way to interrupt executing C; a worker
  * looking for work finds the flag and returns. Whatever is queued
  * stays queued and is never run, which tearing down afterwards
  * reports rather than hides.
  *
- * **pool_queued(pool)** — how many tasks are waiting right now.
+ * **cera_pool_queued(pool)** — how many tasks are waiting right now.
  *
- * **pool_worker_station(pool, worker)** — which station that worker
+ * **cera_pool_worker_station(pool, worker)** — which station that worker
  * is inside, or -1. A number the pool ferries and never interprets,
  * like the one on the task it came from, and **a number rather than
  * the task's address** on purpose: a report written while a lock is
@@ -258,29 +257,29 @@ uint64_t pool_worker_epoch(pool_t *p, int worker);
  * anything. A stale integer is a wrong answer; a stale pointer is a
  * crash inside the thing that exists to explain a crash.
  */
-void pool_signal_when_finished(pool_t *p, int signo);
-void pool_stop(pool_t *p);
-int  pool_queued(pool_t *p);
-int  pool_worker_station(pool_t *p, int worker);
+void cera_pool_signal_when_finished(cera_pool_t *p, int signo);
+void cera_pool_stop(cera_pool_t *p);
+int  cera_pool_queued(cera_pool_t *p);
+int  cera_pool_worker_station(cera_pool_t *p, int worker);
 
 /*
- * **pool_finished(pool)** — whether the pool has already decided the
+ * **cera_pool_finished(pool)** — whether the pool has already decided the
  * work is over. For telling a caller that arrived too late, rather
  * than letting it push tasks nobody will ever run. The window it
  * detects is closed by making a standing promise before the gate
  * opens, which is issue 104's rule and has not changed.
  */
-int  pool_finished(pool_t *p);
+int  cera_pool_finished(cera_pool_t *p);
 /* }}} */
 /* }}} */
 
-/* {{{ pool_queue_stats() — issue 105 */
+/* {{{ cera_pool_queue_stats() — issue 105 */
 /*
  * The queue's current capacity, its high-water occupancy, and how
  * many times it has grown. Written for the phase 1 demo: every number
  * a demo reports must be measured, and these are the measurements.
  */
-void pool_queue_stats(pool_t *p, int *capacity, int *high_water, int *growths);
+void cera_pool_queue_stats(cera_pool_t *p, int *capacity, int *high_water, int *growths);
 /* }}} */
 
 
@@ -292,7 +291,6 @@ void pool_queue_stats(pool_t *p, int *capacity, int *high_water, int *growths);
  * Was src/018-station.h. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/018-station.h"
 /*
  * 018-station.h — stations, slots, and the map that holds them.
  *
@@ -343,7 +341,7 @@ void pool_queue_stats(pool_t *p, int *capacity, int *high_water, int *growths);
  * numbers — the map file spells a port's kind as text, and the dump
  * writes text back.
  *
- * IN_PORT_NONE is not a third kind of value; it is the absence of a
+ * CERA_IN_PORT_NONE is not a third kind of value; it is the absence of a
  * decision (issue 210b). A port in it has been given no source, and a
  * station holding one can never be ready — which is what lets a
  * program be assembled from nothing, a station coming into existence
@@ -352,10 +350,10 @@ void pool_queue_stats(pool_t *p, int *capacity, int *high_water, int *growths);
  * handed to a box; the readiness walk simply answers no forever.
  */
 enum in_port_kind {
-    IN_PORT_RING    = 0,
-    IN_PORT_STATIC  = 1,
-    IN_PORT_NONE    = 2,
-    IN_PORT_KIND_COUNT
+    CERA_IN_PORT_RING    = 0,
+    CERA_IN_PORT_STATIC  = 1,
+    CERA_IN_PORT_NONE    = 2,
+    CERA_IN_PORT_KIND_COUNT
 };
 
 /*
@@ -369,7 +367,7 @@ enum in_port_kind {
  * actually demands and then stops, so the cost of guessing low is a
  * slower startup, which is the cheapest time in a program's life to be
  * slow. A port that knows better can say so through
- * map_in_port_start_depth.
+ * cera_map_in_port_start_depth.
  *
  * Every slot is usable. A spare one used to be held back so that
  * head-equals-tail could mean empty rather than full, and with a
@@ -377,7 +375,7 @@ enum in_port_kind {
  * a full buffer is one where no slot answers empty, which is a
  * question that gets asked directly now (issue 210c).
  */
-#define IN_PORT_DEFAULT_CAPACITY 10
+#define CERA_IN_PORT_DEFAULT_CAPACITY 10
 
 /*
  * What is happening to one slot (issue 210c), and who is allowed to
@@ -427,10 +425,10 @@ enum in_port_kind {
  * freshly empty run of slots.
  */
 enum slot_state {
-    SLOT_EMPTY    = 0,
-    SLOT_RESERVED = 1,
-    SLOT_READY    = 2,
-    SLOT_CLAIMED  = 3,
+    CERA_SLOT_EMPTY    = 0,
+    CERA_SLOT_RESERVED = 1,
+    CERA_SLOT_READY    = 2,
+    CERA_SLOT_CLAIMED  = 3,
 };
 
 /*
@@ -443,16 +441,16 @@ enum slot_state {
  * door is an ordinary station of any kind, carrying a mark.
  */
 enum station_door {
-    DOOR_NONE = 0,   /* an interior station, which is most of them */
-    DOOR_IN   = 1,   /* the outside may deliver here */
-    DOOR_OUT  = 2,   /* results wait here to be taken */
+    CERA_DOOR_NONE = 0,   /* an interior station, which is most of them */
+    CERA_DOOR_IN   = 1,   /* the outside may deliver here */
+    CERA_DOOR_OUT  = 2,   /* results wait here to be taken */
 };
 
 enum station_kind {
-    STATION_PLAIN      = 0,
-    STATION_COMPARATOR = 1,
-    STATION_ITERATOR   = 2,
-    STATION_KIND_COUNT
+    CERA_STATION_PLAIN      = 0,
+    CERA_STATION_COMPARATOR = 1,
+    CERA_STATION_ITERATOR   = 2,
+    CERA_STATION_KIND_COUNT
 };
 
 /* {{{ struct in_port_page / struct in_port */
@@ -515,7 +513,7 @@ typedef struct in_port_page {
     _Atomic(struct in_port_page *) next;
     /* page_slots × stride bytes: value, state, padding, repeating. */
     unsigned char                 slots[];
-} in_port_page_t;
+} cera_in_port_page_t;
 
 typedef struct in_port {
     /*
@@ -538,7 +536,7 @@ typedef struct in_port {
     /* The pages, oldest first. The first is allocated when the
      * station is placed; growth appends. Never reordered, never
      * freed until the map is. */
-    in_port_page_t *pages;
+    cera_in_port_page_t *pages;
     /* Slots per page — the same for every page of this port, and the
      * same number the first page was given, so a program that wants
      * deep buffers raises its starting depth and gets large pages
@@ -674,7 +672,7 @@ typedef struct in_port {
      * its siblings, with memory absorbing the imbalance. */
     int growths;
     int high_water;
-} in_port_t;
+} cera_in_port_t;
 /* }}} */
 
 /* {{{ struct destination / struct out_port */
@@ -687,9 +685,9 @@ typedef struct in_port {
 typedef struct destination {
     int32_t station;
     int32_t port;
-} destination_t;
+} cera_destination_t;
 
-/* {{{ dest_set_t */
+/* {{{ cera_dest_set_t */
 /*
  * A port's destinations, as **one immutable array** (issue 214).
  *
@@ -711,8 +709,8 @@ typedef struct destination {
  */
 typedef struct dest_set {
     int           n;
-    destination_t items[];
-} dest_set_t;
+    cera_destination_t items[];
+} cera_dest_set_t;
 /* }}} */
 
 typedef struct out_port {
@@ -726,9 +724,9 @@ typedef struct out_port {
      * Null means a port wired nowhere, which discards — exactly what
      * an unwired comparator outcome should do.
      */
-    _Atomic(dest_set_t *) dests;
+    _Atomic(cera_dest_set_t *) dests;
     struct out_port      *next;
-} out_port_t;
+} cera_out_port_t;
 /* }}} */
 
 /*
@@ -736,7 +734,7 @@ typedef struct out_port {
  * the sign of a minus b. Matches the emitted compare functions;
  * declared here generically so this header names nothing the generator emits.
  */
-typedef int (*station_compare_t)(const void *a, const void *b);
+typedef int (*cera_station_compare_t)(const void *a, const void *b);
 
 /* {{{ struct station */
 /*
@@ -748,11 +746,11 @@ typedef int (*station_compare_t)(const void *a, const void *b);
  */
 typedef struct station {
     pthread_mutex_t mutex;      /* held across delivery and readiness */
-    task_call_t     call;       /* the shim; hand-written until phase 3 */
+    cera_task_call_t     call;       /* the shim; hand-written until phase 3 */
     unsigned char   kind;       /* plain, comparator, iterator */
-    in_port_t      *in_ports;
+    cera_in_port_t      *in_ports;
     int             n_in_ports;
-    out_port_t     *out_ports;  /* list; one plain, three comparator */
+    cera_out_port_t     *out_ports;  /* list; one plain, three comparator */
     int             n_out_ports;
     int             cursor;     /* iterator's next port; the one memory a station keeps */
 
@@ -869,18 +867,18 @@ typedef struct station {
     /* Comparator only: the three-way compare for the box's return
      * type, resolved by the placement function so the delivery
      * path does a call rather than a lookup (issue 503). */
-    station_compare_t compare;
+    cera_station_compare_t compare;
 
     /* Phase 7's counters (issue 702). The counts are atomics updated
      * where the work already is, costing nearly nothing, and are
-     * always on. The times are only ever written when SORA_STATS is
+     * always on. The times are only ever written when CERA_STATS is
      * compiled in — the fields stay so the struct never changes
      * shape, but every clock read compiles out. */
     _Atomic long runs;           /* tasks of this station completed */
     _Atomic long produced;       /* tasks its outputs made due elsewhere */
     _Atomic long box_ns;         /* time inside the box function */
     _Atomic long mutex_wait_ns;  /* time deliverers waited on the mutex */
-} station_t;
+} cera_station_t;
 /* }}} */
 
 /* {{{ struct map */
@@ -920,9 +918,9 @@ typedef struct station {
  * few kilobytes at worst. Nothing is copied either way and no station
  * ever moves either way.
  */
-#define STATIONS_PER_SHELF 64
-#define STATION_SHELF_SHIFT 6
-#define STATION_SHELF_MASK  (STATIONS_PER_SHELF - 1)
+#define CERA_STATIONS_PER_SHELF 64
+#define CERA_STATION_SHELF_SHIFT 6
+#define CERA_STATION_SHELF_MASK  (CERA_STATIONS_PER_SHELF - 1)
 
 /*
  * **A station table belongs to one processor**, and so does the pool
@@ -962,7 +960,7 @@ typedef struct map {
      * breaks the sentence in this header rather than keeping it. It is
      * written down so the choice reads as a choice.
      */
-    station_t **shelves;
+    cera_station_t **shelves;
     int         n_shelves;
 
     /*
@@ -975,7 +973,7 @@ typedef struct map {
      * published.
      */
     _Atomic int n_stations;
-    pool_t    *pool;            /* set by map_start; delivery pushes here */
+    cera_pool_t    *pool;            /* set by cera_map_start; delivery pushes here */
 
     /* How many stations the seed sweep enqueued (issue 605). Zero
      * on hand-built maps that seed by delivering. */
@@ -1054,7 +1052,7 @@ typedef struct map {
     int       observer_running;
     char     *observer_path;
     int       observer_interval_ms;
-} map_t;
+} cera_map_t;
 /* }}} */
 
 /* ------------------------------------------------------------------ */
@@ -1066,23 +1064,23 @@ typedef struct map {
 /* optional, which is a different and worse project.                  */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_create() — issue 201 */
+/* {{{ cera_map_create() — issue 201 */
 /* N places reserved up front. The table grows a shelf at a time
  * afterwards (issue 211), so this is a convenience rather than a
  * commitment. */
-/* {{{ map_station() — issue 211 */
+/* {{{ cera_map_station() — issue 211 */
 /*
  * Station number n: one shift, one mask, one extra dereference where
  * a flat array had one add. On the delivery path, which is why the
  * cost is named rather than assumed away.
  */
-static inline station_t *map_station(map_t *m, int n)
+static inline cera_station_t *cera_map_station(cera_map_t *m, int n)
 {
-    return &m->shelves[n >> STATION_SHELF_SHIFT][n & STATION_SHELF_MASK];
+    return &m->shelves[n >> CERA_STATION_SHELF_SHIFT][n & CERA_STATION_SHELF_MASK];
 }
 /* }}} */
 
-/* {{{ map_add_station() — issue 211 */
+/* {{{ cera_map_add_station() — issue 211 */
 /*
  * Make room for one more station and return its index, adding a shelf
  * when the current ones are full.
@@ -1095,42 +1093,42 @@ static inline station_t *map_station(map_t *m, int n)
  *
  * Returns -1 if it cannot grow.
  */
-int map_add_station(map_t *m);
+int cera_map_add_station(cera_map_t *m);
 /* }}} */
 
-map_t *map_create(int n_stations);
+cera_map_t *cera_map_create(int n_stations);
 
-/* {{{ map_create_empty() — issue 211 */
+/* {{{ cera_map_create_empty() — issue 211 */
 /*
  * A map with no stations at all, grown one at a time afterwards. This
  * is what reading a file does now, so that reading a map and adding a
  * station to a running program are the same act rather than two that
- * must agree. map_create is the same thing with N places reserved up
+ * must agree. cera_map_create is the same thing with N places reserved up
  * front, kept because a great many tests know exactly how many they
  * want.
  */
-map_t *map_create_empty(void);
+cera_map_t *cera_map_create_empty(void);
 /* }}} */
 /* }}} */
 
-/* {{{ map_place() — issues 201, 202, 207 */
+/* {{{ cera_map_place() — issues 201, 202, 207 */
 /*
  * Place a box at station index: its shim, its kind, one ring-buffer
  * port per element size given, and the byte size of its return value
  * (zero for a sink). Element sizes are hand-supplied here; from
  * phase 3 they come from the emitted file, derived from the real C.
  */
-void map_place(map_t *m, int station, task_call_t shim, int kind,
+void cera_map_place(cera_map_t *m, int station, cera_task_call_t shim, int kind,
                int n_in_ports, const int *elem_sizes, int out_size);
 /* }}} */
 
-/* {{{ map_in_port_start_depth() — issue 210b */
+/* {{{ cera_map_in_port_start_depth() — issue 210b */
 /*
  * Tell one port how deep its ring buffer should start, in slots.
  *
  * It is a hint rather than a setting: growth covers being wrong, so
  * nobody has to be right. A port never told anything starts at
- * IN_PORT_DEFAULT_CAPACITY, and a program that guesses low pays a slower
+ * CERA_IN_PORT_DEFAULT_CAPACITY, and a program that guesses low pays a slower
  * startup and nothing else. What this exists for is the case where an
  * author already knows one input side outruns its siblings — the
  * situation phase 7's buffer report shouts about — and would rather
@@ -1156,11 +1154,11 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
  * file capable of hiding every fault after it, since a caller
  * collecting mistakes cannot collect the one that killed it.
  */
-const char *map_in_port_start_depth(map_t *m, int station, int port,
+const char *cera_map_in_port_start_depth(cera_map_t *m, int station, int port,
                                     int slots);
 /* }}} */
 
-/* {{{ map_in_port_convert() — issues 210b, 210f */
+/* {{{ cera_map_in_port_convert() — issues 210b, 210f */
 /*
  * Change what one port is: name the station, the port, and the tag it
  * is becoming.
@@ -1181,7 +1179,7 @@ const char *map_in_port_start_depth(map_t *m, int station, int port,
  * non-guarantee, and the scan is not the only thing that opens gaps.
  *
  * Becoming a static **for the first time** is refused here and goes
- * through map_in_port_static_text, because what a port needs in order
+ * through cera_map_in_port_static_text, because what a port needs in order
  * to become a static is a *value*, and this call names only a tag.
  * Becoming a static **again** is what this does, and it works because
  * a constant survives being converted away exactly as the slots do.
@@ -1190,13 +1188,13 @@ const char *map_in_port_start_depth(map_t *m, int station, int port,
  * binding, so a port that goes static, ring, static reads the same
  * value it read before. That is the same rule as the slots: nothing
  * on any path through here is destroyed. It is also what keeps
- * IN_PORT_NONE meaning one thing — "nobody has said yet" — rather than
+ * CERA_IN_PORT_NONE meaning one thing — "nobody has said yet" — rather than
  * also meaning "somebody said, then said something else."
  */
-void map_in_port_convert(map_t *m, int station, int port, int kind);
+void cera_map_in_port_convert(cera_map_t *m, int station, int port, int kind);
 /* }}} */
 
-/* {{{ map_configure_port() — issue 210g */
+/* {{{ cera_map_configure_port() — issue 210g */
 /*
  * **Where a port's values come from**, as one operation: a station, a
  * port, a source, and — when the source is a value — the value
@@ -1205,7 +1203,7 @@ void map_in_port_convert(map_t *m, int station, int port, int kind);
  * `source` is one of the port kinds. Given text, a port becoming a
  * constant takes that value; given none, it returns to the value it
  * held before, which a constant surviving conversion is what makes
- * possible. A port with no source at all is *IN_PORT_NONE*, and a
+ * possible. A port with no source at all is *CERA_IN_PORT_NONE*, and a
  * station holding one can never be ready.
  *
  * **Returns NULL when it took, or a sentence saying why not.** The
@@ -1220,11 +1218,11 @@ void map_in_port_convert(map_t *m, int station, int port, int kind);
  * executable — which is what lets reading a file be a sequence of
  * ordinary operations rather than a privileged path.
  */
-const char *map_configure_port(map_t *m, int station, int port,
+const char *cera_map_configure_port(cera_map_t *m, int station, int port,
                                int source, const char *text);
 /* }}} */
 
-/* {{{ map_check_sources() — issue 210g */
+/* {{{ cera_map_check_sources() — issue 210g */
 /*
  * Every parameter that has nowhere to get a value, collected into one
  * sentence. NULL when every port on every station has a source.
@@ -1243,10 +1241,10 @@ const char *map_configure_port(map_t *m, int station, int port,
  * exemption to the rule that a station runs when every one of its
  * slots holds a value.
  */
-const char *map_check_sources(map_t *m);
+const char *cera_map_check_sources(cera_map_t *m);
 /* }}} */
 
-/* {{{ map_bring_up() — issue 212 */
+/* {{{ cera_map_bring_up() — issue 212 */
 /*
  * **Declare a program finished, check the whole of it, and set going
  * whatever can run without waiting for an arrival.**
@@ -1270,10 +1268,10 @@ const char *map_check_sources(map_t *m);
  * wrong**, because a program that runs half of what it was asked to
  * is worse than one that refuses.
  */
-const char *map_bring_up(map_t *m);
+const char *cera_map_bring_up(cera_map_t *m);
 /* }}} */
 
-/* {{{ map_designate_output() and collecting — issue 209 */
+/* {{{ cera_map_designate_output() and collecting — issue 209 */
 /*
  * **Where a program's results come from.**
  *
@@ -1289,13 +1287,13 @@ const char *map_bring_up(map_t *m);
  * results are several stations, and each gets the readiness check
  * that already exists rather than a new shape.
  *
- * `map_output_waiting` says how many are held; `map_output_take`
+ * `cera_map_output_waiting` says how many are held; `cera_map_output_take`
  * takes the oldest, returning 1 or 0. Both exist because a caller
  * asked to drain results cannot write the loop with only one of them.
  */
-const char *map_designate_output(map_t *m, int station);
+const char *cera_map_designate_output(cera_map_t *m, int station);
 
-/* {{{ map_station_set_cursor() — issue 712 */
+/* {{{ cera_map_station_set_cursor() — issue 712 */
 /*
  * Put an iterator back where it had got to: which of its exits the
  * next value takes.
@@ -1309,7 +1307,7 @@ const char *map_designate_output(map_t *m, int station);
  * nothing for it to mean: a plain station has one exit and a
  * comparator chooses by comparing.
  */
-const char *map_station_set_cursor(map_t *m, int station, int at);
+const char *cera_map_station_set_cursor(cera_map_t *m, int station, int at);
 
 /*
  * The other door: the station the outside is allowed to deliver to.
@@ -1324,9 +1322,9 @@ const char *map_station_set_cursor(map_t *m, int station, int at);
  * whose entrance is its exit, and asking for it is almost certainly a
  * mis-named station.
  */
-const char *map_designate_input(map_t *m, int station);
+const char *cera_map_designate_input(cera_map_t *m, int station);
 
-/* {{{ map_start_beside() — issue 212 */
+/* {{{ cera_map_start_beside() — issue 212 */
 /*
  * **Start a fresh program beside this one, sharing its workers.**
  *
@@ -1353,7 +1351,7 @@ const char *map_designate_input(map_t *m, int station);
  * each, and it needs nothing added here — a door does not ask where
  * its caller is.
  */
-map_t *map_start_beside(map_t *parent);
+cera_map_t *cera_map_start_beside(cera_map_t *parent);
 
 /*
  * Deliver into a program from outside it. NULL when taken, or a
@@ -1366,16 +1364,16 @@ map_t *map_start_beside(map_t *parent);
  * likely to be right about it — inside the graph a wire was checked
  * when it was drawn, and here there is no wire.
  */
-const char *map_deliver_argument(map_t *m, int station, int port,
+const char *cera_map_deliver_argument(cera_map_t *m, int station, int port,
                                  const void *value, int size);
-/* {{{ map_deliver_argument_text() / map_deliver_command_line() — issue 213 */
+/* {{{ cera_map_deliver_argument_text() / cera_map_deliver_command_line() — issue 213 */
 /*
  * **Arguments written as text.** The constant reader pointed at a
  * command line instead of at a map file — same code, same
  * compiler-computed offsets, same messages naming the field that was
  * wrong, and struct arguments in brace syntax for free.
  *
- * `map_deliver_command_line` takes the whole of it: a program's
+ * `cera_map_deliver_command_line` takes the whole of it: a program's
  * arguments are the input ports of the stations it declared as
  * entrances, in station order and then port order. It holds a
  * standing promise while it delivers and drops it afterwards, which
@@ -1391,16 +1389,16 @@ const char *map_deliver_argument(map_t *m, int station, int port,
  * points at has to outlive every box that might read it — which is
  * the whole run. A command line lives as long as the program does.
  */
-const char *map_deliver_argument_text(map_t *m, int station, int port,
+const char *cera_map_deliver_argument_text(cera_map_t *m, int station, int port,
                                       const char *text);
-const char *map_deliver_command_line(map_t *m, int argc, char **argv);
+const char *cera_map_deliver_command_line(cera_map_t *m, int argc, char **argv);
 /* }}} */
 
-int map_output_waiting(map_t *m, int station);
-int map_output_take(map_t *m, int station, void *into, int size);
+int cera_map_output_waiting(cera_map_t *m, int station);
+int cera_map_output_take(cera_map_t *m, int station, void *into, int size);
 /* }}} */
 
-/* {{{ map_name_station() — issue 212 */
+/* {{{ cera_map_name_station() — issue 212 */
 /*
  * What to call a station. NULL when taken, or a sentence saying why
  * not.
@@ -1410,10 +1408,10 @@ int map_output_take(map_t *m, int station, void *into, int size);
  * person watching a live view. A program with no names runs perfectly
  * well; it just cannot be described on disk.
  */
-const char *map_name_station(map_t *m, int station, const char *name);
+const char *cera_map_name_station(cera_map_t *m, int station, const char *name);
 /* }}} */
 
-/* {{{ map_wire() — issue 212 */
+/* {{{ cera_map_wire() — issue 212 */
 /*
  * Draw a wire from a station's output port to another station's input
  * port, **at any moment** — while a program is being assembled or on
@@ -1427,7 +1425,7 @@ const char *map_name_station(map_t *m, int station, const char *name);
  * the widths, so a program could be built by hand that the same
  * program read from a file would have been refused.
  */
-const char *map_wire(map_t *m, int from_station, int port,
+const char *cera_map_wire(cera_map_t *m, int from_station, int port,
                      int to_station, int to_port);
 /* }}} */
 
@@ -1447,7 +1445,7 @@ const char *map_wire(map_t *m, int from_station, int port,
  */
 /* }}} */
 
-/* {{{ map_remove_station() — issue 216 */
+/* {{{ cera_map_remove_station() — issue 216 */
 /*
  * Take a station out of a running program and free its place for the
  * next one.
@@ -1478,28 +1476,28 @@ const char *map_wire(map_t *m, int from_station, int port,
  * stations, and holding anything else across a removal is your own
  * affair.
  */
-const char *map_remove_station(map_t *m, int station);
+const char *cera_map_remove_station(cera_map_t *m, int station);
 /* }}} */
 
-void map_connect(map_t *m, int from_station, int port,
+void cera_map_connect(cera_map_t *m, int from_station, int port,
                  int to_station, int to_port);
 /* }}} */
 
-/* {{{ map_start() / map_destroy() — issue 207 */
+/* {{{ cera_map_start() / cera_map_destroy() — issue 207 */
 /*
- * map_start creates the pool with delivery as its finish hook.
- * Values injected before pool_release(m->pool) are the seed; the
+ * cera_map_start creates the pool with delivery as its finish hook.
+ * Values injected before cera_pool_release(m->pool) are the seed; the
  * formal seed sweep arrives in phase 6 (issue 605).
  */
-void map_start(map_t *m, int n_workers);
-void map_destroy(map_t *m);
+void cera_map_start(cera_map_t *m, int n_workers);
+void cera_map_destroy(cera_map_t *m);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
 /* The push path (issues 202–206).                                    */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_deliver_value() — issues 204, 205 */
+/* {{{ cera_map_deliver_value() — issues 204, 205 */
 /*
  * Deliver one value into one port of one station: take the mutex,
  * write, run the readiness check, claim if complete, release, then
@@ -1508,16 +1506,16 @@ void map_destroy(map_t *m);
  * into a map from outside. Returns whether a task became due, which
  * the statistics read as "the deliverer produced one".
  */
-int map_deliver_value(map_t *m, int station, int port, const void *value);
+int cera_map_deliver_value(cera_map_t *m, int station, int port, const void *value);
 /* }}} */
 
-/* {{{ map_in_port_depth() — issue 208 */
+/* {{{ cera_map_in_port_depth() — issue 208 */
 /* How many values are waiting in a port right now. Takes the mutex.
  * Exists for demos and diagnostics, not for engine decisions. */
-int map_in_port_depth(map_t *m, int station, int port);
+int cera_map_in_port_depth(cera_map_t *m, int station, int port);
 /* }}} */
 
-/* {{{ map_station_try_start() — issues 401, 605 */
+/* {{{ cera_map_station_try_start() — issues 401, 605 */
 /*
  * Ask a station whether it is ready, and if it is, claim one value
  * from every port, build a task, and push it. Returns whether one
@@ -1538,9 +1536,9 @@ int map_in_port_depth(map_t *m, int station, int port);
  * port still answers no, and the engine will not invent a value for
  * it.
  */
-int map_station_try_start(map_t *m, int station);
+int cera_map_station_try_start(cera_map_t *m, int station);
 
-/* {{{ map_station_start_while_ready() — issue 712 */
+/* {{{ cera_map_station_start_while_ready() — issue 712 */
 /*
  * Keep starting while the station stays ready, and say how many tasks
  * became due.
@@ -1557,7 +1555,7 @@ int map_station_try_start(map_t *m, int station);
  * alone, which is right: nothing accumulates where there is no
  * buffer.
  */
-int map_station_start_while_ready(map_t *m, int station);
+int cera_map_station_start_while_ready(cera_map_t *m, int station);
 
 /*
  * The same drain, for a caller that has already asked once — a
@@ -1569,7 +1567,7 @@ int map_station_start_while_ready(map_t *m, int station);
  * because nothing accumulates where there is nothing to accumulate in,
  * and asking again would start it a second time for one change.
  */
-int map_station_keep_starting(map_t *m, int station);
+int cera_map_station_keep_starting(cera_map_t *m, int station);
 /* }}} */
 
 /*
@@ -1584,7 +1582,7 @@ int map_station_keep_starting(map_t *m, int station);
  * mutex inside the delivery file, where the discipline is written
  * down once.
  */
-int map_station_start_after(map_t *m, int station,
+int cera_map_station_start_after(cera_map_t *m, int station,
                             void (*while_locked)(void *), void *ctx);
 /* }}} */
 
@@ -1594,7 +1592,7 @@ int map_station_start_after(map_t *m, int station,
 /* values rather than the keeper of a table.                          */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_in_port_static_text() */
+/* {{{ cera_map_in_port_static_text() */
 /*
  * Give a port a constant, written as text, and make it a static.
  *
@@ -1615,11 +1613,11 @@ int map_station_start_after(map_t *m, int station,
  * station, because a port that was the last one missing is no longer
  * missing.
  */
-void map_in_port_static_text(map_t *m, int station, int port,
+void cera_map_in_port_static_text(cera_map_t *m, int station, int port,
                              const char *text);
 /* }}} */
 
-/* {{{ map_in_port_static_write() — issue 405 */
+/* {{{ cera_map_in_port_static_write() — issue 405 */
 /*
  * Change a static while the program runs. It names a station and a
  * port, because that is where the value lives, and it is size-checked
@@ -1668,7 +1666,7 @@ void map_in_port_static_text(map_t *m, int station, int port,
  * debugger, a control socket, a person turning a knob, or a parent
  * program configuring a child.
  */
-void map_in_port_static_write(map_t *m, int station, int port,
+void cera_map_in_port_static_write(cera_map_t *m, int station, int port,
                            const void *bytes, int size);
 /* }}} */
 
@@ -1677,7 +1675,7 @@ void map_in_port_static_write(map_t *m, int station, int port,
 /* surface a map author touches.                                      */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_in_port_queue_text() — issue 712 */
+/* {{{ cera_map_in_port_queue_text() — issue 712 */
 /*
  * Values put back into a buffer, from the text a capture wrote:
  * comma separated, read one at a time because a struct value has
@@ -1689,7 +1687,7 @@ void map_in_port_static_write(map_t *m, int station, int port,
  *
  * Returns NULL, or a refusal naming what went wrong.
  */
-const char *map_in_port_queue_text(map_t *m, int station, int port,
+const char *cera_map_in_port_queue_text(cera_map_t *m, int station, int port,
                                    const char *text);
 /* }}} */
 /* }}} */
@@ -1703,7 +1701,6 @@ const char *map_in_port_queue_text(map_t *m, int station, int port,
  * Was src/026-emitted.h. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/026-emitted.h"
 /*
  * 026-emitted.h — the joint between the two halves of a program.
  *
@@ -1741,34 +1738,34 @@ const char *map_in_port_queue_text(map_t *m, int station, int port,
  * wrong answers — a negative float reads as larger than a positive
  * one byte-wise (issue 305).
  */
-typedef int (*compare_fn_t)(const void *a, const void *b);
+typedef int (*cera_compare_fn_t)(const void *a, const void *b);
 
 /* What a struct field fundamentally is, for the statics reader. */
 enum field_kind {
-    FIELD_INT = 0,     /* signed integers of any width */
-    FIELD_UINT,        /* unsigned integers of any width */
-    FIELD_FLOAT,       /* float or double */
-    FIELD_STRING,      /* a char array, fixed length, text inside */
-    FIELD_STRUCT,      /* another struct, by its own field table */
+    CERA_FIELD_INT = 0,     /* signed integers of any width */
+    CERA_FIELD_UINT,        /* unsigned integers of any width */
+    CERA_FIELD_FLOAT,       /* float or double */
+    CERA_FIELD_STRING,      /* a char array, fixed length, text inside */
+    CERA_FIELD_STRUCT,      /* another struct, by its own field table */
 };
 
 /* {{{ struct field_info / struct_info */
-typedef struct struct_info struct_info_t;
+typedef struct struct_info cera_struct_info_t;
 
 typedef struct field_info {
     const char           *name;
     int                   offset;     /* offsetof, compiler-computed */
     int                   size;       /* sizeof the member */
     unsigned char         kind;
-    const struct_info_t  *nested;     /* FIELD_STRUCT only */
-    int                   array_len;  /* FIELD_STRING only */
-} field_info_t;
+    const cera_struct_info_t  *nested;     /* CERA_FIELD_STRUCT only */
+    int                   array_len;  /* CERA_FIELD_STRING only */
+} cera_field_info_t;
 
 struct struct_info {
     const char          *name;
     int                  size;
     int                  n_fields;
-    const field_info_t  *fields;
+    const cera_field_info_t  *fields;
 };
 /* }}} */
 
@@ -1829,19 +1826,19 @@ struct struct_info {
 typedef struct box_place {
     const char *name;      /* the bare function name, as maps say today */
     const char *address;   /* file:function, as maps will say */
-    void      (*place)(map_t *m, int station, int kind);
-} box_place_t;
+    void      (*place)(cera_map_t *m, int station, int kind);
+} cera_box_place_t;
 
-extern const box_place_t    box_places[];
+extern const cera_box_place_t    box_places[];
 extern const int            n_box_places;
 
 /* Which placement function writes this box's station. Compiled-in
  * rows first, then anything compiled after the program started. */
-const box_place_t *box_place_find(const char *name);
+const cera_box_place_t *cera_box_place_find(const char *name);
 
 /* The generated data. Defined in src/generated/emitted.c, which the
  * generator rewrites on every build where a box source changed. */
-extern const struct_info_t  struct_layouts[];
+extern const cera_struct_info_t  struct_layouts[];
 extern const int            n_struct_layouts;
 
 /* {{{ writing a value down and reading it back — issue 408 */
@@ -1877,44 +1874,44 @@ extern const int            n_struct_layouts;
  * address; the messages used to name an entry number, which named a
  * row in a table rather than anything in the program.
  */
-typedef struct sora_where {
+typedef struct cera_where {
     int station;
     int port;
-} sora_where_t;
+} cera_where_t;
 
 /*
  * A growing piece of text that never overflows and always reports how
  * much it wanted, so a caller that was cut short can tell, and ask
  * again with more room. The same contract snprintf offers.
  */
-typedef struct sora_textbuf {
+typedef struct cera_textbuf {
     char *out;
     int   room;
     int   used;
-} sora_textbuf_t;
+} cera_textbuf_t;
 
 /* Reading. Each returns where it stopped; each refuses fatally,
  * naming the station, the port and the field. */
-const char *sora_text_expect(const char *p, char c, const sora_where_t *w,
+const char *cera_text_expect(const char *p, char c, const cera_where_t *w,
                              const char *what);
-const char *sora_text_signed(const char *p, void *out, int size,
-                             const sora_where_t *w, const char *field);
-const char *sora_text_unsigned(const char *p, void *out, int size,
-                               const sora_where_t *w, const char *field);
-const char *sora_text_floating(const char *p, void *out, int size,
-                               const sora_where_t *w, const char *field);
+const char *cera_text_signed(const char *p, void *out, int size,
+                             const cera_where_t *w, const char *field);
+const char *cera_text_unsigned(const char *p, void *out, int size,
+                               const cera_where_t *w, const char *field);
+const char *cera_text_floating(const char *p, void *out, int size,
+                               const cera_where_t *w, const char *field);
 /* A char array, filled to `room` bytes and zero-padded. Bounded by
  * the array rather than by a terminator, because a field filled
  * exactly to its width has no room for one. */
-const char *sora_text_chars(const char *p, char *out, int room,
-                            const sora_where_t *w, const char *field);
+const char *cera_text_chars(const char *p, char *out, int room,
+                            const cera_where_t *w, const char *field);
 
 /* Writing. What comes out is what would go back in. */
-void sora_text_put(sora_textbuf_t *tb, const char *literal);
-void sora_text_put_signed(sora_textbuf_t *tb, const void *bytes, int size);
-void sora_text_put_unsigned(sora_textbuf_t *tb, const void *bytes, int size);
-void sora_text_put_floating(sora_textbuf_t *tb, const void *bytes, int size);
-void sora_text_put_chars(sora_textbuf_t *tb, const char *chars, int room);
+void cera_text_put(cera_textbuf_t *tb, const char *literal);
+void cera_text_put_signed(cera_textbuf_t *tb, const void *bytes, int size);
+void cera_text_put_unsigned(cera_textbuf_t *tb, const void *bytes, int size);
+void cera_text_put_floating(cera_textbuf_t *tb, const void *bytes, int size);
+void cera_text_put_chars(cera_textbuf_t *tb, const char *chars, int room);
 
 /*
  * One struct's two directions. A port holding a struct constant is
@@ -1932,31 +1929,31 @@ typedef struct struct_text {
      * about how much room is there.
      */
     int         size;
-    const char *(*read)(const char *p, void *out, const sora_where_t *w);
-    void        (*write)(const void *bytes, sora_textbuf_t *tb);
-} struct_text_t;
+    const char *(*read)(const char *p, void *out, const cera_where_t *w);
+    void        (*write)(const void *bytes, cera_textbuf_t *tb);
+} cera_struct_text_t;
 
-extern const struct_text_t struct_texts[];
+extern const cera_struct_text_t struct_texts[];
 extern const int           n_struct_texts;
 
 /* One type's pair by name, or NULL. Wanted at placement and by a
  * caller building a port by hand; nothing on the delivery path asks. */
-const struct_text_t *struct_text_find(const char *type_name);
+const cera_struct_text_t *cera_struct_text_find(const char *type_name);
 /* }}} */
 
-/* {{{ struct_find() */
-const struct_info_t *struct_find(const char *type_name);
+/* {{{ cera_struct_find() */
+const cera_struct_info_t *cera_struct_find(const char *type_name);
 /* }}} */
 
-/* {{{ emitted_print() */
+/* {{{ cera_emitted_print() */
 /* Every box, its parameter types and sizes, its return, its task
  * size — so a build problem is diagnosed by reading what was
  * emitted, not by guessing (issue 303). */
-void emitted_print(FILE *out);
+void cera_emitted_print(FILE *out);
 /* }}} */
 
 
-/* {{{ map_place_box() */
+/* {{{ cera_map_place_box() */
 /*
  * Place a box at a station by name, sizes drawn from the emitted file
  * instead of typed in by hand — the moment phase 2's hand-supplied
@@ -1965,7 +1962,7 @@ void emitted_print(FILE *out);
  * return value (issue 502's shape, placed early so the loader needs
  * no special case).
  */
-void map_place_box(map_t *m, int station, const char *box_name, int kind);
+void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int kind);
 /* }}} */
 
 /* {{{ box sources, as text — issue 311c */
@@ -1989,15 +1986,15 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind);
 typedef struct box_source {
     const char *path;
     const char *text;
-} box_source_t;
+} cera_box_source_t;
 
-extern const box_source_t sora_box_sources[];
-extern const int          sora_n_box_sources;
+extern const cera_box_source_t cera_box_sources[];
+extern const int          cera_n_box_sources;
 
 /* The text of one box source, by the path the build knew it as, or
  * NULL. A bare basename matches too, because that is how a person
  * refers to a file they can see. */
-const char *box_source_text(const char *path);
+const char *cera_box_source_text(const char *path);
 /* }}} */
 
 /* {{{ maps compiled into code — issue 311d */
@@ -2042,16 +2039,16 @@ typedef struct map_build {
      * needs this to find the copy's doors (issue 217); a caller
      * building a whole program passes null and ignores the count.
      */
-    int       (*build)(map_t *m, int *landed, int cap);
-} map_build_t;
+    int       (*build)(cera_map_t *m, int *landed, int cap);
+} cera_map_build_t;
 
-extern const map_build_t sora_map_builds[];
-extern const int         sora_n_map_builds;
+extern const cera_map_build_t cera_map_builds[];
+extern const int         cera_n_map_builds;
 
 /* The build function for one description, by the path the build knew
  * it as, or by the bare name somebody would type. NULL when this
  * program was not built with that map. */
-const map_build_t *map_build_find(const char *path);
+const cera_map_build_t *cera_map_build_find(const char *path);
 /* }}} */
 
 
@@ -2063,7 +2060,6 @@ const map_build_t *map_build_find(const char *path);
  * Was src/040-mapfile.h. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/040-mapfile.h"
 /*
  * 040-mapfile.h — a description on disk becoming a running program.
  *
@@ -2093,24 +2089,24 @@ const map_build_t *map_build_find(const char *path);
 
 
 
-/* {{{ map_load_file() — issues 602–605 */
+/* {{{ cera_map_load_file() — issues 602–605 */
 /*
  * The whole journey: parse, build every station from its placement function
  * (first pass), resolve and type-check every arrow (second pass),
  * validate what needs the whole map, start the pool with its workers
  * parked, and seed. The caller releases the pool when ready:
  *
- *   map_t *m = map_load_file("program.map", 0);
- *   pool_release(m->pool);
- *   pool_join(m->pool);
- *   map_destroy(m);
+ *   cera_map_t *m = cera_map_load_file("program.map", 0);
+ *   cera_pool_release(m->pool);
+ *   cera_pool_join(m->pool);
+ *   cera_map_destroy(m);
  *
  * Every failure between here and the seed is fatal and names its
  * station; validation failures are collected and printed together
  * before stopping, because someone fixing a new map wants the whole
  * list.
  */
-map_t *map_load_file(const char *path, int n_workers);
+cera_map_t *cera_map_load_file(const char *path, int n_workers);
 
 /*
  * The same, for an artifact that says at the top that it lost work
@@ -2120,16 +2116,16 @@ map_t *map_load_file(const char *path, int n_workers);
  * act and has a different name so that whoever does it has said out
  * loud that they know what is missing.
  */
-map_t *map_load_salvage(const char *path, int n_workers);
+cera_map_t *cera_map_load_salvage(const char *path, int n_workers);
 /* }}} */
 
-/* {{{ map_seed_count() — issue 605's reading */
+/* {{{ cera_map_seed_count() — issue 605's reading */
 /* How many stations the seed enqueued on load — a map that seeds one
  * when its author expected ten has a wiring mistake. */
-int map_seed_count(map_t *m);
+int cera_map_seed_count(cera_map_t *m);
 /* }}} */
 
-/* {{{ map_instantiate_file() — issue 217 */
+/* {{{ cera_map_instantiate_file() — issue 217 */
 /*
  * **A description brought inside a program that already exists.**
  *
@@ -2159,9 +2155,9 @@ typedef struct map_instance {
      * should want the doors instead. */
     int *station;
     int  count;
-} map_instance_t;
+} cera_map_instance_t;
 
-map_instance_t map_instantiate_file(map_t *m, const char *path);
+cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path);
 
 /*
  * **The nth door of an instance facing that way**, or -1. This is the
@@ -2169,12 +2165,12 @@ map_instance_t map_instantiate_file(map_t *m, const char *path);
  * brought inside itself: everything that is not a door belongs to the
  * description's author to rename or restructure.
  */
-int  map_instance_entrance(map_t *m, const map_instance_t *in, int nth);
-int  map_instance_result(map_t *m, const map_instance_t *in, int nth);
-void map_instance_free(map_instance_t *in);
+int  cera_map_instance_entrance(cera_map_t *m, const cera_map_instance_t *in, int nth);
+int  cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int nth);
+void cera_map_instance_free(cera_map_instance_t *in);
 /* }}} */
 
-/* {{{ map_add_part() / map_connect_parts() — issue 217 */
+/* {{{ cera_map_add_part() / cera_map_connect_parts() — issue 217 */
 /*
  * **Adding a box and adding a map are one operation.**
  *
@@ -2201,11 +2197,11 @@ void map_instance_free(map_instance_t *in);
 typedef struct map_part {
     int entrance;   /* where values go in, or -1 if nothing may be fed */
     int result;     /* where values come out */
-} map_part_t;
+} cera_map_part_t;
 
-const char *map_add_part(map_t *m, const char *what, map_part_t *out);
-const char *map_connect_parts(map_t *m, map_part_t from, int from_port,
-                              map_part_t to, int to_port);
+const char *cera_map_add_part(cera_map_t *m, const char *what, cera_map_part_t *out);
+const char *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, int from_port,
+                              cera_map_part_t to, int to_port);
 /* }}} */
 
 
@@ -2218,7 +2214,6 @@ const char *map_connect_parts(map_t *m, map_part_t from, int from_port,
  * Was src/049-observe.h. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/049-observe.h"
 /*
  * 049-observe.h — seeing inside a running map.
  *
@@ -2233,7 +2228,7 @@ const char *map_connect_parts(map_t *m, map_part_t from, int from_port,
  * by the phases that built the structures (growth counts in phase 2,
  * high water alongside); this phase reads them out loud. Timing is
  * heavier than counting, so it compiles out entirely unless
- * SORA_STATS is defined — a measurement apparatus whose cost is
+ * CERA_STATS is defined — a measurement apparatus whose cost is
  * unmeasured is a rumour, and one that cannot be removed is a tax.
  */
 
@@ -2247,7 +2242,7 @@ const char *map_connect_parts(map_t *m, map_part_t from, int from_port,
 /* Reporting (issues 701, 702).                                       */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_report_buffers() — issue 701 */
+/* {{{ cera_map_report_buffers() — issue 701 */
 /*
  * Every port's growth story: doublings, current capacity, high-water
  * occupancy — plus the pool ring's own, because the two piles form
@@ -2255,13 +2250,13 @@ const char *map_connect_parts(map_t *m, map_part_t from, int from_port,
  * more than capacity: a thousand-slot buffer that held two values
  * had one bad moment; one that held nine hundred is a bottleneck.
  */
-void map_report_buffers(map_t *m, FILE *out);
+void cera_map_report_buffers(cera_map_t *m, FILE *out);
 /* }}} */
 
-/* {{{ map_report_stations() — issue 702 */
+/* {{{ cera_map_report_stations() — issue 702 */
 /*
  * Per station: runs, tasks produced for others, and — when compiled
- * with SORA_STATS — time inside the box and time spent waiting on the
+ * with CERA_STATS — time inside the box and time spent waiting on the
  * station's mutex. Three orderings of the same data, because the
  * interesting station is a different one under each.
  *
@@ -2271,47 +2266,47 @@ void map_report_buffers(map_t *m, FILE *out);
  * now, so a station's own box time is the whole of its cost.
  */
 enum report_order {
-    REPORT_BY_TIME = 0,
-    REPORT_BY_CONTENTION,
-    REPORT_BY_COUNT,
-    REPORT_ORDER_COUNT
+    CERA_REPORT_BY_TIME = 0,
+    CERA_REPORT_BY_CONTENTION,
+    CERA_REPORT_BY_COUNT,
+    CERA_REPORT_ORDER_COUNT
 };
-void map_report_stations(map_t *m, FILE *out, int order);
+void cera_map_report_stations(cera_map_t *m, FILE *out, int order);
 /* }}} */
 
-/* {{{ map_observe_start() / map_observe_stop() — issue 701 */
+/* {{{ cera_map_observe_start() / cera_map_observe_stop() — issue 701 */
 /*
  * Periodic emission of both reports to a file, from a small thread
  * that is not a worker and pushes nothing (so termination stays
  * sound). An interval of zero refuses to start: diagnostics nobody
  * reads are a background thread doing nothing useful.
  */
-void map_observe_start(map_t *m, const char *path, int interval_ms);
-void map_observe_stop(map_t *m);
+void cera_map_observe_start(cera_map_t *m, const char *path, int interval_ms);
+void cera_map_observe_stop(cera_map_t *m);
 /* }}} */
 
-/* {{{ map_report_shutdown() — issue 701's loud parting word */
-/* Called by map_destroy: any port grown past the shout threshold is
+/* {{{ cera_map_report_shutdown() — issue 701's loud parting word */
+/* Called by cera_map_destroy: any port grown past the shout threshold is
  * named on stderr, so a quietly-absorbing map gets decided about. */
-void map_report_shutdown(map_t *m);
+void cera_map_report_shutdown(cera_map_t *m);
 /* }}} */
 
-/* {{{ sora_stats hooks — filled by generated shims and the engine */
+/* {{{ cera_stats hooks — filled by generated shims and the engine */
 /*
  * The shims emitted by the generator call the first of these around
- * every box run when SORA_STATS is defined; the engine calls the
+ * every box run when CERA_STATS is defined; the engine calls the
  * rest from the delivery path. All of them are cheap atomics on the
  * station's own counters; all of the *timing* callers compile out
  * without the define.
  */
-void sora_stats_box_time(task_t *t, long ns);
+void cera_stats_box_time(cera_task_t *t, long ns);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
 /* The dump (issue 703). Lives in 051-dump.c.                         */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_dump() */
+/* {{{ cera_map_dump() */
 /*
  * Write the in-memory station table back out in the map file format,
  * derived facts as comments beside the lines that parse. Dumped from
@@ -2320,18 +2315,18 @@ void sora_stats_box_time(task_t *t, long ns);
  * bug nothing else would catch. Requires a map loaded from a file
  * (names retained); refuses a hand-built map by name.
  */
-void map_dump(map_t *m, FILE *out);
+void cera_map_dump(cera_map_t *m, FILE *out);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
 /* Rewiring (issue 704). Lives in 052-rewire.c.                       */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_unwire() / map_disconnect() — issues 704, 106 */
+/* {{{ cera_map_unwire() / cera_map_disconnect() — issues 704, 106 */
 /*
  * Cut one wire on a live map, by rebuilding the destination list
- * without it. `map_unwire` hands a refusal back so a caller can
- * collect it; `map_disconnect` stops the program.
+ * without it. `cera_map_unwire` hands a refusal back so a caller can
+ * collect it; `cera_map_disconnect` stops the program.
  *
  * **A third face used to sit here and it is gone** (issue 106). It
  * printed the refusal and returned minus one, which 704 chose
@@ -2342,9 +2337,9 @@ void map_dump(map_t *m, FILE *out);
  * refusal leaves a program running that somebody believes they just
  * edited successfully. The debt is paid off rather than serviced.
  */
-const char *map_unwire(map_t *m, int from_station, int port,
+const char *cera_map_unwire(cera_map_t *m, int from_station, int port,
                        int to_station, int to_port);
-void        map_disconnect(map_t *m, int from_station, int port,
+void        cera_map_disconnect(cera_map_t *m, int from_station, int port,
                            int to_station, int to_port);
 /* }}} */
 
@@ -2357,7 +2352,6 @@ void        map_disconnect(map_t *m, int from_station, int port,
  * Was src/073-latebox.h. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/073-latebox.h"
 /*
  * 073-latebox.h — boxes that arrive after the program started.
  *
@@ -2391,7 +2385,7 @@ void        map_disconnect(map_t *m, int from_station, int port,
 
 
 
-/* {{{ late_compile_source() */
+/* {{{ cera_late_compile_source() */
 /*
  * Compile C source into the running program and add every box it
  * defines to the table.
@@ -2410,24 +2404,24 @@ void        map_disconnect(map_t *m, int from_station, int port,
  * opens the diagnostic report's destination during startup rather
  * than while dying.
  */
-int late_compile_source(const char *c_source);
+int cera_late_compile_source(const char *c_source);
 /* }}} */
 
-/* {{{ late_box_count() / late_box_at() */
+/* {{{ cera_late_box_count() / cera_late_box_at() */
 /*
  * The boxes added after the program started, in the order they
  * arrived. The compiled-in ones are not included: those are
  * box_places and have always been reachable directly.
  *
- * Lookup by name goes through box_place_find, which walks both, so
+ * Lookup by name goes through cera_box_place_find, which walks both, so
  * almost nothing needs these. They exist for a report that wants to
  * say what a program has grown, and for the tests.
  */
-int                late_box_count(void);
-const box_place_t *late_box_at(int i);
+int                cera_late_box_count(void);
+const cera_box_place_t *cera_late_box_at(int i);
 /* }}} */
 
-/* {{{ late_unload_box() */
+/* {{{ cera_late_unload_box() */
 /*
  * Unload a box added while the program ran, freeing the library its
  * code came in.
@@ -2454,16 +2448,16 @@ const box_place_t *late_box_at(int i);
  *
  * Returns 0, or -1 with a reason on stderr.
  */
-int late_unload_box(map_t *m, const char *name);
+int cera_late_unload_box(cera_map_t *m, const char *name);
 /* }}} */
 
-/* {{{ late_source_dir() */
+/* {{{ cera_late_source_dir() */
 /* Where saved sources go, so a reloader can find one from a box's
  * name alone. */
-const char *late_source_dir(void);
+const char *cera_late_source_dir(void);
 /* }}} */
 
-/* {{{ late_compile_map() — issue 311d */
+/* {{{ cera_late_compile_map() — issue 311d */
 /*
  * **A description handed to a running program, compiled into it.**
  *
@@ -2491,10 +2485,10 @@ const char *late_source_dir(void);
  * that stays loaded, so they may be kept and used again, on any
  * program.
  */
-const map_build_t *late_compile_map(const char *map_text);
+const cera_map_build_t *cera_late_compile_map(const char *map_text);
 /* }}} */
 
-/* {{{ late_spill_sources() — issue 712 */
+/* {{{ cera_late_spill_sources() — issue 712 */
 /*
  * Write every source this program is made of into a directory, under
  * the paths it was compiled as — what the build put in, and everything
@@ -2509,10 +2503,10 @@ const map_build_t *late_compile_map(const char *map_text);
  *
  * Returns how many were written, or -1 with a reason on stderr.
  */
-int late_spill_sources(const char *dir);
+int cera_late_spill_sources(const char *dir);
 /* }}} */
 
-/* {{{ late_source_text() — issue 311d */
+/* {{{ cera_late_source_text() — issue 311d */
 /*
  * **The C one late-arriving source was compiled from**, by the path
  * it was compiled under, or NULL.
@@ -2523,12 +2517,12 @@ int late_spill_sources(const char *dir);
  * exactly as the program's own generated file does, so this returns a
  * pointer into the loaded object and lives as long as it does.
  *
- * Callers should reach for `box_source_text` instead, which asks this
+ * Callers should reach for `cera_box_source_text` instead, which asks this
  * after asking what the build compiled in. Two lookups exist because
  * the two tables live in different objects; one question is asked, and
  * whether a box arrived early or late is not part of it.
  */
-const char *late_source_text(const char *path);
+const char *cera_late_source_text(const char *path);
 /* }}} */
 
 
@@ -2540,7 +2534,6 @@ const char *late_source_text(const char *path);
  * Was src/091-stopping.h. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/091-stopping.h"
 /*
  * 091-stopping.h — every way a program ends except the happy one.
  *
@@ -2579,17 +2572,17 @@ const char *late_source_text(const char *path);
  * correct and retry, against one it cannot — visible to a shell
  * script rather than only to somebody reading the message.
  */
-#define SORA_EXIT_FINISHED     0    /* ran out of work, or was asked to stop */
-#define SORA_EXIT_BAD_FILE     65   /* a map file the engine refused        */
-#define SORA_EXIT_BAD_CALL     70   /* an invalid construction call         */
-#define SORA_EXIT_NO_RESOURCE  71   /* out of memory; no edit fixes it      */
-#define SORA_EXIT_INTERRUPTED  130  /* a person interrupted it              */
+#define CERA_EXIT_FINISHED     0    /* ran out of work, or was asked to stop */
+#define CERA_EXIT_BAD_FILE     65   /* a map file the engine refused        */
+#define CERA_EXIT_BAD_CALL     70   /* an invalid construction call         */
+#define CERA_EXIT_NO_RESOURCE  71   /* out of memory; no edit fixes it      */
+#define CERA_EXIT_INTERRUPTED  130  /* a person interrupted it              */
 /* The quit path is not in this list: it aborts, and the shell
  * computes 131 from the signal itself. Naming a number here would be
  * inventing an agreement that already exists. */
 /* }}} */
 
-/* {{{ sora_prepare() — issue 106 */
+/* {{{ cera_prepare() — issue 106 */
 /*
  * **Block the three signals in every thread, and open the report's
  * destination.** Call this before any thread exists, because a thread
@@ -2609,13 +2602,13 @@ const char *late_source_text(const char *path);
  * is the one file operation available on every path here — including
  * the one that is forbidden to take a lock.
  */
-void sora_prepare(const char *report_path);
+void cera_prepare(const char *report_path);
 
-/* Where the report will be written. Valid after sora_prepare. */
-const char *sora_report_path(void);
+/* Where the report will be written. Valid after cera_prepare. */
+const char *cera_report_path(void);
 /* }}} */
 
-/* {{{ sora_wait() — issue 106 */
+/* {{{ cera_wait() — issue 106 */
 /*
  * **Wait for the program to end, however it ends**, and return the
  * code the process should exit with.
@@ -2653,14 +2646,14 @@ const char *sora_report_path(void);
  * stuck would trap the person it was written for, which is the exact
  * failure it exists to prevent.
  */
-int sora_wait(map_t *m);
+int cera_wait(cera_map_t *m);
 /* }}} */
 
-/* {{{ sora_capture() / sora_capture_now() — issue 712 */
+/* {{{ cera_capture() / cera_capture_now() — issue 712 */
 /*
  * **Put a running program down on disk so it can be picked up again.**
  *
- * `sora_capture` is the polite one. It shuts the entrance — the only
+ * `cera_capture` is the polite one. It shuts the entrance — the only
  * way anything outside pushes work in — lets everything already in
  * flight finish and deliver, waits for the workers to go home, and
  * then writes the artifact. What it produces is **complete** by
@@ -2674,9 +2667,9 @@ int sora_wait(map_t *m);
  * that is merely slow. Whoever asked for the capture already has a
  * clock, and theirs is the only one that knows how long is too long
  * for this deployment. This is the same reasoning that keeps a
- * timeout out of `sora_wait`, and it is not weaker here.
+ * timeout out of `cera_wait`, and it is not weaker here.
  *
- * `sora_capture_now` is for when that clock runs out. It writes
+ * `cera_capture_now` is for when that clock runs out. It writes
  * immediately, whatever is happening, and the artifact says so: a
  * header naming every station a worker is still inside, and the plain
  * statement that their inputs are lost and their results were never
@@ -2690,8 +2683,8 @@ int sora_wait(map_t *m);
  *
  * Both return 0, or -1 with a reason on stderr.
  */
-int sora_capture(map_t *m, const char *path);
-int sora_capture_now(map_t *m, const char *path);
+int cera_capture(cera_map_t *m, const char *path);
+int cera_capture_now(cera_map_t *m, const char *path);
 
 /*
  * **A capture that stands alone**, into a directory: the description,
@@ -2718,10 +2711,10 @@ int sora_capture_now(map_t *m, const char *path);
  *
  * Drains first, exactly as the plain capture does. Returns 0 or -1.
  */
-int sora_capture_whole(map_t *m, const char *dir);
+int cera_capture_whole(cera_map_t *m, const char *dir);
 /* }}} */
 
-/* {{{ sora_stop_now() — issue 106 */
+/* {{{ cera_stop_now() — issue 106 */
 /*
  * **An invalid operation ends the program**, having first said
  * everything it can about what went wrong.
@@ -2740,7 +2733,7 @@ int sora_capture_whole(map_t *m, const char *dir);
  *
  * `m` may be NULL when there is no program to describe yet.
  */
-void sora_stop_now(map_t *m, int exit_code, const char *why);
+void cera_stop_now(cera_map_t *m, int exit_code, const char *why);
 /* }}} */
 
 

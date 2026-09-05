@@ -58,16 +58,16 @@ typedef struct {
  * real address by any means available here, which is exactly the
  * thing 058 records.
  */
-static map_t *program_of(program p, const char *what)
+static cera_map_t *program_of(program p, const char *what)
 {
     if (p.at == 0) {
         char said[256];
         snprintf(said, sizeof said,
                  "construction: %s was asked of no program at all — the "
                  "port carrying it was never given one", what);
-        sora_stop_now(NULL, SORA_EXIT_BAD_CALL, said);
+        cera_stop_now(NULL, CERA_EXIT_BAD_CALL, said);
     }
-    return (map_t *)p.at;
+    return (cera_map_t *)p.at;
 }
 
 /* {{{ static void refused() */
@@ -86,11 +86,11 @@ static map_t *program_of(program p, const char *what)
  * built by an ignored refusal is not a state anything can reach,
  * because there is no surviving path that reaches it.
  */
-static void refused(map_t *m, const char *what, const char *why)
+static void refused(cera_map_t *m, const char *what, const char *why)
 {
     char said[512];
     snprintf(said, sizeof said, "construction: refused %s: %s", what, why);
-    sora_stop_now(m, SORA_EXIT_BAD_CALL, said);
+    cera_stop_now(m, CERA_EXIT_BAD_CALL, said);
 }
 /* }}} */
 
@@ -136,10 +136,10 @@ typedef struct {
  */
 part program_add(program p, const char *what)
 {
-    map_t *m = program_of(p, "adding a part");
+    cera_map_t *m = program_of(p, "adding a part");
     part made = { -1, -1 };
-    map_part_t got;
-    const char *no = map_add_part(m, what, &got);
+    cera_map_part_t got;
+    const char *no = cera_map_add_part(m, what, &got);
     if (no)
         refused(m, "a part", no);
     made.entrance = got.entrance;
@@ -159,10 +159,10 @@ part program_add(program p, const char *what)
 int program_connect(program p, part from, int from_port,
                     part to, int to_port)
 {
-    map_t *m = program_of(p, "drawing a wire");
-    map_part_t a = { from.entrance, from.result };
-    map_part_t b = { to.entrance, to.result };
-    const char *no = map_connect_parts(m, a, from_port, b, to_port);
+    cera_map_t *m = program_of(p, "drawing a wire");
+    cera_map_part_t a = { from.entrance, from.result };
+    cera_map_part_t b = { to.entrance, to.result };
+    const char *no = cera_map_connect_parts(m, a, from_port, b, to_port);
     if (no)
         refused(m, "a wire", no);
     return 1;
@@ -178,12 +178,12 @@ int program_connect(program p, part from, int from_port,
 int program_set_constant(program p, part which, int port,
                          const char *text)
 {
-    map_t *m = program_of(p, "setting a constant");
+    cera_map_t *m = program_of(p, "setting a constant");
     /* A part's way *in* is what takes a value, whether it is a single
      * box's own port or a brought-in map's entrance. Both read the
      * same way: give this thing's port a value. */
-    const char *no = map_configure_port(m, which.entrance, port,
-                                        IN_PORT_STATIC, text);
+    const char *no = cera_map_configure_port(m, which.entrance, port,
+                                        CERA_IN_PORT_STATIC, text);
     if (no)
         refused(m, "a constant", no);
     return 1;
@@ -212,20 +212,20 @@ int program_set_constant(program p, part which, int port,
  */
 int program_set_door(program p, part which, int facing)
 {
-    map_t *m = program_of(p, "marking a door");
+    cera_map_t *m = program_of(p, "marking a door");
     /* Marking a part as one of this program's own doors: the way in
      * for an entrance, the way out for a result. A single box has one
      * station for both, so either mark lands where it should. */
     const char *no;
-    if (facing == DOOR_IN)
-        no = map_designate_input(m, which.entrance);
-    else if (facing == DOOR_OUT)
-        no = map_designate_output(m, which.result);
+    if (facing == CERA_DOOR_IN)
+        no = cera_map_designate_input(m, which.entrance);
+    else if (facing == CERA_DOOR_OUT)
+        no = cera_map_designate_output(m, which.result);
     else {
         char which[128];
         snprintf(which, sizeof which,
                  "%d is neither the way in (%d) nor the way out (%d)",
-                 facing, DOOR_IN, DOOR_OUT);
+                 facing, CERA_DOOR_IN, CERA_DOOR_OUT);
         refused(m, "a door", which);
         return 0;
     }
@@ -240,12 +240,12 @@ int program_set_door(program p, part which, int facing)
  */
 int program_name_station(program p, part which, const char *name)
 {
-    map_t *m = program_of(p, "naming a station");
+    cera_map_t *m = program_of(p, "naming a station");
     /* Names a part's way in, which for a single box is the station
      * itself and for a brought-in map is the station a parent knows
      * about. The rest of a map's stations were named by its own
      * description and keep those names. */
-    const char *no = map_name_station(m, which.entrance, name);
+    const char *no = cera_map_name_station(m, which.entrance, name);
     if (no)
         refused(m, "a name", no);
     return 1;

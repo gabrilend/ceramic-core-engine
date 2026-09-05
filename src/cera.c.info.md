@@ -13,8 +13,8 @@ into one, and the parts that end one.
 Eleven files meant every joint between them had to be a global name,
 because being in a header was the only way one file could reach another.
 A host program linking this engine inherited about forty ordinary
-English words it never asked for — `map_create`, `map_start`,
-`pool_push` — and would fail to link if it had its own notion of a map.
+English words it never asked for — `cera_map_create`, `cera_map_start`,
+`cera_pool_push` — and would fail to link if it had its own notion of a map.
 
 One file makes private the default and public a deliberate act, the act
 being a declaration in `cera.h`. **That property cannot decay**, and not
@@ -24,7 +24,9 @@ anything published without being declared. A function added next year is
 private unless somebody writes it into the header, and the build says so
 if they meant to and forgot.
 
-The engine exported 123 symbols before this and exports 100 now.
+The engine exported 123 symbols before this and exports 100 now, and
+every one of the 100 begins `cera_` — so a host program with its own
+notion of a map or a pool has nothing to collide with.
 
 The cost is that any change recompiles the whole engine, which at this
 size is a fraction of a second and is paid by the consumer's build

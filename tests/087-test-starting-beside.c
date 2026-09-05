@@ -41,11 +41,11 @@ static void must_take(const char *refusal, const char *what)
 int main(void)
 {
     /* The first program, with workers of its own. */
-    map_t *first = map_create_empty();
-    int keeper = map_add_station(first);
-    map_place_box(first, keeper, "keep", STATION_PLAIN);
-    must_take(map_name_station(first, keeper, "keeper"), "a name");
-    must_take(map_designate_input(first, keeper), "an entrance");
+    cera_map_t *first = cera_map_create_empty();
+    int keeper = cera_map_add_station(first);
+    cera_map_place_box(first, keeper, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(first, keeper, "keeper"), "a name");
+    must_take(cera_map_designate_input(first, keeper), "an entrance");
 
     /*
      * A way out, with nothing wired into it yet. Every program
@@ -57,38 +57,38 @@ int main(void)
      * it gives this program a station 1 — and the second program has
      * one too, and they are not the same station.
      */
-    int outcome = map_add_station(first);
-    map_place_box(first, outcome, "double_it", STATION_PLAIN);
-    must_take(map_name_station(first, outcome, "outcome"), "a name");
-    must_take(map_designate_output(first, outcome), "a result");
+    int outcome = cera_map_add_station(first);
+    cera_map_place_box(first, outcome, "double_it", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(first, outcome, "outcome"), "a name");
+    must_take(cera_map_designate_output(first, outcome), "a result");
 
-    map_start(first, 3);
-    pool_submitter_register(first->pool);
+    cera_map_start(first, 3);
+    cera_pool_submitter_register(first->pool);
     /* Its way out has nothing wired into it yet — the wire arrives
      * further down — so bringing it up says so. That notice is this
      * program being honest, not this program being wrong. */
     printf("  (the notice below is a way out nobody has wired yet)\n");
     fflush(stdout);
-    must_take(map_bring_up(first), "the first program");
-    pool_release(first->pool);
+    must_take(cera_map_bring_up(first), "the first program");
+    cera_pool_release(first->pool);
 
     /*
      * A second program, started beside the first. Its own station
      * table, its own everything — the same workers.
      */
-    map_t *second = map_start_beside(first);
-    int gate = map_add_station(second);
-    map_place_box(second, gate, "keep", STATION_PLAIN);
-    must_take(map_name_station(second, gate, "gate"), "a name");
+    cera_map_t *second = cera_map_start_beside(first);
+    int gate = cera_map_add_station(second);
+    cera_map_place_box(second, gate, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(second, gate, "gate"), "a name");
 
-    int answer = map_add_station(second);
-    map_place_box(second, answer, "double_it", STATION_PLAIN);
-    must_take(map_name_station(second, answer, "answer"), "a name");
+    int answer = cera_map_add_station(second);
+    cera_map_place_box(second, answer, "double_it", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(second, answer, "answer"), "a name");
 
-    must_take(map_wire(second, gate, 0, answer, 0), "a wire");
-    must_take(map_designate_input(second, gate), "an entrance");
-    must_take(map_designate_output(second, answer), "a result");
-    must_take(map_bring_up(second), "the second program");
+    must_take(cera_map_wire(second, gate, 0, answer, 0), "a wire");
+    must_take(cera_map_designate_input(second, gate), "an entrance");
+    must_take(cera_map_designate_output(second, answer), "a result");
+    must_take(cera_map_bring_up(second), "the second program");
 
     if (second->pool != first->pool) {
         fprintf(stderr, "the second program did not share the workers\n");
@@ -114,29 +114,29 @@ int main(void)
      * Reaching a program started beside you is what its entrance is
      * for, and there is no second way.
      */
-    if (map_station(first, 1) == map_station(second, 1)) {
+    if (cera_map_station(first, 1) == cera_map_station(second, 1)) {
         fprintf(stderr, "the two station 1s are one record, so this proves "
                         "nothing\n");
         return 1;
     }
-    must_take(map_wire(first, keeper, 0, 1, 0),
+    must_take(cera_map_wire(first, keeper, 0, 1, 0),
               "a wire that looks like it crosses");
 
     int homeward = 21;
-    must_take(map_deliver_argument(first, keeper, 0, &homeward,
+    must_take(cera_map_deliver_argument(first, keeper, 0, &homeward,
                                    sizeof homeward),
               "a value into the first program");
 
     /* Reached the only way anything outside reaches a program. */
     for (int i = 1; i <= 4; i++) {
         int argument = i;
-        must_take(map_deliver_argument(second, gate, 0, &argument,
+        must_take(cera_map_deliver_argument(second, gate, 0, &argument,
                                        sizeof argument),
                   "an argument");
     }
 
-    pool_submitter_unregister(first->pool);
-    pool_join(first->pool);
+    cera_pool_submitter_unregister(first->pool);
+    cera_pool_join(first->pool);
 
     /*
      * The value went to the first program's own station 1 — doubled
@@ -146,8 +146,8 @@ int main(void)
      * index, and the wire stayed home.
      */
     int homeward_result = 0;
-    if (map_output_waiting(first, outcome) != 1
-        || !map_output_take(first, outcome, &homeward_result,
+    if (cera_map_output_waiting(first, outcome) != 1
+        || !cera_map_output_take(first, outcome, &homeward_result,
                             sizeof homeward_result)
         || homeward_result != 42) {
         fprintf(stderr, "the wire that looked like it crossed did not "
@@ -157,15 +157,15 @@ int main(void)
     printf("  a wire naming another program's index drew an ordinary wire "
            "at home instead; indices do not cross\n");
 
-    if (map_output_waiting(second, answer) != 4) {
+    if (cera_map_output_waiting(second, answer) != 4) {
         fprintf(stderr, "the second program produced %d results, not 4\n",
-                map_output_waiting(second, answer));
+                cera_map_output_waiting(second, answer));
         return 1;
     }
     int total = 0;
     for (int i = 0; i < 4; i++) {
         int got = 0;
-        map_output_take(second, answer, &got, sizeof got);
+        cera_map_output_take(second, answer, &got, sizeof got);
         total += got;
     }
     if (total != 2 + 4 + 6 + 8) {
@@ -182,7 +182,7 @@ int main(void)
      * the program that made them owns them, and others may still be
      * running on them.
      */
-    map_destroy(second);
+    cera_map_destroy(second);
     if (!first->pool) {
         fprintf(stderr, "destroying the borrower took the workers\n");
         return 1;
@@ -202,11 +202,11 @@ int main(void)
            "after the workers went home)\n");
     fflush(stdout);
     int after = 5;
-    must_take(map_deliver_argument(first, keeper, 0, &after, sizeof after),
+    must_take(cera_map_deliver_argument(first, keeper, 0, &after, sizeof after),
               "an argument after the second program died");
     printf("  and the first outlived it: entrance, table and workers all "
            "still there\n");
 
-    map_destroy(first);
+    cera_map_destroy(first);
     return 0;
 }

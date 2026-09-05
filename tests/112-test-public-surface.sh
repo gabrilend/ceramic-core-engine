@@ -32,10 +32,10 @@ CC="${CC:-gcc}"
 # given placeholder values rather than being threaded through from the
 # build. What matters here is the symbol table, not a runnable object.
 "${CC}" -std=gnu11 -O2 -pthread \
-    -I"${DIR}/libs" -I"${DIR}/src" \
-    -DSORA_CC='"cc"' -DSORA_GENERATOR='"generate"' \
-    -DSORA_ROOT='"."' -DSORA_INCLUDE='"."' -DSORA_INCLUDE_LIBS='"."' \
-    -DSORA_RAM_SHARED='"/dev/shm"' -DSORA_RAM_EXEC='"/tmp"' \
+    -I"${DIR}/src" \
+    -DCERA_CC='"cc"' -DCERA_GENERATOR='"generate"' \
+    -DCERA_ROOT='"."' -DCERA_INCLUDE='"."' \
+    -DCERA_RAM_SHARED='"/dev/shm"' -DCERA_RAM_EXEC='"/tmp"' \
     -ffunction-sections -fdata-sections \
     -c "${DIR}/src/cera.c" -o "${WORK}/cera.o" || {
         echo "  the engine did not compile on its own"

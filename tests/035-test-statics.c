@@ -100,7 +100,7 @@ static void expect_death(void (*scenario)(void), const char *what)
 static _Atomic long static_sum;
 static _Atomic int static_runs;
 
-static void tally_sum__call(task_t *t)
+static void tally_sum__call(cera_task_t *t)
 {
     int x;
     memcpy(&x, t->in[0], sizeof x);
@@ -111,30 +111,30 @@ static void tally_sum__call(task_t *t)
 static void test_static_feeds_forever(void)
 {
     enum { VALUES = 50 };
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "add", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "add", CERA_STATION_PLAIN);
     int one_int[1] = { sizeof(int) };
-    map_place(m, 1, tally_sum__call, STATION_PLAIN, 1, one_int, 0);
-    map_connect(m, 0, 0, 1, 0);
+    cera_map_place(m, 1, tally_sum__call, CERA_STATION_PLAIN, 1, one_int, 0);
+    cera_map_connect(m, 0, 0, 1, 0);
 
-    map_in_port_static_text(m, 0, 1, "1000");
+    cera_map_in_port_static_text(m, 0, 1, "1000");
 
-    map_start(m, 4);
+    cera_map_start(m, 4);
     static_sum = 0;
     static_runs = 0;
     /* Only the buffer side is fed; the static side is always full,
      * so every single delivery completes a set. */
     for (int i = 0; i < VALUES; i++)
-        map_deliver_value(m, 0, 0, &i);
-    pool_release(m->pool);
-    pool_join(m->pool);
+        cera_map_deliver_value(m, 0, 0, &i);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     long expected = 0;
     for (int i = 0; i < VALUES; i++)
         expected += i + 1000;
     check(static_runs == VALUES, "one run per buffered value");
     check(static_sum == expected, "the static arrived identically every time");
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a static fed %d runs without ever being consumed\n", VALUES);
 }
 /* }}} */
@@ -147,17 +147,17 @@ static void test_all_static_station_never_fires(void)
      * property the seed sweep and the pull path stood on; both are
      * gone, and what starts such a station now is a write to one of
      * its own ports, which is an event. */
-    map_t *m = map_create(1);
-    map_place_box(m, 0, "add", STATION_PLAIN);
-    map_in_port_static_text(m, 0, 0, "1");
-    map_in_port_static_text(m, 0, 1, "2");
-    map_start(m, 2);
-    pool_release(m->pool);
+    cera_map_t *m = cera_map_create(1);
+    cera_map_place_box(m, 0, "add", CERA_STATION_PLAIN);
+    cera_map_in_port_static_text(m, 0, 0, "1");
+    cera_map_in_port_static_text(m, 0, 1, "2");
+    cera_map_start(m, 2);
+    cera_pool_release(m->pool);
     /* If the vacuously-ready station were runnable by delivery, the
      * pool would never terminate (it would keep producing). It
      * terminates immediately instead. */
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
     printf("  an all-static station is never woken by delivery\n");
 }
 /* }}} */
@@ -165,7 +165,7 @@ static void test_all_static_station_never_fires(void)
 /* {{{ test_struct_constant_bytes() */
 static _Atomic int record_checked;
 
-static void check_record__call(task_t *t)
+static void check_record__call(cera_task_t *t)
 {
     record got;
     memcpy(&got, t->in[0], sizeof got);
@@ -190,7 +190,7 @@ static void check_record__call(task_t *t)
 
 static _Atomic int padded_ok;
 
-static void relay_record__call(task_t *t)
+static void relay_record__call(cera_task_t *t)
 {
     /* Harness relay so the record static has a home with a declared type:
      * claims land here, then flow to the checker. */
@@ -208,10 +208,10 @@ static void relay_record__call(task_t *t)
  * performs the same two steps rather than calling it, and the point
  * of the test is that those two steps never see a half-written value.
  */
-static void claim_constant(map_t *m, int station, int port, void *into)
+static void claim_constant(cera_map_t *m, int station, int port, void *into)
 {
-    station_t *s = map_station(m, station);
-    in_port_t *sl = &s->in_ports[port];
+    cera_station_t *s = cera_map_station(m, station);
+    cera_in_port_t *sl = &s->in_ports[port];
     pthread_mutex_lock(&s->mutex);
     memcpy(into, sl->constant, (size_t)sl->elem_size);
     pthread_mutex_unlock(&s->mutex);
@@ -220,7 +220,7 @@ static void claim_constant(map_t *m, int station, int port, void *into)
 
 static void test_struct_constant_bytes(void)
 {
-    map_t *m = map_create(2);
+    cera_map_t *m = cera_map_create(2);
     /* nudge takes (vec3, float): use its vec3 port for a struct
      * static... but the full every-kind case wants `record`. Place a
      * harness relay typed by hand for the record, with the type name
@@ -228,7 +228,7 @@ static void test_struct_constant_bytes(void)
      * so instead: use stamp_record's vec3 parameter for the nested
      * case and a hand relay for the full record below. */
     int one_record[1] = { sizeof(record) };
-    map_place(m, 0, relay_record__call, STATION_PLAIN, 1, one_record, sizeof(record));
+    cera_map_place(m, 0, relay_record__call, CERA_STATION_PLAIN, 1, one_record, sizeof(record));
     /*
      * Hand placement grants no type, so this port is given one the way
      * a placement function would — and that is now **two** things, not
@@ -245,51 +245,51 @@ static void test_struct_constant_bytes(void)
      * cannot be read — which is the same limit hand placement has
      * always had, arriving where it can be seen.
      */
-    map_station(m, 0)->in_ports[0].type_name = "record";
-    map_station(m, 0)->in_ports[0].text = struct_text_find("record");
-    map_place(m, 1, check_record__call, STATION_PLAIN, 1, one_record, 0);
-    map_connect(m, 0, 0, 1, 0);
+    cera_map_station(m, 0)->in_ports[0].type_name = "record";
+    cera_map_station(m, 0)->in_ports[0].text = cera_struct_text_find("record");
+    cera_map_place(m, 1, check_record__call, CERA_STATION_PLAIN, 1, one_record, 0);
+    cera_map_connect(m, 0, 0, 1, 0);
 
-    map_in_port_static_text(m, 0, 0, "{ 5, { 1.5, 2.5, 3.5 }, \"hey there\", 42 }");
+    cera_map_in_port_static_text(m, 0, 0, "{ 5, { 1.5, 2.5, 3.5 }, \"hey there\", 42 }");
 
     /* All-static station: delivery cannot wake it, so read its
      * constant the way a claim does and feed the checker by hand. */
     record claimed;
     claim_constant(m, 0, 0, &claimed);
-    map_start(m, 2);
-    map_deliver_value(m, 1, 0, &claimed);
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_map_start(m, 2);
+    cera_map_deliver_value(m, 1, 0, &claimed);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     check(record_checked == 1, "the checker ran");
-    map_destroy(m);
+    cera_map_destroy(m);
     (void)padded_ok;
     printf("  brace text became bytes identical to a compiled initializer\n");
 }
 /* }}} */
 
 /* {{{ death scenarios: malformed statics are fatal at bind */
-static map_t *doomed;
+static cera_map_t *doomed;
 
 static void die_too_many(void)
 {
-    doomed = map_create(1);
-    map_place_box(doomed, 0, "nudge", STATION_PLAIN); /* (vec3, float) */
-    map_in_port_static_text(doomed, 0, 0, "{ 1.0, 2.0, 3.0, 4.0 }");
+    doomed = cera_map_create(1);
+    cera_map_place_box(doomed, 0, "nudge", CERA_STATION_PLAIN); /* (vec3, float) */
+    cera_map_in_port_static_text(doomed, 0, 0, "{ 1.0, 2.0, 3.0, 4.0 }");
 }
 
 static void die_too_few(void)
 {
-    doomed = map_create(1);
-    map_place_box(doomed, 0, "nudge", STATION_PLAIN);
-    map_in_port_static_text(doomed, 0, 0, "{ 1.0, 2.0 }");
+    doomed = cera_map_create(1);
+    cera_map_place_box(doomed, 0, "nudge", CERA_STATION_PLAIN);
+    cera_map_in_port_static_text(doomed, 0, 0, "{ 1.0, 2.0 }");
 }
 
 static void die_string_for_number(void)
 {
-    doomed = map_create(1);
-    map_place_box(doomed, 0, "nudge", STATION_PLAIN);
-    map_in_port_static_text(doomed, 0, 0, "{ \"one\", 2.0, 3.0 }");
+    doomed = cera_map_create(1);
+    cera_map_place_box(doomed, 0, "nudge", CERA_STATION_PLAIN);
+    cera_map_in_port_static_text(doomed, 0, 0, "{ \"one\", 2.0, 3.0 }");
 }
 
 static void die_untyped_port(void)
@@ -299,10 +299,10 @@ static void die_untyped_port(void)
      * should become. This replaces a scenario that stopped existing:
      * an entry the file never gave a value for, which was a hole in a
      * table, and there is no table (issue 401). */
-    doomed = map_create(1);
+    doomed = cera_map_create(1);
     int one_int[1] = { sizeof(int) };
-    map_place(doomed, 0, tally_sum__call, STATION_PLAIN, 1, one_int, 0);
-    map_in_port_static_text(doomed, 0, 0, "5");
+    cera_map_place(doomed, 0, tally_sum__call, CERA_STATION_PLAIN, 1, one_int, 0);
+    cera_map_in_port_static_text(doomed, 0, 0, "5");
 }
 /* }}} */
 
@@ -316,7 +316,7 @@ static void die_untyped_port(void)
 static _Atomic int torn_seen;
 static _Atomic int mutation_claims;
 
-static void check_world__call(task_t *t)
+static void check_world__call(cera_task_t *t)
 {
     vec3 v;
     memcpy(&v, t->in[0], sizeof v);
@@ -331,19 +331,19 @@ static void check_world__call(task_t *t)
 
 static void *world_writer(void *arg)
 {
-    map_t *m = arg;
+    cera_map_t *m = arg;
     vec3 worlds[2] = { { 1, 1, 1 }, { 2, 2, 2 } };
     for (int i = 0; i < 4000; i++)
-        map_in_port_static_write(m, 0, 0, &worlds[i & 1], sizeof(vec3));
+        cera_map_in_port_static_write(m, 0, 0, &worlds[i & 1], sizeof(vec3));
     return NULL;
 }
 
 static void test_mutation_and_torn_reads(void)
 {
     enum { CLAIMS = 4000 };
-    map_t *m = map_create(1);
-    map_place_box(m, 0, "magnitude_squared", STATION_PLAIN); /* (vec3) */
-    map_in_port_static_text(m, 0, 0, "{ 1, 1, 1 }");
+    cera_map_t *m = cera_map_create(1);
+    cera_map_place_box(m, 0, "magnitude_squared", CERA_STATION_PLAIN); /* (vec3) */
+    cera_map_in_port_static_text(m, 0, 0, "{ 1, 1, 1 }");
 
     torn_seen = 0;
     pthread_t writer;
@@ -370,7 +370,7 @@ static void test_mutation_and_torn_reads(void)
     check(got.x == 2.0f && got.y == 2.0f && got.z == 2.0f,
           "the last write is what the next claim sees");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     (void)mutation_claims;
     (void)check_world__call;
     printf("  %d claims raced a writer through the station's own mutex: "
@@ -391,10 +391,10 @@ static void test_mutation_and_torn_reads(void)
  */
 static void test_ports_are_independent(void)
 {
-    map_t *m = map_create(1);
-    map_place_box(m, 0, "add", STATION_PLAIN);   /* (int, int) */
-    map_in_port_static_text(m, 0, 0, "7");
-    map_in_port_static_text(m, 0, 1, "7");
+    cera_map_t *m = cera_map_create(1);
+    cera_map_place_box(m, 0, "add", CERA_STATION_PLAIN);   /* (int, int) */
+    cera_map_in_port_static_text(m, 0, 0, "7");
+    cera_map_in_port_static_text(m, 0, 1, "7");
 
     int a = 0, b = 0;
     claim_constant(m, 0, 0, &a);
@@ -402,13 +402,13 @@ static void test_ports_are_independent(void)
     check(a == 7 && b == 7, "both ports took the same written value");
 
     int changed = 99;
-    map_in_port_static_write(m, 0, 0, &changed, sizeof changed);
+    cera_map_in_port_static_write(m, 0, 0, &changed, sizeof changed);
     claim_constant(m, 0, 0, &a);
     claim_constant(m, 0, 1, &b);
     check(a == 99, "the written port changed");
     check(b == 7, "its neighbour did not");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  two ports given one value are independent afterwards\n");
 }
 /* }}} */
@@ -454,17 +454,17 @@ static void awkward_values_round_trip(void)
          * and the field table the way a placement function would —
          * the same harness the struct-constant test uses, because the
          * demo boxes take no `record` parameter. */
-        map_t *m = map_create(1);
-        map_place(m, 0, relay_record__call, STATION_PLAIN, 1, one_record,
+        cera_map_t *m = cera_map_create(1);
+        cera_map_place(m, 0, relay_record__call, CERA_STATION_PLAIN, 1, one_record,
                   sizeof(record));
-        in_port_t *sl = &map_station(m, 0)->in_ports[0];
+        cera_in_port_t *sl = &cera_map_station(m, 0)->in_ports[0];
         sl->type_name = "record";
-        sl->text = struct_text_find("record");
+        sl->text = cera_struct_text_find("record");
 
         /* Bytes straight onto the port, bypassing text entirely, so
          * what is being round-tripped is a value rather than a
          * spelling. */
-        sl->kind = IN_PORT_STATIC;
+        sl->kind = CERA_IN_PORT_STATIC;
         sl->constant_set = 1;
         memcpy(sl->constant, &cases[i].value, sizeof(record));
 
@@ -474,13 +474,13 @@ static void awkward_values_round_trip(void)
         check(wrote > 0 && wrote < (int)sizeof text, cases[i].note);
 
         /* And back in, onto a second port of the same shape. */
-        map_t *back = map_create(1);
-        map_place(back, 0, relay_record__call, STATION_PLAIN, 1, one_record,
+        cera_map_t *back = cera_map_create(1);
+        cera_map_place(back, 0, relay_record__call, CERA_STATION_PLAIN, 1, one_record,
                   sizeof(record));
-        in_port_t *to = &map_station(back, 0)->in_ports[0];
+        cera_in_port_t *to = &cera_map_station(back, 0)->in_ports[0];
         to->type_name = "record";
-        to->text = struct_text_find("record");
-        map_in_port_static_text(back, 0, 0, text);
+        to->text = cera_struct_text_find("record");
+        cera_map_in_port_static_text(back, 0, 0, text);
 
         record got;
         memcpy(&got, to->constant, sizeof got);
@@ -490,8 +490,8 @@ static void awkward_values_round_trip(void)
             exit(1);
         }
 
-        map_destroy(m);
-        map_destroy(back);
+        cera_map_destroy(m);
+        cera_map_destroy(back);
     }
 
     printf("  four awkward values formatted, read back, and compared byte "
@@ -540,7 +540,7 @@ static void must_take(const char *refusal, const char *what)
 static _Atomic long computed_sum;
 static _Atomic int computed_runs;
 
-static void tally_computed__call(task_t *t)
+static void tally_computed__call(cera_task_t *t)
 {
     int v;
     memcpy(&v, t->in[0], sizeof v);
@@ -550,59 +550,59 @@ static void tally_computed__call(task_t *t)
 
 static void a_wire_computes_a_constant(void)
 {
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
 
-    int source = map_add_station(m);
-    map_place_box(m, source, "seven", STATION_PLAIN);
-    must_take(map_name_station(m, source, "source"), "a name");
+    int source = cera_map_add_station(m);
+    cera_map_place_box(m, source, "seven", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, source, "source"), "a name");
 
-    int adder = map_add_station(m);
-    map_place_box(m, adder, "add", STATION_PLAIN);
-    must_take(map_name_station(m, adder, "adder"), "a name");
+    int adder = cera_map_add_station(m);
+    cera_map_place_box(m, adder, "add", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, adder, "adder"), "a name");
     /* Port 1 is a constant, and starts as one somebody wrote down. */
-    map_in_port_static_text(m, adder, 1, "0");
+    cera_map_in_port_static_text(m, adder, 1, "0");
 
-    int tally = map_add_station(m);
+    int tally = cera_map_add_station(m);
     int one_int = (int)sizeof(int);
-    map_place(m, tally, tally_computed__call, STATION_PLAIN, 1, &one_int, 0);
-    must_take(map_name_station(m, tally, "tally"), "a name");
+    cera_map_place(m, tally, tally_computed__call, CERA_STATION_PLAIN, 1, &one_int, 0);
+    must_take(cera_map_name_station(m, tally, "tally"), "a name");
 
     /* The wire that makes the constant computed. */
-    must_take(map_wire(m, source, 0, adder, 1),
+    must_take(cera_map_wire(m, source, 0, adder, 1),
               "a wire into a static port");
-    must_take(map_wire(m, adder, 0, tally, 0), "a wire to the tally");
+    must_take(cera_map_wire(m, adder, 0, tally, 0), "a wire to the tally");
 
-    int gate = map_add_station(m);
-    map_place_box(m, gate, "keep", STATION_PLAIN);
-    must_take(map_name_station(m, gate, "gate"), "a name");
-    must_take(map_designate_input(m, gate), "an entrance");
-    must_take(map_wire(m, gate, 0, adder, 0), "the ordinary input");
+    int gate = cera_map_add_station(m);
+    cera_map_place_box(m, gate, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, gate, "gate"), "a name");
+    must_take(cera_map_designate_input(m, gate), "an entrance");
+    must_take(cera_map_wire(m, gate, 0, adder, 0), "the ordinary input");
 
-    int out = map_add_station(m);
-    map_place_box(m, out, "keep", STATION_PLAIN);
-    must_take(map_name_station(m, out, "out"), "a name");
-    must_take(map_designate_output(m, out), "a way out");
+    int out = cera_map_add_station(m);
+    cera_map_place_box(m, out, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, out, "out"), "a name");
+    must_take(cera_map_designate_output(m, out), "a way out");
 
-    map_start(m, 2);
-    pool_submitter_register(m->pool);
-    must_take(map_bring_up(m), "the program");
-    pool_release(m->pool);
+    cera_map_start(m, 2);
+    cera_pool_submitter_register(m->pool);
+    must_take(cera_map_bring_up(m), "the program");
+    cera_pool_release(m->pool);
 
     /* The source ran at bring-up — it has no inputs — so seven is
      * already sitting on the adder's second port. Wait for it, so
      * what follows is a fact rather than a schedule. */
-    while (atomic_load(&map_station(m, source)->runs) < 1)
+    while (atomic_load(&cera_map_station(m, source)->runs) < 1)
         usleep(200);
 
     const int BATCH = 20;
     for (int i = 0; i < BATCH; i++) {
         int v = i;
-        must_take(map_deliver_argument(m, gate, 0, &v, sizeof v),
+        must_take(cera_map_deliver_argument(m, gate, 0, &v, sizeof v),
                   "an argument");
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
     check(atomic_load(&computed_runs) == BATCH,
           "every value went through the adder");
@@ -613,11 +613,11 @@ static void a_wire_computes_a_constant(void)
     check(atomic_load(&computed_sum) == expected,
           "and every one of them was added to the seven a wire put "
           "there, not to the zero somebody wrote down");
-    check(atomic_load(&map_station(m, source)->runs) == 1,
+    check(atomic_load(&cera_map_station(m, source)->runs) == 1,
           "the station that computed the constant ran once, which is "
           "what makes it a constant");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a wire computed a constant: %d values, each plus the seven "
            "a station put on a static port\n", BATCH);
 }
@@ -638,16 +638,16 @@ static void a_wire_computes_a_constant(void)
  */
 static void test_two_maps_at_once(void)
 {
-    map_t *first = map_create(1);
-    map_t *second = map_create(1);
-    map_place_box(first, 0, "add", STATION_PLAIN);
-    map_place_box(second, 0, "add", STATION_PLAIN);
+    cera_map_t *first = cera_map_create(1);
+    cera_map_t *second = cera_map_create(1);
+    cera_map_place_box(first, 0, "add", CERA_STATION_PLAIN);
+    cera_map_place_box(second, 0, "add", CERA_STATION_PLAIN);
 
-    map_in_port_static_text(first, 0, 0, "10");
-    map_in_port_static_text(second, 0, 0, "20");
+    cera_map_in_port_static_text(first, 0, 0, "10");
+    cera_map_in_port_static_text(second, 0, 0, "20");
 
-    map_start(first, 1);
-    map_start(second, 1);
+    cera_map_start(first, 1);
+    cera_map_start(second, 1);
 
     int a = 0, b = 0;
     claim_constant(first, 0, 0, &a);
@@ -655,18 +655,18 @@ static void test_two_maps_at_once(void)
     check(a == 10 && b == 20, "each map kept its own value while both ran");
 
     int changed = 555;
-    map_in_port_static_write(first, 0, 0, &changed, sizeof changed);
+    cera_map_in_port_static_write(first, 0, 0, &changed, sizeof changed);
     claim_constant(first, 0, 0, &a);
     claim_constant(second, 0, 0, &b);
     check(a == 555, "the written map changed");
     check(b == 20, "the other map did not notice");
 
-    pool_release(first->pool);
-    pool_release(second->pool);
-    pool_join(first->pool);
-    pool_join(second->pool);
-    map_destroy(first);
-    map_destroy(second);
+    cera_pool_release(first->pool);
+    cera_pool_release(second->pool);
+    cera_pool_join(first->pool);
+    cera_pool_join(second->pool);
+    cera_map_destroy(first);
+    cera_map_destroy(second);
     printf("  two maps ran side by side and did not see each other\n");
 }
 /* }}} */

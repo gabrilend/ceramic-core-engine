@@ -70,7 +70,7 @@ static char *slurp(const char *path)
 }
 /* }}} */
 
-/* {{{ static map_t *a_busy_program() */
+/* {{{ static cera_map_t *a_busy_program() */
 /*
  * Two stations in a loop, fed from outside: a doubler whose result
  * comes back round through a station that keeps it. It never runs out
@@ -82,26 +82,26 @@ static char *slurp(const char *path)
  * down when the entrance is shut and the values in flight are used
  * up.
  */
-static map_t *a_busy_program(void)
+static cera_map_t *a_busy_program(void)
 {
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
 
-    int gate = map_add_station(m);
-    map_place_box(m, gate, "keep", STATION_PLAIN);
-    map_name_station(m, gate, "gate");
-    map_designate_input(m, gate);
+    int gate = cera_map_add_station(m);
+    cera_map_place_box(m, gate, "keep", CERA_STATION_PLAIN);
+    cera_map_name_station(m, gate, "gate");
+    cera_map_designate_input(m, gate);
 
-    int work = map_add_station(m);
-    map_place_box(m, work, "slow_double", STATION_PLAIN);
-    map_name_station(m, work, "work");
+    int work = cera_map_add_station(m);
+    cera_map_place_box(m, work, "slow_double", CERA_STATION_PLAIN);
+    cera_map_name_station(m, work, "work");
 
-    int out = map_add_station(m);
-    map_place_box(m, out, "keep", STATION_PLAIN);
-    map_name_station(m, out, "out");
-    map_designate_output(m, out);
+    int out = cera_map_add_station(m);
+    cera_map_place_box(m, out, "keep", CERA_STATION_PLAIN);
+    cera_map_name_station(m, out, "out");
+    cera_map_designate_output(m, out);
 
-    map_wire(m, gate, 0, work, 0);
-    map_wire(m, work, 0, out, 0);
+    cera_map_wire(m, gate, 0, work, 0);
+    cera_map_wire(m, work, 0, out, 0);
     return m;
 }
 /* }}} */
@@ -122,7 +122,7 @@ static map_t *a_busy_program(void)
  * there is no separate notification and none is wanted.
  */
 typedef struct {
-    map_t *m;
+    cera_map_t *m;
     int    cap;
     int    pace_us;   /* 0 floods; anything else keeps it going a while */
     int    started;   /* raised once the first values are in flight */
@@ -133,7 +133,7 @@ static void *feed(void *arg)
     feeder_t *f = arg;
     for (int i = 0; i < f->cap; i++) {
         int v = i;
-        if (map_deliver_argument(f->m, 0, 0, &v, sizeof v) != NULL)
+        if (cera_map_deliver_argument(f->m, 0, 0, &v, sizeof v) != NULL)
             break;    /* the door shut; the promise is no longer honest */
         if (i == 4)
             atomic_store((_Atomic int *)&f->started, 1);
@@ -141,7 +141,7 @@ static void *feed(void *arg)
             usleep((unsigned)f->pace_us);
     }
     atomic_store((_Atomic int *)&f->started, 1);
-    pool_submitter_unregister(f->m->pool);
+    cera_pool_submitter_unregister(f->m->pool);
     return NULL;
 }
 /* }}} */
@@ -173,11 +173,11 @@ static pid_t start_child(const char *report_path, int n_values,
     /* Before any thread exists, which is what makes "blocked in every
      * thread" true without visiting any of them — a thread inherits
      * the mask of whoever created it. */
-    sora_prepare(report_path);
+    cera_prepare(report_path);
 
-    map_t *m = a_busy_program();
-    map_start(m, workers);
-    map_bring_up(m);
+    cera_map_t *m = a_busy_program();
+    cera_map_start(m, workers);
+    cera_map_bring_up(m);
 
     /*
      * **The promise is made before the gate opens, not after.**
@@ -194,8 +194,8 @@ static pid_t start_child(const char *report_path, int n_values,
      * reason — a program that had already finished exits zero, which
      * is what the polite path was asserting.
      */
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     static feeder_t f;
     f.m = m;
@@ -214,7 +214,7 @@ static pid_t start_child(const char *report_path, int n_values,
     ssize_t wrote = write(pipefd[1], "r", 1);
     (void)wrote;
 
-    _exit(sora_wait(m));
+    _exit(cera_wait(m));
 }
 /* }}} */
 
@@ -286,7 +286,7 @@ static void the_polite_shutdown_writes_nothing(void)
 
     int status = reap(pid, "a polite shutdown");
 
-    check(WIFEXITED(status) && WEXITSTATUS(status) == SORA_EXIT_FINISHED,
+    check(WIFEXITED(status) && WEXITSTATUS(status) == CERA_EXIT_FINISHED,
           "a politely stopped program exits zero, the same as one that "
           "ran out of work");
 
@@ -308,22 +308,22 @@ static void the_polite_shutdown_writes_nothing(void)
  */
 static void the_polite_shutdown_shuts_the_door(void)
 {
-    map_t *m = a_busy_program();
-    map_start(m, 2);
-    map_bring_up(m);
+    cera_map_t *m = a_busy_program();
+    cera_map_start(m, 2);
+    cera_map_bring_up(m);
 
     int v = 1;
-    check(map_deliver_argument(m, 0, 0, &v, sizeof v) == NULL,
+    check(cera_map_deliver_argument(m, 0, 0, &v, sizeof v) == NULL,
           "an open program takes an argument");
 
     atomic_store(&m->closing, 1);
-    const char *no = map_deliver_argument(m, 0, 0, &v, sizeof v);
+    const char *no = cera_map_deliver_argument(m, 0, 0, &v, sizeof v);
     check(no != NULL && strstr(no, "winding down") != NULL,
           "and a closing one refuses, saying why");
 
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
     printf("  the entrance shuts when a program is asked to wind down\n");
 }
 /* }}} */
@@ -362,7 +362,7 @@ static void the_interrupt_gathers_everything(void)
 
     int status = reap(pid, "an interrupt");
 
-    check(WIFEXITED(status) && WEXITSTATUS(status) == SORA_EXIT_INTERRUPTED,
+    check(WIFEXITED(status) && WEXITSTATUS(status) == CERA_EXIT_INTERRUPTED,
           "an interrupted program exits 130, which every shell already "
           "understands");
 
@@ -456,17 +456,17 @@ static void an_ignored_refusal_cannot_half_build(void)
     if (pid == 0) {
         close(pipefd[0]);
         freopen("/dev/null", "w", stderr);
-        sora_prepare("/dev/null");
+        cera_prepare("/dev/null");
 
-        map_t *m = map_create_empty();
-        int a = map_add_station(m);
-        map_place_box(m, a, "seven", STATION_PLAIN);   /* -> int, 4 bytes */
-        int b = map_add_station(m);
-        map_place_box(m, b, "mix", STATION_PLAIN);     /* port 1: double  */
+        cera_map_t *m = cera_map_create_empty();
+        int a = cera_map_add_station(m);
+        cera_map_place_box(m, a, "seven", CERA_STATION_PLAIN);   /* -> int, 4 bytes */
+        int b = cera_map_add_station(m);
+        cera_map_place_box(m, b, "mix", CERA_STATION_PLAIN);     /* port 1: double  */
 
         /* Four bytes into an eight-byte port, through the face that
          * stops rather than the one that hands the reason back. */
-        map_connect(m, a, 0, b, 1);
+        cera_map_connect(m, a, 0, b, 1);
 
         /* Never reached. If it is, the program was left half built by
          * an instruction it refused, which is the whole thing being
@@ -484,7 +484,7 @@ static void an_ignored_refusal_cannot_half_build(void)
     waitpid(pid, &status, 0);
 
     check(got <= 0, "the program did not carry on past a refused edit");
-    check(WIFEXITED(status) && WEXITSTATUS(status) == SORA_EXIT_BAD_CALL,
+    check(WIFEXITED(status) && WEXITSTATUS(status) == CERA_EXIT_BAD_CALL,
           "and ended with the code meaning the calling code was wrong, "
           "which a shell can tell from a malformed file");
 
@@ -521,35 +521,35 @@ static void a_wedged_program_still_reports(void)
     pid_t pid = fork();
     if (pid == 0) {
         close(pipefd[0]);
-        sora_prepare(report);
+        cera_prepare(report);
 
-        map_t *m = map_create_empty();
-        int gate = map_add_station(m);
-        map_place_box(m, gate, "keep", STATION_PLAIN);
-        map_name_station(m, gate, "gate");
-        map_designate_input(m, gate);
-        int stuck = map_add_station(m);
-        map_place_box(m, stuck, "wedge", STATION_PLAIN);
-        map_name_station(m, stuck, "stuck");
-        map_designate_output(m, stuck);
-        map_wire(m, gate, 0, stuck, 0);
+        cera_map_t *m = cera_map_create_empty();
+        int gate = cera_map_add_station(m);
+        cera_map_place_box(m, gate, "keep", CERA_STATION_PLAIN);
+        cera_map_name_station(m, gate, "gate");
+        cera_map_designate_input(m, gate);
+        int stuck = cera_map_add_station(m);
+        cera_map_place_box(m, stuck, "wedge", CERA_STATION_PLAIN);
+        cera_map_name_station(m, stuck, "stuck");
+        cera_map_designate_output(m, stuck);
+        cera_map_wire(m, gate, 0, stuck, 0);
 
-        map_start(m, 2);
-        map_bring_up(m);
-        pool_submitter_register(m->pool);
-        pool_release(m->pool);
+        cera_map_start(m, 2);
+        cera_map_bring_up(m);
+        cera_pool_submitter_register(m->pool);
+        cera_pool_release(m->pool);
 
         /* Two workers, four values: both end up inside the wedge and
          * the rest sit in the queue forever. */
         for (int i = 0; i < 4; i++) {
             int v = i;
-            map_deliver_argument(m, gate, 0, &v, sizeof v);
+            cera_map_deliver_argument(m, gate, 0, &v, sizeof v);
         }
         /* Give both workers time to get inside. */
         usleep(200000);
         ssize_t wrote = write(pipefd[1], "r", 1);
         (void)wrote;
-        _exit(sora_wait(m));
+        _exit(cera_wait(m));
     }
 
     close(pipefd[1]);
@@ -557,7 +557,7 @@ static void a_wedged_program_still_reports(void)
     kill(pid, SIGINT);
     int status = reap(pid, "an interrupt on a wedged program");
 
-    check(WIFEXITED(status) && WEXITSTATUS(status) == SORA_EXIT_INTERRUPTED,
+    check(WIFEXITED(status) && WEXITSTATUS(status) == CERA_EXIT_INTERRUPTED,
           "a program whose every worker is wedged still stops when a "
           "person asks it to");
 
@@ -603,21 +603,21 @@ static void a_held_lock_does_not_trap_the_person(void)
     pid_t pid = fork();
     if (pid == 0) {
         close(pipefd[0]);
-        sora_prepare(report);
+        cera_prepare(report);
 
-        map_t *m = a_busy_program();
-        map_start(m, 2);
-        map_bring_up(m);
-        pool_submitter_register(m->pool);
-        pool_release(m->pool);
+        cera_map_t *m = a_busy_program();
+        cera_map_start(m, 2);
+        cera_map_bring_up(m);
+        cera_pool_submitter_register(m->pool);
+        cera_pool_release(m->pool);
 
         /* Held and never released, which is the condition being
          * survived rather than a mistake. */
-        pthread_mutex_lock(&map_station(m, 1)->mutex);
+        pthread_mutex_lock(&cera_map_station(m, 1)->mutex);
 
         ssize_t wrote = write(pipefd[1], "r", 1);
         (void)wrote;
-        _exit(sora_wait(m));
+        _exit(cera_wait(m));
     }
 
     close(pipefd[1]);
@@ -628,7 +628,7 @@ static void a_held_lock_does_not_trap_the_person(void)
     kill(pid, SIGINT);
 
     int status = reap(pid, "a second interrupt through a held lock");
-    check(WIFEXITED(status) && WEXITSTATUS(status) == SORA_EXIT_INTERRUPTED,
+    check(WIFEXITED(status) && WEXITSTATUS(status) == CERA_EXIT_INTERRUPTED,
           "a second interrupt got out of a report that could not finish");
 
     printf("  a second interrupt escaped a gather stuck on a lock nobody "
@@ -659,18 +659,18 @@ static void the_quit_ignores_a_held_lock(void)
     pid_t pid = fork();
     if (pid == 0) {
         close(pipefd[0]);
-        sora_prepare(report);
+        cera_prepare(report);
 
-        map_t *m = a_busy_program();
-        map_start(m, 2);
-        map_bring_up(m);
-        pool_submitter_register(m->pool);
-        pool_release(m->pool);
-        pthread_mutex_lock(&map_station(m, 1)->mutex);
+        cera_map_t *m = a_busy_program();
+        cera_map_start(m, 2);
+        cera_map_bring_up(m);
+        cera_pool_submitter_register(m->pool);
+        cera_pool_release(m->pool);
+        pthread_mutex_lock(&cera_map_station(m, 1)->mutex);
 
         ssize_t wrote = write(pipefd[1], "r", 1);
         (void)wrote;
-        _exit(sora_wait(m));
+        _exit(cera_wait(m));
     }
 
     close(pipefd[1]);

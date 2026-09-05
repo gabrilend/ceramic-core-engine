@@ -89,7 +89,7 @@ static int inspect(parcel_t p, int serial)
     return good;
 }
 
-static void inspect__call(task_t *t)
+static void inspect__call(cera_task_t *t)
 {
     parcel_t p;
     memcpy(&p, t->in[0], sizeof p);
@@ -113,31 +113,31 @@ static parcel_t make_parcel(int serial)
 
 int main(void)
 {
-    map_t *m = map_create(1);
+    cera_map_t *m = cera_map_create(1);
     int sizes[2] = { sizeof(parcel_t), sizeof(int) };
-    map_place(m, 0, inspect__call, STATION_PLAIN, 2, sizes, sizeof(int));
-    map_start(m, 4);
+    cera_map_place(m, 0, inspect__call, CERA_STATION_PLAIN, 2, sizes, sizeof(int));
+    cera_map_start(m, 4);
 
     /* Warm-up pairs, delivered before release, wrap the ring: head
      * and tail advance together away from zero. */
     for (int i = 0; i < WARMUP; i++) {
         parcel_t p = make_parcel(i);
-        map_deliver_value(m, 0, 0, &p);
-        map_deliver_value(m, 0, 1, &i);
+        cera_map_deliver_value(m, 0, 0, &p);
+        cera_map_deliver_value(m, 0, 1, &i);
     }
 
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     /* Flood the parcel side only: the buffer must grow, starting
      * from its wrapped state, while the serial side stays empty. */
     for (int i = 0; i < FLOOD; i++) {
         parcel_t p = make_parcel(WARMUP + i);
-        map_deliver_value(m, 0, 0, &p);
+        cera_map_deliver_value(m, 0, 0, &p);
     }
-    if (map_station(m, 0)->in_ports[0].growths < 3) {
+    if (cera_map_station(m, 0)->in_ports[0].growths < 3) {
         fprintf(stderr, "expected several growths from the flood, saw %d\n",
-                map_station(m, 0)->in_ports[0].growths);
+                cera_map_station(m, 0)->in_ports[0].growths);
         exit(1);
     }
 
@@ -146,11 +146,11 @@ int main(void)
      * exactly once is both. */
     for (int i = 0; i < FLOOD; i++) {
         int serial = WARMUP + i;
-        map_deliver_value(m, 0, 1, &serial);
+        cera_map_deliver_value(m, 0, 1, &serial);
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
     if (pairs_checked != TOTAL) {
         fprintf(stderr, "%d pairs fired, expected %d\n",
@@ -174,9 +174,9 @@ int main(void)
         }
     }
 
-    int growths = map_station(m, 0)->in_ports[0].growths;
-    int high_water = map_station(m, 0)->in_ports[0].high_water;
-    map_destroy(m);
+    int growths = cera_map_station(m, 0)->in_ports[0].growths;
+    int high_water = cera_map_station(m, 0)->in_ports[0].high_water;
+    cera_map_destroy(m);
     printf("  %d struct+int pairs, none torn and none lost, across %d "
            "wrapped growths (high water %d)\n", TOTAL, growths, high_water);
     return 0;

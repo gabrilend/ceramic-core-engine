@@ -89,32 +89,44 @@ nothing is added in the meantime that would make it impossible. The
 thing that would make it impossible is a wire that crosses tables, and
 there is a standing reason not to have one.
 
+**And there is now something being built toward it.**
+[108](../../issues/108-choosing-where-a-box-runs.md) is the affinity
+call and the placement of workers on particular cores, plus the
+vocabulary for a station to say which processors it will run on. It
+takes the intent above as its starting point and answers the question
+below.
+
 ---
 
-## Open question: what does "shared" mean when two processors share a table?
+## Answered: "shared" means one process, several threads
 
-Two readings, and they ask for different engines.
+Two readings were possible, and they asked for different engines.
 
-**One process, several sockets.** Every core is in one address space
-already; a station table allocated with the ordinary allocator is
-reachable from all of them, and what differs between sockets is only
-how *fast*. Nothing in the engine changes; what would eventually
-change is where the memory is allocated from and which cores the
-workers run on. This is the reading the note above is written under.
+**One process, several sockets — this is the one meant.** Every core
+is in one address space already; a station table allocated with the
+ordinary allocator is reachable from all of them, and what differs
+between sockets is only how *fast*. Mutexes are ordinary mutexes.
+Pointers are pointers. A box is a function in this binary. Nothing in
+the engine changes shape; what changes is where memory is allocated
+from and which cores the workers run on.
 
-**Several processes, one machine.** Then "the area in shared memory
-where the stations actually live" is a mapping — the project's own
-`/dev/shm` tier, or something like it — and a station table would have
-to be built inside it rather than on the heap. That reaches further
-than it sounds: a station holds a mutex, which would have to be
-created shareable between processes; it holds pointers to its port
-array and its slot pages, which would all have to live in the mapping
-too and be addressed as offsets rather than as addresses, because two
-processes need not map it at the same place; and a box is a function
-pointer, which means nothing at all in another process unless both
-loaded the same binary at the same address.
+**Several processes, one machine — not this.** Then "the area in
+shared memory where the stations actually live" would be a mapping —
+the project's own `/dev/shm` tier, or something like it — and a
+station table would have to be built inside it rather than on the
+heap. That reaches further than it sounds: a station holds a mutex,
+which would have to be created shareable between processes; it holds
+pointers to its port array and its slot pages, which would all have to
+live in the mapping too and be addressed as offsets rather than as
+addresses, because two processes need not map it at the same place;
+and a box is a function pointer, which means nothing at all in another
+process unless both loaded the same binary at the same address.
 
-The second reading is a real design and a large one. The first costs
-nothing and is what everything here currently assumes. **Which one is
-meant has not been asked yet**, and it should be before anything is
-built toward either.
+**And "no main thread" belongs to the first reading too.** It means
+there is no privileged owner among the workers — nobody creates the
+pool, decides its shape, and hands placements to the others. The
+consequence lands in
+[108](../../issues/108-choosing-where-a-box-runs.md): a worker
+announces where it lives rather than being told, and the pool's reach
+is the union of what its members announced. A central placement
+policy would have needed a centre, and there is not one.

@@ -15,8 +15,8 @@
  * until the arena dies, which is when the program ends. Nothing owns
  * anything individually.
  */
-#ifndef SORA_GENPARSE_H
-#define SORA_GENPARSE_H
+#ifndef CERA_GENPARSE_H
+#define CERA_GENPARSE_H
 
 #include "065-gentext.h"
 

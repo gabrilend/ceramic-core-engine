@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>019-station.c — the structural half, from inside</title>
+<title>905 — The prefix</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -38,8 +38,6 @@
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
-<a href="issue-904-the-old-files-are-removed.html">904 — The old files are removed</a>
-<a href="issue-905-the-prefix.html">905 — The prefix</a>
 <a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
@@ -131,9 +129,9 @@
 <a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
 <a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
+<a href="done-904-the-old-files-are-removed.html">904 — The old files are removed</a>
+<a href="done-905-the-prefix.html" class="here">905 — The prefix</a>
 <h2>Interfaces</h2>
-<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
-<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
 <a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
@@ -147,22 +145,6 @@
 <a href="info-099-mapparse-h.html">099-mapparse.h — reading a description, from outside</a>
 <a href="info-100-mapparse-c.html">100-mapparse.c — the parser, from inside</a>
 <a href="info-109-dependencies-sh.html">109-dependencies.sh — what the project needs, and how to get it</a>
-<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
-<a href="info-019-station-c.html" class="here">019-station.c — the structural half, from inside</a>
-<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
-<a href="info-026-emitted-h.html">026-emitted.h — the shapes the generator emits, from outside</a>
-<a href="info-027-emitted-support-c.html">027-emitted-support.c — the hand-written half of what the generator emits</a>
-<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
-<a href="info-040-mapfile-h.html">040-mapfile.h — a description becoming a program, from outside</a>
-<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
-<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
-<a href="info-050-observe-c.html">050-observe.c — the engine saying out loud what it already knew</a>
-<a href="info-051-dump-c.html">051-dump.c — writing a running program back out as a file</a>
-<a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
-<a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
-<a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
-<a href="info-091-stopping-h.html">091-stopping.h — the ways a program ends, from outside</a>
-<a href="info-092-stopping-c.html">092-stopping.c — the ways a program ends, from inside</a>
 <a href="info-098-engine-surface-syms.html">098-engine-surface.syms — the engine's public surface</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
@@ -173,46 +155,96 @@
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>019-station.c — the structural half, from inside</h1>
-<p>The usable interface is in <code>018-station.h.info.md</code>. This file builds
-and dismantles; it never moves a value. Its private pieces:</p>
+<h1>905 — The prefix</h1>
+<h2>Current behaviour</h2>
+<p><strong>Done.</strong> The engine exports 100 symbols and every one of them begins
+<code>cera_</code>. There is no second family and no exception.</p>
+<p>3,008 renames across 52 files, plus 706 respellings of the older half
+of the name, and <strong>not one byte of test output changed</strong>. The rename
+reached the header, the body, the generator that writes engine calls
+into every emitted file, the tests, the example, the linker's export
+list, and the prose in the documents — which a compiler would never
+have checked.</p>
+<p><strong>The export list collapsed to one line.</strong> It named two families
+because the engine was carrying two spellings of its own name; one
+spelling means one pattern. The file survives anyway, and deliberately:
+what cannot go in a link command is the thirty lines around the pattern
+explaining why the narrow form is needed and what the sweeping form
+costs. That answers the open question 902 left about whether it should
+still exist.</p>
+<p><strong>One rename changes what a person types</strong>, not only what a linker
+reads: the environment variable that says how many workers to start.</p>
+<h3>The trap in a prefix rename, which cost one build</h3>
+<p>A word boundary sits between <code>-</code> and <code>D</code>, not between <code>D</code> and <code>S</code>. So a
+whole-identifier rename finds <code>CERA_ROOT</code> written on its own and does
+not find it in <code>-DCERA_ROOT</code> on a compile line, and the build breaks
+somewhere that looks unrelated — a test failing to see a macro the
+Makefile is definitely defining.</p>
+<p>Worth writing down because the tool was right and the mental model was
+wrong: **the definition of a name and the use of a name are not written
+the same way**, and a rename that only understands uses will silently
+skip every definition on a command line.</p>
+<h3>The question dissolved rather than being answered</h3>
+<p>It was asked as a choice between two names and it is not one.</p>
+<pre class="code">
+soramech
+ceramic
+</pre>
+<p><strong>Same word.</strong> The consonants are identical and in order — S, R, M, K —
+the vowels are all reduced to almost nothing, and the trailing <code>h</code> is
+silent. Read down the columns: positions three, four, five and seven are
+the same letters outright, and the first pair only differ in which
+letter English uses to spell that sound.</p>
+<p>So the engine was never renamed when it was distilled onto this branch.
+It was <strong>respelled</strong>, and nobody noticed, including the people doing it.
+<code>cera_</code> and <code>cera_</code> have been two spellings of one prefix the whole time,
+which is why the project could carry both without anything feeling wrong
+— there was no collision to feel, because there were not two names.</p>
+<p>That reframes what is being decided. Not <em>which name</em>, since there is
+one, but <strong>which spelling of it a consumer meets</strong>, which is a much
+smaller question with a much clearer answer:</p>
+<p><strong><code>cera_</code>, because it is what the file says.</strong> A consumer holds two
+files called <code>cera.c</code> and <code>cera.h</code>, writes <code>#include "cera.h"</code>, and then
+calls something. If that something is <code>cera_map_create</code>, they have been
+handed a spelling mismatch on their first line and no way to know it is
+not a second library. If it is <code>cera_map_create</code>, the include and the
+call agree and there is nothing to explain.</p>
+<p>The cost — renaming the fifteen-odd symbols already spelled <code>cera_</code>, and
+every include guard — is not a cost of choosing between names. It is the
+cost of the respelling having been half-done for months.</p>
+<h3>What the rename touches</h3>
 <ul>
-<li>A construction failure routine that prints what was wrong with the</li>
-<p>  map being described and stops — building on a wrong description
-  helps nobody.</p>
-<li>Ring buffers start at ten slots on purpose: growth is cheap and</li>
-<p>  proven, and a generous initial size would only hide the mechanism
-  the demos exist to show. Ten is a magic number and is meant to be
-  one — it lives as a single named constant beside the record in the
-  header, because a port can now ask for a different depth and two
-  places have to agree on what the default is.</p>
-<li>Every port gets its slots at placement whatever it is for, and</li>
-<p>  nothing frees them until the map is torn down. A conversion is then
-  a field write, and values already waiting survive one.</p>
-<li>One table names the three kinds in the words a person would use, so</li>
-<p>  every refusal that turns somebody away from a port can say which of
-  the three it found. "Not a buffer" describes two different
-  situations with two different fixes.</p>
-<li>Ports are appended at the tail of their list so indices match the</li>
-<p>  order wires were declared. <strong>Destinations are not a list at all</strong>
-  (issue 214): a port holds one immutable array behind an atomic
-  pointer, and drawing or removing a wire builds a whole new array and
-  swaps the pointer. <code>out_port_dests</code> reads it with one atomic load and no
-  lock; <code>dest_set_build</code> makes the replacement; <code>dest_set_retire</code>
-  files what it replaced. New wires are appended within the array, so
-  fan-out order still matches declaration order and the dump still
-  round-trips.</p>
-<li><strong>The scrapyard</strong> holds sets a rewire replaced, because a walker may</li>
-<p>  be inside one. <code>map_scrap_sweep</code> frees every set no worker can still
-  be inside — a worker whose epoch is even is not in a task, and one
-  whose epoch has moved has left the task it was in. Retiring sweeps
-  first, so a program that rewires forever reclaims as it goes.
-  <code>map_scrap_free_all</code> empties the rest at teardown. Both unfile a set
-  and free it under one hold of the scrap lock, so a second toucher
-  does not find it and cannot free it twice; the lock is a leaf and
-  nothing is acquired while it is held.</p>
-<li>Teardown walks stations, then input ports, then output ports,</li>
-<p>  freeing leaf-first, and then empties the scrapyard.</p>
+<li>The header's declarations and the definitions in <code>cera.c</code>.</li>
+<li>The generator, which writes calls to engine functions into every</li>
+<p>  emitted file, and writes station-builder symbols under a prefix.</p>
+<li>The linker's export list, which names families by prefix — after this</li>
+<p>  it is one pattern, which is when <a href="done-902-the-header-says-what-is-public.html">902</a>'s
+  open question about whether that file still needs to exist can be
+  answered.</p>
+<li>Every test and the example.</li>
+<li>The documents and the completed issues, which name these calls in</li>
+<p>  prose.</p>
+</ul>
+<h3>What it does not touch</h3>
+<p><strong>Box functions.</strong> A box is the consumer's own C function and carries
+their names, not ours. The only engine-derived symbol attached to a box
+is its generated station-builder, which lives under the engine prefix
+already.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. <strong>Rename in the header first</strong>, since it is the list.
+2. <strong>Follow it into <code>cera.c</code>, the generator, the tests, the example.</strong>
+3. <strong>Grep the whole tree</strong> for the old names — including prose, which a
+   compiler will never check. The include guards go too: <code>CERA_STATION_H</code>
+   and its siblings are already gone into <code>CERA_H</code>, but the generated
+   code and the documents still say <code>cera_</code> in places a compiler will
+   never read.
+4. <strong>Collapse the export list</strong> to the single pattern the prefix now
+   allows, and decide whether it remains a file.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="done-903-everything-else-goes-private.html">903</a>, which shortened this list</li>
+<li><a href="done-902-the-header-says-what-is-public.html">902</a>, whose open question</li>
+<p>  this one settles</p>
 </ul>
 
 </main>

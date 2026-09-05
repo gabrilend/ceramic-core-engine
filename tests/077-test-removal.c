@@ -54,15 +54,15 @@ static void check(int ok, const char *what)
 
 /* {{{ static int wires_naming() */
 /* How many destination records anywhere in the map name a station. */
-static int wires_naming(map_t *m, int station)
+static int wires_naming(cera_map_t *m, int station)
 {
     int n = 0;
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call)
             continue;
-        for (out_port_t *p = s->out_ports; p; p = p->next) {
-            dest_set_t *set = out_port_dests(p);
+        for (cera_out_port_t *p = s->out_ports; p; p = p->next) {
+            cera_dest_set_t *set = out_port_dests(p);
             for (int d = 0; set && d < set->n; d++)
                 if (set->items[d].station == station)
                     n++;
@@ -80,32 +80,32 @@ static int wires_naming(map_t *m, int station)
  */
 static void removal_cuts_every_wire_first(void)
 {
-    map_t *m = map_create(4);
-    map_place_box(m, 0, "seven", STATION_PLAIN);
-    map_place_box(m, 1, "seven", STATION_PLAIN);
-    map_place_box(m, 2, "seven", STATION_PLAIN);
-    map_place_box(m, 3, "keep", STATION_PLAIN);
-    map_connect(m, 0, 0, 3, 0);
-    map_connect(m, 1, 0, 3, 0);
-    map_connect(m, 2, 0, 3, 0);
+    cera_map_t *m = cera_map_create(4);
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "seven", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 2, "seven", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 3, "keep", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 3, 0);
+    cera_map_connect(m, 1, 0, 3, 0);
+    cera_map_connect(m, 2, 0, 3, 0);
 
     check(wires_naming(m, 3) == 3, "three wires name the doomed station");
 
-    map_start(m, 4);
-    check(map_remove_station(m, 3) == 0, "it came out");
+    cera_map_start(m, 4);
+    check(cera_map_remove_station(m, 3) == 0, "it came out");
     check(wires_naming(m, 3) == 0,
           "and every wire that named it went with it — nothing stale is "
           "left to be followed");
     /* Not free yet: its record still carries what a task being built
      * from it needs, and the sweep that clears them is what frees the
      * place. Once the workers are idle, one sweep does it. */
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
     map_scrap_sweep(m);
-    check(map_station(m, 3)->call == NULL,
+    check(cera_map_station(m, 3)->call == NULL,
           "and once nothing could be inside it, the place came free");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  three wires named a station; removing it cut all three\n");
 }
 /* }}} */
@@ -119,40 +119,40 @@ static void removal_cuts_every_wire_first(void)
  */
 static void the_place_is_reused(void)
 {
-    map_t *m = map_create(3);
-    map_place_box(m, 0, "double_it", STATION_PLAIN);
-    map_place_box(m, 1, "keep", STATION_PLAIN);
-    map_place_box(m, 2, "keep", STATION_PLAIN);
-    map_connect(m, 0, 0, 1, 0);
+    cera_map_t *m = cera_map_create(3);
+    cera_map_place_box(m, 0, "double_it", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 2, "keep", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 1, 0);
 
-    map_start(m, 4);
-    check(map_remove_station(m, 1) == 0, "the wired-to station came out");
+    cera_map_start(m, 4);
+    check(cera_map_remove_station(m, 1) == 0, "the wired-to station came out");
     check(wires_naming(m, 1) == 0, "so nothing names its place");
 
     /* The place comes free when nobody can be inside a task built
      * from it. With nothing running yet, one sweep is enough. */
     map_scrap_sweep(m);
-    check(map_station(m, 1)->call == NULL, "and the place came free");
+    check(cera_map_station(m, 1)->call == NULL, "and the place came free");
 
     /* A different box takes the same place. Under a design that
      * reused places without cutting wires first, the old wire would
      * still point here and this station would receive values nobody
      * sent it. */
-    map_place_box(m, 1, "keep", STATION_PLAIN);
-    check(map_station(m, 1)->call != NULL, "and a new station took it");
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    check(cera_map_station(m, 1)->call != NULL, "and a new station took it");
 
-    map_connect(m, 0, 0, 2, 0);
+    cera_map_connect(m, 0, 0, 2, 0);
     int five = 5;
-    map_deliver_value(m, 0, 0, &five);
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_map_deliver_value(m, 0, 0, &five);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
-    check(atomic_load(&map_station(m, 2)->runs) == 1,
+    check(atomic_load(&cera_map_station(m, 2)->runs) == 1,
           "the value went where it was wired");
-    check(atomic_load(&map_station(m, 1)->runs) == 0,
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 0,
           "and the reused place received nothing, because no wire named it");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a freed place was reused and received only its own wires\n");
 }
 /* }}} */
@@ -166,16 +166,16 @@ static void the_place_is_reused(void)
  */
 static void removal_under_load(void)
 {
-    map_t *m = map_create(6);
-    map_place_box(m, 0, "double_it", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(6);
+    cera_map_place_box(m, 0, "double_it", CERA_STATION_PLAIN);
     for (int i = 1; i < 6; i++)
-        map_place_box(m, i, "keep", STATION_PLAIN);
+        cera_map_place_box(m, i, "keep", CERA_STATION_PLAIN);
     for (int i = 1; i < 6; i++)
-        map_connect(m, 0, 0, i, 0);
+        cera_map_connect(m, 0, 0, i, 0);
 
-    map_start(m, 4);
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_map_start(m, 4);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     /*
      * Remove and re-place under load. A removed place does not come
@@ -186,25 +186,25 @@ static void removal_under_load(void)
     int removed = 0, replaced = 0;
     for (int round = 0; round < 200; round++) {
         int v = round;
-        map_deliver_value(m, 0, 0, &v);
+        cera_map_deliver_value(m, 0, 0, &v);
 
         int victim = 1 + (round % 5);
-        station_t *st = map_station(m, victim);
+        cera_station_t *st = cera_map_station(m, victim);
         if (st->call && !atomic_load(&st->removed)) {
-            if (map_remove_station(m, victim) == 0)
+            if (cera_map_remove_station(m, victim) == 0)
                 removed++;
         } else {
             map_scrap_sweep(m);
             if (!st->call) {
-                map_place_box(m, victim, "keep", STATION_PLAIN);
-                map_connect(m, 0, 0, victim, 0);
+                cera_map_place_box(m, victim, "keep", CERA_STATION_PLAIN);
+                cera_map_connect(m, 0, 0, victim, 0);
                 replaced++;
             }
         }
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
     map_scrap_sweep(m);
 
     check(removed > 0 && replaced > 0,
@@ -214,7 +214,7 @@ static void removal_under_load(void)
     printf("  %d removals and %d placements under load, scrapyard drained\n",
            removed, replaced);
 
-    map_destroy(m);
+    cera_map_destroy(m);
 }
 /* }}} */
 
@@ -231,38 +231,38 @@ static void an_unplaced_box_unloads(void)
     static const char source[] =
         "int never_placed(int x)\n{\n    return x + 1;\n}\n";
 
-    check(late_compile_source(source) == 1, "a box was compiled in");
-    check(box_place_find("never_placed") != NULL, "and can be found");
+    check(cera_late_compile_source(source) == 1, "a box was compiled in");
+    check(cera_box_place_find("never_placed") != NULL, "and can be found");
 
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "double_it", STATION_PLAIN);
-    map_place_box(m, 1, "keep", STATION_PLAIN);
-    map_connect(m, 0, 0, 1, 0);
-    map_start(m, 4);
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "double_it", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 1, 0);
+    cera_map_start(m, 4);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     /* Work in flight, so the pool is saturated while the unload
      * happens — which is the case the counter exists for. */
     for (int i = 0; i < 100; i++) {
         int v = i;
-        map_deliver_value(m, 0, 0, &v);
+        cera_map_deliver_value(m, 0, 0, &v);
     }
 
-    int rc = late_unload_box(m, "never_placed");
+    int rc = cera_late_unload_box(m, "never_placed");
     check(rc == 0, "a box no station places was unloaded");
-    check(box_place_find("never_placed") == NULL,
+    check(cera_box_place_find("never_placed") == NULL,
           "and can no longer be found by name");
 
     /* A box that IS placed must be refused, because unloading its
      * code while a station names it is exactly the crash this is
      * built to avoid. */
-    check(late_unload_box(m, "double_it") != 0,
+    check(cera_late_unload_box(m, "double_it") != 0,
           "a box a station places was refused");
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
     printf("  an unplaced box unloaded while the pool was busy\n");
 }
 /* }}} */

@@ -17,8 +17,8 @@
  *
  * How it is arranged: eleven sections in the project's reading
  * order, each formerly a numbered file, each opening with a banner
- * naming what it was. A #line directive at every seam keeps compiler
- * errors and debugger backtraces pointing at the original source.
+ * naming what it was. Those banners are all that is left of eighteen
+ * filenames, and they are the part that was carrying the meaning.
  *
  * GENERATED ONCE from the numbered bodies by scripts/110-amalgamate.lua
  * (issue 901) and edited by hand from then on.
@@ -43,7 +43,7 @@
  * machinery, and the machinery is here.
  * ================================================================== */
 
-/* {{{ map_connect() — issues 201, 205, 207 */
+/* {{{ cera_map_connect() — issues 201, 205, 207 */
 /*
  * Wire: from a station's output port to a destination station's port.
  * Ports are created on first use, in index order. Repeat with the
@@ -61,8 +61,8 @@
  * dest_set_retire files a replaced set in the map's scrapyard. It
  * takes the scrap lock and nothing else.
  */
-static dest_set_t *out_port_dests(const out_port_t *p);
-static dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
+static cera_dest_set_t *out_port_dests(const cera_out_port_t *p);
+static cera_dest_set_t *dest_set_build(const cera_dest_set_t *from, int add_station,
                            int add_port, int drop_station, int drop_port);
 
 /* {{{ map_deliver() — issue 205 */
@@ -71,7 +71,7 @@ static dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
  * chooses the outgoing port by the station's kind, and walks that
  * port's destinations delivering the output value to each.
  */
-static void map_deliver(void *ctx, task_t *t);
+static void map_deliver(void *ctx, cera_task_t *t);
 /* }}} */
 
 /* {{{ in_port_slot() / in_port_slot_move() — issue 210c */
@@ -99,8 +99,8 @@ static void map_deliver(void *ctx, task_t *t);
  * looks at another slot, which is the property the whole design is
  * for.
  */
-static void *in_port_slot(const in_port_t *sl, int index);
-static int   in_port_slot_move(const in_port_t *sl, int index, int from, int to);
+static void *in_port_slot(const cera_in_port_t *sl, int index);
+static int   in_port_slot_move(const cera_in_port_t *sl, int index, int from, int to);
 
 /*
  * The same transition on a slot the caller has already located.
@@ -135,7 +135,7 @@ static int   slot_state_at(const void *slot, int elem_size);
  * capture writes them as stored and a revival delivers them back that
  * way, which is exactly as faithful as the engine is.
  */
-static int in_port_waiting_text(const in_port_t *sl, char *out, int room);
+static int in_port_waiting_text(const cera_in_port_t *sl, char *out, int room);
 /* }}} */
 
 /* {{{ in_port_add_page() / in_port_free_pages() — issue 210e */
@@ -151,8 +151,8 @@ static int in_port_waiting_text(const in_port_t *sl, char *out, int room);
  * one moment a port's page size legitimately changes — its starting
  * depth, which may only be set while the port is empty.
  */
-static in_port_page_t *in_port_add_page(in_port_t *sl);
-static void            in_port_free_pages(in_port_t *sl);
+static cera_in_port_page_t *in_port_add_page(cera_in_port_t *sl);
+static void            in_port_free_pages(cera_in_port_t *sl);
 /* }}} */
 
 /* {{{ in_port_kind_name() — issue 210b */
@@ -171,13 +171,13 @@ static const char *in_port_kind_name(unsigned char kind);
 /* {{{ station_out_port() */
 /* The port at an index, or null if never wired — which delivery
  * reads as "discard". */
-static out_port_t *station_out_port(station_t *s, int index);
+static cera_out_port_t *station_out_port(cera_station_t *s, int index);
 /* }}} */
 
 /* {{{ in_port_constant_free() — teardown joint */
 /* A port's constant and, for a string, the characters it points at.
  * Owned by the port and freed with the map. */
-static void in_port_constant_free(in_port_t *sl);
+static void in_port_constant_free(cera_in_port_t *sl);
 /* }}} */
 
 /* {{{ in_port_constant_text() — issue 401 */
@@ -200,7 +200,7 @@ static void in_port_constant_free(in_port_t *sl);
  * because text resolves its layout when it is read and so survives a
  * rebuild that would silently change what raw bytes meant.
  */
-static int in_port_constant_text(const in_port_t *sl, char *out, int room);
+static int in_port_constant_text(const cera_in_port_t *sl, char *out, int room);
 /* }}} */
 
 /* {{{ task_build() — the one way a task comes into existence */
@@ -211,7 +211,7 @@ static int in_port_constant_text(const in_port_t *sl, char *out, int room);
  * claimed under the station's mutex beside the ring pops now (issue
  * 401), so nothing is left to resolve here.
  */
-static task_t *task_build(map_t *m, int station_index,
+static cera_task_t *task_build(cera_map_t *m, int station_index,
                    const unsigned char *claimed, int port);
 /* }}} */
 
@@ -222,7 +222,7 @@ static task_t *task_build(map_t *m, int station_index,
  * rows that arrived while the program ran are searched separately and
  * must agree about what a name means.
  */
-static int box_place_matches(const box_place_t *row, const char *name);
+static int box_place_matches(const cera_box_place_t *row, const char *name);
 /* }}} */
 
 /*
@@ -248,10 +248,10 @@ static void  slot_set_at(void *slot, int elem_size, int to);
  * map_retire sweeps before filing, so a program that changes shape
  * forever reclaims as it goes rather than growing forever.
  */
-static void        map_retire(map_t *m, void *p, void (*free_fn)(void *));
-static void        map_scrap_sweep(map_t *m);
-static int         map_scrap_count(map_t *m);
-static void        map_scrap_free_all(map_t *m);
+static void        map_retire(cera_map_t *m, void *p, void (*free_fn)(void *));
+static void        map_scrap_sweep(cera_map_t *m);
+static int         map_scrap_count(cera_map_t *m);
+static void        map_scrap_free_all(cera_map_t *m);
 
 /*
  * A joint that only a white-box test reaches.
@@ -282,7 +282,6 @@ static void        map_scrap_free_all(map_t *m);
  * Was libs/012-pool.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/libs/012-pool.c"
 /*
  * 012-pool.c — the thread pool: one queue, many workers, no boss.
  *
@@ -328,7 +327,7 @@ static void        map_scrap_free_all(map_t *m);
 typedef struct worker {
     pthread_t thread;
     int       index;
-    pool_t   *pool;
+    cera_pool_t   *pool;
 } worker_t;
 /* }}} */
 
@@ -371,7 +370,7 @@ struct pool {
      * array length; head is the oldest task, tail the next free slot.
      * One slot is always left empty so head==tail means empty and
      * never means full. All four are guarded by `mutex`. */
-    task_t **slots;
+    cera_task_t **slots;
     int      capacity;
     int      head;
     int      tail;
@@ -382,7 +381,7 @@ struct pool {
      * Sleeping workers wait here. Arrives with issue 103. */
     pthread_cond_t wake;
 
-    /* Workers park here at creation until pool_release. Arrives with
+    /* Workers park here at creation until cera_pool_release. Arrives with
      * issue 102. */
     pthread_cond_t start_gate;
     int            released;
@@ -396,7 +395,7 @@ struct pool {
     int sleeping;
 
     /* Set once, by the last sleeper finding the queue truly empty,
-     * or by pool_destroy on a never-released pool. Every worker that
+     * or by cera_pool_destroy on a never-released pool. Every worker that
      * sees it returns. */
     int stop;
 
@@ -421,7 +420,7 @@ struct pool {
      */
     struct pool_epoch *epochs;
 
-    pool_finish_t finish;
+    cera_pool_finish_t finish;
     void         *finish_ctx;
 
     /* Measurements for the phase 1 demo: the queue's own story. */
@@ -450,7 +449,7 @@ struct pool {
 
 /* {{{ queue_count() */
 /* How many tasks the ring currently holds. Caller holds the mutex. */
-static int queue_count(pool_t *p)
+static int queue_count(cera_pool_t *p)
 {
     /* Two paths: unwrapped (tail ahead of head) is plain subtraction;
      * wrapped (tail behind head) adds one lap of the ring. */
@@ -473,11 +472,11 @@ static int queue_count(pool_t *p)
  * Safe because the ring holds pointers out to tasks and nothing holds
  * pointers into the ring: the shelf moves, the boxes on it do not.
  */
-static void queue_grow(pool_t *p)
+static void queue_grow(cera_pool_t *p)
 {
     int held = queue_count(p);
     int new_capacity = p->capacity * 2;
-    task_t **fresh = malloc((size_t)new_capacity * sizeof *fresh);
+    cera_task_t **fresh = malloc((size_t)new_capacity * sizeof *fresh);
     if (!fresh) {
         fprintf(stderr, "pool: queue growth to %d entries failed: out of memory\n",
                 new_capacity);
@@ -503,8 +502,8 @@ static void queue_grow(pool_t *p)
 }
 /* }}} */
 
-/* {{{ pool_push() */
-void pool_push(pool_t *p, task_t *t)
+/* {{{ cera_pool_push() */
+void cera_pool_push(cera_pool_t *p, cera_task_t *t)
 {
     pthread_mutex_lock(&p->mutex);
 
@@ -529,11 +528,11 @@ void pool_push(pool_t *p, task_t *t)
 }
 /* }}} */
 
-/* {{{ pool_pop() */
-task_t *pool_pop(pool_t *p)
+/* {{{ cera_pool_pop() */
+cera_task_t *cera_pool_pop(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
-    task_t *t = NULL;
+    cera_task_t *t = NULL;
     /* Two paths: an empty ring returns null — the caller decides
      * whether that means sleep (a worker) or done (a test); a
      * non-empty ring surrenders its oldest entry. */
@@ -555,14 +554,14 @@ task_t *pool_pop(pool_t *p)
  */
 static __thread int this_worker_index = -1;
 
-int pool_worker_index(void)
+int cera_pool_worker_index(void)
 {
     return this_worker_index;
 }
 /* }}} */
 
-/* {{{ pool_worker_epoch() */
-uint64_t pool_worker_epoch(pool_t *p, int worker)
+/* {{{ cera_pool_worker_epoch() */
+uint64_t cera_pool_worker_epoch(cera_pool_t *p, int worker)
 {
     if (!p || !p->epochs || worker < 0 || worker >= p->n_workers)
         return 0;
@@ -575,7 +574,7 @@ uint64_t pool_worker_epoch(pool_t *p, int worker)
  * The run loop (issues 102, 103, 104). The shape is one big loop
  * under the mutex, dropping it only while actually running a task:
  *
- *   - stop set        -> return, letting pool_join collect us.
+ *   - stop set        -> return, letting cera_pool_join collect us.
  *   - queue non-empty -> pop, unlock, run, deliver, free, relock.
  *   - queue empty     -> register asleep. If that registration makes
  *                        every worker asleep and nobody outside can
@@ -594,14 +593,14 @@ uint64_t pool_worker_epoch(pool_t *p, int worker)
 static void *worker_main(void *arg)
 {
     worker_t *w = arg;
-    pool_t *p = w->pool;
+    cera_pool_t *p = w->pool;
     int finished_here = 0;
 
     this_worker_index = w->index;
 
     pthread_mutex_lock(&p->mutex);
 
-    /* Park at the starting gate until pool_release. Seeding happens
+    /* Park at the starting gate until cera_pool_release. Seeding happens
      * while everyone is parked here, which is what keeps issue 104's
      * "nothing pushes from outside after startup" true for maps. */
     while (!p->released && !p->stop)
@@ -614,7 +613,7 @@ static void *worker_main(void *arg)
         if (p->head != p->tail) {
             /* Work exists: take the oldest and run it with the lock
              * dropped, so the queue stays open while user code runs. */
-            task_t *t = p->slots[p->head];
+            cera_task_t *t = p->slots[p->head];
             p->head = (p->head + 1) % p->capacity;
             pthread_mutex_unlock(&p->mutex);
 
@@ -718,8 +717,8 @@ static void *worker_main(void *arg)
 }
 /* }}} */
 
-/* {{{ pool_signal_when_finished() */
-void pool_signal_when_finished(pool_t *p, int signo)
+/* {{{ cera_pool_signal_when_finished() */
+void cera_pool_signal_when_finished(cera_pool_t *p, int signo)
 {
     pthread_mutex_lock(&p->mutex);
     p->finished_signal = signo;
@@ -742,7 +741,7 @@ void pool_signal_when_finished(pool_t *p, int signo)
 }
 /* }}} */
 
-/* {{{ pool_stop() */
+/* {{{ cera_pool_stop() */
 /*
  * **Stop starting new things**, which is what halting honestly means
  * here (issue 106). A worker inside a box finishes that box, because
@@ -753,7 +752,7 @@ void pool_signal_when_finished(pool_t *p, int signo)
  * visible rather than hidden: tearing the pool down afterwards says
  * how many were left.
  */
-void pool_stop(pool_t *p)
+void cera_pool_stop(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
     p->stop = 1;
@@ -763,7 +762,7 @@ void pool_stop(pool_t *p)
 }
 /* }}} */
 
-/* {{{ pool_finished() */
+/* {{{ cera_pool_finished() */
 /*
  * **Whether this pool has already decided the work is over.**
  *
@@ -779,7 +778,7 @@ void pool_stop(pool_t *p)
  * the promise before opening the gate. This is how somebody finds out
  * they did not.
  */
-int pool_finished(pool_t *p)
+int cera_pool_finished(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
     int done = p->stop;
@@ -788,8 +787,8 @@ int pool_finished(pool_t *p)
 }
 /* }}} */
 
-/* {{{ pool_queued() / pool_worker_station() */
-int pool_queued(pool_t *p)
+/* {{{ cera_pool_queued() / cera_pool_worker_station() */
+int cera_pool_queued(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
     int n = queue_count(p);
@@ -803,7 +802,7 @@ int pool_queued(pool_t *p)
  * take, so it must be a plain load of a plain number and never a
  * dereference of anything.
  */
-int pool_worker_station(pool_t *p, int worker)
+int cera_pool_worker_station(cera_pool_t *p, int worker)
 {
     if (worker < 0 || worker >= p->n_workers)
         return -1;
@@ -815,7 +814,7 @@ int pool_worker_station(pool_t *p, int worker)
 /* {{{ decide_worker_count() */
 /*
  * Three paths, most explicit first: a positive argument is obeyed;
- * the SORAMECH_WORKERS environment variable is next, because tests
+ * the CERAMIC_WORKERS environment variable is next, because tests
  * want one worker and race hunts want two; failing both, one worker
  * per online processor.
  */
@@ -824,11 +823,11 @@ static int decide_worker_count(int n_workers)
     if (n_workers > 0)
         return n_workers;
 
-    const char *env = getenv("SORAMECH_WORKERS");
+    const char *env = getenv("CERAMIC_WORKERS");
     if (env && *env) {
         int n = atoi(env);
         if (n <= 0) {
-            fprintf(stderr, "pool: SORAMECH_WORKERS is '%s', not a positive number\n", env);
+            fprintf(stderr, "pool: CERAMIC_WORKERS is '%s', not a positive number\n", env);
             abort();
         }
         return n;
@@ -843,10 +842,10 @@ static int decide_worker_count(int n_workers)
 }
 /* }}} */
 
-/* {{{ pool_create() */
-pool_t *pool_create(int n_workers, pool_finish_t finish, void *finish_ctx)
+/* {{{ cera_pool_create() */
+cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *finish_ctx)
 {
-    pool_t *p = calloc(1, sizeof *p);
+    cera_pool_t *p = calloc(1, sizeof *p);
     if (!p) {
         fprintf(stderr, "pool: allocation failed\n");
         abort();
@@ -905,8 +904,8 @@ pool_t *pool_create(int n_workers, pool_finish_t finish, void *finish_ctx)
 }
 /* }}} */
 
-/* {{{ pool_release() */
-void pool_release(pool_t *p)
+/* {{{ cera_pool_release() */
+void cera_pool_release(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
     p->released = 1;
@@ -915,8 +914,8 @@ void pool_release(pool_t *p)
 }
 /* }}} */
 
-/* {{{ pool_join() */
-void pool_join(pool_t *p)
+/* {{{ cera_pool_join() */
+void cera_pool_join(cera_pool_t *p)
 {
     if (p->joined)
         return;
@@ -932,15 +931,15 @@ void pool_join(pool_t *p)
 }
 /* }}} */
 
-/* {{{ pool_submitter_register() / pool_submitter_unregister() */
-void pool_submitter_register(pool_t *p)
+/* {{{ cera_pool_submitter_register() / cera_pool_submitter_unregister() */
+void cera_pool_submitter_register(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
     p->outside++;
     pthread_mutex_unlock(&p->mutex);
 }
 
-void pool_submitter_unregister(pool_t *p)
+void cera_pool_submitter_unregister(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
     p->outside--;
@@ -959,8 +958,8 @@ void pool_submitter_unregister(pool_t *p)
 }
 /* }}} */
 
-/* {{{ pool_destroy() */
-void pool_destroy(pool_t *p)
+/* {{{ cera_pool_destroy() */
+void cera_pool_destroy(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
     int started = p->released;
@@ -974,7 +973,7 @@ void pool_destroy(pool_t *p)
     }
     pthread_mutex_unlock(&p->mutex);
 
-    pool_join(p);
+    cera_pool_join(p);
 
     /* Any tasks still in the ring were never run; freeing them here
      * would guess at their ownership, and a stopped-early pool with
@@ -992,15 +991,15 @@ void pool_destroy(pool_t *p)
 }
 /* }}} */
 
-/* {{{ pool_worker_count() */
-int pool_worker_count(pool_t *p)
+/* {{{ cera_pool_worker_count() */
+int cera_pool_worker_count(cera_pool_t *p)
 {
     return p->n_workers;
 }
 /* }}} */
 
-/* {{{ pool_queue_stats() */
-void pool_queue_stats(pool_t *p, int *capacity, int *high_water, int *growths)
+/* {{{ cera_pool_queue_stats() */
+void cera_pool_queue_stats(cera_pool_t *p, int *capacity, int *high_water, int *growths)
 {
     pthread_mutex_lock(&p->mutex);
     if (capacity)   *capacity = p->capacity;
@@ -1020,7 +1019,6 @@ void pool_queue_stats(pool_t *p, int *capacity, int *high_water, int *growths)
  * Was src/019-station.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/019-station.c"
 /*
  * 019-station.c — building and dismantling the station table.
  *
@@ -1046,7 +1044,7 @@ void pool_queue_stats(pool_t *p, int *capacity, int *high_water, int *growths)
 /*
  * Ring buffers start small on purpose: growth is cheap, proven, and
  * worth seeing in the demo; a generous initial size would only hide
- * the mechanism. The depth itself is IN_PORT_DEFAULT_CAPACITY, declared
+ * the mechanism. The depth itself is CERA_IN_PORT_DEFAULT_CAPACITY, declared
  * beside the record in the header because the port's contract is
  * where a reader looks for it — and because issue 210b gave a port a
  * way to ask for a different one, which means two places now have to
@@ -1075,7 +1073,7 @@ static void fail(const char *what)
      */
     char said[512];
     snprintf(said, sizeof said, "map construction: %s", what);
-    sora_stop_now(NULL, SORA_EXIT_BAD_CALL, said);
+    cera_stop_now(NULL, CERA_EXIT_BAD_CALL, said);
 }
 
 /* {{{ fail_resource() */
@@ -1089,7 +1087,7 @@ static void fail_resource(const char *what)
 {
     char said[512];
     snprintf(said, sizeof said, "map construction: %s", what);
-    sora_stop_now(NULL, SORA_EXIT_NO_RESOURCE, said);
+    cera_stop_now(NULL, CERA_EXIT_NO_RESOURCE, said);
 }
 /* }}} */
 /* }}} */
@@ -1147,9 +1145,9 @@ static int slot_stride(int elem_size)
  * and then follows `next`, which is what keeps a sweep to one pointer
  * hop per page boundary instead of a walk per slot.
  */
-static in_port_page_t *in_port_page_at(const in_port_t *sl, int page)
+static cera_in_port_page_t *in_port_page_at(const cera_in_port_t *sl, int page)
 {
-    in_port_page_t *pg = sl->pages;
+    cera_in_port_page_t *pg = sl->pages;
     while (page-- > 0 && pg)
         pg = atomic_load_explicit(&pg->next, memory_order_acquire);
     return pg;
@@ -1157,9 +1155,9 @@ static in_port_page_t *in_port_page_at(const in_port_t *sl, int page)
 /* }}} */
 
 /* {{{ in_port_slot() */
-static void *in_port_slot(const in_port_t *sl, int index)
+static void *in_port_slot(const cera_in_port_t *sl, int index)
 {
-    in_port_page_t *pg = in_port_page_at(sl, index / sl->page_slots);
+    cera_in_port_page_t *pg = in_port_page_at(sl, index / sl->page_slots);
     if (!pg) {
         /* An ordinal past the last page means the caller computed a
          * position the port does not have. Nothing should be able to:
@@ -1180,21 +1178,21 @@ static void *in_port_slot(const in_port_t *sl, int index)
  * and to grow it, because they are the same act (issue 210e) — which
  * is the shape the station table already uses one level up.
  */
-static in_port_page_t *in_port_add_page(in_port_t *sl)
+static cera_in_port_page_t *in_port_add_page(cera_in_port_t *sl)
 {
     /* Zeroed rather than merely allocated, because a slot's state is
      * part of it and empty is zero (issue 210c) — a fresh page has to
      * be a page of *empty* slots, or the first reader to reach it
      * would find whatever the allocator left behind and believe it. */
-    in_port_page_t *pg = calloc(1, sizeof *pg
+    cera_in_port_page_t *pg = calloc(1, sizeof *pg
                                 + (size_t)sl->page_slots * (size_t)sl->stride);
     if (!pg) fail_resource("out of memory for a page of a ring buffer");
 
     if (!sl->pages) {
         sl->pages = pg;
     } else {
-        in_port_page_t *last = sl->pages;
-        in_port_page_t *next;
+        cera_in_port_page_t *last = sl->pages;
+        cera_in_port_page_t *next;
         while ((next = atomic_load_explicit(&last->next,
                                             memory_order_relaxed)) != NULL)
             last = next;
@@ -1215,11 +1213,11 @@ static in_port_page_t *in_port_add_page(in_port_t *sl)
 /* }}} */
 
 /* {{{ in_port_free_pages() */
-static void in_port_free_pages(in_port_t *sl)
+static void in_port_free_pages(cera_in_port_t *sl)
 {
-    in_port_page_t *pg = sl->pages;
+    cera_in_port_page_t *pg = sl->pages;
     while (pg) {
-        in_port_page_t *next = atomic_load_explicit(&pg->next,
+        cera_in_port_page_t *next = atomic_load_explicit(&pg->next,
                                                     memory_order_relaxed);
         free(pg);
         pg = next;
@@ -1308,7 +1306,7 @@ static void slot_set_at(void *slot, int elem_size, int to)
  * The same transition, named by ordinal rather than by address, for
  * every caller that has an index in hand and no page to walk from.
  */
-CERA_TEST_ONLY static int in_port_slot_move(const in_port_t *sl, int index, int from, int to)
+CERA_TEST_ONLY static int in_port_slot_move(const cera_in_port_t *sl, int index, int from, int to)
 {
     return slot_move_at(in_port_slot(sl, index), sl->elem_size, from, to);
 }
@@ -1321,12 +1319,12 @@ CERA_TEST_ONLY static int in_port_slot_move(const in_port_t *sl, int index, int 
  * growing it by reallocation is safe — the same kind of copy the
  * pool's ring already does. No station record is ever copied.
  */
-static int add_shelf(map_t *m)
+static int add_shelf(cera_map_t *m)
 {
-    station_t *shelf = calloc(STATIONS_PER_SHELF, sizeof *shelf);
+    cera_station_t *shelf = calloc(CERA_STATIONS_PER_SHELF, sizeof *shelf);
     if (!shelf)
         return -1;
-    station_t **shelves = realloc(m->shelves,
+    cera_station_t **shelves = realloc(m->shelves,
                                   (size_t)(m->n_shelves + 1) * sizeof *shelves);
     if (!shelves) {
         free(shelf);
@@ -1339,10 +1337,10 @@ static int add_shelf(map_t *m)
 }
 /* }}} */
 
-/* {{{ map_create() */
-map_t *map_create_empty(void)
+/* {{{ cera_map_create() */
+cera_map_t *cera_map_create_empty(void)
 {
-    map_t *m = calloc(1, sizeof *m);
+    cera_map_t *m = calloc(1, sizeof *m);
     if (!m) fail_resource("out of memory for the map");
     pthread_mutex_init(&m->rewire_mutex, NULL);
     pthread_mutex_init(&m->scrap_mutex, NULL);
@@ -1350,13 +1348,13 @@ map_t *map_create_empty(void)
 }
 /* }}} */
 
-/* {{{ map_create() */
-map_t *map_create(int n_stations)
+/* {{{ cera_map_create() */
+cera_map_t *cera_map_create(int n_stations)
 {
     if (n_stations <= 0)
         fail("a map needs at least one station");
 
-    map_t *m = calloc(1, sizeof *m);
+    cera_map_t *m = calloc(1, sizeof *m);
     if (!m) fail_resource("out of memory for the map");
 
     pthread_mutex_init(&m->rewire_mutex, NULL);
@@ -1368,13 +1366,13 @@ map_t *map_create(int n_stations)
      * the table grows a shelf at a time afterwards, and nothing
      * already placed ever moves.
      *
-     * Reserved directly rather than by calling map_add_station in a
+     * Reserved directly rather than by calling cera_map_add_station in a
      * loop, because that call hands back the first place nobody has
      * filled — which is the same place every time until somebody
      * fills it. Reserving N places and filling them is a different
      * act from asking for somewhere to put one thing.
      */
-    while (n_stations > m->n_shelves * STATIONS_PER_SHELF)
+    while (n_stations > m->n_shelves * CERA_STATIONS_PER_SHELF)
         if (add_shelf(m) < 0)
             fail_resource("out of memory for the station table");
     atomic_store_explicit(&m->n_stations, n_stations, memory_order_release);
@@ -1383,8 +1381,8 @@ map_t *map_create(int n_stations)
 }
 /* }}} */
 
-/* {{{ map_add_station() */
-int map_add_station(map_t *m)
+/* {{{ cera_map_add_station() */
+int cera_map_add_station(cera_map_t *m)
 {
     /* Exclusive, under the lock every other structural change already
      * takes (issue 704). Two threads each finding the same free place,
@@ -1405,7 +1403,7 @@ int map_add_station(map_t *m)
      */
     int count = atomic_load_explicit(&m->n_stations, memory_order_acquire);
     for (int i = 0; i < count; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call && !atomic_load_explicit(&s->removed,
                                               memory_order_acquire)) {
             pthread_mutex_unlock(&m->rewire_mutex);
@@ -1413,7 +1411,7 @@ int map_add_station(map_t *m)
         }
     }
 
-    if (count >= m->n_shelves * STATIONS_PER_SHELF && add_shelf(m) < 0) {
+    if (count >= m->n_shelves * CERA_STATIONS_PER_SHELF && add_shelf(m) < 0) {
         pthread_mutex_unlock(&m->rewire_mutex);
         return -1;
     }
@@ -1431,18 +1429,18 @@ int map_add_station(map_t *m)
 }
 /* }}} */
 
-/* {{{ map_place() */
-void map_place(map_t *m, int station, task_call_t shim, int kind,
+/* {{{ cera_map_place() */
+void cera_map_place(cera_map_t *m, int station, cera_task_call_t shim, int kind,
                int n_in_ports, const int *elem_sizes, int out_size)
 {
     if (station < 0 || station >= m->n_stations)
         fail("placing a box at a station index outside the table");
-    if (kind < 0 || kind >= STATION_KIND_COUNT)
+    if (kind < 0 || kind >= CERA_STATION_KIND_COUNT)
         fail("placing a box of a kind that does not exist");
     if (n_in_ports < 0)
         fail("a station cannot have a negative number of slots");
 
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (s->call)
         fail("placing a box at a station already occupied");
 
@@ -1460,7 +1458,7 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
     }
 
     for (int i = 0; i < n_in_ports; i++) {
-        in_port_t *sl = &s->in_ports[i];
+        cera_in_port_t *sl = &s->in_ports[i];
         if (elem_sizes[i] <= 0)
             fail("a port's element size must be positive");
         /* Every port starts life as a ring buffer — the default the
@@ -1468,7 +1466,7 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
          * having its source taken away, is a conversion applied
          * afterwards; neither one frees what is allocated here
          * (issue 210b). */
-        sl->kind = IN_PORT_RING;
+        sl->kind = CERA_IN_PORT_RING;
         sl->elem_size = elem_sizes[i];
         sl->stride = slot_stride(sl->elem_size);
         /* The first page, which is the same act as growing (issue
@@ -1476,7 +1474,7 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
          * only in how many times this has happened. */
         sl->pages = NULL;
         sl->capacity = 0;
-        sl->page_slots = IN_PORT_DEFAULT_CAPACITY;
+        sl->page_slots = CERA_IN_PORT_DEFAULT_CAPACITY;
         in_port_add_page(sl);
         sl->read_hint = 0;
         sl->write_hint = 0;
@@ -1503,7 +1501,7 @@ void map_place(map_t *m, int station, task_call_t shim, int kind,
  * it one. A program built by calling the surface has no names, and a
  * complaint that says "?" about it is one nobody can act on.
  */
-static void station_label_into(map_t *m, int i, char *out, size_t room)
+static void station_label_into(cera_map_t *m, int i, char *out, size_t room)
 {
     if (m->station_names && i < m->n_named && m->station_names[i])
         snprintf(out, room, "%s", m->station_names[i]);
@@ -1532,10 +1530,10 @@ static void station_label_into(map_t *m, int i, char *out, size_t room)
  * one fewer than the refusal names and concludes the engine is
  * confused.
  */
-static void no_such_port_into(map_t *m, int station, int port,
+static void no_such_port_into(cera_map_t *m, int station, int port,
                               char *out, size_t room)
 {
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     char who[64];
     station_label_into(m, station, who, sizeof who);
     snprintf(out, room,
@@ -1543,11 +1541,11 @@ static void no_such_port_into(map_t *m, int station, int port,
              "parameters%s)",
              who, port, s->box_name ? s->box_name : "?", s->n_in_ports,
              s->n_in_ports == 1 ? "" : "s",
-             s->kind == STATION_COMPARATOR ? ", plus the threshold" : "");
+             s->kind == CERA_STATION_COMPARATOR ? ", plus the threshold" : "");
 }
 /* }}} */
 
-/* {{{ map_in_port_start_depth() */
+/* {{{ cera_map_in_port_start_depth() */
 /*
  * **A refusal travels rather than stopping here** (issue 210g).
  *
@@ -1562,7 +1560,7 @@ static void no_such_port_into(map_t *m, int station, int port,
  * look at, and the only difference is that the ones who *do* look can
  * say where the trouble was.
  */
-const char *map_in_port_start_depth(map_t *m, int station, int port, int slots)
+const char *cera_map_in_port_start_depth(cera_map_t *m, int station, int port, int slots)
 {
     static _Thread_local char said[192];
 
@@ -1571,7 +1569,7 @@ const char *map_in_port_start_depth(map_t *m, int station, int port, int slots)
                  "station %d is outside the table", station);
         return said;
     }
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (port < 0 || port >= s->n_in_ports) {
         no_such_port_into(m, station, port, said, sizeof said);
         return said;
@@ -1587,7 +1585,7 @@ const char *map_in_port_start_depth(map_t *m, int station, int port, int slots)
         return said;
     }
 
-    in_port_t *sl = &s->in_ports[port];
+    cera_in_port_t *sl = &s->in_ports[port];
     if (sl->held != 0) {
         char who[64];
         station_label_into(m, station, who, sizeof who);
@@ -1616,21 +1614,21 @@ const char *map_in_port_start_depth(map_t *m, int station, int port, int slots)
 }
 /* }}} */
 
-/* {{{ map_in_port_convert() */
-void map_in_port_convert(map_t *m, int station, int port, int kind)
+/* {{{ cera_map_in_port_convert() */
+void cera_map_in_port_convert(cera_map_t *m, int station, int port, int kind)
 {
     /* A case of the one configuration operation (issue 210g), kept as
      * a name because "convert this port" is what callers already say.
      * Passing no text means *the value it had before*, which is why
      * becoming a static again works and becoming one for the first
      * time is refused here. */
-    const char *no = map_configure_port(m, station, port, kind, NULL);
+    const char *no = cera_map_configure_port(m, station, port, kind, NULL);
     if (no)
         fail(no);
 }
 /* }}} */
 
-/* {{{ map_configure_port() */
+/* {{{ cera_map_configure_port() */
 /*
  * **The one operation that says where a port's values come from**
  * (issue 210g): a station, a port, a source, and — when the source is
@@ -1664,7 +1662,7 @@ void map_in_port_convert(map_t *m, int station, int port, int kind)
  * with the rest of the refusal policy rather than being half done
  * here.
  */
-const char *map_configure_port(map_t *m, int station, int port,
+const char *cera_map_configure_port(cera_map_t *m, int station, int port,
                                int source, const char *text)
 {
     /* Per thread, because two threads may be editing two different
@@ -1677,7 +1675,7 @@ const char *map_configure_port(map_t *m, int station, int port,
                  "station %d is outside the table", station);
         return said;
     }
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (port < 0 || port >= s->n_in_ports) {
         /* The loader's wording, which named the box and remembered
          * the comparator's threshold, moved down here so that every
@@ -1685,18 +1683,18 @@ const char *map_configure_port(map_t *m, int station, int port,
         no_such_port_into(m, station, port, said, sizeof said);
         return said;
     }
-    if (source < 0 || source >= IN_PORT_KIND_COUNT) {
+    if (source < 0 || source >= CERA_IN_PORT_KIND_COUNT) {
         snprintf(said, sizeof said,
                  "there is no such source for a port");
         return said;
     }
 
-    if (source == IN_PORT_STATIC) {
+    if (source == CERA_IN_PORT_STATIC) {
         if (text) {
             /* Binding parses the text and sets the tag together, so a
              * value that will not parse never leaves the port in a
              * state that claims to hold one. */
-            map_in_port_static_text(m, station, port, text);
+            cera_map_in_port_static_text(m, station, port, text);
             return NULL;
         }
         if (!s->in_ports[port].constant_set) {
@@ -1719,7 +1717,7 @@ const char *map_configure_port(map_t *m, int station, int port,
 }
 /* }}} */
 
-/* {{{ map_check_sources() */
+/* {{{ cera_map_check_sources() */
 /*
  * **Every parameter needs somewhere to get a value** (issue 210g).
  *
@@ -1747,19 +1745,19 @@ const char *map_configure_port(map_t *m, int station, int port,
  * when every one of its slots holds a value. So this is unqualified:
  * a port with no source is an error, full stop.
  */
-const char *map_check_sources(map_t *m)
+const char *cera_map_check_sources(cera_map_t *m)
 {
     static _Thread_local char said[512];
     int used = 0, found = 0;
 
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         /* An empty place in the table is not a station (issue 216). */
         if (!s->call)
             continue;
         for (int j = 0; j < s->n_in_ports; j++) {
             if (atomic_load_explicit(&s->in_ports[j].kind,
-                                     memory_order_relaxed) != IN_PORT_NONE)
+                                     memory_order_relaxed) != CERA_IN_PORT_NONE)
                 continue;
             found++;
             if (used < (int)sizeof said - 64) {
@@ -1794,7 +1792,7 @@ const char *map_check_sources(map_t *m)
 }
 /* }}} */
 
-/* {{{ map_name_station() */
+/* {{{ cera_map_name_station() */
 /*
  * **What to call a station** (issue 212), which is the sixth thing
  * construction has to be able to say.
@@ -1817,7 +1815,7 @@ const char *map_check_sources(map_t *m)
  * The array grows with the table, because stations are added one at a
  * time now rather than counted in advance.
  */
-const char *map_name_station(map_t *m, int station, const char *name)
+const char *cera_map_name_station(cera_map_t *m, int station, const char *name)
 {
     static _Thread_local char said[192];
 
@@ -1848,7 +1846,7 @@ const char *map_name_station(map_t *m, int station, const char *name)
 }
 /* }}} */
 
-/* {{{ map_station_set_cursor() — issue 712 */
+/* {{{ cera_map_station_set_cursor() — issue 712 */
 /*
  * **Put an iterator back where it had got to.**
  *
@@ -1863,7 +1861,7 @@ const char *map_name_station(map_t *m, int station, const char *name)
  * a plain station has one exit and a comparator chooses by comparing,
  * so neither has a position to be in.
  */
-const char *map_station_set_cursor(map_t *m, int station, int at)
+const char *cera_map_station_set_cursor(cera_map_t *m, int station, int at)
 {
     static _Thread_local char said[192];
 
@@ -1872,8 +1870,8 @@ const char *map_station_set_cursor(map_t *m, int station, int at)
                  station);
         return said;
     }
-    station_t *s = map_station(m, station);
-    if (s->kind != STATION_ITERATOR) {
+    cera_station_t *s = cera_map_station(m, station);
+    if (s->kind != CERA_STATION_ITERATOR) {
         snprintf(said, sizeof said,
                  "station %d is not an iterator, so it has no exit it is "
                  "pointing at", station);
@@ -1890,7 +1888,7 @@ const char *map_station_set_cursor(map_t *m, int station, int at)
 }
 /* }}} */
 
-/* {{{ map_designate_output() */
+/* {{{ cera_map_designate_output() */
 /*
  * **Say that this station is a place the program's results come
  * from** (issue 209).
@@ -1910,7 +1908,7 @@ const char *map_station_set_cursor(map_t *m, int station, int at)
  * C does not have, and would be the only thing in the engine with
  * several readiness checks over subsets of its ports.
  */
-const char *map_designate_output(map_t *m, int station)
+const char *cera_map_designate_output(cera_map_t *m, int station)
 {
     static _Thread_local char said[192];
 
@@ -1919,7 +1917,7 @@ const char *map_designate_output(map_t *m, int station)
                  station);
         return said;
     }
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (!s->call) {
         snprintf(said, sizeof said,
                  "station %d has no box placed — place, then designate",
@@ -1936,18 +1934,18 @@ const char *map_designate_output(map_t *m, int station)
                  "the source of", station);
         return said;
     }
-    s->door = DOOR_OUT;
+    s->door = CERA_DOOR_OUT;
     return NULL;
 }
 /* }}} */
 
-/* {{{ map_start_beside() */
-map_t *map_start_beside(map_t *parent)
+/* {{{ cera_map_start_beside() */
+cera_map_t *cera_map_start_beside(cera_map_t *parent)
 {
     if (!parent->pool)
         fail("starting a program beside one that has not started itself");
 
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
     /*
      * The same workers, and nothing else shared. A task now says
      * which program it belongs to, so a worker finishing one does not
@@ -1960,7 +1958,7 @@ map_t *map_start_beside(map_t *parent)
 }
 /* }}} */
 
-/* {{{ map_designate_input() */
+/* {{{ cera_map_designate_input() */
 /*
  * **Say that this station is where the outside delivers** (issue
  * 213), which is the other door and the same design.
@@ -1990,7 +1988,7 @@ map_t *map_start_beside(map_t *parent)
  * station's output port may feed as many interior stations as it is
  * wired to.
  */
-const char *map_designate_input(map_t *m, int station)
+const char *cera_map_designate_input(cera_map_t *m, int station)
 {
     static _Thread_local char said[192];
 
@@ -1999,14 +1997,14 @@ const char *map_designate_input(map_t *m, int station)
                  station);
         return said;
     }
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (!s->call) {
         snprintf(said, sizeof said,
                  "station %d has no box placed — place, then designate",
                  station);
         return said;
     }
-    if (s->door == DOOR_OUT) {
+    if (s->door == CERA_DOOR_OUT) {
         /* A program whose entrance is its exit is not a program with
          * two doors; it is somebody having designated the wrong
          * station. Refused rather than quietly overwritten. */
@@ -2015,12 +2013,12 @@ const char *map_designate_input(map_t *m, int station)
                  "cannot be both doors", station);
         return said;
     }
-    s->door = DOOR_IN;
+    s->door = CERA_DOOR_IN;
     return NULL;
 }
 /* }}} */
 
-/* {{{ map_deliver_argument() */
+/* {{{ cera_map_deliver_argument() */
 /*
  * **Deliver a value from outside the program** (issue 213).
  *
@@ -2037,7 +2035,7 @@ const char *map_designate_input(map_t *m, int station)
  * the graph a wire was checked when it was drawn, and here there is
  * no wire, so this is the only moment.
  */
-const char *map_deliver_argument(map_t *m, int station, int port,
+const char *cera_map_deliver_argument(cera_map_t *m, int station, int port,
                                  const void *value, int size)
 {
     static _Thread_local char said[224];
@@ -2065,8 +2063,8 @@ const char *map_deliver_argument(map_t *m, int station, int port,
                  station);
         return said;
     }
-    station_t *s = map_station(m, station);
-    if (s->door != DOOR_IN) {
+    cera_station_t *s = cera_map_station(m, station);
+    if (s->door != CERA_DOOR_IN) {
         snprintf(said, sizeof said,
                  "station %d is not a declared entrance — the outside may "
                  "only deliver to a program's input stations", station);
@@ -2085,12 +2083,12 @@ const char *map_deliver_argument(map_t *m, int station, int port,
         return said;
     }
 
-    map_deliver_value(m, station, port, value);
+    cera_map_deliver_value(m, station, port, value);
     return NULL;
 }
 /* }}} */
 
-/* {{{ map_output_waiting() / map_output_take() */
+/* {{{ cera_map_output_waiting() / cera_map_output_take() */
 /*
  * The two halves of collecting a program's results from outside,
  * mirroring the call that writes a constant in (issue 209).
@@ -2106,22 +2104,22 @@ const char *map_deliver_argument(map_t *m, int station, int port,
  * belongs to one worker, a held result belongs to the station until
  * somebody takes it.
  */
-int map_output_waiting(map_t *m, int station)
+int cera_map_output_waiting(cera_map_t *m, int station)
 {
     if (station < 0 || station >= m->n_stations)
         return 0;
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     pthread_mutex_lock(&s->mutex);
     int n = s->n_held;
     pthread_mutex_unlock(&s->mutex);
     return n;
 }
 
-int map_output_take(map_t *m, int station, void *into, int size)
+int cera_map_output_take(cera_map_t *m, int station, void *into, int size)
 {
     if (station < 0 || station >= m->n_stations)
         return 0;
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (size != s->out_size)
         fail("taking a result into something the wrong size for it");
 
@@ -2146,8 +2144,8 @@ int map_output_take(map_t *m, int station, void *into, int size)
 }
 /* }}} */
 
-/* {{{ map_bring_up() */
-const char *map_bring_up(map_t *m)
+/* {{{ cera_map_bring_up() */
+const char *cera_map_bring_up(cera_map_t *m)
 {
     static _Thread_local char said[768];
     int used = 0, faults = 0;
@@ -2177,7 +2175,7 @@ const char *map_bring_up(map_t *m)
      * silently never runs is the hardest thing to notice from
      * outside.
      */
-    const char *unsourced = map_check_sources(m);
+    const char *unsourced = cera_map_check_sources(m);
     if (unsourced)
         fprintf(stderr, "map: WARNING: %s — %s will not run until %s\n",
                 unsourced,
@@ -2214,7 +2212,7 @@ const char *map_bring_up(map_t *m)
     int total_ports = 0;
     for (int i = 0; i < m->n_stations; i++) {
         first_port[i] = total_ports;
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         total_ports += s->call ? s->n_in_ports : 0;
     }
     first_port[m->n_stations] = total_ports;
@@ -2226,15 +2224,15 @@ const char *map_bring_up(map_t *m)
         return "out of memory checking a program";
     }
     for (int k = 0; k < m->n_stations; k++) {
-        station_t *other = map_station(m, k);
-        for (out_port_t *p = other->out_ports; p; p = p->next) {
-            dest_set_t *set = out_port_dests(p);
+        cera_station_t *other = cera_map_station(m, k);
+        for (cera_out_port_t *p = other->out_ports; p; p = p->next) {
+            cera_dest_set_t *set = out_port_dests(p);
             for (int di = 0; set && di < set->n; di++) {
                 int at = set->items[di].station;
                 int port = set->items[di].port;
                 if (at < 0 || at >= m->n_stations)
                     continue;
-                station_t *dest = map_station(m, at);
+                cera_station_t *dest = cera_map_station(m, at);
                 if (!dest->call || port < 0 || port >= dest->n_in_ports)
                     continue;
                 landed[first_port[at] + port] = 1;
@@ -2243,7 +2241,7 @@ const char *map_bring_up(map_t *m)
     }
 
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call)
             continue;   /* an empty place is not a station (issue 216) */
 
@@ -2255,7 +2253,7 @@ const char *map_bring_up(map_t *m)
         int has_ring = 0, any_arrow = 0;
         for (int j = 0; j < s->n_in_ports; j++) {
             if (atomic_load_explicit(&s->in_ports[j].kind,
-                                     memory_order_relaxed) == IN_PORT_RING)
+                                     memory_order_relaxed) == CERA_IN_PORT_RING)
                 has_ring = 1;
             any_arrow |= landed_on[j];
         }
@@ -2273,7 +2271,7 @@ const char *map_bring_up(map_t *m)
         for (int j = 0; j < s->n_in_ports; j++) {
             unsigned char k = atomic_load_explicit(&s->in_ports[j].kind,
                                                    memory_order_relaxed);
-            if (landed_on[j] && k != IN_PORT_RING && k != IN_PORT_STATIC) {
+            if (landed_on[j] && k != CERA_IN_PORT_RING && k != CERA_IN_PORT_STATIC) {
                 faults++;
                 if (used < (int)sizeof said - 128)
                     used += snprintf(said + used, sizeof said - (size_t)used,
@@ -2304,7 +2302,7 @@ const char *map_bring_up(map_t *m)
          * telling somebody that the thing they just declared might
          * not happen.
          */
-        if (has_ring && !any_arrow && s->door != DOOR_IN)
+        if (has_ring && !any_arrow && s->door != CERA_DOOR_IN)
             fprintf(stderr,
                     "map: WARNING: station %s has buffered inputs that no "
                     "arrow feeds — unless something outside delivers into "
@@ -2348,8 +2346,8 @@ const char *map_bring_up(map_t *m)
      */
     int has_result = 0;
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
-        if (s->call && s->door == DOOR_OUT)
+        cera_station_t *s = cera_map_station(m, i);
+        if (s->call && s->door == CERA_DOOR_OUT)
             has_result = 1;
     }
     if (!has_result) {
@@ -2380,14 +2378,14 @@ const char *map_bring_up(map_t *m)
      * refused it, so reaching here means there are none.
      */
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call || s->seeded)
             continue;
 
         int has_ring = 0;
         for (int j = 0; j < s->n_in_ports; j++)
             if (atomic_load_explicit(&s->in_ports[j].kind,
-                                     memory_order_relaxed) == IN_PORT_RING)
+                                     memory_order_relaxed) == CERA_IN_PORT_RING)
                 has_ring = 1;
         if (has_ring)
             continue;
@@ -2395,7 +2393,7 @@ const char *map_bring_up(map_t *m)
         /* Through the same door delivery uses — one way a task comes
          * into existence, not two. */
         s->seeded = 1;
-        if (map_station_try_start(m, i))
+        if (cera_map_station_try_start(m, i))
             m->seeded++;
     }
     return NULL;
@@ -2405,12 +2403,12 @@ const char *map_bring_up(map_t *m)
 /* {{{ in_port_kind_name() */
 static const char *in_port_kind_name(unsigned char kind)
 {
-    static const char *const names[IN_PORT_KIND_COUNT] = {
-        [IN_PORT_RING]   = "a buffer",
-        [IN_PORT_STATIC] = "a static value",
-        [IN_PORT_NONE]   = "a port with no source yet",
+    static const char *const names[CERA_IN_PORT_KIND_COUNT] = {
+        [CERA_IN_PORT_RING]   = "a buffer",
+        [CERA_IN_PORT_STATIC] = "a static value",
+        [CERA_IN_PORT_NONE]   = "a port with no source yet",
     };
-    return kind < IN_PORT_KIND_COUNT ? names[kind]
+    return kind < CERA_IN_PORT_KIND_COUNT ? names[kind]
                                     : "a port of an unknown kind";
 }
 /* }}} */
@@ -2422,9 +2420,9 @@ static const char *in_port_kind_name(unsigned char kind)
  * any cleverness. Returns null when the port was never created,
  * which delivery reads as "discard".
  */
-static out_port_t *station_out_port(station_t *s, int index)
+static cera_out_port_t *station_out_port(cera_station_t *s, int index)
 {
-    out_port_t *p = s->out_ports;
+    cera_out_port_t *p = s->out_ports;
     for (int i = 0; p && i < index; i++)
         p = p->next;
     return p;
@@ -2432,7 +2430,7 @@ static out_port_t *station_out_port(station_t *s, int index)
 /* }}} */
 
 /* {{{ out_port_dests() */
-static dest_set_t *out_port_dests(const out_port_t *p)
+static cera_dest_set_t *out_port_dests(const cera_out_port_t *p)
 {
     if (!p)
         return NULL;
@@ -2452,13 +2450,13 @@ static dest_set_t *out_port_dests(const out_port_t *p)
  * drop removes **one** matching pair, not every match, because a wire
  * drawn twice is two wires and removing one should leave the other.
  */
-static dest_set_t *dest_set_build(const dest_set_t *from, int add_station,
+static cera_dest_set_t *dest_set_build(const cera_dest_set_t *from, int add_station,
                            int add_port, int drop_station, int drop_port)
 {
     int old_n = from ? from->n : 0;
     int n = old_n + (add_station >= 0 ? 1 : 0);
-    dest_set_t *set = calloc(1, sizeof *set + (size_t)(n > 0 ? n : 1)
-                                              * sizeof(destination_t));
+    cera_dest_set_t *set = calloc(1, sizeof *set + (size_t)(n > 0 ? n : 1)
+                                              * sizeof(cera_destination_t));
     if (!set)
         fail_resource("out of memory for a destination set");
 
@@ -2520,7 +2518,7 @@ struct scrap_item {
  * snapshot in any run this engine will ever have and read as
  * unchanged when it is not.
  */
-static int nobody_can_hold(map_t *m, const struct scrap_item *it)
+static int nobody_can_hold(cera_map_t *m, const struct scrap_item *it)
 {
     /*
      * Filed when there were no workers at all — during construction,
@@ -2531,7 +2529,7 @@ static int nobody_can_hold(map_t *m, const struct scrap_item *it)
     if (it->n_snapshot == 0)
         return 1;
     for (int i = 0; i < it->n_snapshot; i++) {
-        uint64_t now = pool_worker_epoch(m->pool, i);
+        uint64_t now = cera_pool_worker_epoch(m->pool, i);
         if ((now % 2) == 0)
             continue;                       /* not in a task */
         if (now != it->snapshot[i])
@@ -2543,7 +2541,7 @@ static int nobody_can_hold(map_t *m, const struct scrap_item *it)
 /* }}} */
 
 /* {{{ map_scrap_sweep() */
-static void map_scrap_sweep(map_t *m)
+static void map_scrap_sweep(cera_map_t *m)
 {
     pthread_mutex_lock(&m->scrap_mutex);
     struct scrap_item **link = &m->scrap_head;
@@ -2567,7 +2565,7 @@ static void map_scrap_sweep(map_t *m)
 /* }}} */
 
 /* {{{ map_retire() */
-static void map_retire(map_t *m, void *p, void (*free_fn)(void *))
+static void map_retire(cera_map_t *m, void *p, void (*free_fn)(void *))
 {
     if (!p)
         return;
@@ -2577,14 +2575,14 @@ static void map_retire(map_t *m, void *p, void (*free_fn)(void *))
      * it goes. */
     map_scrap_sweep(m);
 
-    int workers = m->pool ? pool_worker_count(m->pool) : 0;
+    int workers = m->pool ? cera_pool_worker_count(m->pool) : 0;
     uint64_t *snapshot = NULL;
     if (workers > 0) {
         snapshot = calloc((size_t)workers, sizeof *snapshot);
         if (!snapshot)
             fail_resource("out of memory retiring something");
         for (int i = 0; i < workers; i++)
-            snapshot[i] = pool_worker_epoch(m->pool, i);
+            snapshot[i] = cera_pool_worker_epoch(m->pool, i);
     }
 
     struct scrap_item *it = calloc(1, sizeof *it);
@@ -2611,7 +2609,7 @@ static void map_retire(map_t *m, void *p, void (*free_fn)(void *))
 /* }}} */
 
 /* {{{ map_scrap_count() */
-CERA_TEST_ONLY static int map_scrap_count(map_t *m)
+CERA_TEST_ONLY static int map_scrap_count(cera_map_t *m)
 {
     pthread_mutex_lock(&m->scrap_mutex);
     int n = 0;
@@ -2627,7 +2625,7 @@ CERA_TEST_ONLY static int map_scrap_count(map_t *m)
  * Empties the scrapyard. Called at teardown, when every worker has
  * been collected and nothing can be using anything.
  */
-static void map_scrap_free_all(map_t *m)
+static void map_scrap_free_all(cera_map_t *m)
 {
     pthread_mutex_lock(&m->scrap_mutex);
     struct scrap_item *it = m->scrap_head;
@@ -2643,8 +2641,8 @@ static void map_scrap_free_all(map_t *m)
 }
 /* }}} */
 
-/* {{{ map_connect() */
-void map_connect(map_t *m, int from_station, int port,
+/* {{{ cera_map_connect() */
+void cera_map_connect(cera_map_t *m, int from_station, int port,
                  int to_station, int to_port)
 {
     /*
@@ -2658,21 +2656,21 @@ void map_connect(map_t *m, int from_station, int port,
      * from a file would have been refused — two sets of rules meant
      * to agree, with one of them missing two.
      */
-    const char *no = map_wire(m, from_station, port, to_station, to_port);
+    const char *no = cera_map_wire(m, from_station, port, to_station, to_port);
     if (no)
         fail(no);
 }
 /* }}} */
 
-/* {{{ map_start() */
-void map_start(map_t *m, int n_workers)
+/* {{{ cera_map_start() */
+void cera_map_start(cera_map_t *m, int n_workers)
 {
     if (m->pool)
         fail("the map was already started");
     /* Delivery rides the pool's finish hook: after a worker runs a
      * task, the map decides where its output goes. This is the whole
      * of the pool's knowledge of the engine — one function pointer. */
-    m->pool = pool_create(n_workers, map_deliver, m);
+    m->pool = cera_pool_create(n_workers, map_deliver, m);
 
     /* A process-wide "active map" pointer used to be set here, so that
      * a box — which receives only values and has no handle to anything
@@ -2686,13 +2684,13 @@ void map_start(map_t *m, int n_workers)
 }
 /* }}} */
 
-/* {{{ map_in_port_depth() */
-int map_in_port_depth(map_t *m, int station, int port)
+/* {{{ cera_map_in_port_depth() */
+int cera_map_in_port_depth(cera_map_t *m, int station, int port)
 {
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (port < 0 || port >= s->n_in_ports)
         fail("asking the depth of a port that does not exist");
-    in_port_t *sl = &s->in_ports[port];
+    cera_in_port_t *sl = &s->in_ports[port];
 
     /* A maintained count rather than index arithmetic (issue 210d):
      * with values claimed wherever they sit, the distance between two
@@ -2709,20 +2707,20 @@ int map_in_port_depth(map_t *m, int station, int port)
 }
 /* }}} */
 
-/* {{{ map_destroy() */
+/* {{{ cera_map_destroy() */
 /* Phase 7 joints, implemented in the observe module; declared here
  * narrowly so teardown can call them without the whole header. */
-void map_observe_stop(map_t *m);
-void map_report_shutdown(map_t *m);
+void cera_map_observe_stop(cera_map_t *m);
+void cera_map_report_shutdown(cera_map_t *m);
 
-void map_destroy(map_t *m)
+void cera_map_destroy(cera_map_t *m)
 {
-    map_observe_stop(m);
+    cera_map_observe_stop(m);
     /* A borrowed pool belongs to the program that made it, and other
      * programs may still be running on it (issue 212). */
     if (m->pool && !m->pool_is_borrowed)
-        pool_destroy(m->pool);
-    map_report_shutdown(m);
+        cera_pool_destroy(m->pool);
+    cera_map_report_shutdown(m);
     if (m->station_names) {
         /* Over what the array actually holds, not over the station
          * count: stations are added one at a time and the names grow
@@ -2733,7 +2731,7 @@ void map_destroy(map_t *m)
     }
 
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call) {
             pthread_mutex_destroy(&s->mutex);
             continue;
@@ -2752,10 +2750,10 @@ void map_destroy(map_t *m)
             in_port_constant_free(&s->in_ports[j]);
         }
         free(s->in_ports);
-        out_port_t *p = s->out_ports;
+        cera_out_port_t *p = s->out_ports;
         while (p) {
             free(out_port_dests(p));
-            out_port_t *next = p->next;
+            cera_out_port_t *next = p->next;
             free(p);
             p = next;
         }
@@ -2780,7 +2778,6 @@ void map_destroy(map_t *m)
  * Was src/020-delivery.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/020-delivery.c"
 /*
  * 020-delivery.c — how a value becomes the next thing that runs.
  *
@@ -2823,12 +2820,12 @@ void map_destroy(map_t *m)
 #include <string.h>
 
 /*
- * Timing exists only when SORA_STATS is compiled in (issue 702) —
+ * Timing exists only when CERA_STATS is compiled in (issue 702) —
  * a clock read per box on short boxes is real overhead, and a
  * measurement apparatus that cannot be removed is a tax. The macros
  * vanish entirely without the define.
  */
-#ifdef SORA_STATS
+#ifdef CERA_STATS
 #include <time.h>
 static long stats_now_ns(void)
 {
@@ -2889,7 +2886,7 @@ static void die(const char *what, int station)
  * search with different names, and the ways they differ — which
  * transition, which hint — are arguments rather than logic.
  */
-static int in_port_scan(in_port_t *sl, int *hint, int from, int to,
+static int in_port_scan(cera_in_port_t *sl, int *hint, int from, int to,
                         void **found, int exclusive)
 {
     /*
@@ -2916,7 +2913,7 @@ static int in_port_scan(in_port_t *sl, int *hint, int from, int to,
      */
     int page = start / sl->page_slots;
     int off  = start % sl->page_slots;
-    in_port_page_t *pg = sl->pages;
+    cera_in_port_page_t *pg = sl->pages;
     for (int i = 0; i < page && pg; i++)
         pg = pg->next;
 
@@ -3001,7 +2998,7 @@ static int in_port_scan(in_port_t *sl, int *hint, int from, int to,
  * structural operations, so that two threads meeting a full buffer
  * add one page between them rather than one each.
  */
-static void in_port_grow_locked(in_port_t *sl)
+static void in_port_grow_locked(cera_in_port_t *sl)
 {
     in_port_add_page(sl);
     /* A writer looking for space should start where the space now is.
@@ -3011,7 +3008,7 @@ static void in_port_grow_locked(in_port_t *sl)
 }
 /* }}} */
 /* {{{ in_port_write_locked() */
-static void in_port_write(station_t *s, in_port_t *sl, const void *value)
+static void in_port_write(cera_station_t *s, cera_in_port_t *sl, const void *value)
 {
     /* Look for somewhere to put it, and grow only if there is
      * genuinely nowhere (issue 210d). This used to grow when the tail
@@ -3021,7 +3018,7 @@ static void in_port_write(station_t *s, in_port_t *sl, const void *value)
      * no arithmetic: a full buffer is one where nothing answers.
      */
     void *slot = NULL;
-    int c = in_port_scan(sl, &sl->write_hint, SLOT_EMPTY, SLOT_RESERVED,
+    int c = in_port_scan(sl, &sl->write_hint, CERA_SLOT_EMPTY, CERA_SLOT_RESERVED,
                          &slot, 0);
     if (c < 0) {
         /* Nowhere to put it, so the port has to grow — and growth is
@@ -3035,12 +3032,12 @@ static void in_port_write(station_t *s, in_port_t *sl, const void *value)
          * be a buffer that doubles every time two writers are unlucky
          * together. */
         pthread_mutex_lock(&s->mutex);
-        c = in_port_scan(sl, &sl->write_hint, SLOT_EMPTY, SLOT_RESERVED,
+        c = in_port_scan(sl, &sl->write_hint, CERA_SLOT_EMPTY, CERA_SLOT_RESERVED,
                          &slot, 0);
         if (c < 0) {
             in_port_grow_locked(sl);
             c = in_port_scan(sl, &sl->write_hint,
-                             SLOT_EMPTY, SLOT_RESERVED, &slot, 0);
+                             CERA_SLOT_EMPTY, CERA_SLOT_RESERVED, &slot, 0);
         }
         pthread_mutex_unlock(&s->mutex);
         if (c < 0) {
@@ -3061,7 +3058,7 @@ static void in_port_write(station_t *s, in_port_t *sl, const void *value)
      * The release on that transition is what makes these bytes
      * visible to whoever later takes the slot from *ready*. */
     memcpy(slot, value, (size_t)sl->elem_size);
-    if (!slot_move_at(slot, sl->elem_size, SLOT_RESERVED, SLOT_READY)) {
+    if (!slot_move_at(slot, sl->elem_size, CERA_SLOT_RESERVED, CERA_SLOT_READY)) {
         fprintf(stderr, "delivery: publishing a slot this thread had "
                         "reserved, and somebody else had moved it\n");
         abort();
@@ -3110,9 +3107,9 @@ static void in_port_write(station_t *s, in_port_t *sl, const void *value)
  * availability. A no here is therefore an engine bug rather than a
  * lost race, which is why the caller stops rather than retrying.
  */
-static int in_port_take_locked(in_port_t *sl, void **taken)
+static int in_port_take_locked(cera_in_port_t *sl, void **taken)
 {
-    int c = in_port_scan(sl, &sl->read_hint, SLOT_READY, SLOT_CLAIMED,
+    int c = in_port_scan(sl, &sl->read_hint, CERA_SLOT_READY, CERA_SLOT_CLAIMED,
                          taken, 1);
     if (c < 0)
         return 0;
@@ -3138,10 +3135,10 @@ static int in_port_take_locked(in_port_t *sl, void **taken)
  * later, reading from the task and holding no slot at all — which is
  * why no user code is ever inside this window either.
  */
-static void in_port_release(in_port_t *sl, void *slot, void *into)
+static void in_port_release(cera_in_port_t *sl, void *slot, void *into)
 {
     memcpy(into, slot, (size_t)sl->elem_size);
-    if (!slot_move_at(slot, sl->elem_size, SLOT_CLAIMED, SLOT_EMPTY)) {
+    if (!slot_move_at(slot, sl->elem_size, CERA_SLOT_CLAIMED, CERA_SLOT_EMPTY)) {
         fprintf(stderr, "delivery: releasing a slot this thread had claimed, "
                         "and somebody else had moved it\n");
         abort();
@@ -3157,7 +3154,7 @@ static void in_port_release(in_port_t *sl, void *slot, void *into)
 /* ------------------------------------------------------------------ */
 
 /* {{{ filled: ring / static */
-static int ring_filled(const in_port_t *sl)
+static int ring_filled(const cera_in_port_t *sl)
 {
     /* A maintained count rather than two indices differing. The
      * indices stopped being able to answer this when values began
@@ -3167,14 +3164,14 @@ static int ring_filled(const in_port_t *sl)
     return sl->held > 0;
 }
 
-static int static_filled(const in_port_t *sl)
+static int static_filled(const cera_in_port_t *sl)
 {
     /* A static's value is simply always there (issue 401). */
     (void)sl;
     return 1;
 }
 
-static int none_filled(const in_port_t *sl)
+static int none_filled(const cera_in_port_t *sl)
 {
     /* Nobody has said where this port's value comes from, so there is
      * no value and there is no prospect of one (issue 210b). This is
@@ -3186,10 +3183,10 @@ static int none_filled(const in_port_t *sl)
     return 0;
 }
 
-static int (*const in_port_filled[IN_PORT_KIND_COUNT])(const in_port_t *) = {
-    [IN_PORT_RING]   = ring_filled,
-    [IN_PORT_STATIC] = static_filled,
-    [IN_PORT_NONE]   = none_filled,
+static int (*const in_port_filled[CERA_IN_PORT_KIND_COUNT])(const cera_in_port_t *) = {
+    [CERA_IN_PORT_RING]   = ring_filled,
+    [CERA_IN_PORT_STATIC] = static_filled,
+    [CERA_IN_PORT_NONE]   = none_filled,
 };
 /* }}} */
 
@@ -3207,7 +3204,7 @@ static int (*const in_port_filled[IN_PORT_KIND_COUNT])(const in_port_t *) = {
  * hand the hot path to whoever wrote the slowest box. Nothing is
  * gathered now (issue 210), so what remains is only lock ordering.
  */
-static void ring_claim(in_port_t *sl, void *into, void **taken)
+static void ring_claim(cera_in_port_t *sl, void *into, void **taken)
 {
     /* Under the mutex the readiness walk has already established that
      * this port holds something, and nothing can have taken it since:
@@ -3233,7 +3230,7 @@ static void ring_claim(in_port_t *sl, void *into, void **taken)
     (void)into;
 }
 
-static void static_claim_locked(in_port_t *sl, void *into, void **taken)
+static void static_claim_locked(cera_in_port_t *sl, void *into, void **taken)
 {
     /* Nothing is taken, so nothing is released afterwards: a static is
      * peeked, never consumed. **And the copy stays under the lock**,
@@ -3265,7 +3262,7 @@ static void static_claim_locked(in_port_t *sl, void *into, void **taken)
     memcpy(into, sl->constant, (size_t)sl->elem_size);
 }
 
-static void none_claim(in_port_t *sl, void *into, void **taken)
+static void none_claim(cera_in_port_t *sl, void *into, void **taken)
 {
     (void)taken;
     /* Unreachable, and saying so out loud is the point. The walk above
@@ -3288,11 +3285,11 @@ static void none_claim(in_port_t *sl, void *into, void **taken)
  * that a reader had to already know the meaning of. The decision it
  * encoded is gone with the statics table, so the hole is gone with it.
  */
-static void (*const in_port_claim_locked[IN_PORT_KIND_COUNT])
-                   (in_port_t *, void *, void **) = {
-    [IN_PORT_RING]   = ring_claim,
-    [IN_PORT_STATIC] = static_claim_locked,
-    [IN_PORT_NONE]   = none_claim,
+static void (*const in_port_claim_locked[CERA_IN_PORT_KIND_COUNT])
+                   (cera_in_port_t *, void *, void **) = {
+    [CERA_IN_PORT_RING]   = ring_claim,
+    [CERA_IN_PORT_STATIC] = static_claim_locked,
+    [CERA_IN_PORT_NONE]   = none_claim,
 };
 /* }}} */
 
@@ -3301,7 +3298,7 @@ static void (*const in_port_claim_locked[IN_PORT_KIND_COUNT])
  * Total bytes of one complete input set. Element sizes never change
  * after construction, so this reads without the mutex.
  */
-static int station_input_bytes(const station_t *s)
+static int station_input_bytes(const cera_station_t *s)
 {
     int total = 0;
     for (int i = 0; i < s->n_in_ports; i++)
@@ -3318,7 +3315,7 @@ static int station_input_bytes(const station_t *s)
  * buffer — copied out and the head advanced, so no other thread can
  * claim the same ones. Returns whether a task became due.
  */
-static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed,
+static int station_ready_and_claim_locked(cera_station_t *s, unsigned char *claimed,
                                           void **taken)
 {
     /*
@@ -3335,14 +3332,14 @@ static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed,
      * than prevented.
      */
     for (int i = 0; i < s->n_in_ports; i++) {
-        in_port_t *sl = &s->in_ports[i];
+        cera_in_port_t *sl = &s->in_ports[i];
         if (!in_port_filled[sl->kind](sl))
             return 0;
     }
 
     int offset = 0;
     for (int i = 0; i < s->n_in_ports; i++) {
-        in_port_t *sl = &s->in_ports[i];
+        cera_in_port_t *sl = &s->in_ports[i];
         /* Every kind, unconditionally. The caller used to test the
          * function pointer here because the static row was null; there
          * is no null now, so the dispatch is a call rather than a call
@@ -3373,12 +3370,12 @@ static int station_ready_and_claim_locked(station_t *s, unsigned char *claimed,
  * were copied under the lock where the only protection they have
  * lives.
  */
-static void station_release_claimed(station_t *s, unsigned char *claimed,
+static void station_release_claimed(cera_station_t *s, unsigned char *claimed,
                                     void **taken)
 {
     int offset = 0;
     for (int i = 0; i < s->n_in_ports; i++) {
-        in_port_t *sl = &s->in_ports[i];
+        cera_in_port_t *sl = &s->in_ports[i];
         if (taken[i])
             in_port_release(sl, taken[i], claimed + offset);
         offset += sl->elem_size;
@@ -3400,18 +3397,18 @@ static void station_release_claimed(station_t *s, unsigned char *claimed,
  * time. Non-static since phase 6: the seed sweep builds its first
  * tasks through this same door.
  */
-static task_t *task_build(map_t *m, int station_index,
+static cera_task_t *task_build(cera_map_t *m, int station_index,
                    const unsigned char *claimed, int port)
 {
-    station_t *s = map_station(m, station_index);
+    cera_station_t *s = cera_map_station(m, station_index);
 
     int in_bytes = station_input_bytes(s);
-    size_t total = sizeof(task_t)
+    size_t total = sizeof(cera_task_t)
                  + (size_t)s->n_in_ports * sizeof(void *)
                  + (size_t)in_bytes
                  + (size_t)s->out_size;
 
-    task_t *t = malloc(total);
+    cera_task_t *t = malloc(total);
     if (!t)
         die("out of memory building a task", station_index);
 
@@ -3442,7 +3439,7 @@ static task_t *task_build(map_t *m, int station_index,
      */
     int offset = 0;
     for (int i = 0; i < s->n_in_ports; i++) {
-        in_port_t *sl = &s->in_ports[i];
+        cera_in_port_t *sl = &s->in_ports[i];
         t->in[i] = data + offset;
         if (!claimed)
             die("building a task with no claimed values for a station that "
@@ -3465,7 +3462,7 @@ static task_t *task_build(map_t *m, int station_index,
 /* Delivery itself (issues 204, 205).                                 */
 /* ------------------------------------------------------------------ */
 
-/* {{{ map_station_try_start() */
+/* {{{ cera_map_station_try_start() */
 /*
  * Readiness, claim, build, push — a delivery with the delivering taken
  * out. Three callers wanted exactly this and were each doing their own
@@ -3487,12 +3484,12 @@ static task_t *task_build(map_t *m, int station_index,
  * the check it triggers is this one: an empty ring port still answers
  * no, and the engine will not invent a value for it.
  */
-int map_station_start_after(map_t *m, int station,
+int cera_map_station_start_after(cera_map_t *m, int station,
                             void (*while_locked)(void *), void *ctx)
 {
     if (station < 0 || station >= m->n_stations)
         die("starting a station outside the table", station);
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (!s->call)
         die("starting a station with no box placed", station);
     /* Removed and not yet reclaimed: nothing new starts from it
@@ -3521,7 +3518,7 @@ int map_station_start_after(map_t *m, int station,
     if (while_locked)
         while_locked(ctx);
     int due = station_ready_and_claim_locked(s, claimed, taken);
-    if (due && s->kind == STATION_ITERATOR && s->n_out_ports > 0) {
+    if (due && s->kind == CERA_STATION_ITERATOR && s->n_out_ports > 0) {
         port = s->cursor;
         s->cursor = (s->cursor + 1) % s->n_out_ports;
     }
@@ -3530,21 +3527,21 @@ int map_station_start_after(map_t *m, int station,
     if (due) {
         /* Outside the lock: the copies, then the task (issue 210d). */
         station_release_claimed(s, claimed, taken);
-        pool_push(m->pool, task_build(m, station, in_bytes > 0 ? claimed : NULL,
+        cera_pool_push(m->pool, task_build(m, station, in_bytes > 0 ? claimed : NULL,
                                       port));
     }
     return due;
 }
 /* }}} */
 
-/* {{{ map_station_try_start() */
-int map_station_try_start(map_t *m, int station)
+/* {{{ cera_map_station_try_start() */
+int cera_map_station_try_start(cera_map_t *m, int station)
 {
-    return map_station_start_after(m, station, NULL, NULL);
+    return cera_map_station_start_after(m, station, NULL, NULL);
 }
 /* }}} */
 
-/* {{{ map_station_start_while_ready() — issue 712 */
+/* {{{ cera_map_station_start_while_ready() — issue 712 */
 /*
  * **Keep starting while the station stays ready**, which is what the
  * one rule says should happen and what asking once does not do.
@@ -3566,9 +3563,9 @@ int map_station_try_start(map_t *m, int station)
  *
  * Returns how many tasks became due.
  */
-int map_station_keep_starting(map_t *m, int station)
+int cera_map_station_keep_starting(cera_map_t *m, int station)
 {
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
 
     /*
      * **A station with no buffer is asked once and left alone**, and
@@ -3582,30 +3579,30 @@ int map_station_keep_starting(map_t *m, int station)
      */
     for (int j = 0; j < s->n_in_ports; j++)
         if (atomic_load_explicit(&s->in_ports[j].kind,
-                                 memory_order_relaxed) == IN_PORT_RING)
+                                 memory_order_relaxed) == CERA_IN_PORT_RING)
             goto drain;
     return 0;
 
 drain:;
     int started = 0;
-    while (map_station_try_start(m, station))
+    while (cera_map_station_try_start(m, station))
         started++;
     return started;
 }
 
-int map_station_start_while_ready(map_t *m, int station)
+int cera_map_station_start_while_ready(cera_map_t *m, int station)
 {
-    int started = map_station_try_start(m, station) ? 1 : 0;
-    return started + map_station_keep_starting(m, station);
+    int started = cera_map_station_try_start(m, station) ? 1 : 0;
+    return started + cera_map_station_keep_starting(m, station);
 }
 /* }}} */
 
-/* {{{ map_deliver_value() */
-int map_deliver_value(map_t *m, int station, int port, const void *value)
+/* {{{ cera_map_deliver_value() */
+int cera_map_deliver_value(cera_map_t *m, int station, int port, const void *value)
 {
     if (station < 0 || station >= m->n_stations)
         die("delivering to a station outside the table", station);
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
 
     /*
      * The station may have been removed since this value set out
@@ -3656,10 +3653,10 @@ int map_deliver_value(map_t *m, int station, int port, const void *value)
      * static port is last-writer-wins, nondeterministically**, which
      * is stated as a non-guarantee rather than left as a surprise.
      */
-    if (s->in_ports[port].kind == IN_PORT_NONE)
+    if (s->in_ports[port].kind == CERA_IN_PORT_NONE)
         die("delivering into a port that has no source yet", station);
-    if (s->in_ports[port].kind == IN_PORT_STATIC) {
-        map_in_port_static_write(m, station, port, value,
+    if (s->in_ports[port].kind == CERA_IN_PORT_STATIC) {
+        cera_map_in_port_static_write(m, station, port, value,
                                  s->in_ports[port].elem_size);
         return 0;
     }
@@ -3683,7 +3680,7 @@ int map_deliver_value(map_t *m, int station, int port, const void *value)
     pthread_mutex_lock(&s->mutex);
     STATS_CHARGE(s->mutex_wait_ns, wait_start);
     int due = station_ready_and_claim_locked(s, claimed, taken);
-    if (due && s->kind == STATION_ITERATOR && s->n_out_ports > 0) {
+    if (due && s->kind == CERA_STATION_ITERATOR && s->n_out_ports > 0) {
         /* The one memory a station keeps, touched at the one moment
          * only one thread can be looking (issue 504): this task
          * takes the cursor's exit, the cursor moves on, and the
@@ -3696,7 +3693,7 @@ int map_deliver_value(map_t *m, int station, int port, const void *value)
     if (due) {
         /* Outside the lock: the copies, then the task (issue 210d). */
         station_release_claimed(s, claimed, taken);
-        pool_push(m->pool, task_build(m, station, claimed, out_port));
+        cera_pool_push(m->pool, task_build(m, station, claimed, out_port));
     }
     return due;
 }
@@ -3710,14 +3707,14 @@ int map_deliver_value(map_t *m, int station, int port, const void *value)
 /* ------------------------------------------------------------------ */
 
 /* {{{ route: plain / comparator / iterator */
-static int route_plain(station_t *s, task_t *t)
+static int route_plain(cera_station_t *s, cera_task_t *t)
 {
     (void)s; (void)t;
     /* A plain box has one exit. */
     return 0;
 }
 
-static int route_comparator(station_t *s, task_t *t)
+static int route_comparator(cera_station_t *s, cera_task_t *t)
 {
     /* The threshold rode along as the task's last input — claimed
      * like any other port, never handed to the box (issue 502). The
@@ -3728,7 +3725,7 @@ static int route_comparator(station_t *s, task_t *t)
     return sign + 1;
 }
 
-static int route_iterator(station_t *s, task_t *t)
+static int route_iterator(cera_station_t *s, cera_task_t *t)
 {
     (void)s;
     /* Chosen at enqueue time, under the station's mutex, and
@@ -3738,10 +3735,10 @@ static int route_iterator(station_t *s, task_t *t)
     return t->port;
 }
 
-static int (*const route_choose[STATION_KIND_COUNT])(station_t *, task_t *) = {
-    [STATION_PLAIN]      = route_plain,
-    [STATION_COMPARATOR] = route_comparator,
-    [STATION_ITERATOR]   = route_iterator,
+static int (*const route_choose[CERA_STATION_KIND_COUNT])(cera_station_t *, cera_task_t *) = {
+    [CERA_STATION_PLAIN]      = route_plain,
+    [CERA_STATION_COMPARATOR] = route_comparator,
+    [CERA_STATION_ITERATOR]   = route_iterator,
 };
 /* }}} */
 
@@ -3763,7 +3760,7 @@ static int (*const route_choose[STATION_KIND_COUNT])(station_t *, task_t *) = {
  * into somewhere nobody is looking, and waiting until shutdown to
  * mention it wastes the entire run.
  */
-static void station_hold_result(map_t *m, int index, station_t *s,
+static void station_hold_result(cera_map_t *m, int index, cera_station_t *s,
                                 const void *value)
 {
     pthread_mutex_lock(&s->mutex);
@@ -3814,7 +3811,7 @@ static void station_hold_result(map_t *m, int index, station_t *s,
  * proportional to fan-out **on every value the engine moved**, and it
  * was the last thing holding the station's mutex on the hot path.
  */
-static void map_deliver(void *ctx, task_t *t)
+static void map_deliver(void *ctx, cera_task_t *t)
 {
     /*
      * **The task says which program it belongs to**, not the pool
@@ -3824,8 +3821,8 @@ static void map_deliver(void *ctx, task_t *t)
      * map came from the pool, a pool could serve exactly one map.
      */
     (void)ctx;
-    map_t *m = t->owner;
-    station_t *s = map_station(m, t->station);
+    cera_map_t *m = t->owner;
+    cera_station_t *s = cera_map_station(m, t->station);
 
     s->runs++;
     /* The box's own time, charged onto the task by the shim and moved
@@ -3839,8 +3836,8 @@ static void map_deliver(void *ctx, task_t *t)
 
     int out_port_index = route_choose[s->kind](s, t);
 
-    out_port_t *port = station_out_port(s, out_port_index);
-    dest_set_t *set = out_port_dests(port);
+    cera_out_port_t *port = station_out_port(s, out_port_index);
+    cera_dest_set_t *set = out_port_dests(port);
     if (!set || set->n == 0) {
         /*
          * Nobody is wired here. For almost every station that means
@@ -3853,7 +3850,7 @@ static void map_deliver(void *ctx, task_t *t)
          * results are the one thing discarding makes meaningless —
          * a program that computed them and dropped them did nothing.
          */
-        if (s->door == DOOR_OUT)
+        if (s->door == CERA_DOOR_OUT)
             station_hold_result(m, t->station, s, t->out);
         return;
     }
@@ -3863,7 +3860,7 @@ static void map_deliver(void *ctx, task_t *t)
      * each delivery may unblock a station, so this worker is busy
      * manufacturing parallelism for everyone else. */
     for (int i = 0; i < set->n; i++)
-        s->produced += map_deliver_value(m, set->items[i].station,
+        s->produced += cera_map_deliver_value(m, set->items[i].station,
                                          set->items[i].port, t->out);
 }
 /* }}} */
@@ -3879,7 +3876,6 @@ static void map_deliver(void *ctx, task_t *t)
  * Was src/027-emitted-support.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/027-emitted-support.c"
 /*
  * 027-emitted-support.c — walking what the generator wrote.
  *
@@ -3906,11 +3902,11 @@ static void map_deliver(void *ctx, task_t *t)
  * lookups need them: everything else reaches a box through the row it
  * was already handed.
  */
-static const box_place_t *late_recover_box(const char *name);
-static const box_place_t *late_place_find(const char *name);
-const char        *late_source_text(const char *path);
+static const cera_box_place_t *late_recover_box(const char *name);
+static const cera_box_place_t *late_place_find(const char *name);
+const char        *cera_late_source_text(const char *path);
 
-/* {{{ box_place_find() */
+/* {{{ cera_box_place_find() */
 /*
  * Which generated placement function writes this box's station
  * (issue 311b). Compiled-in rows first, then anything that arrived
@@ -3951,7 +3947,7 @@ const char        *late_source_text(const char *path);
  * briefly, and the symptom was a dump that could not shorten an
  * address it had just written.
  */
-static int box_place_matches(const box_place_t *row, const char *name)
+static int box_place_matches(const cera_box_place_t *row, const char *name)
 {
     if (!strchr(name, ':'))
         return strcmp(row->name, name) == 0;
@@ -3971,7 +3967,7 @@ static int box_place_matches(const box_place_t *row, const char *name)
            && strcmp(row->address + a - n, name) == 0;
 }
 
-const box_place_t *box_place_find(const char *name)
+const cera_box_place_t *cera_box_place_find(const char *name)
 {
     if (!name || !*name)
         return NULL;
@@ -3982,14 +3978,14 @@ const box_place_t *box_place_find(const char *name)
 }
 /* }}} */
 
-/* {{{ struct_text_find() */
+/* {{{ cera_struct_text_find() */
 /*
  * One type's reader and writer, by name (issue 408). Asked at
  * placement, so that a port holding a struct constant is *handed* its
  * pair — the same way a station is handed its shim and its comparison
  * — and nothing searches anything afterwards.
  */
-const struct_text_t *struct_text_find(const char *type_name)
+const cera_struct_text_t *cera_struct_text_find(const char *type_name)
 {
     if (!type_name)
         return NULL;
@@ -4001,8 +3997,8 @@ const struct_text_t *struct_text_find(const char *type_name)
 }
 /* }}} */
 
-/* {{{ struct_find() */
-const struct_info_t *struct_find(const char *type_name)
+/* {{{ cera_struct_find() */
+const cera_struct_info_t *cera_struct_find(const char *type_name)
 {
     for (int i = 0; i < n_struct_layouts; i++)
         if (strcmp(struct_layouts[i].name, type_name) == 0)
@@ -4011,7 +4007,7 @@ const struct_info_t *struct_find(const char *type_name)
 }
 /* }}} */
 
-/* {{{ emitted_print() */
+/* {{{ cera_emitted_print() */
 /*
  * **What a program can place, and where each one came from.**
  *
@@ -4023,7 +4019,7 @@ const struct_info_t *struct_find(const char *type_name)
  * know: which names a program answers to, and which file each one was
  * compiled from.
  */
-void emitted_print(FILE *out)
+void cera_emitted_print(FILE *out)
 {
     fprintf(out, "emitted: %d boxes, %d structs\n",
             n_box_places, n_struct_layouts);
@@ -4031,11 +4027,11 @@ void emitted_print(FILE *out)
         fprintf(out, "  %-20s %s\n", box_places[i].name,
                 box_places[i].address);
     for (int i = 0; i < n_struct_layouts; i++) {
-        const struct_info_t *s = &struct_layouts[i];
+        const cera_struct_info_t *s = &struct_layouts[i];
         fprintf(out, "  struct %s: %d bytes, %d fields\n",
                 s->name, s->size, s->n_fields);
         for (int f = 0; f < s->n_fields; f++) {
-            const field_info_t *fl = &s->fields[f];
+            const cera_field_info_t *fl = &s->fields[f];
             static const char *const kind_names[] = {
                 "int", "uint", "float", "string", "struct",
             };
@@ -4046,7 +4042,7 @@ void emitted_print(FILE *out)
 }
 /* }}} */
 
-/* {{{ box_source_text() */
+/* {{{ cera_box_source_text() */
 /*
  * **The C one box source was compiled from** (issue 311c), by the
  * path the build knew it as.
@@ -4057,21 +4053,21 @@ void emitted_print(FILE *out)
  * the full path is the way to say which, exactly as it is for
  * addressing a box.
  */
-const char *box_source_text(const char *path)
+const char *cera_box_source_text(const char *path)
 {
     if (!path || !*path)
         return NULL;
 
-    for (int i = 0; i < sora_n_box_sources; i++)
-        if (strcmp(sora_box_sources[i].path, path) == 0)
-            return sora_box_sources[i].text;
+    for (int i = 0; i < cera_n_box_sources; i++)
+        if (strcmp(cera_box_sources[i].path, path) == 0)
+            return cera_box_sources[i].text;
 
     /* Then by basename, for somebody who typed what they could see. */
-    for (int i = 0; i < sora_n_box_sources; i++) {
-        const char *slash = strrchr(sora_box_sources[i].path, '/');
-        const char *base = slash ? slash + 1 : sora_box_sources[i].path;
+    for (int i = 0; i < cera_n_box_sources; i++) {
+        const char *slash = strrchr(cera_box_sources[i].path, '/');
+        const char *base = slash ? slash + 1 : cera_box_sources[i].path;
         if (strcmp(base, path) == 0)
-            return sora_box_sources[i].text;
+            return cera_box_sources[i].text;
     }
 
     /*
@@ -4086,37 +4082,37 @@ const char *box_source_text(const char *path)
      * describe the program rather than the last thing that happened
      * to it.
      */
-    return late_source_text(path);
+    return cera_late_source_text(path);
 }
 /* }}} */
 
-/* {{{ map_build_find() */
+/* {{{ cera_map_build_find() */
 /*
  * **The compiled form of one description** (issue 311d), by the path
  * the build knew it as or by the bare name somebody would type — the
  * same two ways a box source is found, for the same reason.
  */
-const map_build_t *map_build_find(const char *path)
+const cera_map_build_t *cera_map_build_find(const char *path)
 {
     if (!path || !*path)
         return NULL;
 
-    for (int i = 0; i < sora_n_map_builds; i++)
-        if (strcmp(sora_map_builds[i].path, path) == 0)
-            return &sora_map_builds[i];
+    for (int i = 0; i < cera_n_map_builds; i++)
+        if (strcmp(cera_map_builds[i].path, path) == 0)
+            return &cera_map_builds[i];
 
-    for (int i = 0; i < sora_n_map_builds; i++) {
-        const char *slash = strrchr(sora_map_builds[i].path, '/');
-        const char *base = slash ? slash + 1 : sora_map_builds[i].path;
+    for (int i = 0; i < cera_n_map_builds; i++) {
+        const char *slash = strrchr(cera_map_builds[i].path, '/');
+        const char *base = slash ? slash + 1 : cera_map_builds[i].path;
         if (strcmp(base, path) == 0)
-            return &sora_map_builds[i];
+            return &cera_map_builds[i];
     }
     return NULL;
 }
 /* }}} */
 
-/* {{{ map_place_box() */
-void map_place_box(map_t *m, int station, const char *box_name, int kind)
+/* {{{ cera_map_place_box() */
+void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int kind)
 {
     /*
      * A place that has been removed but not yet reclaimed is not free
@@ -4127,7 +4123,7 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
      * record.
      */
     if (station >= 0 && station < m->n_stations
-        && atomic_load_explicit(&map_station(m, station)->removed,
+        && atomic_load_explicit(&cera_map_station(m, station)->removed,
                                 memory_order_acquire)) {
         fprintf(stderr,
                 "map: station %d was removed and is not reclaimed yet — "
@@ -4136,7 +4132,7 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
         abort();
     }
 
-    const box_place_t *bp = box_place_find(box_name);
+    const cera_box_place_t *bp = cera_box_place_find(box_name);
     if (!bp) {
         /*
          * Before giving up: a box added while some *earlier* process
@@ -4204,7 +4200,6 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
  * Was src/033-statics.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/033-statics.c"
 /*
  * 033-statics.c — the values that are simply always there.
  *
@@ -4261,12 +4256,12 @@ void map_place_box(map_t *m, int station, const char *box_name, int kind)
 #include <string.h>
 
 /*
- * Where an error happened. Published as sora_where_t (issue 408),
+ * Where an error happened. Published as cera_where_t (issue 408),
  * because generated readers name the same place, and spelled `where_t`
  * here so the file that has always used the short name still reads
  * the way it did.
  */
-typedef sora_where_t where_t;
+typedef cera_where_t where_t;
 
 /* {{{ die_static() */
 static void die_static(const where_t *w, const char *what)
@@ -4291,7 +4286,7 @@ static void die_static(const where_t *w, const char *what)
     char said[512];
     snprintf(said, sizeof said, "statics: station %d port %d: %s",
              w->station, w->port, what);
-    sora_stop_now(NULL, SORA_EXIT_BAD_CALL, said);
+    cera_stop_now(NULL, CERA_EXIT_BAD_CALL, said);
 }
 /* }}} */
 
@@ -4441,8 +4436,8 @@ typedef enum {
  * against another. It asks how to turn text into bytes, which needs
  * to know whether those bytes are a number, and which kind.
  */
-static type_class_t classify_port(const in_port_t *sl,
-                                  const struct_text_t **out_struct)
+static type_class_t classify_port(const cera_in_port_t *sl,
+                                  const cera_struct_text_t **out_struct)
 {
     const char *tn = sl->type_name ? sl->type_name : "";
     static const char *const ints[] = {
@@ -4579,7 +4574,7 @@ static const char *skip_ws(const char *p)
  * was cut short and ask again with a bigger buffer, the same contract
  * snprintf offers.
  */
-typedef sora_textbuf_t textbuf_t;
+typedef cera_textbuf_t textbuf_t;
 
 static void tb_addf(textbuf_t *tb, const char *fmt, ...);
 
@@ -4669,7 +4664,7 @@ static void float_text(textbuf_t *tb, double v, int size)
  * the part that varies by type is generated, and the part that does
  * not is written once, here, and called.
  */
-const char *sora_text_expect(const char *p, char c, const sora_where_t *w,
+const char *cera_text_expect(const char *p, char c, const cera_where_t *w,
                              const char *what)
 {
     p = skip_ws(p);
@@ -4681,8 +4676,8 @@ const char *sora_text_expect(const char *p, char c, const sora_where_t *w,
     return skip_ws(p + 1);
 }
 
-const char *sora_text_signed(const char *p, void *out, int size,
-                             const sora_where_t *w, const char *field)
+const char *cera_text_signed(const char *p, void *out, int size,
+                             const cera_where_t *w, const char *field)
 {
     p = skip_ws(p);
     char *end;
@@ -4696,8 +4691,8 @@ const char *sora_text_signed(const char *p, void *out, int size,
     return skip_ws(end);
 }
 
-const char *sora_text_unsigned(const char *p, void *out, int size,
-                               const sora_where_t *w, const char *field)
+const char *cera_text_unsigned(const char *p, void *out, int size,
+                               const cera_where_t *w, const char *field)
 {
     p = skip_ws(p);
     char *end;
@@ -4711,8 +4706,8 @@ const char *sora_text_unsigned(const char *p, void *out, int size,
     return skip_ws(end);
 }
 
-const char *sora_text_floating(const char *p, void *out, int size,
-                               const sora_where_t *w, const char *field)
+const char *cera_text_floating(const char *p, void *out, int size,
+                               const cera_where_t *w, const char *field)
 {
     p = skip_ws(p);
     char *end;
@@ -4726,8 +4721,8 @@ const char *sora_text_floating(const char *p, void *out, int size,
     return skip_ws(end);
 }
 
-const char *sora_text_chars(const char *p, char *out, int room,
-                            const sora_where_t *w, const char *field)
+const char *cera_text_chars(const char *p, char *out, int room,
+                            const cera_where_t *w, const char *field)
 {
     char note[192];
     snprintf(note, sizeof note, "field '%s'", field);
@@ -4743,30 +4738,30 @@ const char *sora_text_chars(const char *p, char *out, int room,
     return skip_ws(p);
 }
 
-void sora_text_put(sora_textbuf_t *tb, const char *literal)
+void cera_text_put(cera_textbuf_t *tb, const char *literal)
 {
     tb_addf(tb, "%s", literal);
 }
 
-void sora_text_put_signed(sora_textbuf_t *tb, const void *bytes, int size)
+void cera_text_put_signed(cera_textbuf_t *tb, const void *bytes, int size)
 {
     where_t w = { -1, -1 };
     tb_addf(tb, "%lld", read_integer((const unsigned char *)bytes, size, &w));
 }
 
-void sora_text_put_unsigned(sora_textbuf_t *tb, const void *bytes, int size)
+void cera_text_put_unsigned(cera_textbuf_t *tb, const void *bytes, int size)
 {
     where_t w = { -1, -1 };
     tb_addf(tb, "%llu", read_unsigned((const unsigned char *)bytes, size, &w));
 }
 
-void sora_text_put_floating(sora_textbuf_t *tb, const void *bytes, int size)
+void cera_text_put_floating(cera_textbuf_t *tb, const void *bytes, int size)
 {
     where_t w = { -1, -1 };
     float_text(tb, read_float((const unsigned char *)bytes, size, &w), size);
 }
 
-void sora_text_put_chars(sora_textbuf_t *tb, const char *chars, int room)
+void cera_text_put_chars(cera_textbuf_t *tb, const char *chars, int room)
 {
     /* Bounded by the array rather than trusted to a terminator,
      * because a field filled exactly to its width has no room for
@@ -4789,12 +4784,12 @@ void sora_text_put_chars(sora_textbuf_t *tb, const char *chars, int room)
  * The port is still needed — it says what shape the bytes are — but
  * not as the place the bytes come from.
  */
-static void value_text(const in_port_t *sl, const void *bytes,
+static void value_text(const cera_in_port_t *sl, const void *bytes,
                        const char *string, textbuf_t *tb)
 {
     where_t w = { -1, -1 };   /* the port is the caller's to name here */
     {
-        const struct_text_t *si = NULL;
+        const cera_struct_text_t *si = NULL;
         switch (classify_port(sl, &si)) {
         case TN_INT:
             tb_addf(tb, "%lld", read_integer(bytes, sl->elem_size, &w));
@@ -4834,7 +4829,7 @@ static void value_text(const in_port_t *sl, const void *bytes,
 /* }}} */
 
 /* {{{ in_port_constant_text() */
-static int in_port_constant_text(const in_port_t *sl, char *out, int room)
+static int in_port_constant_text(const cera_in_port_t *sl, char *out, int room)
 {
     textbuf_t tb = { out, room, 0 };
     if (room > 0)
@@ -4872,7 +4867,7 @@ static int in_port_constant_text(const in_port_t *sl, char *out, int room)
  * constant writer offers, so a caller asks for the length and then
  * writes.
  */
-static int in_port_waiting_text(const in_port_t *sl, char *out, int room)
+static int in_port_waiting_text(const cera_in_port_t *sl, char *out, int room)
 {
     textbuf_t tb = { out, room, 0 };
     if (room > 0)
@@ -4882,7 +4877,7 @@ static int in_port_waiting_text(const in_port_t *sl, char *out, int room)
     int capacity = atomic_load(&sl->capacity);
     for (int i = 0; i < capacity; i++) {
         void *slot = in_port_slot(sl, i);
-        if (!slot || slot_state_at(slot, sl->elem_size) != SLOT_READY)
+        if (!slot || slot_state_at(slot, sl->elem_size) != CERA_SLOT_READY)
             continue;
         if (written++)
             tb_addf(&tb, ", ");
@@ -4903,7 +4898,7 @@ static int in_port_waiting_text(const in_port_t *sl, char *out, int room)
 /* ------------------------------------------------------------------ */
 
 /* {{{ in_port_constant_free() */
-static void in_port_constant_free(in_port_t *sl)
+static void in_port_constant_free(cera_in_port_t *sl)
 {
     free(sl->constant);
     free(sl->constant_string);
@@ -4934,13 +4929,13 @@ static void in_port_constant_free(in_port_t *sl)
  * that pointer, and freeing what it points at is freeing something a
  * box may still be looking at.
  */
-static void port_text_to_bytes_ending(const in_port_t *sl, const char *text,
+static void port_text_to_bytes_ending(const cera_in_port_t *sl, const char *text,
                                       unsigned char *into,
                                       char **owned_string,
                                       const where_t *w,
                                       const char **end);
 
-static void port_text_to_bytes(const in_port_t *sl, const char *text,
+static void port_text_to_bytes(const cera_in_port_t *sl, const char *text,
                                unsigned char *into, char **owned_string,
                                const where_t *w)
 {
@@ -4955,7 +4950,7 @@ static void port_text_to_bytes(const in_port_t *sl, const char *text,
  * it ended (issue 712). With `end` null this behaves as it always
  * did: whatever follows the value is trailing text and a fault.
  */
-static void port_text_to_bytes_ending(const in_port_t *sl, const char *text,
+static void port_text_to_bytes_ending(const cera_in_port_t *sl, const char *text,
                                       unsigned char *into,
                                       char **owned_string,
                                       const where_t *w,
@@ -4964,7 +4959,7 @@ static void port_text_to_bytes_ending(const in_port_t *sl, const char *text,
     unsigned char *fresh = into;
     char *fresh_string = NULL;
 
-    const struct_text_t *si = NULL;
+    const cera_struct_text_t *si = NULL;
     switch (classify_port(sl, &si)) {
     case TN_INT: {
         char *stop;
@@ -5047,17 +5042,17 @@ static void port_text_to_bytes_ending(const in_port_t *sl, const char *text,
 }
 /* }}} */
 
-/* {{{ map_in_port_static_text() */
-void map_in_port_static_text(map_t *m, int station, int port, const char *text)
+/* {{{ cera_map_in_port_static_text() */
+void cera_map_in_port_static_text(cera_map_t *m, int station, int port, const char *text)
 {
     where_t w = { station, port };
 
     if (station < 0 || station >= m->n_stations)
         die_static(&w, "giving a constant to a station outside the table");
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (port < 0 || port >= s->n_in_ports)
         die_static(&w, "giving a constant to a port the box does not have");
-    in_port_t *sl = &s->in_ports[port];
+    cera_in_port_t *sl = &s->in_ports[port];
     if (!sl->type_name)
         die_static(&w,
                    "the port has no declared type — a constant needs a station "
@@ -5084,7 +5079,7 @@ void map_in_port_static_text(map_t *m, int station, int port, const char *text)
     memcpy(sl->constant, fresh, (size_t)sl->elem_size);
     sl->constant_string = fresh_string;
     sl->constant_set = 1;
-    sl->kind = IN_PORT_STATIC;
+    sl->kind = CERA_IN_PORT_STATIC;
     pthread_mutex_unlock(&s->mutex);
 
     free(fresh);
@@ -5100,11 +5095,11 @@ void map_in_port_static_text(map_t *m, int station, int port, const char *text)
      * to push and the loader is still assembling — the seed sweep is
      * what starts a freshly loaded map, deliberately and once. */
     if (m->pool)
-        map_station_start_while_ready(m, station);
+        cera_map_station_start_while_ready(m, station);
 }
 /* }}} */
 
-/* {{{ map_deliver_argument_text() */
+/* {{{ cera_map_deliver_argument_text() */
 /*
  * **An argument written as text**, turned into the bytes the port
  * wants and delivered through the ordinary door (issue 213).
@@ -5122,7 +5117,7 @@ void map_in_port_static_text(map_t *m, int station, int port, const char *text)
  * at. One allocation per argument, released when the process is, is
  * the honest shape: a command line lives as long as the program does.
  */
-const char *map_deliver_argument_text(map_t *m, int station, int port,
+const char *cera_map_deliver_argument_text(cera_map_t *m, int station, int port,
                                       const char *text)
 {
     static _Thread_local char said[256];
@@ -5132,13 +5127,13 @@ const char *map_deliver_argument_text(map_t *m, int station, int port,
                  station);
         return said;
     }
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (port < 0 || port >= s->n_in_ports) {
         snprintf(said, sizeof said, "station %d has no port %d — it has %d",
                  station, port, s->n_in_ports);
         return said;
     }
-    in_port_t *sl = &s->in_ports[port];
+    cera_in_port_t *sl = &s->in_ports[port];
     if (!sl->type_name) {
         snprintf(said, sizeof said,
                  "station %d port %d has no declared type, so text has no "
@@ -5158,7 +5153,7 @@ const char *map_deliver_argument_text(map_t *m, int station, int port,
     char *owned = NULL;
     port_text_to_bytes(sl, text, bytes, &owned, &w);
 
-    const char *no = map_deliver_argument(m, station, port, bytes,
+    const char *no = cera_map_deliver_argument(m, station, port, bytes,
                                           sl->elem_size);
     free(bytes);
     /* `owned` is not freed; see above. */
@@ -5166,7 +5161,7 @@ const char *map_deliver_argument_text(map_t *m, int station, int port,
 }
 /* }}} */
 
-/* {{{ map_deliver_command_line() */
+/* {{{ cera_map_deliver_command_line() */
 /*
  * **The command line, delivered into a program's entrances** (issue
  * 213).
@@ -5188,14 +5183,14 @@ const char *map_deliver_argument_text(map_t *m, int station, int port,
  * command line is a program that waits forever for the rest, which is
  * a worse way to learn about a typo than being told.
  */
-const char *map_deliver_command_line(map_t *m, int argc, char **argv)
+const char *cera_map_deliver_command_line(cera_map_t *m, int argc, char **argv)
 {
     static _Thread_local char said[256];
 
     int wanted = 0;
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
-        if (s->call && s->door == DOOR_IN)
+        cera_station_t *s = cera_map_station(m, i);
+        if (s->call && s->door == CERA_DOOR_IN)
             wanted += s->n_in_ports;
     }
 
@@ -5224,7 +5219,7 @@ const char *map_deliver_command_line(map_t *m, int argc, char **argv)
      * close a window that opened before this was called. It is how
      * somebody finds out they left it open.
      */
-    if (m->pool && pool_finished(m->pool)) {
+    if (m->pool && cera_pool_finished(m->pool)) {
         snprintf(said, sizeof said,
                  "this program had already finished before its arguments "
                  "arrived — something outside has to hold a standing "
@@ -5236,18 +5231,18 @@ const char *map_deliver_command_line(map_t *m, int argc, char **argv)
     int taken = 0;
     const char *no = NULL;
     for (int i = 0; i < m->n_stations && !no; i++) {
-        station_t *s = map_station(m, i);
-        if (!s->call || s->door != DOOR_IN)
+        cera_station_t *s = cera_map_station(m, i);
+        if (!s->call || s->door != CERA_DOOR_IN)
             continue;
         for (int j = 0; j < s->n_in_ports && !no; j++)
-            no = map_deliver_argument_text(m, i, j, argv[1 + taken++]);
+            no = cera_map_deliver_argument_text(m, i, j, argv[1 + taken++]);
     }
 
     return no;
 }
 /* }}} */
 
-/* {{{ map_in_port_queue_text() — issue 712 */
+/* {{{ cera_map_in_port_queue_text() — issue 712 */
 /*
  * **Values put back into a buffer**, from the text a capture wrote.
  *
@@ -5271,7 +5266,7 @@ const char *map_deliver_command_line(map_t *m, int argc, char **argv)
  *
  * Returns NULL, or a refusal naming what went wrong.
  */
-const char *map_in_port_queue_text(map_t *m, int station, int port,
+const char *cera_map_in_port_queue_text(cera_map_t *m, int station, int port,
                                    const char *text)
 {
     static _Thread_local char said[256];
@@ -5281,20 +5276,20 @@ const char *map_in_port_queue_text(map_t *m, int station, int port,
                  station);
         return said;
     }
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (port < 0 || port >= s->n_in_ports) {
         snprintf(said, sizeof said, "station %d has no port %d — it has %d",
                  station, port, s->n_in_ports);
         return said;
     }
-    in_port_t *sl = &s->in_ports[port];
+    cera_in_port_t *sl = &s->in_ports[port];
     if (!sl->type_name) {
         snprintf(said, sizeof said,
                  "station %d port %d has no declared type, so waiting values "
                  "have no shape to become", station, port);
         return said;
     }
-    if (atomic_load(&sl->kind) != IN_PORT_RING) {
+    if (atomic_load(&sl->kind) != CERA_IN_PORT_RING) {
         snprintf(said, sizeof said,
                  "station %d port %d is not a buffer, so nothing can be "
                  "waiting in it", station, port);
@@ -5336,7 +5331,7 @@ const char *map_in_port_queue_text(map_t *m, int station, int port,
          * wrong for every value that did not complete a station,
          * which is most of the values a capture holds.
          */
-        map_deliver_value(m, station, port, bytes);
+        cera_map_deliver_value(m, station, port, bytes);
         free(bytes);
 
         p = end;
@@ -5382,7 +5377,7 @@ const char *map_in_port_queue_text(map_t *m, int station, int port,
  * directions is worse than no test.
  */
 typedef struct {
-    in_port_t  *port;
+    cera_in_port_t  *port;
     const void *bytes;
     int         size;
 } static_write_t;
@@ -5394,18 +5389,18 @@ static void static_write_under_lock(void *ctx)
 }
 /* }}} */
 
-/* {{{ map_in_port_static_write() */
-void map_in_port_static_write(map_t *m, int station, int port,
+/* {{{ cera_map_in_port_static_write() */
+void cera_map_in_port_static_write(cera_map_t *m, int station, int port,
                            const void *bytes, int size)
 {
     where_t w = { station, port };
 
     if (station < 0 || station >= m->n_stations)
         die_static(&w, "writing to a station outside the table");
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (port < 0 || port >= s->n_in_ports)
         die_static(&w, "writing to a port the box does not have");
-    in_port_t *sl = &s->in_ports[port];
+    cera_in_port_t *sl = &s->in_ports[port];
     if (!sl->constant_set)
         die_static(&w, "writing to a port that has never held a constant — "
                        "give it one as text first, so its shape is known");
@@ -5429,7 +5424,7 @@ void map_in_port_static_write(map_t *m, int station, int port,
      * to happen — a map being built is written into before it runs. */
     static_write_t job = { sl, bytes, size };
     if (m->pool) {
-        map_station_start_after(m, station, static_write_under_lock, &job);
+        cera_map_station_start_after(m, station, static_write_under_lock, &job);
         /*
          * **And then keep asking** (issue 712). The call above did the
          * write and one readiness check inside a single lock hold,
@@ -5443,7 +5438,7 @@ void map_in_port_static_write(map_t *m, int station, int port,
          * A station with no buffer is not asked again, because the
          * call above already started it and nothing there accumulates.
          */
-        map_station_keep_starting(m, station);
+        cera_map_station_keep_starting(m, station);
     } else {
         pthread_mutex_lock(&s->mutex);
         static_write_under_lock(&job);
@@ -5459,7 +5454,6 @@ void map_in_port_static_write(map_t *m, int station, int port,
  * Was src/042-loader.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/042-loader.c"
 /*
  * 042-loader.c — the moment the two halves of a program meet.
  *
@@ -5489,7 +5483,7 @@ void map_in_port_static_write(map_t *m, int station, int port,
 /* A box added while some earlier process ran; see 073-latebox.h. It
  * is declared here rather than included, because the loader needs one
  * function from that file and nothing else it offers. */
-static const box_place_t *late_recover_box(const char *name);
+static const cera_box_place_t *late_recover_box(const char *name);
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -5512,7 +5506,7 @@ static void die_load(const char *path, int line, const char *station,
                  path, line, station, what);
     else
         snprintf(said, sizeof said, "map %s:%d: %s", path, line, what);
-    sora_stop_now(NULL, SORA_EXIT_BAD_FILE, said);
+    cera_stop_now(NULL, CERA_EXIT_BAD_FILE, said);
 }
 /* }}} */
 
@@ -5572,10 +5566,10 @@ static char *read_whole_file(const char *path)
  * compiled is the description, and the code that comes back binds to
  * the station-builders this program published.
  */
-static void build_from_file(map_t *m, const char *path, map_instance_t *out)
+static void build_from_file(cera_map_t *m, const char *path, cera_map_instance_t *out)
 {
     char *text = read_whole_file(path);
-    const map_build_t *built = late_compile_map(text);
+    const cera_map_build_t *built = cera_late_compile_map(text);
     free(text);
 
     if (!built)
@@ -5602,7 +5596,7 @@ static void build_from_file(map_t *m, const char *path, map_instance_t *out)
 }
 /* }}} */
 
-/* {{{ map_load_file() */
+/* {{{ cera_map_load_file() */
 /* {{{ static int marked_incomplete() */
 /*
  * **An artifact that says it lost work** (issue 712). A capture taken
@@ -5621,9 +5615,9 @@ static int marked_incomplete(const char *text)
 }
 /* }}} */
 
-static map_t *load_file(const char *path, int n_workers, int salvaging);
+static cera_map_t *load_file(const char *path, int n_workers, int salvaging);
 
-/* {{{ map_load_file() / map_load_salvage() */
+/* {{{ cera_map_load_file() / cera_map_load_salvage() */
 /*
  * **Reading a description back is refused when it says it lost work**,
  * unless the caller asks for salvage (issue 712). A program picked up
@@ -5635,17 +5629,17 @@ static map_t *load_file(const char *path, int n_workers, int salvaging);
  * the point — whoever calls it has said out loud that they know what
  * is missing.
  */
-map_t *map_load_file(const char *path, int n_workers)
+cera_map_t *cera_map_load_file(const char *path, int n_workers)
 {
     return load_file(path, n_workers, 0);
 }
 
-map_t *map_load_salvage(const char *path, int n_workers)
+cera_map_t *cera_map_load_salvage(const char *path, int n_workers)
 {
     return load_file(path, n_workers, 1);
 }
 
-static map_t *load_file(const char *path, int n_workers, int salvaging)
+static cera_map_t *load_file(const char *path, int n_workers, int salvaging)
 {
     /*
      * An empty table, grown one station at a time as the description
@@ -5669,14 +5663,14 @@ static map_t *load_file(const char *path, int n_workers, int salvaging)
                      "salvage door if that is understood and wanted");
     }
 
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
 
     build_from_file(m, path, NULL);
 
     /* The pool exists before the seed so the seed has somewhere to
      * push, but its workers stay parked until the caller releases —
      * the seeding window issue 102 built. */
-    map_start(m, n_workers);
+    cera_map_start(m, n_workers);
 
     /*
      * **Reading a file no longer validates or seeds; it asks for the
@@ -5685,7 +5679,7 @@ static map_t *load_file(const char *path, int n_workers, int salvaging)
      * loader could do that nothing else could, and with them moved
      * there is no state called *still loading* left for it to be in.
      */
-    const char *no = map_bring_up(m);
+    const char *no = cera_map_bring_up(m);
     if (no)
         die_load(path, 0, NULL, no);
 
@@ -5711,10 +5705,10 @@ static map_t *load_file(const char *path, int n_workers, int salvaging)
      */
     int has_entrance = 0;
     for (int i = 0; i < m->n_stations; i++)
-        if (map_station(m, i)->door == DOOR_IN)
+        if (cera_map_station(m, i)->door == CERA_DOOR_IN)
             has_entrance = 1;
 
-    if (map_seed_count(m) == 0 && !has_entrance)
+    if (cera_map_seed_count(m) == 0 && !has_entrance)
         die_load(path, 0, NULL,
                  "nothing to seed — every station waits for a buffered "
                  "value, so the map cannot ever start");
@@ -5723,7 +5717,7 @@ static map_t *load_file(const char *path, int n_workers, int salvaging)
 }
 /* }}} */
 
-/* {{{ map_instantiate_file() */
+/* {{{ cera_map_instantiate_file() */
 /*
  * **Bring a description inside a program that already exists** (issue
  * 217) — the operation this whole file turns out to have been, with
@@ -5755,7 +5749,7 @@ static map_t *load_file(const char *path, int n_workers, int salvaging)
  * interior station of an instance is reaching inside, which is the
  * thing the marks exist to stop happening by accident.
  */
-map_instance_t map_instantiate_file(map_t *m, const char *path)
+cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path)
 {
     /*
      * **Where the stations landed comes back from the built function
@@ -5765,13 +5759,13 @@ map_instance_t map_instantiate_file(map_t *m, const char *path)
      * and the parent wants the doors in the order the description
      * declared them rather than in table order.
      */
-    map_instance_t in;
+    cera_map_instance_t in;
     build_from_file(m, path, &in);
     return in;
 }
 /* }}} */
 
-/* {{{ map_instance_door() / map_instance_free() */
+/* {{{ map_instance_door() / cera_map_instance_free() */
 /*
  * **The nth station of this instance facing that way**, or -1.
  *
@@ -5785,26 +5779,26 @@ map_instance_t map_instantiate_file(map_t *m, const char *path)
  * only. They come back in the order the description declared them,
  * which is the one order a description can be said to have.
  */
-static int map_instance_door(map_t *m, const map_instance_t *in,
+static int map_instance_door(cera_map_t *m, const cera_map_instance_t *in,
                              int facing, int nth)
 {
     int seen = 0;
     for (int i = 0; i < in->count; i++) {
-        station_t *s = map_station(m, in->station[i]);
+        cera_station_t *s = cera_map_station(m, in->station[i]);
         if (s->call && s->door == facing && seen++ == nth)
             return in->station[i];
     }
     return -1;
 }
 
-int map_instance_entrance(map_t *m, const map_instance_t *in, int nth)
+int cera_map_instance_entrance(cera_map_t *m, const cera_map_instance_t *in, int nth)
 {
-    return map_instance_door(m, in, DOOR_IN, nth);
+    return map_instance_door(m, in, CERA_DOOR_IN, nth);
 }
 
-int map_instance_result(map_t *m, const map_instance_t *in, int nth)
+int cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int nth)
 {
-    return map_instance_door(m, in, DOOR_OUT, nth);
+    return map_instance_door(m, in, CERA_DOOR_OUT, nth);
 }
 
 /*
@@ -5813,7 +5807,7 @@ int map_instance_result(map_t *m, const map_instance_t *in, int nth)
  * things landed, and a parent keeps it only for as long as it is
  * still deciding what to wire.
  */
-void map_instance_free(map_instance_t *in)
+void cera_map_instance_free(cera_map_instance_t *in)
 {
     free(in->station);
     in->station = NULL;
@@ -5821,7 +5815,7 @@ void map_instance_free(map_instance_t *in)
 }
 /* }}} */
 
-/* {{{ map_add_part() */
+/* {{{ cera_map_add_part() */
 /*
  * **Adding a box and adding a map are one operation** (issue 217).
  *
@@ -5848,14 +5842,14 @@ void map_instance_free(map_instance_t *in)
  * order nobody can see; finding neither is refused naming both places
  * that were searched.
  */
-const char *map_add_part(map_t *m, const char *what, map_part_t *out)
+const char *cera_map_add_part(cera_map_t *m, const char *what, cera_map_part_t *out)
 {
     static _Thread_local char said[512];
 
     if (!what || !*what)
         return "adding a part with no name";
 
-    const box_place_t *box = box_place_find(what);
+    const cera_box_place_t *box = cera_box_place_find(what);
     FILE *described = fopen(what, "r");
     if (described)
         fclose(described);
@@ -5870,20 +5864,20 @@ const char *map_add_part(map_t *m, const char *what, map_part_t *out)
 
     if (box) {
         /* A list of one. Its doors are itself. */
-        int at = map_add_station(m);
+        int at = cera_map_add_station(m);
         if (at < 0)
             return "the station table would not grow";
-        map_place_box(m, at, what, STATION_PLAIN);
+        cera_map_place_box(m, at, what, CERA_STATION_PLAIN);
         out->entrance = at;
         out->result = at;
         return NULL;
     }
 
     if (described) {
-        map_instance_t in = map_instantiate_file(m, what);
-        out->entrance = map_instance_entrance(m, &in, 0);
-        out->result = map_instance_result(m, &in, 0);
-        map_instance_free(&in);
+        cera_map_instance_t in = cera_map_instantiate_file(m, what);
+        out->entrance = cera_map_instance_entrance(m, &in, 0);
+        out->result = cera_map_instance_result(m, &in, 0);
+        cera_map_instance_free(&in);
         if (out->result < 0) {
             snprintf(said, sizeof said,
                      "'%s' declares no way out, so nothing can be taken "
@@ -5900,7 +5894,7 @@ const char *map_add_part(map_t *m, const char *what, map_part_t *out)
 }
 /* }}} */
 
-/* {{{ map_connect_parts() */
+/* {{{ cera_map_connect_parts() */
 /*
  * **A wire from one part's way out to another part's way in**, which
  * is the only wire a composing caller ever needs to draw (issue 217).
@@ -5915,8 +5909,8 @@ const char *map_add_part(map_t *m, const char *what, map_part_t *out)
  * receiving one. A comparator's three outcomes are reachable this way
  * exactly as before.
  */
-const char *map_connect_parts(map_t *m, map_part_t from, int from_port,
-                              map_part_t to, int to_port)
+const char *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, int from_port,
+                              cera_map_part_t to, int to_port)
 {
     static _Thread_local char said[256];
 
@@ -5931,12 +5925,12 @@ const char *map_connect_parts(map_t *m, map_part_t from, int from_port,
                  "that takes no arguments cannot be fed");
         return said;
     }
-    return map_wire(m, from.result, from_port, to.entrance, to_port);
+    return cera_map_wire(m, from.result, from_port, to.entrance, to_port);
 }
 /* }}} */
 
-/* {{{ map_seed_count() */
-int map_seed_count(map_t *m)
+/* {{{ cera_map_seed_count() */
+int cera_map_seed_count(cera_map_t *m)
 {
     return m->seeded;
 }
@@ -5949,7 +5943,6 @@ int map_seed_count(map_t *m)
  * Was src/050-observe.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/050-observe.c"
 /*
  * 050-observe.c — the engine, saying out loud what it already knew.
  *
@@ -5990,7 +5983,7 @@ int map_seed_count(map_t *m)
 #define GROWTH_SHOUT_THRESHOLD 16
 
 /* {{{ station_label() */
-static const char *station_label(map_t *m, int i, char *fallback, size_t n)
+static const char *station_label(cera_map_t *m, int i, char *fallback, size_t n)
 {
     if (m->station_names && m->station_names[i])
         return m->station_names[i];
@@ -5999,16 +5992,16 @@ static const char *station_label(map_t *m, int i, char *fallback, size_t n)
 }
 /* }}} */
 
-/* {{{ map_report_buffers() */
-void map_report_buffers(map_t *m, FILE *out)
+/* {{{ cera_map_report_buffers() */
+void cera_map_report_buffers(cera_map_t *m, FILE *out)
 {
     fprintf(out, "buffers:\n");
     int spoke = 0;
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         for (int j = 0; j < s->n_in_ports; j++) {
-            in_port_t *sl = &s->in_ports[j];
-            if (sl->kind != IN_PORT_RING)
+            cera_in_port_t *sl = &s->in_ports[j];
+            if (sl->kind != CERA_IN_PORT_RING)
                 continue;
             if (sl->growths == 0 && sl->high_water <= 1)
                 continue;
@@ -6034,7 +6027,7 @@ void map_report_buffers(map_t *m, FILE *out)
 
     if (m->pool) {
         int capacity, high_water, growths;
-        pool_queue_stats(m->pool, &capacity, &high_water, &growths);
+        cera_pool_queue_stats(m->pool, &capacity, &high_water, &growths);
         fprintf(out,
                 "  the task ring: grew %d time%s to %d entries, high water %d\n"
                 "  (port piles mean uneven inputs; ring piles mean consumers\n"
@@ -6045,57 +6038,57 @@ void map_report_buffers(map_t *m, FILE *out)
 /* }}} */
 
 /* {{{ the three orderings — a dispatch table of comparators */
-static map_t *sorting_map;   /* qsort has no context argument */
+static cera_map_t *sorting_map;   /* qsort has no context argument */
 
 /* Time attributable to a station's own work. This used to add the
  * gather time charged to it as a puller, because a station that
  * pulled paid for its upstream's run on its own thread and hiding
  * that would have mis-ranked it (issue 702). Nothing pulls now
  * (issue 210), so the box's own time is the whole of it. */
-static long station_time(const station_t *s)
+static long station_time(const cera_station_t *s)
 {
     return s->box_ns;
 }
 
 static int by_time(const void *a, const void *b)
 {
-    const station_t *sa = map_station(sorting_map, *(const int *)a);
-    const station_t *sb = map_station(sorting_map, *(const int *)b);
+    const cera_station_t *sa = cera_map_station(sorting_map, *(const int *)a);
+    const cera_station_t *sb = cera_map_station(sorting_map, *(const int *)b);
     return (station_time(sb) > station_time(sa))
          - (station_time(sb) < station_time(sa));
 }
 
 static int by_contention(const void *a, const void *b)
 {
-    const station_t *sa = map_station(sorting_map, *(const int *)a);
-    const station_t *sb = map_station(sorting_map, *(const int *)b);
+    const cera_station_t *sa = cera_map_station(sorting_map, *(const int *)a);
+    const cera_station_t *sb = cera_map_station(sorting_map, *(const int *)b);
     return (sb->mutex_wait_ns > sa->mutex_wait_ns)
          - (sb->mutex_wait_ns < sa->mutex_wait_ns);
 }
 
 static int by_count(const void *a, const void *b)
 {
-    const station_t *sa = map_station(sorting_map, *(const int *)a);
-    const station_t *sb = map_station(sorting_map, *(const int *)b);
+    const cera_station_t *sa = cera_map_station(sorting_map, *(const int *)a);
+    const cera_station_t *sb = cera_map_station(sorting_map, *(const int *)b);
     return (sb->runs > sa->runs) - (sb->runs < sa->runs);
 }
 
-static int (*const orderings[REPORT_ORDER_COUNT])(const void *, const void *) = {
-    [REPORT_BY_TIME]       = by_time,
-    [REPORT_BY_CONTENTION] = by_contention,
-    [REPORT_BY_COUNT]      = by_count,
+static int (*const orderings[CERA_REPORT_ORDER_COUNT])(const void *, const void *) = {
+    [CERA_REPORT_BY_TIME]       = by_time,
+    [CERA_REPORT_BY_CONTENTION] = by_contention,
+    [CERA_REPORT_BY_COUNT]      = by_count,
 };
 /* }}} */
 
-/* {{{ map_report_stations() */
-void map_report_stations(map_t *m, FILE *out, int order)
+/* {{{ cera_map_report_stations() */
+void cera_map_report_stations(cera_map_t *m, FILE *out, int order)
 {
-    if (order < 0 || order >= REPORT_ORDER_COUNT) {
+    if (order < 0 || order >= CERA_REPORT_ORDER_COUNT) {
         fprintf(stderr, "observe: no such report ordering\n");
         abort();
     }
 
-    static const char *const order_names[REPORT_ORDER_COUNT] = {
+    static const char *const order_names[CERA_REPORT_ORDER_COUNT] = {
         "by time inside boxes", "by mutex contention", "by run count",
     };
     fprintf(out, "stations, %s:\n", order_names[order]);
@@ -6108,26 +6101,26 @@ void map_report_stations(map_t *m, FILE *out, int order)
 
     for (int rank = 0; rank < m->n_stations; rank++) {
         int i = indices[rank];
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         char fallback[32];
         fprintf(out, "  %-12s runs %-7ld produced %-7ld",
                 station_label(m, i, fallback, sizeof fallback),
                 (long)s->runs, (long)s->produced);
-#ifdef SORA_STATS
+#ifdef CERA_STATS
         fprintf(out, " box %8.2fms  waited %8.2fms",
                 s->box_ns / 1e6, s->mutex_wait_ns / 1e6);
 #endif
         fprintf(out, "\n");
     }
-#ifndef SORA_STATS
-    fprintf(out, "  (times compiled out; build with -DSORA_STATS to see them)\n");
+#ifndef CERA_STATS
+    fprintf(out, "  (times compiled out; build with -DCERA_STATS to see them)\n");
 #endif
 }
 /* }}} */
 
-/* {{{ sora_stats_box_time() */
+/* {{{ cera_stats_box_time() */
 /*
- * Called by every generated shim when SORA_STATS is compiled in.
+ * Called by every generated shim when CERA_STATS is compiled in.
  *
  * It used to reach a process-wide "active map" pointer, the same way a
  * box's statics write did — and that pointer was the singleton, the
@@ -6142,7 +6135,7 @@ void map_report_stations(map_t *m, FILE *out, int order)
  * station afterwards. The pool stays ignorant of stations, and nothing
  * anywhere is process-wide.
  */
-void sora_stats_box_time(task_t *t, long ns)
+void cera_stats_box_time(cera_task_t *t, long ns)
 {
     if (t)
         t->box_ns += ns;
@@ -6152,13 +6145,13 @@ void sora_stats_box_time(task_t *t, long ns)
 /* {{{ the observer thread */
 static void *observer_main(void *arg)
 {
-    map_t *m = arg;
+    cera_map_t *m = arg;
     while (__atomic_load_n(&m->observer_running, __ATOMIC_ACQUIRE)) {
         FILE *out = fopen(m->observer_path, "a");
         if (out) {
             fprintf(out, "--- observation ---\n");
-            map_report_buffers(m, out);
-            map_report_stations(m, out, REPORT_BY_COUNT);
+            cera_map_report_buffers(m, out);
+            cera_map_report_stations(m, out, CERA_REPORT_BY_COUNT);
             fclose(out);
         }
         usleep((useconds_t)m->observer_interval_ms * 1000);
@@ -6166,7 +6159,7 @@ static void *observer_main(void *arg)
     return NULL;
 }
 
-void map_observe_start(map_t *m, const char *path, int interval_ms)
+void cera_map_observe_start(cera_map_t *m, const char *path, int interval_ms)
 {
     if (interval_ms <= 0) {
         /* Refuse rather than default: an engine writing diagnostics
@@ -6186,7 +6179,7 @@ void map_observe_start(map_t *m, const char *path, int interval_ms)
     pthread_create(&m->observer, NULL, observer_main, m);
 }
 
-void map_observe_stop(map_t *m)
+void cera_map_observe_stop(cera_map_t *m)
 {
     if (!m->observer_running)
         return;
@@ -6197,20 +6190,20 @@ void map_observe_stop(map_t *m)
 }
 /* }}} */
 
-/* {{{ map_report_shutdown() */
+/* {{{ cera_map_report_shutdown() */
 /*
  * The loud parting word (issue 701): any port that grew past the
  * threshold gets named at teardown, because a map that works while
  * one buffer quietly absorbs a mismatch forever is a map with a
  * design problem nothing else will surface.
  */
-void map_report_shutdown(map_t *m)
+void cera_map_report_shutdown(cera_map_t *m)
 {
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         for (int j = 0; j < s->n_in_ports; j++) {
-            in_port_t *sl = &s->in_ports[j];
-            if (sl->kind == IN_PORT_RING && sl->growths >= GROWTH_SHOUT_THRESHOLD) {
+            cera_in_port_t *sl = &s->in_ports[j];
+            if (sl->kind == CERA_IN_PORT_RING && sl->growths >= GROWTH_SHOUT_THRESHOLD) {
                 char fallback[32];
                 fprintf(stderr,
                         "observe: %s.%d grew %d pages (to %d slots, high water "
@@ -6234,7 +6227,6 @@ void map_report_shutdown(map_t *m)
  * Was src/051-dump.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/051-dump.c"
 /*
  * 051-dump.c — the loaded map, written back out as a map.
  *
@@ -6265,13 +6257,13 @@ void map_report_shutdown(map_t *m)
 /* {{{ kind_letter() */
 static char kind_letter(unsigned char kind)
 {
-    static const char letters[STATION_KIND_COUNT] = { 'p', 'c', 'i' };
-    return kind < STATION_KIND_COUNT ? letters[kind] : '?';
+    static const char letters[CERA_STATION_KIND_COUNT] = { 'p', 'c', 'i' };
+    return kind < CERA_STATION_KIND_COUNT ? letters[kind] : '?';
 }
 /* }}} */
 
-/* {{{ map_dump() */
-void map_dump(map_t *m, FILE *out)
+/* {{{ cera_map_dump() */
+void cera_map_dump(cera_map_t *m, FILE *out)
 {
     /*
      * **Every station needs a name**, because a station line begins
@@ -6286,7 +6278,7 @@ void map_dump(map_t *m, FILE *out)
      * (issue 212), so the question is now asked per station.
      */
     for (int i = 0; i < m->n_stations; i++) {
-        if (!map_station(m, i)->call)
+        if (!cera_map_station(m, i)->call)
             continue;   /* an empty place is not a station */
         if (i < m->n_named && m->station_names && m->station_names[i])
             continue;
@@ -6331,7 +6323,7 @@ void map_dump(map_t *m, FILE *out)
         abort();
     }
     for (int i = 0; i < m->n_stations; i++) {
-        if (!map_station(m, i)->call)
+        if (!cera_map_station(m, i)->call)
             continue;
         const char *want = m->station_names[i];
         char candidate[128];
@@ -6367,17 +6359,17 @@ void map_dump(map_t *m, FILE *out)
      * already read past.
      */
     if (m->pool) {
-        int workers = pool_worker_count(m->pool);
+        int workers = cera_pool_worker_count(m->pool);
         int busy = 0;
         for (int i = 0; i < workers; i++)
-            if (pool_worker_station(m->pool, i) >= 0)
+            if (cera_pool_worker_station(m->pool, i) >= 0)
                 busy++;
         if (busy > 0) {
             fprintf(out, "# INCOMPLETE CAPTURE\n");
             fprintf(out, "# %d task%s still running and did not finish:\n",
                     busy, busy == 1 ? " was" : "s were");
             for (int i = 0; i < workers; i++) {
-                int at = pool_worker_station(m->pool, i);
+                int at = cera_pool_worker_station(m->pool, i);
                 if (at < 0)
                     continue;
                 const char *who = (at < m->n_named && m->station_names
@@ -6425,7 +6417,7 @@ void map_dump(map_t *m, FILE *out)
      * observable in behaviour, only in notation.
      */
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         /* Announced like every other line kind (issue 607), so that a
          * station's name never sits where a keyword sits and no word
          * is ever both. */
@@ -6448,8 +6440,8 @@ void map_dump(map_t *m, FILE *out)
          * doors did not survive being written down could not be
          * composed after a round trip, which is most of what naming
          * them was for. */
-        const char *door = s->door == DOOR_IN  ? " entry"
-                         : s->door == DOOR_OUT ? " result"
+        const char *door = s->door == CERA_DOOR_IN  ? " entry"
+                         : s->door == CERA_DOOR_OUT ? " result"
                          : "";
 
         /*
@@ -6472,8 +6464,8 @@ void map_dump(map_t *m, FILE *out)
             const char *colon = strrchr(written_as, ':');
             if (colon) {
                 const char *bare = colon + 1;
-                const box_place_t *by_bare = box_place_find(bare);
-                const box_place_t *by_address = box_place_find(written_as);
+                const cera_box_place_t *by_bare = cera_box_place_find(bare);
+                const cera_box_place_t *by_address = cera_box_place_find(written_as);
                 if (by_bare && by_bare == by_address)
                     written_as = bare;
             }
@@ -6486,7 +6478,7 @@ void map_dump(map_t *m, FILE *out)
          * writes exceptions, and a cursor at the beginning is not one.
          */
         char at[16] = "";
-        if (s->kind == STATION_ITERATOR && s->cursor != 0)
+        if (s->kind == CERA_STATION_ITERATOR && s->cursor != 0)
             snprintf(at, sizeof at, " @%d", s->cursor);
 
         fprintf(out, "%s %c%s%s   # station %d\n",
@@ -6494,7 +6486,7 @@ void map_dump(map_t *m, FILE *out)
                 kind_letter(s->kind), door, at, i);
 
         for (int j = 0; j < s->n_in_ports; j++) {
-            in_port_t *sl = &s->in_ports[j];
+            cera_in_port_t *sl = &s->in_ports[j];
 
             /*
              * A starting depth, written only when it differs from the
@@ -6506,11 +6498,11 @@ void map_dump(map_t *m, FILE *out)
              * runs to the end of the line, so nothing can follow it.
              */
             char depth[32] = "";
-            if (sl->capacity != IN_PORT_DEFAULT_CAPACITY)
+            if (sl->capacity != CERA_IN_PORT_DEFAULT_CAPACITY)
                 snprintf(depth, sizeof depth, "x%d ", sl->capacity);
 
             switch (sl->kind) {
-            case IN_PORT_STATIC: {
+            case CERA_IN_PORT_STATIC: {
                 /* The value itself, spoken from its bytes rather than
                  * echoed from remembered text (issue 401) — so a
                  * constant a runtime write changed dumps as what it
@@ -6534,7 +6526,7 @@ void map_dump(map_t *m, FILE *out)
                 free(text);
                 break;
             }
-            case IN_PORT_RING: {
+            case CERA_IN_PORT_RING: {
                 /*
                  * **Values waiting in the buffer, if any** (issue
                  * 712). This is the difference between a schematic and
@@ -6584,7 +6576,7 @@ void map_dump(map_t *m, FILE *out)
                             sl->elem_size, sl->capacity);
                 break;
             }
-            case IN_PORT_NONE:
+            case CERA_IN_PORT_NONE:
                 /*
                  * A port with no source at all, written as a bare dash
                  * (issue 210b). It is a state and not a value, so the
@@ -6608,8 +6600,8 @@ void map_dump(map_t *m, FILE *out)
          * without anybody arranging it (issue 214). Nothing in the
          * running engine reads that order or means anything by it. */
         int out_port_index = 0;
-        for (out_port_t *p = s->out_ports; p; p = p->next, out_port_index++) {
-            dest_set_t *set = out_port_dests(p);
+        for (cera_out_port_t *p = s->out_ports; p; p = p->next, out_port_index++) {
+            cera_dest_set_t *set = out_port_dests(p);
             for (int di = 0; set && di < set->n; di++)
                 fprintf(out, "  out %d - %s.%d\n", out_port_index,
                         written[set->items[di].station],
@@ -6630,7 +6622,6 @@ void map_dump(map_t *m, FILE *out)
  * Was src/052-rewire.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/052-rewire.c"
 /*
  * 052-rewire.c — changing the shape while it runs.
  *
@@ -6707,14 +6698,14 @@ static const char *said(const char *what)
 /* {{{ station_kind_out_port_limit() */
 static int station_kind_out_port_limit(unsigned char kind)
 {
-    static const int limits[STATION_KIND_COUNT] = {
-        [STATION_PLAIN] = 1, [STATION_COMPARATOR] = 3, [STATION_ITERATOR] = 0,
+    static const int limits[CERA_STATION_KIND_COUNT] = {
+        [CERA_STATION_PLAIN] = 1, [CERA_STATION_COMPARATOR] = 3, [CERA_STATION_ITERATOR] = 0,
     };
-    return kind < STATION_KIND_COUNT ? limits[kind] : 1;
+    return kind < CERA_STATION_KIND_COUNT ? limits[kind] : 1;
 }
 /* }}} */
 
-/* {{{ map_wire() */
+/* {{{ cera_map_wire() */
 /*
  * **Draw a wire, at any moment** (issue 212) — while a program is
  * being assembled, or on a running one with workers in flight. There
@@ -6734,7 +6725,7 @@ static int station_kind_out_port_limit(unsigned char kind)
  * Returns NULL when the wire was drawn, or a sentence saying why not.
  * The string is valid until this thread's next refusal.
  */
-const char *map_wire(map_t *m, int from_station, int port,
+const char *cera_map_wire(cera_map_t *m, int from_station, int port,
                      int to_station, int to_port)
 {
     pthread_mutex_lock(&m->rewire_mutex);
@@ -6745,8 +6736,8 @@ const char *map_wire(map_t *m, int from_station, int port,
         pthread_mutex_unlock(&m->rewire_mutex);
         return said("a station index outside the table");
     }
-    station_t *from = map_station(m, from_station);
-    station_t *to = map_station(m, to_station);
+    cera_station_t *from = cera_map_station(m, from_station);
+    cera_station_t *to = cera_map_station(m, to_station);
     /* Only construction used to ask this, and it is the one rule the
      * runtime path was missing rather than the other way round: an
      * empty place in the table has no ports to wire and no size to
@@ -6788,11 +6779,11 @@ const char *map_wire(map_t *m, int from_station, int port,
                  "parameters%s)",
                  who, to_port, to->box_name ? to->box_name : "?",
                  to->n_in_ports, to->n_in_ports == 1 ? "" : "s",
-                 to->kind == STATION_COMPARATOR ? ", plus the threshold" : "");
+                 to->kind == CERA_STATION_COMPARATOR ? ", plus the threshold" : "");
         pthread_mutex_unlock(&m->rewire_mutex);
         return said(message);
     }
-    in_port_t *dest = &to->in_ports[to_port];
+    cera_in_port_t *dest = &to->in_ports[to_port];
     /*
      * **A static destination is legal now** (issue 405): a value
      * arriving there overwrites the constant rather than queueing,
@@ -6801,7 +6792,7 @@ const char *map_wire(map_t *m, int from_station, int port,
      * which has nothing to overwrite and nowhere to queue — the
      * arriving value would have nowhere to go at all.
      */
-    if (dest->kind != IN_PORT_RING && dest->kind != IN_PORT_STATIC) {
+    if (dest->kind != CERA_IN_PORT_RING && dest->kind != CERA_IN_PORT_STATIC) {
         /* Named by station and port, because "the destination port"
          * is not something anybody can go and look at. The whole-map
          * check said it this way and this refusal now arrives first,
@@ -6916,19 +6907,19 @@ const char *map_wire(map_t *m, int from_station, int port,
      * exactly as the loader would. */
     pthread_mutex_lock(&from->mutex);
     while (from->n_out_ports <= port) {
-        out_port_t *fresh = calloc(1, sizeof *fresh);
+        cera_out_port_t *fresh = calloc(1, sizeof *fresh);
         if (!fresh) {
             pthread_mutex_unlock(&from->mutex);
             pthread_mutex_unlock(&m->rewire_mutex);
             return said("out of memory for a port");
         }
-        out_port_t **link = &from->out_ports;
+        cera_out_port_t **link = &from->out_ports;
         while (*link)
             link = &(*link)->next;
         *link = fresh;
         from->n_out_ports++;
     }
-    out_port_t *p = station_out_port(from, port);
+    cera_out_port_t *p = station_out_port(from, port);
 
     /*
      * A whole new set, published by one write (issue 214). Walkers
@@ -6936,8 +6927,8 @@ const char *map_wire(map_t *m, int from_station, int port,
      * disturbed; the old set is filed rather than freed, because one
      * of them may be in it right now.
      */
-    dest_set_t *old = out_port_dests(p);
-    dest_set_t *fresh_set = dest_set_build(old, to_station, to_port, -1, -1);
+    cera_dest_set_t *old = out_port_dests(p);
+    cera_dest_set_t *fresh_set = dest_set_build(old, to_station, to_port, -1, -1);
     atomic_store_explicit(&p->dests, fresh_set, memory_order_release);
     pthread_mutex_unlock(&from->mutex);
     map_retire(m, old, free);
@@ -6947,7 +6938,7 @@ const char *map_wire(map_t *m, int from_station, int port,
 }
 /* }}} */
 
-/* {{{ map_unwire() */
+/* {{{ cera_map_unwire() */
 /*
  * **Cut one wire, at any moment.** NULL when it came out, or a
  * sentence saying why not — the same shape as drawing one, for the
@@ -6967,7 +6958,7 @@ const char *map_wire(map_t *m, int from_station, int port,
  * collect it, and one stops the program. Neither can be ignored into
  * a half-built program.
  */
-const char *map_unwire(map_t *m, int from_station, int port,
+const char *cera_map_unwire(cera_map_t *m, int from_station, int port,
                        int to_station, int to_port)
 {
     pthread_mutex_lock(&m->rewire_mutex);
@@ -6975,12 +6966,12 @@ const char *map_unwire(map_t *m, int from_station, int port,
         pthread_mutex_unlock(&m->rewire_mutex);
         return said("a station index outside the table");
     }
-    station_t *from = map_station(m, from_station);
+    cera_station_t *from = cera_map_station(m, from_station);
 
     pthread_mutex_lock(&from->mutex);
-    out_port_t *p = station_out_port(from, port);
-    dest_set_t *old = out_port_dests(p);
-    dest_set_t *fresh_set = NULL;
+    cera_out_port_t *p = station_out_port(from, port);
+    cera_dest_set_t *old = out_port_dests(p);
+    cera_dest_set_t *fresh_set = NULL;
     int found = 0;
     for (int i = 0; old && i < old->n; i++)
         if (old->items[i].station == to_station
@@ -7008,17 +6999,17 @@ const char *map_unwire(map_t *m, int from_station, int port,
 }
 /* }}} */
 
-/* {{{ map_disconnect() */
+/* {{{ cera_map_disconnect() */
 /*
  * The same operation, for a caller that wants a refusal to stop the
  * program (issue 106).
  */
-void map_disconnect(map_t *m, int from_station, int port,
+void cera_map_disconnect(cera_map_t *m, int from_station, int port,
                     int to_station, int to_port)
 {
-    const char *no = map_unwire(m, from_station, port, to_station, to_port);
+    const char *no = cera_map_unwire(m, from_station, port, to_station, to_port);
     if (no)
-        sora_stop_now(m, SORA_EXIT_BAD_CALL, no);
+        cera_stop_now(m, CERA_EXIT_BAD_CALL, no);
 }
 /* }}} */
 
@@ -7034,9 +7025,9 @@ void map_disconnect(map_t *m, int from_station, int port,
  * the place is free for the next station.
  */
 typedef struct removed_parts {
-    station_t  *station;
-    out_port_t *out_ports;
-    in_port_t  *in_ports;
+    cera_station_t  *station;
+    cera_out_port_t *out_ports;
+    cera_in_port_t  *in_ports;
     int         n_in_ports;
     char       *name;
 } removed_parts_t;
@@ -7045,10 +7036,10 @@ static void reclaim_station(void *p)
 {
     removed_parts_t *r = p;
 
-    out_port_t *port = r->out_ports;
+    cera_out_port_t *port = r->out_ports;
     while (port) {
         free(out_port_dests(port));
-        out_port_t *next = port->next;
+        cera_out_port_t *next = port->next;
         free(port);
         port = next;
     }
@@ -7061,7 +7052,7 @@ static void reclaim_station(void *p)
 
     /* Last, and this is the moment the place becomes free: everything
      * that reads a station checks the shim first. */
-    station_t *s = r->station;
+    cera_station_t *s = r->station;
     s->out_ports = NULL;
     s->n_out_ports = 0;
     s->in_ports = NULL;
@@ -7076,8 +7067,8 @@ static void reclaim_station(void *p)
 }
 /* }}} */
 
-/* {{{ map_remove_station() */
-const char *map_remove_station(map_t *m, int station)
+/* {{{ cera_map_remove_station() */
+const char *cera_map_remove_station(cera_map_t *m, int station)
 {
     pthread_mutex_lock(&m->rewire_mutex);
 
@@ -7085,7 +7076,7 @@ const char *map_remove_station(map_t *m, int station)
         pthread_mutex_unlock(&m->rewire_mutex);
         return said("removing a station outside the table");
     }
-    station_t *s = map_station(m, station);
+    cera_station_t *s = cera_map_station(m, station);
     if (!s->call || atomic_load_explicit(&s->removed, memory_order_acquire)) {
         pthread_mutex_unlock(&m->rewire_mutex);
         return said("removing a station that is not there");
@@ -7110,12 +7101,12 @@ const char *map_remove_station(map_t *m, int station)
      * without a version on every wire.
      */
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *other = map_station(m, i);
+        cera_station_t *other = cera_map_station(m, i);
         if (!other->call)
             continue;
         pthread_mutex_lock(&other->mutex);
-        for (out_port_t *p = other->out_ports; p; p = p->next) {
-            dest_set_t *old = out_port_dests(p);
+        for (cera_out_port_t *p = other->out_ports; p; p = p->next) {
+            cera_dest_set_t *old = out_port_dests(p);
             if (!old)
                 continue;
             int names_it = 0;
@@ -7127,10 +7118,10 @@ const char *map_remove_station(map_t *m, int station)
             /* Rebuilt without every wire to this station, in one new
              * set rather than one per wire, so a walker sees the
              * before or the after and never a partial cut. */
-            dest_set_t *fresh =
+            cera_dest_set_t *fresh =
                 calloc(1, sizeof *fresh
                           + (size_t)(old->n > 0 ? old->n : 1)
-                            * sizeof(destination_t));
+                            * sizeof(cera_destination_t));
             if (!fresh) {
                 pthread_mutex_unlock(&other->mutex);
                 pthread_mutex_unlock(&m->rewire_mutex);
@@ -7181,7 +7172,6 @@ const char *map_remove_station(map_t *m, int station)
  * Was src/074-latebox.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/074-latebox.c"
 /*
  * 074-latebox.c — a box arriving after the program started, from inside.
  *
@@ -7241,23 +7231,20 @@ const char *map_remove_station(map_t *m, int station)
  * this file compiles outside the project's Makefile; a real build
  * always defines all four.
  */
-#ifndef SORA_CC
-#define SORA_CC "cc"
+#ifndef CERA_CC
+#define CERA_CC "cc"
 #endif
-#ifndef SORA_GENERATOR
-#define SORA_GENERATOR "generate"
+#ifndef CERA_GENERATOR
+#define CERA_GENERATOR "generate"
 #endif
-#ifndef SORA_INCLUDE
-#define SORA_INCLUDE "."
+#ifndef CERA_INCLUDE
+#define CERA_INCLUDE "."
 #endif
-#ifndef SORA_INCLUDE_LIBS
-#define SORA_INCLUDE_LIBS "."
+#ifndef CERA_RAM_SHARED
+#define CERA_RAM_SHARED "/dev/shm/minimal-soramech"
 #endif
-#ifndef SORA_RAM_SHARED
-#define SORA_RAM_SHARED "/dev/shm/minimal-soramech"
-#endif
-#ifndef SORA_RAM_EXEC
-#define SORA_RAM_EXEC "/tmp/minimal-soramech"
+#ifndef CERA_RAM_EXEC
+#define CERA_RAM_EXEC "/tmp/minimal-soramech"
 #endif
 /* }}} */
 
@@ -7273,7 +7260,7 @@ typedef struct late_block {
      * 311b). A box compiled while the program runs has to be
      * placeable the same way as one compiled into it, which means the
      * same generated function doing the writing. */
-    const box_place_t *places;
+    const cera_box_place_t *places;
     int                n_places;
     /* And the source it was compiled from, as text (issue 311d). The
      * generator emits this for every object it writes, so a loaded
@@ -7286,7 +7273,7 @@ typedef struct late_block {
      * from the build alone once boxes have arrived. And the check that
      * refuses to compile the same source twice — same path, same
      * bytes, already here. */
-    const box_source_t *sources;
+    const cera_box_source_t *sources;
     int                 n_sources;
     void              *handle;
 } late_block_t;
@@ -7296,7 +7283,7 @@ static int           late_total;
 static int           late_serial; /* names the scratch files apart */
 /* }}} */
 
-/* {{{ late_source_dir() / late_library_dir() */
+/* {{{ cera_late_source_dir() / late_library_dir() */
 /*
  * **Two tiers, and which goes where is not arbitrary.** The project
  * keeps RAM-backed scratch in two places: `/dev/shm` for artifacts
@@ -7312,24 +7299,24 @@ static int           late_serial; /* names the scratch files apart */
  * one, which is the useful kind of mistake: the rule existed and the
  * reason for it had to be rediscovered.
  */
-const char *late_source_dir(void)
+const char *cera_late_source_dir(void)
 {
-    return SORA_RAM_SHARED "/late-boxes";
+    return CERA_RAM_SHARED "/late-boxes";
 }
 
 static const char *late_library_dir(void)
 {
-    return SORA_RAM_EXEC "/late-boxes";
+    return CERA_RAM_EXEC "/late-boxes";
 }
 /* }}} */
 
-/* {{{ late_box_count() / late_box_at() */
-int late_box_count(void)
+/* {{{ cera_late_box_count() / cera_late_box_at() */
+int cera_late_box_count(void)
 {
     return late_total;
 }
 
-const box_place_t *late_box_at(int i)
+const cera_box_place_t *cera_late_box_at(int i)
 {
     /* Blocks are newest first, so walking them in order and counting
      * down gives the caller oldest-first, which is the order boxes
@@ -7351,9 +7338,9 @@ const box_place_t *late_box_at(int i)
  * name added twice resolves to the newer one, and the older code is
  * still loaded and still callable by anything already placed.
  */
-static const box_place_t *late_place_find(const char *name);
+static const cera_box_place_t *late_place_find(const char *name);
 
-static const box_place_t *late_place_find(const char *name)
+static const cera_box_place_t *late_place_find(const char *name)
 {
     for (late_block_t *b = late_head; b; b = b->next)
         for (int i = 0; i < b->n_places; i++)
@@ -7366,7 +7353,7 @@ static const box_place_t *late_place_find(const char *name)
 }
 /* }}} */
 
-/* {{{ late_source_text() */
+/* {{{ cera_late_source_text() */
 /*
  * The C a late-arriving source was compiled from, by the path it was
  * compiled under. Newest first, for the same reason the box lookup is:
@@ -7376,7 +7363,7 @@ static const box_place_t *late_place_find(const char *name)
  * Full path first and basename second, matching how a box is
  * addressed, so that a person can type what they can see.
  */
-const char *late_source_text(const char *path)
+const char *cera_late_source_text(const char *path)
 {
     if (!path || !*path)
         return NULL;
@@ -7458,8 +7445,8 @@ static void close_library(void *handle)
 }
 /* }}} */
 
-/* {{{ late_unload_box() */
-int late_unload_box(map_t *m, const char *name)
+/* {{{ cera_late_unload_box() */
+int cera_late_unload_box(cera_map_t *m, const char *name)
 {
     if (!m || !name || !*name) {
         fprintf(stderr, "latebox: asked to unload nothing\n");
@@ -7493,7 +7480,7 @@ int late_unload_box(map_t *m, const char *name)
      * one library and leave in one.
      */
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call)
             continue;
         /*
@@ -7557,15 +7544,15 @@ int late_unload_box(map_t *m, const char *name)
  * which is the ordinary case of a genuinely misspelled name, and the
  * caller's message for that is the best one in the program.
  */
-static const box_place_t *late_recover_box(const char *name);
+static const cera_box_place_t *late_recover_box(const char *name);
 
-static const box_place_t *late_recover_box(const char *name)
+static const cera_box_place_t *late_recover_box(const char *name)
 {
     if (!name || !*name)
         return NULL;
 
     char path[512];
-    snprintf(path, sizeof path, "%s/%s.c", late_source_dir(), name);
+    snprintf(path, sizeof path, "%s/%s.c", cera_late_source_dir(), name);
 
     FILE *f = fopen(path, "r");
     if (!f)
@@ -7593,14 +7580,14 @@ static const box_place_t *late_recover_box(const char *name)
     fprintf(stderr, "latebox: '%s' was not built in; recovering it from %s\n",
             name, path);
 
-    int added = late_compile_source(text);
+    int added = cera_late_compile_source(text);
     free(text);
     if (added < 0) {
         fprintf(stderr, "latebox: '%s' could not be recovered from its own "
                         "saved source\n", name);
         return NULL;
     }
-    return box_place_find(name);
+    return cera_box_place_find(name);
 }
 /* }}} */
 
@@ -7664,18 +7651,18 @@ static int spill_sources(const char *dir, const char **paths, int cap)
     int n = 0;
     char full[1024];
 
-    for (int i = 0; i < sora_n_box_sources; i++) {
+    for (int i = 0; i < cera_n_box_sources; i++) {
         if (n >= cap)
             break;
         if (snprintf(full, sizeof full, "%s/%s",
-                     dir, sora_box_sources[i].path) >= (int)sizeof full) {
+                     dir, cera_box_sources[i].path) >= (int)sizeof full) {
             fprintf(stderr, "latebox: path too long: %s\n",
-                    sora_box_sources[i].path);
+                    cera_box_sources[i].path);
             return -1;
         }
         if (ensure_path_dirs(full) != 0)
             return -1;
-        if (write_text(full, sora_box_sources[i].text) != 0)
+        if (write_text(full, cera_box_sources[i].text) != 0)
             return -1;
         paths[n] = strdup(full);
         if (!paths[n]) {
@@ -7750,7 +7737,7 @@ static void gather_missing_boxes(const char *map_path, const char *list_path)
 {
     char cmd[2048];
     snprintf(cmd, sizeof cmd, "%s --map-boxes %s > %s",
-             SORA_GENERATOR, map_path, list_path);
+             CERA_GENERATOR, map_path, list_path);
     if (run(cmd) != 0)
         return;   /* the compiler will say what is wrong with it */
 
@@ -7765,7 +7752,7 @@ static void gather_missing_boxes(const char *map_path, const char *list_path)
             name[--n] = '\0';
         if (n == 0)
             continue;
-        if (box_place_find(name))
+        if (cera_box_place_find(name))
             continue;
         late_recover_box(name);
     }
@@ -7773,7 +7760,7 @@ static void gather_missing_boxes(const char *map_path, const char *list_path)
 }
 /* }}} */
 
-/* {{{ late_spill_sources() — issue 712 */
+/* {{{ cera_late_spill_sources() — issue 712 */
 /*
  * **Every source this program is made of, written out under the paths
  * it was compiled as**, so that a captured program can be built again
@@ -7793,7 +7780,7 @@ static void gather_missing_boxes(const char *map_path, const char *list_path)
  *
  * Returns how many sources were written, or -1.
  */
-int late_spill_sources(const char *dir)
+int cera_late_spill_sources(const char *dir)
 {
     enum { MAX_SPILLED = 256 };
     const char *paths[MAX_SPILLED];
@@ -7804,19 +7791,19 @@ int late_spill_sources(const char *dir)
 }
 /* }}} */
 
-/* {{{ late_compile_map() */
-const map_build_t *late_compile_map(const char *map_text)
+/* {{{ cera_late_compile_map() */
+const cera_map_build_t *cera_late_compile_map(const char *map_text)
 {
     if (!map_text || !*map_text) {
         fprintf(stderr, "latebox: an empty description describes nothing\n");
         return NULL;
     }
 
-    const char *dir = late_source_dir();
+    const char *dir = cera_late_source_dir();
     const char *libdir = late_library_dir();
-    if (ensure_dir(SORA_RAM_SHARED) != 0 || ensure_dir(dir) != 0)
+    if (ensure_dir(CERA_RAM_SHARED) != 0 || ensure_dir(dir) != 0)
         return NULL;
-    if (ensure_dir(SORA_RAM_EXEC) != 0 || ensure_dir(libdir) != 0)
+    if (ensure_dir(CERA_RAM_EXEC) != 0 || ensure_dir(libdir) != 0)
         return NULL;
 
     int serial = late_serial++;
@@ -7868,7 +7855,7 @@ const map_build_t *late_compile_map(const char *map_text)
      */
     int at = snprintf(cmd, sizeof cmd,
                       "%s %s --root=%s --map=%s --external-boxes",
-                      SORA_GENERATOR, gen_path, src_root, map_path);
+                      CERA_GENERATOR, gen_path, src_root, map_path);
     for (int i = 0; i < n_spilled && at < (int)sizeof cmd; i++)
         at += snprintf(cmd + at, sizeof cmd - (size_t)at, " %s", spilled[i]);
     if (at >= (int)sizeof cmd) {
@@ -7882,8 +7869,8 @@ const map_build_t *late_compile_map(const char *map_text)
     }
 
     snprintf(cmd, sizeof cmd,
-             "%s -std=gnu11 -O2 -fPIC -shared -I%s -I%s -o %s %s",
-             SORA_CC, SORA_INCLUDE, SORA_INCLUDE_LIBS, lib_path, gen_path);
+             "%s -std=gnu11 -O2 -fPIC -shared -I%s -o %s %s",
+             CERA_CC, CERA_INCLUDE, lib_path, gen_path);
     if (run(cmd) != 0) {
         fprintf(stderr, "latebox: the compiler refused the code generated "
                         "for %s\n", map_path);
@@ -7901,8 +7888,8 @@ const map_build_t *late_compile_map(const char *map_text)
         return NULL;
     }
 
-    const map_build_t *builds = dlsym(handle, "sora_map_builds");
-    const int *count = dlsym(handle, "sora_n_map_builds");
+    const cera_map_build_t *builds = dlsym(handle, "cera_map_builds");
+    const int *count = dlsym(handle, "cera_n_map_builds");
     if (!builds || !count || *count <= 0) {
         fprintf(stderr, "latebox: %s builds no description — the generator "
                         "emitted something unexpected\n", lib_path);
@@ -7913,19 +7900,19 @@ const map_build_t *late_compile_map(const char *map_text)
 }
 /* }}} */
 
-/* {{{ late_compile_source() */
-int late_compile_source(const char *c_source)
+/* {{{ cera_late_compile_source() */
+int cera_late_compile_source(const char *c_source)
 {
     if (!c_source || !*c_source) {
         fprintf(stderr, "latebox: asked to compile nothing\n");
         return -1;
     }
 
-    const char *dir = late_source_dir();
+    const char *dir = cera_late_source_dir();
     const char *libdir = late_library_dir();
-    if (ensure_dir(SORA_RAM_SHARED) != 0 || ensure_dir(dir) != 0)
+    if (ensure_dir(CERA_RAM_SHARED) != 0 || ensure_dir(dir) != 0)
         return -1;
-    if (ensure_dir(SORA_RAM_EXEC) != 0 || ensure_dir(libdir) != 0)
+    if (ensure_dir(CERA_RAM_EXEC) != 0 || ensure_dir(libdir) != 0)
         return -1;
 
     int serial = late_serial++;
@@ -7946,7 +7933,7 @@ int late_compile_source(const char *c_source)
     if (write_text(box_path, c_source) != 0)
         return -1;
 
-    snprintf(cmd, sizeof cmd, "%s %s %s", SORA_GENERATOR, gen_path, box_path);
+    snprintf(cmd, sizeof cmd, "%s %s %s", CERA_GENERATOR, gen_path, box_path);
     if (run(cmd) != 0) {
         fprintf(stderr, "latebox: the generator refused %s\n", box_path);
         return -1;
@@ -7957,8 +7944,8 @@ int late_compile_source(const char *c_source)
      * the one that built this binary, which is what makes its answer
      * to sizeof the same answer. */
     snprintf(cmd, sizeof cmd,
-             "%s -std=gnu11 -O2 -fPIC -shared -I%s -I%s -o %s %s",
-             SORA_CC, SORA_INCLUDE, SORA_INCLUDE_LIBS, lib_path, gen_path);
+             "%s -std=gnu11 -O2 -fPIC -shared -I%s -o %s %s",
+             CERA_CC, CERA_INCLUDE, lib_path, gen_path);
     if (run(cmd) != 0) {
         fprintf(stderr, "latebox: the compiler refused the generated "
                         "generated source for %s\n", box_path);
@@ -8007,7 +7994,7 @@ int late_compile_source(const char *c_source)
      * a `sizeof` the compiler folded, so there was nothing in them
      * anybody read twice.
      */
-    const box_place_t *places = dlsym(handle, "box_places");
+    const cera_box_place_t *places = dlsym(handle, "box_places");
     const int *count = dlsym(handle, "n_box_places");
     if (!places || !count) {
         fprintf(stderr, "latebox: %s defines no placement functions — the "
@@ -8038,8 +8025,8 @@ int late_compile_source(const char *c_source)
      * load it would trade a working box for a missing document. What
      * it costs is that this source cannot be written back out, and the
      * lookup answers NULL rather than pretending. */
-    const box_source_t *sources = dlsym(handle, "sora_box_sources");
-    const int *n_sources = dlsym(handle, "sora_n_box_sources");
+    const cera_box_source_t *sources = dlsym(handle, "cera_box_sources");
+    const int *n_sources = dlsym(handle, "cera_n_box_sources");
     if (sources && n_sources && *n_sources > 0) {
         block->sources   = sources;
         block->n_sources = *n_sources;
@@ -8082,7 +8069,6 @@ int late_compile_source(const char *c_source)
  * Was src/092-stopping.c. The number is this section's position in the
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
-#line 1 "/mnt/mtwo/programming/ai-playground/minimal-soramech/src/092-stopping.c"
 /*
  * 092-stopping.c — every way a program ends except the happy one.
  *
@@ -8142,13 +8128,13 @@ static int interrupts;
 /*
  * The only signal handler in this file, installed for the length of
  * one gather and doing the one thing a handler is unarguably allowed
- * to do. See the second-interrupt case in sora_wait for why it has to
+ * to do. See the second-interrupt case in cera_wait for why it has to
  * exist at all.
  */
 static void escape_now(int sig)
 {
     (void)sig;
-    _exit(SORA_EXIT_INTERRUPTED);
+    _exit(CERA_EXIT_INTERRUPTED);
 }
 /* }}} */
 
@@ -8180,8 +8166,8 @@ static void say(const char *fmt, ...)
 }
 /* }}} */
 
-/* {{{ sora_prepare() */
-void sora_prepare(const char *report_path)
+/* {{{ cera_prepare() */
+void cera_prepare(const char *report_path)
 {
     finished_signal = SIGRTMIN;
 
@@ -8201,7 +8187,7 @@ void sora_prepare(const char *report_path)
     if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0) {
         fprintf(stderr, "stopping: could not block the signals this "
                         "program answers\n");
-        exit(SORA_EXIT_NO_RESOURCE);
+        exit(CERA_EXIT_NO_RESOURCE);
     }
 
     if (report_path && *report_path) {
@@ -8213,9 +8199,9 @@ void sora_prepare(const char *report_path)
          * and useless as a post-mortem after the machine came back;
          * the core dump is what covers the second case.
          */
-        mkdir(SORA_RAM_SHARED, 0777);
+        mkdir(CERA_RAM_SHARED, 0777);
         snprintf(report_where, sizeof report_where,
-                 "%s/stopping-%d.txt", SORA_RAM_SHARED, (int)getpid());
+                 "%s/stopping-%d.txt", CERA_RAM_SHARED, (int)getpid());
     }
 
     report_fd = open(report_where, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -8233,8 +8219,8 @@ void sora_prepare(const char *report_path)
 }
 /* }}} */
 
-/* {{{ sora_report_path() */
-const char *sora_report_path(void)
+/* {{{ cera_report_path() */
+const char *cera_report_path(void)
 {
     return report_where;
 }
@@ -8259,7 +8245,7 @@ const char *sora_report_path(void)
  * missing the newest station, which is a smaller wrong than not
  * reporting at all.
  */
-static void report_without_locks(map_t *m)
+static void report_without_locks(cera_map_t *m)
 {
     say("== the program stopped on demand, taking no locks ==\n");
     if (!m) {
@@ -8270,7 +8256,7 @@ static void report_without_locks(map_t *m)
     int n = m->n_stations;
     say("stations: %d\n", n);
     for (int i = 0; i < n; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call)
             continue;
         say("  station %d: %ld run, %ld produced\n", i,
@@ -8279,10 +8265,10 @@ static void report_without_locks(map_t *m)
     }
 
     if (m->pool) {
-        int workers = pool_worker_count(m->pool);
+        int workers = cera_pool_worker_count(m->pool);
         say("workers: %d\n", workers);
         for (int i = 0; i < workers; i++) {
-            int at = pool_worker_station(m->pool, i);
+            int at = cera_pool_worker_station(m->pool, i);
             if (at < 0)
                 say("  worker %d: between tasks\n", i);
             else
@@ -8306,7 +8292,7 @@ static void report_without_locks(map_t *m)
  * graph outran another, while tasks stuck in the queue mean the
  * consumers are slower than the producers.
  */
-static void report_everything(map_t *m)
+static void report_everything(cera_map_t *m)
 {
     say("== the program was interrupted ==\n");
     if (!m) {
@@ -8315,11 +8301,11 @@ static void report_everything(map_t *m)
     }
 
     if (m->pool)
-        say("tasks queued and never run: %d\n", pool_queued(m->pool));
+        say("tasks queued and never run: %d\n", cera_pool_queued(m->pool));
 
     say("\n-- stations --\n");
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call)
             continue;
         char who[64];
@@ -8331,20 +8317,20 @@ static void report_everything(map_t *m)
             (long)atomic_load_explicit(&s->runs, memory_order_relaxed),
             (long)atomic_load_explicit(&s->produced, memory_order_relaxed));
         for (int j = 0; j < s->n_in_ports; j++) {
-            in_port_t *sl = &s->in_ports[j];
+            cera_in_port_t *sl = &s->in_ports[j];
             if (atomic_load_explicit(&sl->kind, memory_order_relaxed)
-                != IN_PORT_RING)
+                != CERA_IN_PORT_RING)
                 continue;
             say("    port %d: %d waiting, %d deepest, grown %d times\n",
-                j, map_in_port_depth(m, i, j), sl->high_water, sl->growths);
+                j, cera_map_in_port_depth(m, i, j), sl->high_water, sl->growths);
         }
     }
 
     if (m->pool) {
         say("\n-- workers --\n");
-        int workers = pool_worker_count(m->pool);
+        int workers = cera_pool_worker_count(m->pool);
         for (int i = 0; i < workers; i++) {
-            int at = pool_worker_station(m->pool, i);
+            int at = cera_pool_worker_station(m->pool, i);
             if (at < 0) {
                 say("  worker %d: between tasks\n", i);
                 continue;
@@ -8368,14 +8354,14 @@ static void report_everything(map_t *m)
     say("\n-- the program as it stands --\n");
     FILE *f = fdopen(dup(report_fd), "a");
     if (f) {
-        map_dump(m, f);
+        cera_map_dump(m, f);
         fclose(f);
     }
 }
 /* }}} */
 
-/* {{{ sora_wait() */
-int sora_wait(map_t *m)
+/* {{{ cera_wait() */
+int cera_wait(cera_map_t *m)
 {
     sigset_t set;
     sigemptyset(&set);
@@ -8385,7 +8371,7 @@ int sora_wait(map_t *m)
     sigaddset(&set, finished_signal);
 
     if (m && m->pool)
-        pool_signal_when_finished(m->pool, finished_signal);
+        cera_pool_signal_when_finished(m->pool, finished_signal);
 
     for (;;) {
         int sig = 0;
@@ -8396,8 +8382,8 @@ int sora_wait(map_t *m)
             /* The ordinary ending. The last sleeper already broadcast
              * shutdown; this only collects the threads. */
             if (m && m->pool)
-                pool_join(m->pool);
-            return SORA_EXIT_FINISHED;
+                cera_pool_join(m->pool);
+            return CERA_EXIT_FINISHED;
         }
 
         if (sig == SIGTERM) {
@@ -8418,7 +8404,7 @@ int sora_wait(map_t *m)
 
         if (sig == SIGINT) {
             if (++interrupts > 1)
-                _exit(SORA_EXIT_INTERRUPTED);
+                _exit(CERA_EXIT_INTERRUPTED);
 
             /*
              * **A second one skips everything, and making that true
@@ -8465,9 +8451,9 @@ int sora_wait(map_t *m)
              * when this report matters most.
              */
             if (m && m->pool)
-                pool_stop(m->pool);
+                cera_pool_stop(m->pool);
             report_everything(m);
-            return SORA_EXIT_INTERRUPTED;
+            return CERA_EXIT_INTERRUPTED;
         }
 
         if (sig == SIGQUIT) {
@@ -8488,7 +8474,7 @@ int sora_wait(map_t *m)
 /* }}} */
 
 /* {{{ static int write_capture() */
-static int write_capture(map_t *m, const char *path)
+static int write_capture(cera_map_t *m, const char *path)
 {
     FILE *f = fopen(path, "w");
     if (!f) {
@@ -8496,7 +8482,7 @@ static int write_capture(map_t *m, const char *path)
                 path, strerror(errno));
         return -1;
     }
-    map_dump(m, f);
+    cera_map_dump(m, f);
     if (fclose(f) != 0) {
         fprintf(stderr, "capture: cannot finish writing %s: %s\n",
                 path, strerror(errno));
@@ -8506,8 +8492,8 @@ static int write_capture(map_t *m, const char *path)
 }
 /* }}} */
 
-/* {{{ sora_capture() */
-int sora_capture(map_t *m, const char *path)
+/* {{{ cera_capture() */
+int cera_capture(cera_map_t *m, const char *path)
 {
     if (!m || !path || !*path) {
         fprintf(stderr, "capture: needs a program and somewhere to put it\n");
@@ -8528,8 +8514,8 @@ int sora_capture(map_t *m, const char *path)
         /* Released in case nobody has: a pool whose workers are still
          * parked at the starting gate never drains, and both of these
          * are safe to call again. */
-        pool_release(m->pool);
-        pool_join(m->pool);
+        cera_pool_release(m->pool);
+        cera_pool_join(m->pool);
     }
 
     return write_capture(m, path);
@@ -8553,7 +8539,7 @@ int sora_capture(map_t *m, const char *path)
  * needed its own instrumentation would be a report that changed what
  * it was reporting on.
  */
-static int write_capture_report(map_t *m, const char *path)
+static int write_capture_report(cera_map_t *m, const char *path)
 {
     FILE *f = fopen(path, "w");
     if (!f) {
@@ -8568,7 +8554,7 @@ static int write_capture_report(map_t *m, const char *path)
 
     long total_runs = 0;
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call)
             continue;
         total_runs += atomic_load_explicit(&s->runs, memory_order_relaxed);
@@ -8576,7 +8562,7 @@ static int write_capture_report(map_t *m, const char *path)
     fprintf(f, "stations: %d, tasks run: %ld\n\n", m->n_stations, total_runs);
 
     for (int i = 0; i < m->n_stations; i++) {
-        station_t *s = map_station(m, i);
+        cera_station_t *s = cera_map_station(m, i);
         if (!s->call)
             continue;
         const char *who = (i < m->n_named && m->station_names
@@ -8589,9 +8575,9 @@ static int write_capture_report(map_t *m, const char *path)
                                            memory_order_relaxed));
 
         for (int j = 0; j < s->n_in_ports; j++) {
-            in_port_t *sl = &s->in_ports[j];
+            cera_in_port_t *sl = &s->in_ports[j];
             if (atomic_load_explicit(&sl->kind, memory_order_relaxed)
-                != IN_PORT_RING)
+                != CERA_IN_PORT_RING)
                 continue;
             int held = atomic_load_explicit(&sl->held, memory_order_relaxed);
             if (held == 0 && sl->high_water == 0 && sl->growths == 0)
@@ -8615,19 +8601,19 @@ static int write_capture_report(map_t *m, const char *path)
      * the half of what a program is made of that no build knows about,
      * and the reason a whole capture is a directory rather than a file.
      */
-    int late = late_box_count();
+    int late = cera_late_box_count();
     fprintf(f, "\nboxes that arrived while it ran: %d\n", late);
     for (int i = 0; i < late; i++) {
-        const box_place_t *row = late_box_at(i);
+        const cera_box_place_t *row = cera_late_box_at(i);
         if (row)
             fprintf(f, "    %s\n", row->address);
     }
 
     if (m->pool) {
-        int workers = pool_worker_count(m->pool);
+        int workers = cera_pool_worker_count(m->pool);
         int busy = 0;
         for (int i = 0; i < workers; i++)
-            if (pool_worker_station(m->pool, i) >= 0)
+            if (cera_pool_worker_station(m->pool, i) >= 0)
                 busy++;
         fprintf(f, "\nworkers: %d, still inside a box when written: %d\n",
                 workers, busy);
@@ -8645,8 +8631,8 @@ static int write_capture_report(map_t *m, const char *path)
 }
 /* }}} */
 
-/* {{{ sora_capture_whole() */
-int sora_capture_whole(map_t *m, const char *dir)
+/* {{{ cera_capture_whole() */
+int cera_capture_whole(cera_map_t *m, const char *dir)
 {
     if (!m || !dir || !*dir) {
         fprintf(stderr, "capture: needs a program and somewhere to put it\n");
@@ -8666,7 +8652,7 @@ int sora_capture_whole(map_t *m, const char *dir)
      * are not there — the first is obviously incomplete and the second
      * looks whole and is not.
      */
-    if (late_spill_sources(dir) < 0)
+    if (cera_late_spill_sources(dir) < 0)
         return -1;
 
     char path[1024];
@@ -8675,7 +8661,7 @@ int sora_capture_whole(map_t *m, const char *dir)
         fprintf(stderr, "capture: path too long: %s\n", dir);
         return -1;
     }
-    if (sora_capture(m, path) != 0)
+    if (cera_capture(m, path) != 0)
         return -1;
 
     /* The report last, because it is the only part nothing depends on
@@ -8691,8 +8677,8 @@ int sora_capture_whole(map_t *m, const char *dir)
 }
 /* }}} */
 
-/* {{{ sora_capture_now() */
-int sora_capture_now(map_t *m, const char *path)
+/* {{{ cera_capture_now() */
+int cera_capture_now(cera_map_t *m, const char *path)
 {
     if (!m || !path || !*path) {
         fprintf(stderr, "capture: needs a program and somewhere to put it\n");
@@ -8705,8 +8691,8 @@ int sora_capture_now(map_t *m, const char *path)
 }
 /* }}} */
 
-/* {{{ sora_stop_now() */
-void sora_stop_now(map_t *m, int exit_code, const char *why)
+/* {{{ cera_stop_now() */
+void cera_stop_now(cera_map_t *m, int exit_code, const char *why)
 {
     fprintf(stderr, "%s\n", why ? why : "an invalid operation");
     fflush(stderr);
@@ -8718,7 +8704,7 @@ void sora_stop_now(map_t *m, int exit_code, const char *why)
      * in — the same report an interrupt writes, for the same reason.
      */
     if (m && m->pool)
-        pool_stop(m->pool);
+        cera_pool_stop(m->pool);
     say("== an invalid operation ended this program ==\n%s\n",
         why ? why : "an invalid operation");
     report_everything(m);

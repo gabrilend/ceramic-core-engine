@@ -25,7 +25,8 @@ section stands on the ones above it.
 
 ## What is in here, and what is not
 
-**100 symbols, and the engine exports exactly those 100.** Not "roughly
+**100 symbols, every one of them beginning `cera_`, and the engine
+exports exactly those 100.** Not "roughly
 these" — checked on every test run by
 `tests/112-test-public-surface.sh`, which compiles the engine alone,
 asks the object file what it publishes, and fails naming anything that
@@ -58,10 +59,10 @@ through the executable's dynamic symbol table, which is what
 [098-engine-surface.syms](098-engine-surface.syms.info.md) publishes.
 That file and this one describe the same boundary from two directions —
 what a shared object may bind to, and what a program may call. They
-agree today by both naming the same families; after
-[905](../issues/905-the-prefix.md) gives every public name one prefix,
-the linker's list collapses to a single pattern and the question of
-whether it needs to be a file at all can finally be asked.
+agree today by both naming the same families; [905](../issues/completed/905-the-prefix.md) gave every public name one
+prefix, so the linker's list is now a single pattern — and it stayed a
+file, because what will not fit in a link command is the explanation
+around the pattern rather than the pattern.
 
 ## Using it
 
@@ -70,9 +71,21 @@ whether it needs to be a file at all can finally be asked.
 ```
 
 One include path, or none if the two files sit beside your own source.
-Two linker settings are required and are not optional — see
-[057 — Packaging](../docs/implementation-notes/057-packaging.md), which
-explains why the obvious way to write the first cancels the second.
+
+Two linker settings are required and are not optional:
+
+```
+-Wl,--dynamic-list=098-engine-surface.syms -Wl,--gc-sections
+```
+
+The first publishes the engine so that a box or a map compiled while
+the program runs can bind back into it; the second throws away what
+nothing reaches. They only make sense together, and the obvious way to
+write the first — `-rdynamic` — cancels the second, because an exported
+symbol is a root the collector may never touch and exporting everything
+declares the whole binary reachable. See
+[098-engine-surface.syms](098-engine-surface.syms.info.md), which
+carries the measurements.
 
 ## Related
 

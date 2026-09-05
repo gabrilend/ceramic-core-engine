@@ -242,31 +242,31 @@ static void test_box_symbols(void)
      * into a single underscore would make both of these `math_c__add`
      * and the linker would reject the build without ever mentioning
      * either file. */
-    check_str(gt_box_symbol(a, "math.c", "add"), "sora_box_math_dot_c__add",
+    check_str(gt_box_symbol(a, "math.c", "add"), "cera_box_math_dot_c__add",
               "a dot becomes a word");
-    check_str(gt_box_symbol(a, "math_c", "add"), "sora_box_math_und_c__add",
+    check_str(gt_box_symbol(a, "math_c", "add"), "cera_box_math_und_c__add",
               "an underscore escapes itself");
 
     /* Reading left to right: math + _dot_ + dot + _dot_ + c. */
     check_str(gt_box_symbol(a, "math.dot.c", "add"),
-              "sora_box_math_dot_dot_dot_c__add",
+              "cera_box_math_dot_dot_dot_c__add",
               "a name that spells out the escape still decodes");
 
     /* The path is what settles two files sharing a basename, so the
      * separator needs a rule of its own. */
     check_str(gt_box_symbol(a, "src/boxes/math.c", "add"),
-              "sora_box_src_sl_boxes_sl_math_dot_c__add",
+              "cera_box_src_sl_boxes_sl_math_dot_c__add",
               "a path is part of the symbol");
 
     /* This project's own sources: a leading digit and hyphens, which
      * is why there is a prefix and a rule for the hyphen. */
     check_str(gt_box_symbol(a, "029-demo-boxes.c", "add"),
-              "sora_box_029_dsh_demo_dsh_boxes_dot_c__add",
+              "cera_box_029_dsh_demo_dsh_boxes_dot_c__add",
               "a real source of this project produces a legal identifier");
 
     /* Anything else at all, so no filename can defeat the scheme. */
     check_str(gt_box_symbol(a, "od d.c", "add"),
-              "sora_box_od_x20_d_dot_c__add",
+              "cera_box_od_x20_d_dot_c__add",
               "an unforeseen character is transcribed rather than dropped");
 
     /*

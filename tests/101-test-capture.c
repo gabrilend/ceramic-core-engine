@@ -66,14 +66,14 @@ static void write_text(const char *path, const char *text)
 /* }}} */
 
 /* {{{ static void dump_to() */
-static void dump_to(map_t *m, const char *path)
+static void dump_to(cera_map_t *m, const char *path)
 {
     FILE *f = fopen(path, "w");
     if (!f) {
         fprintf(stderr, "cannot write %s\n", path);
         exit(1);
     }
-    map_dump(m, f);
+    cera_map_dump(m, f);
     fclose(f);
 }
 /* }}} */
@@ -119,7 +119,7 @@ static void work_in_flight_survives(void)
         "station adder add p result\n"
         "  in 1 -\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
 
     /* Three values into the port that has a source, none of which can
      * make the station ready, because its other port has none. */
@@ -129,11 +129,11 @@ static void work_in_flight_survives(void)
          * a fact about the station rather than about this value — and
          * here nothing can become due, because the adder's other port
          * is empty. The buffer depth below is what says it landed. */
-        map_deliver_value(m, 1, 0, &value);
+        cera_map_deliver_value(m, 1, 0, &value);
     }
-    check(atomic_load(&map_station(m, 1)->in_ports[0].held) == 3,
+    check(atomic_load(&cera_map_station(m, 1)->in_ports[0].held) == 3,
           "three values are waiting and none of them could run");
-    check(atomic_load(&map_station(m, 1)->runs) == 0,
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 0,
           "and the station has not run, because its other port is empty");
 
     dump_to(m, dump_path);
@@ -147,10 +147,10 @@ static void work_in_flight_survives(void)
           "and all three of them are in it");
 
     /* Read back into a fresh program, which never saw the first. */
-    map_t *revived = map_load_file(dump_path, 2);
-    check(atomic_load(&map_station(revived, 1)->in_ports[0].held) == 3,
+    cera_map_t *revived = cera_map_load_file(dump_path, 2);
+    check(atomic_load(&cera_map_station(revived, 1)->in_ports[0].held) == 3,
           "the revived program has the same three values waiting");
-    check(atomic_load(&map_station(revived, 1)->runs) == 0,
+    check(atomic_load(&cera_map_station(revived, 1)->runs) == 0,
           "and has not run either, so nothing was consumed on the way");
 
     /* Captured twice is the same text, which is the round trip the
@@ -160,12 +160,12 @@ static void work_in_flight_survives(void)
     check(strcmp(slurp(dump_path), slurp(again_path)) == 0,
           "capturing the revived program produced the same text again");
 
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
-    pool_release(revived->pool);
-    pool_join(revived->pool);
-    map_destroy(revived);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
+    cera_pool_release(revived->pool);
+    cera_pool_join(revived->pool);
+    cera_map_destroy(revived);
 
     printf("  work waiting in a buffer was written down and picked up "
            "again\n");
@@ -192,37 +192,37 @@ static void the_revived_program_finishes_the_work(void)
         "station adder add p result\n"
         "  in 1 -\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
     for (int v = 1; v <= 3; v++) {
         int value = v * 100;
-        map_deliver_value(m, 1, 0, &value);
+        cera_map_deliver_value(m, 1, 0, &value);
     }
     dump_to(m, dump_path);
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
 
-    map_t *revived = map_load_file(dump_path, 2);
+    cera_map_t *revived = cera_map_load_file(dump_path, 2);
 
     /* Finish the port that was never wired, which is what the program
      * was waiting for all along. */
-    check(map_configure_port(revived, 1, 1, IN_PORT_STATIC, "7") == NULL,
+    check(cera_map_configure_port(revived, 1, 1, CERA_IN_PORT_STATIC, "7") == NULL,
           "the missing port was finished on the revived program");
-    check(map_bring_up(revived) == NULL,
+    check(cera_map_bring_up(revived) == NULL,
           "and the revived program came up");
 
-    pool_release(revived->pool);
-    pool_join(revived->pool);
+    cera_pool_release(revived->pool);
+    cera_pool_join(revived->pool);
 
-    check(atomic_load(&map_station(revived, 1)->runs) == 3,
+    check(atomic_load(&cera_map_station(revived, 1)->runs) == 3,
           "all three pieces of work in flight ran after revival");
 
     /* And the answers are the ones the first program would have
      * produced: each value plus seven. */
     int seen[3] = { 0, 0, 0 }, got = 0;
-    while (map_output_waiting(revived, 1) > 0 && got < 3) {
+    while (cera_map_output_waiting(revived, 1) > 0 && got < 3) {
         int out = 0;
-        map_output_take(revived, 1, &out, (int)sizeof out);
+        cera_map_output_take(revived, 1, &out, (int)sizeof out);
         seen[got++] = out;
     }
     check(got == 3, "and produced three results");
@@ -230,7 +230,7 @@ static void the_revived_program_finishes_the_work(void)
     check(total == (100 + 7) + (200 + 7) + (300 + 7),
           "which are the answers the captured work was waiting to give");
 
-    map_destroy(revived);
+    cera_map_destroy(revived);
     printf("  and the revived program finished the work it was carrying\n");
 }
 /* }}} */
@@ -260,18 +260,18 @@ static void a_struct_queue_survives(void)
         "station shifter nudge p result\n"
         "  in 1 -\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
 
     /* Two vec3 values, each holding commas of its own. */
-    check(map_in_port_queue_text(m, 1, 0,
+    check(cera_map_in_port_queue_text(m, 1, 0,
               "{ 1.5, 2.5, 3.5 }, { 4.5, 5.5, 6.5 }") == NULL,
           "two struct values were put into the buffer");
-    check(atomic_load(&map_station(m, 1)->in_ports[0].held) == 2,
+    check(atomic_load(&cera_map_station(m, 1)->in_ports[0].held) == 2,
           "and both of them are waiting");
 
     dump_to(m, dump_path);
-    map_t *revived = map_load_file(dump_path, 2);
-    check(atomic_load(&map_station(revived, 1)->in_ports[0].held) == 2,
+    cera_map_t *revived = cera_map_load_file(dump_path, 2);
+    check(atomic_load(&cera_map_station(revived, 1)->in_ports[0].held) == 2,
           "the revived program has both struct values waiting");
 
     dump_to(revived, again_path);
@@ -279,12 +279,12 @@ static void a_struct_queue_survives(void)
           "and writing it down again produced the same text, commas and "
           "all");
 
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
-    pool_release(revived->pool);
-    pool_join(revived->pool);
-    map_destroy(revived);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
+    cera_pool_release(revived->pool);
+    cera_pool_join(revived->pool);
+    cera_map_destroy(revived);
 
     printf("  a queue of struct values survived, inner commas and all\n");
 }
@@ -318,26 +318,26 @@ static void a_deep_buffer_drains_when_the_constant_arrives(void)
         "  in 0 x64\n"
         "  in 1 -\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
 
     for (int v = 0; v < 30; v++) {
         int value = v;
-        map_deliver_value(m, 1, 0, &value);
+        cera_map_deliver_value(m, 1, 0, &value);
     }
-    check(atomic_load(&map_station(m, 1)->in_ports[0].held) == 30,
+    check(atomic_load(&cera_map_station(m, 1)->in_ports[0].held) == 30,
           "thirty values are waiting on one port");
-    check(atomic_load(&map_station(m, 1)->runs) == 0,
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 0,
           "and none of them can run, because the other port is empty");
 
     /* Door one: a constant bound to the empty port. */
-    check(map_configure_port(m, 1, 1, IN_PORT_STATIC, "1") == NULL,
+    check(cera_map_configure_port(m, 1, 1, CERA_IN_PORT_STATIC, "1") == NULL,
           "a constant was bound to the port that was empty");
-    pool_release(m->pool);
-    pool_join(m->pool);
-    check(atomic_load(&map_station(m, 1)->runs) == 30,
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 30,
           "and all thirty ran, not one");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  thirty values waiting on one port all ran when the other "
            "port was filled\n");
 }
@@ -363,31 +363,31 @@ static void writing_a_constant_drains_what_was_waiting(void)
         "  in 0 x64\n"
         "  in 1 = 1\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
 
     /* The constant is already there, so each delivery starts one task
      * as it lands — which is the ordinary path and needs no help.
      * Deliver with the workers parked so the work piles up instead. */
     for (int v = 0; v < 30; v++) {
         int value = v;
-        map_deliver_value(m, 1, 0, &value);
+        cera_map_deliver_value(m, 1, 0, &value);
     }
 
     /* Now change the constant. Nothing is waiting by this point,
      * because every delivery started its own task, so what this
      * proves is the narrower half: writing does not strand anything
      * and does not start a station twice for one change. */
-    long before = atomic_load(&map_station(m, 1)->runs);
+    long before = atomic_load(&cera_map_station(m, 1)->runs);
     int fresh = 5;
-    map_in_port_static_write(m, 1, 1, &fresh, (int)sizeof fresh);
+    cera_map_in_port_static_write(m, 1, 1, &fresh, (int)sizeof fresh);
 
-    pool_release(m->pool);
-    pool_join(m->pool);
-    check(atomic_load(&map_station(m, 1)->runs) == 30,
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 30,
           "thirty deliveries produced thirty runs and no more");
     check(before <= 30, "and none of them ran twice");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  writing a constant left nothing stranded and started "
            "nothing twice\n");
 }
@@ -414,24 +414,24 @@ static void a_station_of_only_constants_runs_once_per_change(void)
         "  in 0 = 2\n"
         "  in 1 = 3\n");
 
-    map_t *m = map_load_file(map_path, 2);
-    pool_release(m->pool);
-    pool_join(m->pool);
-    check(atomic_load(&map_station(m, 0)->runs) == 1,
+    cera_map_t *m = cera_map_load_file(map_path, 2);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    check(atomic_load(&cera_map_station(m, 0)->runs) == 1,
           "a station of only constants ran exactly once");
 
-    map_t *again = map_load_file(map_path, 2);
+    cera_map_t *again = cera_map_load_file(map_path, 2);
     int fresh = 10;
-    map_in_port_static_write(again, 0, 0, &fresh, (int)sizeof fresh);
-    map_in_port_static_write(again, 0, 1, &fresh, (int)sizeof fresh);
-    pool_release(again->pool);
-    pool_join(again->pool);
-    check(atomic_load(&map_station(again, 0)->runs) == 3,
+    cera_map_in_port_static_write(again, 0, 0, &fresh, (int)sizeof fresh);
+    cera_map_in_port_static_write(again, 0, 1, &fresh, (int)sizeof fresh);
+    cera_pool_release(again->pool);
+    cera_pool_join(again->pool);
+    check(atomic_load(&cera_map_station(again, 0)->runs) == 3,
           "and once more for each change to a constant on it — never "
           "looping, which it would do forever");
 
-    map_destroy(m);
-    map_destroy(again);
+    cera_map_destroy(m);
+    cera_map_destroy(again);
     printf("  a station of only constants ran once, and once again per "
            "change\n");
 }
@@ -473,22 +473,22 @@ static void writing_the_same_value_still_counts(void)
         "  in 0 = 2\n"
         "  in 1 = 3\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
 
     /* Three writes of the value already there. */
     int same = 3;
     for (int i = 0; i < 3; i++)
-        map_in_port_static_write(m, 0, 1, &same, (int)sizeof same);
+        cera_map_in_port_static_write(m, 0, 1, &same, (int)sizeof same);
 
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     /* One for becoming complete, one for each write. */
-    check(atomic_load(&map_station(m, 0)->runs) == 4,
+    check(atomic_load(&cera_map_station(m, 0)->runs) == 4,
           "writing the value a port already held ran the station again, "
           "every time");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  writing a constant its own value over again counted every "
            "time\n");
 }
@@ -519,38 +519,38 @@ static void a_write_drains_whatever_is_waiting(void)
         "  in 1 x64\n"
         "  in 2 = 7\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
 
     /* Ten on the first buffer, nothing on the second. */
     for (int v = 0; v < 10; v++) {
         int value = v;
-        map_deliver_value(m, 1, 0, &value);
+        cera_map_deliver_value(m, 1, 0, &value);
     }
 
     /* Writing the constant cannot start anything: a port is empty, and
      * that is the whole of the rule. */
     unsigned long seven = 7;   /* stamp_record's third parameter */
-    map_in_port_static_write(m, 1, 2, &seven, (int)sizeof seven);
-    check(atomic_load(&map_station(m, 1)->runs) == 0,
+    cera_map_in_port_static_write(m, 1, 2, &seven, (int)sizeof seven);
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 0,
           "writing a constant started nothing while a port was empty");
-    check(atomic_load(&map_station(m, 1)->in_ports[0].held) == 10,
+    check(atomic_load(&cera_map_station(m, 1)->in_ports[0].held) == 10,
           "and left all ten waiting");
 
     /* Four on the second buffer: four pairs are due, six wait on. */
     for (int v = 0; v < 4; v++) {
         vec3 where = { (float)v, 0.0f, 0.0f };
-        map_deliver_value(m, 1, 1, &where);
+        cera_map_deliver_value(m, 1, 1, &where);
     }
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
-    check(atomic_load(&map_station(m, 1)->runs) == 4,
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 4,
           "four values on the second buffer paired with four of the ten");
-    check(atomic_load(&map_station(m, 1)->in_ports[0].held) == 6,
+    check(atomic_load(&cera_map_station(m, 1)->in_ports[0].held) == 6,
           "and the other six are still waiting, because the rule is every "
           "port and not merely the constant");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a write started nothing while a port was empty, and the "
            "surplus stayed waiting\n");
 }
@@ -588,34 +588,34 @@ static void an_iterator_remembers_where_it_was(void)
         "station second keep p\n"
         "station third keep p\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
 
     /* Two values through it, so the next exit is the third. */
     for (int v = 0; v < 2; v++) {
         int value = v;
-        map_deliver_value(m, 1, 0, &value);
+        cera_map_deliver_value(m, 1, 0, &value);
     }
-    pool_release(m->pool);
-    pool_join(m->pool);
-    check(map_station(m, 1)->cursor == 2,
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    check(cera_map_station(m, 1)->cursor == 2,
           "after two values the iterator is pointing at its third exit");
 
     dump_to(m, dump_path);
     check(strstr(slurp(dump_path), "@2") != NULL,
           "and the capture wrote where it had got to");
 
-    map_t *revived = map_load_file(dump_path, 2);
-    check(map_station(revived, 1)->cursor == 2,
+    cera_map_t *revived = cera_map_load_file(dump_path, 2);
+    check(cera_map_station(revived, 1)->cursor == 2,
           "the revived program's iterator is pointing at the same exit");
 
     dump_to(revived, again_path);
     check(strcmp(slurp(dump_path), slurp(again_path)) == 0,
           "and writing it down again produced the same text");
 
-    map_destroy(m);
-    pool_release(revived->pool);
-    pool_join(revived->pool);
-    map_destroy(revived);
+    cera_map_destroy(m);
+    cera_pool_release(revived->pool);
+    cera_pool_join(revived->pool);
+    cera_map_destroy(revived);
 
     printf("  an iterator was revived pointing where it had got to\n");
 }
@@ -646,30 +646,30 @@ static void draining_produces_a_complete_capture(void)
         "\n"
         "station twice double_it p result\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
     for (int v = 0; v < 5; v++) {
         int value = v;
-        map_deliver_argument(m, 0, 0, &value, (int)sizeof value);
+        cera_map_deliver_argument(m, 0, 0, &value, (int)sizeof value);
     }
 
-    check(sora_capture(m, dump_path) == 0, "the program was captured");
+    check(cera_capture(m, dump_path) == 0, "the program was captured");
 
     const char *text = slurp(dump_path);
     check(strstr(text, "INCOMPLETE") == NULL,
           "and the capture says nothing about being incomplete, because "
           "it drained first");
-    check(atomic_load(&map_station(m, 1)->runs) == 5,
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 5,
           "everything in flight finished before it was written");
 
     /* And it reads back through the ordinary door, which an
      * incomplete one would not. */
-    map_t *revived = map_load_file(dump_path, 2);
+    cera_map_t *revived = cera_map_load_file(dump_path, 2);
     check(revived != NULL, "and a complete capture reads back plainly");
-    pool_release(revived->pool);
-    pool_join(revived->pool);
-    map_destroy(revived);
+    cera_pool_release(revived->pool);
+    cera_pool_join(revived->pool);
+    cera_map_destroy(revived);
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  draining before writing produced a capture with nothing "
            "missing\n");
 }
@@ -702,24 +702,24 @@ static void an_incomplete_capture_says_so_and_is_refused(void)
 
     pid_t child = fork();
     if (child == 0) {
-        map_t *m = map_load_file(map_path, 1);
+        cera_map_t *m = cera_map_load_file(map_path, 1);
         int value = 1;
-        map_deliver_argument(m, 0, 0, &value, (int)sizeof value);
-        pool_release(m->pool);
+        cera_map_deliver_argument(m, 0, 0, &value, (int)sizeof value);
+        cera_pool_release(m->pool);
 
         /* Wait until the one worker is actually inside the wedge,
          * rather than guessing. Nothing here invents a clock: it asks
          * the pool what its worker is doing until the answer is the
          * station that never returns. */
         for (;;) {
-            int at = pool_worker_station(m->pool, 0);
+            int at = cera_pool_worker_station(m->pool, 0);
             if (at == 1)
                 break;
         }
 
         /* Not the polite one: draining would never return, which is
          * the whole reason this door exists. */
-        _exit(sora_capture_now(m, dump_path) == 0 ? 0 : 1);
+        _exit(cera_capture_now(m, dump_path) == 0 ? 0 : 1);
     }
     check(child > 0, "a child was forked to hold the wedged worker");
     if (child <= 0)
@@ -776,12 +776,12 @@ static void reviving_a_lossy_capture_is_refused(const char *self)
                    "refused");
 
     /* And salvaging it works, having said so out loud. */
-    map_t *salvaged = map_load_salvage(lossy_path, 2);
+    cera_map_t *salvaged = cera_map_load_salvage(lossy_path, 2);
     check(salvaged != NULL, "and salvaging the same file worked");
     if (salvaged) {
-        pool_release(salvaged->pool);
-        pool_join(salvaged->pool);
-        map_destroy(salvaged);
+        cera_pool_release(salvaged->pool);
+        cera_pool_join(salvaged->pool);
+        cera_map_destroy(salvaged);
     }
 
     printf("  an incomplete capture was refused by the ordinary door and "
@@ -814,7 +814,7 @@ static void a_grown_program_captures_whole(void)
         "    return x * 4;\n"
         "}\n";
 
-    check(late_compile_source(source) == 1,
+    check(cera_late_compile_source(source) == 1,
           "a box arrived after the program started");
 
     char map_path[512], out_dir[192], described[512], probe[1024];
@@ -827,11 +827,11 @@ static void a_grown_program_captures_whole(void)
         "\n"
         "station four quadruple p result\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
     int value = 3;
-    map_deliver_argument(m, 0, 0, &value, (int)sizeof value);
+    cera_map_deliver_argument(m, 0, 0, &value, (int)sizeof value);
 
-    check(sora_capture_whole(m, out_dir) == 0,
+    check(cera_capture_whole(m, out_dir) == 0,
           "the grown program was captured whole");
 
     /* The description is there. */
@@ -844,7 +844,7 @@ static void a_grown_program_captures_whole(void)
     /* And so is the source of the box the build never saw. Found by
      * asking the running program what that box is filed under, rather
      * than by knowing where the compiler happened to put it. */
-    const box_place_t *row = box_place_find("quadruple");
+    const cera_box_place_t *row = cera_box_place_find("quadruple");
     check(row != NULL, "the late box is placeable by name");
     if (row) {
         const char *colon = strrchr(row->address, ':');
@@ -885,7 +885,7 @@ static void a_grown_program_captures_whole(void)
     check(strstr(report, "four (station 1)") != NULL,
           "and says what each station did, by the name its author gave it");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a program that grew a box was captured whole, with a report "
            "of what it had done\n");
 }
@@ -898,7 +898,7 @@ int main(int argc, char **argv)
 
     /* The child of the refusal test does one thing and dies trying. */
     if (argc == 3 && strcmp(argv[1], "--load-lossy") == 0) {
-        map_load_file(argv[2], 1);
+        cera_map_load_file(argv[2], 1);
         return 0;   /* not reached: the load is fatal */
     }
 

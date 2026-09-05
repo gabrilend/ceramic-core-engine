@@ -48,14 +48,14 @@ static void check(int ok, const char *what)
 static char work_dir[256];
 
 /* {{{ static void dump_to() */
-static void dump_to(map_t *m, const char *path)
+static void dump_to(cera_map_t *m, const char *path)
 {
     FILE *f = fopen(path, "w");
     if (!f) {
         fprintf(stderr, "cannot write %s\n", path);
         exit(1);
     }
-    map_dump(m, f);
+    cera_map_dump(m, f);
     fclose(f);
 }
 /* }}} */
@@ -91,12 +91,12 @@ int main(void)
     }
 
     /* The build was told about this description, so it is here. */
-    const map_build_t *compiled = map_build_find("095-doubling.map");
+    const cera_map_build_t *compiled = cera_map_build_find("095-doubling.map");
     check(compiled != NULL,
           "the build compiled the description it was told about");
-    check(map_build_find("maps/095-doubling.map") != NULL,
+    check(cera_map_build_find("maps/095-doubling.map") != NULL,
           "and it is found by the path the build knew it as");
-    check(map_build_find("no-such.map") == NULL,
+    check(cera_map_build_find("no-such.map") == NULL,
           "and a description this program was not built with is not there");
     if (!compiled)
         return 1;
@@ -110,14 +110,14 @@ int main(void)
            "now: read, compiled at build, compiled while running)\n");
     fflush(stdout);
 
-    map_t *read = map_load_file(SORA_ROOT "/maps/095-doubling.map", 2);
+    cera_map_t *read = cera_map_load_file(CERA_ROOT "/maps/095-doubling.map", 2);
 
     /* And the same description, as the calls the build compiled it
      * into. Nothing here parses anything. */
-    map_t *built = map_create_empty();
+    cera_map_t *built = cera_map_create_empty();
     compiled->build(built, NULL, 0);
-    map_start(built, 2);
-    const char *no = map_bring_up(built);
+    cera_map_start(built, 2);
+    const char *no = cera_map_bring_up(built);
     if (no) {
         fprintf(stderr, "the compiled program was refused: %s\n", no);
         return 1;
@@ -137,17 +137,17 @@ int main(void)
      * ones this program published. That is why the station-builders
      * are published at all.
      */
-    char *description = slurp(SORA_ROOT "/maps/095-doubling.map");
-    const map_build_t *compiled_now = late_compile_map(description);
+    char *description = slurp(CERA_ROOT "/maps/095-doubling.map");
+    const cera_map_build_t *compiled_now = cera_late_compile_map(description);
     check(compiled_now != NULL,
           "a description handed to the running program compiled into it");
 
-    map_t *late = NULL;
+    cera_map_t *late = NULL;
     if (compiled_now) {
-        late = map_create_empty();
+        late = cera_map_create_empty();
         compiled_now->build(late, NULL, 0);
-        map_start(late, 2);
-        const char *refused = map_bring_up(late);
+        cera_map_start(late, 2);
+        const char *refused = cera_map_bring_up(late);
         if (refused) {
             fprintf(stderr, "the program compiled at run time was refused: "
                             "%s\n", refused);
@@ -198,9 +198,9 @@ int main(void)
         if (strcmp(c, e) == 0)
             printf("  and compiling it again while the program ran made a "
                    "third identical copy, binding to boxes already here\n");
-        pool_release(late->pool);
-        pool_join(late->pool);
-        map_destroy(late);
+        cera_pool_release(late->pool);
+        cera_pool_join(late->pool);
+        cera_map_destroy(late);
     }
 
     /*
@@ -211,7 +211,7 @@ int main(void)
      * building it twice into one program gives two independent copies
      * — the same claim instantiating from text makes.
      */
-    map_t *twice = map_create_empty();
+    cera_map_t *twice = cera_map_create_empty();
     compiled->build(twice, NULL, 0);
     int after_first = twice->n_stations;
     compiled->build(twice, NULL, 0);
@@ -220,20 +220,20 @@ int main(void)
 
     int doors = 0;
     for (int i = 0; i < twice->n_stations; i++)
-        if (map_station(twice, i)->door == DOOR_OUT)
+        if (cera_map_station(twice, i)->door == CERA_DOOR_OUT)
             doors++;
     check(doors == 2,
           "and each copy brought its own way out, so the second was not "
           "built on top of the first");
 
-    map_destroy(twice);
+    cera_map_destroy(twice);
 
-    pool_release(read->pool);
-    pool_join(read->pool);
-    pool_release(built->pool);
-    pool_join(built->pool);
-    map_destroy(read);
-    map_destroy(built);
+    cera_pool_release(read->pool);
+    cera_pool_join(read->pool);
+    cera_pool_release(built->pool);
+    cera_pool_join(built->pool);
+    cera_map_destroy(read);
+    cera_map_destroy(built);
 
     snprintf(command, sizeof command, "rm -rf %s", work_dir);
     if (system(command) != 0)

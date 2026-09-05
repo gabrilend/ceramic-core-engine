@@ -46,42 +46,42 @@ static void check(int ok, const char *what)
  */
 static void nothing_moves_across_a_shelf(void)
 {
-    map_t *m = map_create(1);
-    map_place_box(m, 0, "seven", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(1);
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);
 
     /* Where the first few live now. */
     enum { WATCH = 4 };
-    station_t *before[WATCH];
+    cera_station_t *before[WATCH];
     for (int i = 0; i < WATCH; i++) {
-        int at = map_add_station(m);
+        int at = cera_map_add_station(m);
         check(at >= 0, "a place was handed out");
-        map_place_box(m, at, "keep", STATION_PLAIN);
-        before[i] = map_station(m, at);
+        cera_map_place_box(m, at, "keep", CERA_STATION_PLAIN);
+        before[i] = cera_map_station(m, at);
     }
 
     /* Well past one shelf, so the shelf array itself reallocates
      * several times. */
     int added = 0;
-    for (int i = 0; i < STATIONS_PER_SHELF * 3; i++) {
-        int at = map_add_station(m);
+    for (int i = 0; i < CERA_STATIONS_PER_SHELF * 3; i++) {
+        int at = cera_map_add_station(m);
         if (at < 0)
             break;
-        map_place_box(m, at, "keep", STATION_PLAIN);
+        cera_map_place_box(m, at, "keep", CERA_STATION_PLAIN);
         added++;
     }
-    check(added == STATIONS_PER_SHELF * 3, "the table grew as far as asked");
+    check(added == CERA_STATIONS_PER_SHELF * 3, "the table grew as far as asked");
     check(m->n_shelves > 1, "and it took more than one shelf to do it");
 
     int moved = 0;
     for (int i = 0; i < WATCH; i++)
-        if (map_station(m, i + 1) != before[i])
+        if (cera_map_station(m, i + 1) != before[i])
             moved = 1;
     check(!moved,
           "not one station already placed moved, mutex and all — which is "
           "the entire reason the table is shelves");
 
     int shelves = m->n_shelves;
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  grew across %d shelves; nothing already placed moved\n",
            shelves);
 }
@@ -95,48 +95,48 @@ static void nothing_moves_across_a_shelf(void)
  */
 static void a_station_added_mid_run(void)
 {
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "double_it", STATION_PLAIN);
-    map_place_box(m, 1, "keep", STATION_PLAIN);
-    map_connect(m, 0, 0, 1, 0);
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "double_it", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 1, 0);
 
-    map_start(m, 4);
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_map_start(m, 4);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     for (int i = 0; i < 50; i++) {
         int v = i;
-        map_deliver_value(m, 0, 0, &v);
+        cera_map_deliver_value(m, 0, 0, &v);
     }
 
     /* Grown while it runs, then wired in. */
-    int fresh = map_add_station(m);
+    int fresh = cera_map_add_station(m);
     check(fresh >= 2, "a new place came from beyond what was allocated");
-    map_place_box(m, fresh, "keep", STATION_PLAIN);
-    check(map_wire(m, 0, 0, fresh, 0) == NULL,
+    cera_map_place_box(m, fresh, "keep", CERA_STATION_PLAIN);
+    check(cera_map_wire(m, 0, 0, fresh, 0) == NULL,
           "and a wire reached it");
 
     for (int i = 0; i < 50; i++) {
         int v = i;
-        map_deliver_value(m, 0, 0, &v);
+        cera_map_deliver_value(m, 0, 0, &v);
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
-    check(atomic_load(&map_station(m, fresh)->runs) > 0,
+    check(atomic_load(&cera_map_station(m, fresh)->runs) > 0,
           "the station added mid-run received values");
-    check(atomic_load(&map_station(m, 1)->runs) == 100,
+    check(atomic_load(&cera_map_station(m, 1)->runs) == 100,
           "and the one that was always there got every value, undisturbed");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a station added mid-run took values; the old one lost none\n");
 }
 /* }}} */
 
 /* {{{ many threads asking at once */
 typedef struct {
-    map_t *m;
+    cera_map_t *m;
     int    got[64];
     int    n;
 } asker_t;
@@ -145,7 +145,7 @@ static void *ask_for_places(void *arg)
 {
     asker_t *a = arg;
     for (int i = 0; i < a->n; i++)
-        a->got[i] = map_add_station(a->m);
+        a->got[i] = cera_map_add_station(a->m);
     return NULL;
 }
 
@@ -157,8 +157,8 @@ static void *ask_for_places(void *arg)
 static void concurrent_asks_share_nothing(void)
 {
     enum { THREADS = 8, EACH = 20 };
-    map_t *m = map_create(1);
-    map_place_box(m, 0, "seven", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(1);
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);
 
     asker_t askers[THREADS];
     pthread_t threads[THREADS];
@@ -202,36 +202,36 @@ static void concurrent_asks_share_nothing(void)
     printf("  %d asks with nothing filled returned %d distinct places\n",
            handed, handed - duplicates);
 
-    map_destroy(m);
+    cera_map_destroy(m);
 }
 /* }}} */
 
 /* {{{ static void filled_places_are_never_handed_twice() */
 static void filled_places_are_never_handed_twice(void)
 {
-    map_t *m = map_create(1);
-    map_place_box(m, 0, "seven", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(1);
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);
 
     enum { N = 200 };
     int seen[N + 8];
     memset(seen, 0, sizeof seen);
     int duplicates = 0;
     for (int i = 0; i < N; i++) {
-        int at = map_add_station(m);
+        int at = cera_map_add_station(m);
         check(at >= 0, "a place was handed out");
         if (at >= 0 && at < N + 8) {
             if (seen[at])
                 duplicates++;
             seen[at] = 1;
         }
-        map_place_box(m, at, "keep", STATION_PLAIN);
+        cera_map_place_box(m, at, "keep", CERA_STATION_PLAIN);
     }
     check(duplicates == 0,
           "no filled place was ever handed to a second caller");
     check(m->n_stations >= N, "and the table holds all of them");
     printf("  %d places asked for and filled, none handed twice\n", N);
 
-    map_destroy(m);
+    cera_map_destroy(m);
 }
 /* }}} */
 

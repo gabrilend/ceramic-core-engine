@@ -20,8 +20,8 @@ and it obeys it. That separation is deliberate: the mechanical half
 should be boring enough to trust, so the interesting half can be
 argued about on its own.
 
-**A companion follows its source.** `019-station.c.info.md` is not a
-step in the reading order; it is the same step as `019-station.c`, so
+**A companion follows its source.** `066-gentext.c.info.md` is not a
+step in the reading order; it is the same step as `066-gentext.c`, so
 it takes whatever number that file takes and is never listed
 separately. The same is true of a demo runner's letter suffix — `037a`
 runs `037` — which is why suffixes are preserved rather than

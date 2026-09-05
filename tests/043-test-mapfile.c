@@ -77,7 +77,7 @@ static void expect_death_saying(const char *map_text, const char *fragment,
     if (pid == 0) {
         dup2(pipefd[1], 2);
         close(pipefd[0]);
-        map_t *m = map_load_file(map_path, 2);
+        cera_map_t *m = cera_map_load_file(map_path, 2);
         (void)m;
         _exit(0); /* surviving is the failure */
     }
@@ -192,40 +192,40 @@ static void test_half_built_round_trips(void)
         "  in 1 = 2.5\n");
     write_text(map_path, map_text);
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
 
-    check(map_station(m, 1)->in_ports[0].kind == IN_PORT_NONE,
+    check(cera_map_station(m, 1)->in_ports[0].kind == CERA_IN_PORT_NONE,
           "a dash left the port with no source");
-    check(map_station(m, 1)->in_ports[0].capacity == 64,
+    check(cera_map_station(m, 1)->in_ports[0].capacity == 64,
           "and the depth before it still sized the slots");
-    check(map_station(m, 1)->in_ports[1].kind == IN_PORT_STATIC,
+    check(cera_map_station(m, 1)->in_ports[1].kind == CERA_IN_PORT_STATIC,
           "the other port took its value as usual");
-    check(map_seed_count(m) == 1,
+    check(cera_map_seed_count(m) == 1,
           "only the runnable station was seeded; the half-built one was not");
 
     FILE *d1 = fopen(dump1, "w");
-    map_dump(m, d1);
+    cera_map_dump(m, d1);
     fclose(d1);
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
 
     /* The dump has to reload into the same program, which is the
      * whole claim: the file says what is actually there. */
-    map_t *again = map_load_file(dump1, 2);
-    check(map_station(again, 1)->in_ports[0].kind == IN_PORT_NONE,
+    cera_map_t *again = cera_map_load_file(dump1, 2);
+    check(cera_map_station(again, 1)->in_ports[0].kind == CERA_IN_PORT_NONE,
           "reloading the dump gave a port with no source, not a buffer");
-    check(map_station(again, 1)->in_ports[0].capacity == 64,
+    check(cera_map_station(again, 1)->in_ports[0].capacity == 64,
           "and the depth survived the trip");
-    check(map_station(again, 1)->in_ports[1].kind == IN_PORT_STATIC,
+    check(cera_map_station(again, 1)->in_ports[1].kind == CERA_IN_PORT_STATIC,
           "and so did the value on the other port");
 
     FILE *d2 = fopen(dump2, "w");
-    map_dump(again, d2);
+    cera_map_dump(again, d2);
     fclose(d2);
-    pool_release(again->pool);
-    pool_join(again->pool);
-    map_destroy(again);
+    cera_pool_release(again->pool);
+    cera_pool_join(again->pool);
+    cera_map_destroy(again);
 
     char *first = slurp_file(dump1);
     char first_copy[8192];
@@ -274,11 +274,11 @@ static void test_a_program_is_a_text_file(void)
     write_text(map_path, map_text);
 
     unlink(result_path);
-    map_t *m = map_load_file(map_path, 2);
-    check(map_seed_count(m) == 1, "exactly the head was seeded");
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
+    check(cera_map_seed_count(m) == 1, "exactly the head was seeded");
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
 
     check(read_int(result_path) == 14,
           "seven, routed greater-than-five, doubled, landed on disk as 14");
@@ -318,27 +318,27 @@ static void a_box_can_be_addressed_three_ways(void)
         /* The whole path and a function. */
         "station answer src/boxes/029-demo-boxes.c:keep p result\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
     check(m->n_stations == 3, "all three forms placed a box");
 
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     int got = 0;
-    check(map_output_take(m, 2, &got, sizeof got) && got == 14,
+    check(cera_map_output_take(m, 2, &got, sizeof got) && got == 14,
           "and the program ran: seven, doubled, kept");
 
     /* Every station carries the full address, whichever form the file
      * used to ask for it. */
     for (int i = 0; i < m->n_stations; i++)
-        check(strstr(map_station(m, i)->box_name,
+        check(strstr(cera_map_station(m, i)->box_name,
                      "src/boxes/029-demo-boxes.c:") != NULL,
               "each station carries the box's whole address");
 
     FILE *f = fopen(dump_path, "w");
-    map_dump(m, f);
+    cera_map_dump(m, f);
     fclose(f);
-    map_destroy(m);
+    cera_map_destroy(m);
 
     /* The dump shortened all three back to bare names, because each
      * resolves uniquely — so a map written briefly stays brief. */
@@ -349,11 +349,11 @@ static void a_box_can_be_addressed_three_ways(void)
           "and did not write the address it did not need");
 
     /* And what it wrote reads back. */
-    map_t *again = map_load_file(dump_path, 2);
+    cera_map_t *again = cera_map_load_file(dump_path, 2);
     check(again->n_stations == 3, "the shortened dump reads back");
-    pool_release(again->pool);
-    pool_join(again->pool);
-    map_destroy(again);
+    cera_pool_release(again->pool);
+    cera_pool_join(again->pool);
+    cera_map_destroy(again);
 
     printf("  a box addressed three ways placed the same box, and the dump "
            "wrote the short form\n");
@@ -389,13 +389,13 @@ static void an_awkward_constant_survives_a_file(void)
         "station holder write_int_file p\n"
         "  in 0 = \"say \\\"hi\\\" \\tand \\xc3\\xa9 done\"\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
 
     /* The characters that came back, compared whole rather than
      * probed — a value that survives in three places and not in the
      * fourth is a value that did not survive. */
     static const char want[] = "say \"hi\" \tand \xc3\xa9 done";
-    const char *got = map_station(m, 1)->in_ports[0].constant_string;
+    const char *got = cera_map_station(m, 1)->in_ports[0].constant_string;
     check(got != NULL, "the constant was read");
     if (got && strcmp(got, want) != 0) {
         fprintf(stderr, "mapfile test failed: the constant came back as "
@@ -404,19 +404,19 @@ static void an_awkward_constant_survives_a_file(void)
     }
 
     FILE *f = fopen(dump1, "w");
-    map_dump(m, f);
+    cera_map_dump(m, f);
     fclose(f);
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
 
-    map_t *again = map_load_file(dump1, 2);
+    cera_map_t *again = cera_map_load_file(dump1, 2);
     f = fopen(dump2, "w");
-    map_dump(again, f);
+    cera_map_dump(again, f);
     fclose(f);
-    pool_release(again->pool);
-    pool_join(again->pool);
-    map_destroy(again);
+    cera_pool_release(again->pool);
+    cera_pool_join(again->pool);
+    cera_map_destroy(again);
 
     char *a = slurp_file(dump1);
     char first_copy[8192];
@@ -470,7 +470,7 @@ static void the_keywords_are_not_reserved(void)
         "  out 0 - station.0\n"
         "station station keep p\n");
 
-    map_t *m = map_load_file(map_path, 2);
+    cera_map_t *m = cera_map_load_file(map_path, 2);
     check(m->n_stations == 4,
           "four stations named after the four words that mean something");
     check(strcmp(m->station_names[0], "in") == 0
@@ -479,27 +479,27 @@ static void the_keywords_are_not_reserved(void)
           && strcmp(m->station_names[3], "station") == 0,
           "and each kept the name it was given");
 
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
-    check(atomic_load(&map_station(m, 3)->runs) == 1,
+    check(atomic_load(&cera_map_station(m, 3)->runs) == 1,
           "and the program ran end to end: seven, plus five, doubled, "
           "kept");
 
     FILE *f = fopen(dump_path, "w");
-    map_dump(m, f);
+    cera_map_dump(m, f);
     fclose(f);
-    map_destroy(m);
+    cera_map_destroy(m);
 
     /* Written down and read back, which is where a half-working name
      * would show. */
-    map_t *again = map_load_file(dump_path, 2);
+    cera_map_t *again = cera_map_load_file(dump_path, 2);
     check(again->n_stations == 4
           && strcmp(again->station_names[0], "in") == 0,
           "and a program named that way survives being written down");
-    pool_release(again->pool);
-    pool_join(again->pool);
-    map_destroy(again);
+    cera_pool_release(again->pool);
+    cera_pool_join(again->pool);
+    cera_map_destroy(again);
 
     printf("  a program whose stations are called in, out, statics and "
            "station ran and round-tripped\n");

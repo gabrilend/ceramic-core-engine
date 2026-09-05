@@ -15,8 +15,8 @@ translation unit as its callers can be `static`.
 | [901 — the engine becomes one file](completed/901-the-engine-becomes-one-file.md) | **complete** | Eleven bodies and seven headers concatenated in reading order into `cera.c` and `cera.h`, with a banner and a `#line` at every seam. Compiled clean under `-Wall -Wextra -Werror` with no edit to the code that moved. Thirty-three of thirty-four test outputs byte-identical to the numbered build; the thirty-fourth differs by the four lines the emitted file's include block lost. |
 | [902 — the header says what is public](completed/902-the-header-says-what-is-public.md) | **complete** | The header declares 100 symbols and the engine exports exactly those. Twenty-three joints moved into the body with their documentation; two of them had never been declared in any header and were exported anyway. |
 | [903 — everything else goes private](completed/903-everything-else-goes-private.md) | **complete** | 123 exported symbols became 100, and a test checks it on every run — the list was derived from the header rather than written, and the test was proven by being made to fail. Seven white-box tests now compile inside the engine. |
-| [904 — the old files are removed](904-the-old-files-are-removed.md) | open | The eighteen numbered sources and their interface files go, once the output has been compared byte for byte. |
-| [905 — the prefix](905-the-prefix.md) | open, **unblocked** | One prefix on every public name, and the name is `cera_`. The question of which prefix turned out not to be a question — see below. |
+| [904 — the old files are removed](completed/904-the-old-files-are-removed.md) | **complete** | Gone, with their eighteen interface files and the `libs/` directory. The `#line` directives went rather than being re-pointed, and the two include paths became one. |
+| [905 — the prefix](completed/905-the-prefix.md) | **complete** | Every one of the 100 exported symbols begins `cera_`. 3,008 renames and 706 respellings across 52 files, and not one byte of test output changed. The linker's export list collapsed to a single line. |
 | [906 — an error reaches the host](906-an-error-reaches-the-host.md) | open | An installable handler called with the message before the engine dies. The engine still dies. |
 | [907 — built outside the tree](907-built-outside-the-tree.md) | open | The capstone: `make test` builds a program with this engine in a scratch directory that cannot see this repository, and runs it. |
 | [908 — two maps in one process](908-two-maps-in-one-process.md) | open, **not on the critical path** | The process-wide active map, threaded through the task instead. Or, failing that, written down where somebody will read it. |
@@ -80,6 +80,25 @@ adds a way for a host to *hear* about a refusal, and deliberately no way
 to survive one. An error code a caller may ignore is a fallback wearing
 a return type.
 
+## Where the phase stands
+
+**Five of eight done, and the engine can now leave.** It is two files,
+it publishes 100 symbols and every one of them says whose they are,
+nothing else escapes at all, and a test checks that on every run.
+
+What is left is not about shape:
+
+- **[906](906-an-error-reaches-the-host.md)** — a host cannot hear why
+  the engine stopped, only that it did.
+- **[907](907-built-outside-the-tree.md)** — nothing has yet compiled
+  this engine from a directory that cannot see this repository, so every
+  claim above is still inference from reading rather than from doing.
+- **[908](908-two-maps-in-one-process.md)** — one process-wide variable
+  means one map, silently.
+
+907 is the one that matters most, because it is the only one that can
+prove the other seven.
+
 ## The engine has one name and two spellings of it
 
 Asking which prefix to use produced the observation that ends the
@@ -103,7 +122,7 @@ collide with.
 What that leaves is not a choice between names but a choice of spelling,
 and the answer follows from the files rather than from anybody's taste:
 a consumer holds `cera.h`, writes `#include "cera.h"`, and should not
-then have to call something spelled `sora_`. The include and the call
+then have to call something spelled `cera_`. The include and the call
 agree, or the consumer's first line hands them a puzzle.
 
 [905](905-the-prefix.md) is unblocked and its cost is unchanged — it was

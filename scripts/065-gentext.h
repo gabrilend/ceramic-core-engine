@@ -20,8 +20,8 @@
  * is correct, and a bug here surfaces as garbled C hundreds of lines
  * away in a file nobody reads. It gets its own test for that reason.
  */
-#ifndef SORA_GENTEXT_H
-#define SORA_GENTEXT_H
+#ifndef CERA_GENTEXT_H
+#define CERA_GENTEXT_H
 
 #include <stddef.h>
 

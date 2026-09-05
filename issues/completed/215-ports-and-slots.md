@@ -57,8 +57,8 @@ Everything not listed took the obvious form: `slot_*` became
 | was | is | why |
 |---|---|---|
 | `cell`, `cells`, `CELL_*` | `slot`, `slots`, `SLOT_*` | one place one value sits |
-| `slot_t`, `struct slot` | `in_port_t`, `struct in_port` | the standing interface for one input |
-| `port_t`, `struct port` | `out_port_t`, `struct out_port` | where a result goes |
+| `slot_t`, `struct slot` | `cera_in_port_t`, `struct in_port` | the standing interface for one input |
+| `port_t`, `struct port` | `cera_out_port_t`, `struct out_port` | where a result goes |
 | `slots`, `n_slots` on a station | `in_ports`, `n_in_ports` | |
 | `ports`, `n_ports` on a station | `out_ports`, `n_out_ports` | |
 | `slot_cell`, `slot_cell_move` | `in_port_slot`, `in_port_slot_move` | a port's slot, which is now sayable |

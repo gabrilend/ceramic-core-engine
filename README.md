@@ -98,7 +98,10 @@ int add(int a, int b) { return a + b; }
 
 It takes its arguments by value, returns one value, and **may not
 remember anything between calls** — no statics, no globals, nothing
-kept. That rule is load-bearing; see below.
+kept. Memory belongs to the **station**, which holds a value the box's
+own output is wired back into, so an accumulator is an arrow you can
+see rather than a variable you cannot. That rule is load-bearing; see
+below.
 
 **A map says where the boxes go and what feeds what.** This is
 [`maps/107-example.map`](maps/107-example.map), the one the example
@@ -174,8 +177,14 @@ repository's `original` branch, bridges between languages. This one
 deliberately cannot, and dropping the bridge is what buys the focus on
 the runtime underneath.
 
-**And not finished.** Phases 1 through 7 stand; phase 8, the tools that
-live outside the engine, has started.
+**And not finished.** Phases 1 through 7 stand. Phase 8, the tools that
+live outside the engine, has started — there is a canvas you can draw a
+map on, and it cannot yet hand you the file. Phase 9, which is the
+engine becoming two files you can take away, is most of the way there:
+`src/cera.c` and `src/cera.h`, everything else private, one prefix on
+everything public. What it has not done is prove it, because nothing has
+yet built a program with this engine from a directory that cannot see
+this repository.
 
 ## Where to go from here
 
@@ -185,7 +194,7 @@ live outside the engine, has started.
 | [`docs/`](docs/) | the documentation, in reading order. `docs/HTML/` is a generated site of the same thing. |
 | [`docs/058-guarantees.md`](docs/058-guarantees.md) | every promise the runtime makes, numbered, with what each one costs. |
 | [`issues/completed/`](issues/completed/) | **the real documentation.** Blueprints, not work logs: what stood before, what should stand after, why the alternatives were refused. The project is meant to be rebuildable by working through them in order. |
-| [`src/`](src/) | the engine. Every file has a `.info.md` beside it — read that first unless you are debugging that exact file. |
+| [`src/`](src/) | the engine — two files, `cera.c` and `cera.h`, each with a `.info.md` beside it. Read those first unless you are debugging the source itself. |
 | [`example/`](example/) | the program `make example` runs, commented at length. |
 | `workbench/` | a canvas for drawing a map in a browser. Early. |
 

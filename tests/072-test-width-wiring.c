@@ -72,18 +72,18 @@ typedef struct { float a; float b; float c; } triple;
  */
 static void identical_shapes_wire(void)
 {
-    map_t *m = map_create(3);
+    cera_map_t *m = cera_map_create(3);
 
     /* as_triple(float, float, float) -> triple */
-    map_place_box(m, 0, "as_triple", STATION_PLAIN);
+    cera_map_place_box(m, 0, "as_triple", CERA_STATION_PLAIN);
     /* magnitude_squared(vec3) -> float, which is where the value
      * arriving as a vec3 gets looked at. */
-    map_place_box(m, 1, "magnitude_squared", STATION_PLAIN);
+    cera_map_place_box(m, 1, "magnitude_squared", CERA_STATION_PLAIN);
     /* A sink, so the float has somewhere to land. */
-    map_place_box(m, 2, "swallow", STATION_PLAIN);
+    cera_map_place_box(m, 2, "swallow", CERA_STATION_PLAIN);
 
     /* The wire the whole issue is about: triple out, vec3 in. */
-    map_connect(m, 0, 0, 1, 0);
+    cera_map_connect(m, 0, 0, 1, 0);
 
     /*
      * **Asked of the two stations**, which is where these facts live
@@ -93,8 +93,8 @@ static void identical_shapes_wire(void)
      * folded — so this is the same question put to the thing that
      * actually gets wired.
      */
-    station_t *producer = map_station(m, 0);
-    station_t *consumer = map_station(m, 1);
+    cera_station_t *producer = cera_map_station(m, 0);
+    cera_station_t *consumer = cera_map_station(m, 1);
 
     check(strcmp(consumer->in_ports[0].type_name, "vec3") == 0,
           "the receiving end is spelled vec3");
@@ -107,20 +107,20 @@ static void identical_shapes_wire(void)
           "width, which is the whole point");
 
     /* Feed it and see the value arrive intact. 3-4-5 gives 50. */
-    map_start(m, 2);
+    cera_map_start(m, 2);
     float xs[3] = { 3.0f, 4.0f, 5.0f };
     for (int i = 0; i < 3; i++)
-        map_deliver_value(m, 0, i, &xs[i]);
-    pool_release(m->pool);
-    pool_join(m->pool);
+        cera_map_deliver_value(m, 0, i, &xs[i]);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
-    long ran_producer = atomic_load(&map_station(m, 0)->runs);
-    long ran_consumer = atomic_load(&map_station(m, 1)->runs);
+    long ran_producer = atomic_load(&cera_map_station(m, 0)->runs);
+    long ran_consumer = atomic_load(&cera_map_station(m, 1)->runs);
     check(ran_producer == 1, "the producing station ran once");
     check(ran_consumer == 1,
           "the consuming station ran, so the wire really carried a value");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a triple wired into a vec3 and the value arrived\n");
 }
 /* }}} */
@@ -174,11 +174,11 @@ static void byte_identical(void)
  */
 static void different_widths_refused(void)
 {
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "add", STATION_PLAIN);   /* -> int         */
-    map_place_box(m, 1, "mix", STATION_PLAIN);   /* port 1: double */
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "add", CERA_STATION_PLAIN);   /* -> int         */
+    cera_map_place_box(m, 1, "mix", CERA_STATION_PLAIN);   /* port 1: double */
 
-    const char *said = map_wire(m, 0, 0, 1, 1);
+    const char *said = cera_map_wire(m, 0, 0, 1, 1);
 
     check(said != NULL,
           "a four-byte value into an eight-byte port was refused");
@@ -190,7 +190,7 @@ static void different_widths_refused(void)
         printf("  refused: %s\n", said);
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
 }
 /* }}} */
 
@@ -219,14 +219,14 @@ static void different_widths_refused(void)
  */
 static void a_source_with_no_inputs_is_checked_too(void)
 {
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "seven", STATION_PLAIN);  /* () -> int      */
-    map_place_box(m, 1, "mix", STATION_PLAIN);    /* port 1: double */
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);  /* () -> int      */
+    cera_map_place_box(m, 1, "mix", CERA_STATION_PLAIN);    /* port 1: double */
 
-    check(map_station(m, 0)->n_in_ports == 0,
+    check(cera_map_station(m, 0)->n_in_ports == 0,
           "the source really does take nothing, which is the whole point");
 
-    const char *no = map_wire(m, 0, 0, 1, 1);
+    const char *no = cera_map_wire(m, 0, 0, 1, 1);
     check(no != NULL,
           "a four-byte value from an input-less station into an eight-byte "
           "port was refused");
@@ -238,10 +238,10 @@ static void a_source_with_no_inputs_is_checked_too(void)
 
     /* And the wire really did not happen — a refusal that says no and
      * connects anyway is worse than one that says yes. */
-    check(out_port_dests(station_out_port(map_station(m, 0), 0)) == NULL,
+    check(out_port_dests(station_out_port(cera_map_station(m, 0), 0)) == NULL,
           "and nothing was connected");
 
-    map_destroy(m);
+    cera_map_destroy(m);
 }
 /* }}} */
 

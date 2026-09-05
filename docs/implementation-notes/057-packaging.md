@@ -1,5 +1,28 @@
 # 057 — Packaging the engine as a library
 
+> **Most of this has since been built, and one of its recommendations
+> was overturned.** Phase 9 executed the survey below: the engine is
+> now one translation unit and one header, `src/cera.c` and
+> `src/cera.h`, with the eighteen numbered sources deleted; everything
+> not declared in the header is `static` and a test checks it on every
+> run; and every public name carries one prefix.
+>
+> **What changed from the recommendation:** this note proposed a
+> packaging *script* that would derive an amalgamation from the
+> numbered files on the way out. That was not done. The amalgamation
+> became the source and the numbered files were deleted, so there is
+> one copy of the engine rather than one copy plus a derivation that
+> could drift from it. What the script version was protecting — two
+> consumer-facing files nobody hand-maintains — turned out not to be
+> worth a second copy of the engine.
+>
+> The survey is kept as written because its reasoning is what the phase
+> was built on, and because the parts still undone are still described
+> correctly here: the error handler, the out-of-tree build test, and the
+> one-map-per-process fix. See
+> [phase 9's progress page](../../issues/phase-9-progress.md) for what
+> stands today.
+
 What it would take to hand this to another project. Nothing here is
 built; this is a survey of the distance between where the code is and
 where it would have to be, with the decisions that have to be made
@@ -117,8 +140,8 @@ symbol table of a linked test binary, not by guessing.
 
 | in the way | what it does to a consumer | size of the fix |
 |---|---|---|
-| **Engine symbols are common words.** `map_create`, `map_connect`, `map_start`, `map_destroy`, `pool_create`, `pool_push`, `pool_join` and about thirty more are exported unprefixed. | Any host program with its own notion of a map or a pool fails to link, with a duplicate-symbol error naming a function they never wrote. | Mechanical rename, ~40 symbols, touches source, interface files, docs, and issue text. Half a day, done carefully. |
-| **Internals are exported too.** `task_build`, `station_out_port`, `static_claim`, `gather_claim`, `map_statics_free`, `sora_stats_box_time` are joints between engine files, not API. | They collide like anything else, and they invite a consumer to call them. | Free, if the amalgamation shape below is taken. |
+| **Engine symbols are common words.** `cera_map_create`, `cera_map_connect`, `cera_map_start`, `cera_map_destroy`, `cera_pool_create`, `cera_pool_push`, `cera_pool_join` and about thirty more are exported unprefixed. | Any host program with its own notion of a map or a pool fails to link, with a duplicate-symbol error naming a function they never wrote. | Mechanical rename, ~40 symbols, touches source, interface files, docs, and issue text. Half a day, done carefully. |
+| **Internals are exported too.** `task_build`, `station_out_port`, `static_claim`, `gather_claim`, `map_statics_free`, `cera_stats_box_time` are joints between engine files, not API. | They collide like anything else, and they invite a consumer to call them. | Free, if the amalgamation shape below is taken. |
 | **The demo boxes export `add`, `mix`, `keep`, `nudge`, `seven`, `swallow`, `magnitude_squared`.** | These are example code, and `add` is the single most collidable symbol in C. | Exclude `src/boxes/` from the packaged library. Trivial, but it must be deliberate — the build currently wildcards it in. |
 | **One process-wide global.** The active map, so a box can reach the statics table. There were two; the other recorded where the last load's time went, broken into stages that stopped existing, and it went with them. | One map per process, forever, silently. A host that wants two engines gets one, and the second quietly writes into the first. | Medium. Already the first-pass report's second priority: thread the map through the task instead of parking it in a global. |
 | **Every error calls `abort()`.** | A malformed map file, a missing gather source, or an out-of-memory task kills the host application. A library that can end someone else's process on bad input is not embeddable. | Small in code, large in decision. See below. |
@@ -346,7 +369,7 @@ both. The mechanism for keeping an engine resident already exists in the
 outside-submitter registration; what is missing is naming it as the
 lifecycle question it is.
 
-**4. What is the prefix?** `sora_` is already used by a few symbols and
+**4. What is the prefix?** `cera_` is already used by a few symbols and
 by every include guard. Applying it to everything public is the obvious
 choice; it just has to be done once, everywhere, and grepped for
 stragglers — including in the documents and issue files, which name

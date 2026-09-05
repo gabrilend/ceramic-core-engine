@@ -32,7 +32,7 @@ static int sum3(int a, int b, int c)
     return a + b + c;
 }
 
-static void sum3__call(task_t *t)
+static void sum3__call(cera_task_t *t)
 {
     int a = *(int *)t->in[0];
     int b = *(int *)t->in[1];
@@ -52,22 +52,22 @@ static void test_every_arrival_order(void)
         {0,1,2}, {0,2,1}, {1,0,2}, {1,2,0}, {2,0,1}, {2,1,0},
     };
 
-    map_t *m = map_create(1);
+    cera_map_t *m = cera_map_create(1);
     int sizes[3] = { sizeof(int), sizeof(int), sizeof(int) };
-    map_place(m, 0, sum3__call, STATION_PLAIN, 3, sizes, sizeof(int));
-    map_start(m, 2);
+    cera_map_place(m, 0, sum3__call, CERA_STATION_PLAIN, 3, sizes, sizeof(int));
+    cera_map_start(m, 2);
 
     fired = 0;
     sum_seen = 0;
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     for (int round = 0; round < 6; round++) {
         int before = fired;
         for (int step = 0; step < 3; step++) {
             int port = orders[round][step];
             int value = round * 10 + port;
-            map_deliver_value(m, 0, port, &value);
+            cera_map_deliver_value(m, 0, port, &value);
         }
         /* Nothing asserts `fired == before` between deliveries —
          * the task runs asynchronously — but by the end of all six
@@ -75,8 +75,8 @@ static void test_every_arrival_order(void)
         (void)before;
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
     if (fired != 6) {
         fprintf(stderr, "6 complete sets fired %d tasks\n", (int)fired);
@@ -92,7 +92,7 @@ static void test_every_arrival_order(void)
         exit(1);
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  every arrival order: one firing per complete set\n");
 }
 /* }}} */
@@ -107,7 +107,7 @@ static long add2(int a, int b)
     return (long)a + b;
 }
 
-static void add2__call(task_t *t)
+static void add2__call(cera_task_t *t)
 {
     int a = *(int *)t->in[0];
     int b = *(int *)t->in[1];
@@ -118,30 +118,30 @@ static void add2__call(task_t *t)
 }
 
 enum { HAMMERS = 8, PER_HAMMER = 2000 };
-static map_t *hammer_map;
+static cera_map_t *hammer_map;
 
 static void *hammer_main(void *arg)
 {
     int base = (int)(long)arg * PER_HAMMER;
     for (int i = 0; i < PER_HAMMER; i++) {
         int v = base + i;
-        map_deliver_value(hammer_map, 0, 0, &v);
-        map_deliver_value(hammer_map, 0, 1, &v);
+        cera_map_deliver_value(hammer_map, 0, 0, &v);
+        cera_map_deliver_value(hammer_map, 0, 1, &v);
     }
     return NULL;
 }
 
 static void test_hammer(void)
 {
-    hammer_map = map_create(1);
+    hammer_map = cera_map_create(1);
     int sizes[2] = { sizeof(int), sizeof(int) };
-    map_place(hammer_map, 0, add2__call, STATION_PLAIN, 2, sizes, sizeof(long));
-    map_start(hammer_map, 4);
+    cera_map_place(hammer_map, 0, add2__call, CERA_STATION_PLAIN, 2, sizes, sizeof(long));
+    cera_map_start(hammer_map, 4);
 
     pair_sum = 0;
     pair_count = 0;
-    pool_submitter_register(hammer_map->pool);
-    pool_release(hammer_map->pool);
+    cera_pool_submitter_register(hammer_map->pool);
+    cera_pool_release(hammer_map->pool);
 
     pthread_t threads[HAMMERS];
     for (long i = 0; i < HAMMERS; i++)
@@ -149,8 +149,8 @@ static void test_hammer(void)
     for (int i = 0; i < HAMMERS; i++)
         pthread_join(threads[i], NULL);
 
-    pool_submitter_unregister(hammer_map->pool);
-    pool_join(hammer_map->pool);
+    cera_pool_submitter_unregister(hammer_map->pool);
+    cera_pool_join(hammer_map->pool);
 
     /* Every value 0..N-1 was delivered once to each side. Whatever
      * pairing the interleaving produced, the total across both sides
@@ -168,7 +168,7 @@ static void test_hammer(void)
         exit(1);
     }
 
-    map_destroy(hammer_map);
+    cera_map_destroy(hammer_map);
     printf("  %d threads hammering one station: %ld claims, none lost, none doubled\n",
            HAMMERS, n);
 }
@@ -207,26 +207,26 @@ static void test_unconfigured_port_never_ready(void)
 {
     enum { WAITING = 5, FED = 3 };
 
-    map_t *m = map_create(1);
+    cera_map_t *m = cera_map_create(1);
     int sizes[3] = { sizeof(int), sizeof(int), sizeof(int) };
-    map_place(m, 0, sum3__call, STATION_PLAIN, 3, sizes, sizeof(int));
+    cera_map_place(m, 0, sum3__call, CERA_STATION_PLAIN, 3, sizes, sizeof(int));
 
     /* Port 2 has no source. Nothing about the station is otherwise
      * unusual — it is fully placed, its slots are allocated, and it
      * would run happily if anyone said where port 2's values come
      * from. */
-    map_in_port_convert(m, 0, 2, IN_PORT_NONE);
+    cera_map_in_port_convert(m, 0, 2, CERA_IN_PORT_NONE);
 
-    map_start(m, 2);
+    cera_map_start(m, 2);
     fired = 0;
     sum_seen = 0;
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     for (int i = 0; i < WAITING; i++) {
         int a = 100, b = 200;
-        map_deliver_value(m, 0, 0, &a);
-        map_deliver_value(m, 0, 1, &b);
+        cera_map_deliver_value(m, 0, 0, &a);
+        cera_map_deliver_value(m, 0, 1, &b);
     }
 
     int fired_while_unconfigured = fired;
@@ -234,14 +234,14 @@ static void test_unconfigured_port_never_ready(void)
     /* The port is given a source. The slots it has been carrying all
      * along are what it starts using — no allocation happens here,
      * which is the whole of issue 210b's standing-buffer decision. */
-    map_in_port_convert(m, 0, 2, IN_PORT_RING);
+    cera_map_in_port_convert(m, 0, 2, CERA_IN_PORT_RING);
     for (int i = 0; i < FED; i++) {
         int c = 300;
-        map_deliver_value(m, 0, 2, &c);
+        cera_map_deliver_value(m, 0, 2, &c);
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
     if (fired_while_unconfigured != 0) {
         fprintf(stderr, "a station with an unconfigured port fired %d times\n",
@@ -259,7 +259,7 @@ static void test_unconfigured_port_never_ready(void)
         exit(1);
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  an unconfigured port held a station still, then let it run "
            "with %d values still waiting\n", WAITING - FED);
 }
@@ -290,44 +290,44 @@ static void test_values_survive_a_round_trip_through_static(void)
 {
     enum { WAITING = 6 };
 
-    map_t *m = map_create(1);
-    map_place_box(m, 0, "add", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(1);
+    cera_map_place_box(m, 0, "add", CERA_STATION_PLAIN);
 
-    map_start(m, 2);
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_map_start(m, 2);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     /* Port 0 fills up. Port 1 is empty, so nothing fires and the
      * values simply wait. */
     for (int i = 0; i < WAITING; i++) {
         int a = 7;
-        map_deliver_value(m, 0, 0, &a);
+        cera_map_deliver_value(m, 0, 0, &a);
     }
 
     /* Away from a buffer and back. A static needs a value before it
      * can be one, so port 0 is given a constant first — which is also
      * the path that used to free the slots. */
-    map_in_port_static_text(m, 0, 0, "1000");
-    map_in_port_convert(m, 0, 0, IN_PORT_RING);
+    cera_map_in_port_static_text(m, 0, 0, "1000");
+    cera_map_in_port_convert(m, 0, 0, CERA_IN_PORT_RING);
 
     /* Now let it run. If the round trip lost the backlog, fewer than
      * WAITING pairs can ever form. */
     for (int i = 0; i < WAITING; i++) {
         int b = 3;
-        map_deliver_value(m, 0, 1, &b);
+        cera_map_deliver_value(m, 0, 1, &b);
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
-    long runs = atomic_load(&map_station(m, 0)->runs);
+    long runs = atomic_load(&cera_map_station(m, 0)->runs);
     if (runs != WAITING) {
         fprintf(stderr, "a round trip through static lost values: %ld of %d "
                         "runs\n", runs, WAITING);
         exit(1);
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  %d values waited out a round trip through static and were "
            "all served\n", WAITING);
 }
@@ -357,19 +357,19 @@ static void test_values_survive_a_round_trip_through_static(void)
  * property.
  */
 static _Atomic int cycle_stop;
-static map_t      *cycle_map;
+static cera_map_t      *cycle_map;
 
 static void *cycle_feeder(void *arg)
 {
     (void)arg;
     long fed = 0;
-    pool_submitter_register(cycle_map->pool);
+    cera_pool_submitter_register(cycle_map->pool);
     while (!atomic_load(&cycle_stop)) {
         int b = 3;
-        map_deliver_value(cycle_map, 0, 1, &b);
+        cera_map_deliver_value(cycle_map, 0, 1, &b);
         fed++;
     }
-    pool_submitter_unregister(cycle_map->pool);
+    cera_pool_submitter_unregister(cycle_map->pool);
     return (void *)(intptr_t)fed;
 }
 
@@ -377,11 +377,11 @@ static void test_cycling_a_tag_under_load(void)
 {
     enum { ROUNDS = 2000 };
 
-    cycle_map = map_create(1);
-    map_place_box(cycle_map, 0, "add", STATION_PLAIN);
+    cycle_map = cera_map_create(1);
+    cera_map_place_box(cycle_map, 0, "add", CERA_STATION_PLAIN);
     /* Port 0 starts as a static so that every tag in the cycle is
      * reachable from the one before it. */
-    map_in_port_static_text(cycle_map, 0, 0, "7");
+    cera_map_in_port_static_text(cycle_map, 0, 0, "7");
 
     /* The feeder floods port 1 while port 0 spends most of its time
      * unusable, so port 1 builds exactly the backlog the buffer
@@ -391,28 +391,28 @@ static void test_cycling_a_tag_under_load(void)
     printf("  (the growth warning below is what this scene is provoking)\n");
     fflush(stdout);
 
-    map_start(cycle_map, 3);
+    cera_map_start(cycle_map, 3);
     cycle_stop = 0;
-    pool_submitter_register(cycle_map->pool);
-    pool_release(cycle_map->pool);
+    cera_pool_submitter_register(cycle_map->pool);
+    cera_pool_release(cycle_map->pool);
 
     pthread_t feeder;
     pthread_create(&feeder, NULL, cycle_feeder, NULL);
 
     for (int i = 0; i < ROUNDS; i++) {
-        map_in_port_convert(cycle_map, 0, 0, IN_PORT_NONE);
-        map_in_port_convert(cycle_map, 0, 0, IN_PORT_RING);
-        map_in_port_convert(cycle_map, 0, 0, IN_PORT_STATIC);
+        cera_map_in_port_convert(cycle_map, 0, 0, CERA_IN_PORT_NONE);
+        cera_map_in_port_convert(cycle_map, 0, 0, CERA_IN_PORT_RING);
+        cera_map_in_port_convert(cycle_map, 0, 0, CERA_IN_PORT_STATIC);
     }
 
     atomic_store(&cycle_stop, 1);
     void *fed_p = NULL;
     pthread_join(feeder, &fed_p);
     long fed = (long)(intptr_t)fed_p;
-    pool_submitter_unregister(cycle_map->pool);
-    pool_join(cycle_map->pool);
+    cera_pool_submitter_unregister(cycle_map->pool);
+    cera_pool_join(cycle_map->pool);
 
-    long runs = atomic_load(&map_station(cycle_map, 0)->runs);
+    long runs = atomic_load(&cera_map_station(cycle_map, 0)->runs);
     if (runs > fed) {
         fprintf(stderr, "cycling a tag under load invented values: %ld runs "
                         "from %ld deliveries\n", runs, fed);
@@ -427,7 +427,7 @@ static void test_cycling_a_tag_under_load(void)
         exit(1);
     }
 
-    map_destroy(cycle_map);
+    cera_map_destroy(cycle_map);
     printf("  a port cycled through three tags %d times under load; "
            "%ld runs from %ld deliveries, none invented\n",
            ROUNDS * 3, runs, fed);
@@ -452,23 +452,23 @@ static void test_cycling_a_tag_under_load(void)
  */
 static void test_every_parameter_needs_a_source(void)
 {
-    map_t *m = map_create(2);
-    map_place_box(m, 0, "add", STATION_PLAIN);
-    map_place_box(m, 1, "add", STATION_PLAIN);
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, "add", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "add", CERA_STATION_PLAIN);
 
     /* Fully wired by default: every port starts expecting arrows. */
-    if (map_check_sources(m) != NULL) {
+    if (cera_map_check_sources(m) != NULL) {
         fprintf(stderr, "a freshly placed program was called incomplete: %s\n",
-                map_check_sources(m));
+                cera_map_check_sources(m));
         exit(1);
     }
 
     /* Two ports on two different stations, so the answer has to name
      * both rather than stopping at the first. */
-    map_in_port_convert(m, 0, 1, IN_PORT_NONE);
-    map_in_port_convert(m, 1, 0, IN_PORT_NONE);
+    cera_map_in_port_convert(m, 0, 1, CERA_IN_PORT_NONE);
+    cera_map_in_port_convert(m, 1, 0, CERA_IN_PORT_NONE);
 
-    const char *said = map_check_sources(m);
+    const char *said = cera_map_check_sources(m);
     if (!said) {
         fprintf(stderr, "two unsourced ports went unnoticed\n");
         exit(1);
@@ -483,8 +483,8 @@ static void test_every_parameter_needs_a_source(void)
     }
 
     /* Giving one back a source leaves the other still named. */
-    map_in_port_convert(m, 0, 1, IN_PORT_RING);
-    said = map_check_sources(m);
+    cera_map_in_port_convert(m, 0, 1, CERA_IN_PORT_RING);
+    said = cera_map_check_sources(m);
     if (!said || strstr(said, "0.1")) {
         fprintf(stderr, "a port given a source was still complained about: "
                         "%s\n", said ? said : "(nothing)");
@@ -492,13 +492,13 @@ static void test_every_parameter_needs_a_source(void)
     }
 
     /* And giving the last one back leaves nothing to say. */
-    map_in_port_convert(m, 1, 0, IN_PORT_RING);
-    if (map_check_sources(m) != NULL) {
+    cera_map_in_port_convert(m, 1, 0, CERA_IN_PORT_RING);
+    if (cera_map_check_sources(m) != NULL) {
         fprintf(stderr, "a fully wired program was still called incomplete\n");
         exit(1);
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  every parameter needs a source; two missing were both named "
            "and counted\n");
 }

@@ -46,21 +46,26 @@ child. The write names a station and a port, is size-checked against
 what that port holds, and takes the station's own mutex — the same lock
 the claim takes, so no invocation can see a half-written value.
 
-**From a wire — designed, and the only one of the three not built.** An
-arrow whose destination port holds a static would overwrite that static
-rather than queueing into a ring buffer. The box producing the value is
-untouched by this: it takes its arguments, returns one value, and has
-no idea what happens next. The *wire* is what says the value lands in a
-slot. This matters because it keeps the capability visible — it is in
-the file, in the dump, and drawable — rather than being a box reaching
-sideways into something no arrow connects it to.
+**From a wire.** An arrow whose destination port holds a static
+**overwrites** that static rather than queueing into a ring buffer.
+The box producing the value is untouched by this: it takes its
+arguments, returns one value, and has no idea what happens next. The
+*wire* is what says the value lands in a slot. This matters because it
+keeps the capability visible — it is in the file, in the dump, and
+drawable — rather than being a box reaching sideways into something no
+arrow connects it to.
 
-Today such a wire is **refused at load time** and a delivery into a
-static port stops the program. Both refusals are older than this design
-and predate there being anywhere for the value to go; the write call
-they would need now exists and takes the right lock. What is left is
-teaching delivery to use it and removing the load-time check that
-currently calls the arrow a mistake. Issue 405 carries it.
+**This is also how a station remembers.** An arrow from a station's
+own output back into its own static input port makes that port hold
+whatever the last run returned, and every run afterwards reads it. A
+counter is that arrow. The box stays a function of its arguments, the
+memory belongs to the placement rather than to the function — one box
+at three stations is three memories — and the whole of it is one line
+in the map file.
+
+Two arrows into one static port is last-writer-wins,
+nondeterministically. Issue 405 built this and the load-time refusal
+that used to call such an arrow a mistake is gone.
 
 ## A write is an event
 

@@ -38,8 +38,6 @@
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
-<a href="issue-904-the-old-files-are-removed.html">904 — The old files are removed</a>
-<a href="issue-905-the-prefix.html">905 — The prefix</a>
 <a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
@@ -131,9 +129,9 @@
 <a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
 <a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
+<a href="done-904-the-old-files-are-removed.html">904 — The old files are removed</a>
+<a href="done-905-the-prefix.html">905 — The prefix</a>
 <h2>Interfaces</h2>
-<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
-<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
 <a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
@@ -147,22 +145,6 @@
 <a href="info-099-mapparse-h.html">099-mapparse.h — reading a description, from outside</a>
 <a href="info-100-mapparse-c.html">100-mapparse.c — the parser, from inside</a>
 <a href="info-109-dependencies-sh.html">109-dependencies.sh — what the project needs, and how to get it</a>
-<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
-<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
-<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
-<a href="info-026-emitted-h.html">026-emitted.h — the shapes the generator emits, from outside</a>
-<a href="info-027-emitted-support-c.html">027-emitted-support.c — the hand-written half of what the generator emits</a>
-<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
-<a href="info-040-mapfile-h.html">040-mapfile.h — a description becoming a program, from outside</a>
-<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
-<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
-<a href="info-050-observe-c.html">050-observe.c — the engine saying out loud what it already knew</a>
-<a href="info-051-dump-c.html">051-dump.c — writing a running program back out as a file</a>
-<a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
-<a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
-<a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
-<a href="info-091-stopping-h.html">091-stopping.h — the ways a program ends, from outside</a>
-<a href="info-092-stopping-c.html">092-stopping.c — the ways a program ends, from inside</a>
 <a href="info-098-engine-surface-syms.html">098-engine-surface.syms — the engine's public surface</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
@@ -252,7 +234,7 @@ is exact <em>because</em> the check and the registration happen inside one
 hold of it, and that exactness is what makes the termination decision
 sound. Anything that moves work off this lock has to leave that
 property standing.</p>
-<p><code>pool_pop()</code> exists in the header but no worker uses it. Workers
+<p><code>cera_pool_pop()</code> exists in the header but no worker uses it. Workers
 inline the take because they need to keep the lock across the decision
 to sleep; the function is for tests and for whoever owns the pool.</p>
 <p>There is exactly one queue and no way to name it, because there is
@@ -394,10 +376,10 @@ several to say it about. Small, and forgetting one produces a report
 that quietly lies.</p>
 <table>
 <tr><td>what</td><td>today</td><td>after</td></tr>
-<tr><td><code>pool_queued()</code></td><td>how many tasks are in the ring</td><td>the sum over every queue</td></tr>
-<tr><td><code>pool_destroy()</code>'s complaint about unrun tasks</td><td>counts the ring</td><td>counts all of them, or it under-reports exactly the work a stopped program abandoned</td></tr>
-<tr><td><code>pool_queue_stats()</code> — capacity, high water, growths</td><td>one ring's three numbers</td><td>one set per queue. Aggregate, or report per queue and let the caller add up. The phase 1 demo reads these, so whatever shape is chosen has a reader waiting.</td></tr>
-<tr><td><code>pool_stop()</code></td><td>queued tasks stay queued and are never run</td><td>unchanged in meaning, plural in fact</td></tr>
+<tr><td><code>cera_pool_queued()</code></td><td>how many tasks are in the ring</td><td>the sum over every queue</td></tr>
+<tr><td><code>cera_pool_destroy()</code>'s complaint about unrun tasks</td><td>counts the ring</td><td>counts all of them, or it under-reports exactly the work a stopped program abandoned</td></tr>
+<tr><td><code>cera_pool_queue_stats()</code> — capacity, high water, growths</td><td>one ring's three numbers</td><td>one set per queue. Aggregate, or report per queue and let the caller add up. The phase 1 demo reads these, so whatever shape is chosen has a reader waiting.</td></tr>
+<tr><td><code>cera_pool_stop()</code></td><td>queued tasks stay queued and are never run</td><td>unchanged in meaning, plural in fact</td></tr>
 </table>
 <p>---</p>
 <h2>One ring type, used several times</h2>
@@ -441,7 +423,7 @@ the common path, and it is the harder change.</p>
    serve.
 6. <strong>The starvation answer</strong> from P3 above, whichever is chosen, plus a
    test that reproduces the starving case first and then does not.
-7. <strong>The counting and reporting</strong>, so <code>pool_queued</code>, the destroy
+7. <strong>The counting and reporting</strong>, so <code>cera_pool_queued</code>, the destroy
    complaint and the queue statistics tell the truth about several
    queues.
 8. <strong>Then 108's placements</strong> become a way of computing a server set
@@ -454,7 +436,7 @@ unchanged, from step 1 onward. This is the most important test in the
 issue and it is one that already exists.</p>
 <p><strong>That a named destination is honored.</strong> A station pointed at a
 destination served by one worker, a box that records
-<code>pool_worker_index()</code>, several hundred invocations, and an assertion
+<code>cera_pool_worker_index()</code>, several hundred invocations, and an assertion
 that every one ran on that worker. Directly observable, no timing
 involved.</p>
 <p><strong>That nothing is lost across the split.</strong> The existing tests that push
@@ -470,7 +452,7 @@ program.</p>
 served first and kept permanently fed, one task in the default queue,
 and a measurement of how long it waits. Written as a failing test
 first, so whichever answer is chosen is proven to answer it.</p>
-<p><strong>That the counts add up.</strong> <code>pool_queued()</code> against a known number of
+<p><strong>That the counts add up.</strong> <code>cera_pool_queued()</code> against a known number of
 tasks spread over several queues, and the destroy complaint against a
 deliberately stopped program with work left in more than one.</p>
 <p>---</p>
@@ -494,7 +476,7 @@ deliberately stopped program with work left in more than one.</p>
    the property most worth not disturbing. Splitting is what actually
    takes contention off the common path, and it is where the
    termination argument would have to be re-made from scratch.
-5. <strong>What does <code>pool_pop()</code> mean now?</strong> It is public, used by tests and
+5. <strong>What does <code>cera_pool_pop()</code> mean now?</strong> It is public, used by tests and
    pool owners, and called from threads that are not workers. Popping
    the default queue is the obvious reading; whether it can reach a
    named one is a separate question.

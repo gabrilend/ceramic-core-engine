@@ -32,7 +32,7 @@ static _Atomic int chain_records;
 
 static int increment(int x) { return x + 1; }
 
-static void increment__call(task_t *t)
+static void increment__call(cera_task_t *t)
 {
     int x = *(int *)t->in[0];
     int r = increment(x);
@@ -46,7 +46,7 @@ static void record(int x)
     chain_records++;
 }
 
-static void record__call(task_t *t)
+static void record__call(cera_task_t *t)
 {
     record(*(int *)t->in[0]);
     /* A sink writes nothing: the box returns void, so there is no
@@ -56,14 +56,14 @@ static void record__call(task_t *t)
 static void test_chain(void)
 {
     enum { VALUES = 50 };
-    map_t *m = map_create(3);
+    cera_map_t *m = cera_map_create(3);
     int one_int[1] = { sizeof(int) };
-    map_place(m, 0, increment__call, STATION_PLAIN, 1, one_int, sizeof(int));
-    map_place(m, 1, increment__call, STATION_PLAIN, 1, one_int, sizeof(int));
-    map_place(m, 2, record__call, STATION_PLAIN, 1, one_int, 0);
-    map_connect(m, 0, 0, 1, 0);
-    map_connect(m, 1, 0, 2, 0);
-    map_start(m, 4);
+    cera_map_place(m, 0, increment__call, CERA_STATION_PLAIN, 1, one_int, sizeof(int));
+    cera_map_place(m, 1, increment__call, CERA_STATION_PLAIN, 1, one_int, sizeof(int));
+    cera_map_place(m, 2, record__call, CERA_STATION_PLAIN, 1, one_int, 0);
+    cera_map_connect(m, 0, 0, 1, 0);
+    cera_map_connect(m, 1, 0, 2, 0);
+    cera_map_start(m, 4);
 
     chain_middle_ran = 0;
     chain_total = 0;
@@ -71,9 +71,9 @@ static void test_chain(void)
 
     /* Seed before release: the phase 2 stand-in for the seed sweep. */
     for (int i = 0; i < VALUES; i++)
-        map_deliver_value(m, 0, 0, &i);
-    pool_release(m->pool);
-    pool_join(m->pool);
+        cera_map_deliver_value(m, 0, 0, &i);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     long expected = 0;
     for (int i = 0; i < VALUES; i++)
@@ -95,7 +95,7 @@ static void test_chain(void)
         exit(1);
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  a three-station chain carried %d values end to end\n", VALUES);
 }
 /* }}} */
@@ -109,7 +109,7 @@ static void tally(int x)
     fan_hits++;
 }
 
-static void tally__call(task_t *t)
+static void tally__call(cera_task_t *t)
 {
     tally(*(int *)t->in[0]);
 }
@@ -117,22 +117,22 @@ static void tally__call(task_t *t)
 static void test_fan_out(void)
 {
     enum { SINKS = 20, VALUES = 10 };
-    map_t *m = map_create(1 + SINKS);
+    cera_map_t *m = cera_map_create(1 + SINKS);
     int one_int[1] = { sizeof(int) };
-    map_place(m, 0, increment__call, STATION_PLAIN, 1, one_int, sizeof(int));
+    cera_map_place(m, 0, increment__call, CERA_STATION_PLAIN, 1, one_int, sizeof(int));
     for (int i = 0; i < SINKS; i++) {
-        map_place(m, 1 + i, tally__call, STATION_PLAIN, 1, one_int, 0);
+        cera_map_place(m, 1 + i, tally__call, CERA_STATION_PLAIN, 1, one_int, 0);
         /* Same port every time: fan-out is one port with many
          * destinations, not many ports. */
-        map_connect(m, 0, 0, 1 + i, 0);
+        cera_map_connect(m, 0, 0, 1 + i, 0);
     }
-    map_start(m, 4);
+    cera_map_start(m, 4);
 
     fan_hits = 0;
     for (int i = 0; i < VALUES; i++)
-        map_deliver_value(m, 0, 0, &i);
-    pool_release(m->pool);
-    pool_join(m->pool);
+        cera_map_deliver_value(m, 0, 0, &i);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     if (fan_hits != SINKS * VALUES) {
         fprintf(stderr, "fan-out delivered %d of %d copies\n",
@@ -140,7 +140,7 @@ static void test_fan_out(void)
         exit(1);
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  one port fanned %d values out to %d destinations\n",
            VALUES, SINKS);
 }
@@ -158,7 +158,7 @@ static _Atomic int parcels_wrong;
 
 static parcel_t relay(parcel_t p) { return p; }
 
-static void relay__call(task_t *t)
+static void relay__call(cera_task_t *t)
 {
     parcel_t p;
     memcpy(&p, t->in[0], sizeof p);
@@ -175,7 +175,7 @@ static void receive(parcel_t p)
         parcels_wrong++;
 }
 
-static void receive__call(task_t *t)
+static void receive__call(cera_task_t *t)
 {
     parcel_t p;
     memcpy(&p, t->in[0], sizeof p);
@@ -185,12 +185,12 @@ static void receive__call(task_t *t)
 static void test_struct_through_sink(void)
 {
     enum { PARCELS = 40 };
-    map_t *m = map_create(2);
+    cera_map_t *m = cera_map_create(2);
     int one_parcel[1] = { sizeof(parcel_t) };
-    map_place(m, 0, relay__call, STATION_PLAIN, 1, one_parcel, sizeof(parcel_t));
-    map_place(m, 1, receive__call, STATION_PLAIN, 1, one_parcel, 0);
-    map_connect(m, 0, 0, 1, 0);
-    map_start(m, 4);
+    cera_map_place(m, 0, relay__call, CERA_STATION_PLAIN, 1, one_parcel, sizeof(parcel_t));
+    cera_map_place(m, 1, receive__call, CERA_STATION_PLAIN, 1, one_parcel, 0);
+    cera_map_connect(m, 0, 0, 1, 0);
+    cera_map_start(m, 4);
 
     parcels_seen = 0;
     parcels_wrong = 0;
@@ -200,10 +200,10 @@ static void test_struct_through_sink(void)
         p.weight = i * 2.5;
         snprintf(p.label, sizeof p.label, "parcel-%d", i);
         p.serial = i;
-        map_deliver_value(m, 0, 0, &p);
+        cera_map_deliver_value(m, 0, 0, &p);
     }
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     if (parcels_seen != PARCELS) {
         fprintf(stderr, "sink received %d of %d parcels\n",
@@ -215,7 +215,7 @@ static void test_struct_through_sink(void)
         exit(1);
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     printf("  %d structs crossed two hops byte-identical into a void sink\n",
            PARCELS);
 }

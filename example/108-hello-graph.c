@@ -37,19 +37,19 @@ int main(void)
      * finding it is a lookup in what this binary was built with rather
      * than the reading of a file.
      */
-    const map_build_t *program = map_build_find("107-example.map");
+    const cera_map_build_t *program = cera_map_build_find("107-example.map");
     if (!program) {
         fprintf(stderr, "this binary was not built with 107-example.map\n");
         return 1;
     }
 
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
     program->build(m, NULL, 0);
 
     /* Four workers for four stations, which is more than it needs —
      * two of them have nothing to do until the first has run. */
-    map_start(m, 4);
-    const char *refused = map_bring_up(m);
+    cera_map_start(m, 4);
+    const char *refused = cera_map_bring_up(m);
     if (refused) {
         fprintf(stderr, "the program was refused: %s\n", refused);
         return 1;
@@ -65,7 +65,7 @@ int main(void)
     puts("");
 
     const int value = 7;
-    const char *no = map_deliver_argument(m, 0, 0, &value,
+    const char *no = cera_map_deliver_argument(m, 0, 0, &value,
                                           (int)sizeof value);
     if (no) {
         fprintf(stderr, "could not feed the program: %s\n", no);
@@ -75,22 +75,22 @@ int main(void)
     /* The workers have been parked at the gate until now, so
      * everything above was seeding. Letting them go starts the
      * program; joining waits until nothing is left to run. */
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     int answer = 0;
-    if (map_output_waiting(m, 3) <= 0) {
+    if (cera_map_output_waiting(m, 3) <= 0) {
         fprintf(stderr, "the program produced nothing\n");
         return 1;
     }
-    map_output_take(m, 3, &answer, (int)sizeof answer);
+    cera_map_output_take(m, 3, &answer, (int)sizeof answer);
 
     printf("   fed %d  ->  twice gave %d, plus gave %d  ->  total gave %d\n",
            value, value * 2, value + 10, answer);
 
     long ran = 0;
     for (int i = 0; i < m->n_stations; i++)
-        ran += atomic_load(&map_station(m, i)->runs);
+        ran += atomic_load(&cera_map_station(m, i)->runs);
     printf("   %ld tasks ran across %d stations, and nothing anywhere\n",
            ran, m->n_stations);
     puts("   said when any of them should.");
@@ -121,6 +121,6 @@ int main(void)
     puts("   other. see guarantees V1 and V2 in docs/058-guarantees.md.");
     puts("");
 
-    map_destroy(m);
+    cera_map_destroy(m);
     return 0;
 }

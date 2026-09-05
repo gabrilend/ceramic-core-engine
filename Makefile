@@ -37,7 +37,11 @@ RAM_SHARED := /dev/shm/$(PROJECT)
 
 CC     ?= gcc
 CFLAGS := -std=gnu11 -Wall -Wextra -Werror -g -O2 -pthread
-CFLAGS += -I$(DIR)/libs -I$(DIR)/src
+# One include path, because there is one header (issue 904). This was
+# two — libs/ for the pool and src/ for everything above it — and a
+# consumer inherited both along with having to know that the entry
+# point was called 018-station.h.
+CFLAGS += -I$(DIR)/src
 
 # Every function and every piece of static data in a section of its
 # own, so that the linker can throw away the ones nothing reaches
@@ -53,16 +57,15 @@ CFLAGS += -ffunction-sections -fdata-sections
 # built the binary is the one that must compile anything added to it**
 # — that is what gives a program exactly one answer to sizeof by
 # construction rather than by checking.
-CFLAGS += -DSORA_CC='"$(CC)"'
-CFLAGS += -DSORA_GENERATOR='"$(BUILD)/generate"'
+CFLAGS += -DCERA_CC='"$(CC)"'
+CFLAGS += -DCERA_GENERATOR='"$(BUILD)/generate"'
 # The project root, so a test can find the box sources the generated
 # file names — those paths are shortened against it so that two
 # machines building the same tree emit the same file (issue 311c).
-CFLAGS += -DSORA_ROOT='"$(DIR)"'
-CFLAGS += -DSORA_INCLUDE='"$(DIR)/src"'
-CFLAGS += -DSORA_INCLUDE_LIBS='"$(DIR)/libs"'
-CFLAGS += -DSORA_RAM_SHARED='"$(RAM_SHARED)"'
-CFLAGS += -DSORA_RAM_EXEC='"$(RAM_EXEC)"'
+CFLAGS += -DCERA_ROOT='"$(DIR)"'
+CFLAGS += -DCERA_INCLUDE='"$(DIR)/src"'
+CFLAGS += -DCERA_RAM_SHARED='"$(RAM_SHARED)"'
+CFLAGS += -DCERA_RAM_EXEC='"$(RAM_EXEC)"'
 
 # The generator (phase 3): box sources are whatever sits in
 # src/boxes/ — discovered, never listed, so a box cannot exist that

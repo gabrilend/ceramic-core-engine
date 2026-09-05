@@ -36,8 +36,8 @@
 static _Atomic long chain_total;
 
 typedef struct chain_task {
-    task_t  base;
-    pool_t *pool;
+    cera_task_t  base;
+    cera_pool_t *pool;
     int     remaining;
 } chain_task_t;
 
@@ -48,7 +48,7 @@ typedef struct chain_task {
  * startup; none remaining means this chain is done and only the
  * count remains.
  */
-static void chain_step(task_t *t)
+static void chain_step(cera_task_t *t)
 {
     chain_task_t *c = (chain_task_t *)t;
     chain_total++;
@@ -58,7 +58,7 @@ static void chain_step(task_t *t)
         next->base.call = chain_step;
         next->pool = c->pool;
         next->remaining = c->remaining - 1;
-        pool_push(c->pool, &next->base);
+        cera_pool_push(c->pool, &next->base);
     }
 }
 /* }}} */
@@ -77,17 +77,17 @@ static void test_chains(void)
         expected += lengths[i] + 1;
 
     chain_total = 0;
-    pool_t *p = pool_create(4, NULL, NULL);
+    cera_pool_t *p = cera_pool_create(4, NULL, NULL);
     for (int i = 0; i < CHAINS; i++) {
         chain_task_t *c = malloc(sizeof *c);
         if (!c) abort();
         c->base.call = chain_step;
         c->pool = p;
         c->remaining = lengths[i];
-        pool_push(p, &c->base);
+        cera_pool_push(p, &c->base);
     }
-    pool_release(p);
-    pool_join(p);
+    cera_pool_release(p);
+    cera_pool_join(p);
 
     if (chain_total != expected) {
         fprintf(stderr,
@@ -95,7 +95,7 @@ static void test_chains(void)
                 (long)chain_total, expected);
         exit(1);
     }
-    pool_destroy(p);
+    cera_pool_destroy(p);
     printf("  five uneven chains, %ld links, none cut short\n", expected);
 }
 /* }}} */
@@ -103,13 +103,13 @@ static void test_chains(void)
 /* {{{ test_empty_pool_terminates() */
 static void test_empty_pool_terminates(void)
 {
-    pool_t *p = pool_create(3, NULL, NULL);
-    pool_release(p);
+    cera_pool_t *p = cera_pool_create(3, NULL, NULL);
+    cera_pool_release(p);
     /* Nothing was ever pushed. If the last-sleeper rule is wrong in
      * the empty direction, this join never returns and the test
      * runner's timeout is the error message. */
-    pool_join(p);
-    pool_destroy(p);
+    cera_pool_join(p);
+    cera_pool_destroy(p);
     printf("  an empty pool terminates instead of sleeping forever\n");
 }
 /* }}} */
@@ -117,7 +117,7 @@ static void test_empty_pool_terminates(void)
 /* {{{ test_repeated_small_pools() */
 static _Atomic int burst_ran;
 
-static void burst_tick(task_t *t)
+static void burst_tick(cera_task_t *t)
 {
     (void)t;
     burst_ran++;
@@ -128,21 +128,21 @@ static void test_repeated_small_pools(void)
     enum { ROUNDS = 200, BURST = 50 };
     for (int r = 0; r < ROUNDS; r++) {
         burst_ran = 0;
-        pool_t *p = pool_create(4, NULL, NULL);
+        cera_pool_t *p = cera_pool_create(4, NULL, NULL);
         for (int i = 0; i < BURST; i++) {
-            task_t *t = malloc(sizeof *t);
+            cera_task_t *t = malloc(sizeof *t);
             if (!t) abort();
             t->call = burst_tick;
-            pool_push(p, t);
+            cera_pool_push(p, t);
         }
-        pool_release(p);
-        pool_join(p);
+        cera_pool_release(p);
+        cera_pool_join(p);
         if (burst_ran != BURST) {
             fprintf(stderr, "round %d: %d of %d tasks ran\n",
                     r, (int)burst_ran, BURST);
             exit(1);
         }
-        pool_destroy(p);
+        cera_pool_destroy(p);
     }
     printf("  %d fresh pools each ran their full burst\n", ROUNDS);
 }

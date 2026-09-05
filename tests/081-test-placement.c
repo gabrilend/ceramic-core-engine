@@ -44,8 +44,8 @@ static void complain(const char *box, const char *what)
  * Every field placement writes, compared one at a time so a failure
  * names which one differs rather than only that something does.
  */
-static int same_station(const char *box, const station_t *a,
-                        const station_t *b)
+static int same_station(const char *box, const cera_station_t *a,
+                        const cera_station_t *b)
 {
     int ok = 1;
     if (a->call != b->call)        { complain(box, "different shim"); ok = 0; }
@@ -57,8 +57,8 @@ static int same_station(const char *box, const station_t *a,
         return 0;   /* comparing ports past here would read past one */
     }
     for (int i = 0; i < a->n_in_ports; i++) {
-        const in_port_t *pa = &a->in_ports[i];
-        const in_port_t *pb = &b->in_ports[i];
+        const cera_in_port_t *pa = &a->in_ports[i];
+        const cera_in_port_t *pb = &b->in_ports[i];
         if (pa->elem_size != pb->elem_size) {
             complain(box, "a port takes a different number of bytes");
             ok = 0;
@@ -85,14 +85,14 @@ static int same_station(const char *box, const station_t *a,
  * something a test can call twice, so those are skipped here and the
  * refusal itself is proven where refusals are proven.
  */
-static int place_both_ways(const box_place_t *bp, int kind)
+static int place_both_ways(const cera_box_place_t *bp, int kind)
 {
-    map_t *m = map_create(2);
-    map_place_box(m, 0, bp->name, kind);     /* found by name */
+    cera_map_t *m = cera_map_create(2);
+    cera_map_place_box(m, 0, bp->name, kind);     /* found by name */
     bp->place(m, 1, kind);                   /* called directly */
 
-    int ok = same_station(bp->name, map_station(m, 0), map_station(m, 1));
-    map_destroy(m);
+    int ok = same_station(bp->name, cera_map_station(m, 0), cera_map_station(m, 1));
+    cera_map_destroy(m);
     return ok;
 }
 /* }}} */
@@ -129,7 +129,7 @@ int main(void)
      */
     int plain = 0;
     for (int i = 0; i < n_box_places; i++) {
-        place_both_ways(&box_places[i], STATION_PLAIN);
+        place_both_ways(&box_places[i], CERA_STATION_PLAIN);
         plain++;
     }
 

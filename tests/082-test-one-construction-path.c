@@ -55,14 +55,14 @@ static char *slurp(const char *path)
 /* }}} */
 
 /* {{{ static void dump_to() */
-static void dump_to(map_t *m, const char *path)
+static void dump_to(cera_map_t *m, const char *path)
 {
     FILE *f = fopen(path, "w");
     if (!f) {
         fprintf(stderr, "cannot write %s\n", path);
         exit(1);
     }
-    map_dump(m, f);
+    cera_map_dump(m, f);
     fclose(f);
 }
 /* }}} */
@@ -113,29 +113,29 @@ static void must_take(const char *refusal, const char *what)
  */
 static int a_station_joins_a_running_program(void)
 {
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
 
     /* The part that is already going: values in, doubled, kept. */
-    int doubler = map_add_station(m);
-    map_place_box(m, doubler, "double_it", STATION_PLAIN);
-    must_take(map_name_station(m, doubler, "doubler"), "a name");
+    int doubler = cera_map_add_station(m);
+    cera_map_place_box(m, doubler, "double_it", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, doubler, "doubler"), "a name");
 
-    int kept = map_add_station(m);
-    map_place_box(m, kept, "keep", STATION_PLAIN);
-    must_take(map_name_station(m, kept, "kept"), "a name");
-    must_take(map_wire(m, doubler, 0, kept, 0), "the first wire");
+    int kept = cera_map_add_station(m);
+    cera_map_place_box(m, kept, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, kept, "kept"), "a name");
+    must_take(cera_map_wire(m, doubler, 0, kept, 0), "the first wire");
 
-    map_start(m, 4);
+    cera_map_start(m, 4);
     /* A standing promise that more work may arrive, so the last
      * sleeper does not decide the program is finished between two
      * deliveries (issue 104). */
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     const int BATCH = 50;
     for (int i = 0; i < BATCH; i++) {
         int v = i;
-        map_deliver_value(m, doubler, 0, &v);
+        cera_map_deliver_value(m, doubler, 0, &v);
     }
 
     /*
@@ -158,19 +158,19 @@ static int a_station_joins_a_running_program(void)
      * throughout — no worker is stopped, nothing is quiesced, the
      * pool is never paused.
      */
-    while (atomic_load(&map_station(m, kept)->runs) < BATCH)
+    while (atomic_load(&cera_map_station(m, kept)->runs) < BATCH)
         usleep(200);
 
 
     /* Add: a place, and a box in it. Nothing can reach it yet. */
-    int adder = map_add_station(m);
-    map_place_box(m, adder, "add", STATION_PLAIN);
-    must_take(map_name_station(m, adder, "adder"), "a name");
+    int adder = cera_map_add_station(m);
+    cera_map_place_box(m, adder, "add", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, adder, "adder"), "a name");
 
-    int results = map_add_station(m);
-    map_place_box(m, results, "keep", STATION_PLAIN);
-    must_take(map_name_station(m, results, "results"), "a name");
-    must_take(map_designate_output(m, results), "the results door");
+    int results = cera_map_add_station(m);
+    cera_map_place_box(m, results, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, results, "results"), "a name");
+    must_take(cera_map_designate_output(m, results), "the results door");
 
     /* This scene collects at the end rather than as it goes, which is
      * precisely the condition the output door shouts about: results
@@ -183,26 +183,26 @@ static int a_station_joins_a_running_program(void)
     /* Configure: the second addend is a constant. Written while the
      * program runs, through the same call a map file's `in 1 = 1000`
      * becomes. */
-    must_take(map_configure_port(m, adder, 1, IN_PORT_STATIC, "1000"),
+    must_take(cera_map_configure_port(m, adder, 1, CERA_IN_PORT_STATIC, "1000"),
               "a constant bound to a running program");
 
     /* Wire: last, which is when the first value can arrive. */
-    must_take(map_wire(m, adder, 0, results, 0), "the results wire");
-    must_take(map_wire(m, doubler, 0, adder, 0), "the wire that starts it");
+    must_take(cera_map_wire(m, adder, 0, results, 0), "the results wire");
+    must_take(cera_map_wire(m, doubler, 0, adder, 0), "the wire that starts it");
 
     for (int i = 0; i < BATCH; i++) {
         int v = i;
-        map_deliver_value(m, doubler, 0, &v);
+        cera_map_deliver_value(m, doubler, 0, &v);
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
     int failed = 0;
 
-    if (atomic_load(&map_station(m, adder)->runs) != BATCH) {
+    if (atomic_load(&cera_map_station(m, adder)->runs) != BATCH) {
         fprintf(stderr, "the station added mid-run ran %d times, not %d\n",
-                (int)atomic_load(&map_station(m, adder)->runs), BATCH);
+                (int)atomic_load(&cera_map_station(m, adder)->runs), BATCH);
         failed = 1;
     }
 
@@ -218,7 +218,7 @@ static int a_station_joins_a_running_program(void)
     int taken = 0;
     for (;;) {
         int got = 0;
-        if (!map_output_take(m, results, &got, sizeof got))
+        if (!cera_map_output_take(m, results, &got, sizeof got))
             break;
         taken++;
         int which = (got - 1000) / 2;
@@ -244,14 +244,14 @@ static int a_station_joins_a_running_program(void)
 
     /* The undisturbed half: everything sent, before and after the
      * program grew, reached the station that was always there. */
-    if (atomic_load(&map_station(m, kept)->runs) != 2 * BATCH) {
+    if (atomic_load(&cera_map_station(m, kept)->runs) != 2 * BATCH) {
         fprintf(stderr, "the station that was already there ran %d times, "
                         "not %d — growing the program cost it values\n",
-                (int)atomic_load(&map_station(m, kept)->runs), 2 * BATCH);
+                (int)atomic_load(&cera_map_station(m, kept)->runs), 2 * BATCH);
         failed = 1;
     }
 
-    map_destroy(m);
+    cera_map_destroy(m);
     if (!failed)
         printf("  a station was added, configured and wired into a running "
                "program; it produced %d results and the running part lost "
@@ -264,7 +264,7 @@ int main(void)
 {
     char dir[256], map_path[320], from_file[320], from_calls[320];
     snprintf(dir, sizeof dir, "%s/one-path-%d",
-             late_source_dir(), (int)getpid());
+             cera_late_source_dir(), (int)getpid());
     char cmd[512];
     snprintf(cmd, sizeof cmd, "mkdir -p %s", dir);
     if (system(cmd) != 0) {
@@ -312,7 +312,7 @@ int main(void)
     fflush(stdout);
 
     /* One program, read. */
-    map_t *read = map_load_file(map_path, 2);
+    cera_map_t *read = cera_map_load_file(map_path, 2);
     dump_to(read, from_file);
 
     /*
@@ -321,33 +321,33 @@ int main(void)
      * program — which is the point: there is nothing here that only
      * a file is allowed to do.
      */
-    map_t *built = map_create_empty();
+    cera_map_t *built = cera_map_create_empty();
     const char *const names[] = { "source", "adder", "twice", "waiting" };
     const char *const boxes[] = { "seven", "add", "double_it", "add" };
     for (int i = 0; i < 4; i++) {
-        int at = map_add_station(built);
+        int at = cera_map_add_station(built);
         if (at != i) {
             fprintf(stderr, "stations came out in a different order: "
                             "wanted %d, got %d\n", i, at);
             return 1;
         }
-        map_place_box(built, at, boxes[i], STATION_PLAIN);
-        must_take(map_name_station(built, at, names[i]), "a name");
+        cera_map_place_box(built, at, boxes[i], CERA_STATION_PLAIN);
+        must_take(cera_map_name_station(built, at, names[i]), "a name");
     }
 
-    must_take(map_configure_port(built, 1, 1, IN_PORT_STATIC, "1000"),
+    must_take(cera_map_configure_port(built, 1, 1, CERA_IN_PORT_STATIC, "1000"),
               "a constant");
-    map_in_port_start_depth(built, 2, 0, 64);
-    must_take(map_configure_port(built, 3, 1, IN_PORT_NONE, NULL),
+    cera_map_in_port_start_depth(built, 2, 0, 64);
+    must_take(cera_map_configure_port(built, 3, 1, CERA_IN_PORT_NONE, NULL),
               "a port left unwired");
-    must_take(map_designate_output(built, 2), "the way out");
+    must_take(cera_map_designate_output(built, 2), "the way out");
 
-    map_connect(built, 0, 0, 1, 0);   /* source -> adder.0 */
-    map_connect(built, 1, 0, 2, 0);   /* adder  -> twice.0 */
-    map_connect(built, 1, 0, 3, 0);   /* adder  -> waiting.0, a fan-out */
+    cera_map_connect(built, 0, 0, 1, 0);   /* source -> adder.0 */
+    cera_map_connect(built, 1, 0, 2, 0);   /* adder  -> twice.0 */
+    cera_map_connect(built, 1, 0, 3, 0);   /* adder  -> waiting.0, a fan-out */
 
-    map_start(built, 2);
-    must_take(map_bring_up(built), "the finished program");
+    cera_map_start(built, 2);
+    must_take(cera_map_bring_up(built), "the finished program");
     dump_to(built, from_calls);
 
     char *a = slurp(from_file);
@@ -384,17 +384,17 @@ int main(void)
      * The format gained a form for it — a depth with nothing after
      * it — and this is the assertion that the two are told apart.
      */
-    if (map_station(read, 2)->in_ports[0].capacity != 64) {
+    if (cera_map_station(read, 2)->in_ports[0].capacity != 64) {
         fprintf(stderr, "the deepened buffer came back %d slots deep\n",
-                map_station(read, 2)->in_ports[0].capacity);
+                cera_map_station(read, 2)->in_ports[0].capacity);
         return 1;
     }
-    if (atomic_load(&map_station(read, 2)->in_ports[0].kind) != IN_PORT_RING) {
+    if (atomic_load(&cera_map_station(read, 2)->in_ports[0].kind) != CERA_IN_PORT_RING) {
         fprintf(stderr, "the deepened buffer came back as something other "
                         "than a buffer\n");
         return 1;
     }
-    if (atomic_load(&map_station(read, 3)->in_ports[1].kind) != IN_PORT_NONE) {
+    if (atomic_load(&cera_map_station(read, 3)->in_ports[1].kind) != CERA_IN_PORT_NONE) {
         fprintf(stderr, "the port with no source came back as something "
                         "else\n");
         return 1;
@@ -405,13 +405,13 @@ int main(void)
     /* Let both run down rather than tearing them apart mid-flight:
      * the fan-out puts one value into a station that can never claim
      * it, and destroying a pool with work still in it says so. */
-    pool_release(read->pool);
-    pool_join(read->pool);
-    pool_release(built->pool);
-    pool_join(built->pool);
+    cera_pool_release(read->pool);
+    cera_pool_join(read->pool);
+    cera_pool_release(built->pool);
+    cera_pool_join(built->pool);
 
-    map_destroy(read);
-    map_destroy(built);
+    cera_map_destroy(read);
+    cera_map_destroy(built);
 
     /* The same operations, on a program that is already running. */
     if (a_station_joins_a_running_program() != 0)

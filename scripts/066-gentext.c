@@ -379,7 +379,7 @@ char *gt_mangle(arena_t *a, const char *type_name)
  * outside this function needs to know what it is — a caller wants a
  * symbol, not a naming convention.
  */
-#define BOX_SYMBOL_PREFIX "sora_box_"
+#define BOX_SYMBOL_PREFIX "cera_box_"
 
 static void escape_into(buf_t *b, const char *s)
 {

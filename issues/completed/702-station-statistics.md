@@ -34,7 +34,7 @@ Built. Run counts and produced-for-others ride the delivery path as
 atomics where the work already is, always on, costing a fetch-add.
 Timing — box time from inside the generated shims, mutex wait around
 the delivery lock, gather time charged to the pulling station at the
-exact call — exists only when SORA_STATS is compiled in; without the
+exact call — exists only when CERA_STATS is compiled in; without the
 define every clock read compiles out of the shims and the delivery
 path both, so the apparatus can be removed entirely, and the demo
 measures its cost with it on and off rather than assuming. The

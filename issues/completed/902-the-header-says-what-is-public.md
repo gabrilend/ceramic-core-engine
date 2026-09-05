@@ -46,13 +46,13 @@ engine functions today, and every one of them is public by necessity:
 
 | what it needs them for | the calls |
 |---|---|
-| building a station from a compiled map | `map_add_station`, `map_place`, `map_name_station`, `map_configure_port`, `map_wire`, `map_in_port_start_depth`, `map_station` |
-| marking doors | `map_designate_input`, `map_designate_output` |
-| a map placed inside another map | `map_add_part`, `map_connect_parts` |
-| a box ending its own program | `sora_stop_now` |
-| handing a built map back | `sora_built_take` |
-| charging a box's time to its station | `sora_stats_box_time` |
-| a value to and from text | the eleven `sora_text_*` calls |
+| building a station from a compiled map | `cera_map_add_station`, `cera_map_place`, `cera_map_name_station`, `cera_map_configure_port`, `cera_map_wire`, `cera_map_in_port_start_depth`, `cera_map_station` |
+| marking doors | `cera_map_designate_input`, `cera_map_designate_output` |
+| a map placed inside another map | `cera_map_add_part`, `cera_map_connect_parts` |
+| a box ending its own program | `cera_stop_now` |
+| handing a built map back | `cera_built_take` |
+| charging a box's time to its station | `cera_stats_box_time` |
+| a value to and from text | the eleven `cera_text_*` calls |
 
 **And a published symbol is also a run-time requirement.** A box or a
 map compiled while the program runs arrives as a shared object and binds

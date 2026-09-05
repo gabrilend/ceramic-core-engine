@@ -32,12 +32,12 @@
 static const char *field_kind_name(tkind_t k)
 {
     switch (k) {
-    case TKIND_INT:    return "FIELD_INT";
-    case TKIND_UINT:   return "FIELD_UINT";
-    case TKIND_FLOAT:  return "FIELD_FLOAT";
-    case TKIND_STRING: return "FIELD_STRING";
-    case TKIND_STRUCT: return "FIELD_STRUCT";
-    default:           return "FIELD_INT";
+    case TKIND_INT:    return "CERA_FIELD_INT";
+    case TKIND_UINT:   return "CERA_FIELD_UINT";
+    case TKIND_FLOAT:  return "CERA_FIELD_FLOAT";
+    case TKIND_STRING: return "CERA_FIELD_STRING";
+    case TKIND_STRUCT: return "CERA_FIELD_STRUCT";
+    default:           return "CERA_FIELD_INT";
     }
 }
 /* }}} */
@@ -164,7 +164,7 @@ static void emit_shims(buf_t *w, const description_t *d)
         const box_t *b = vec_at(&d->boxes, i);
         buf_line(w, "/* generated from: %s %s(...) [%s:%d] */",
                  b->ret, b->name, b->file, b->line);
-        buf_line(w, "static void %s__call(task_t *t)", b->name);
+        buf_line(w, "static void %s__call(cera_task_t *t)", b->name);
         buf_line(w, "{");
         buf_line(w, "    (void)t;");
         for (int j = 0; j < b->n_params; j++) {
@@ -172,12 +172,12 @@ static void emit_shims(buf_t *w, const description_t *d)
             buf_line(w, "    memcpy(&a%d, t->in[%d], sizeof a%d);", j, j, j);
         }
 
-        /* Timing exists only under SORA_STATS (issue 702): the clock
+        /* Timing exists only under CERA_STATS (issue 702): the clock
          * reads compile out entirely otherwise, so measurement is a
          * choice made at build time and never a standing tax. */
-        buf_line(w, "#ifdef SORA_STATS");
-        buf_line(w, "    struct timespec sora_t0, sora_t1;");
-        buf_line(w, "    clock_gettime(CLOCK_MONOTONIC, &sora_t0);");
+        buf_line(w, "#ifdef CERA_STATS");
+        buf_line(w, "    struct timespec cera_t0, cera_t1;");
+        buf_line(w, "    clock_gettime(CLOCK_MONOTONIC, &cera_t0);");
         buf_line(w, "#endif");
 
         buf_addstr(w, "    ");
@@ -188,16 +188,16 @@ static void emit_shims(buf_t *w, const description_t *d)
             buf_addf(w, "%sa%d", j ? ", " : "", j);
         buf_line(w, ");");
 
-        buf_line(w, "#ifdef SORA_STATS");
-        buf_line(w, "    clock_gettime(CLOCK_MONOTONIC, &sora_t1);");
+        buf_line(w, "#ifdef CERA_STATS");
+        buf_line(w, "    clock_gettime(CLOCK_MONOTONIC, &cera_t1);");
         /* The time is charged onto the task, and the delivery walk
          * moves it onto the station afterwards. It used to be charged
          * straight to the station, found through a process-wide
          * pointer to the running map, and that pointer was what
          * limited a process to a single running map (issue 405). */
-        buf_line(w, "    sora_stats_box_time(t,");
-        buf_line(w, "        (sora_t1.tv_sec - sora_t0.tv_sec) * 1000000000L");
-        buf_line(w, "        + (sora_t1.tv_nsec - sora_t0.tv_nsec));");
+        buf_line(w, "    cera_stats_box_time(t,");
+        buf_line(w, "        (cera_t1.tv_sec - cera_t0.tv_sec) * 1000000000L");
+        buf_line(w, "        + (cera_t1.tv_nsec - cera_t0.tv_nsec));");
         buf_line(w, "#endif");
 
         if (strcmp(b->ret, "void") != 0)
@@ -220,7 +220,7 @@ static void emit_structs(buf_t *w, const description_t *d)
 {
     for (int i = 0; i < d->structs.n; i++) {
         const sdef_t *s = vec_at(&d->structs, i);
-        buf_line(w, "static const field_info_t %s__fields[] = {", s->name);
+        buf_line(w, "static const cera_field_info_t %s__fields[] = {", s->name);
         for (int j = 0; j < s->n_fields; j++) {
             const field_t *f = &s->fields[j];
             char nested[64];
@@ -239,7 +239,7 @@ static void emit_structs(buf_t *w, const description_t *d)
         buf_line(w, "");
     }
 
-    buf_line(w, "const struct_info_t struct_layouts[] = {");
+    buf_line(w, "const cera_struct_info_t struct_layouts[] = {");
     for (int i = 0; i < d->structs.n; i++) {
         const sdef_t *s = vec_at(&d->structs, i);
         buf_line(w, "    { \"%s\", (int)sizeof(%s), %d, %s__fields },",
@@ -332,37 +332,37 @@ static void emit_struct_text(buf_t *w, const description_t *d)
         buf_line(w, "/* reads a %s out of brace text */", s->name);
         buf_line(w, "static const char *%s__read(const char *p, void *out,",
                  s->name);
-        buf_line(w, "        const sora_where_t *w)");
+        buf_line(w, "        const cera_where_t *w)");
         buf_line(w, "{");
         buf_line(w, "    %s v;", s->name);
         /* Zeroed first, so a padding hole is the same bytes every
          * time and two values that read the same compare the same. */
         buf_line(w, "    memset(&v, 0, sizeof v);");
-        buf_line(w, "    p = sora_text_expect(p, '{', w, "
+        buf_line(w, "    p = cera_text_expect(p, '{', w, "
                     "\"to open a %s\");", s->name);
         for (int j = 0; j < s->n_fields; j++) {
             const field_t *f = &s->fields[j];
             if (j)
-                buf_line(w, "    p = sora_text_expect(p, ',', w, "
+                buf_line(w, "    p = cera_text_expect(p, ',', w, "
                             "\"between fields of a %s\");", s->name);
             switch (f->kind) {
             case TKIND_INT:
-                buf_line(w, "    p = sora_text_signed(p, &v.%s, "
+                buf_line(w, "    p = cera_text_signed(p, &v.%s, "
                             "(int)sizeof v.%s, w, \"%s\");",
                          f->name, f->name, f->name);
                 break;
             case TKIND_UINT:
-                buf_line(w, "    p = sora_text_unsigned(p, &v.%s, "
+                buf_line(w, "    p = cera_text_unsigned(p, &v.%s, "
                             "(int)sizeof v.%s, w, \"%s\");",
                          f->name, f->name, f->name);
                 break;
             case TKIND_FLOAT:
-                buf_line(w, "    p = sora_text_floating(p, &v.%s, "
+                buf_line(w, "    p = cera_text_floating(p, &v.%s, "
                             "(int)sizeof v.%s, w, \"%s\");",
                          f->name, f->name, f->name);
                 break;
             case TKIND_STRING:
-                buf_line(w, "    p = sora_text_chars(p, v.%s, "
+                buf_line(w, "    p = cera_text_chars(p, v.%s, "
                             "(int)sizeof v.%s, w, \"%s\");",
                          f->name, f->name, f->name);
                 break;
@@ -376,7 +376,7 @@ static void emit_struct_text(buf_t *w, const description_t *d)
                 exit(65);
             }
         }
-        buf_line(w, "    p = sora_text_expect(p, '}', w, "
+        buf_line(w, "    p = cera_text_expect(p, '}', w, "
                     "\"to close a %s\");", s->name);
         buf_line(w, "    memcpy(out, &v, sizeof v);");
         buf_line(w, "    return p;");
@@ -387,30 +387,30 @@ static void emit_struct_text(buf_t *w, const description_t *d)
          * same order, so what comes out is what would go back in. */
         buf_line(w, "/* writes a %s down as brace text */", s->name);
         buf_line(w, "static void %s__write(const void *bytes, "
-                    "sora_textbuf_t *tb)", s->name);
+                    "cera_textbuf_t *tb)", s->name);
         buf_line(w, "{");
         buf_line(w, "    %s v;", s->name);
         buf_line(w, "    memcpy(&v, bytes, sizeof v);");
-        buf_line(w, "    sora_text_put(tb, \"{ \");");
+        buf_line(w, "    cera_text_put(tb, \"{ \");");
         for (int j = 0; j < s->n_fields; j++) {
             const field_t *f = &s->fields[j];
             if (j)
-                buf_line(w, "    sora_text_put(tb, \", \");");
+                buf_line(w, "    cera_text_put(tb, \", \");");
             switch (f->kind) {
             case TKIND_INT:
-                buf_line(w, "    sora_text_put_signed(tb, &v.%s, "
+                buf_line(w, "    cera_text_put_signed(tb, &v.%s, "
                             "(int)sizeof v.%s);", f->name, f->name);
                 break;
             case TKIND_UINT:
-                buf_line(w, "    sora_text_put_unsigned(tb, &v.%s, "
+                buf_line(w, "    cera_text_put_unsigned(tb, &v.%s, "
                             "(int)sizeof v.%s);", f->name, f->name);
                 break;
             case TKIND_FLOAT:
-                buf_line(w, "    sora_text_put_floating(tb, &v.%s, "
+                buf_line(w, "    cera_text_put_floating(tb, &v.%s, "
                             "(int)sizeof v.%s);", f->name, f->name);
                 break;
             case TKIND_STRING:
-                buf_line(w, "    sora_text_put_chars(tb, v.%s, "
+                buf_line(w, "    cera_text_put_chars(tb, v.%s, "
                             "(int)sizeof v.%s);", f->name, f->name);
                 break;
             case TKIND_STRUCT:
@@ -421,7 +421,7 @@ static void emit_struct_text(buf_t *w, const description_t *d)
                 break;
             }
         }
-        buf_line(w, "    sora_text_put(tb, \" }\");");
+        buf_line(w, "    cera_text_put(tb, \" }\");");
         buf_line(w, "}");
         buf_line(w, "");
     }
@@ -431,7 +431,7 @@ static void emit_struct_text(buf_t *w, const description_t *d)
     buf_line(w, " * handed its own pair at placement, so writing one down "
                 "follows a");
     buf_line(w, " * pointer rather than searching anything (issue 408). */");
-    buf_line(w, "const struct_text_t struct_texts[] = {");
+    buf_line(w, "const cera_struct_text_t struct_texts[] = {");
     for (int i = 0; i < d->structs.n; i++) {
         const sdef_t *s = vec_at(&d->structs, i);
         buf_line(w, "    { \"%s\", (int)sizeof(%s), %s__read, %s__write },",
@@ -498,8 +498,8 @@ static void emit_placements(buf_t *w, const description_t *d,
          * never places. Extendable at run time is a requirement of
          * this engine; small was never one. */
         buf_line(w, "/* places %s:%s */", file, b->name);
-        buf_line(w, "void %s__place(map_t *m, int station, int kind);", sym);
-        buf_line(w, "void %s__place(map_t *m, int station, int kind)", sym);
+        buf_line(w, "void %s__place(cera_map_t *m, int station, int kind);", sym);
+        buf_line(w, "void %s__place(cera_map_t *m, int station, int kind)", sym);
         buf_line(w, "{");
 
         /* A comparator carries one extra port holding the value to
@@ -508,7 +508,7 @@ static void emit_placements(buf_t *w, const description_t *d,
          * which of the two reasons applies — "cannot be a comparator"
          * alone would leave the author guessing which fix to make. */
         if (is_void) {
-            buf_line(w, "    if (kind == STATION_COMPARATOR) {");
+            buf_line(w, "    if (kind == CERA_STATION_COMPARATOR) {");
             buf_line(w, "        fprintf(stderr, \"map: '%s:%s' cannot be a \"",
                      file, b->name);
             buf_line(w, "                \"comparator — it returns nothing, so \"");
@@ -516,7 +516,7 @@ static void emit_placements(buf_t *w, const description_t *d,
             buf_line(w, "        abort();");
             buf_line(w, "    }");
         } else if (!compare_of[i]) {
-            buf_line(w, "    if (kind == STATION_COMPARATOR) {");
+            buf_line(w, "    if (kind == CERA_STATION_COMPARATOR) {");
             buf_line(w, "        fprintf(stderr, \"map: '%s:%s' cannot be a \"",
                      file, b->name);
             buf_line(w, "                \"comparator — its return type '%s' has \"",
@@ -528,7 +528,7 @@ static void emit_placements(buf_t *w, const description_t *d,
             buf_line(w, "    }");
         }
 
-        buf_line(w, "    int extra = (kind == STATION_COMPARATOR) ? 1 : 0;");
+        buf_line(w, "    int extra = (kind == CERA_STATION_COMPARATOR) ? 1 : 0;");
         /* The threshold slot is always in the array and counted only
          * when it is wanted, which also keeps the array from being
          * zero-length for a box that takes no parameters — something C
@@ -545,11 +545,11 @@ static void emit_placements(buf_t *w, const description_t *d,
         else
             snprintf(ret_size, sizeof ret_size, "(int)sizeof(%s)", b->ret);
 
-        buf_line(w, "    map_place(m, station, %s__call, kind, %d + extra,",
+        buf_line(w, "    cera_map_place(m, station, %s__call, kind, %d + extra,",
                  b->name, b->n_params);
         buf_line(w, "              sizes, %s);", ret_size);
         buf_line(w, "");
-        buf_line(w, "    station_t *s = map_station(m, station);");
+        buf_line(w, "    cera_station_t *s = cera_map_station(m, station);");
         buf_line(w, "    (void)s;");
         /* The name the dump reads, written here rather than found by
          * scanning every box for a matching call site (issue 311b).
@@ -607,7 +607,7 @@ static void emit_placements(buf_t *w, const description_t *d,
      * what keeps every emitted function referenced, which a build with
      * warnings as errors requires.
      */
-    buf_line(w, "const box_place_t box_places[] = {");
+    buf_line(w, "const cera_box_place_t box_places[] = {");
     for (int i = 0; i < d->boxes.n; i++) {
         const box_t *b = vec_at(&d->boxes, i);
         const char *file = path_within(b->file, root);
@@ -757,8 +757,8 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
 {
     if (n_maps == 0) {
         buf_line(w, "/* No maps were named to this build (issue 311d). */");
-        buf_line(w, "const map_build_t sora_map_builds[] = { { 0, 0, 0 } };");
-        buf_line(w, "const int sora_n_map_builds = 0;");
+        buf_line(w, "const cera_map_build_t cera_map_builds[] = { { 0, 0, 0 } };");
+        buf_line(w, "const int cera_n_map_builds = 0;");
         buf_line(w, "");
         return;
     }
@@ -815,7 +815,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
                         mapfile_free(earlier);
                 }
                 if (!said)
-                    buf_line(w, "void %s__place(map_t *m, int station, "
+                    buf_line(w, "void %s__place(cera_map_t *m, int station, "
                                 "int kind);", place);
             }
             mapfile_free(md);
@@ -834,10 +834,10 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
     buf_line(w, " * produced two different exit codes depending on which");
     buf_line(w, " * route had read it. There is one route now, and the");
     buf_line(w, " * fault is in the file either way (issue 311d). */");
-    buf_line(w, "static void sora_built_take(const char *refusal)");
+    buf_line(w, "static void cera_built_take(const char *refusal)");
     buf_line(w, "{");
     buf_line(w, "    if (refusal)");
-    buf_line(w, "        sora_stop_now(0, SORA_EXIT_BAD_FILE, refusal);");
+    buf_line(w, "        cera_stop_now(0, CERA_EXIT_BAD_FILE, refusal);");
     buf_line(w, "}");
     buf_line(w, "");
 
@@ -865,7 +865,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
          * allocates.
          */
         buf_line(w, "/* builds %s */", shortened);
-        buf_line(w, "static int %s(map_t *m, int *landed, int cap)", sym);
+        buf_line(w, "static int %s(cera_map_t *m, int *landed, int cap)", sym);
         buf_line(w, "{");
         buf_line(w, "    int at[%d];", md->n_stations > 0 ? md->n_stations : 1);
 
@@ -874,36 +874,36 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
             const box_t *b = box_named(d, s->box, root, maps[mi], s->line);
             char *place = gt_box_symbol(a, path_within(b->file, root),
                                         b->name);
-            const char *kind = s->kind == STATION_COMPARATOR
-                             ? "STATION_COMPARATOR"
-                             : s->kind == STATION_ITERATOR
-                             ? "STATION_ITERATOR" : "STATION_PLAIN";
+            const char *kind = s->kind == CERA_STATION_COMPARATOR
+                             ? "CERA_STATION_COMPARATOR"
+                             : s->kind == CERA_STATION_ITERATOR
+                             ? "CERA_STATION_ITERATOR" : "CERA_STATION_PLAIN";
 
-            buf_line(w, "    at[%d] = map_add_station(m);", index);
-            buf_line(w, "    sora_built_take(map_name_station(m, at[%d], "
+            buf_line(w, "    at[%d] = cera_map_add_station(m);", index);
+            buf_line(w, "    cera_built_take(cera_map_name_station(m, at[%d], "
                         "\"%s\"));", index, s->name);
             buf_line(w, "    %s__place(m, at[%d], %s);", place, index, kind);
             /* Where an iterator had got to, if it had got anywhere
              * (issue 712). Emitted after the box is placed, because
              * placement is what gives the station its exits. */
             if (s->cursor > 0)
-                buf_line(w, "    sora_built_take(map_station_set_cursor(m, "
+                buf_line(w, "    cera_built_take(cera_map_station_set_cursor(m, "
                             "at[%d], %d));", index, s->cursor);
-            if (s->door == DOOR_IN)
-                buf_line(w, "    sora_built_take(map_designate_input(m, "
+            if (s->door == CERA_DOOR_IN)
+                buf_line(w, "    cera_built_take(cera_map_designate_input(m, "
                             "at[%d]));", index);
-            else if (s->door == DOOR_OUT)
-                buf_line(w, "    sora_built_take(map_designate_output(m, "
+            else if (s->door == CERA_DOOR_OUT)
+                buf_line(w, "    cera_built_take(cera_map_designate_output(m, "
                             "at[%d]));", index);
 
             for (desc_input_t *in = s->inputs; in; in = in->next) {
                 if (in->depth > 0)
-                    buf_line(w, "    sora_built_take(map_in_port_start_depth"
+                    buf_line(w, "    cera_built_take(cera_map_in_port_start_depth"
                                 "(m, at[%d], %d, %d));",
                              index, in->port, in->depth);
                 if (in->is_none) {
-                    buf_line(w, "    sora_built_take(map_configure_port(m, "
-                                "at[%d], %d, IN_PORT_NONE, 0));",
+                    buf_line(w, "    cera_built_take(cera_map_configure_port(m, "
+                                "at[%d], %d, CERA_IN_PORT_NONE, 0));",
                              index, in->port);
                     continue;
                 }
@@ -936,8 +936,8 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
                  * have formed in the program this was captured from.
                  */
                 if (in->is_waiting) {
-                    buf_addstr(w, "    sora_built_take("
-                                  "map_in_port_queue_text(m, at[");
+                    buf_addstr(w, "    cera_built_take("
+                                  "cera_map_in_port_queue_text(m, at[");
                     buf_addf(w, "%d], %d, \"", index, in->port);
                     for (const char *c = text; *c; c++) {
                         if (*c == '\\')     buf_addstr(w, "\\\\");
@@ -947,9 +947,9 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
                     buf_addstr(w, "\"));\n");
                     continue;
                 }
-                buf_addstr(w, "    sora_built_take(map_configure_port(m, "
+                buf_addstr(w, "    cera_built_take(cera_map_configure_port(m, "
                               "at[");
-                buf_addf(w, "%d], %d, IN_PORT_STATIC, \"", index, in->port);
+                buf_addf(w, "%d], %d, CERA_IN_PORT_STATIC, \"", index, in->port);
                 for (const char *c = text; *c; c++) {
                     if (*c == '\\')     buf_addstr(w, "\\\\");
                     else if (*c == '"') buf_addstr(w, "\\\"");
@@ -976,7 +976,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
                             maps[mi], out->line, out->dest_station);
                     exit(65);
                 }
-                buf_line(w, "    sora_built_take(map_wire(m, at[%d], %d, "
+                buf_line(w, "    cera_built_take(cera_map_wire(m, at[%d], %d, "
                             "at[%d], %d));",
                          index, out->port, found, out->dest_port);
             }
@@ -993,7 +993,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
     }
 
     buf_line(w, "/* Which built function belongs to which description. */");
-    buf_line(w, "const map_build_t sora_map_builds[] = {");
+    buf_line(w, "const cera_map_build_t cera_map_builds[] = {");
     for (int mi = 0; mi < n_maps; mi++) {
         const char *shortened = path_within(maps[mi], root);
         char *sym = gt_box_symbol(a, shortened, "build");
@@ -1001,7 +1001,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
                  map_station_count(maps[mi]), sym);
     }
     buf_line(w, "};");
-    buf_line(w, "const int sora_n_map_builds = %d;", n_maps);
+    buf_line(w, "const int cera_n_map_builds = %d;", n_maps);
     buf_line(w, "");
 }
 /* }}} */
@@ -1072,14 +1072,14 @@ static void emit_sources(buf_t *w, arena_t *a, const char **sources,
     buf_line(w, "/* Which text belongs to which source. The path is the one");
     buf_line(w, " * the build handed the generator, shortened against the");
     buf_line(w, " * project root so two machines emit the same file. */");
-    buf_line(w, "const box_source_t sora_box_sources[] = {");
+    buf_line(w, "const cera_box_source_t cera_box_sources[] = {");
     for (int i = 0; i < n_sources; i++) {
         const char *shortened = path_within(sources[i], root);
         char *sym = gt_box_symbol(a, shortened, "source");
         buf_line(w, "    { \"%s\", %s },", shortened, sym);
     }
     buf_line(w, "};");
-    buf_line(w, "const int sora_n_box_sources = %d;", n_sources);
+    buf_line(w, "const int cera_n_box_sources = %d;", n_sources);
     buf_line(w, "");
 }
 /* }}} */

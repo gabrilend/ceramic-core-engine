@@ -459,12 +459,14 @@ Port zero of this station delivers to port zero of the station named
 `printer`. Repeat the line to fan out; one port may carry any number of
 destinations.
 
-An arrow whose destination port holds a static will, once issue 405
-lands, **overwrite that static** rather than queue into a ring buffer —
-so a value can become a constant the destination reads on every later
-invocation. It does not make the destination run, because a static
-never gates readiness. This is how a constant gets computed at startup
-instead of written here by hand, and it is deliberately a property of
+An arrow whose destination port holds a static **overwrites that
+static** rather than queueing into a ring buffer — so a value can
+become a constant the destination reads on every later invocation. It
+does not make the destination run, because a static never gates
+readiness. This is how a constant gets computed at startup instead of
+being written here by hand, and **it is how a station remembers**: an
+arrow from a station's own output back into its own static input port
+holds whatever the last run returned. It is deliberately a property of
 the arrow rather than of the box, so that it shows up in this file
 instead of happening invisibly inside C.
 
@@ -545,9 +547,9 @@ engine used to keep the table alive for the whole run, shared, behind a
 mutex of its own, and two consequences followed that were never
 features: two ports of different types could reference one entry and
 read the same bytes each their own way, and a box could write to the
-table, which was a back channel around "a box cannot remember" and, by
-requiring a process-wide pointer to the running map, the reason a
-process could hold only one program.
+table, which was a back channel through which one box reached
+another's world and, by requiring a process-wide pointer to the
+running map, the reason a process could hold only one program.
 
 **Sharing, when it is wanted, is drawn.** One station holds the value
 and everyone who needs it has an arrow from it. That costs a station

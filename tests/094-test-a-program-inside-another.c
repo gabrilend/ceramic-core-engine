@@ -106,10 +106,10 @@ static void write_the_part(void)
  */
 static void two_instances_share_nothing(void)
 {
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
 
-    map_instance_t first = map_instantiate_file(m, part_path);
-    map_instance_t second = map_instantiate_file(m, part_path);
+    cera_map_instance_t first = cera_map_instantiate_file(m, part_path);
+    cera_map_instance_t second = cera_map_instantiate_file(m, part_path);
 
     check(first.count == 3 && second.count == 3,
           "each instance built the three stations its description names");
@@ -122,10 +122,10 @@ static void two_instances_share_nothing(void)
     check(!shared, "and the two instances share no station at all");
 
     /* Doors found by asking which way they face, never by index. */
-    int in_a = map_instance_entrance(m, &first, 0);
-    int out_a = map_instance_result(m, &first, 0);
-    int in_b = map_instance_entrance(m, &second, 0);
-    int out_b = map_instance_result(m, &second, 0);
+    int in_a = cera_map_instance_entrance(m, &first, 0);
+    int out_a = cera_map_instance_result(m, &first, 0);
+    int in_b = cera_map_instance_entrance(m, &second, 0);
+    int out_b = cera_map_instance_result(m, &second, 0);
     check(in_a >= 0 && out_a >= 0 && in_b >= 0 && out_b >= 0,
           "each instance has an entrance and a way out");
     check(in_a != in_b && out_a != out_b,
@@ -134,13 +134,13 @@ static void two_instances_share_nothing(void)
 
     /* Separate buffers: filling one instance's entrance leaves the
      * other's empty. */
-    check(map_in_port_depth(m, in_a, 0) == 0
-          && map_in_port_depth(m, in_b, 0) == 0,
+    check(cera_map_in_port_depth(m, in_a, 0) == 0
+          && cera_map_in_port_depth(m, in_b, 0) == 0,
           "both start empty");
 
-    map_instance_free(&first);
-    map_instance_free(&second);
-    map_destroy(m);
+    cera_map_instance_free(&first);
+    cera_map_instance_free(&second);
+    cera_map_destroy(m);
     printf("  one description instantiated twice built two of everything, "
            "sharing nothing\n");
 }
@@ -165,40 +165,40 @@ static void two_instances_share_nothing(void)
  */
 static void a_parent_cannot_tell(void)
 {
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
 
     /* The parent's own station: a source of sevens. */
-    int source = map_add_station(m);
-    map_place_box(m, source, "seven", STATION_PLAIN);
-    must_take(map_name_station(m, source, "source"), "a name");
+    int source = cera_map_add_station(m);
+    cera_map_place_box(m, source, "seven", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, source, "source"), "a name");
 
-    map_instance_t first = map_instantiate_file(m, part_path);
-    map_instance_t second = map_instantiate_file(m, part_path);
+    cera_map_instance_t first = cera_map_instantiate_file(m, part_path);
+    cera_map_instance_t second = cera_map_instantiate_file(m, part_path);
 
-    int in_a = map_instance_entrance(m, &first, 0);
-    int out_a = map_instance_result(m, &first, 0);
-    int in_b = map_instance_entrance(m, &second, 0);
-    int out_b = map_instance_result(m, &second, 0);
+    int in_a = cera_map_instance_entrance(m, &first, 0);
+    int out_a = cera_map_instance_result(m, &first, 0);
+    int in_b = cera_map_instance_entrance(m, &second, 0);
+    int out_b = cera_map_instance_result(m, &second, 0);
 
     /* Three ordinary wires. Two of them cross what used to be a seam
      * and there is nothing there to cross. */
-    must_take(map_wire(m, source, 0, in_a, 0), "the wire into the first");
-    must_take(map_wire(m, out_a, 0, in_b, 0), "the wire between the two");
+    must_take(cera_map_wire(m, source, 0, in_a, 0), "the wire into the first");
+    must_take(cera_map_wire(m, out_a, 0, in_b, 0), "the wire between the two");
 
     /* The parent's own way out, fed by the second instance. */
-    int answer = map_add_station(m);
-    map_place_box(m, answer, "keep", STATION_PLAIN);
-    must_take(map_name_station(m, answer, "answer"), "a name");
-    must_take(map_designate_output(m, answer), "the parent's way out");
-    must_take(map_wire(m, out_b, 0, answer, 0), "the wire to the answer");
+    int answer = cera_map_add_station(m);
+    cera_map_place_box(m, answer, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, answer, "answer"), "a name");
+    must_take(cera_map_designate_output(m, answer), "the parent's way out");
+    must_take(cera_map_wire(m, out_b, 0, answer, 0), "the wire to the answer");
 
-    map_start(m, 2);
-    must_take(map_bring_up(m), "the composed program");
-    pool_release(m->pool);
-    pool_join(m->pool);
+    cera_map_start(m, 2);
+    must_take(cera_map_bring_up(m), "the composed program");
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
 
     int got = 0;
-    check(map_output_take(m, answer, &got, sizeof got) && got == 28,
+    check(cera_map_output_take(m, answer, &got, sizeof got) && got == 28,
           "seven went in, was doubled by each of two instances, and "
           "twenty-eight came out");
 
@@ -213,13 +213,13 @@ static void a_parent_cannot_tell(void)
         if (first.station[i] != in_a && first.station[i] != out_a)
             middle = first.station[i];
     check(middle >= 0
-          && atomic_load(&map_station(m, middle)->runs) == 1,
+          && atomic_load(&cera_map_station(m, middle)->runs) == 1,
           "the instance's interior station ran, though nothing outside "
           "it knows its name");
 
-    map_instance_free(&first);
-    map_instance_free(&second);
-    map_destroy(m);
+    cera_map_instance_free(&first);
+    cera_map_instance_free(&second);
+    cera_map_destroy(m);
     printf("  a parent wired to two instances by their doors alone and "
            "got 28 back\n");
 }
@@ -238,63 +238,63 @@ static void a_parent_cannot_tell(void)
  */
 static void instantiating_into_a_running_program(void)
 {
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
 
-    int gate = map_add_station(m);
-    map_place_box(m, gate, "keep", STATION_PLAIN);
-    must_take(map_name_station(m, gate, "gate"), "a name");
-    must_take(map_designate_input(m, gate), "an entrance");
+    int gate = cera_map_add_station(m);
+    cera_map_place_box(m, gate, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, gate, "gate"), "a name");
+    must_take(cera_map_designate_input(m, gate), "an entrance");
 
-    int kept = map_add_station(m);
-    map_place_box(m, kept, "keep", STATION_PLAIN);
-    must_take(map_name_station(m, kept, "kept"), "a name");
-    must_take(map_designate_output(m, kept), "a way out");
-    must_take(map_wire(m, gate, 0, kept, 0), "the first wire");
+    int kept = cera_map_add_station(m);
+    cera_map_place_box(m, kept, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, kept, "kept"), "a name");
+    must_take(cera_map_designate_output(m, kept), "a way out");
+    must_take(cera_map_wire(m, gate, 0, kept, 0), "the first wire");
 
-    map_start(m, 3);
-    pool_submitter_register(m->pool);
-    must_take(map_bring_up(m), "the program");
-    pool_release(m->pool);
+    cera_map_start(m, 3);
+    cera_pool_submitter_register(m->pool);
+    must_take(cera_map_bring_up(m), "the program");
+    cera_pool_release(m->pool);
 
     const int BATCH = 20;
     for (int i = 0; i < BATCH; i++) {
         int v = i;
-        must_take(map_deliver_argument(m, gate, 0, &v, sizeof v),
+        must_take(cera_map_deliver_argument(m, gate, 0, &v, sizeof v),
                   "an argument");
     }
-    while (atomic_load(&map_station(m, kept)->runs) < BATCH)
+    while (atomic_load(&cera_map_station(m, kept)->runs) < BATCH)
         usleep(200);
 
     /* ---- mid-flight ---- */
-    map_instance_t part = map_instantiate_file(m, part_path);
-    int in_p = map_instance_entrance(m, &part, 0);
-    int out_p = map_instance_result(m, &part, 0);
+    cera_map_instance_t part = cera_map_instantiate_file(m, part_path);
+    int in_p = cera_map_instance_entrance(m, &part, 0);
+    int out_p = cera_map_instance_result(m, &part, 0);
 
-    int landing = map_add_station(m);
-    map_place_box(m, landing, "keep", STATION_PLAIN);
-    must_take(map_name_station(m, landing, "landing"), "a name");
-    must_take(map_designate_output(m, landing), "a second way out");
-    must_take(map_wire(m, out_p, 0, landing, 0), "the wire out of it");
-    must_take(map_wire(m, gate, 0, in_p, 0), "the wire into it");
-    must_take(map_bring_up(m), "the grown program");
+    int landing = cera_map_add_station(m);
+    cera_map_place_box(m, landing, "keep", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(m, landing, "landing"), "a name");
+    must_take(cera_map_designate_output(m, landing), "a second way out");
+    must_take(cera_map_wire(m, out_p, 0, landing, 0), "the wire out of it");
+    must_take(cera_map_wire(m, gate, 0, in_p, 0), "the wire into it");
+    must_take(cera_map_bring_up(m), "the grown program");
 
     for (int i = 0; i < BATCH; i++) {
         int v = i;
-        must_take(map_deliver_argument(m, gate, 0, &v, sizeof v),
+        must_take(cera_map_deliver_argument(m, gate, 0, &v, sizeof v),
                   "an argument after growing");
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
-    check(map_output_waiting(m, landing) == BATCH,
+    check(cera_map_output_waiting(m, landing) == BATCH,
           "the subgraph added mid-run produced one result per value it "
           "was sent");
-    check(atomic_load(&map_station(m, kept)->runs) == 2 * BATCH,
+    check(atomic_load(&cera_map_station(m, kept)->runs) == 2 * BATCH,
           "and the part that was already running lost nothing");
 
-    map_instance_free(&part);
-    map_destroy(m);
+    cera_map_instance_free(&part);
+    cera_map_destroy(m);
     printf("  a whole subgraph joined a running program and the running "
            "part lost nothing\n");
 }
@@ -320,85 +320,85 @@ static void instantiating_into_a_running_program(void)
  */
 static void a_map_adds_a_map(void)
 {
-    map_t *built = map_create_empty();
-    map_start(built, 2);
+    cera_map_t *built = cera_map_create_empty();
+    cera_map_start(built, 2);
 
     char address[64];
     snprintf(address, sizeof address, "{ %zu }", (size_t)built);
     char quoted[600];
     snprintf(quoted, sizeof quoted, "\"%s\"", part_path);
 
-    map_t *builder = map_create_empty();
+    cera_map_t *builder = cera_map_create_empty();
 
     /* Add the described part — three stations and their wiring. */
-    int add_part = map_add_station(builder);
-    map_place_box(builder, add_part, "program_add", STATION_PLAIN);
-    must_take(map_name_station(builder, add_part, "add_part"), "a name");
-    must_take(map_configure_port(builder, add_part, 0, IN_PORT_STATIC,
+    int add_part = cera_map_add_station(builder);
+    cera_map_place_box(builder, add_part, "program_add", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(builder, add_part, "add_part"), "a name");
+    must_take(cera_map_configure_port(builder, add_part, 0, CERA_IN_PORT_STATIC,
                                  address), "the program to build into");
-    must_take(map_configure_port(builder, add_part, 1, IN_PORT_STATIC,
+    must_take(cera_map_configure_port(builder, add_part, 1, CERA_IN_PORT_STATIC,
                                  quoted), "the map to add");
 
     /* Add a plain box — one station — through the same operation. */
-    int add_box = map_add_station(builder);
-    map_place_box(builder, add_box, "program_add", STATION_PLAIN);
-    must_take(map_name_station(builder, add_box, "add_box"), "a name");
-    must_take(map_configure_port(builder, add_box, 0, IN_PORT_STATIC,
+    int add_box = cera_map_add_station(builder);
+    cera_map_place_box(builder, add_box, "program_add", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(builder, add_box, "add_box"), "a name");
+    must_take(cera_map_configure_port(builder, add_box, 0, CERA_IN_PORT_STATIC,
                                  address), "the same program");
-    must_take(map_configure_port(builder, add_box, 1, IN_PORT_STATIC,
+    must_take(cera_map_configure_port(builder, add_box, 1, CERA_IN_PORT_STATIC,
                                  "\"seven\""), "the box to add");
 
     /* Wire the box's way out into the part's way in, which for the
      * box is its own station and for the part is its entrance. */
-    int join = map_add_station(builder);
-    map_place_box(builder, join, "program_connect", STATION_PLAIN);
-    must_take(map_name_station(builder, join, "join"), "a name");
-    must_take(map_configure_port(builder, join, 0, IN_PORT_STATIC, address),
+    int join = cera_map_add_station(builder);
+    cera_map_place_box(builder, join, "program_connect", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(builder, join, "join"), "a name");
+    must_take(cera_map_configure_port(builder, join, 0, CERA_IN_PORT_STATIC, address),
               "the program to wire in");
-    must_take(map_wire(builder, add_box, 0, join, 1), "the box, as a part");
-    must_take(map_configure_port(builder, join, 2, IN_PORT_STATIC, "0"),
+    must_take(cera_map_wire(builder, add_box, 0, join, 1), "the box, as a part");
+    must_take(cera_map_configure_port(builder, join, 2, CERA_IN_PORT_STATIC, "0"),
               "which output port");
-    must_take(map_wire(builder, add_part, 0, join, 3), "the map, as a part");
-    must_take(map_configure_port(builder, join, 4, IN_PORT_STATIC, "0"),
+    must_take(cera_map_wire(builder, add_part, 0, join, 3), "the map, as a part");
+    must_take(cera_map_configure_port(builder, join, 4, CERA_IN_PORT_STATIC, "0"),
               "which input port");
 
     /* Mark the part's way out as the built program's way out. */
-    int door = map_add_station(builder);
-    map_place_box(builder, door, "program_set_door", STATION_PLAIN);
-    must_take(map_name_station(builder, door, "door"), "a name");
-    must_take(map_configure_port(builder, door, 0, IN_PORT_STATIC, address),
+    int door = cera_map_add_station(builder);
+    cera_map_place_box(builder, door, "program_set_door", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(builder, door, "door"), "a name");
+    must_take(cera_map_configure_port(builder, door, 0, CERA_IN_PORT_STATIC, address),
               "the program to mark in");
-    must_take(map_wire(builder, add_part, 0, door, 1), "the part to mark");
-    must_take(map_configure_port(builder, door, 2, IN_PORT_STATIC, "2"),
+    must_take(cera_map_wire(builder, add_part, 0, door, 1), "the part to mark");
+    must_take(cera_map_configure_port(builder, door, 2, CERA_IN_PORT_STATIC, "2"),
               "facing out");
-    must_take(map_designate_output(builder, door), "the builder's answer");
+    must_take(cera_map_designate_output(builder, door), "the builder's answer");
 
-    map_start(builder, 2);
-    must_take(map_bring_up(builder), "the builder");
-    pool_release(builder->pool);
-    pool_join(builder->pool);
+    cera_map_start(builder, 2);
+    must_take(cera_map_bring_up(builder), "the builder");
+    cera_pool_release(builder->pool);
+    cera_pool_join(builder->pool);
 
     int worked = 0;
-    check(map_output_take(builder, door, &worked, sizeof worked)
+    check(cera_map_output_take(builder, door, &worked, sizeof worked)
           && worked == 1,
           "the builder added a box and a map through one operation and "
           "wired them together");
 
-    must_take(map_bring_up(built), "the program the builder made");
-    pool_release(built->pool);
-    pool_join(built->pool);
+    must_take(cera_map_bring_up(built), "the program the builder made");
+    cera_pool_release(built->pool);
+    cera_pool_join(built->pool);
 
     int got = 0;
     int found = 0;
     for (int i = 0; i < built->n_stations && !found; i++)
-        if (map_station(built, i)->door == DOOR_OUT)
-            found = map_output_take(built, i, &got, sizeof got);
+        if (cera_map_station(built, i)->door == CERA_DOOR_OUT)
+            found = cera_map_output_take(built, i, &got, sizeof got);
     check(found && got == 14,
           "and what it built ran: seven from the box, doubled by the "
           "map, fourteen at the way out");
 
-    map_destroy(builder);
-    map_destroy(built);
+    cera_map_destroy(builder);
+    cera_map_destroy(built);
     printf("  a map added a box and a map to another map, through one "
            "operation\n");
 }
@@ -423,35 +423,35 @@ static void a_map_adds_a_map(void)
  */
 static void a_composed_program_still_writes_down(void)
 {
-    map_t *m = map_create_empty();
+    cera_map_t *m = cera_map_create_empty();
 
-    map_instance_t first = map_instantiate_file(m, part_path);
-    map_instance_t second = map_instantiate_file(m, part_path);
-    must_take(map_wire(m, map_instance_result(m, &first, 0), 0,
-                       map_instance_entrance(m, &second, 0), 0),
+    cera_map_instance_t first = cera_map_instantiate_file(m, part_path);
+    cera_map_instance_t second = cera_map_instantiate_file(m, part_path);
+    must_take(cera_map_wire(m, cera_map_instance_result(m, &first, 0), 0,
+                       cera_map_instance_entrance(m, &second, 0), 0),
               "the wire between the two");
-    map_instance_free(&first);
-    map_instance_free(&second);
+    cera_map_instance_free(&first);
+    cera_map_instance_free(&second);
 
     char one[512], two[512];
     snprintf(one, sizeof one, "%s/composed.map", work_dir);
     snprintf(two, sizeof two, "%s/composed-again.map", work_dir);
 
     FILE *f = fopen(one, "w");
-    map_dump(m, f);
+    cera_map_dump(m, f);
     fclose(f);
-    map_destroy(m);
+    cera_map_destroy(m);
 
     /* If the names had not been made unique this would refuse, saying
      * a station with that name already exists. */
-    map_t *back = map_load_file(one, 2);
+    cera_map_t *back = cera_map_load_file(one, 2);
     f = fopen(two, "w");
-    map_dump(back, f);
+    cera_map_dump(back, f);
     fclose(f);
-    pool_release(back->pool);
-    pool_join(back->pool);
+    cera_pool_release(back->pool);
+    cera_pool_join(back->pool);
 
-    check(map_station(back, 0)->call != NULL,
+    check(cera_map_station(back, 0)->call != NULL,
           "the composed program read back");
 
     FILE *a = fopen(one, "r");
@@ -468,7 +468,7 @@ static void a_composed_program_still_writes_down(void)
     check(same, "and dumping the dump gives the dump, so the round trip "
                 "closed on a program with two of everything");
 
-    map_destroy(back);
+    cera_map_destroy(back);
     printf("  a program holding two copies of one description was written "
            "down and read back\n");
 }

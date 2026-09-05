@@ -46,8 +46,8 @@ int main(void)
      * because building it and running it are separate acts and the
      * second one needs somewhere to push.
      */
-    map_t *built = map_create_empty();
-    map_start(built, 2);
+    cera_map_t *built = cera_map_create_empty();
+    cera_map_start(built, 2);
 
     /*
      * The builder. Three stations, each running one construction
@@ -62,14 +62,14 @@ int main(void)
     char address[64];
     snprintf(address, sizeof address, "{ %zu }", (size_t)built);
 
-    map_t *builder = map_create_empty();
-    int adder   = map_add_station(builder);
-    map_place_box(builder, adder, "program_add", STATION_PLAIN);
-    must_take(map_name_station(builder, adder, "adder"), "a name");
+    cera_map_t *builder = cera_map_create_empty();
+    int adder   = cera_map_add_station(builder);
+    cera_map_place_box(builder, adder, "program_add", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(builder, adder, "adder"), "a name");
 
-    must_take(map_configure_port(builder, adder, 0, IN_PORT_STATIC, address),
+    must_take(cera_map_configure_port(builder, adder, 0, CERA_IN_PORT_STATIC, address),
               "the program to build into");
-    must_take(map_configure_port(builder, adder, 1, IN_PORT_STATIC,
+    must_take(cera_map_configure_port(builder, adder, 1, CERA_IN_PORT_STATIC,
                                  "\"seven\""),
               "the thing to add");
 
@@ -97,25 +97,25 @@ int main(void)
      * would produce a part with two different stations in it and this
      * line would read identically.
      */
-    int doorman = map_add_station(builder);
-    map_place_box(builder, doorman, "program_set_door", STATION_PLAIN);
-    must_take(map_name_station(builder, doorman, "doorman"), "a name");
-    must_take(map_configure_port(builder, doorman, 0, IN_PORT_STATIC, address),
+    int doorman = cera_map_add_station(builder);
+    cera_map_place_box(builder, doorman, "program_set_door", CERA_STATION_PLAIN);
+    must_take(cera_map_name_station(builder, doorman, "doorman"), "a name");
+    must_take(cera_map_configure_port(builder, doorman, 0, CERA_IN_PORT_STATIC, address),
               "the program to mark a door in");
     /* Port 1 arrives by wire — it is the part the first operation
      * made, travelling whole. Nothing takes it apart. */
-    must_take(map_configure_port(builder, doorman, 2, IN_PORT_STATIC, "2"),
+    must_take(cera_map_configure_port(builder, doorman, 2, CERA_IN_PORT_STATIC, "2"),
               "which way the door faces");
-    must_take(map_wire(builder, adder, 0, doorman, 1),
+    must_take(cera_map_wire(builder, adder, 0, doorman, 1),
               "the wire carrying a station index between two operations");
 
     /* The builder's own way out is the answer to "did it work". */
-    must_take(map_designate_output(builder, doorman), "the builder's way out");
+    must_take(cera_map_designate_output(builder, doorman), "the builder's way out");
 
-    map_start(builder, 2);
-    must_take(map_bring_up(builder), "the builder");
-    pool_release(builder->pool);
-    pool_join(builder->pool);
+    cera_map_start(builder, 2);
+    must_take(cera_map_bring_up(builder), "the builder");
+    cera_pool_release(builder->pool);
+    cera_pool_join(builder->pool);
 
     /*
      * The builder ran once and put one station into the other
@@ -127,7 +127,7 @@ int main(void)
                 built->n_stations);
         return 1;
     }
-    station_t *made = map_station(built, 0);
+    cera_station_t *made = cera_map_station(built, 0);
     if (!made->call) {
         fprintf(stderr, "the station the builder made has no box\n");
         return 1;
@@ -142,13 +142,13 @@ int main(void)
                 made->box_name ? made->box_name : "(nothing)");
         return 1;
     }
-    if (made->door != DOOR_OUT) {
+    if (made->door != CERA_DOOR_OUT) {
         fprintf(stderr, "the builder placed the station but did not mark "
                         "it as the way out\n");
         return 1;
     }
     int worked = 0;
-    if (!map_output_take(builder, doorman, &worked, sizeof worked)
+    if (!cera_map_output_take(builder, doorman, &worked, sizeof worked)
         || worked != 1) {
         fprintf(stderr, "the builder's own result says the door was not "
                         "marked\n");
@@ -162,10 +162,10 @@ int main(void)
      * check would miss: a station can look right and still be
      * unrunnable, and the way to find out is to run it.
      */
-    must_take(map_name_station(built, 0, "source"), "a name");
-    must_take(map_bring_up(built), "the built program");
-    pool_release(built->pool);
-    pool_join(built->pool);
+    must_take(cera_map_name_station(built, 0, "source"), "a name");
+    must_take(cera_map_bring_up(built), "the built program");
+    cera_pool_release(built->pool);
+    cera_pool_join(built->pool);
 
     if (atomic_load(&made->runs) != 1) {
         fprintf(stderr, "the built program's station ran %ld times, not 1\n",
@@ -174,7 +174,7 @@ int main(void)
     }
     printf("  and the program it built came up and ran\n");
 
-    map_destroy(builder);
-    map_destroy(built);
+    cera_map_destroy(builder);
+    cera_map_destroy(built);
     return 0;
 }

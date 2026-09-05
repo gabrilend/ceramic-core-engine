@@ -43,10 +43,10 @@ proves the mechanism, because every existing test loads a program.
 
 **One thing the plan did not distinguish**, found in building it: a
 place nobody has filled and a place somebody emptied look identical,
-because both are a record with no shim. `map_add_station` hands back
+because both are a record with no shim. `cera_map_add_station` hands back
 the first unfilled place, so asking twice without filling in between
 gives the same answer twice — which is correct for what it means
-("somewhere to put one thing") and wrong for what map_create wanted
+("somewhere to put one thing") and wrong for what cera_map_create wanted
 ("N places reserved"). Creation reserves directly; only growth reuses.
 
 **Proven**, in `tests/078-test-growth.c`:

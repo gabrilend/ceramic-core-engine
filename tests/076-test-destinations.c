@@ -67,30 +67,30 @@ static void check(int ok, const char *what)
  */
 static void a_wire_removed_mid_run(void)
 {
-    map_t *m = map_create(3);
-    map_place_box(m, 0, "seven", STATION_PLAIN);
-    map_place_box(m, 1, "keep", STATION_PLAIN);
-    map_place_box(m, 2, "keep", STATION_PLAIN);
-    map_connect(m, 0, 0, 1, 0);
-    map_connect(m, 0, 0, 2, 0);
+    cera_map_t *m = cera_map_create(3);
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 2, "keep", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 1, 0);
+    cera_map_connect(m, 0, 0, 2, 0);
 
-    out_port_t *p = map_station(m, 0)->out_ports;
-    dest_set_t *before = out_port_dests(p);
+    cera_out_port_t *p = cera_map_station(m, 0)->out_ports;
+    cera_dest_set_t *before = out_port_dests(p);
     check(before && before->n == 2, "two wires make a set of two");
 
-    map_start(m, 4);
-    check(map_unwire(m, 0, 0, 2, 0) == NULL, "a wire came out");
+    cera_map_start(m, 4);
+    check(cera_map_unwire(m, 0, 0, 2, 0) == NULL, "a wire came out");
 
-    dest_set_t *after = out_port_dests(p);
+    cera_dest_set_t *after = out_port_dests(p);
     check(after && after->n == 1, "and the new set has one");
     check(after != before, "which is a different array, not an edited one");
     check(before->n == 2,
           "the old array is untouched — a walker inside it sees what it "
           "always saw");
 
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
     printf("  a wire came out and the old set was left intact for walkers\n");
 }
 /* }}} */
@@ -104,15 +104,15 @@ static void a_wire_removed_mid_run(void)
  */
 static void the_scrapyard_drains(void)
 {
-    map_t *m = map_create(3);
-    map_place_box(m, 0, "double_it", STATION_PLAIN);
-    map_place_box(m, 1, "keep", STATION_PLAIN);
-    map_place_box(m, 2, "keep", STATION_PLAIN);
-    map_connect(m, 0, 0, 1, 0);
+    cera_map_t *m = cera_map_create(3);
+    cera_map_place_box(m, 0, "double_it", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 2, "keep", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 1, 0);
 
-    map_start(m, 4);
-    pool_submitter_register(m->pool);
-    pool_release(m->pool);
+    cera_map_start(m, 4);
+    cera_pool_submitter_register(m->pool);
+    cera_pool_release(m->pool);
 
     /* Work in flight the whole time, so workers are genuinely inside
      * tasks and some sets are genuinely unfreeable when swept. */
@@ -120,18 +120,18 @@ static void the_scrapyard_drains(void)
     int deepest = 0;
     for (int i = 0; i < ROUNDS; i++) {
         int v = i;
-        map_deliver_value(m, 0, 0, &v);
+        cera_map_deliver_value(m, 0, 0, &v);
         if (i % 2 == 0)
-            map_connect(m, 0, 0, 2, 0);
+            cera_map_connect(m, 0, 0, 2, 0);
         else
-            map_disconnect(m, 0, 0, 2, 0);
+            cera_map_disconnect(m, 0, 0, 2, 0);
         int filed = map_scrap_count(m);
         if (filed > deepest)
             deepest = filed;
     }
 
-    pool_submitter_unregister(m->pool);
-    pool_join(m->pool);
+    cera_pool_submitter_unregister(m->pool);
+    cera_pool_join(m->pool);
 
     /* With every worker now idle and therefore even, one more sweep
      * has to be able to free everything filed. */
@@ -146,7 +146,7 @@ static void the_scrapyard_drains(void)
     printf("  %d rewires under load: deepest %d filed, %d left after\n",
            ROUNDS, deepest, left);
 
-    map_destroy(m);
+    cera_map_destroy(m);
 }
 /* }}} */
 
@@ -159,24 +159,24 @@ static void the_scrapyard_drains(void)
  */
 static void teardown_with_sets_still_filed(void)
 {
-    map_t *m = map_create(3);
-    map_place_box(m, 0, "seven", STATION_PLAIN);
-    map_place_box(m, 1, "keep", STATION_PLAIN);
-    map_place_box(m, 2, "keep", STATION_PLAIN);
-    map_connect(m, 0, 0, 1, 0);
-    map_connect(m, 0, 0, 2, 0);
+    cera_map_t *m = cera_map_create(3);
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 2, "keep", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 1, 0);
+    cera_map_connect(m, 0, 0, 2, 0);
 
-    map_start(m, 2);
+    cera_map_start(m, 2);
     for (int i = 0; i < 20; i++) {
-        map_disconnect(m, 0, 0, 2, 0);
-        map_connect(m, 0, 0, 2, 0);
+        cera_map_disconnect(m, 0, 0, 2, 0);
+        cera_map_connect(m, 0, 0, 2, 0);
     }
     check(map_scrap_count(m) > 0,
           "sets are filed and waiting when teardown arrives");
 
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
     printf("  a teardown emptied a scrapyard that still had sets in it\n");
 }
 /* }}} */
@@ -191,31 +191,31 @@ static void teardown_with_sets_still_filed(void)
  */
 static void the_dump_still_round_trips(void)
 {
-    map_t *m = map_create(4);
-    map_place_box(m, 0, "seven", STATION_PLAIN);
-    map_place_box(m, 1, "keep", STATION_PLAIN);
-    map_place_box(m, 2, "keep", STATION_PLAIN);
-    map_place_box(m, 3, "keep", STATION_PLAIN);
-    map_connect(m, 0, 0, 1, 0);
-    map_connect(m, 0, 0, 2, 0);
-    map_connect(m, 0, 0, 3, 0);
+    cera_map_t *m = cera_map_create(4);
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 2, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 3, "keep", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 1, 0);
+    cera_map_connect(m, 0, 0, 2, 0);
+    cera_map_connect(m, 0, 0, 3, 0);
 
-    dest_set_t *set = out_port_dests(map_station(m, 0)->out_ports);
+    cera_dest_set_t *set = out_port_dests(cera_map_station(m, 0)->out_ports);
     check(set && set->n == 3, "three wires drawn");
     check(set->items[0].station == 1 && set->items[1].station == 2
           && set->items[2].station == 3,
           "and they sit in the order they were drawn");
 
-    map_start(m, 2);
-    map_disconnect(m, 0, 0, 2, 0);
-    set = out_port_dests(map_station(m, 0)->out_ports);
+    cera_map_start(m, 2);
+    cera_map_disconnect(m, 0, 0, 2, 0);
+    set = out_port_dests(cera_map_station(m, 0)->out_ports);
     check(set && set->n == 2 && set->items[0].station == 1
           && set->items[1].station == 3,
           "removing the middle one leaves the others in their order");
 
-    pool_release(m->pool);
-    pool_join(m->pool);
-    map_destroy(m);
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    cera_map_destroy(m);
     printf("  a rebuild kept wiring order, so the dump still round-trips\n");
 }
 /* }}} */

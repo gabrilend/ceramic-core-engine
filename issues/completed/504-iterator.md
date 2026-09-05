@@ -29,9 +29,13 @@ never sees it. Two tasks assembled a moment apart therefore carry
 different ports, decided by the enqueuing thread under the lock, and no
 two invocations can collide over it.
 
-This is not really an exception to "a box cannot remember." It is the
-station remembering on the box's behalf, at a moment when only one
-thread can be looking.
+The cursor is the station remembering rather than the box, which is
+how memory works everywhere here. What makes it a special case is only
+where it is kept: ordinary station memory is a value on a static port
+that a wire delivered, and an author draws it. The cursor is a field
+the engine keeps, advanced under the station's mutex, because it must
+be decided at the instant a task is built and there is no value for a
+wire to carry.
 
 **An iterator distributes fairly but does not deliver in order.** The
 port is chosen when the task is created, not when it finishes. If the

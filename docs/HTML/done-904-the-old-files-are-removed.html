@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>092-stopping.c — the ways a program ends, from inside</title>
+<title>904 — The old files are removed</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -38,8 +38,6 @@
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
-<a href="issue-904-the-old-files-are-removed.html">904 — The old files are removed</a>
-<a href="issue-905-the-prefix.html">905 — The prefix</a>
 <a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
@@ -131,9 +129,9 @@
 <a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
 <a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
+<a href="done-904-the-old-files-are-removed.html" class="here">904 — The old files are removed</a>
+<a href="done-905-the-prefix.html">905 — The prefix</a>
 <h2>Interfaces</h2>
-<a href="info-011-pool-h.html">011-pool.h — the thread pool, from outside</a>
-<a href="info-012-pool-c.html">012-pool.c — the thread pool, from inside</a>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
 <a href="info-067-genparse-h.html">067-genparse.h — what the generator found</a>
@@ -147,22 +145,6 @@
 <a href="info-099-mapparse-h.html">099-mapparse.h — reading a description, from outside</a>
 <a href="info-100-mapparse-c.html">100-mapparse.c — the parser, from inside</a>
 <a href="info-109-dependencies-sh.html">109-dependencies.sh — what the project needs, and how to get it</a>
-<a href="info-018-station-h.html">018-station.h — stations, ports, and maps, from outside</a>
-<a href="info-019-station-c.html">019-station.c — the structural half, from inside</a>
-<a href="info-020-delivery-c.html">020-delivery.c — the moving half, from inside</a>
-<a href="info-026-emitted-h.html">026-emitted.h — the shapes the generator emits, from outside</a>
-<a href="info-027-emitted-support-c.html">027-emitted-support.c — the hand-written half of what the generator emits</a>
-<a href="info-033-statics-c.html">033-statics.c — constants on ports, from outside</a>
-<a href="info-040-mapfile-h.html">040-mapfile.h — a description becoming a program, from outside</a>
-<a href="info-042-loader-c.html">042-loader.c — the loader, from inside</a>
-<a href="info-049-observe-h.html">049-observe.h — seeing inside, from outside</a>
-<a href="info-050-observe-c.html">050-observe.c — the engine saying out loud what it already knew</a>
-<a href="info-051-dump-c.html">051-dump.c — writing a running program back out as a file</a>
-<a href="info-052-rewire-c.html">052-rewire.c — changing the shape while it runs</a>
-<a href="info-073-latebox-h.html">073-latebox.h — boxes that arrive after the program started</a>
-<a href="info-074-latebox-c.html">074-latebox.c — a late box, from inside</a>
-<a href="info-091-stopping-h.html">091-stopping.h — the ways a program ends, from outside</a>
-<a href="info-092-stopping-c.html" class="here">092-stopping.c — the ways a program ends, from inside</a>
 <a href="info-098-engine-surface-syms.html">098-engine-surface.syms — the engine's public surface</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
@@ -173,63 +155,110 @@
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>092-stopping.c — the ways a program ends, from inside</h1>
-<p>Interface and the reasoning behind it in <code>091-stopping.h.info.md</code>.
-This is what the file actually contains.</p>
-<h2>The shape</h2>
-<p><strong>One loop around one <code>sigwait</code>.</strong> Four numbers can come back and each
-one is a branch:</p>
+<h1>904 — The old files are removed</h1>
+<h2>Current behaviour</h2>
+<p><strong>Done. One engine on disk.</strong> The eleven numbered bodies, the seven
+numbered headers and their eighteen interface files are gone, and
+<code>libs/</code> went with its last file. What is left in <code>src/</code> is <code>cera.c</code>,
+<code>cera.h</code>, their two interface files, the linker's export list, the box
+sources and the generated file.</p>
+<p><strong>The <code>#line</code> directives went too, rather than being re-pointed.</strong> They
+named the numbered sources, and a directive naming a file that does not
+exist is worse than none because a debugger believes it. Re-pointing
+them at <code>cera.c</code> would have meant computing each section's true offset
+and keeping it right forever; removing them makes the compiler count
+from the top of the file, which is the same answer and cannot go stale.
+The section banners are what carries the reading order now, and they
+were always the part doing the work.</p>
+<p><strong>The two include paths became one.</strong> <code>libs/</code> for the pool and <code>src/</code>
+for everything above it are one directory now, so the flag that named
+the second is gone from the build and from the command the engine hands
+its own compiler when a box arrives at run time. A consumer adds one
+include path, or none if the two files sit beside their own source.</p>
+<h3>What the grep found</h3>
+<p>One thing that mattered and several that did not. The generator's map
+parser included the station header for two enumerations and would have
+stopped compiling — caught by the build, immediately, which is the
+failure mode to want.</p>
+<p>The rest were prose: three documents using a deleted file as the
+example when explaining the numbering rule, which is not a broken build
+but is a reader sent to look for something that is not there. Those now
+name files that exist.</p>
+<p>The eighteen freed indices stay free. A number is a position in a
+reading order and a reused one makes two things claim one position; the
+gap is the record that something stood there.</p>
+<h2>Intended behaviour</h2>
+<p><strong>One engine on disk.</strong> The numbered sources and their <code>.info.md</code>
+companions are deleted. <code>cera.c</code> and <code>cera.h</code> gain their own <code>.info.md</code>
+files. The <code>#line</code> directives at each seam, which pointed at the
+numbered sources, point at <code>cera.c</code> itself — a directive naming a file
+that no longer exists is worse than none, because a debugger will
+believe it.</p>
+<h3>The condition, which is not "the tests pass"</h3>
+<p><strong>Byte-identical output.</strong> Every test binary's standard output and
+standard error, captured from the numbered build and from the <code>cera</code>
+build, compared byte for byte and found equal. The tests passing proves
+they still pass; identical bytes prove nothing moved that was not meant
+to move.</p>
+<p>Two things legitimately differ and are excluded by construction rather
+than by exception: paths printed by a test that names its own source
+file, and anything containing a timing. Both are known in advance, and
+anything else that differs is a finding.</p>
+<h3>What goes with them</h3>
+<p>Deleting the numbered engine sources leaves references behind. Grep is
+the tool and the whole tree is the target:</p>
 <ul>
-<li><strong>the finished signal</strong> — the pool ran out of work and said so.</li>
-<p>  Collect the threads, return zero.</p>
-<li><strong>polite shutdown</strong> — set the program's closing flag and go back to</li>
-<p>  waiting. Nothing else. The entrance refuses from that moment, which
-  is the whole of what "stop accepting new work" can mean, and the
-  ordinary ending does the rest.</p>
-<li><strong>interrupt</strong> — stop starting new things, unblock the escape,</li>
-<p>  gather everything, return 130.</p>
-<li><strong>quit</strong> — write what needs no lock, abort.</li>
+<li><strong>The build's include paths.</strong> <code>-I libs -I src</code> becomes one path, or</li>
+<p>  none if <code>cera.h</code> sits beside what includes it.</p>
+<li><strong>The generator's emitted includes.</strong> It writes between one and five</li>
+<p>  <code>#include</code> lines naming numbered headers into every emitted file.
+  Those become one.</p>
+<li><strong>The documentation.</strong> Docs, implementation notes, <code>.info.md</code> files</li>
+<p>  and issue text all name these files in prose. A reference to a deleted
+  file is a broken promise to a reader.</p>
+<li><strong>The HTML mirror</strong>, which is generated and swept, so it corrects</li>
+<p>  itself once the sources do.</p>
+<li><strong><code>scripts/110-amalgamate.lua</code></strong>, the one-shot tool that produced the</li>
+<p>  two files. Once its inputs are gone it cannot run, and it has been in
+  the record for a commit, which is all a migration tool is owed.</p>
+<li><strong><code>.file-index-counter</code>.</strong> Eighteen indices are freed. They are not</li>
+<p>  reused: the numbers are positions in a reading order, and a reused
+  number makes two things claim one position. The gap is the record that
+  something was there.</p>
 </ul>
-<h2>The two reports</h2>
-<p><strong><code>report_everything</code></strong> runs on the waiting thread and is free to take
-every lock it likes, because the thread holding this number is running
-ordinary code rather than sitting in a handler. It writes per-station
-run and produced counts by name, per-port depth, high water and growth
-count, which worker is inside which station, and then the program
-itself rendered as a map file — because somebody diagnosing a program
-that was edited while it ran needs the shape it had at the end, not
-the shape the file on disk describes. Those stopped being the same
-thing the moment a program could be built while running.</p>
-<p><strong><code>report_without_locks</code></strong> takes nothing. It reads atomic counters and
-one integer per worker, names stations by index, and follows no
-pointer another thread could be freeing. A shelf pointer is safe to
-follow — the table grows by adding shelves and nothing already placed
-moves — so reading a count that is one behind means missing the newest
-station, which is a smaller wrong than not reporting at all.</p>
-<p><strong><code>say</code> formats into a stack buffer and writes once</strong>, because <code>write</code>
-is the only file operation available on every path in this file,
-including the one forbidden to take a lock. A buffered stream takes
-one.</p>
-<h2>What is deliberately absent</h2>
-<p><strong>No watchdog.</strong> Detecting a wedge from inside cannot be done. The
-last-sleeper rule is structurally incapable of it: it fires when
-workers go to <em>sleep</em>, and a worker in an infinite loop never sleeps.
-A progress counter comes closer — every station carries an always-on
-run count — but the threshold is unavoidably a guess, because sixteen
-workers each legitimately running a very long box look identical to
-sixteen wedged ones. That is the halting problem wearing work clothes.
-So the signal comes from outside, where somebody who actually knows
-how long is too long is the one deciding.</p>
-<p><strong>No stopping a running box.</strong> There is no safe way to interrupt
-executing C. The cancellation facility only acts at cancellation
-points, so a tight loop containing no system call never reaches one;
-even when it fires it does not unwind C code, and any mutex the thread
-held stays locked forever — which would freeze every thread delivering
-into that station, a worse outcome than the wedge. So "halt
-everything" honestly means <strong>stop starting new things</strong>.</p>
-<p><strong>No clock.</strong> See the polite path in the interface notes: the only
-clock that knows how long is too long belongs to whoever sent the
-signal.</p>
+<h2>Suggested implementation steps</h2>
+<p>1. <strong>Capture the output of every test twice</strong> — once from the numbered
+   build, once from the <code>cera</code> build — and diff, with
+   <code>scripts/111-capture-test-output.sh</code>, which
+   <a href="done-901-the-engine-becomes-one-file.html">901</a> built for exactly
+   this and which knows which four tests report a race and must be
+   compared by shape. Do not proceed on a difference; understand it.
+   901 did this once already and found one, explained by the emitted
+   file's include block losing four lines; a second difference appearing
+   now would mean something moved that should not have.
+2. **Delete the eleven bodies, the seven headers, and their <code>.info.md</code>
+   companions**, in one commit, so the removal is one thing in the
+   record rather than scattered.
+3. <strong>Delete the eighteen interface files.</strong> Their replacements —
+   <code>cera.c.info.md</code> and <code>cera.h.info.md</code> — were written alongside the
+   sources in <a href="done-901-the-engine-becomes-one-file.html">901</a>,
+   because a source file without one is a file a reader has to open.
+   The header's is the important one: it is the document a consumer
+   reads instead of the source, and it grows a real function list when
+   <a href="done-902-the-header-says-what-is-public.html">902</a> settles what that list
+   is.
+4. <strong>Re-point the <code>#line</code> directives</strong> at <code>cera.c</code>.
+5. <strong>Grep the whole tree</strong> for every deleted filename and fix what it
+   finds — build, generator, docs, notes, interface files, issue text.
+6. <strong>Regenerate the documentation site</strong> and let the sweep remove the
+   pages whose sources are gone.</p>
+<h2>Related</h2>
+<ul>
+<li><a href="done-901-the-engine-becomes-one-file.html">901</a>, which created the duplicate</li>
+<p>  this removes</p>
+<li><a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>,</li>
+<p>  whose rule decides that the freed numbers stay free</p>
+</ul>
 
 </main>
 </div></body></html>

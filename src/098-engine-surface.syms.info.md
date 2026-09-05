@@ -35,7 +35,7 @@ for rather than assumed:
 | pattern | what it covers |
 |---|---|
 | `map_*` | the construction surface — placing a station, drawing a wire, naming a door, marking an entrance or a result |
-| `sora_*` | stopping — a box ending the program it is running inside — **and every generated station-builder**, whose symbol carries its box's full path under the same prefix |
+| `cera_*` | stopping — a box ending the program it is running inside — **and every generated station-builder**, whose symbol carries its box's full path under the same prefix |
 
 The station-builders are there for a different reason than everything
 else. Not because the engine calls them, but because **a map compiled

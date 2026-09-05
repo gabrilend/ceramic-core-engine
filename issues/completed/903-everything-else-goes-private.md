@@ -106,7 +106,7 @@ they are only outside by accident of which directory they sit in.
 
 ## What this does not fix
 
-**The public names are still ordinary English words.** `map_create` does
+**The public names are still ordinary English words.** `cera_map_create` does
 not collide any less for being deliberately public. That is
 [905](905-the-prefix.md), and it is a smaller job after this one because
 the list it has to rename is the header rather than the engine.

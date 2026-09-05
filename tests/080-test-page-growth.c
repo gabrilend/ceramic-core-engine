@@ -60,7 +60,7 @@
 enum { PAGE = 7, VALUES = 900, FEEDERS = 4 };
 
 static _Atomic int seen[VALUES];
-static map_t      *the_map;
+static cera_map_t      *the_map;
 
 /* {{{ check() */
 static void check(int cond, const char *what)
@@ -79,7 +79,7 @@ static void check(int cond, const char *what)
  * arrivals of one value and one arrival each of two values give the
  * same total.
  */
-static void recorder__call(task_t *t)
+static void recorder__call(cera_task_t *t)
 {
     int v;
     memcpy(&v, t->in[0], sizeof v);
@@ -92,11 +92,11 @@ static void recorder__call(task_t *t)
 static void *feed_values(void *arg)
 {
     long which = (long)arg;
-    pool_submitter_register(the_map->pool);
+    cera_pool_submitter_register(the_map->pool);
     for (int i = (int)which; i < VALUES; i += FEEDERS) {
-        map_deliver_value(the_map, 0, 0, &i);
+        cera_map_deliver_value(the_map, 0, 0, &i);
     }
-    pool_submitter_unregister(the_map->pool);
+    cera_pool_submitter_unregister(the_map->pool);
     return NULL;
 }
 /* }}} */
@@ -105,12 +105,12 @@ static void *feed_values(void *arg)
 static void *feed_tokens(void *arg)
 {
     long which = (long)arg;
-    pool_submitter_register(the_map->pool);
+    cera_pool_submitter_register(the_map->pool);
     for (int i = (int)which; i < VALUES; i += FEEDERS) {
         int token = 1;
-        map_deliver_value(the_map, 0, 1, &token);
+        cera_map_deliver_value(the_map, 0, 1, &token);
     }
-    pool_submitter_unregister(the_map->pool);
+    cera_pool_submitter_unregister(the_map->pool);
     return NULL;
 }
 /* }}} */
@@ -122,14 +122,14 @@ static void nothing_lost_or_doubled_while_it_grows(void)
         atomic_store(&seen[i], 0);
 
     int sizes[2] = { (int)sizeof(int), (int)sizeof(int) };
-    the_map = map_create(1);
-    map_place(the_map, 0, recorder__call, STATION_PLAIN, 2, sizes, 0);
+    the_map = cera_map_create(1);
+    cera_map_place(the_map, 0, recorder__call, CERA_STATION_PLAIN, 2, sizes, 0);
 
     /* A small page, so the run crosses many boundaries rather than
      * one. The starting depth is the page size for every page a port
      * ever adds, which is what makes this the lever. */
-    map_in_port_start_depth(the_map, 0, 0, PAGE);
-    map_in_port_start_depth(the_map, 0, 1, PAGE);
+    cera_map_in_port_start_depth(the_map, 0, 0, PAGE);
+    cera_map_in_port_start_depth(the_map, 0, 1, PAGE);
 
     /* This scene deliberately builds the backlog the buffer report
      * exists to shout about, so the shout will happen. Saying so
@@ -138,9 +138,9 @@ static void nothing_lost_or_doubled_while_it_grows(void)
     printf("  (the growth warning below is what this scene is provoking)\n");
     fflush(stdout);
 
-    map_start(the_map, 4);
-    pool_submitter_register(the_map->pool);
-    pool_release(the_map->pool);
+    cera_map_start(the_map, 4);
+    cera_pool_submitter_register(the_map->pool);
+    cera_pool_release(the_map->pool);
 
     /* First the pile-up: one side only, so nothing can be claimed and
      * the port has no choice but to grow. */
@@ -150,7 +150,7 @@ static void nothing_lost_or_doubled_while_it_grows(void)
     for (int i = 0; i < FEEDERS; i++)
         pthread_join(writers[i], NULL);
 
-    in_port_t *piled = &map_station(the_map, 0)->in_ports[0];
+    cera_in_port_t *piled = &cera_map_station(the_map, 0)->in_ports[0];
     check(piled->growths > 0, "the port grew at all");
     check(piled->capacity == PAGE * (piled->growths + 1),
           "capacity is the sum across pages, first page included");
@@ -165,8 +165,8 @@ static void nothing_lost_or_doubled_while_it_grows(void)
     for (int i = 0; i < FEEDERS; i++)
         pthread_join(readers[i], NULL);
 
-    pool_submitter_unregister(the_map->pool);
-    pool_join(the_map->pool);
+    cera_pool_submitter_unregister(the_map->pool);
+    cera_pool_join(the_map->pool);
 
     int missing = 0, doubled = 0;
     for (int i = 0; i < VALUES; i++) {
@@ -179,7 +179,7 @@ static void nothing_lost_or_doubled_while_it_grows(void)
 
     printf("  %d values across %d pages, none lost and none doubled\n",
            VALUES, piled->growths + 1);
-    map_destroy(the_map);
+    cera_map_destroy(the_map);
 }
 /* }}} */
 
@@ -194,11 +194,11 @@ static void nothing_lost_or_doubled_while_it_grows(void)
 static void every_ordinal_lands_on_its_own_slot(void)
 {
     int sizes[1] = { (int)sizeof(int) };
-    map_t *m = map_create(1);
-    map_place(m, 0, recorder__call, STATION_PLAIN, 1, sizes, 0);
-    map_in_port_start_depth(m, 0, 0, PAGE);
+    cera_map_t *m = cera_map_create(1);
+    cera_map_place(m, 0, recorder__call, CERA_STATION_PLAIN, 1, sizes, 0);
+    cera_map_in_port_start_depth(m, 0, 0, PAGE);
 
-    in_port_t *sl = &map_station(m, 0)->in_ports[0];
+    cera_in_port_t *sl = &cera_map_station(m, 0)->in_ports[0];
     /* Four pages, added the way growth adds them. */
     for (int i = 0; i < 3; i++)
         in_port_add_page(sl);
@@ -224,12 +224,12 @@ static void every_ordinal_lands_on_its_own_slot(void)
      * bytes would be read as holding values nobody wrote. */
     for (int i = 0; i < sl->capacity; i++)
         check(slot_move_at(in_port_slot(sl, i), sl->elem_size,
-                           SLOT_EMPTY, SLOT_RESERVED),
+                           CERA_SLOT_EMPTY, CERA_SLOT_RESERVED),
               "a slot on a fresh page was not empty");
 
     printf("  %d ordinals over 4 pages, each its own slot, all empty\n",
            sl->capacity);
-    map_destroy(m);
+    cera_map_destroy(m);
 }
 /* }}} */
 

@@ -76,8 +76,8 @@ concurrency answers to. Fifty-eighth is not where that belongs.
 
 
 
-Every file in the project carries an index — `019-station.c`,
-`020-delivery.c` — and the numbers run across the whole tree rather
+Every file in the project carries an index — `066-gentext.c`,
+`068-genparse.c` — and the numbers run across the whole tree rather
 than per directory, so the project sorts into one sequence. The next
 number comes from the hidden `.file-index-counter` at the project root.
 
@@ -88,7 +88,7 @@ tests for exactly those. A thing, then its proof, then the next thing.
 
 **Two problems, and only the second one needs work.**
 
-**The rule was never written down.** A reader meeting `033-statics.c`
+**The rule was never written down.** A reader meeting `068-genparse.c`
 beside `034-gather.c` has no way to learn whether the numbers mean
 *read these in this order*, *these were created in this order*, or
 *these are related to each other*. The convention is followed carefully

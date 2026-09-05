@@ -378,9 +378,9 @@ static void handle_station(parse_state_t *st, const char *name,
      * plain box that routes everything one way (issue 601). One
      * letter, dispatched. */
     int kind;
-    if (strcmp(kind_word, "p") == 0)      kind = STATION_PLAIN;
-    else if (strcmp(kind_word, "c") == 0) kind = STATION_COMPARATOR;
-    else if (strcmp(kind_word, "i") == 0) kind = STATION_ITERATOR;
+    if (strcmp(kind_word, "p") == 0)      kind = CERA_STATION_PLAIN;
+    else if (strcmp(kind_word, "c") == 0) kind = CERA_STATION_COMPARATOR;
+    else if (strcmp(kind_word, "i") == 0) kind = CERA_STATION_ITERATOR;
     else {
         die_parse(st->path, st->line,
                   "the kind must be p (plain), c (comparator), or i (iterator)");
@@ -408,7 +408,7 @@ static void handle_station(parse_state_t *st, const char *name,
      * differs from `@2 result` and making somebody remember which
      * comes first buys nothing.
      */
-    int door = DOOR_NONE;
+    int door = CERA_DOOR_NONE;
     int cursor = 0;
     const char *trailing[2] = { door_word, extra };
     for (int t = 0; t < 2; t++) {
@@ -420,7 +420,7 @@ static void handle_station(parse_state_t *st, const char *name,
                 die_parse(st->path, st->line,
                           "a station line says '@' twice, and a station has "
                           "one place it had got to");
-            if (kind != STATION_ITERATOR)
+            if (kind != CERA_STATION_ITERATOR)
                 die_parse(st->path, st->line,
                           "'@' says where an iterator is pointing, and this "
                           "station is not one — only kind 'i' takes its "
@@ -434,12 +434,12 @@ static void handle_station(parse_state_t *st, const char *name,
              * writing it down is not wrong, only redundant. */
             continue;
         }
-        if (door != DOOR_NONE)
+        if (door != CERA_DOOR_NONE)
             die_parse(st->path, st->line,
                       "a station line names a door twice, and a station is "
                       "one door or neither");
-        if (strcmp(word, "entry") == 0)       door = DOOR_IN;
-        else if (strcmp(word, "result") == 0) door = DOOR_OUT;
+        if (strcmp(word, "entry") == 0)       door = CERA_DOOR_IN;
+        else if (strcmp(word, "result") == 0) door = CERA_DOOR_OUT;
         else
             die_parse(st->path, st->line,
                       "after the kind, only 'entry' (the outside delivers "

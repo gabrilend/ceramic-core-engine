@@ -104,8 +104,8 @@ order to place a file near its relatives — a reader following the
 order then meets a detour nobody signposted, and the index has
 quietly acquired a second meaning.
 
-**A companion is not a step.** `019-station.c.info.md` takes its
-source's number because it is the same step as `019-station.c`, not
+**A companion is not a step.** `066-gentext.c.info.md` takes its
+source's number because it is the same step as `066-gentext.c`, not
 the one after it.
 
 **A letter suffix is the second half of one step.** A demo runner

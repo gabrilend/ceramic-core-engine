@@ -26,7 +26,7 @@ enum { WORKERS = 4, TASKS = 20, GAP_MICROSECONDS = 40000 };
 static _Atomic int ran;
 
 /* {{{ tick() */
-static void tick(task_t *t)
+static void tick(cera_task_t *t)
 {
     (void)t;
     ran++;
@@ -58,27 +58,27 @@ static double wall_seconds(void)
 
 int main(void)
 {
-    pool_t *p = pool_create(WORKERS, NULL, NULL);
+    cera_pool_t *p = cera_pool_create(WORKERS, NULL, NULL);
 
     /* Register before release: from the pool's view this thread is a
      * standing promise that more work may come, so an all-asleep pool
      * waits instead of terminating. */
-    pool_submitter_register(p);
-    pool_release(p);
+    cera_pool_submitter_register(p);
+    cera_pool_release(p);
 
     double wall_before = wall_seconds();
     double cpu_before = cpu_seconds();
 
     for (int i = 0; i < TASKS; i++) {
-        task_t *t = malloc(sizeof *t);
+        cera_task_t *t = malloc(sizeof *t);
         if (!t) abort();
         t->call = tick;
-        pool_push(p, t);
+        cera_pool_push(p, t);
         usleep(GAP_MICROSECONDS);
     }
 
-    pool_submitter_unregister(p);
-    pool_join(p);
+    cera_pool_submitter_unregister(p);
+    cera_pool_join(p);
 
     double wall = wall_seconds() - wall_before;
     double cpu = cpu_seconds() - cpu_before;
@@ -98,7 +98,7 @@ int main(void)
         exit(1);
     }
 
-    pool_destroy(p);
+    cera_pool_destroy(p);
     printf("  %d workers idled through %.2fs of trickle for %.3fs CPU\n",
            WORKERS, wall, cpu);
     return 0;
