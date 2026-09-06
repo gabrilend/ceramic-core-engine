@@ -157,217 +157,1822 @@
 </nav>
 <main>
 <h1>cera.h — the engine's interface</h1>
-<p>The whole of what a program built with this engine can call, in one
-file. With <code>cera.c</code> beside it this is the engine; there is nothing else
-to install and no include path to configure beyond the directory the two
-files sit in.</p>
-<h2>What replaced what</h2>
-<p>Seven numbered headers, in dependency order, each now a section:</p>
-<table>
-<tr><td>section</td><td>what it covers</td></tr>
-<tr><td>011 — the pool</td><td>worker threads, the task ring, sleeping and waking, termination</td></tr>
-<tr><td>018 — stations</td><td>the station table, ports, wires, and the construction surface</td></tr>
-<tr><td>026 — emitted</td><td>what the generator produces, and how a value becomes text and back</td></tr>
-<tr><td>040 — mapfile</td><td>reading a description, and placing a whole map inside another</td></tr>
-<tr><td>049 — observe</td><td>the reports, the observer thread, the dump, and rewiring</td></tr>
-<tr><td>073 — latebox</td><td>boxes and maps compiled while the program runs</td></tr>
-<tr><td>091 — stopping</td><td>signals, capture, and ending a program</td></tr>
-</table>
-<p>The numbers are kept because they are the reading order: the pool knows
-nothing of stations, stations know nothing of the generator, and each
-section stands on the ones above it.</p>
-<h2>What is in here, and what is not</h2>
-<p>**100 symbols, every one of them beginning <code>cera_</code>, and the engine
-exports exactly those 100.** Not "roughly
-these" — checked on every test run by
-<code>tests/112-test-public-surface.sh</code>, which compiles the engine alone,
-asks the object file what it publishes, and fails naming anything that
-is published without being declared here.</p>
-<p>That is the property this file exists for: **private by default, public
-only by a deliberate act**, the act being a line in this file. It
-cannot decay, because breaking it means writing a function and
-forgetting one word, and something checks.</p>
-<p><strong>What is not here</strong> is how the engine reaches itself — the slot state
-machine, the pages a ring grows by, the constant a port holds, the text
-the dump prints through, the output port lookup and its destination
-sets, task construction, the pool's own callback, the scrapyard, the
-box-table matcher. Twenty-three of them, in <code>cera.c</code> under a banner
-saying so, with the documentation they always had.</p>
-<h2>The one thing that is already known about the boundary</h2>
-<p><strong>Generated code is a separate translation unit and always will be.</strong>
-It is derived at build time from box sources this engine's author has
-never seen, so it cannot be inside <code>cera.c</code>. Twenty-three functions are
-therefore public by necessity rather than by choice — building a station
-from a compiled map, marking doors, placing a map inside a map, a box
-ending its own program, charging a box's time to its station, and the
-eleven calls that turn a value into text and back.</p>
-<p>A box or map compiled <em>while the program runs</em> binds to those same names
-through the executable's dynamic symbol table, which is what
-<a href="info-098-engine-surface-syms.html">098-engine-surface.syms</a> publishes.
-That file and this one describe the same boundary from two directions —
-what a shared object may bind to, and what a program may call. They
-agree today by both naming the same families; <a href="done-905-the-prefix.html">905</a> gave every public name one
-prefix, so the linker's list is now a single pattern — and it stayed a
-file, because what will not fit in a link command is the explanation
-around the pattern rather than the pattern.</p>
+<p>Every call a program built with this engine can make, and nothing else.
+With <code>cera.c</code> beside it this is the engine: two files, one include path,
+and nothing to install.</p>
+<p>The header itself is declarations and fold markers with almost no prose,
+because the prose is here. Both files carry the same eleven components
+in the same order, and within a component the header declares calls in
+the order the body defines them — <code>tests/117-test-header-mirrors-body.sh</code>
+fails if that stops being true.</p>
 <h2>Using it</h2>
 <pre class="code">
 #include <span class="st">"cera.h"</span>
 </pre>
-<p>One include path, or none if the two files sit beside your own source.</p>
-<p>Two linker settings are required and are not optional:</p>
+<p>One include path, or none if the two files sit beside your own source.
+Two linker settings are required and are not optional:</p>
 <pre class="code">
 -Wl,--dynamic-list=098-engine-surface.syms -Wl,--gc-sections
 </pre>
-<p>The first publishes the engine so that a box or a map compiled while
-the program runs can bind back into it; the second throws away what
-nothing reaches. They only make sense together, and the obvious way to
-write the first — <code>-rdynamic</code> — cancels the second, because an exported
-symbol is a root the collector may never touch and exporting everything
-declares the whole binary reachable. See
-<a href="info-098-engine-surface-syms.html">098-engine-surface.syms</a>, which
-carries the measurements.</p>
-<h2>Every call, and how it is declared</h2>
-<p>Generated from the header itself. One hundred calls in seven
-sections, in the order the header presents them — the pool knows
-nothing of stations, stations nothing of the generator, and each
-<em>101 calls.</em> Anything not here is private, and <code>tests/112-test-public-surface.sh</code> fails if the engine publishes something this list does not name.</p>
-<p>section stands on the ones above it.</p>
-<h3>011 — The pool</h3>
+<p>The first publishes the engine so a box or map compiled while the
+program runs can bind back into it; the second throws away what nothing
+reaches. They only make sense together, and the obvious way to write the
+first — <code>-rdynamic</code> — cancels the second, because an exported symbol is
+a root the collector may never touch and exporting everything declares
+the whole binary reachable.</p>
+<h2>What is public, and what checks</h2>
+<p>101 calls, every one beginning <code>cera_</code>, and the engine exports exactly
+those. Anything not declared in <code>cera.h</code> is <code>static</code> in <code>cera.c</code> and is
+not a linker symbol at all; <code>tests/112-test-public-surface.sh</code> fails if
+the engine ever publishes something the header does not name.</p>
+<p><strong>Generated code is a separate translation unit and always will be</strong>,
+being derived at build time from box sources this engine's author has
+never seen. Twenty-three of these calls are public by necessity rather
+than by choice, because that file calls them. A box or map compiled
+<em>while the program runs</em> binds to the same names through the
+executable's dynamic symbol table — see
+<a href="info-098-engine-surface-syms.html">098-engine-surface.syms</a>.</p>
+<h2>012 — the pool</h2>
+<h3>cera_task_t</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> task cera_task_t;
+</pre>
+<p>A task is one invocation, made concrete: created the
+moment a station's inputs are all present, destroyed by the worker
+that ran it. The pool reads exactly one field — <code>call</code> — and treats
+the rest as freight; everything the fields <em>mean</em> lives on the
+delivery path.</p>
+<p>The values behind <code>in</code> are copies, claimed under the station's
+mutex, so a task is self-contained: once built it depends on
+nothing another thread can change. The whole task — struct,
+pointer array, value bytes — is one allocation, sized exactly for
+its box, and freed with one call by the worker that ran it.</p>
+<p>Phase 1 tests still hang synthetic payloads off the end by
+embedding this struct first in a larger one; the pool cannot tell
+and does not care.</p>
+<h3>cera_task_call_t</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">void</span> (*cera_task_call_t)(cera_task_t *t);
+</pre>
+<h3>struct task</h3>
+<pre class="code">
+<span class="kw">struct</span> task {
+    cera_task_call_t call;
+    <span class="kw">void</span>       *owner;
+    int32_t     station;
+    int32_t     port;
+    int32_t     n_in;
+    <span class="kw">void</span>      **in;
+    <span class="kw">void</span>       *out;
+    <span class="kw">long</span>        box_ns;
+};
+</pre>
+<p>A task is one invocation, made concrete: created the
+moment a station's inputs are all present, destroyed by the worker
+that ran it. The pool reads exactly one field — <code>call</code> — and treats
+the rest as freight; everything the fields <em>mean</em> lives on the
+delivery path.</p>
+<p>The values behind <code>in</code> are copies, claimed under the station's
+mutex, so a task is self-contained: once built it depends on
+nothing another thread can change. The whole task — struct,
+pointer array, value bytes — is one allocation, sized exactly for
+its box, and freed with one call by the worker that ran it.</p>
+<p>Phase 1 tests still hang synthetic payloads off the end by
+embedding this struct first in a larger one; the pool cannot tell
+and does not care.</p>
 <table>
-<tr><td>call</td><td>declared as</td></tr>
-<tr><td><code>cera_pool_create</code></td><td><code>cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *finish_ctx)</code></td></tr>
-<tr><td><code>cera_pool_push</code></td><td><code>void cera_pool_push(cera_pool_t *p, cera_task_t *t)</code></td></tr>
-<tr><td><code>cera_pool_pop</code></td><td><code>cera_task_t *cera_pool_pop(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_release</code></td><td><code>void cera_pool_release(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_join</code></td><td><code>void cera_pool_join(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_destroy</code></td><td><code>void cera_pool_destroy(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_submitter_register</code></td><td><code>void cera_pool_submitter_register(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_submitter_unregister</code></td><td><code>void cera_pool_submitter_unregister(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_worker_index</code></td><td><code>int cera_pool_worker_index(void)</code></td></tr>
-<tr><td><code>cera_pool_worker_count</code></td><td><code>int cera_pool_worker_count(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_worker_epoch</code></td><td><code>uint64_t cera_pool_worker_epoch(cera_pool_t *p, int worker)</code></td></tr>
-<tr><td><code>cera_pool_signal_when_finished</code></td><td><code>void cera_pool_signal_when_finished(cera_pool_t *p, int signo)</code></td></tr>
-<tr><td><code>cera_pool_stop</code></td><td><code>void cera_pool_stop(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_queued</code></td><td><code>int cera_pool_queued(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_worker_station</code></td><td><code>int cera_pool_worker_station(cera_pool_t *p, int worker)</code></td></tr>
-<tr><td><code>cera_pool_finished</code></td><td><code>int cera_pool_finished(cera_pool_t *p)</code></td></tr>
-<tr><td><code>cera_pool_queue_stats</code></td><td><code>void cera_pool_queue_stats(cera_pool_t *p, int *capacity, int *high_water, int *growths)</code></td></tr>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>call</code></td><td>the shim to run</td></tr>
+<tr><td><code>owner</code></td><td>Which program this task belongs to, carried the same way <code>station</code> and <code>port</code> are — ferried without being interpreted, which is what keeps the pool ignorant of maps. A void pointer for exactly that reason: the pool must not know what this is. Without it a pool serves one program, because finishing a task means resolving a station index, and an index means nothing without the table it indexes. The finish hook therefore had to carry the map, which bound the pool to it. With it, one pool can serve several programs — which is what lets a program start another beside itself, sharing the workers and nothing else.</td></tr>
+<tr><td><code>station</code></td><td>which station produced it, so delivery knows where to look</td></tr>
+<tr><td><code>port</code></td><td>an iterator's assigned exit</td></tr>
+<tr><td><code>n_in</code></td><td>how many input values ride along</td></tr>
+<tr><td><code>in</code></td><td>one claimed value per input port, in parameter order</td></tr>
+<tr><td><code>out</code></td><td>where the return value lands; null for a sink</td></tr>
+<tr><td><code>box_ns</code></td><td>How long the box took, when the engine is built with timing compiled in. The pool never reads it — it is carried here the same way <code>station</code> and <code>port</code> are, as something the pool ferries without interpreting, which is what keeps the pool ignorant of maps. It rides on the task because the alternative was a process-wide pointer to the running map, so that a shim — which receives only a task — could find the station to charge. That pointer was what made a process able to run only one map at a time, and one optional measurement was the last thing holding it.</td></tr>
 </table>
-<h3>018 — Stations, ports and wires</h3>
+<h3>cera_pool_t</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> pool cera_pool_t;
+</pre>
+<h3>cera_pool_finish_t</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">void</span> (*cera_pool_finish_t)(<span class="kw">void</span> *ctx, cera_task_t *t);
+</pre>
+<p>The finish hook is delivery's reserved seat. After a
+worker runs a task and before it frees it, the hook is called with
+the context given at creation. Passing a null hook means "just free
+it". The hook is how the pool stays
+ignorant of stations while still carrying their values forward.</p>
+<h3>cera_pool_push()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_pool_push(cera_pool_t *p, cera_task_t *t);
+</pre>
+<p>Enqueue one task. Grows the ring if it is full (a bounded memory
+copy, never a wait on user code) and wakes every sleeping worker.
+The task must have been allocated with malloc; the worker that runs
+it frees it.</p>
+<h3>cera_pool_pop()</h3>
+<pre class="code">
+cera_task_t *cera_pool_pop(cera_pool_t *p);
+</pre>
+<p>Dequeue the oldest task, or return null when the queue is empty.
+Never blocks: the decision to sleep on empty belongs to the worker
+run loop, not to the queue.</p>
+<h3>cera_pool_worker_index()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_pool_worker_index(<span class="kw">void</span>);
+</pre>
+<p>The index of the worker running the calling thread, or -1 when
+called from a thread that is not a worker. Costs a thread-local
+read; the statistics are attributed per worker through it.</p>
+<h3>cera_pool_worker_epoch()</h3>
+<pre class="code">
+uint64_t cera_pool_worker_epoch(cera_pool_t *p, <span class="kw">int</span> worker);
+</pre>
+<p>A worker's epoch: **odd while it is inside a task, even while it is
+not.** Bumped once at the start of a whole task and once at the end,
+on a cache line nobody else writes, so it costs one uncontended
+write per task and no coordination at all.</p>
+<p>It exists so that somebody wanting to free something a worker might
+be using — a destination set a rewire replaced, the compiled code of
+a box nobody places any more — can find out without asking anyone to
+stop. Snapshot every worker's epoch when you retire the thing; later,
+a worker whose epoch is now <strong>even</strong>, or **differs from the
+snapshot**, cannot still be in the task it was in, and therefore
+cannot be holding it.</p>
+<p>Nothing waits and nothing spins. An idle worker is asleep and
+therefore even, so it passes without ever having to move — which is
+what would otherwise deadlock a sweep against a quiet pool.</p>
+<h3>cera_pool_signal_when_finished()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_pool_signal_when_finished(cera_pool_t *p, <span class="kw">int</span> signo);
+</pre>
+<p><strong>cera_pool_signal_when_finished(pool, signal)</strong> — raise this signal,
+once, when the pool decides by itself that the work has run out.</p>
+<p>The thread that wants to know a program is over is usually also
+waiting to be <em>told</em> to stop, and one waiting point woken for two
+reasons is simpler than two waits that have to be combined. So the
+end of the work arrives as one more signal, told apart from the
+others by its number.</p>
+<p>It is raised at the process rather than at a thread, which needs no
+thread identity to be recorded and lands wherever somebody is
+waiting. Opt-in, and it has to be: most signals kill a process by
+default, so a pool that raised one unasked would end every program
+that did not expect it.</p>
+<p><strong>cera_pool_stop(pool)</strong> — stop starting new things, which is what
+halting honestly means. A worker inside a box finishes that box,
+because there is no safe way to interrupt executing C; a worker
+looking for work finds the flag and returns. Whatever is queued
+stays queued and is never run, which tearing down afterwards
+reports rather than hides.</p>
+<p><strong>cera_pool_queued(pool)</strong> — how many tasks are waiting right now.</p>
+<p><strong>cera_pool_worker_station(pool, worker)</strong> — which station that worker
+is inside, or -1. A number the pool ferries and never interprets,
+like the one on the task it came from, and **a number rather than
+the task's address** on purpose: a report written while a lock is
+held by something that will never release it must not dereference
+anything. A stale integer is a wrong answer; a stale pointer is a
+crash inside the thing that exists to explain a crash.</p>
+<h3>cera_pool_stop()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_pool_stop(cera_pool_t *p);
+</pre>
+<h3>cera_pool_finished()</h3>
+<pre class="code">
+<span class="kw">int</span>  cera_pool_finished(cera_pool_t *p);
+</pre>
+<p><strong>cera_pool_finished(pool)</strong> — whether the pool has already decided the
+work is over. For telling a caller that arrived too late, rather
+than letting it push tasks nobody will ever run. The window it
+detects is closed by making a standing promise before the gate
+opens.</p>
+<h3>cera_pool_queued()</h3>
+<pre class="code">
+<span class="kw">int</span>  cera_pool_queued(cera_pool_t *p);
+</pre>
+<h3>cera_pool_worker_station()</h3>
+<pre class="code">
+<span class="kw">int</span>  cera_pool_worker_station(cera_pool_t *p, <span class="kw">int</span> worker);
+</pre>
+<h3>cera_pool_create()</h3>
+<pre class="code">
+cera_pool_t *cera_pool_create(<span class="kw">int</span> n_workers, cera_pool_finish_t finish, <span class="kw">void</span> *finish_ctx);
+</pre>
+<p>n_workers &lt;= 0 means: use the CERAMIC_WORKERS environment variable
+if set, otherwise one worker per online processor. Workers are
+spawned immediately but parked at a starting barrier; nothing runs
+until cera_pool_release. That gap is where a map is seeded.</p>
+<h3>cera_pool_release()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_pool_release(cera_pool_t *p);
+</pre>
+<p>Release the workers past the starting barrier. Called once.</p>
+<h3>cera_pool_join()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_pool_join(cera_pool_t *p);
+</pre>
+<p>Wait until the pool has terminated itself — every task run, every
+worker returned. Termination is decided by the last worker to fall
+asleep re-checking the queue, so this is a wait for
+genuine completion, not a deadline.</p>
+<h3>cera_pool_submitter_register()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_pool_submitter_register(cera_pool_t *p);
+</pre>
+<p>The termination rule assumes nothing outside the pool pushes tasks
+after the workers are released. Anything that does — a trickle-feed
+test, a control socket — must hold a registration for as long as it
+might still push, or the pool can declare itself finished between
+two of its pushes. Unregistering the last outside submitter nudges
+the workers so a fully-asleep pool re-evaluates termination.</p>
+<h3>cera_pool_submitter_unregister()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_pool_submitter_unregister(cera_pool_t *p);
+</pre>
+<h3>cera_pool_destroy()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_pool_destroy(cera_pool_t *p);
+</pre>
+<p>Free the pool. If workers were started, join them first.</p>
+<h3>cera_pool_worker_count()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_pool_worker_count(cera_pool_t *p);
+</pre>
+<p>How many workers this pool actually has, after defaulting.</p>
+<h3>cera_pool_queue_stats()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_pool_queue_stats(cera_pool_t *p, <span class="kw">int</span> *capacity, <span class="kw">int</span> *high_water, <span class="kw">int</span> *growths);
+</pre>
+<p>The queue's current capacity, its high-water occupancy, and how
+many times it has grown. Every number
+a demo reports must be measured, and these are the measurements.</p>
+<h2>019 — the station table</h2>
+<h3>enum in_port_kind</h3>
+<pre class="code">
+<span class="kw">enum</span> in_port_kind {
+    CERA_IN_PORT_RING    = 0,
+    CERA_IN_PORT_STATIC  = 1,
+    CERA_IN_PORT_NONE    = 2,
+    CERA_IN_PORT_KIND_COUNT
+};
+</pre>
+<p>The port kinds. The tag is stored, never inferred:
+asking "is my upstream input-less?" on every readiness check would
+chase an index to answer a question that cannot change while the
+program runs.</p>
+<p>There is no pull path — no port that runs its upstream box inline to
+produce a value. Writing a static runs the ordinary readiness check
+on its station instead. See
+docs/implementation-notes/056-no-pull-path.md.</p>
+<p>Nothing outside this file sees these as numbers: the map file spells
+a port's kind as text and the dump writes text back.</p>
+<p>CERA_IN_PORT_NONE is not a third kind of value; it is the absence of a
+decision. A port in it has been given no source, and a
+station holding one can never be ready — which is what lets a
+program be assembled from nothing, a station coming into existence
+with every port unset and becoming runnable as its ports are given
+sources one at a time. No null is invented and nothing is ever
+handed to a box; the readiness walk simply answers no forever.</p>
+<h3>CERA_IN_PORT_DEFAULT_CAPACITY</h3>
+<pre class="code">
+#define CERA_IN_PORT_DEFAULT_CAPACITY 10
+</pre>
+<p>Every port's ring buffer starts this deep, in slots of that port's
+own element size — so a port carrying four-byte integers starts at
+forty bytes and one carrying a two-hundred-byte struct at two
+thousand.</p>
+<p>Ten is a magic number and is meant to be one. It barely matters: a
+buffer that starts too small grows to whatever depth the program
+actually demands and then stops, so the cost of guessing low is a
+slower startup, which is the cheapest time in a program's life to be
+slow. A port that knows better can say so through
+cera_map_in_port_start_depth.</p>
+<p>Every slot is usable. A full buffer is one where no slot answers
+empty, which is asked directly rather than inferred from indices.</p>
+<h3>enum slot_state</h3>
+<pre class="code">
+<span class="kw">enum</span> slot_state {
+    CERA_SLOT_EMPTY    = 0,
+    CERA_SLOT_RESERVED = 1,
+    CERA_SLOT_READY    = 2,
+    CERA_SLOT_CLAIMED  = 3,
+};
+</pre>
+<p>What is happening to one slot, and who is allowed to
+touch it while it is happening.</p>
 <table>
-<tr><td>call</td><td>declared as</td></tr>
-<tr><td><code>cera_map_station</code></td><td><code>static inline cera_station_t *cera_map_station(cera_map_t *m, int n)</code></td></tr>
-<tr><td><code>cera_map_add_station</code></td><td><code>int cera_map_add_station(cera_map_t *m)</code></td></tr>
-<tr><td><code>cera_map_create</code></td><td><code>cera_map_t *cera_map_create(int n_stations)</code></td></tr>
-<tr><td><code>cera_map_create_empty</code></td><td><code>cera_map_t *cera_map_create_empty(void)</code></td></tr>
-<tr><td><code>cera_map_place</code></td><td><code>void cera_map_place(cera_map_t *m, int station, cera_task_call_t shim, int kind, int n_in_ports, const int *elem_sizes, int out_size)</code></td></tr>
-<tr><td><code>cera_map_in_port_start_depth</code></td><td><code>const char *cera_map_in_port_start_depth(cera_map_t *m, int station, int port, int slots)</code></td></tr>
-<tr><td><code>cera_map_in_port_convert</code></td><td><code>void cera_map_in_port_convert(cera_map_t *m, int station, int port, int kind)</code></td></tr>
-<tr><td><code>cera_map_configure_port</code></td><td><code>const char *cera_map_configure_port(cera_map_t *m, int station, int port, int source, const char *text)</code></td></tr>
-<tr><td><code>cera_map_check_sources</code></td><td><code>const char *cera_map_check_sources(cera_map_t *m)</code></td></tr>
-<tr><td><code>cera_map_bring_up</code></td><td><code>const char *cera_map_bring_up(cera_map_t *m)</code></td></tr>
-<tr><td><code>cera_map_designate_output</code></td><td><code>const char *cera_map_designate_output(cera_map_t *m, int station)</code></td></tr>
-<tr><td><code>cera_map_station_set_cursor</code></td><td><code>const char *cera_map_station_set_cursor(cera_map_t *m, int station, int at)</code></td></tr>
-<tr><td><code>cera_map_designate_input</code></td><td><code>const char *cera_map_designate_input(cera_map_t *m, int station)</code></td></tr>
-<tr><td><code>cera_map_start_beside</code></td><td><code>cera_map_t *cera_map_start_beside(cera_map_t *parent)</code></td></tr>
-<tr><td><code>cera_map_deliver_argument</code></td><td><code>const char *cera_map_deliver_argument(cera_map_t *m, int station, int port, const void *value, int size)</code></td></tr>
-<tr><td><code>cera_map_deliver_argument_text</code></td><td><code>const char *cera_map_deliver_argument_text(cera_map_t *m, int station, int port, const char *text)</code></td></tr>
-<tr><td><code>cera_map_deliver_command_line</code></td><td><code>const char *cera_map_deliver_command_line(cera_map_t *m, int argc, char **argv)</code></td></tr>
-<tr><td><code>cera_map_output_waiting</code></td><td><code>int cera_map_output_waiting(cera_map_t *m, int station)</code></td></tr>
-<tr><td><code>cera_map_output_take</code></td><td><code>int cera_map_output_take(cera_map_t *m, int station, void *into, int size)</code></td></tr>
-<tr><td><code>cera_map_name_station</code></td><td><code>const char *cera_map_name_station(cera_map_t *m, int station, const char *name)</code></td></tr>
-<tr><td><code>cera_map_wire</code></td><td><code>const char *cera_map_wire(cera_map_t *m, int from_station, int port, int to_station, int to_port)</code></td></tr>
-<tr><td><code>cera_map_remove_station</code></td><td><code>const char *cera_map_remove_station(cera_map_t *m, int station)</code></td></tr>
-<tr><td><code>cera_map_connect</code></td><td><code>void cera_map_connect(cera_map_t *m, int from_station, int port, int to_station, int to_port)</code></td></tr>
-<tr><td><code>cera_map_start</code></td><td><code>void cera_map_start(cera_map_t *m, int n_workers)</code></td></tr>
-<tr><td><code>cera_map_destroy</code></td><td><code>void cera_map_destroy(cera_map_t *m)</code></td></tr>
-<tr><td><code>cera_map_deliver_value</code></td><td><code>int cera_map_deliver_value(cera_map_t *m, int station, int port, const void *value)</code></td></tr>
-<tr><td><code>cera_map_in_port_depth</code></td><td><code>int cera_map_in_port_depth(cera_map_t *m, int station, int port)</code></td></tr>
-<tr><td><code>cera_map_station_try_start</code></td><td><code>int cera_map_station_try_start(cera_map_t *m, int station)</code></td></tr>
-<tr><td><code>cera_map_station_start_while_ready</code></td><td><code>int cera_map_station_start_while_ready(cera_map_t *m, int station)</code></td></tr>
-<tr><td><code>cera_map_station_keep_starting</code></td><td><code>int cera_map_station_keep_starting(cera_map_t *m, int station)</code></td></tr>
-<tr><td><code>cera_map_station_start_after</code></td><td><code>int cera_map_station_start_after(cera_map_t *m, int station, void (*while_locked)(void *), void *ctx)</code></td></tr>
-<tr><td><code>cera_map_in_port_static_text</code></td><td><code>void cera_map_in_port_static_text(cera_map_t *m, int station, int port, const char *text)</code></td></tr>
-<tr><td><code>cera_map_in_port_static_write</code></td><td><code>void cera_map_in_port_static_write(cera_map_t *m, int station, int port, const void *bytes, int size)</code></td></tr>
-<tr><td><code>cera_map_in_port_queue_text</code></td><td><code>const char *cera_map_in_port_queue_text(cera_map_t *m, int station, int port, const char *text)</code></td></tr>
+<tr><td>state</td><td>meaning</td><td>who may touch it</td></tr>
+<tr><td>empty</td><td>nothing here</td><td>a writer, by taking</td></tr>
+<tr><td>reserved</td><td>a writer is copying in</td><td>that writer only</td></tr>
+<tr><td>ready</td><td>the bytes have landed</td><td>a reader, by taking</td></tr>
+<tr><td>claimed</td><td>a reader is copying out</td><td>that reader only</td></tr>
 </table>
-<h3>026 — Generated code, and values as text</h3>
+<p><strong>This is the mutual exclusion, per slot rather than per port.</strong> A
+writer must not write while anyone reads or writes; a reader must
+not read while anyone writes; and the state says so. Two threads can
+never own one slot.</p>
+<p><strong>Only one transition is a compare-and-swap</strong>, and knowing which is
+worth more than assuming all of them are. Empty →
+reserved is where two writers genuinely race for the same slot, so
+the loser has to be told it lost. The other three have exactly one
+possible mover: reserved → ready and claimed → empty are done by
+the worker that owns the slot, and ready → claimed is done under
+the station's mutex, which excludes the only other thing that could
+want it. Those are an ordinary load and an ordinary store, with
+acquire and release ordering so the bytes travel with the state.</p>
+<p>The claim's <em>search</em> asks this question of every candidate it walks
+past, so a read-modify-write per candidate is measurable where a
+load is not.</p>
+<p><strong>Slots are not cleared when released.</strong> Every write is a copy of
+the port's full element size, so a stale value is always completely
+covered and there is no such thing as a partial write into a slot.
+The guarantee is not that a slot was cleaned but that its bytes are
+never read unless its state says ready, which is this machine's
+entire job. Zeroing on release would cost a full erase per claim.</p>
+<p>Empty is zero so that a freshly allocated run of slots is a
+freshly empty run of slots.</p>
+<h3>enum station_door</h3>
+<pre class="code">
+<span class="kw">enum</span> station_door {
+    CERA_DOOR_NONE = 0,   <span class="cm">/* an interior station, which is most of them */</span>
+    CERA_DOOR_IN   = 1,   <span class="cm">/* the outside may deliver here */</span>
+    CERA_DOOR_OUT  = 2,   <span class="cm">/* results wait here to be taken */</span>
+};
+</pre>
+<p>The three station kinds, consulted only by the routing dispatch.
+Identical in every respect except which output port a returned value
+goes down.</p>
+<p>Which way a door faces. Not a station kind: a
+door is an ordinary station of any kind, carrying a mark.</p>
+<h3>enum station_kind</h3>
+<pre class="code">
+<span class="kw">enum</span> station_kind {
+    CERA_STATION_PLAIN      = 0,
+    CERA_STATION_COMPARATOR = 1,
+    CERA_STATION_ITERATOR   = 2,
+    CERA_STATION_KIND_COUNT
+};
+</pre>
+<h3>struct in_port_page / struct in_port</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> in_port_page {
+    _Atomic(<span class="kw">struct</span> in_port_page *) next;
+    <span class="kw">unsigned</span> <span class="kw">char</span>                 slots[];
+} cera_in_port_page_t;
+<span class="kw">typedef</span> <span class="kw">struct</span> in_port {
+    _Atomic <span class="kw">unsigned</span> <span class="kw">char</span> kind;
+    <span class="kw">int</span>   elem_size;
+    cera_in_port_page_t *pages;
+    <span class="kw">int</span>   page_slots;
+    _Atomic <span class="kw">int</span> capacity;
+    <span class="kw">int</span>   stride;
+    <span class="kw">int</span>   read_hint;
+    <span class="kw">int</span>   write_hint;
+    _Atomic <span class="kw">int</span> held;
+    <span class="kw">void</span> *constant;
+    <span class="kw">char</span> *constant_string;
+    <span class="kw">int</span>   constant_set;
+    <span class="kw">const</span> <span class="kw">char</span> *type_name;
+    <span class="kw">const</span> <span class="kw">struct</span> struct_text *text;
+    <span class="kw">int</span> growths;
+    <span class="kw">int</span> high_water;
+} cera_in_port_t;
+</pre>
+<p>One input port. Which fields are <em>in effect</em> depends on the kind: a
+ring buffer reads the pages, the page size, the capacity and the two
+hints; a static reads its constant; an unconfigured port reads
+neither. elem_size matters to all three — slots are exactly the size
+of the parameter this port feeds, which is what makes a write a
+memcpy with no allocation on the hot path.</p>
+<p>The <code>source</code> field went with the gatherer: it held the
+upstream station a port pulled from, and nothing pulls now.</p>
+<p>**The slots are allocated at instantiation and are never freed
+until the map is**, whatever the tag currently says.
+A port that is a static for the whole life of a program carries
+slots it never uses, and that is the price: it is paid once, at
+startup, in the cheapest moment a program has. What it buys is that
+changing a port's source is a field write rather than an allocation
+dance — there is never a moment when the storage a tag needs is
+absent — and that values already waiting in a port survive it being
+turned into something else and back.</p>
+<p><strong>Both storages are real</strong>: the slots, and the
+bytes of a static. Exactly one is in effect and the other sits idle,
+which is what makes changing what a port is a field write in both
+directions rather than only one.</p>
+<p>One page of a port's ring buffer.</p>
+<p>A buffer grows by adding one of these to the end of a short list,
+never by copying, so <strong>no slot that already exists ever moves</strong>.
+That is not a tidiness argument. A worker copying bytes out of a
+slot it has claimed holds no lock — a claimed slot belongs to it
+alone and needs no exclusion from anybody — and relocating that
+slot underneath it is precisely the thing that ownership does not
+protect against. Copy-and-unwrap growth was safe only while the
+station's mutex covered the whole copy, and it stops being safe the
+moment the value copies leave that lock.</p>
+<p>Every page holds the same number of slots, so turning a slot's
+ordinal into a page and an offset is a divide and a remainder.
+Pages that each doubled the last would have made that a walk down
+the list comparing ranges; the scan does this on every step and
+growth happens rarely, so the cheap operation belongs on the side
+that repeats.</p>
 <table>
-<tr><td>call</td><td>declared as</td></tr>
-<tr><td><code>cera_box_place_find</code></td><td><code>const cera_box_place_t *cera_box_place_find(const char *name)</code></td></tr>
-<tr><td><code>cera_text_expect</code></td><td><code>const char *cera_text_expect(const char *p, char c, const cera_where_t *w, const char *what)</code></td></tr>
-<tr><td><code>cera_text_signed</code></td><td><code>const char *cera_text_signed(const char *p, void *out, int size, const cera_where_t *w, const char *field)</code></td></tr>
-<tr><td><code>cera_text_unsigned</code></td><td><code>const char *cera_text_unsigned(const char *p, void *out, int size, const cera_where_t *w, const char *field)</code></td></tr>
-<tr><td><code>cera_text_floating</code></td><td><code>const char *cera_text_floating(const char *p, void *out, int size, const cera_where_t *w, const char *field)</code></td></tr>
-<tr><td><code>cera_text_chars</code></td><td><code>const char *cera_text_chars(const char *p, char *out, int room, const cera_where_t *w, const char *field)</code></td></tr>
-<tr><td><code>cera_text_put</code></td><td><code>void cera_text_put(cera_textbuf_t *tb, const char *literal)</code></td></tr>
-<tr><td><code>cera_text_put_signed</code></td><td><code>void cera_text_put_signed(cera_textbuf_t *tb, const void *bytes, int size)</code></td></tr>
-<tr><td><code>cera_text_put_unsigned</code></td><td><code>void cera_text_put_unsigned(cera_textbuf_t *tb, const void *bytes, int size)</code></td></tr>
-<tr><td><code>cera_text_put_floating</code></td><td><code>void cera_text_put_floating(cera_textbuf_t *tb, const void *bytes, int size)</code></td></tr>
-<tr><td><code>cera_text_put_chars</code></td><td><code>void cera_text_put_chars(cera_textbuf_t *tb, const char *chars, int room)</code></td></tr>
-<tr><td><code>cera_struct_text_find</code></td><td><code>const cera_struct_text_t *cera_struct_text_find(const char *type_name)</code></td></tr>
-<tr><td><code>cera_struct_find</code></td><td><code>const cera_struct_info_t *cera_struct_find(const char *type_name)</code></td></tr>
-<tr><td><code>cera_emitted_print</code></td><td><code>void cera_emitted_print(FILE *out)</code></td></tr>
-<tr><td><code>cera_map_place_box</code></td><td><code>void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int kind)</code></td></tr>
-<tr><td><code>cera_box_source_text</code></td><td><code>const char *cera_box_source_text(const char *path)</code></td></tr>
-<tr><td><code>cera_map_build_find</code></td><td><code>const cera_map_build_t *cera_map_build_find(const char *path)</code></td></tr>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>next</code></td><td>Atomic because a delivering writer walks this list holding no lock while a grower may be appending to it. Growth publishes a page by storing it here with release, and bumps the capacity only afterwards — so a scanner that sees the larger capacity is guaranteed to find the page, and one that sees the old capacity simply does not use the new slots yet. Neither is wrong; the second is merely a sweep too early.</td></tr>
+<tr><td><code>slots</code></td><td>page_slots × stride bytes: value, state, padding, repeating.</td></tr>
 </table>
-<h3>040 — Descriptions, and a map inside a map</h3>
 <table>
-<tr><td>call</td><td>declared as</td></tr>
-<tr><td><code>cera_map_load_file</code></td><td><code>cera_map_t *cera_map_load_file(const char *path, int n_workers)</code></td></tr>
-<tr><td><code>cera_map_load_salvage</code></td><td><code>cera_map_t *cera_map_load_salvage(const char *path, int n_workers)</code></td></tr>
-<tr><td><code>cera_map_seed_count</code></td><td><code>int cera_map_seed_count(cera_map_t *m)</code></td></tr>
-<tr><td><code>cera_map_instantiate_file</code></td><td><code>cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path)</code></td></tr>
-<tr><td><code>cera_map_instance_entrance</code></td><td><code>int cera_map_instance_entrance(cera_map_t *m, const cera_map_instance_t *in, int nth)</code></td></tr>
-<tr><td><code>cera_map_instance_result</code></td><td><code>int cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int nth)</code></td></tr>
-<tr><td><code>cera_map_instance_free</code></td><td><code>void cera_map_instance_free(cera_map_instance_t *in)</code></td></tr>
-<tr><td><code>cera_map_add_part</code></td><td><code>const char *cera_map_add_part(cera_map_t *m, const char *what, cera_map_part_t *out)</code></td></tr>
-<tr><td><code>cera_map_connect_parts</code></td><td><code>const char *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, int from_port, cera_map_part_t to, int to_port)</code></td></tr>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>kind</code></td><td>Atomic because a delivery reads it holding no lock while a conversion may be writing it. Conversion takes the station's mutex, so it does not race the readiness walk or the claim — but the two guard checks at the top of a delivery run before any lock is taken, and a plain byte read against a plain byte write is a data race whatever the values involved. The outcome of losing that race is benign, which is why this is the only thing needed: a value written into a port that has just become a static lands in slots that exist regardless of the tag, and waits there until the port is a buffer again. That is the same promise conversion already makes about values it finds.</td></tr>
+<tr><td><code>pages</code></td><td>The pages, oldest first. The first is allocated when the station is placed; growth appends. Never reordered, never freed until the map is.</td></tr>
+<tr><td><code>page_slots</code></td><td>Slots per page — the same for every page of this port, and the same number the first page was given, so a program that wants deep buffers raises its starting depth and gets large pages everywhere rather than a long chain of small ones.</td></tr>
+<tr><td><code>capacity</code></td><td>Total slots across every page. A sum rather than a single allocation's size, which is what the buffer report speaks. Atomic, and written after the page it counts is linked, so that seeing it is proof the slots exist. A scan snapshots it once rather than re-reading it, which is what bounds the sweep: a reader that kept re-reading a number another thread keeps raising could be made to walk forever.</td></tr>
+<tr><td><code>stride</code></td><td>Bytes from one slot to the next: the value's own size, plus its state, rounded up so every value keeps the alignment its type needs. Computed once at allocation, because the rounding is the only arithmetic on the delivery path that is not a single operation.</td></tr>
+<tr><td><code>read_hint</code></td><td>Where to start looking, for a reader and for a writer. These replaced a head and a tail, and the difference is the whole of that issue: a position must be exact and is therefore computed; a hint may be wrong and therefore is not. A head index had to be right, because it was what said which slots were occupied — which meant maintaining it under exclusion, which meant the lock. A hint says only "somebody found a slot near here recently". A stale one costs a slightly longer scan and nothing else, so nothing has to be excluded to keep it true, because there is nothing about it that must be. They are ordinals into the port's slots rather than pointers. Under paging a pointer into a page would in fact stay valid, since pages never move — but an ordinal survives being read while another thread appends a page, and it is the same shape the scan already needs to bound itself by. Same reason a wire is a pair of integers rather than an address.</td></tr>
+<tr><td><code>held</code></td><td>How many slots are ready right now. Maintained rather than counted, because readiness asks this question on every single delivery and a scan to answer it would be the walk this design is trying to get rid of. Atomic because it stops being read under the mutex as the lock comes off the claim path.</td></tr>
+<tr><td><code>constant</code></td><td>What a static needs: the value itself, on the port. A station is one instantiation of a box, wired its own way. Its input ports are its own: one may be fed by a wire, another may hold a value that is simply always there. Which of those a port is, and what it holds, is a property of that port on that station and of nothing else — so nothing is shared. Claiming a static happens under the station's own mutex beside the ring pop, so the static half of an input set is as mutually consistent as the buffered half. <code>constant</code> is elem_size bytes, allocated at placement like the slots and kept for the life of the map. <code>constant_string</code> is where a string static's characters live, since the value for such a port is a pointer and it has to point at something the port owns. <code>constant_set</code> is what stops a port being turned into a static that has no value: the tag would be in effect and the storage behind it would be nothing anybody wrote.</td></tr>
+<tr><td><code>type_name</code></td><td>The type this port feeds, as text — what lets a static's text become bytes of the right <em>shape</em>. Null on hand-placed stations, which therefore cannot bind statics. This is not a precedent for carrying type names. A wire is checked by width and never by name: two boxes may spell one shape differently and mean the same data, so comparing names would refuse a sound connection. Nothing here is ever compared against anything — it names a layout, because turning <code>{ 5, 2.0, "hey" }</code> into bytes needs more than a byte count. Messages and the dump read the spelling.</td></tr>
+<tr><td><code>text</code></td><td>How a value of this port's type is written down and read back — the address of a generated pair, written by the placement function because it knows the type concretely. Null unless the type is a struct, and null on a hand-placed station, so the reader checks before following it. Two functions rather than a table of fields. The pair reaches each field by name, so there is no offset stored anywhere and none computed — a stronger form of guarantee C1 than a correct number carried around. Declared as an incomplete type because the pair belongs to the build path and this header must not depend on it — the dependency runs the other way.</td></tr>
+<tr><td><code>growths</code></td><td>How many times this buffer has doubled, and the deepest the backlog ever got; the reports read both. A growing port is one input side outpacing its siblings, with memory absorbing the imbalance.</td></tr>
 </table>
-<h3>049 — Watching, dumping, rewiring</h3>
+<h3>struct destination / struct out_port</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> destination {
+    int32_t station;
+    int32_t port;
+} cera_destination_t;
+<span class="kw">typedef</span> <span class="kw">struct</span> dest_set {
+    <span class="kw">int</span>           n;
+    cera_destination_t items[];
+} cera_dest_set_t;
+<span class="kw">typedef</span> <span class="kw">struct</span> out_port {
+    _Atomic(cera_dest_set_t *) dests;
+    <span class="kw">struct</span> out_port      *next;
+} cera_out_port_t;
+</pre>
+<p>A port is one exit from a station; a destination is one place a
+port delivers. Both numbers of a destination are needed: delivery
+takes the destination station's mutex and examines all of its
+slots, so it must name the station, not merely land inside it.</p>
+<p>A port's destinations, as <strong>one immutable array</strong>.</p>
+<p>Nothing ever edits one. Drawing or removing a wire builds a whole
+new set and swaps the port's pointer in a single atomic write, so a
+walker reads the pointer once and then walks something nobody will
+ever modify. That is what takes the station's mutex off the delivery
+walk: there is no lock, no copy onto the walker's stack, and no way
+to see a half-edited set.</p>
+<p>An array is the right shape on its own terms: the destinations are
+visited in order, immediately, one after another, and a contiguous
+run of pairs is what a processor wants for that.</p>
 <table>
-<tr><td>call</td><td>declared as</td></tr>
-<tr><td><code>cera_map_report_buffers</code></td><td><code>void cera_map_report_buffers(cera_map_t *m, FILE *out)</code></td></tr>
-<tr><td><code>cera_map_report_stations</code></td><td><code>void cera_map_report_stations(cera_map_t *m, FILE *out, int order)</code></td></tr>
-<tr><td><code>cera_map_observe_start</code></td><td><code>void cera_map_observe_start(cera_map_t *m, const char *path, int interval_ms)</code></td></tr>
-<tr><td><code>cera_map_observe_stop</code></td><td><code>void cera_map_observe_stop(cera_map_t *m)</code></td></tr>
-<tr><td><code>cera_map_report_shutdown</code></td><td><code>void cera_map_report_shutdown(cera_map_t *m)</code></td></tr>
-<tr><td><code>cera_stats_box_time</code></td><td><code>void cera_stats_box_time(cera_task_t *t, long ns)</code></td></tr>
-<tr><td><code>cera_map_dump</code></td><td><code>void cera_map_dump(cera_map_t *m, FILE *out)</code></td></tr>
-<tr><td><code>cera_map_unwire</code></td><td><code>const char *cera_map_unwire(cera_map_t *m, int from_station, int port, int to_station, int to_port)</code></td></tr>
-<tr><td><code>cera_map_disconnect</code></td><td><code>void cera_map_disconnect(cera_map_t *m, int from_station, int port, int to_station, int to_port)</code></td></tr>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>dests</code></td><td>Read without any lock on the hot path, written only while the rewiring lock is held. Atomic because a reader and a writer genuinely race here, and because the release on the write is what makes the set's contents visible to whoever reads the pointer afterwards. Null means a port wired nowhere, which discards — exactly what an unwired comparator outcome should do.</td></tr>
 </table>
-<h3>073 — Code that arrives after the build</h3>
+<h3>cera_station_compare_t</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">int</span> (*cera_station_compare_t)(<span class="kw">const</span> <span class="kw">void</span> *a, <span class="kw">const</span> <span class="kw">void</span> *b);
+</pre>
+<p>Three-way comparison over raw bytes of two values of one type —
+the sign of a minus b. Matches the emitted compare functions;
+declared here generically so this header names nothing the generator emits.</p>
+<h3>struct station</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> station {
+    pthread_mutex_t mutex;
+    cera_task_call_t     call;
+    <span class="kw">unsigned</span> <span class="kw">char</span>   kind;
+    cera_in_port_t      *in_ports;
+    <span class="kw">int</span>             n_in_ports;
+    cera_out_port_t     *out_ports;
+    <span class="kw">int</span>             n_out_ports;
+    <span class="kw">int</span>             cursor;
+    _Atomic <span class="kw">unsigned</span> <span class="kw">char</span> removed;
+    <span class="kw">int</span>             out_size;
+    <span class="kw">const</span> <span class="kw">char</span>     *box_name;
+    <span class="kw">unsigned</span> <span class="kw">char</span>   seeded;
+    <span class="kw">unsigned</span> <span class="kw">char</span>   door;
+    <span class="kw">void</span>           *held;
+    <span class="kw">int</span>             n_held;
+    <span class="kw">int</span>             held_room;
+    <span class="kw">int</span>             held_growths;
+    cera_station_compare_t compare;
+    _Atomic <span class="kw">long</span> runs;
+    _Atomic <span class="kw">long</span> produced;
+    _Atomic <span class="kw">long</span> box_ns;
+    _Atomic <span class="kw">long</span> mutex_wait_ns;
+} cera_station_t;
+</pre>
+<p>Fixed-size on purpose: the array of these must stay indexable, and
+growing a buffer must never move a station.</p>
 <table>
-<tr><td>call</td><td>declared as</td></tr>
-<tr><td><code>cera_late_compile_source</code></td><td><code>int cera_late_compile_source(const char *c_source)</code></td></tr>
-<tr><td><code>cera_late_box_count</code></td><td><code>int cera_late_box_count(void)</code></td></tr>
-<tr><td><code>cera_late_box_at</code></td><td><code>const cera_box_place_t *cera_late_box_at(int i)</code></td></tr>
-<tr><td><code>cera_late_unload_box</code></td><td><code>int cera_late_unload_box(cera_map_t *m, const char *name)</code></td></tr>
-<tr><td><code>cera_late_source_dir</code></td><td><code>const char *cera_late_source_dir(void)</code></td></tr>
-<tr><td><code>cera_late_compile_map</code></td><td><code>const cera_map_build_t *cera_late_compile_map(const char *map_text)</code></td></tr>
-<tr><td><code>cera_late_spill_sources</code></td><td><code>int cera_late_spill_sources(const char *dir)</code></td></tr>
-<tr><td><code>cera_late_source_text</code></td><td><code>const char *cera_late_source_text(const char *path)</code></td></tr>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>mutex</code></td><td>held across delivery and readiness</td></tr>
+<tr><td><code>call</code></td><td>the shim to run</td></tr>
+<tr><td><code>kind</code></td><td>plain, comparator, iterator</td></tr>
+<tr><td><code>out_ports</code></td><td>list; one plain, three comparator</td></tr>
+<tr><td><code>cursor</code></td><td>iterator's next port; the one memory a station keeps</td></tr>
+<tr><td><code>removed</code></td><td>Set when this station has been removed and not yet reclaimed. Its fields stay readable until the scrapyard frees them, and that is the whole trick. A task is built from a station's port count, return size, and shim <em>after</em> the readiness check released the mutex — so clearing those at the moment of removal would leave a worker building a task out of a station that had just been emptied underneath it. Instead the record stays intact and this flag says not to start anything new from it. The fields go when nobody can still be inside a task that needs them, which is the same question the scrapyard already answers. So a removed place is not immediately a free place: it becomes one when the sweep clears the shim. That is correct rather than inconvenient — you cannot reuse something while somebody might still be using it.</td></tr>
+<tr><td><code>out_size</code></td><td>bytes of the box's return value; 0 means sink</td></tr>
+<tr><td><code>box_name</code></td><td>The name this station was placed as, written by the generated placement function as a literal. Not a lookup. The literal costs one pointer per station, the string is read-only data the compiler emits anyway, and nothing is allocated or freed. Null for a station placed by hand with no name given, which is honest rather than awkward: nothing on disk describes such a program either, so there is nothing for a station line to say. The dump says so plainly instead of inventing something. It carries the bare function name, which is what a map file says.</td></tr>
+<tr><td><code>seeded</code></td><td>Whether this station has already been set going by a bring-up. The pass that starts a program is repeatable: a station added to a running program is checked and started by the next call, and one that was started before is not started twice. Without the mark, bringing a grown program up again would give every no-input station a second run for no reason anybody asked for — which is the sort of thing that looks like a scheduling bug for a week.</td></tr>
+<tr><td><code>door</code></td><td>Whether this station is a door, and which way it faces. One mark rather than two flags, because the two are one design seen from either side: a program's inputs are the ports the outside is allowed to deliver to, and its outputs are the ports a parent may wire from. A station is neither, or one, and being both would mean a program whose entrance is its exit. A door is an ordinary station and runs whatever box it was placed with — same shape, same readiness check. The mark adds one rule on each side. Facing out: when its output port is wired nowhere, values are held instead of discarded. Discarding is right for every other port and wrong for this one — an unwired comparator branch is the ordinary case, but a program that computed its results and dropped them did nothing. Facing in: it is the only station the outside may deliver to. That is what gives a program a surface rather than internals that happen to be reachable, and it is why a parent can wire to a sub-program without knowing what anything inside it is called.</td></tr>
+<tr><td><code>held</code></td><td>The results waiting to be taken, when nobody is wired to this station's output port. Guarded by the station's own mutex — the one the claim already takes — because a worker finishing a box and somebody outside draining results genuinely meet here. Grown by doubling. A pile-up here is a third diagnosis and not either of the other two: a port backing up means uneven inputs, the task ring backing up means consumers slower than producers, and this backing up means <em>nobody is collecting the program's results at all</em>. It is the loudest of the three by design, because the other two are performance signals and this one means the program is computing into somewhere nobody is looking.</td></tr>
+<tr><td><code>compare</code></td><td>Comparator only: the three-way compare for the box's return type, resolved by the placement function so the delivery path does a call rather than a lookup.</td></tr>
+<tr><td><code>runs</code></td><td>The counters. The counts are atomics updated where the work already is, costing nearly nothing, and are always on. The times are only ever written when CERA_STATS is compiled in — the fields stay so the struct never changes shape, but every clock read compiles out.</td></tr>
+<tr><td><code>produced</code></td><td>tasks its outputs made due elsewhere</td></tr>
+<tr><td><code>box_ns</code></td><td>time inside the box function</td></tr>
+<tr><td><code>mutex_wait_ns</code></td><td>time deliverers waited on the mutex</td></tr>
 </table>
-<h3>091 — Ending a program, and putting one down</h3>
+<h3>struct map</h3>
+<pre class="code">
+#define CERA_STATIONS_PER_SHELF 64
+#define CERA_STATION_SHELF_SHIFT 6
+#define CERA_STATION_SHELF_MASK  (CERA_STATIONS_PER_SHELF - 1)
+<span class="kw">typedef</span> <span class="kw">struct</span> map {
+    cera_station_t **shelves;
+    <span class="kw">int</span>         n_shelves;
+    _Atomic <span class="kw">int</span> n_stations;
+    cera_pool_t    *pool;
+    <span class="kw">int</span> seeded;
+    <span class="kw">char</span> **station_names;
+    <span class="kw">int</span>    n_named;
+    _Atomic <span class="kw">int</span> closing;
+    <span class="kw">int</span>    pool_is_borrowed;
+    pthread_mutex_t rewire_mutex;
+    pthread_mutex_t   scrap_mutex;
+    <span class="kw">struct</span> scrap_item *scrap_head;
+    pthread_t observer;
+    <span class="kw">int</span>       observer_running;
+    <span class="kw">char</span>     *observer_path;
+    <span class="kw">int</span>       observer_interval_ms;
+} cera_map_t;
+</pre>
+<p><strong>A station table belongs to one processor</strong>, and so does the pool
+that runs it.</p>
+<p>Not to one machine and not to one core: to the package, the thing
+with its own memory controller. Every core inside it shares that
+processor's fast memory, and a table living there is reachable by
+all of them at the speed everything below assumes. Two processors
+<em>can</em> share a table when the memory holding the stations is
+reachable from both, and that is the slower path and the exception.</p>
+<p>Nothing here pins a table to a processor — no affinity, no
+allocation on a particular node. What is written down is the intent,
+because the one thing that would make it impossible later is a wire
+that crosses tables, and there is now a standing reason not to have
+one beyond the software reason there always was. A program spanning
+two processors is two programs talking through their doors, not one
+program with a long wire. See
+docs/implementation-notes/090-one-table-per-processor.md.</p>
+<p>The <code>statics</code> section of a map file is notation and nothing else: a
+way to write a value down once while describing the map. Reading it
+copies the value into each port that names it, and from that moment
+the entry has done its job — there is no table, and nothing is
+shared between ports.</p>
+<p>Sharing, when it is wanted, is drawn: one station holds the value
+and everyone who needs it has an arrow from it, which costs a
+station and gains a wire somebody can see.</p>
+<p>How many station records sit on one shelf. A power of
+two, so turning a station number into a shelf and a position within
+it is one shift and one mask rather than a division.</p>
+<p>The number does not have to be guessed well, and that is the point.
+Too small and the short array of shelf pointers grows a little more
+often — and that array holds addresses, so growing it is safe and
+fast. Too large and the last shelf holds some records nobody uses, a
+few kilobytes at worst. Nothing is copied either way and no station
+ever moves either way.</p>
 <table>
-<tr><td>call</td><td>declared as</td></tr>
-<tr><td><code>cera_prepare</code></td><td><code>void cera_prepare(const char *report_path)</code></td></tr>
-<tr><td><code>cera_report_path</code></td><td><code>const char *cera_report_path(void)</code></td></tr>
-<tr><td><code>cera_wait</code></td><td><code>int cera_wait(cera_map_t *m)</code></td></tr>
-<tr><td><code>cera_capture</code></td><td><code>int cera_capture(cera_map_t *m, const char *path)</code></td></tr>
-<tr><td><code>cera_capture_now</code></td><td><code>int cera_capture_now(cera_map_t *m, const char *path)</code></td></tr>
-<tr><td><code>cera_capture_whole</code></td><td><code>int cera_capture_whole(cera_map_t *m, const char *dir)</code></td></tr>
-<tr><td><code>cera_stop_now</code></td><td><code>void cera_stop_now(cera_map_t *m, int exit_code, const char *why)</code></td></tr>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>shelves</code></td><td>The table is shelves, not one array. A flat array grows by reallocation, and reallocation moves the mutexes — a thread parked on one would be waiting at an address nobody unlocks. A table built out of shelves does not move anything: growing means allocating one more shelf and writing its pointer here. Every station already placed stays exactly where it was, mutex included, so guarantee S1 is kept rather than argued with. The alternative was lifting the mutex out of the station so the record becomes movable. That trades a shift-and-mask on the delivery path for a pointer chase on the delivery path, and breaks the sentence in this header rather than keeping it. It is written down so the choice reads as a choice.</td></tr>
+<tr><td><code>n_stations</code></td><td>Only ever grows, and is published last. A thread reading a stale, smaller count does not see the newest station, and that is harmless: a station nothing is wired to yet cannot be reached by delivery, and the wire that will reach it is drawn after the station exists. The one ordering to enforce is that the station is completely built before the count that reveals it is published.</td></tr>
+<tr><td><code>pool</code></td><td>set by cera_map_start; delivery pushes here</td></tr>
+<tr><td><code>seeded</code></td><td>How many stations the seed sweep enqueued. Zero on hand-built maps that seed by delivering.</td></tr>
+<tr><td><code>station_names</code></td><td>Station names, retained from the map file (null on hand-built maps). The engine itself never reads them — every wire is an index — but the dump must write a file that reads back, and a person watching a live view deserves names. The loader's throwaway lookup table and this are different things: that one resolved arrows and died; this one is for speaking.</td></tr>
+<tr><td><code>n_named</code></td><td>How many of them the array has room for, which is not always the station count: stations are added one at a time now, so the names grow behind them.</td></tr>
+<tr><td><code>closing</code></td><td>The outside door is shut. Set when a supervisor has politely asked the program to wind down. Delivering an argument from outside is refused from that moment, which is the whole of what "stop accepting new work" can mean here — the entrance is the only way anything outside puts work into a program, so closing it is what lets the queue actually drain and the last-sleeper rule fire. Nothing else changes. No worker is told anything, no task is discarded, no clock starts. The program ends exactly the way it would have ended on its own, which is the argument for this path: it adds no mechanism, only an early trigger for the one that already exists.</td></tr>
+<tr><td><code>pool_is_borrowed</code></td><td>True when this program was started beside another and shares its workers. It borrows the pool and must not destroy it — the program that made it owns it, and tearing down a pool other programs are still running on would take them with it.</td></tr>
+<tr><td><code>rewire_mutex</code></td><td>The rewiring lock: edge validation and list mutation are one operation under it, never two.</td></tr>
+<tr><td><code>scrap_mutex</code></td><td>The scrapyard: destination sets a rewire replaced, kept until nothing can still be walking them. It owns a lock, and not against tearing. Nothing ever reads a filed set's contents. The lock is against two hands freeing the same set, and there are two touchers where only one is obvious: rewiring sweeps, and teardown empties. Anything that touches this takes the lock, confirms the set is still filed, unfiles it, and frees it under that same hold — so a second arrival simply does not find it. The lock is a leaf: nothing is acquired while it is held. Said as a rule rather than left to be inferred, because a lock-ordering cycle is exactly what somebody builds later having had no way to know. It costs nothing this issue is trying to save. The lock being removed is the one on the delivery walk; this one is touched when wiring changes and when the program ends, never between.</td></tr>
+<tr><td><code>observer</code></td><td>The observer: a small reporting thread, not a worker, pushing nothing.</td></tr>
 </table>
+<h3>static inline cera_station_t *cera_map_s</h3>
+<pre class="code">
+<span class="kw">static</span> inline cera_station_t *cera_map_station(cera_map_t *m, <span class="kw">int</span> n)
+{
+    <span class="kw">return</span> &amp;m-&gt;shelves[n &gt;&gt; CERA_STATION_SHELF_SHIFT][n &amp; CERA_STATION_SHELF_MASK];
+}
+</pre>
+<h3>cera_map_create_empty()</h3>
+<pre class="code">
+cera_map_t *cera_map_create_empty(<span class="kw">void</span>);
+</pre>
+<p>A map with no stations at all, grown one at a time afterwards. This
+is what reading a file does now, so that reading a map and adding a
+station to a running program are the same act rather than two that
+must agree. cera_map_create is the same thing with N places reserved up
+front, kept because a great many tests know exactly how many they
+want.</p>
+<h3>cera_map_create()</h3>
+<pre class="code">
+cera_map_t *cera_map_create(<span class="kw">int</span> n_stations);
+</pre>
+<h3>cera_map_add_station()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_add_station(cera_map_t *m);
+</pre>
+<p>Make room for one more station and return its index, adding a shelf
+when the current ones are full.</p>
+<p><strong>A removed station's place is reused before the table grows.</strong> A
+freed position holds nothing stale, because removing a station is
+what removes the wires to it, so the next station placed
+can simply take it. That makes a program which adds and removes
+forever reach a steady size rather than climbing.</p>
+<p>Returns -1 if it cannot grow.</p>
+<h3>cera_map_place()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_place(cera_map_t *m, <span class="kw">int</span> station, cera_task_call_t shim, <span class="kw">int</span> kind,
+               <span class="kw">int</span> n_in_ports, <span class="kw">const</span> <span class="kw">int</span> *elem_sizes, <span class="kw">int</span> out_size);
+</pre>
+<p>Place a box at station index: its shim, its kind, one ring-buffer
+port per element size given, and the byte size of its return value
+(zero for a sink). Element sizes come from the emitted file, derived from the real C.</p>
+<h3>cera_map_in_port_start_depth()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_in_port_start_depth(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port,
+                                    <span class="kw">int</span> slots);
+</pre>
+<p>Tell one port how deep its ring buffer should start, in slots.</p>
+<p>It is a hint rather than a setting: growth covers being wrong, so
+nobody has to be right. A port never told anything starts at
+CERA_IN_PORT_DEFAULT_CAPACITY, and a program that guesses low pays a slower
+startup and nothing else. What this exists for is the case where an
+author already knows one input side outruns its siblings — the
+situation the buffer report shouts about — and would rather
+not watch it grow thirteen times to find out.</p>
+<p>Refuses a port that already holds values, because a <em>starting</em>
+depth set after the start is a different and much harder operation:
+it would have to move values that other threads may be reading.</p>
+<p><strong>Returns NULL when it took, or a sentence saying why not</strong>, so a
+caller reading a file can collect this fault along with the rest.</p>
+<h3>cera_map_in_port_convert()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_in_port_convert(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port, <span class="kw">int</span> kind);
+</pre>
+<p>Change what one port is: name the station, the port, and the tag it
+is becoming.</p>
+<p><strong>Conversion is a field write.</strong> Storage does not move. The slots
+stay exactly as they are on every path through this — not freed,
+not cleared, not drained — so whatever a producer had already
+handed over and nobody had claimed is still waiting if the port
+becomes a ring buffer again. Discarding it would throw away values
+a producer already handed over, invisibly, which is worse than
+serving them slightly late.</p>
+<p>That "slightly late" is the honest cost: a port turned into
+something else and back may deliver a value that arrived before the
+conversion after values that arrived during it. Arrival order is
+not promised, so this costs nothing that was still
+being offered — but it is a second reason for the same
+non-guarantee, and the scan is not the only thing that opens gaps.</p>
+<p>Becoming a static <strong>for the first time</strong> is refused here and goes
+through cera_map_in_port_static_text, because what a port needs in order
+to become a static is a <em>value</em>, and this call names only a tag.
+Becoming a static <strong>again</strong> is what this does, and it works because
+a constant survives being converted away exactly as the slots do.</p>
+<p>A port that has been a static and is converted away keeps its
+binding, so a port that goes static, ring, static reads the same
+value it read before. That is the same rule as the slots: nothing
+on any path through here is destroyed. It is also what keeps
+CERA_IN_PORT_NONE meaning one thing — "nobody has said yet" — rather than
+also meaning "somebody said, then said something else."</p>
+<h3>cera_map_configure_port()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_configure_port(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port,
+                               <span class="kw">int</span> source, <span class="kw">const</span> <span class="kw">char</span> *text);
+</pre>
+<p><strong>Where a port's values come from</strong>, as one operation: a station, a
+port, a source, and — when the source is a value — the value
+itself, written as text.</p>
+<p><code>source</code> is one of the port kinds. Given text, a port becoming a
+constant takes that value; given none, it returns to the value it
+held before, which a constant surviving conversion is what makes
+possible. A port with no source at all is <em>CERA_IN_PORT_NONE</em>, and a
+station holding one can never be ready.</p>
+<p><strong>Returns NULL when it took, or a sentence saying why not.</strong> The
+refusal travels upward instead of stopping the program, so a caller
+reading a file can collect every mistake in it and present them
+together rather than one per run. The string is valid until this
+thread's next refusal.</p>
+<p>Binding, converting and taking a source away were three calls with
+three shapes; they are cases of this one now. There is one
+description of what it means to give a port a source, and it is
+executable — which is what lets reading a file be a sequence of
+ordinary operations rather than a privileged path.</p>
+<h3>cera_map_check_sources()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_check_sources(cera_map_t *m);
+</pre>
+<p>Every parameter that has nowhere to get a value, collected into one
+sentence. NULL when every port on every station has a source.</p>
+<p>A port without one is the ordinary state of a station somebody has
+not finished wiring, so this is not asked while a program is being
+assembled — it is asked at the moment somebody says it is finished.
+Asking then is what lets the complaint name the station and the
+port while the person who mis-wired them is still there; a station
+with an unsourced port otherwise just never runs, and a program
+that quietly does less than it was asked to is a bad way to learn
+about a typo.</p>
+<p><strong>No exceptions.</strong> A parameter a box could do without was proposed
+and refused, because it would have been the only
+exemption to the rule that a station runs when every one of its
+slots holds a value.</p>
+<h3>cera_map_name_station()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_name_station(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">const</span> <span class="kw">char</span> *name);
+</pre>
+<p>What to call a station. NULL when taken, or a sentence saying why
+not.</p>
+<p>The engine never reads these — every wire is an index. They are for
+writing a program back out as a file that reads in again, and for a
+person watching a live view. A program with no names runs perfectly
+well; it just cannot be described on disk.</p>
+<h3>cera_map_station_set_cursor()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_station_set_cursor(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> at);
+</pre>
+<p>Put an iterator back where it had got to: which of its exits the
+next value takes.</p>
+<p>This is the one memory a station keeps, so a program written down
+mid-run and revived with its iterators reset would send the next
+value to an exit it was never going to — right shape, wrong
+behaviour, which is the worst way for a capture to be wrong.</p>
+<p>Refused on anything that is not an iterator, because there is
+nothing for it to mean: a plain station has one exit and a
+comparator chooses by comparing.</p>
+<h3>cera_map_designate_output()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_designate_output(cera_map_t *m, <span class="kw">int</span> station);
+</pre>
+<p><strong>Where a program's results come from.</strong></p>
+<p>A designated station stays an ordinary station — same shape, same
+readiness, running whatever box it was placed with or none. The
+designation adds one rule: when its output port is wired nowhere,
+values are <strong>held</strong> rather than discarded. Discarding is right for
+every other port and wrong for this one, because a program that
+computed its results and dropped them did nothing.</p>
+<p>A program may have several. A box returns one value, so a station
+has one output port, so a program output is one station; several
+results are several stations, and each gets the readiness check
+that already exists rather than a new shape.</p>
+<p><code>cera_map_output_waiting</code> says how many are held; <code>cera_map_output_take</code>
+takes the oldest, returning 1 or 0. Both exist because a caller
+asked to drain results cannot write the loop with only one of them.</p>
+<h3>cera_map_start_beside()</h3>
+<pre class="code">
+cera_map_t *cera_map_start_beside(cera_map_t *parent);
+</pre>
+<p><strong>Start a fresh program beside this one, sharing its workers.</strong></p>
+<p>Composing and starting are two different acts and this is the
+second. A program started beside another has its own station table,
+its own rewiring lock, its own everything — except the pool.</p>
+<p><strong>You cannot wire to it</strong>, and that is the point rather than a
+limitation. A wire is a station index and a port index, and an
+index only means anything inside one station table; two stations
+can be wired together exactly when they sit in the same table.
+Reaching a program started beside you is what its entrance is for.</p>
+<p>Which of the two you want follows from whether you want isolation.
+A composed program is one graph and a parent wires across the seam
+like it wires anything. A started one is separate, reached only
+through its doors, and a program that runs other programs wants
+that.</p>
+<p><strong>This is the within-one-processor case.</strong> Several programs, one
+pool, one processor's cores, reaching each other only through their
+doors. The across-processors case is the same shape with a pool
+each, and it needs nothing added here — a door does not ask where
+its caller is.</p>
+<h3>cera_map_designate_input()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_designate_input(cera_map_t *m, <span class="kw">int</span> station);
+</pre>
+<p>The other door: the station the outside is allowed to deliver to.</p>
+<p>Without it a caller reaches a program by naming one of its interior
+stations, which means knowing what they are called — rename one and
+every caller breaks. The mark is what turns internals that happen
+to be reachable into a surface, and it is what lets a parent wire
+to a sub-program without knowing anything inside it.</p>
+<p>A station cannot be both doors; being both would mean a program
+whose entrance is its exit, and asking for it is almost certainly a
+mis-named station.</p>
+<h3>cera_map_deliver_argument()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_deliver_argument(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port,
+                                 <span class="kw">const</span> <span class="kw">void</span> *value, <span class="kw">int</span> size);
+</pre>
+<p>Deliver into a program from outside it. NULL when taken, or a
+sentence saying why not.</p>
+<p>Underneath it is the ordinary delivery. What differs is who may use
+it: this refuses any station that is not a declared entrance, and
+that refusal is the whole of what gives a program a surface. The
+size is checked here because a caller from outside is the one least
+likely to be right about it — inside the graph a wire was checked
+when it was drawn, and here there is no wire.</p>
+<h3>cera_map_output_waiting()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_output_waiting(cera_map_t *m, <span class="kw">int</span> station);
+</pre>
+<h3>cera_map_output_take()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_output_take(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">void</span> *into, <span class="kw">int</span> size);
+</pre>
+<h3>cera_map_bring_up()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_bring_up(cera_map_t *m);
+</pre>
+<p>**Declare a program finished, check the whole of it, and set going
+whatever can run without waiting for an arrival.**</p>
+<p>A caller assembles a program by whatever route — reading a file,
+calling the construction surface, or both — and then says it is
+finished. There is no privileged loading state.</p>
+<p><strong>Repeatable.</strong> A station added to a running program is checked and
+started by the next call; a station already started is not started
+again. That is what makes "add a station now, wire it in a moment,
+bring it up" an ordinary sequence rather than a window of
+invalidity.</p>
+<p>Returns NULL when the program was sound, or a collected complaint
+naming every fault found. **Nothing is started when anything is
+wrong**, because a program that runs half of what it was asked to
+is worse than one that refuses.</p>
+<h3>cera_map_connect()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_connect(cera_map_t *m, <span class="kw">int</span> from_station, <span class="kw">int</span> port,
+                 <span class="kw">int</span> to_station, <span class="kw">int</span> to_port);
+</pre>
+<p>Wire: from a station's output port to a destination station's port.
+Ports are created on first use, in index order. Repeat with the
+same port to fan out.</p>
+<h3>cera_map_start()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_start(cera_map_t *m, <span class="kw">int</span> n_workers);
+</pre>
+<p>cera_map_start creates the pool with delivery as its finish hook.
+Values injected before cera_pool_release(m-&gt;pool) are the seed.</p>
+<h3>cera_map_in_port_depth()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_in_port_depth(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port);
+</pre>
+<p>How many values are waiting in a port right now. Takes the mutex.
+Exists for demos and diagnostics, not for engine decisions.</p>
+<h3>cera_map_destroy()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_destroy(cera_map_t *m);
+</pre>
+<h2>020 — delivery, readiness, routing</h2>
+<h3>cera_map_station_start_after()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_station_start_after(cera_map_t *m, <span class="kw">int</span> station,
+                            <span class="kw">void</span> (*while_locked)(<span class="kw">void</span> *), <span class="kw">void</span> *ctx);
+</pre>
+<p>The same thing, with a piece of work done inside the station's hold
+before the check runs.</p>
+<p>There is one caller and it is writing a static. A write and the
+readiness check it triggers both want the station's mutex, and two
+acquisitions would leave a gap between the value changing and the
+question being asked. Handing the work in rather than exporting a
+lock-already-held variant keeps every acquisition of a station's
+mutex inside the delivery file, where the discipline is written
+down once.</p>
+<h3>cera_map_station_try_start()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_station_try_start(cera_map_t *m, <span class="kw">int</span> station);
+</pre>
+<p>Ask a station whether it is ready, and if it is, claim one value
+from every port, build a task, and push it. Returns whether one
+became due.</p>
+<p>This is the interior of a delivery with the delivering taken out,
+and it exists because two other things needed exactly that and were
+each doing their own version. The seed sweep enqueued a station
+without asking whether it was ready at all, which was safe only
+while an unasked question happened to have the same answer. Writing
+a static is supposed to run the ordinary readiness check on its
+station — that is what replaced the pull path, and it is what makes
+a chain of stations wired through static ports into a recalculation
+graph — and it was not running one.</p>
+<p>A write cannot make something run that could not run anyway,
+because the check it triggers is the ordinary one: an empty ring
+port still answers no, and the engine will not invent a value for
+it.</p>
+<h3>cera_map_station_keep_starting()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_station_keep_starting(cera_map_t *m, <span class="kw">int</span> station);
+</pre>
+<p>The same drain, for a caller that has already asked once — a
+constant being written does the write and the first check inside one
+lock hold, deliberately, so that there is no gap between the value
+changing and the question being asked. This continues from there.</p>
+<p>A station with no buffer returns zero without asking anything,
+because nothing accumulates where there is nothing to accumulate in,
+and asking again would start it a second time for one change.</p>
+<h3>cera_map_station_start_while_ready()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_station_start_while_ready(cera_map_t *m, <span class="kw">int</span> station);
+</pre>
+<p>Keep starting while the station stays ready, and say how many tasks
+became due.</p>
+<p>Asking once is enough on the delivery path — one value arrives, at
+most one task can become due. It is not enough when a port fills
+<em>all at once</em> while another port has values stacked up in it: a
+constant being bound, or a revived program putting a captured queue
+back. The station is then ready several times over, and asking once
+strands the rest.</p>
+<p>A station whose every port is a constant is ready forever, because
+a constant is never consumed. Such a station is asked once and left
+alone, which is right: nothing accumulates where there is no
+buffer.</p>
+<h3>cera_map_deliver_value()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_deliver_value(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port, <span class="kw">const</span> <span class="kw">void</span> *value);
+</pre>
+<p>Deliver one value into one port of one station: take the mutex,
+write, run the readiness check, claim if complete, release, then
+build and push a task if one became due. This is both the interior
+of the delivery walk and the way a test or a seed drops a value
+into a map from outside. Returns whether a task became due, which
+the statistics read as "the deliverer produced one".</p>
+<h2>027 — support for generated code</h2>
+<h3>cera_compare_fn_t</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">int</span> (*cera_compare_fn_t)(<span class="kw">const</span> <span class="kw">void</span> *a, <span class="kw">const</span> <span class="kw">void</span> *b);
+</pre>
+<p>Three-way comparison over the raw bytes of two values of one type,
+returning the sign of a minus b. Generic in signature so one table
+can hold every type's; each generated body copies the bytes into
+real typed variables first, because comparing raw bytes gives
+wrong answers — a negative float reads as larger than a positive
+one byte-wise.</p>
+<h3>enum field_kind</h3>
+<pre class="code">
+<span class="kw">enum</span> field_kind {
+    CERA_FIELD_INT = 0,     <span class="cm">/* signed integers of any width */</span>
+    CERA_FIELD_UINT,        <span class="cm">/* unsigned integers of any width */</span>
+    CERA_FIELD_FLOAT,       <span class="cm">/* float or double */</span>
+    CERA_FIELD_STRING,      <span class="cm">/* a char array, fixed length, text inside */</span>
+    CERA_FIELD_STRUCT,      <span class="cm">/* another struct, by its own field table */</span>
+};
+</pre>
+<p>What a struct field fundamentally is, for the statics reader.</p>
+<h3>struct field_info / struct_info</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> struct_info cera_struct_info_t;
+<span class="kw">typedef</span> <span class="kw">struct</span> field_info {
+    <span class="kw">const</span> <span class="kw">char</span>           *name;
+    <span class="kw">int</span>                   offset;
+    <span class="kw">int</span>                   size;
+    <span class="kw">unsigned</span> <span class="kw">char</span>         kind;
+    <span class="kw">const</span> cera_struct_info_t  *nested;
+    <span class="kw">int</span>                   array_len;
+} cera_field_info_t;
+<span class="kw">struct</span> struct_info {
+    <span class="kw">const</span> <span class="kw">char</span>          *name;
+    <span class="kw">int</span>                  size;
+    <span class="kw">int</span>                  n_fields;
+    <span class="kw">const</span> cera_field_info_t  *fields;
+};
+</pre>
+<table>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>offset</code></td><td>offsetof, compiler-computed</td></tr>
+<tr><td><code>size</code></td><td>sizeof the member</td></tr>
+<tr><td><code>nested</code></td><td>CERA_FIELD_STRUCT only</td></tr>
+<tr><td><code>array_len</code></td><td>CERA_FIELD_STRING only</td></tr>
+</table>
+<h3>struct box_place</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> box_place {
+    <span class="kw">const</span> <span class="kw">char</span> *name;
+    <span class="kw">const</span> <span class="kw">char</span> *address;
+    <span class="kw">void</span>      (*place)(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> kind);
+} cera_box_place_t;
+<span class="kw">extern</span> <span class="kw">const</span> cera_box_place_t    box_places[];
+<span class="kw">extern</span> <span class="kw">const</span> <span class="kw">int</span>            n_box_places;
+<span class="kw">extern</span> <span class="kw">const</span> cera_struct_info_t  struct_layouts[];
+<span class="kw">extern</span> <span class="kw">const</span> <span class="kw">int</span>            n_struct_layouts;
+</pre>
+<p>One box's <strong>placement function</strong>, and the two names it answers to.</p>
+<p>The generator emits a function per box that writes a station
+directly — the shim, the slot sizes, the return size, the type
+names, the comparison — with every number a <code>sizeof</code> the compiler
+folds into an immediate. A placement function <em>is</em> hand placement,
+written by the generator instead of by a person, which is why there
+are not two doors into the engine: placing by name is only a way of
+finding which generated hand-placement to call.</p>
+<p><strong>This table is temporary and says so.</strong> Once the generator reads
+maps itself it emits the calls, and a placement function is reached
+by being called rather than by being found. Both names
+are carried meanwhile: the bare function name, which is what map
+files say today, and the file-and-function address, which is what
+they will say.</p>
+<table>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>name</code></td><td>the bare function name, as maps say today</td></tr>
+<tr><td><code>address</code></td><td>file:function, as maps will say</td></tr>
+</table>
+<h3>writing a value down and reading it back</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> cera_where {
+    <span class="kw">int</span> station;
+    <span class="kw">int</span> port;
+} cera_where_t;
+<span class="kw">typedef</span> <span class="kw">struct</span> cera_textbuf {
+    <span class="kw">char</span> *out;
+    <span class="kw">int</span>   room;
+    <span class="kw">int</span>   used;
+} cera_textbuf_t;
+<span class="kw">typedef</span> <span class="kw">struct</span> struct_text {
+    <span class="kw">const</span> <span class="kw">char</span> *name;
+    <span class="kw">int</span>         size;
+    <span class="kw">const</span> <span class="kw">char</span> *(*read)(<span class="kw">const</span> <span class="kw">char</span> *p, <span class="kw">void</span> *out, <span class="kw">const</span> cera_where_t *w);
+    <span class="kw">void</span>        (*write)(<span class="kw">const</span> <span class="kw">void</span> *bytes, cera_textbuf_t *tb);
+} cera_struct_text_t;
+<span class="kw">extern</span> <span class="kw">const</span> cera_struct_text_t struct_texts[];
+<span class="kw">extern</span> <span class="kw">const</span> <span class="kw">int</span>           n_struct_texts;
+</pre>
+<p>Where a fault was, threaded through so a refusal can name somewhere
+a person can go and look: a station and a port, which is an address
+in the program.</p>
+<p>A growing piece of text that never overflows and always reports how
+much it wanted, so a caller that was cut short can tell, and ask
+again with more room. The same contract snprintf offers.</p>
+<p>One struct's two directions. A port holding a struct constant is
+handed this pair at placement, the same way it is handed everything
+else it needs, so writing a constant down follows a pointer instead
+of searching anything.</p>
+<table>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>size</code></td><td>How many bytes the reader will write. Carried so that a port whose width disagrees with the type is refused before the write rather than overrun by it — the one thing the pair cannot check for itself, since it is handed a destination and told nothing about how much room is there.</td></tr>
+</table>
+<h3>box sources, as text</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> box_source {
+    <span class="kw">const</span> <span class="kw">char</span> *path;
+    <span class="kw">const</span> <span class="kw">char</span> *text;
+} cera_box_source_t;
+<span class="kw">extern</span> <span class="kw">const</span> cera_box_source_t cera_box_sources[];
+<span class="kw">extern</span> <span class="kw">const</span> <span class="kw">int</span>          cera_n_box_sources;
+</pre>
+<p><strong>The C a program was made from, carried inside it.</strong></p>
+<p>The generated file already includes each box source whole so the
+compiler can see the types and inline each box into its shim. This
+is the same text emitted a second time as data, so a running
+program can say what its boxes look like — and so a program handed
+to somebody else is not a binary that needs a source tree beside it
+before it can do anything with new code.</p>
+<p>The text is exactly what was compiled, which is the point of
+carrying it: a source reported from here can never have changed on
+disk since, because this copy did not come from disk.</p>
+<p>The path is shortened against the project root, so two machines
+building the same tree emit the same file.</p>
+<h3>maps compiled into code</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> map_build {
+    <span class="kw">const</span> <span class="kw">char</span> *path;
+    <span class="kw">int</span>         n_stations;
+    <span class="kw">int</span>       (*build)(cera_map_t *m, <span class="kw">int</span> *landed, <span class="kw">int</span> cap);
+} cera_map_build_t;
+<span class="kw">extern</span> <span class="kw">const</span> cera_map_build_t cera_map_builds[];
+<span class="kw">extern</span> <span class="kw">const</span> <span class="kw">int</span>         cera_n_map_builds;
+</pre>
+<p><strong>A map the build was told about, as the calls it describes.</strong></p>
+<p>The text was a thing a program parsed while it ran; it becomes a
+blueprint for the compilation instead. Every box name in it was
+resolved on the author's machine and became a direct call to that
+box's placement function, so **no box name survives into the
+running program** and a misspelled one fails the build rather than
+somebody else's startup.</p>
+<p>Station names do survive, and that is not an inconsistency: a box
+name was a question the engine had to answer at run time and no
+longer is, while a station name is data the program carries about
+itself so it can be written back out as a file that reads in again.</p>
+<p>The built function works on an empty program and on a crowded one,
+because it records where each station landed rather than assuming
+they are numbered from zero.</p>
+<table>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>n_stations</code></td><td>How many stations the description declares. Known when it was compiled, so a caller that needs to record where they land can size its table before building rather than guessing or building twice.</td></tr>
+</table>
+<h3>cera_box_place_find()</h3>
+<pre class="code">
+<span class="kw">const</span> cera_box_place_t *cera_box_place_find(<span class="kw">const</span> <span class="kw">char</span> *name);
+</pre>
+<p>Which placement function writes this box's station. Compiled-in
+rows first, then anything compiled after the program started.</p>
+<h3>cera_struct_text_find()</h3>
+<pre class="code">
+<span class="kw">const</span> cera_struct_text_t *cera_struct_text_find(<span class="kw">const</span> <span class="kw">char</span> *type_name);
+</pre>
+<p>One type's pair by name, or NULL. Wanted at placement and by a
+caller building a port by hand; nothing on the delivery path asks.</p>
+<h3>cera_struct_find()</h3>
+<pre class="code">
+<span class="kw">const</span> cera_struct_info_t *cera_struct_find(<span class="kw">const</span> <span class="kw">char</span> *type_name);
+</pre>
+<h3>cera_emitted_print()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_emitted_print(FILE *out);
+</pre>
+<p>Every box, its parameter types and sizes, its return, its task
+size — so a build problem is diagnosed by reading what was
+emitted, not by guessing.</p>
+<h3>cera_box_source_text()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_box_source_text(<span class="kw">const</span> <span class="kw">char</span> *path);
+</pre>
+<p>The text of one box source, by the path the build knew it as, or
+NULL. A bare basename matches too, because that is how a person
+refers to a file they can see.</p>
+<h3>cera_map_build_find()</h3>
+<pre class="code">
+<span class="kw">const</span> cera_map_build_t *cera_map_build_find(<span class="kw">const</span> <span class="kw">char</span> *path);
+</pre>
+<p>The build function for one description, by the path the build knew
+it as, or by the bare name somebody would type. NULL when this
+program was not built with that map.</p>
+<h3>cera_map_place_box()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_place_box(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">const</span> <span class="kw">char</span> *box_name, <span class="kw">int</span> kind);
+</pre>
+<p>Place a box at a station by name, with every size drawn from the
+emitted file, so element sizes are correct by construction. A
+comparator gets its extra threshold port here, typed to the box's
+return value, so the loader needs no special case.</p>
+<h2>033 — constants, and values from text</h2>
+<h3>cera_text_expect()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_text_expect(<span class="kw">const</span> <span class="kw">char</span> *p, <span class="kw">char</span> c, <span class="kw">const</span> cera_where_t *w,
+                             <span class="kw">const</span> <span class="kw">char</span> *what);
+</pre>
+<p>Reading. Each returns where it stopped; each refuses fatally,
+naming the station, the port and the field.</p>
+<h3>cera_text_signed()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_text_signed(<span class="kw">const</span> <span class="kw">char</span> *p, <span class="kw">void</span> *out, <span class="kw">int</span> size,
+                             <span class="kw">const</span> cera_where_t *w, <span class="kw">const</span> <span class="kw">char</span> *field);
+</pre>
+<h3>cera_text_unsigned()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_text_unsigned(<span class="kw">const</span> <span class="kw">char</span> *p, <span class="kw">void</span> *out, <span class="kw">int</span> size,
+                               <span class="kw">const</span> cera_where_t *w, <span class="kw">const</span> <span class="kw">char</span> *field);
+</pre>
+<h3>cera_text_floating()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_text_floating(<span class="kw">const</span> <span class="kw">char</span> *p, <span class="kw">void</span> *out, <span class="kw">int</span> size,
+                               <span class="kw">const</span> cera_where_t *w, <span class="kw">const</span> <span class="kw">char</span> *field);
+</pre>
+<h3>cera_text_chars()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_text_chars(<span class="kw">const</span> <span class="kw">char</span> *p, <span class="kw">char</span> *out, <span class="kw">int</span> room,
+                            <span class="kw">const</span> cera_where_t *w, <span class="kw">const</span> <span class="kw">char</span> *field);
+</pre>
+<p>A char array, filled to <code>room</code> bytes and zero-padded. Bounded by
+the array rather than by a terminator, because a field filled
+exactly to its width has no room for one.</p>
+<h3>cera_text_put()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_text_put(cera_textbuf_t *tb, <span class="kw">const</span> <span class="kw">char</span> *literal);
+</pre>
+<p>Writing. What comes out is what would go back in.</p>
+<h3>cera_text_put_signed()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_text_put_signed(cera_textbuf_t *tb, <span class="kw">const</span> <span class="kw">void</span> *bytes, <span class="kw">int</span> size);
+</pre>
+<h3>cera_text_put_unsigned()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_text_put_unsigned(cera_textbuf_t *tb, <span class="kw">const</span> <span class="kw">void</span> *bytes, <span class="kw">int</span> size);
+</pre>
+<h3>cera_text_put_floating()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_text_put_floating(cera_textbuf_t *tb, <span class="kw">const</span> <span class="kw">void</span> *bytes, <span class="kw">int</span> size);
+</pre>
+<h3>cera_text_put_chars()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_text_put_chars(cera_textbuf_t *tb, <span class="kw">const</span> <span class="kw">char</span> *chars, <span class="kw">int</span> room);
+</pre>
+<h3>cera_map_in_port_static_text()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_in_port_static_text(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port,
+                             <span class="kw">const</span> <span class="kw">char</span> *text);
+</pre>
+<p>Give a port a constant, written as text, and make it a static.</p>
+<p>The text is parsed here into the port's own storage, shaped by the
+port's declared type — which is why only stations placed by name
+can hold statics: turning <code>{ 5, 2.0, { 0, 0, 0 }, "hey there", 2 }</code>
+into bytes means knowing the field layout, and the type is where
+that comes from.</p>
+<p>Nothing is retained afterwards. A map file's <code>statics</code> section is
+notation: a way to write a value down once and point ports at it by
+number while the file is being read. Two ports given the same
+entry's text end up with two independent values, and writing one
+does not disturb the other.</p>
+<p>A static is always full, never consumed, and never gates readiness —
+but setting one runs the readiness check on its station, since a
+port that was the last one missing is now filled.</p>
+<h3>cera_map_deliver_argument_text()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_deliver_argument_text(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port,
+                                      <span class="kw">const</span> <span class="kw">char</span> *text);
+</pre>
+<p><strong>Arguments written as text.</strong> The constant reader pointed at a
+command line instead of at a map file — same code, same
+compiler-computed offsets, same messages naming the field that was
+wrong, and struct arguments in brace syntax for free.</p>
+<p><code>cera_map_deliver_command_line</code> takes the whole of it: a program's
+arguments are the input ports of the stations it declared as
+entrances, in station order and then port order. It holds a
+standing promise while it delivers and drops it afterwards, which
+is what stops the program deciding it has finished between two
+arguments and what lets it end once they are all in.</p>
+<p>A count that does not match is refused rather than partly
+delivered: half a command line is a program waiting forever for the
+rest, which is a worse way to learn about a typo than being told.</p>
+<p><strong>A string argument's characters are never freed</strong>, deliberately.
+The value delivered for a string port <em>is</em> a pointer, and what it
+points at has to outlive every box that might read it — which is
+the whole run. A command line lives as long as the program does.</p>
+<h3>cera_map_deliver_command_line()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_deliver_command_line(cera_map_t *m, <span class="kw">int</span> argc, <span class="kw">char</span> **argv);
+</pre>
+<h3>cera_map_in_port_queue_text()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_in_port_queue_text(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port,
+                                   <span class="kw">const</span> <span class="kw">char</span> *text);
+</pre>
+<p>Values put back into a buffer, from the text a capture wrote:
+comma separated, read one at a time because a struct value has
+commas inside it.</p>
+<p>Each goes in through the ordinary delivery, so the readiness check
+runs and the tasks that form are the tasks that would have formed.
+Nothing is reconstructed; the same door is used.</p>
+<p>Returns NULL, or a refusal naming what went wrong.</p>
+<h3>cera_map_in_port_static_write()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_in_port_static_write(cera_map_t *m, <span class="kw">int</span> station, <span class="kw">int</span> port,
+                           <span class="kw">const</span> <span class="kw">void</span> *bytes, <span class="kw">int</span> size);
+</pre>
+<p>Change a static while the program runs. It names a station and a
+port, because that is where the value lives, and it is size-checked
+against what that port holds.</p>
+<p>It takes the station's own mutex — the one the claim already takes
+— so no claim can see a half-written value. That matters for
+anything wider than a machine word: a struct half-overwritten while
+a claim copies it yields fields that were never simultaneously
+true, which is not theoretical and was demonstrated.</p>
+<p><strong>Writing the value the port already holds still counts</strong>, and the
+station is asked to run again. A write is a statement — the value
+is now this — rather than a report of a difference, so whether the
+bytes happen to match is a fact about the previous value, which the
+caller said nothing about. Comparing would also be unreliable: a
+struct arrives as raw bytes, padding included, so two writes meaning
+one value can differ where nobody wrote anything.</p>
+<p>Like setting one, writing one runs the readiness check on the
+station — and keeps asking while it stays ready, so a buffer with
+work stacked up in it drains rather than releasing one task.
+Writing does not <em>consume</em> anything, so a station that was already
+able to run runs again, which is what makes a chain of stations
+wired through static ports recalculate.</p>
+<p><strong>A box cannot write a static.</strong> A box that needs to affect
+something later in the run returns a value and the value is wired
+somewhere. Every writer is outside the graph: a debugger, a control
+socket, a person turning a knob, or a parent program configuring a
+child.</p>
+<h2>042 — reading a description</h2>
+<h3>cera_map_instance_t</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> map_instance {
+    <span class="kw">int</span> *station;
+    <span class="kw">int</span>  count;
+} cera_map_instance_t;
+</pre>
+<p><strong>A description brought inside a program that already exists.</strong></p>
+<p>Reading a file into a fresh program is this with the program fixed
+at "a new empty one", which is what it always was. What changes is
+that the program may already have stations in it, so a description
+is a <strong>template being instantiated</strong> rather than a program being
+merged: new stations are built for its stations and wired the way
+it says, and one description can be instantiated as many times into
+one program as anybody likes with nothing shared between the
+copies.</p>
+<p><strong>Nothing that already exists is renumbered</strong>, so the invariant
+everything here rests on — an index means what it meant — is never
+approached. What the description says and where its stations land
+are two different numbers, related by a table rather than by an
+offset: adding a station hands back a <em>freed</em> place before it grows
+the table, so a program that has had removals gets whatever holes
+exist, in whatever order. The offset is what the translation
+degenerates to when nothing has been removed.</p>
+<p>Legal at any moment, because every operation it is made of is.</p>
+<table>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>station</code></td><td>Where each of the description's stations landed, in the order the description declared them. The engine needs it; a parent should want the doors instead.</td></tr>
+</table>
+<table>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>station</code></td><td>Where each of the description's stations landed, in the order the description declared them. The engine needs it; a parent should want the doors instead.</td></tr>
+</table>
+<h3>cera_map_part_t</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">struct</span> map_part {
+    <span class="kw">int</span> entrance;
+    <span class="kw">int</span> result;
+} cera_map_part_t;
+</pre>
+<p><strong>Adding a box and adding a map are one operation.</strong></p>
+<p>A map is a list of boxes and the wiring between them; a box is a
+list of one. Adding a map walks its list, instantiates each box and
+connects them the way it says; adding a box walks a list of length
+one and connects nothing.</p>
+<p><strong>A part is where values go in and where they come out.</strong> For a map
+those are the stations it declared as doors. For a single box they
+are the same station, because a box's own input ports are its way
+in and its own output port is its way out — a box is a map of one
+station whose doors are itself.</p>
+<p>That is what lets a handle be passed around without ever being
+taken apart: everything that consumes one takes it whole, so
+nothing has to exist whose only job is to pull a field out of it.</p>
+<p>Which kind a name refers to is <strong>resolved rather than guessed</strong>: a
+box lives in the binary and a description lives on disk, both are
+looked for, and finding both or neither is refused with the places
+that were searched named.</p>
+<table>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>entrance</code></td><td>where values go in, or -1 if nothing may be fed</td></tr>
+<tr><td><code>result</code></td><td>where values come out</td></tr>
+</table>
+<table>
+<tr><td>field</td><td>meaning</td></tr>
+<tr><td><code>entrance</code></td><td>where values go in, or -1 if nothing may be fed</td></tr>
+<tr><td><code>result</code></td><td>where values come out</td></tr>
+</table>
+<h3>cera_map_load_file()</h3>
+<pre class="code">
+cera_map_t *cera_map_load_file(<span class="kw">const</span> <span class="kw">char</span> *path, <span class="kw">int</span> n_workers);
+</pre>
+<p>The whole journey: parse, build every station from its placement function
+(first pass), resolve and type-check every arrow (second pass),
+validate what needs the whole map, start the pool with its workers
+parked, and seed. The caller releases the pool when ready:</p>
+<p>  cera_map_t *m = cera_map_load_file("program.map", 0);
+  cera_pool_release(m-&gt;pool);
+  cera_pool_join(m-&gt;pool);
+  cera_map_destroy(m);</p>
+<p>Every failure between here and the seed is fatal and names its
+station; validation failures are collected and printed together
+before stopping, because someone fixing a new map wants the whole
+list.</p>
+<h3>cera_map_load_salvage()</h3>
+<pre class="code">
+cera_map_t *cera_map_load_salvage(<span class="kw">const</span> <span class="kw">char</span> *path, <span class="kw">int</span> n_workers);
+</pre>
+<p>The same, for an artifact that says at the top that it lost work.
+Reading one through the ordinary door is refused,
+because a program quietly missing results somebody computed is the
+failure this engine refuses everywhere. Salvaging is a different
+act and has a different name so that whoever does it has said out
+loud that they know what is missing.</p>
+<h3>cera_map_instantiate_file()</h3>
+<pre class="code">
+cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, <span class="kw">const</span> <span class="kw">char</span> *path);
+</pre>
+<h3>cera_map_instance_entrance()</h3>
+<pre class="code">
+<span class="kw">int</span>  cera_map_instance_entrance(cera_map_t *m, <span class="kw">const</span> cera_map_instance_t *in, <span class="kw">int</span> nth);
+</pre>
+<p><strong>The nth door of an instance facing that way</strong>, or -1. This is the
+whole of what a parent is entitled to know about something it
+brought inside itself: everything that is not a door belongs to the
+description's author to rename or restructure.</p>
+<h3>cera_map_instance_result()</h3>
+<pre class="code">
+<span class="kw">int</span>  cera_map_instance_result(cera_map_t *m, <span class="kw">const</span> cera_map_instance_t *in, <span class="kw">int</span> nth);
+</pre>
+<h3>cera_map_instance_free()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_instance_free(cera_map_instance_t *in);
+</pre>
+<h3>cera_map_add_part()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_add_part(cera_map_t *m, <span class="kw">const</span> <span class="kw">char</span> *what, cera_map_part_t *out);
+</pre>
+<h3>cera_map_connect_parts()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, <span class="kw">int</span> from_port,
+                              cera_map_part_t to, <span class="kw">int</span> to_port);
+</pre>
+<h3>cera_map_seed_count()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_map_seed_count(cera_map_t *m);
+</pre>
+<p>How many stations the seed enqueued on load — a map that seeds one
+when its author expected ten has a wiring mistake.</p>
+<h2>050 — reports and the observer</h2>
+<h3>enum report_order</h3>
+<pre class="code">
+<span class="kw">enum</span> report_order {
+    CERA_REPORT_BY_TIME = 0,
+    CERA_REPORT_BY_CONTENTION,
+    CERA_REPORT_BY_COUNT,
+    CERA_REPORT_ORDER_COUNT
+};
+</pre>
+<p>Per station: runs, tasks produced for others, and — when compiled
+with CERA_STATS — time inside the box and time spent waiting on the
+station's mutex. Three orderings of the same data, because the
+interesting station is a different one under each.</p>
+<p>Nothing pulls, so a station's own box time is the whole of its cost.</p>
+<h3>cera_map_report_buffers()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_report_buffers(cera_map_t *m, FILE *out);
+</pre>
+<p>Every port's growth story: doublings, current capacity, high-water
+occupancy — plus the pool ring's own, because the two piles form
+in different places. High water matters
+more than capacity: a thousand-slot buffer that held two values
+had one bad moment; one that held nine hundred is a bottleneck.</p>
+<h3>cera_map_report_stations()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_report_stations(cera_map_t *m, FILE *out, <span class="kw">int</span> order);
+</pre>
+<h3>cera_stats_box_time()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_stats_box_time(cera_task_t *t, <span class="kw">long</span> ns);
+</pre>
+<p>The shims emitted by the generator call the first of these around
+every box run when CERA_STATS is defined; the engine calls the
+rest from the delivery path. All of them are cheap atomics on the
+station's own counters; all of the <em>timing</em> callers compile out
+without the define.</p>
+<h3>cera_map_observe_start()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_observe_start(cera_map_t *m, <span class="kw">const</span> <span class="kw">char</span> *path, <span class="kw">int</span> interval_ms);
+</pre>
+<p>Periodic emission of both reports to a file, from a small thread
+that is not a worker and pushes nothing (so termination stays
+sound). An interval of zero refuses to start: diagnostics nobody
+reads are a background thread doing nothing useful.</p>
+<h3>cera_map_observe_stop()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_observe_stop(cera_map_t *m);
+</pre>
+<h3>cera_map_report_shutdown()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_report_shutdown(cera_map_t *m);
+</pre>
+<p>Called by cera_map_destroy: any port grown past the shout threshold is
+named on stderr, so a quietly-absorbing map gets decided about.</p>
+<h2>051 — a live map written back out</h2>
+<h3>cera_map_dump()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_map_dump(cera_map_t *m, FILE *out);
+</pre>
+<p>Write the in-memory station table back out in the map file format,
+derived facts as comments beside the lines that parse. Dumped from
+the table, never from any remembered text: the table is what
+exists, and any disagreement with the original file is a loader
+bug nothing else would catch. Requires a map loaded from a file
+(names retained); refuses a hand-built map by name.</p>
+<h2>052 — changing a running program</h2>
+<h3>cera_map_wire()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_wire(cera_map_t *m, <span class="kw">int</span> from_station, <span class="kw">int</span> port,
+                     <span class="kw">int</span> to_station, <span class="kw">int</span> to_port);
+</pre>
+<p>Draw a wire from a station's output port to another station's input
+port, <strong>at any moment</strong> — while a program is being assembled or on
+a running one with workers in flight. NULL when drawn, or a
+sentence saying why not.</p>
+<p>There is one implementation and it applies every rule, because the
+rules were never about <em>when</em>. Construction and live editing used
+to have one each, and construction's was quietly the weaker: it
+never asked whether the destination was a buffer and never compared
+the widths, so a program could be built by hand that the same
+program read from a file would have been refused.</p>
+<h3>cera_map_unwire()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_unwire(cera_map_t *m, <span class="kw">int</span> from_station, <span class="kw">int</span> port,
+                       <span class="kw">int</span> to_station, <span class="kw">int</span> to_port);
+</pre>
+<p>Cut one wire on a live map, by rebuilding the destination list
+without it. <code>cera_map_unwire</code> hands a refusal back so a caller can
+collect it; <code>cera_map_disconnect</code> stops the program.</p>
+<p>There are two faces and not three: a caller either collects the
+refusal or the program stops. Nothing prints a refusal and returns
+a code that can be ignored, which would leave a program running
+that somebody believes they just edited successfully.</p>
+<h3>cera_map_disconnect()</h3>
+<pre class="code">
+<span class="kw">void</span>        cera_map_disconnect(cera_map_t *m, <span class="kw">int</span> from_station, <span class="kw">int</span> port,
+                           <span class="kw">int</span> to_station, <span class="kw">int</span> to_port);
+</pre>
+<h3>cera_map_remove_station()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_map_remove_station(cera_map_t *m, <span class="kw">int</span> station);
+</pre>
+<p>Take a station out of a running program and free its place for the
+next one.</p>
+<p><strong>Removing the wires that name it is the first thing it does</strong>, and
+that is what makes a version tag on every wire unnecessary. A wire
+exists only as a destination record on some station's output port,
+so walking every station, every output port, every destination
+finds all of them — nothing else in the engine names a station.
+With none left, nothing stale can survive to be followed, and the
+place can be reused with no tag, no version, and no cost anywhere
+on the delivery path.</p>
+<p>The guarantee is that a wire never names a station that is not
+there, held by removal removing the wires to it.</p>
+<p>The station's ports and buffers go to the scrapyard rather than
+being freed, because a worker may be running a task from this
+station right now and will touch them when it finishes.</p>
+<p>Returns 0, or -1 with a reason on stderr. What it cannot see: a
+caller <strong>outside</strong> the map holding on to this station's index. The
+input station deliberately does not remember who delivered into it,
+so there is nothing to walk. That is undefined rather than
+defended — a program is reached through its input and output
+stations, and holding anything else across a removal is your own
+affair.</p>
+<h2>074 — boxes and maps compiled at run time</h2>
+<h3>cera_late_source_dir()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_late_source_dir(<span class="kw">void</span>);
+</pre>
+<p>Where saved sources go, so a reloader can find one from a box's
+name alone.</p>
+<h3>cera_late_box_count()</h3>
+<pre class="code">
+<span class="kw">int</span>                cera_late_box_count(<span class="kw">void</span>);
+</pre>
+<p>The boxes added after the program started, in the order they
+arrived. The compiled-in ones are not included: those are
+box_places and have always been reachable directly.</p>
+<p>Lookup by name goes through cera_box_place_find, which walks both, so
+almost nothing needs these. They exist for a report that wants to
+say what a program has grown, and for the tests.</p>
+<h3>cera_late_box_at()</h3>
+<pre class="code">
+<span class="kw">const</span> cera_box_place_t *cera_late_box_at(<span class="kw">int</span> i);
+</pre>
+<h3>cera_late_source_text()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_late_source_text(<span class="kw">const</span> <span class="kw">char</span> *path);
+</pre>
+<p><strong>The C one late-arriving source was compiled from</strong>, by the path
+it was compiled under, or NULL.</p>
+<p>The text is not copied here and nothing allocates: a loaded object
+carries its own source as a C array
+(<a href="done-311c-source-rides-in-the-binary.html">311c</a>),
+exactly as the program's own generated file does, so this returns a
+pointer into the loaded object and lives as long as it does.</p>
+<p>Callers should reach for <code>cera_box_source_text</code> instead, which asks this
+after asking what the build compiled in. Two lookups exist because
+the two tables live in different objects; one question is asked, and
+whether a box arrived early or late is not part of it.</p>
+<h3>cera_late_unload_box()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_late_unload_box(cera_map_t *m, <span class="kw">const</span> <span class="kw">char</span> *name);
+</pre>
+<p>Unload a box added while the program ran, freeing the library its
+code came in.</p>
+<p><strong>Refused while any station in the given map places it.</strong> Unloading
+code a station names is exactly the crash this is built to avoid,
+and the check is the cheap half of the problem.</p>
+<p>The expensive half is that a worker may be <em>inside</em> that code right
+now, having picked up a task for it a moment ago. That is answered
+by the same per-worker counter the scrapyard uses — the
+counter deliberately spans a whole task rather than a delivery
+walk, so it answers "might somebody be inside this box" and "might
+somebody be inside this station" with one number. The library is
+handed to the map's scrapyard and closed once nobody can be in it.</p>
+<p><strong>What it checks is the map you hand it.</strong> A process running
+several maps could have another one placing this box, and nothing
+here can see that, because nothing in this engine is process-wide
+and there is no list of running maps to consult. Unloading a box
+another map places is the caller's to avoid; it is stated rather
+than defended, which is the same footing as reaching into a program
+by anything other than its input and output stations.</p>
+<p>Returns 0, or -1 with a reason on stderr.</p>
+<h3>cera_late_spill_sources()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_late_spill_sources(<span class="kw">const</span> <span class="kw">char</span> *dir);
+</pre>
+<p>Write every source this program is made of into a directory, under
+the paths it was compiled as — what the build put in, and everything
+that has arrived since.</p>
+<p>This is what lets a captured program be built again somewhere else.
+A program that grew boxes is made of more than its build compiled,
+and a description of one names boxes whose source exists nowhere on
+the machine that reads it. Written beside the description, at the
+paths the description addresses them by, the two together are a
+program somebody can build.</p>
+<p>Returns how many were written, or -1 with a reason on stderr.</p>
+<h3>cera_late_compile_map()</h3>
+<pre class="code">
+<span class="kw">const</span> cera_map_build_t *cera_late_compile_map(<span class="kw">const</span> <span class="kw">char</span> *map_text);
+</pre>
+<p><strong>A description handed to a running program, compiled into it.</strong></p>
+<p>The text goes through the same pipe a box source does — write it
+out, run the generator, run the compiler that built this binary,
+load the result — and comes back as the function that builds it.
+Call that function on any program to get the stations and wiring the
+description asked for.</p>
+<p><strong>Nothing is compiled twice.</strong> The boxes the description names are
+already in this process, so what is compiled is the description and
+nothing else: no second copy of any box, no call wrappers, no field
+tables. The generated code declares the functions that build
+stations for those boxes and binds to the ones this program
+published.</p>
+<p>Which is why a program has to publish them, and does — see
+<a href="info-098-engine-surface-syms.html">098-engine-surface.syms</a>. A
+description naming a box this program does not hold fails at load,
+naming the symbol it wanted.</p>
+<p>Returns the row describing what was compiled — its path, how many
+stations it declares, and the function that builds it — or NULL with
+a reason on stderr. The row and its function belong to a library
+that stays loaded, so they may be kept and used again, on any
+program.</p>
+<h3>cera_late_compile_source()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_late_compile_source(<span class="kw">const</span> <span class="kw">char</span> *c_source);
+</pre>
+<p>Compile C source into the running program and add every box it
+defines to the table.</p>
+<p>Returns the number of boxes added, or -1 on failure. A failure
+leaves the table exactly as it was — nothing is half-added — and
+puts <strong>the compiler's own output</strong> on stderr rather than a summary
+of it, because the message that says what is wrong with a piece of C
+is the one the compiler wrote.</p>
+<p>The source is saved to the RAM-backed scratch tier at the moment it
+is compiled, treated exactly like a log: written as it happens,
+gone at reboot. That is what lets a dump taken afterwards be
+reloaded by a fresh process on the same machine — the artifact
+exists before anybody needs it, which is the same reasoning that
+opens the diagnostic report's destination during startup rather
+than while dying.</p>
+<h2>092 — signals, capture, and the end</h2>
+<h3>exit codes</h3>
+<pre class="code">
+#define CERA_EXIT_FINISHED     0    <span class="cm">/* ran out of work, or was asked to stop */</span>
+#define CERA_EXIT_BAD_FILE     65   <span class="cm">/* a map file the engine refused        */</span>
+#define CERA_EXIT_BAD_CALL     70   <span class="cm">/* an invalid construction call         */</span>
+#define CERA_EXIT_NO_RESOURCE  71   <span class="cm">/* out of memory; no edit fixes it      */</span>
+#define CERA_EXIT_INTERRUPTED  130  <span class="cm">/* a person interrupted it              */</span>
+#define CERA_EXIT_BUG          134  <span class="cm">/* an engine fault; aborts, leaving a core */</span>
+</pre>
+<p><strong>Everything below the signal offset belongs to the program</strong>; the
+offset and above belongs to signals by convention, so no meaning
+here ever reaches up there.</p>
+<p>The three middle codes are the ones worth having. They make the
+distinction this project already draws — a fault the caller can
+correct and retry, against one it cannot — visible to a shell
+script rather than only to somebody reading the message.</p>
+<h3>cera_error_fn</h3>
+<pre class="code">
+<span class="kw">typedef</span> <span class="kw">void</span> (*cera_error_fn)(<span class="kw">const</span> <span class="kw">char</span> *message, <span class="kw">int</span> exit_code);
+</pre>
+<h3>cera_on_error()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_on_error(cera_error_fn fn);
+</pre>
+<h3>cera_prepare()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_prepare(<span class="kw">const</span> <span class="kw">char</span> *report_path);
+</pre>
+<p>**Block the three signals in every thread, and open the report's
+destination.** Call this before any thread exists, because a thread
+inherits the mask of the thread that made it — which is what makes
+"every thread" true without visiting any of them.</p>
+<p><code>report_path</code> names where a diagnostic report goes; NULL means the
+project's RAM-backed scratch directory, which is right for something
+read while debugging and useless as a post-mortem after a reboot —
+that is what a core dump is for.</p>
+<p><strong>The destination is opened now rather than while dying</strong>, and that
+is not tidiness. The directory lives on a filesystem a reboot
+empties, so it may be absent, and creating it on a failure path
+means a system call that can fail for reasons a dying program can do
+nothing about. A descriptor is an integer, and writing to an integer
+is the one file operation available on every path here — including
+the one that is forbidden to take a lock.</p>
+<h3>cera_report_path()</h3>
+<pre class="code">
+<span class="kw">const</span> <span class="kw">char</span> *cera_report_path(<span class="kw">void</span>);
+</pre>
+<p>Where the report will be written. Valid after cera_prepare.</p>
+<h3>cera_wait()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_wait(cera_map_t *m);
+</pre>
+<p><strong>Wait for the program to end, however it ends</strong>, and return the
+code the process should exit with.</p>
+<p>The pool must already be released. Three signals are answered, and
+they form a progression: each needs less cooperation from the
+program than the one before, and each is the right answer for a
+program in worse condition than the last.</p>
+<table>
+<tr><td></td><td>polite shutdown</td><td>interrupt</td><td>quit</td></tr>
+<tr><td>who sends it</td><td>a service manager</td><td>a person at a terminal</td><td>a person who wants evidence</td></tr>
+<tr><td>what it means</td><td>wind down, there is time</td><td>stop, and tell me why</td><td>stop now, leave the body</td></tr>
+<tr><td>diagnostics</td><td>none</td><td>everything</td><td>only what needs no lock</td></tr>
+<tr><td>waits for running boxes</td><td>yes</td><td>no</td><td>no</td></tr>
+<tr><td>how it ends</td><td>zero, by the existing rule</td><td>130, explicitly</td><td>aborts, leaving a core</td></tr>
+</table>
+<p><strong>The polite path adds no mechanism at all</strong>, which is the argument
+for it: it shuts the one door the outside can push work through and
+then goes back to waiting, so the program ends exactly the way it
+would have ended on its own. It writes no diagnostics, because
+nobody asked for any and a supervisor stopping a healthy program
+does not want a report it did not request.</p>
+<p><strong>It borrows a clock rather than inventing one.</strong> On a wedged
+program this path never completes, which is correct: whatever sent
+the signal already has a timer and will escalate to the uncatchable
+kill when it expires. That supervisor's clock is the only clock in
+the system that knows how long is too long for this deployment, and
+a guess made here is wrong on a slow machine and wrong differently
+on a fast one.</p>
+<p><strong>A second interrupt skips everything and exits at once.</strong> Ctrl+C
+twice always works, so a diagnostic path that gets stuck cannot
+trap the person it was written for.</p>
+<h3>cera_capture()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_capture(cera_map_t *m, <span class="kw">const</span> <span class="kw">char</span> *path);
+</pre>
+<p><strong>Put a running program down on disk so it can be picked up again.</strong></p>
+<p><code>cera_capture</code> is the polite one. It shuts the entrance — the only
+way anything outside pushes work in — lets everything already in
+flight finish and deliver, waits for the workers to go home, and
+then writes the artifact. What it produces is <strong>complete</strong> by
+construction: no task was running when it was written, so nothing
+was lost.</p>
+<p><strong>There is no bound on the wait, deliberately.</strong> Quiet is decidable
+exactly — the pool knows when its queue is empty and every worker
+is asleep — so the only case that never returns is a box that never
+returns, and nothing inside the process can tell that from a box
+that is merely slow. Whoever asked for the capture already has a
+clock, and theirs is the only one that knows how long is too long
+for this deployment. This is the same reasoning that keeps a
+timeout out of <code>cera_wait</code>, and it is not weaker here.</p>
+<p><code>cera_capture_now</code> is for when that clock runs out. It writes
+immediately, whatever is happening, and the artifact says so: a
+header naming every station a worker is still inside, and the plain
+statement that their inputs are lost and their results were never
+delivered.</p>
+<p><strong>The incompleteness is stated, never inferred.</strong> Reading such an
+artifact back is refused unless the caller asks for salvage, so a
+revived program is never quietly missing work somebody computed.</p>
+<p>Both return 0, or -1 with a reason on stderr.</p>
+<h3>cera_capture_whole()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_capture_whole(cera_map_t *m, <span class="kw">const</span> <span class="kw">char</span> *dir);
+</pre>
+<p><strong>A capture that stands alone</strong>, into a directory: the description,
+and beside it every source the program is made of, at the paths the
+description addresses them by.</p>
+<p>The plain capture writes a description and nothing else, which is
+enough for a program whose boxes all came from its build — anything
+built the same way already has them. It is <strong>not</strong> enough for a
+program that grew boxes while it ran: such a program is made of more
+than its build compiled, and its description names boxes whose source
+exists nowhere on the machine that reads it.</p>
+<p>What this produces is a program somebody can build. Building it
+needs the engine, which is what building anything with this engine
+needs — the same dependency a consumer already has, not a new one.
+The binary that comes out needs no toolchain of its own, because by
+then every box is compiled in like any other.</p>
+<p>Sources are written before the description, so a half-written
+capture is a directory obviously missing its description rather than
+one whose description names sources that are not there — the first
+cannot be mistaken for whole and the second can.</p>
+<p>Drains first, exactly as the plain capture does. Returns 0 or -1.</p>
+<h3>cera_capture_now()</h3>
+<pre class="code">
+<span class="kw">int</span> cera_capture_now(cera_map_t *m, <span class="kw">const</span> <span class="kw">char</span> *path);
+</pre>
+<h3>cera_stop_now()</h3>
+<pre class="code">
+<span class="kw">void</span> cera_stop_now(cera_map_t *m, <span class="kw">int</span> exit_code, <span class="kw">const</span> <span class="kw">char</span> *why);
+</pre>
+<p><strong>An invalid operation ends the program</strong>, having first said
+everything it can about what went wrong.</p>
+<p>Not a return value a caller may discard. The surface still hands a
+refusal <em>back</em> rather than dying where the failure happens, because
+a caller reading a file collects every mistake in it and presents
+them together — so a refusal travels, accumulates, and the stop
+happens once with the whole list. A single instruction arriving
+alone produces a list of one.</p>
+<p>What this buys is that **a program cannot be left half-built by
+ignored refusals**, because there is no surviving path in which a
+refused instruction leaves a program running that somebody believes
+they just edited successfully.</p>
+<p><code>m</code> may be NULL when there is no program to describe yet.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="info-cera-c.html">cera.c</a> — the implementation</li>
-<li><a href="done-901-the-engine-becomes-one-file.html">901</a> — why there is one file</li>
-<li><a href="done-902-the-header-says-what-is-public.html">902</a> — what is in this file, and why</li>
-<li><a href="done-903-everything-else-goes-private.html">903</a> — what is not, and what checks</li>
+<li><a href="info-098-engine-surface-syms.html">098-engine-surface.syms</a> — what a</li>
+<p>  shared object may bind to</p>
 <li><a href="impl-057-packaging.html">057 — Packaging</a></li>
 </ul>
 

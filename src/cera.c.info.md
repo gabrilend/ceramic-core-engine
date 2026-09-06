@@ -37,7 +37,11 @@ rather than by this one.
 Eleven sections in the project's reading order, each formerly a numbered
 file, each opening with a banner naming what it was:
 
-| section | what it does |
+The header carries the same components in the same order, and declares
+each component's calls in the order this file defines them;
+`tests/117-test-header-mirrors-body.sh` fails if that stops being true.
+
+| component | what it does |
 |---|---|
 | 012 | the pool — the task ring, workers, sleeping, termination |
 | 019 | the station table and its growth |
@@ -51,8 +55,9 @@ file, each opening with a banner naming what it was:
 | 074 | boxes and maps compiled at run time |
 | 092 | signals, capture, and the end |
 
-A `#line` directive at every seam keeps compiler errors and debugger
-backtraces pointing at the original numbered source.
+Markers are maintained by `scripts/113-refold.lua`, which discards every
+one and rewrites them from the code, so a fold cannot drift out of step
+with what it wraps.
 
 ## The joints
 

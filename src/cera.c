@@ -31,6 +31,19 @@
  * come first.
  * ================================================================== */
 
+/* {{{ cera_fail() */
+/*
+ * The one way the engine ends a program it refuses to continue.
+ * `cera_fail` exits with the code it is given; `cera_bug` aborts,
+ * leaving a core. Defined with the rest of the ending.
+ */
+static void cera_fail(int exit_code, const char *fmt, ...);
+/* }}} */
+
+/* {{{ cera_bug() */
+static void cera_bug(const char *fmt, ...);
+/* }}} */
+
 /* {{{ out_port_dests() */
 /*
  * out_port_dests reads a port's current set. One atomic load, no lock,
@@ -235,93 +248,6 @@ static void        map_scrap_free_all(cera_map_t *m);
  * genuinely does not use them, and the compiler says so.
  */
 #define CERA_TEST_ONLY __attribute__((unused))
-
-/* {{{ error_handler */
-/*
- * The one way the engine ends a program it refuses to continue.
- *
- * Every refusal formats its message, hands it to the installed handler
- * if there is one, and then ends the process. There is one of these so
- * that a host has one place to be told from; thirty scattered writes to
- * stderr followed by thirty aborts gave it none.
- *
- * `cera_fail` exits with the code it is given: a fault outside the
- * engine, which a caller may be able to correct. `cera_bug` aborts,
- * leaving a core: the engine found a fault in itself, and the core is
- * the evidence.
- *
- * The handler is read once, into a local, before it is called. Nothing
- * stops a host installing one from another thread while a program is
- * dying, and calling through a pointer that was read twice is a way to
- * call through a null.
- */
-static cera_error_fn error_handler = NULL;
-/* }}} */
-
-/* {{{ cera_on_error() */
-void cera_on_error(cera_error_fn fn)
-{
-    error_handler = fn;
-}
-/* }}} */
-
-/* {{{ tell_the_host() */
-/* The message reaches the handler without its trailing newline, since a
- * host putting it in a structured log wants the sentence and not the
- * line break the terminal wanted. */
-static void tell_the_host(const char *message, int exit_code)
-{
-    cera_error_fn fn = error_handler;
-    if (!fn)
-        return;
-
-    size_t n = strlen(message);
-    while (n > 0 && (message[n - 1] == '\n' || message[n - 1] == '\r'))
-        n--;
-
-    char trimmed[1024];
-    if (n >= sizeof trimmed)
-        n = sizeof trimmed - 1;
-    memcpy(trimmed, message, n);
-    trimmed[n] = '\0';
-    fn(trimmed, exit_code);
-}
-/* }}} */
-
-/* {{{ say_and_end() */
-static void say_and_end(int exit_code, int leave_core, const char *fmt, va_list ap)
-{
-    char message[1024];
-    vsnprintf(message, sizeof message, fmt, ap);
-
-    fputs(message, stderr);
-    tell_the_host(message, exit_code);
-
-    if (leave_core)
-        abort();
-    exit(exit_code);
-}
-/* }}} */
-
-/* {{{ cera_fail() */
-static void cera_fail(int exit_code, const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    say_and_end(exit_code, 0, fmt, ap);
-    va_end(ap);
-}
-/* }}} */
-
-/* {{{ cera_bug() */
-static void cera_bug(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    say_and_end(CERA_EXIT_BUG, 1, fmt, ap);
-    va_end(ap);
-}
-/* }}} */
 
 /* ================================================================== */
 
@@ -2687,16 +2613,6 @@ int cera_map_in_port_depth(cera_map_t *m, int station, int port)
 }
 /* }}} */
 
-/* {{{ cera_map_observe_stop() */
-/* Phase 7 joints, implemented in the observe module; declared here
- * narrowly so teardown can call them without the whole header. */
-void cera_map_observe_stop(cera_map_t *m);
-/* }}} */
-
-/* {{{ cera_map_report_shutdown() */
-void cera_map_report_shutdown(cera_map_t *m);
-/* }}} */
-
 /* {{{ cera_map_destroy() */
 void cera_map_destroy(cera_map_t *m)
 {
@@ -3863,10 +3779,6 @@ static const cera_box_place_t *late_recover_box(const char *name);
 
 /* {{{ late_place_find() */
 static const cera_box_place_t *late_place_find(const char *name);
-/* }}} */
-
-/* {{{ cera_late_source_text() */
-const char        *cera_late_source_text(const char *path);
 /* }}} */
 
 /* {{{ box_place_matches() */
@@ -8068,6 +7980,93 @@ static void say(const char *fmt, ...)
         n = (int)sizeof line - 1;
     ssize_t wrote = write(report_fd, line, (size_t)n);
     (void)wrote;   /* a dying program cannot do anything about a short write */
+}
+/* }}} */
+
+/* {{{ error_handler */
+/*
+ * The one way the engine ends a program it refuses to continue.
+ *
+ * Every refusal formats its message, hands it to the installed handler
+ * if there is one, and then ends the process. There is one of these so
+ * that a host has one place to be told from; thirty scattered writes to
+ * stderr followed by thirty aborts gave it none.
+ *
+ * `cera_fail` exits with the code it is given: a fault outside the
+ * engine, which a caller may be able to correct. `cera_bug` aborts,
+ * leaving a core: the engine found a fault in itself, and the core is
+ * the evidence.
+ *
+ * The handler is read once, into a local, before it is called. Nothing
+ * stops a host installing one from another thread while a program is
+ * dying, and calling through a pointer that was read twice is a way to
+ * call through a null.
+ */
+static cera_error_fn error_handler = NULL;
+/* }}} */
+
+/* {{{ cera_on_error() */
+void cera_on_error(cera_error_fn fn)
+{
+    error_handler = fn;
+}
+/* }}} */
+
+/* {{{ tell_the_host() */
+/* The message reaches the handler without its trailing newline, since a
+ * host putting it in a structured log wants the sentence and not the
+ * line break the terminal wanted. */
+static void tell_the_host(const char *message, int exit_code)
+{
+    cera_error_fn fn = error_handler;
+    if (!fn)
+        return;
+
+    size_t n = strlen(message);
+    while (n > 0 && (message[n - 1] == '\n' || message[n - 1] == '\r'))
+        n--;
+
+    char trimmed[1024];
+    if (n >= sizeof trimmed)
+        n = sizeof trimmed - 1;
+    memcpy(trimmed, message, n);
+    trimmed[n] = '\0';
+    fn(trimmed, exit_code);
+}
+/* }}} */
+
+/* {{{ say_and_end() */
+static void say_and_end(int exit_code, int leave_core, const char *fmt, va_list ap)
+{
+    char message[1024];
+    vsnprintf(message, sizeof message, fmt, ap);
+
+    fputs(message, stderr);
+    tell_the_host(message, exit_code);
+
+    if (leave_core)
+        abort();
+    exit(exit_code);
+}
+/* }}} */
+
+/* {{{ cera_fail() */
+static void cera_fail(int exit_code, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    say_and_end(exit_code, 0, fmt, ap);
+    va_end(ap);
+}
+/* }}} */
+
+/* {{{ cera_bug() */
+static void cera_bug(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    say_and_end(CERA_EXIT_BUG, 1, fmt, ap);
+    va_end(ap);
 }
 /* }}} */
 

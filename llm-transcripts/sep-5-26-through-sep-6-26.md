@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 17:32:35
+Generated on: 2026-09-05 17:56:58
 
 --------------------------------------------------------------------------------
 
@@ -1124,6 +1124,127 @@ because the house style keeps function names out of prose.
 
 Still owed, and outside this repo: the train game doesn't build against the
 current engine. It's the natural second consumer now that the first one passes.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 6
+
+I wrote a single edit to the cera.c file to show proper placing - there should
+be a newline between each closing vimfold and the opening one below it. Can you
+apply that formatting fix to the rest of the src file?
+
+
+Also there's several clear "sections" in the file, they should each have their
+own vimfold as well, so we can condense functionality, not just at the function
+and datastructure level but also one level above them, at the "component" tier.
+We don't need to justify our vimfold choices inside the text. That can be for a
+git commit.
+
+
+I don't understand what 909 is about, can you explain it in one sentence?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 6
+
+Let me find your edit first.
+
+
+Clear — a blank line between a closing fold and the next opening one. Let me
+see the section boundaries so I can wrap those too.
+
+
+Twelve sections. Let me look at the file's own header before I change the tool,
+since some of it explains fold choices.
+
+
+Now updating the tool: section folds, and a blank line between a closing fold
+and the next opening one.
+
+
+Balanced, twelve components, spacing clean. Now trimming the file header — it
+still justifies the arrangement and names a script that no longer exists.
+
+
+Let me check the tool is actually idempotent — the line count moved on a
+second run.
+
+
+Each run adds a blank line — the strip leaves behind the blank the tidy pass
+added. Let me make the strip collapse blank runs so the tool is idempotent.
+
+
+Done. `cera.c` now folds at two tiers, the tool is idempotent, and the object
+code is byte-for-byte unchanged.
+
+
+Shut, the file is twelve lines:
+
+
+```
+
+/* {{{ The joints — how the engine reaches itself */
+
+/* {{{ 012 — the pool */
+
+/* {{{ 019 — the station table */
+
+/* {{{ 020 — delivery, readiness, routing */
+
+/* {{{ 027 — support for generated code */
+
+/* {{{ 033 — constants, and values from text */
+
+/* {{{ 042 — reading a description */
+
+/* {{{ 050 — reports and the observer */
+
+/* {{{ 051 — a live map written back out */
+
+/* {{{ 052 — changing a running program */
+
+/* {{{ 074 — boxes and maps compiled at run time */
+
+/* {{{ 092 — signals, capture, and the end */
+
+```
+
+
+Open one and you get that component's definitions; open one of those and you get
+the definition and its comment.
+
+
+Two things worth flagging. The tool **was not idempotent** — it left behind
+the blank line each removed marker had sat beside and then added another, so
+every run grew the file by a line per component. Fixed, and checked by running
+it twice and diffing. And I pulled the paragraph arguing for one translation
+unit out of the file's own header, along with a sentence naming the script that
+built it — which was deleted three commits ago and would have sent a reader
+looking for a file that isn't there.
+
+
+## What 909 is about
+
+
+**Reading `issues/completed/` in order tells you what the engine should do, but
+never once tells you what any of it is called.**
+
+
+That's a consequence of your own house style working as intended — the
+blueprints say *a station added to a running program is checked and started by
+the ordinary readiness check*, which is the right sentence and contains no
+symbol. Six issues out of seventy-four name a call at all, and three of those
+are phase 9's own, naming calls only as examples of what got moved.
+
+
+So somebody rebuilding the project from those blueprints knows exactly what to
+build and has to invent every signature. The full list of 101 calls does exist
+now, generated from the header into `cera.h.info.md` — what's missing is the
+arrow pointing the other way, from each blueprint to the calls it produced. That
+can't be extracted from the text; it has to be decided one blueprint at a time
+by somebody holding both the blueprint and the header.
 
 
 --------------------------------------------------------------------------------

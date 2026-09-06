@@ -185,8 +185,11 @@ rather than by this one.</p>
 <h2>How it is arranged</h2>
 <p>Eleven sections in the project's reading order, each formerly a numbered
 file, each opening with a banner naming what it was:</p>
+<p>The header carries the same components in the same order, and declares
+each component's calls in the order this file defines them;
+<code>tests/117-test-header-mirrors-body.sh</code> fails if that stops being true.</p>
 <table>
-<tr><td>section</td><td>what it does</td></tr>
+<tr><td>component</td><td>what it does</td></tr>
 <tr><td>012</td><td>the pool — the task ring, workers, sleeping, termination</td></tr>
 <tr><td>019</td><td>the station table and its growth</td></tr>
 <tr><td>020</td><td>delivery, the readiness check, and routing</td></tr>
@@ -199,8 +202,9 @@ file, each opening with a banner naming what it was:</p>
 <tr><td>074</td><td>boxes and maps compiled at run time</td></tr>
 <tr><td>092</td><td>signals, capture, and the end</td></tr>
 </table>
-<p>A <code>#line</code> directive at every seam keeps compiler errors and debugger
-backtraces pointing at the original numbered source.</p>
+<p>Markers are maintained by <code>scripts/113-refold.lua</code>, which discards every
+one and rewrites them from the code, so a fold cannot drift out of step
+with what it wraps.</p>
 <h2>The joints</h2>
 <p>Near the top, under a banner, sit the declarations of everything this
 file does not publish — the slot state machine, the pages a ring grows
