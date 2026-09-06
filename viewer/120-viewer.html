@@ -1,0 +1,43 @@
+<!doctype html>
+<!--
+  120-viewer.html — the shape of a running program, while it runs.
+
+  Nothing on this page can reach the program it is watching. There is no
+  control, no field, no button that sends anything: the only connection
+  is an event stream coming the other way.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>a running program</title>
+<link rel="stylesheet" href="/viewer.css">
+</head>
+<body>
+
+<header>
+  <h1>watching</h1>
+  <span id="mapname" class="quiet"></span>
+  <span class="spacer"></span>
+  <span id="state" class="state waiting">waiting for the program</span>
+  <span id="lost" class="lost" hidden></span>
+  <button id="save" type="button">save this layout</button>
+</header>
+
+<main>
+  <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+    <g id="wires"></g>
+    <g id="stations"></g>
+  </svg>
+</main>
+
+<footer>
+  <span id="tally" class="quiet"></span>
+  <span class="spacer"></span>
+  <span class="quiet">drag a station to move it &mdash; nothing you do here
+  reaches the program</span>
+</footer>
+
+<script src="/viewer.js"></script>
+</body>
+</html>

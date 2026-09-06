@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 19:12:47
+Generated on: 2026-09-05 19:48:24
 
 --------------------------------------------------------------------------------
 
@@ -1647,6 +1647,320 @@ engine rather than its surroundings.
 
 Want me to start on the train game? It's an hour or two and it ends with a
 second thing that runs.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 10
+
+okay let's skip the train game and the demos. Let's build the viewer. There's
+two halves, right? The writer, and the viewer? The writer of course just fills
+out the function names from a text string we enter, and it compiles the map file
+without checking to see if those files actually exists. The viewer listens on an
+HTTP server, right, and it displays things in a browser, with the user able to
+re-arrange the boxes to see them clearly, but NOT able to modify them at all.
+Right?
+
+
+  909 — the blueprints don't name their calls. Real, but it's a day of reading
+  and it costs nothing until somebody rebuilds the project from the tickets.
+
+
+I don't think we need this issue file. The blueprints don't need to name their
+calls.
+
+
+  801 — the canvas draws but can't hand you a file. The writer exists in C; it
+  needs compiling to WebAssembly and wiring in. Middling size, and it's a door
+  nobody is currently trying to walk
+
+  through.
+
+
+we are!
+
+
+  705, 709, 711 — documentation polish. Two of five interactive pieces
+  missing, the slideshow, and a renumbering nobody is blocked on.
+
+
+let's wait on these for now.
+
+
+  107 and 108 — several queues, and a station saying which one its work goes
+  to. Both say confer before building, both have had a central decision reversed
+  once, and 108 still has seven unanswered
+
+  questions at the bottom. These are conversations, not tasks, and they're the
+  only open work that would change the engine rather than its surroundings.
+
+
+don't worry about these.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 10
+
+Mostly right, with one correction that matters: there are **three** pieces, not
+two. Let me read the tickets rather than paraphrase from memory.
+
+
+Let me retire 909 first, then correct one thing in your model.
+
+
+909 is refused and filed, and phase 9 is closed. Now the correction.
+
+
+**There are three pieces, not two**, and the middle one is the one that doesn't
+exist:
+
+
+Your description of **the writer** is exactly right — that's 801. Boxes are
+placed and told what they are by typing a name; the page holds no C, reads no C,
+and cannot tell you whether the name you typed exists, because the thing that
+would answer is a compiler and there isn't one in a browser. It emits one file:
+the map.
+
+
+**The viewer is 803** — and it reads a trail that **802** leaves. That trail
+is the missing middle. Today a running program says nothing about itself except
+to stderr; there is no ring, no events, nothing to display. 802 is a build flag
+that makes the engine emit a small fixed-size record at each thing worth seeing
+— a station ran, a value moved, a buffer grew — into a ring in shared
+memory. Without it, 803 has literally nothing to draw.
+
+
+On **"it listens on an HTTP server, right?"** — that's undecided, and the
+ticket flags it as *the first thing to decide*. The trail deliberately lives in
+a shared-memory ring precisely so there's no socket, no port, no protocol and no
+second thread inside the watched program. But **a browser page cannot map shared
+memory**, so something has to stand between, and that something is the whole
+question. A server is the first and costliest option: it means this project
+gains a long-running program, which nothing else here has.
+
+
+On **rearranging** — yes, and it's not in tension with anything. Moving a box
+on screen changes the layout, not the program. 803's rule is that nothing on the
+page can reach back into what it's watching; where you drag the picture is
+yours.
+
+
+**[Asked the user]**
+
+
+*Q1 — The bridge:* A browser cannot map shared memory. What stands between the
+ring and the page?
+
+- A forwarding reader — A small separate program that maps the ring and pushes
+  events down a socket the page opens. Keeps "cannot touch" true by construction
+  — forwarding is all it can do. Costs: the project gains a long-running
+  program.
+
+- A file the page polls — The reader periodically writes the ring's contents
+  somewhere the page can fetch. No server of our own, but a page cannot read a
+  local file it wasn't handed, so something still has to hand it one repeatedly.
+
+- A snapshot page — The reader regenerates a static HTML page from the ring.
+  No live view at all — you reload to see the present. Cheapest to build and
+  the weakest thing to look at.
+
+→ **Answered:** A forwarding reader" selected preview:
+
+watched program ──writes──> ring in /dev/shm
+
+                                  │
+
+                            reader maps it
+
+                                  │
+
+                         websocket / SSE
+
+                                  │
+
+                              the page
+
+
++ live, any number of viewers
+
++ reader can only forward
+
+− a server process that must be running
+
+− a port to pick, "How does the viewer learn the shape of the graph it is
+drawing?"=(no option selected) notes: It should count the number of boxes in the
+map file. It should create a grid that is as close to square as possible,
+preferring an extra column to an extra row if necessary. Then it should arrange
+the boxes on the canvas with a little bit of padding between them and draw the
+wire lines. the user can then drag and re-arrange them as they please, and it
+won't be saved. I guess maybe we could add a button that "saves the layout" or
+whatever to a simple file alongside the map? file.lay or something? And if a box
+is added dynamically at runtime, it should append itself to the box. If the user
+has been dragging the boxes around, it should pick a spot to put the box that is
+roughly equidistant to the other boxes it's wired to, although... creating boxes
+and wiring them are separate steps, so we gotta be careful here. Then it puts
+the boxes at that derived spot, making sure that it doesn't overlap any existing
+boxes.. Read the answers carefully — they may request clarification, changes,
+or that you not proceed — and follow what they actually say.
+
+
+*Q2 — The graph:* How does the viewer learn the shape of the graph it is
+drawing?
+
+- Ask for a dump once — The program can already write its whole graph out as a
+  map file. The viewer reads that once and has an exact picture immediately —
+  but it needs a second channel to ask for it.
+
+- Learn it from the trail — The trail says a station ran and a value moved
+  from one to another, so the shape can be discovered by watching. No second
+  channel — but the picture is incomplete until everything has run at least
+  once.
+
+- Dump first, trail keeps it current — Read the dump for the initial shape,
+  then let rewiring events from the trail update it. Exact from the start and
+  stays right when the program is edited while running.
+
+→ *(no answer recorded)*
+
+
+Forwarding reader it is. And your layout note answers the graph question
+implicitly — *"count the boxes in the map file"* means the viewer reads the
+map, which is the exact-from-the-first-frame option.
+
+
+One catch you spotted is real and worth settling before I build: a station is
+created and wired as two separate steps, so at the moment a box appears it has
+no wires to be equidistant to. Let me record the resolution with the rest.
+
+
+Now 802, the trail — everything depends on it. Let me read the rest of its
+design.
+
+
+Four open questions in 802. Let me settle them and record the answers, then
+build.
+
+
+Now the ring itself. Header first, as a new component after the ending.
+
+
+The map struct needs a field for it. An incomplete struct pointer needs no
+forward typedef.
+
+
+Both compile. Now the emit sites — with the emitting guarded so an unwatched
+build contains none of it.
+
+
+Now the emit sites themselves — each at the place the thing actually happens.
+
+
+Both compile. The ticket asks that an unwatched build be proven to contain none
+of the emitting — from the symbols, not from assertion.
+
+
+Now the test — the ring, and a reader deliberately made too slow.
+
+
+Three problems, one of them in the engine: my ownership check exempted the same
+process, so a second map in one process could seize the ring — and it did,
+truncating it. The exemption is wrong.
+
+
+Both accounts agree exactly. But losing the slow-reader scene means it's
+untested — let me add it back as its own run.
+
+
+The `\n` escapes got eaten by Python. Let me fix them in place.
+
+
+All five scenes pass, and the loss accounting is exact. Let me wire it into the
+build — it needs the flag.
+
+
+The mirror test caught the new component immediately. Let me match the header to
+the body's order.
+
+
+The component fold structure needs rebuilding after appending. Let me run the
+refold tool.
+
+
+All green — 109 symbols now, and the mirror test verified the new component
+lands in the right place in both files.
+
+
+The trail is built, tested, and committed. That's the middle piece — the
+viewer now has something to read.
+
+
+**What a watched program emits:** ten kinds of event, each at the place the
+thing actually happens. It came up; a task became due; a station ran and for how
+long; a value crossed from one station's port to another's; a buffer grew; a
+station was placed or removed; a wire was drawn or cut; it finished.
+
+
+**Nothing a reader does can slow it.** A writer that laps a reader overwrites
+it. What keeps that honest is that the reader computes exactly what it missed
+from the sequence numbers — and the test doesn't take its word for it. After a
+run that lapped the ring nineteen times: **lost 18,980, kept 1,024, and the
+first one it kept is number 18,981.** The arithmetic closes.
+
+
+**Two independent accounts of one run agree.** The reader's tally of how many
+times each station ran, reconstructed from the trail alone, matches the counters
+the program keeps for itself.
+
+
+**An ordinary build carries none of it**, read out of the object file rather
+than claimed: without the flag, neither the emitter nor the clock it reads
+exists as a symbol, and the object is three kilobytes smaller.
+
+
+Two things worth flagging:
+
+
+**Writing the test found a real fault.** My ownership check — which stops two
+programs sharing one ring — exempted the same process, reasoning that a
+program reopening its own trail isn't a conflict. But two maps in one process
+*are* two programs; that's the whole of what makes them separable. The second
+one promptly truncated the ring a reader was already following. Exemption
+removed.
+
+
+**The mirror test earned itself immediately.** I added the new component to the
+body and the header, and it failed twice: once because I'd declared the calls in
+a different order than I defined them, and once because the component fold
+structure hadn't been rebuilt so the body still thought the new calls belonged
+to the previous component. Neither would have been caught by the compiler.
+
+
+Next is 803 itself — the forwarding reader and the page. Two pieces:
+
+
+**The reader** maps the ring and pushes events down a socket. That's the first
+long-running program in this project, and it's small: attach, loop, forward,
+detach.
+
+
+**The page** reads the map file for the graph, lays it out on the near-square
+grid, draws the wires, lights stations as events arrive, shows buffer depths,
+and says so when the trail reports loss. Drag to rearrange; a pinned box never
+auto-moves; optionally save the layout beside the map as `.lay`.
+
+
+One thing I should ask before building the reader: **what protocol down the
+socket?** A raw newline-delimited stream of one JSON object per event is the
+simplest thing that works and needs nothing on either side; a WebSocket is what
+a browser natively wants but means implementing the handshake and framing in C.
+Server-sent events split the difference — plain HTTP, one `data:` line per
+event, and the browser has `EventSource` built in. I'd take server-sent events:
+no framing to implement, no library, and the page gets automatic reconnection
+for free.
+
+
+Shall I go with that?
 
 
 --------------------------------------------------------------------------------

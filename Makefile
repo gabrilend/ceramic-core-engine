@@ -174,7 +174,7 @@ TEST_BINS := $(patsubst $(DIR)/tests/%.c,$(BUILD)/%,$(TEST_SRC))
 
 .PHONY: all test clean
 
-all: $(TEST_BINS) $(EXAMPLE) html
+all: $(TEST_BINS) $(EXAMPLE) $(VIEWER) $(WATCHED) html
 
 # The build tree lives in RAM (tmp/ -> /tmp/<project>). It must exist
 # before anything writes into it; a build that dies on a missing
@@ -260,13 +260,41 @@ $(BUILD)/106-test-mapwrite: $(DIR)/tests/106-test-mapwrite.c $(GEN_LIB) | $(BUIL
 $(BUILD)/118-test-the-trail: $(DIR)/tests/118-test-the-trail.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
 	$(CC) $(CFLAGS) -DCERA_WATCH -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
 
+# The viewer, and something for it to watch. Neither is part of the
+# engine — they are phase 8 tools that stand outside it — but both are
+# built by the ordinary build so that a change to the engine's own
+# reader cannot quietly stop them compiling.
+#
+# The program being watched is built with watching on, since that is its
+# entire purpose. The viewer is not: it only ever reads somebody else's
+# ring, and building it with the flag would suggest otherwise.
+VIEWER  := $(BUILD)/119-viewer
+WATCHED := $(BUILD)/123-a-program-to-watch
+
+$(VIEWER): $(DIR)/viewer/119-viewer.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
+
+$(WATCHED): $(DIR)/viewer/123-a-program-to-watch.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
+	$(CC) $(CFLAGS) -DCERA_WATCH -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
+
+# What to type to watch something. Two processes, so it says how rather
+# than starting them: the one being watched is somebody's own program.
+.PHONY: viewer
+viewer: $(VIEWER) $(WATCHED)
+	@echo "In one terminal:"
+	@echo "  $(WATCHED) --trail=$(RAM_SHARED)/live.ring"
+	@echo "In another:"
+	@echo "  $(VIEWER) --trail=$(RAM_SHARED)/live.ring \\"
+	@echo "      --map=$(DIR)/maps/107-example.map --root=$(DIR)/viewer"
+	@echo "Then open http://localhost:8723/"
+
 # Shell-driven tests sit beside the compiled ones — the generator's
 # command-line conduct is proven from the shell.
 TEST_SCRIPTS := $(wildcard $(DIR)/tests/*.sh)
 
 # Each test is run in order; the first failure stops the run, because
 # later tests build on machinery the earlier ones just proved broken.
-test: $(TEST_BINS)
+test: $(TEST_BINS) $(VIEWER) $(WATCHED)
 	@for t in $(TEST_BINS); do \
 		echo "== $$(basename $$t)"; \
 		$$t || exit 1; \

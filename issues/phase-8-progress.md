@@ -13,7 +13,7 @@ yet is produce a file: the canvas is a drawing surface and not a door.
 |---|---|---|
 | [801 — the workbench in the browser](801-browser-workbench.md) | **in progress** | A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server. Drawing and keeping several drawings are done; the writer that turns one into a map exists in C and is not in the page yet. |
 | [802 — a program you can watch](completed/802-a-program-you-can-watch.md) | **complete** | A build flag makes a program leave a trail as it runs — every station that ran, every value that moved, every buffer that grew — in a ring in shared memory that any number of processes can read. Without the flag the emitting is not compiled at all, which is read from the object file. A slow reader loses events and is told exactly how many; the arithmetic is checked. |
-| [803 — the viewer](803-the-viewer.md) | open, **unblocked** | A page that watches a running program and **cannot touch it**: stations lighting as they run, buffers filling, and the page saying so when the trail lost events. Shares nothing with the workbench, which is a door where this is a window. |
+| [803 — the viewer](completed/803-the-viewer.md) | **complete**, but undrawn here | A forwarding reader that maps the ring and serves events to a browser, and a page that draws the graph from the map file and lights it as the program runs. It has no write in it anywhere. What is unverified is how it looks: this machine has no working browser. |
 
 ## What it waited on, and no longer does
 

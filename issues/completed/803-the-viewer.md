@@ -7,20 +7,46 @@ and nothing on the page can reach back into what it is looking at.
 It reads the trail [802](802-a-program-you-can-watch.md) leaves and
 does nothing else.
 
-## Current behavior
+## Current behaviour
 
-**Watching a running program means reading stderr.** The observer
-prints a line when results pile up somewhere nobody is taking them
-from; a dying program writes a diagnostic report
-([106](completed/106-stopping-on-purpose.md)); a program put down
-writes one beside its capture
-([712](completed/712-capturing-a-running-program.md)). All three are
-text, after the fact, and none of them is a picture.
+**Built, and running.** Three files and a program:
 
-**And the shape of a program is not visible anywhere while it runs.**
-The dump writes the graph as a list of lines
-([703](completed/703-map-dump.md)), which is the same problem the map
-file has: the graph a file describes is not visible in the file.
+- **`viewer/119-viewer.c`** — the forwarding reader. It maps a watched
+  program's ring with the engine's own reader, serves the page and the
+  map over HTTP, and pushes events down a server-sent event stream. One
+  thread, one poll loop, a reader per connected page — which is why two
+  people watching do not interfere.
+- **`viewer/120-viewer.html`, `121-viewer.css`, `122-viewer.js`** — the
+  page. It reads the map file, lays the stations out on a near-square
+  grid, draws the wires, lights each station as it runs, fills a pip per
+  input port as its backlog deepens, and says so when the trail reports
+  loss.
+- **`viewer/123-a-program-to-watch.c`** — the engine's example graph fed
+  at a human pace and left running until interrupted, because a program
+  that finishes in four milliseconds is correct and useless to watch.
+
+`make viewer` prints the two commands.
+
+### It only forwards, and the test says so
+
+There is no path the server answers by writing anything, anywhere.
+Saving a layout is a **download the browser performs** — the file lands
+in somebody's downloads and putting it beside the map is their own act,
+after which the viewer will read it. That keeps the whole program a
+window: it has no write in it at all.
+
+`tests/124-test-the-viewer.sh` starts a watched program, starts the
+viewer, and checks that the page and its parts come back, that anything
+it does not know is refused, and that thousands of events arrive down a
+socket **in sequence**. A stream out of order would be a picture that
+cannot be trusted about what happened before what.
+
+### What is not verified here
+
+**The drawing.** This machine has no working browser — headless Firefox
+hangs on a blank page, so nothing on it can render one. Everything the
+page is served has been checked; how it looks when drawn has not. That
+wants somebody to open it.
 
 ## Intended behavior
 

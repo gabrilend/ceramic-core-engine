@@ -46,6 +46,9 @@ minimal-soramech/
 ├── issues/                         one file per unit of work
 │   └── completed/
 │       └── demos/                  one runnable demo per finished phase
+├── viewer/                         a window onto a running program: the
+│                                   forwarding reader, the page it serves,
+│                                   and something worth watching
 ├── tests/
 ├── scripts/
 ├── strategems/                     data-flow patterns that keep proving useful

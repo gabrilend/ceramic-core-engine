@@ -36,7 +36,6 @@
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
-<a href="issue-803-the-viewer.html">803 — The viewer</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -123,6 +122,7 @@
 <a href="done-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
 <a href="done-802-a-program-you-can-watch.html">802 — A program you can watch</a>
+<a href="done-803-the-viewer.html">803 — The viewer</a>
 <a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
 <a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
@@ -167,7 +167,7 @@ yet is produce a file: the canvas is a drawing surface and not a door.</p>
 <tr><td>Issue</td><td>State</td><td>In one line</td></tr>
 <tr><td><a href="issue-801-browser-workbench.html">801 — the workbench in the browser</a></td><td><strong>in progress</strong></td><td>A canvas where stations are placed, named, given a kind and a box, and wired; statics filled in; every load-time rule applied as a wire is drawn rather than at startup; and a download of the map together with the C source for the functions it used. Nothing on a server. Drawing and keeping several drawings are done; the writer that turns one into a map exists in C and is not in the page yet.</td></tr>
 <tr><td><a href="done-802-a-program-you-can-watch.html">802 — a program you can watch</a></td><td><strong>complete</strong></td><td>A build flag makes a program leave a trail as it runs — every station that ran, every value that moved, every buffer that grew — in a ring in shared memory that any number of processes can read. Without the flag the emitting is not compiled at all, which is read from the object file. A slow reader loses events and is told exactly how many; the arithmetic is checked.</td></tr>
-<tr><td><a href="issue-803-the-viewer.html">803 — the viewer</a></td><td>open, <strong>unblocked</strong></td><td>A page that watches a running program and <strong>cannot touch it</strong>: stations lighting as they run, buffers filling, and the page saying so when the trail lost events. Shares nothing with the workbench, which is a door where this is a window.</td></tr>
+<tr><td><a href="done-803-the-viewer.html">803 — the viewer</a></td><td><strong>complete</strong>, but undrawn here</td><td>A forwarding reader that maps the ring and serves events to a browser, and a page that draws the graph from the map file and lights it as the program runs. It has no write in it anywhere. What is unverified is how it looks: this machine has no working browser.</td></tr>
 </table>
 <h2>What it waited on, and no longer does</h2>
 <p><strong>The map file format, which was about to change twice.</strong> Boxes
