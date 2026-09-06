@@ -244,6 +244,25 @@ which is two megabytes of shared memory and nothing at all against being
 told you missed something because the buffer was small rather than
 because you were slow.
 
+### Somebody else's screen
+
+The viewer listens on the loopback address, so the machine running a
+program is the only machine that can watch it. **Watching should not be
+the act that puts a program on a network**, so opening that door is a
+thing somebody types rather than a default.
+
+`--listen=all` opens it, and the viewer then prints every address
+another computer could use — because telling somebody "open the viewer"
+is useless without the number, and looking it up is a detour nobody
+should have to take. It also says plainly what has been opened: the port
+is reachable by anything that can reach the machine, and everything it
+serves is a read.
+
+Nothing is needed on the other computer. The page asks for `/map`,
+`/events` and its own two files by relative path and never names a host,
+so it works from anywhere the socket does. There is nothing to install
+and nothing to configure — it is a browser.
+
 ### One command, still two processes
 
 `--view` has the watched program start the viewer as a child and stop it

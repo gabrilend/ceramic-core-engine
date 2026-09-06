@@ -22,11 +22,20 @@
  * its own. No framing to implement and no library to depend on.
  *
  * usage: viewer --trail=<ring> --map=<file> [--port=N] [--root=<dir>]
+ *               [--listen=local|all|<address>]
+ *
+ * It listens on the loopback address unless told otherwise, so a
+ * program being watched is not put on a network by the act of watching
+ * it. `--listen=all` opens it to anyone who can reach the machine,
+ * which is what showing somebody on another computer needs and is worth
+ * being asked for rather than assumed.
  */
 #include "cera.h"
 
 #include <errno.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
+#include <ifaddrs.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <signal.h>
@@ -59,8 +68,9 @@ static struct {
     const char *trail;
     const char *map;
     const char *root;
+    const char *listen;
     int         port;
-} settings = { NULL, NULL, ".", 8723 };
+} settings = { NULL, NULL, ".", "local", 8723 };
 /* }}} */
 
 /* {{{ static void say_usage(const char *why) */
@@ -74,7 +84,10 @@ static void say_usage(const char *why)
         "  --trail   the ring a watched program is writing\n"
         "  --map     the map file describing that program's shape\n"
         "  --port    which port to listen on (default 8723)\n"
-        "  --root    where this program's own page files live\n");
+        "  --root    where this program's own page files live\n"
+        "  --listen  local (default), all, or one address. `all` lets\n"
+        "            another computer watch, and lets any computer that\n"
+        "            can reach this one do the same.\n");
     exit(2);
 }
 /* }}} */
@@ -304,6 +317,7 @@ int main(int argc, char **argv)
         if (strncmp(argv[i], "--trail=", 8) == 0)      settings.trail = argv[i] + 8;
         else if (strncmp(argv[i], "--map=", 6) == 0)   settings.map   = argv[i] + 6;
         else if (strncmp(argv[i], "--root=", 7) == 0)  settings.root  = argv[i] + 7;
+        else if (strncmp(argv[i], "--listen=", 9) == 0) settings.listen = argv[i] + 9;
         else if (strncmp(argv[i], "--port=", 7) == 0)  settings.port  = atoi(argv[i] + 7);
         else say_usage("unrecognised argument");
     }
@@ -324,11 +338,26 @@ int main(int argc, char **argv)
     int yes = 1;
     setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
 
+    /*
+     * Loopback unless asked otherwise. Watching a program should not be
+     * the act that puts it on a network, so opening the door is a thing
+     * somebody types rather than a default.
+     */
     struct sockaddr_in where;
     memset(&where, 0, sizeof where);
     where.sin_family = AF_INET;
-    where.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     where.sin_port = htons((uint16_t)settings.port);
+
+    int open_to_all = strcmp(settings.listen, "all") == 0;
+    if (open_to_all) {
+        where.sin_addr.s_addr = htonl(INADDR_ANY);
+    } else if (strcmp(settings.listen, "local") == 0) {
+        where.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    } else if (inet_pton(AF_INET, settings.listen, &where.sin_addr) != 1) {
+        fprintf(stderr, "viewer: --listen wants local, all, or an address, "
+                        "not '%s'\n", settings.listen);
+        return 1;
+    }
 
     if (bind(listener, (struct sockaddr *)&where, sizeof where) != 0) {
         fprintf(stderr, "viewer: cannot listen on port %d: %s\n",
@@ -340,6 +369,32 @@ int main(int argc, char **argv)
     printf("viewer: watching %s\n", settings.trail);
     printf("viewer: drawing %s\n", settings.map);
     printf("viewer: open http://localhost:%d/\n", settings.port);
+
+    /*
+     * Every address somebody else could use, said out loud. Telling
+     * another person "open the viewer" is useless without the number,
+     * and looking it up is a detour nobody should have to take.
+     */
+    if (open_to_all) {
+        struct ifaddrs *all = NULL;
+        if (getifaddrs(&all) == 0) {
+            for (struct ifaddrs *it = all; it; it = it->ifa_next) {
+                if (!it->ifa_addr || it->ifa_addr->sa_family != AF_INET)
+                    continue;
+                struct sockaddr_in *in = (struct sockaddr_in *)it->ifa_addr;
+                if (in->sin_addr.s_addr == htonl(INADDR_LOOPBACK))
+                    continue;
+                char dotted[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &in->sin_addr, dotted, sizeof dotted);
+                printf("viewer: or from another computer, "
+                       "http://%s:%d/\n", dotted, settings.port);
+            }
+            freeifaddrs(all);
+        }
+        printf("viewer: this port is open to anything that can reach this "
+               "machine. It only ever sends; nothing on the page can "
+               "reach the program.\n");
+    }
     fflush(stdout);
 
     struct client clients[MAX_CLIENTS];

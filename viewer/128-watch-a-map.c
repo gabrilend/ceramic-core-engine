@@ -11,7 +11,7 @@
  * program looks for the station wearing it. A map with no entrance is
  * refused here rather than fed at random.
  *
- * usage: watch-a-map --map=<name.map> --trail=<ring> [--pace=ms] [--view[=port]]
+ * usage: watch-a-map --map=<name.map> --trail=<ring> [--pace=ms] [--view[=port]] [--listen=all]
  */
 #include "cera.h"
 
@@ -57,6 +57,7 @@ int main(int argc, char **argv)
 {
     const char *which = NULL, *trail = NULL;
     int pace_ms = 120, view_port = 0;
+    const char *listen_where = "local";
 
     for (int i = 1; i < argc; i++) {
         if (strncmp(argv[i], "--map=", 6) == 0)        which = argv[i] + 6;
@@ -64,6 +65,7 @@ int main(int argc, char **argv)
         else if (strncmp(argv[i], "--pace=", 7) == 0)  pace_ms = atoi(argv[i] + 7);
         else if (strncmp(argv[i], "--view=", 7) == 0)  view_port = atoi(argv[i] + 7);
         else if (strcmp(argv[i], "--view") == 0)       view_port = 8723;
+        else if (strncmp(argv[i], "--listen=", 9) == 0) listen_where = argv[i] + 9;
     }
     if (!which || !trail) {
         fprintf(stderr, "usage: watch-a-map --map=<name.map> --trail=<ring> "
@@ -118,7 +120,9 @@ int main(int argc, char **argv)
         fclose(shape);
 
         char port_arg[32], trail_arg[600], map_arg[600], root_arg[600], self[600];
+        char listen_arg[64];
         snprintf(port_arg, sizeof port_arg, "--port=%d", view_port);
+        snprintf(listen_arg, sizeof listen_arg, "--listen=%s", listen_where);
         snprintf(trail_arg, sizeof trail_arg, "--trail=%s", trail);
         snprintf(map_arg, sizeof map_arg, "--map=%s", drawn);
         snprintf(root_arg, sizeof root_arg, "--root=%s/viewer", CERA_ROOT);
@@ -126,7 +130,8 @@ int main(int argc, char **argv)
 
         viewer = fork();
         if (viewer == 0) {
-            execl(self, self, trail_arg, map_arg, root_arg, port_arg, (char *)NULL);
+            execl(self, self, trail_arg, map_arg, root_arg, port_arg,
+                  listen_arg, (char *)NULL);
             fprintf(stderr, "could not start the viewer at %s: %s\n",
                     self, strerror(errno));
             _exit(1);

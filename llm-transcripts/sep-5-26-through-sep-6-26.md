@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 21:28:24
+Generated on: 2026-09-05 21:49:47
 
 --------------------------------------------------------------------------------
 
@@ -2700,6 +2700,116 @@ fires into nothing.
 
 Measured: **130 / 130 / 122** to the collector's three ports, 122 runs, and
 **exit 1 never used by either comparator.**
+
+
+--------------------------------------------------------------------------------
+
+### User Request 16
+
+Okay it looks better, but the wires stay lit for a while after they're done
+sending data. They should be as close to live as the shared memory "log"
+reports. I know this is true because there was a wire going into port 1 of the
+collect box (three_way() is the box function) that was still live while the box
+is running. I know this is a bug (probably rendering) because port 2 can only
+fill up when port 0 and 1 are fully filled (because of the way we wired the
+comparators earlier) yet somehow under_twenty's out 0 and out 2 are both "live"
+at the same time.
+
+
+  One threshold, one comparison. Exits 0/1/2 are less/equal/greater — fixed in
+  the engine, not chosen in the map. if <5 → wire 1, if ==77 → wire 2, if
+  >-200 → wire 3 has nowhere to
+
+  live: the grammar's only number is in <last> = N, and out 0 - x.0 names a
+  destination and carries no condition at all.
+
+
+ah I see. So let's just keep it as it is, and keep wiring port 0 to a different
+location than port 1 and 2.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 16
+
+That's not a rendering bug in the drawing — it's the decay window outliving
+the truth. Let me check the arithmetic before I change anything.
+
+
+Measured, and your diagnosis is right. A burst on one exit lasts **600ms** —
+and my warm window was **900ms**, so exit 0 stayed lit right through exit 2's
+entire burst. Both looked live because the decay outlived the truth.
+
+
+Let me verify the fix against the actual event stream, rather than trusting the
+arithmetic.
+
+
+Overlap down from most of the run to 5.7%, and only at burst boundaries —
+where the previous exit genuinely did carry within the window. Let me make that
+a test, since it's exactly what regresses silently.
+
+
+`luajit -e` doesn't pass varargs the way a script file does. Let me make the
+replay a proper tool rather than an inline chunk.
+
+
+The test catches it — 52.5% at the old window, 5.7% at the new one. Full suite
+and commit.
+
+
+Committed. Your reasoning was right and the arithmetic backs it up.
+
+
+## What was wrong
+
+
+Not the drawing of any single event — **the decay window outlived the truth.**
+
+
+I measured the ladder's rhythm: it alternates in bursts of ten values, which at
+60ms each is a **600ms burst** on one exit before switching to the other. My
+wire stayed lit for **900ms**. So the previous exit was still glowing through
+the entire next burst, and two exits of one comparator looked permanently live
+— a picture of something that cannot happen, since one value leaves by one
+exit.
+
+
+I'd picked 900ms because it looked pleasant, and never checked it against the
+rhythm of anything it would be drawing.
+
+
+A wire is lit for **160ms** now, a station for 220. The floor isn't zero and
+can't be: the server drains the ring on a 40ms poll and the page redraws every
+33ms, so ~80ms of lag is structural. What the shorter window buys is that
+nothing is shown as live once it has stopped.
+
+
+## The part worth keeping
+
+
+This is now checked, without a browser. `scripts/130-replay-the-page.lua`
+applies the page's own rule to a captured event stream — **reading the window
+out of the page's source rather than restating it**, since two places that must
+agree is one too many — and reports how much of the time two exits of one
+comparator are lit together. A little is honest, at the handover. A lot means
+the drawing is describing the past as the present.
+
+
+**5.7% now, against 52.5% at the number it replaced.** The test refuses above
+20%, and I proved it by putting 900 back and watching it fail.
+
+
+It's the only check here that tests a drawing, and it needs no browser: what's
+being checked is the arithmetic a browser would do.
+
+
+## On the comparator wiring
+
+
+Left as it is, as you said — port 0 to one place, port 2 to another, and the
+equal exit unreachable rather than merely unwired. That still holds: exit 1
+fired zero times across 530 deliveries.
 
 
 --------------------------------------------------------------------------------
