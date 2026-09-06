@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>802 — A program you can watch</title>
+<title>909 — The blueprints name their calls</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -36,9 +36,7 @@
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
-<a href="issue-802-a-program-you-can-watch.html" class="here">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
-<a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -124,6 +122,7 @@
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
 <a href="done-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="done-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
 <a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
@@ -132,6 +131,7 @@
 <a href="done-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="done-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="done-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
+<a href="done-909-the-blueprints-name-their-calls.html" class="here">909 — The blueprints name their calls</a>
 <h2>Interfaces</h2>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
@@ -155,167 +155,80 @@
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>802 — A program you can watch</h1>
-<p>A program built one way runs and says nothing. Built the other way it
-runs identically and **leaves a trail somebody else can read while it
-happens** — every station that ran, every value that moved, every
-buffer that grew — without the program waiting on anybody, noticing
-anybody, or behaving differently because somebody is there.</p>
-<p>The trail is the deliverable here. What reads it is
-<a href="issue-803-the-viewer.html">803</a>, and it is deliberately not this issue.</p>
-<h2>Current behavior</h2>
-<p>**Everything the engine knows about itself is told afterwards, or on
-the way out.**</p>
-<ul>
-<li><strong>Counters exist and are read at the end.</strong> Every station keeps how</li>
-<p>  many tasks it ran and how many it made due elsewhere
-  (<a href="done-702-station-statistics.html">702</a>); every port keeps how
-  deep it got and how often it grew
-  (<a href="done-701-buffer-growth-reporting.html">701</a>). Something has to
-  ask, and asking is a walk of the whole table.</p>
-<li><strong>A capture writes a report</strong> of the same numbers when a program is</li>
-<p>  put down (<a href="done-712-capturing-a-running-program.html">712</a>).</p>
-<li><strong>A dying program writes a diagnostic report</strong></li>
-<p>  (<a href="done-106-stopping-on-purpose.html">106</a>), which is the closest
-  thing to a live view and requires the program to be in trouble.</p>
-<li><strong>The observer notices piles forming</strong> and prints a line when results</li>
-<p>  stack up somewhere nobody is taking them from. That line goes to
-  stderr, mixed in with everything else, and cannot be read by a
-  program.</p>
-</ul>
-<p>So the shape of what a program <em>did</em> is recoverable, and the shape of
-what it is <em>doing</em> is not. Watching one means printing from inside a
-box, which changes the program to look at it.</p>
-<p><strong>And nothing outside the process can see in at all.</strong> There is no
-socket, no file, no shared area — the only channels out are stderr and
-whatever a program's result station is wired to.</p>
-<h2>Intended behavior</h2>
-<h3>It is a build-time choice, and the cost is zero when it is off</h3>
-<p><strong>A flag on the build says this program can be watched.</strong> With it, the
-engine emits an event at each thing worth seeing. Without it, the
-emitting compiles out entirely — not a branch that is usually false, an
-absence.</p>
-<p>This is the shape <a href="done-702-station-statistics.html">702</a> already
-chose for timing, and the reasoning is quoted rather than re-derived:
-*a measurement apparatus whose cost is unmeasured is a rumour, and one
-that cannot be removed is a tax.* A watched program is allowed to be
-slower than an unwatched one; an unwatched one is not allowed to pay
-anything at all.</p>
-<p><strong>Why a build flag rather than a run-time switch.</strong> A run-time switch
-is a branch on the delivery path, taken on every value that moves, to
-answer a question whose answer never changes during a run. The engine's
-standing habit is to resolve such a question while somebody can still
-read an error message about it — the same reasoning that turned box
-records into placement functions (<a href="done-311b-placement-instead-of-records.html">311b</a>).</p>
-<h3>Watching must never change what is watched</h3>
-<p><strong>This is the constraint the whole issue is held to</strong>, and everything
-below follows from it.</p>
-<ul>
-<li><strong>The program never waits for a reader.</strong> No lock a reader can hold,</li>
-<p>  no buffer a reader can fill, no handshake. A reader that stops
-  reading is a reader that stops receiving.</p>
-<li><strong>A slow reader loses events and is told how many.</strong> Losing them is</li>
-<p>  correct: the alternative is a reader that can slow the program by
-  being slow itself, which is the failure this rule exists to prevent.
-  Being told is what keeps it honest — a view quietly missing events is
-  a view somebody will trust.</p>
-<li><strong>Any number of readers, none of them known to the program.</strong> A</li>
-<p>  reader attaches, reads, and detaches without the program learning
-  that any of it happened. Two readers do not interfere with each
-  other, because neither has anything the other needs.</p>
-<li><strong>A reader cannot write.</strong> Nothing it does can reach the program.</li>
-<p>  This is a window, not a door; <a href="issue-801-browser-workbench.html">801</a> is the
-  door and shares nothing with this.</p>
-</ul>
-<h3>Where the trail lives</h3>
-<p><strong>A ring in shared memory</strong>, under the same RAM tier logs already use
-— the readable one, since this is read and never executed.</p>
-<p>Chosen over the alternatives for what it does <em>not</em> need: no socket to
-listen on, no port to allocate, no protocol, no dependency, and no
-second thread inside the program. A reader opens a file and maps it.</p>
-<p><strong>A writer that catches up with a reader overwrites it</strong>, which is the
-only arrangement in which the program cannot be held up. The ring is
-sized by the build; a reader that cannot keep up with a given size is a
-reader that should ask for a bigger one, and until then it is told what
-it missed.</p>
-<p><strong>Multiple writers, because every worker emits.</strong> What is written is
-small and fixed-size, so a slot is claimed with one atomic step and
-filled afterwards — the same shape a port's slot state already has
-(<a href="done-210c-a-state-on-every-slot.html">210c</a>), for the same reason.</p>
-<h3>What counts as an event</h3>
-<p>Small, fixed-size, and about the graph rather than about values.</p>
-<table>
-<tr><td>event</td><td>what it carries</td></tr>
-<tr><td>a station ran</td><td>which station, how long it took</td></tr>
-<tr><td>a value was delivered</td><td>from which station and port, to which station and port</td></tr>
-<tr><td>a task became due</td><td>which station</td></tr>
-<tr><td>a buffer grew</td><td>which station, which port, how deep it is now</td></tr>
-<tr><td>the program came up</td><td>how many stations, how many workers</td></tr>
-<tr><td>the program finished</td><td>how many tasks in total</td></tr>
-<tr><td>a station was added, removed, or rewired</td><td>which, and into what</td></tr>
-</table>
-<p>**Values are not carried, and that is a decision rather than an
-omission.** A value is any size at all, including sizes that would not
-fit in a fixed-size slot, and copying one onto the trail is a cost paid
-on the delivery path for something a watcher usually does not need — it
-wants to see <em>that</em> the graph is moving and <em>where</em> it is stuck.
-Somebody who wants values has <a href="done-712-capturing-a-running-program.html">712</a>,
-which writes them all, at a moment nothing is running.</p>
-<p><strong>The station's name is not carried either</strong>, because a name is a
-string and this is fixed-size. A reader that wants names reads them
-once, from a dump the program can be asked for, and holds them against
-the indices — which is the same trick a wire already is.</p>
+<h1>909 — The blueprints name their calls</h1>
+<p><strong>Refused.</strong> A blueprint describes what to build and why it has the
+shape it has; the name a call ends up with is not part of that. Somebody
+rebuilding this project from <code>issues/completed/</code> is deciding what the
+engine should do, and the header is right there when they want to know
+what it is called.</p>
+<p>The list of calls exists and is derived rather than typed —
+<code>src/cera.info.md</code> carries all 101 with their signatures, generated from
+the header, grouped into the same components both source files use. That
+was the useful half. The arrow pointing back from each blueprint to the
+calls it produced is the half nobody needs.</p>
+<p>Kept rather than deleted, because a decision not to build something is
+worth as much as the decision to build it, and this one was reached by
+trying: the derivation was attempted, returned six issues out of
+seventy-four, and the reason it returned so few turned out to be the
+house style working exactly as intended.</p>
+<p>---</p>
+<h2>Current behaviour</h2>
+<p><strong>The complete public surface exists in one place and is derived</strong> —
+<code>src/cera.info.md</code> carries all 101 calls in seven sections, generated
+from the header, so it cannot drift from what the engine actually
+publishes.</p>
+<p>**What does not exist is the other direction: which blueprint produced
+which call.** Someone working through <code>issues/completed/</code> in order to
+rebuild this project reaches the end of a ticket knowing what behaviour
+was wanted and not what it is called.</p>
+<h3>Why the obvious derivation does not work</h3>
+<p>Crediting an issue with the calls it names was tried and returns almost
+nothing: <strong>six issues out of seventy-four name a call at all</strong>, and
+three of those are phase 9's own.</p>
+<p>That is not an accident and not a defect in the issues. It is this
+project's house style working exactly as intended — describe a function
+in English rather than by its name, because a name is not something a
+reader can reason about. The blueprints say *a station is added to a
+running program and started by the ordinary readiness check*, which is
+the right sentence, and they do not say which call does it.</p>
+<p>So the mapping cannot be extracted. It has to be decided, one blueprint
+at a time, by somebody who reads the blueprint and knows the header.</p>
+<h2>Intended behaviour</h2>
+<p>**Each completed issue that produced a call says so, once, in a short
+section at the end**, naming the calls and their signatures as declared
+in <code>cera.h</code>.</p>
+<p>The section is an addition to the blueprint, not a replacement for its
+prose. The English stays exactly as it is — it is what makes the ticket
+readable — and the table underneath is what makes it buildable.</p>
+<h3>What each entry has to distinguish</h3>
+<p><strong>Produced</strong> and <strong>mentioned</strong> are different, and a table that blurs
+them is worse than none, because a reader trusts a table more than a
+paragraph. An issue that changed how an existing call behaves is not the
+issue that introduced it, and both facts are worth having.</p>
+<h3>Where it must not go</h3>
+<p><strong>Not into the tickets that only discuss calls in passing.</strong> Phase 9's
+own three name a great many calls as examples of what was moved or
+renamed, and none of them produced any of those calls.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. The shared ring: its shape, its file, one writer and one reader in a
-   test, with the reader losing events on purpose and being told.
-2. The build flag, and a demonstration that an unwatched program
-   contains none of the emitting — read from the binary's symbols
-   rather than asserted.
-3. The events, one at a time, each with the emit at the place the thing
-   actually happens rather than near it.
-4. A reader in C, in the test suite, that follows a running program and
-   reconstructs how many times each station ran — checked against the
-   counters the program itself keeps.
-5. The map file's own reading of the trail: a program watched for its
-   whole life should be reconstructible from the events alone, and
-   comparing that reconstruction against a dump is the strongest test
-   available.</p>
-<h2>Open questions</h2>
-<ul>
-<li><strong>How is the ring's size chosen?</strong> A build flag with a number is the</li>
-<p>  obvious answer and it puts the decision on somebody who has no way to
-  know what a good number is. A size derived from the station count is
-  a guess with better manners. Undecided.</p>
-<li><strong>Does the trail survive the program that wrote it?</strong> A file in the</li>
-<p>  RAM tier outlives the process that made it, so a reader could attach
-  after a program died and read its last moments — which sounds
-  valuable and means the file cannot be removed on exit, and therefore
-  accumulates. Undecided.</p>
-<li><strong>What does a second program watching the same map do?</strong> Nothing</li>
-<p>  stops two programs writing one ring if they are handed the same path.
-  Refusing needs a lock; allowing needs the events to say which program
-  they came from. Undecided, and worth deciding before anybody hits it
-  by accident.</p>
-<li>**Is the event for a rewire the same kind of thing as the event for a</li>
-<p>  delivery?** One says the graph changed shape and the other says
-  something moved through it. A reader has to handle both, and a single
-  stream in one order is the only way it can know which happened first.</p>
-</ul>
+<p>1. <strong>Start from the header's seven sections</strong>, which map onto phases
+   closely enough to narrow each call to two or three candidate
+   blueprints before any reading is needed.
+2. <strong>Read the candidates and assign.</strong> This is the work, and there is no
+   way around it being the work.
+3. <strong>Generate the tables from the assignment</strong>, so the signatures come
+   from the header rather than being typed, and re-running the
+   generation after a rename updates every table.
+4. <strong>Report the calls nothing claims.</strong> A call no blueprint produced is
+   either a gap in the record or a function that arrived without a
+   ticket, and both are worth knowing about before the list is called
+   finished.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="issue-803-the-viewer.html">803 — The viewer</a>, which reads this and does</li>
-<p>  nothing else</p>
-<li><a href="done-702-station-statistics.html">702 — Station statistics</a>, whose</li>
-<p>  build-time switch this copies and whose counters a reader checks
-  itself against</p>
-<li><a href="done-701-buffer-growth-reporting.html">701 — Buffer growth reporting</a>,</li>
-<p>  which already notices the one thing most worth watching for</p>
-<li><a href="done-106-stopping-on-purpose.html">106 — Stopping on purpose</a>,</li>
-<p>  whose report is what this replaces for the living case</p>
-<li><a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>,</li>
-<p>  which is the same question asked of a program standing still</p>
-<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which</li>
-<p>  is a door where this is a window, and shares nothing with it</p>
+<li><a href="done-902-the-header-says-what-is-public.html">902</a>, which promised</li>
+<p>  this and settled the surface it needs</p>
+<li><a href="done-905-the-prefix.html">905</a>, which fixed the names, so the</li>
+<p>  tables can be written once rather than twice</p>
+<li><code>src/cera.info.md</code>, the derived list this has to be reconciled with</li>
 </ul>
 
 </main>

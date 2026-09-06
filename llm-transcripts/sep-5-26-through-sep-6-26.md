@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 18:20:33
+Generated on: 2026-09-05 19:12:47
 
 --------------------------------------------------------------------------------
 
@@ -1438,6 +1438,215 @@ attaches it to the wrong call — a parameter's type drags its own explanation
 along. I caught it because `cera_task_call_t` came out documented as if it were
 a task. Keyed to what a declaration *defines* rather than what it mentions, it
 lands right. Worth knowing if you ever regenerate that file.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 8
+
+So, the cera.h file doesn't need vimfolds for each declaration. The vimfold is
+hiding... nothing except the signature. Not ideal! We just need vimfolds for the
+larger sections. They're needed for source files, but not header files, because
+a header declaration is already just one line.
+
+
+  Everything that left went to cera.h.info.md: what each call does, and every
+  struct's fields as a table.
+
+
+there should be one info.md file for both the .c and the .h file.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 8
+
+A fold hiding one line. Let me strip the inner folds — and the banners, which
+now just repeat the fold label.
+
+
+Packed one-liners will read more like an index. Let me only space around the
+multi-line declarations.
+
+
+The old blanks survived. Let me drop them all first, then insert only around
+multi-line declarations.
+
+
+433 lines and it reads like an index. Now test 117 must read declarations rather
+than fold markers.
+
+
+One difference: the `static inline` that lives only in the header. Same
+exclusion as the body.
+
+
+Now merging the two info files into one. Let me see what references them.
+
+
+Both done. Tree is clean except `CLAUDE.md`, which isn't mine.
+
+
+## The header
+
+
+**433 lines**, down from 2,601 at the start of this work. It folds at the
+component level and nowhere else — eleven lines when shut, and opening one
+gives that component's declarations as a plain list:
+
+
+```
+
+/* {{{ 012 — the pool */
+
+typedef struct task cera_task_t;
+
+typedef void (*cera_task_call_t)(cera_task_t *t);
+
+
+struct task { ... };
+
+
+typedef struct pool cera_pool_t;
+
+typedef void (*cera_pool_finish_t)(void *ctx, cera_task_t *t);
+
+void cera_pool_push(cera_pool_t *p, cera_task_t *t);
+
+cera_task_t *cera_pool_pop(cera_pool_t *p);
+
+int cera_pool_worker_index(void);
+
+...
+
+/* }}} */
+
+```
+
+
+Two things went besides the per-declaration folds. **The banners** — inside a
+fold already labelled with the component's name, four more lines saying it again
+is the same sentence twice. And **the blank lines between one-liners**, so a run
+of declarations reads as an index; only structs and wrapped signatures get space
+around them.
+
+
+The mirroring test had to change with it — it was reading the header's order
+out of fold markers that no longer exist, and now reads the declarations
+themselves. Both sides skip anything `static`: the body's private calls, and the
+one `inline` that's defined where it's declared and so has no second place to
+disagree with.
+
+
+## One document
+
+
+`src/cera.info.md` replaces both. It carries how to use the engine, what's
+public and what checks it, how the two files are arranged, what's inside the
+body that isn't in the header, and then every call and every type with what each
+one means — 2,458 lines.
+
+
+The argument for merging is the same one that made the two files mirror each
+other: they're one thing seen twice, and a reader who wants to know what a call
+does shouldn't first have to decide which file to open.
+
+
+I also repointed the table of contents, both file headers, and three blueprints
+that named the old files. The generated site rebuilds with zero unresolved
+references, and the full suite passes.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 9
+
+Okay great. What next?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 9
+
+Let me check the actual state of what's open rather than answer from memory.
+
+
+The engine is finished work now. Everything open is about **letting somebody
+else see it**, and there are two holes with real consequences.
+
+
+## The two that are actually costing something
+
+
+**Nothing runs when you arrive.** `./run-demo` prints an apology. The seven
+phase demos were deleted on purpose — they demonstrated a batch program, which
+is the opposite of what this engine is for — and their replacements (ticket
+713) were never built. `make example` works, but it shows one four-station
+graph. Somebody who clones this and wants to see a program come up, absorb a
+value written from outside, get rewired mid-run, and take a box compiled while
+it was running has nothing to type. All of that is built and proven; none of it
+is demonstrable.
+
+
+**The only consumer still doesn't build.** The train game names the Lua
+generator that was replaced by the C one. I confirmed it again just now — same
+error. The out-of-tree test proves a *new* program can be built with this
+engine; nothing has yet proved an *existing* one survives an upgrade, and that's
+the more honest question. Fixing it would also be the first real measurement of
+what an engine change costs somebody downstream.
+
+
+## My recommendation, in order
+
+
+**The train game first.** It's the smallest of the three by far — the
+generator moved and its invocation changed — and it converts the phase 9 claim
+from "a new program builds" into "a program somebody already wrote still runs."
+It's also the only item here that tests the engine rather than the presentation
+of it.
+
+
+**Then the demos (713).** This is the front door and it's currently shut. The
+ticket already argues the shape: not thirty-five presses of the space bar while
+a program does things to itself, but a program you keep alive and interfere
+with. It's the largest of the three and the one that most changes what a visitor
+sees.
+
+
+**Then the viewer (802 and 803).** A build flag leaves a trail in shared memory;
+a page reads it and cannot touch what it watches. 802 is self-contained and
+useful on its own — even without the page, a trail you can `tail` beats
+reading stderr. 803's awkward part is admitted in the ticket: a browser can't
+map shared memory, so something has to stand between, and choosing that decides
+how much of it is plumbing.
+
+
+## The rest, and why they're not first
+
+
+**909** — the blueprints don't name their calls. Real, but it's a day of
+reading and it costs nothing until somebody rebuilds the project from the
+tickets.
+
+
+**801** — the canvas draws but can't hand you a file. The writer exists in C;
+it needs compiling to WebAssembly and wiring in. Middling size, and it's a door
+nobody is currently trying to walk through.
+
+
+**705, 709, 711** — documentation polish. Two of five interactive pieces
+missing, the slideshow, and a renumbering nobody is blocked on.
+
+
+**107 and 108** — several queues, and a station saying which one its work goes
+to. Both say *confer before building*, both have had a central decision reversed
+once, and 108 still has seven unanswered questions at the bottom. These are
+conversations, not tasks, and they're the only open work that would change the
+engine rather than its surroundings.
+
+
+Want me to start on the train game? It's an hour or two and it ends with a
+second thing that runs.
 
 
 --------------------------------------------------------------------------------

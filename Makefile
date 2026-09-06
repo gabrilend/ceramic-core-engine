@@ -253,6 +253,13 @@ $(BUILD)/071-test-gentext: $(DIR)/tests/071-test-gentext.c $(GEN_LIB) | $(BUILD)
 $(BUILD)/106-test-mapwrite: $(DIR)/tests/106-test-mapwrite.c $(GEN_LIB) | $(BUILD)
 	$(CC) $(CFLAGS) -I$(DIR)/scripts -o $@ $< $(GEN_LIB)
 
+# The trail's test is the one thing built with watching turned on, since
+# it is the only thing that has anything to watch. Everything else is
+# built without it, which is also what proves an ordinary program pays
+# nothing: the emitting is not in those binaries at all.
+$(BUILD)/118-test-the-trail: $(DIR)/tests/118-test-the-trail.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
+	$(CC) $(CFLAGS) -DCERA_WATCH -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
+
 # Shell-driven tests sit beside the compiled ones — the generator's
 # command-line conduct is proven from the shell.
 TEST_SCRIPTS := $(wildcard $(DIR)/tests/*.sh)

@@ -36,9 +36,7 @@
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
-<a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html" class="here">803 — The viewer</a>
-<a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -124,6 +122,7 @@
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
 <a href="done-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="done-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
 <a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
@@ -132,6 +131,7 @@
 <a href="done-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="done-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="done-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
+<a href="done-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <h2>Interfaces</h2>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
@@ -159,7 +159,7 @@
 <p>A page that watches a running program and <strong>cannot touch it</strong>. Stations
 light up as they run, values move along wires, buffers fill and drain,
 and nothing on the page can reach back into what it is looking at.</p>
-<p>It reads the trail <a href="issue-802-a-program-you-can-watch.html">802</a> leaves and
+<p>It reads the trail <a href="done-802-a-program-you-can-watch.html">802</a> leaves and
 does nothing else.</p>
 <h2>Current behavior</h2>
 <p><strong>Watching a running program means reading stderr.</strong> The observer
@@ -180,7 +180,7 @@ starts a station, no field that writes a constant, no wire that can be
 drawn. A viewer that could reach in would be a debugger, and a debugger
 is a different thing with different rules — chiefly that its presence
 is allowed to change what it is looking at, which is exactly what
-<a href="issue-802-a-program-you-can-watch.html">802</a> refuses.</p>
+<a href="done-802-a-program-you-can-watch.html">802</a> refuses.</p>
 <p>Being unable to touch is what makes it safe to point at a program that
 matters. Somebody watching a live thing should not be one mis-click
 from changing it.</p>
@@ -212,28 +212,56 @@ that must agree.</p>
 <p>  says so, in the picture rather than in a corner. A view quietly
   missing events is a view somebody will trust.</p>
 </ul>
-<h3>How it gets the trail into a browser</h3>
-<p>**This is the one genuinely awkward part and it should be admitted
-early.** A page cannot map shared memory. So something has to stand
-between the ring and the page, and what that something is decides how
-much of this issue is about plumbing.</p>
-<p>The obvious answers, in the order they cost:</p>
-<ul>
-<li><strong>A tiny reader that serves the events over a socket the page opens.</strong></li>
-<p>  A separate program, doing nothing but forwarding — which keeps the
-  "cannot touch" property intact by construction, since forwarding is
-  all it can do.</p>
-<li><strong>A file the page polls.</strong> No server, but a page cannot read a local</li>
-<p>  file it was not handed, so somebody has to hand it one repeatedly.</p>
-<li><strong>The reader writes a page.</strong> No live view at all; a snapshot</li>
-<p>  regenerated. Cheapest and weakest.</p>
-</ul>
-<p><strong>Undecided, and it is the first thing to decide</strong>, because the rest of
-the page is the same either way and this determines whether the phase
-gains a running program nobody asked for.</p>
+<h3>What stands between the ring and the page — decided</h3>
+<p><strong>A forwarding reader.</strong> A separate program maps the ring and pushes
+events down a socket the page opens. It does nothing else, which is what
+keeps <em>cannot touch</em> true by construction rather than by discipline: a
+program that can only forward cannot be talked into writing.</p>
+<p>The cost is stated rather than hidden — **this project gains its first
+long-running program**, and a port to pick. The two alternatives were a
+file something has to keep handing the page, which needs a server
+anyway and adds the poll interval as latency, and a regenerated static
+page, which is a photograph rather than a view and makes lighting and
+buffer depth close to meaningless.</p>
+<h3>Where the picture comes from — decided</h3>
+<p><strong>The map file.</strong> The viewer reads it, counts the stations, and knows
+the whole graph before a single event arrives — including branches that
+have not run and may never run. Learning the shape from the trail alone
+was refused: a program with a rare branch would draw wrong for a long
+time and the page would have no way to know which parts it had not seen.</p>
+<p>Rewiring events from the trail keep it current afterwards, so a program
+edited while it runs stays drawn correctly.</p>
+<h3>The layout</h3>
+<p>**A grid, as close to square as the station count allows, preferring an
+extra column to an extra row.** Boxes are placed in it with padding
+between them and the wires drawn as lines. That is the whole of the
+automatic layout: no force simulation, no ranking, nothing that moves
+under you while you are looking at it.</p>
+<p><strong>Dragging rearranges and changes nothing.</strong> Where a box sits is a fact
+about the picture, not about the program. Nothing a drag does can reach
+the thing being watched.</p>
+<p><strong>A layout can be saved beside the map</strong>, as a small file of its own —
+<code>&lt;name&gt;.lay</code> next to <code>&lt;name&gt;.map</code>. Saved only when asked for. The map
+file is never touched, because the viewer does not write to the thing it
+is describing any more than it writes to the program.</p>
+<h3>A box that appears while you are watching</h3>
+<p>A station added to a running program has to go somewhere, and the
+obvious answer — put it near the ones it is wired to — does not work at
+the moment it is needed. **Creating a station and wiring it are separate
+events**, so when the box first appears it has no wires at all.</p>
+<p>So placement happens in two stages:</p>
+<p>1. <strong>On creation</strong>, the box is appended to the grid, in the next free
+   cell. This is always possible and never wrong, only uninformative.
+2. <strong>When its wires arrive</strong>, if nobody has dragged it, it moves once to
+   a spot roughly equidistant from the stations it connects to, nudged
+   until it overlaps nothing.</p>
+<p><strong>A box a person has dragged is pinned and never moves again.</strong> The rule
+is one sentence: the automatic layout may place a box the viewer has
+never touched, and may not move one they have. A picture that rearranges
+itself under a hand is worse than a picture in the wrong order.</p>
 <h2>Suggested implementation steps</h2>
 <p>1. Read the trail in a program that is not a browser, and print what it
-   sees. This is <a href="issue-802-a-program-you-can-watch.html">802</a>'s test grown up,
+   sees. This is <a href="done-802-a-program-you-can-watch.html">802</a>'s test grown up,
    and it proves the format before anything is drawn.
 2. Decide the bridge, in the open question below.
 3. The graph, drawn from a dump, with no live data in it at all.
@@ -244,28 +272,13 @@ gains a running program nobody asked for.</p>
    example, whatever phase 8's panel turns out to be.</p>
 <h2>Open questions</h2>
 <ul>
-<li><strong>What stands between the shared ring and the page?</strong> The three</li>
-<p>  answers above, and the choice decides whether phase 8 gains a
-  long-running program. Nothing else in this project has one, and that
-  is worth weighing rather than accepting.</p>
-<li>**Does the viewer need the program's dump, or can it learn the graph</li>
-<p>  from the trail alone?** The trail says a station ran and a value
-  moved from one to another, so the shape could be discovered by
-  watching. Discovering it means the picture is incomplete until
-  everything has run at least once, which for a program with a rare
-  branch is a picture that is wrong for a long time. Asking for a dump
-  once is exact and needs a second channel.</p>
 <li><strong>How much history does it hold?</strong> A view of <em>now</em> needs none. A view</li>
-<p>  that answers "what happened just before it wedged" needs some, and
-  the amount is the difference between a dashboard and a recorder.</p>
-<li><strong>Does watching a program that has finished mean anything?</strong> If the</li>
-<p>  trail outlives the process — <a href="issue-802-a-program-you-can-watch.html">802</a>
-  has not decided — then the same page could replay a dead program, and
-  it is worth knowing whether that is one feature or two.</p>
+<p>  that answers "what happened just before it wedged" needs some, and the
+  amount is the difference between a dashboard and a recorder.</p>
 </ul>
 <h2>Related</h2>
 <ul>
-<li><a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>, the</li>
+<li><a href="done-802-a-program-you-can-watch.html">802 — A program you can watch</a>, the</li>
 <p>  trail this reads and the only thing it depends on</p>
 <li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which</li>
 <p>  it shares nothing with, deliberately</p>

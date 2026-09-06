@@ -69,27 +69,67 @@ that must agree.
   says so, in the picture rather than in a corner. A view quietly
   missing events is a view somebody will trust.
 
-### How it gets the trail into a browser
+### What stands between the ring and the page — decided
 
-**This is the one genuinely awkward part and it should be admitted
-early.** A page cannot map shared memory. So something has to stand
-between the ring and the page, and what that something is decides how
-much of this issue is about plumbing.
+**A forwarding reader.** A separate program maps the ring and pushes
+events down a socket the page opens. It does nothing else, which is what
+keeps *cannot touch* true by construction rather than by discipline: a
+program that can only forward cannot be talked into writing.
 
-The obvious answers, in the order they cost:
+The cost is stated rather than hidden — **this project gains its first
+long-running program**, and a port to pick. The two alternatives were a
+file something has to keep handing the page, which needs a server
+anyway and adds the poll interval as latency, and a regenerated static
+page, which is a photograph rather than a view and makes lighting and
+buffer depth close to meaningless.
 
-- **A tiny reader that serves the events over a socket the page opens.**
-  A separate program, doing nothing but forwarding — which keeps the
-  "cannot touch" property intact by construction, since forwarding is
-  all it can do.
-- **A file the page polls.** No server, but a page cannot read a local
-  file it was not handed, so somebody has to hand it one repeatedly.
-- **The reader writes a page.** No live view at all; a snapshot
-  regenerated. Cheapest and weakest.
+### Where the picture comes from — decided
 
-**Undecided, and it is the first thing to decide**, because the rest of
-the page is the same either way and this determines whether the phase
-gains a running program nobody asked for.
+**The map file.** The viewer reads it, counts the stations, and knows
+the whole graph before a single event arrives — including branches that
+have not run and may never run. Learning the shape from the trail alone
+was refused: a program with a rare branch would draw wrong for a long
+time and the page would have no way to know which parts it had not seen.
+
+Rewiring events from the trail keep it current afterwards, so a program
+edited while it runs stays drawn correctly.
+
+### The layout
+
+**A grid, as close to square as the station count allows, preferring an
+extra column to an extra row.** Boxes are placed in it with padding
+between them and the wires drawn as lines. That is the whole of the
+automatic layout: no force simulation, no ranking, nothing that moves
+under you while you are looking at it.
+
+**Dragging rearranges and changes nothing.** Where a box sits is a fact
+about the picture, not about the program. Nothing a drag does can reach
+the thing being watched.
+
+**A layout can be saved beside the map**, as a small file of its own —
+`<name>.lay` next to `<name>.map`. Saved only when asked for. The map
+file is never touched, because the viewer does not write to the thing it
+is describing any more than it writes to the program.
+
+### A box that appears while you are watching
+
+A station added to a running program has to go somewhere, and the
+obvious answer — put it near the ones it is wired to — does not work at
+the moment it is needed. **Creating a station and wiring it are separate
+events**, so when the box first appears it has no wires at all.
+
+So placement happens in two stages:
+
+1. **On creation**, the box is appended to the grid, in the next free
+   cell. This is always possible and never wrong, only uninformative.
+2. **When its wires arrive**, if nobody has dragged it, it moves once to
+   a spot roughly equidistant from the stations it connects to, nudged
+   until it overlaps nothing.
+
+**A box a person has dragged is pinned and never moves again.** The rule
+is one sentence: the automatic layout may place a box the viewer has
+never touched, and may not move one they have. A picture that rearranges
+itself under a hand is worse than a picture in the wrong order.
 
 ## Suggested implementation steps
 
@@ -106,24 +146,9 @@ gains a running program nobody asked for.
 
 ## Open questions
 
-- **What stands between the shared ring and the page?** The three
-  answers above, and the choice decides whether phase 8 gains a
-  long-running program. Nothing else in this project has one, and that
-  is worth weighing rather than accepting.
-- **Does the viewer need the program's dump, or can it learn the graph
-  from the trail alone?** The trail says a station ran and a value
-  moved from one to another, so the shape could be discovered by
-  watching. Discovering it means the picture is incomplete until
-  everything has run at least once, which for a program with a rare
-  branch is a picture that is wrong for a long time. Asking for a dump
-  once is exact and needs a second channel.
 - **How much history does it hold?** A view of *now* needs none. A view
-  that answers "what happened just before it wedged" needs some, and
-  the amount is the difference between a dashboard and a recorder.
-- **Does watching a program that has finished mean anything?** If the
-  trail outlives the process — [802](802-a-program-you-can-watch.md)
-  has not decided — then the same page could replay a dead program, and
-  it is worth knowing whether that is one feature or two.
+  that answers "what happened just before it wedged" needs some, and the
+  amount is the difference between a dashboard and a recorder.
 
 ## Related
 

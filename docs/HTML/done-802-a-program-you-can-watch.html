@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>502 — The comparator</title>
+<title>802 — A program you can watch</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -102,7 +102,7 @@
 <a href="done-407-gather-at-pickup.html">407 — Gathering at pickup</a>
 <a href="done-408-values-back-into-text.html">408 — Values back into text</a>
 <a href="done-501-routing-dispatch.html">501 — Routing dispatch</a>
-<a href="done-502-comparator.html" class="here">502 — The comparator</a>
+<a href="done-502-comparator.html">502 — The comparator</a>
 <a href="done-503-three-way-comparison.html">503 — Three-way comparison on the delivery path</a>
 <a href="done-504-iterator.html">504 — The iterator</a>
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
@@ -122,7 +122,7 @@
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
 <a href="done-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
-<a href="done-802-a-program-you-can-watch.html">802 — A program you can watch</a>
+<a href="done-802-a-program-you-can-watch.html" class="here">802 — A program you can watch</a>
 <a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
 <a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
@@ -155,82 +155,192 @@
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>502 — The comparator</h1>
-<h2>Current behavior</h2>
-<p>Built. Placement by name gives a comparator one port more than its
-box has parameters — the threshold, at the end of the ports array,
-typed to the box's return value from the registry, exactly where
-this issue put it. The shim reads only the real parameters; the
-threshold rides the task as its last input and is consulted after
-the box returns, on the delivery path. It participates in readiness
-like any port: the buffered-threshold test proves a station starving
-until its threshold arrives. All three outcomes reach their own
-ports; an unwired outcome discards ten values without a whisper. No
-operator setting exists anywhere — the operator table in this issue
-remains a statement about wiring, and the demo makes it in numbers.
-A sink asked to be a comparator, and a comparator whose return type
-has no ordering, are both refused at placement naming the fix.</p>
+<h1>802 — A program you can watch</h1>
+<p>A program built one way runs and says nothing. Built the other way it
+runs identically and **leaves a trail somebody else can read while it
+happens** — every station that ran, every value that moved, every
+buffer that grew — without the program waiting on anybody, noticing
+anybody, or behaving differently because somebody is there.</p>
+<p>The trail is the deliverable here. What reads it is
+<a href="issue-803-the-viewer.html">803</a>, and it is deliberately not this issue.</p>
+<h2>Current behaviour</h2>
+<p><strong>Built.</strong> A program compiled with <code>CERA_WATCH</code> writes a fixed-size
+event into a ring in shared memory at each thing worth seeing, and
+anybody who can open the file can read them. The program never waits for
+a reader, never learns one is there, and cannot be slowed by one.</p>
+<p>Ten kinds of event: the program came up, a task became due, a station
+ran and for how long, a value moved from one station's port to another's,
+a buffer grew, a station was placed or removed, a wire was drawn or cut,
+and the program finished. Each is emitted at the place the thing
+actually happens rather than near it.</p>
+<p><strong>The emitting is not in an ordinary build</strong>, and that is read from the
+object file rather than asserted: without the flag neither the emitter
+nor the clock it reads exists as a symbol, and the object is about three
+kilobytes smaller. <strong>The reading is always compiled</strong>, because a watcher
+is a different program with no reason to have been built for watching,
+and having both halves in one place is what keeps the ring's shape
+written down once.</p>
+<h3>What the test holds down</h3>
+<p>Five things, and the last two are the ones worth having:</p>
+<ul>
+<li>A program writes events and a reader that is not the program reads</li>
+<p>  them back in sequence.</p>
+<li>Its account and the program's own counters agree exactly — two</li>
+<p>  independent tallies of one run, and they match.</p>
+<li>**A ring already being written is refused, naming the process that</li>
+<p>  owns it.** The same process is not exempt: two maps in one process are
+  two programs, and a second seizing the first's ring truncates it under
+  a reader that was following it. That was found by writing the test —
+  the first version exempted the same process, and the rival promptly
+  wiped the ring the reader was reading.</p>
+<li><strong>A reader too slow for the ring loses events and is told how many</strong>,</li>
+<p>  and the arithmetic is checked rather than trusted: it lost 18,980, it
+  kept 1,024, and the first one it kept is number 18,981. A count that
+  did not add up would mean a reader quietly showing a shorter story
+  than the one that happened.</p>
+<li>The trail says when the program it describes has ended, so a viewer</li>
+<p>  can stop waiting on a stream that will never move again.</p>
+</ul>
 <h2>Intended behavior</h2>
-<p>Three output ports, meaning less, equal, and greater. The box's return
-value is compared against a threshold and goes down exactly one of
-them.</p>
-<p><strong>The threshold is an extra input port.</strong> A comparator station has one
-more port than its box function has parameters, and that last port
-holds the value to compare against.</p>
-<p><strong>It is not passed to the box function.</strong> The comparison happens after
-the function returns, on the delivery path. Ports and parameters stop
-being one-to-one for this one kind, which is why the kind is written in
-the map rather than inferred — see issue 601.</p>
-<p><strong>It participates in the readiness check like any other port.</strong> The
-station cannot run until it holds something. In practice it is nearly
-always a static port holding a fixed threshold, and a static port is
-always full, so it usually has no effect on readiness at all.</p>
-<p><strong>Its type is never declared anywhere.</strong> It must match the box
-function's return type, because that is what it gets compared against,
-and the registry already knows what that is. This is stricter than a
-declaration and impossible to get wrong.</p>
-<h2>There is no operator setting</h2>
-<p>Choosing an operator is choosing which ports to wire:</p>
+<h3>It is a build-time choice, and the cost is zero when it is off</h3>
+<p><strong>A flag on the build says this program can be watched.</strong> With it, the
+engine emits an event at each thing worth seeing. Without it, the
+emitting compiles out entirely — not a branch that is usually false, an
+absence.</p>
+<p>This is the shape <a href="done-702-station-statistics.html">702</a> already
+chose for timing, and the reasoning is quoted rather than re-derived:
+*a measurement apparatus whose cost is unmeasured is a rumour, and one
+that cannot be removed is a tax.* A watched program is allowed to be
+slower than an unwatched one; an unwatched one is not allowed to pay
+anything at all.</p>
+<p><strong>Why a build flag rather than a run-time switch.</strong> A run-time switch
+is a branch on the delivery path, taken on every value that moves, to
+answer a question whose answer never changes during a run. The engine's
+standing habit is to resolve such a question while somebody can still
+read an error message about it — the same reasoning that turned box
+records into placement functions (<a href="done-311b-placement-instead-of-records.html">311b</a>).</p>
+<h3>Watching must never change what is watched</h3>
+<p><strong>This is the constraint the whole issue is held to</strong>, and everything
+below follows from it.</p>
+<ul>
+<li><strong>The program never waits for a reader.</strong> No lock a reader can hold,</li>
+<p>  no buffer a reader can fill, no handshake. A reader that stops
+  reading is a reader that stops receiving.</p>
+<li><strong>A slow reader loses events and is told how many.</strong> Losing them is</li>
+<p>  correct: the alternative is a reader that can slow the program by
+  being slow itself, which is the failure this rule exists to prevent.
+  Being told is what keeps it honest — a view quietly missing events is
+  a view somebody will trust.</p>
+<li><strong>Any number of readers, none of them known to the program.</strong> A</li>
+<p>  reader attaches, reads, and detaches without the program learning
+  that any of it happened. Two readers do not interfere with each
+  other, because neither has anything the other needs.</p>
+<li><strong>A reader cannot write.</strong> Nothing it does can reach the program.</li>
+<p>  This is a window, not a door; <a href="issue-801-browser-workbench.html">801</a> is the
+  door and shares nothing with this.</p>
+</ul>
+<h3>Where the trail lives</h3>
+<p><strong>A ring in shared memory</strong>, under the same RAM tier logs already use
+— the readable one, since this is read and never executed.</p>
+<p>Chosen over the alternatives for what it does <em>not</em> need: no socket to
+listen on, no port to allocate, no protocol, no dependency, and no
+second thread inside the program. A reader opens a file and maps it.</p>
+<p><strong>A writer that catches up with a reader overwrites it</strong>, which is the
+only arrangement in which the program cannot be held up. The ring is
+sized by the build; a reader that cannot keep up with a given size is a
+reader that should ask for a bigger one, and until then it is told what
+it missed.</p>
+<p><strong>Multiple writers, because every worker emits.</strong> What is written is
+small and fixed-size, so a slot is claimed with one atomic step and
+filled afterwards — the same shape a port's slot state already has
+(<a href="done-210c-a-state-on-every-slot.html">210c</a>), for the same reason.</p>
+<h3>What counts as an event</h3>
+<p>Small, fixed-size, and about the graph rather than about values.</p>
 <table>
-<tr><td>Operator</td><td>Wire these ports to the same place</td></tr>
-<tr><td><code>&lt;</code></td><td>less</td></tr>
-<tr><td><code>&lt;=</code></td><td>less, equal</td></tr>
-<tr><td><code>==</code></td><td>equal</td></tr>
-<tr><td><code>!=</code></td><td>less, greater</td></tr>
-<tr><td><code>&gt;=</code></td><td>equal, greater</td></tr>
-<tr><td><code>&gt;</code></td><td>greater</td></tr>
+<tr><td>event</td><td>what it carries</td></tr>
+<tr><td>a station ran</td><td>which station, how long it took</td></tr>
+<tr><td>a value was delivered</td><td>from which station and port, to which station and port</td></tr>
+<tr><td>a task became due</td><td>which station</td></tr>
+<tr><td>a buffer grew</td><td>which station, which port, how deep it is now</td></tr>
+<tr><td>the program came up</td><td>how many stations, how many workers</td></tr>
+<tr><td>the program finished</td><td>how many tasks in total</td></tr>
+<tr><td>a station was added, removed, or rewired</td><td>which, and into what</td></tr>
 </table>
-<p>All six fall out of three ports, along with combinations no operator
-can name — sending equal one way and greater another. The map says it
-by where the arrows go and the engine needs no setting to read.</p>
-<p>An earlier design carried an operator on the station plus a lookup
-table turning a comparison result into true or false. It was dropped
-because three ports already express strictly more.</p>
-<h2>Where the extra port lives</h2>
-<p>At the end of the ports array, not in a field of its own. The shim
-receives ports zero through N-1; the routing reads port N. The
-readiness check does not care either way — it walks all of them.</p>
-<p>This is why the station struct needs no comparator-specific field and
-the station table stays a flat array of identical records.</p>
+<p>**Values are not carried, and that is a decision rather than an
+omission.** A value is any size at all, including sizes that would not
+fit in a fixed-size slot, and copying one onto the trail is a cost paid
+on the delivery path for something a watcher usually does not need — it
+wants to see <em>that</em> the graph is moving and <em>where</em> it is stuck.
+Somebody who wants values has <a href="done-712-capturing-a-running-program.html">712</a>,
+which writes them all, at a moment nothing is running.</p>
+<p><strong>The station's name is not carried either</strong>, because a name is a
+string and this is fixed-size. A reader that wants names reads them
+once, from a dump the program can be asked for, and holds them against
+the indices — which is the same trick a wire already is.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. Station creation allocates the extra port for a comparator, typed to
-   match the box's return value from the registry.
-2. Fill the comparator row of issue 501's dispatch: read the threshold
-   port, compare (issue 503), return port zero, one, or two.
-3. Ensure the shim is handed only the real parameters.
-4. Extend the construction calls from issue 207 to place a comparator.
-5. A test of all three outcomes reaching the right ports.
-6. A test of a comparator whose threshold is a buffer rather than a
-   static, confirming it blocks until fed — the case that proves the
-   extra port really is in the readiness walk.
-7. A test that a port left unwired discards its values rather than
-   failing.</p>
+<p>1. The shared ring: its shape, its file, one writer and one reader in a
+   test, with the reader losing events on purpose and being told.
+2. The build flag, and a demonstration that an unwatched program
+   contains none of the emitting — read from the binary's symbols
+   rather than asserted.
+3. The events, one at a time, each with the emit at the place the thing
+   actually happens rather than near it.
+4. A reader in C, in the test suite, that follows a running program and
+   reconstructs how many times each station ran — checked against the
+   counters the program itself keeps.
+5. The map file's own reading of the trail: a program watched for its
+   whole life should be reconstructible from the events alone, and
+   comparing that reconstruction against a dump is the strongest test
+   available.</p>
+<h2>What was undecided, and is now</h2>
+<p><strong>The ring's path is the caller's, and the ring outlives the program.</strong>
+<code>cera_watch_open</code> takes a path the way the crash report already takes
+one. A caller that passes the same path every run overwrites its own
+ring and accumulates nothing; a caller that wants yesterday's last
+moments picks a different name and keeps it. The engine does not choose,
+because it has no way to know which of those anybody wants — and a file
+in the RAM tier that the engine deleted on exit could never answer *what
+happened just before it wedged*, which is most of the point.</p>
+<p><strong>The ring's size is derived, and can be overridden.</strong> Slots enough for
+a few hundred events per station, rounded up to a power of two, with a
+floor for tiny programs. A number in a build flag puts the decision on
+somebody with no way to make it; a guess from the station count is a
+guess with better manners, and a reader that cannot keep up is told
+exactly how much it missed and can ask for more.</p>
+<p><strong>Two programs cannot share one ring.</strong> The header records the writing
+process, and opening a ring whose recorded process is still alive is
+refused, naming it. Allowing it would mean every event carrying which
+program it came from, for a situation nobody wants; refusing costs one
+check at startup.</p>
+<p><strong>Every event is the same kind of thing, in one stream, in one order.</strong>
+A rewire and a delivery are one record shape discriminated by a field,
+because the only way a reader can know a wire was cut <em>before</em> a value
+tried to cross it is for both to be in the same sequence.</p>
+<p><strong>The emitting is behind the build flag; the reading is not.</strong> A watcher
+is a different program from the one being watched, and it has no reason
+to have been built with watching turned on. Both halves live in the
+engine so that the ring's shape is defined once — two readers of one
+format are two things that must agree.</p>
+<h2>Open questions</h2>
+<ul>
+<li><strong>How much history does a viewer hold?</strong> The ring holds what it holds;</li>
+<p>  what a <em>page</em> keeps is <a href="issue-803-the-viewer.html">803</a>'s question.</p>
+</ul>
 <h2>Related</h2>
 <ul>
-<li><a href="doc-005-routing.html">005 — Routing</a></li>
-<li>Issue 501 — the dispatch this fills</li>
-<li>Issue 503 — the comparison itself</li>
-<li>Issue 601 — why the kind is written rather than inferred</li>
+<li><a href="issue-803-the-viewer.html">803 — The viewer</a>, which reads this and does</li>
+<p>  nothing else</p>
+<li><a href="done-702-station-statistics.html">702 — Station statistics</a>, whose</li>
+<p>  build-time switch this copies and whose counters a reader checks
+  itself against</p>
+<li><a href="done-701-buffer-growth-reporting.html">701 — Buffer growth reporting</a>,</li>
+<p>  which already notices the one thing most worth watching for</p>
+<li><a href="done-106-stopping-on-purpose.html">106 — Stopping on purpose</a>,</li>
+<p>  whose report is what this replaces for the living case</p>
+<li><a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>,</li>
+<p>  which is the same question asked of a program standing still</p>
+<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which</li>
+<p>  is a door where this is a window, and shares nothing with it</p>
 </ul>
 
 </main>

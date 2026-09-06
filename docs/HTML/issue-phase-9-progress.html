@@ -36,9 +36,7 @@
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
-<a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
-<a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -124,6 +122,7 @@
 <a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>
 <a href="done-710-demos-after-the-pull-path.html">710 — The demos after the pull path</a>
 <a href="done-712-capturing-a-running-program.html">712 — Capturing a running program</a>
+<a href="done-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="done-901-the-engine-becomes-one-file.html">901 — The engine becomes one file</a>
 <a href="done-902-the-header-says-what-is-public.html">902 — The header says what is public</a>
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
@@ -132,6 +131,7 @@
 <a href="done-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
 <a href="done-907-built-outside-the-tree.html">907 — Built outside the tree</a>
 <a href="done-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
+<a href="done-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <h2>Interfaces</h2>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
@@ -171,7 +171,7 @@ translation unit as its callers can be <code>static</code>.</p>
 <tr><td><a href="done-903-everything-else-goes-private.html">903 — everything else goes private</a></td><td><strong>complete</strong></td><td>123 exported symbols became 100, and a test checks it on every run — the list was derived from the header rather than written, and the test was proven by being made to fail. Seven white-box tests now compile inside the engine.</td></tr>
 <tr><td><a href="done-904-the-old-files-are-removed.html">904 — the old files are removed</a></td><td><strong>complete</strong></td><td>Gone, with their eighteen interface files and the <code>libs/</code> directory. The <code>#line</code> directives went rather than being re-pointed, and the two include paths became one.</td></tr>
 <tr><td><a href="done-905-the-prefix.html">905 — the prefix</a></td><td><strong>complete</strong></td><td>Every one of the 100 exported symbols begins <code>cera_</code>. 3,008 renames and 706 respellings across 52 files, and not one byte of test output changed. The linker's export list collapsed to a single line.</td></tr>
-<tr><td><a href="issue-909-the-blueprints-name-their-calls.html">909 — the blueprints name their calls</a></td><td>open, <strong>split out of 902</strong></td><td>Every completed blueprint saying which calls it produced. Cannot be derived — the house style keeps function names out of prose, so six issues in seventy-four name one — and so has to be decided a blueprint at a time.</td></tr>
+<tr><td><a href="done-909-the-blueprints-name-their-calls.html">909 — the blueprints name their calls</a></td><td><strong>refused</strong></td><td>Every completed blueprint saying which calls it produced. Cannot be derived — the house style keeps function names out of prose, so six issues in seventy-four name one — and so has to be decided a blueprint at a time.</td></tr>
 <tr><td><a href="done-906-an-error-reaches-the-host.html">906 — an error reaches the host</a></td><td><strong>complete</strong></td><td>An installable handler, called with the message and the exit code immediately before the engine dies. Building it meant building the funnel first: thirty places wrote to stderr and ended the process, each its own little ending.</td></tr>
 <tr><td><a href="done-907-built-outside-the-tree.html">907 — built outside the tree</a></td><td><strong>complete</strong></td><td>The capstone. <code>make test</code> builds a program with this engine in a scratch directory that cannot see this repository, runs it, and checks the answer. It caught two real faults on its first run.</td></tr>
 <tr><td><a href="done-908-two-maps-in-one-process.html">908 — two maps in one process</a></td><td><strong>complete</strong>, and it needed no code</td><td>There is no process-wide active map — it went with the statics table. What was missing was a test, because a singleton is invisible until two of something exist.</td></tr>
@@ -224,7 +224,7 @@ adds a way for a host to <em>hear</em> about a refusal, and deliberately no way
 to survive one. An error code a caller may ignore is a fallback wearing
 a return type.</p>
 <h2>Where the phase stands</h2>
-<p><strong>Eight of nine done, and the engine has left.</strong> It is two files. It
+<p><strong>Done. The engine has left.</strong> It is two files. It
 publishes 101 symbols and every one says whose it is; nothing else
 escapes at all, and a test checks that on every run. A host installing
 one function hears why it stopped. Two programs run side by side in one
@@ -233,9 +233,10 @@ process on separate pools.</p>
 a directory that cannot see this repository, writes a box and a map and
 a program from nothing, builds them the way a consumer would, and checks
 the answer that comes back.</p>
-<p>What is left is <a href="issue-909-the-blueprints-name-their-calls.html">909</a>, which is
-about the record rather than the engine: the blueprints describe
-behaviour without naming the calls that provide it.</p>
+<p>Nothing is left. <a href="done-909-the-blueprints-name-their-calls.html">909</a>
+was refused: a blueprint describes what to build, and the name a call
+ends up with is not part of that. The list of calls exists in
+<code>src/cera.info.md</code>, derived from the header, which was the useful half.</p>
 <h2>What the last three turned up</h2>
 <p><strong>A funnel had to exist before a handler could hang off it.</strong> Thirty
 places wrote a sentence to stderr and then ended the process, each its

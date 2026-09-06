@@ -167,6 +167,7 @@ typedef struct map {
     int       observer_running;
     char     *observer_path;
     int       observer_interval_ms;
+    struct cera_watch *watch;
 } cera_map_t;
 
 static inline cera_station_t *cera_map_station(cera_map_t *m, int n)
@@ -430,4 +431,44 @@ int cera_capture_whole(cera_map_t *m, const char *dir);
 int cera_capture_now(cera_map_t *m, const char *path);
 void cera_stop_now(cera_map_t *m, int exit_code, const char *why);
 /* }}} */
+
+/* {{{ 118 — watching a running program */
+typedef struct cera_watch cera_watch_t;
+typedef struct cera_watch_reader cera_watch_reader_t;
+
+enum cera_watch_kind {
+    CERA_WATCH_UP,        /* the program came up: a=stations, b=workers   */
+    CERA_WATCH_DUE,       /* a task became due: a=station                 */
+    CERA_WATCH_RAN,       /* a station ran: a=station, ns=how long        */
+    CERA_WATCH_MOVED,     /* a value was delivered: a.b -> c.d            */
+    CERA_WATCH_GREW,      /* a buffer grew: a=station, b=port, c=slots    */
+    CERA_WATCH_ADDED,     /* a station was placed: a=station              */
+    CERA_WATCH_REMOVED,   /* a station was removed: a=station             */
+    CERA_WATCH_WIRED,     /* a wire was drawn: a.b -> c.d                 */
+    CERA_WATCH_UNWIRED,   /* a wire was cut: a.b -> c.d                   */
+    CERA_WATCH_DONE,      /* the program finished: a=tasks in total       */
+    CERA_WATCH_KIND_COUNT
+};
+
+typedef struct cera_watch_event {
+    uint64_t seq;
+    uint64_t ns;
+    uint32_t kind;
+    uint32_t a;
+    uint32_t b;
+    uint32_t c;
+    uint32_t d;
+    uint32_t pad;
+} cera_watch_event_t;
+
+int cera_watch_compiled_in(void);
+const char *cera_watch_kind_name(int kind);
+const char *cera_watch_open(cera_map_t *m, const char *path);
+void cera_watch_close(cera_map_t *m);
+cera_watch_reader_t *cera_watch_attach(const char *path);
+int cera_watch_next(cera_watch_reader_t *r, cera_watch_event_t *into, uint64_t *lost);
+int cera_watch_writer_alive(cera_watch_reader_t *r);
+void cera_watch_detach(cera_watch_reader_t *r);
+/* }}} */
+
 #endif /* CERA_H */

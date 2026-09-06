@@ -33,6 +33,26 @@
  * come first.
  * ================================================================== */
 
+/*
+ * One event onto the trail, or nothing at all.
+ *
+ * Under CERA_WATCH this is a call; without it the arguments are not
+ * even evaluated, so an unwatched program carries no emitting rather
+ * than a branch that is usually false.
+ */
+#ifdef CERA_WATCH
+/* {{{ watch_emit() */
+static void watch_emit(cera_map_t *m, int kind,
+                       uint32_t a, uint32_t b, uint32_t c, uint32_t d,
+                       uint64_t ns);
+/* }}} */
+#define CERA_EMIT(m, kind, a, b, c, d, ns) \
+    watch_emit((m), (kind), (uint32_t)(a), (uint32_t)(b), \
+               (uint32_t)(c), (uint32_t)(d), (uint64_t)(ns))
+#else
+#define CERA_EMIT(m, kind, a, b, c, d, ns) ((void)0)
+#endif
+
 /* {{{ cera_fail() */
 /*
  * The one way the engine ends a program it refuses to continue.
@@ -1125,6 +1145,8 @@ static void *in_port_slot(const cera_in_port_t *sl, int index)
  */
 static cera_in_port_page_t *in_port_add_page(cera_in_port_t *sl)
 {
+    /* The port does not know which station owns it, so the station
+     * emits this one; here is only where it happens. */
     /* Zeroed rather than merely allocated, because a slot's state is
      * part of it and empty is zero — a fresh page has to
      * be a page of *empty* slots, or the first reader to reach it
@@ -1439,6 +1461,8 @@ void cera_map_place(cera_map_t *m, int station, cera_task_call_t shim, int kind,
         sl->constant_string = NULL;
         sl->constant_set = 0;
     }
+
+    CERA_EMIT(m, CERA_WATCH_ADDED, station, kind, n_in_ports, out_size, 0);
 }
 /* }}} */
 
@@ -2313,6 +2337,9 @@ const char *cera_map_bring_up(cera_map_t *m)
         if (cera_map_station_try_start(m, i))
             m->seeded++;
     }
+
+    CERA_EMIT(m, CERA_WATCH_UP, m->n_stations,
+              m->pool ? cera_pool_worker_count(m->pool) : 0, m->seeded, 0, 0);
     return NULL;
 }
 /* }}} */
@@ -2618,6 +2645,15 @@ int cera_map_in_port_depth(cera_map_t *m, int station, int port)
 /* {{{ cera_map_destroy() */
 void cera_map_destroy(cera_map_t *m)
 {
+    long total = 0;
+    for (int i = 0; i < m->n_stations; i++) {
+        cera_station_t *s = cera_map_station(m, i);
+        if (s->call)
+            total += atomic_load_explicit(&s->runs, memory_order_relaxed);
+    }
+    CERA_EMIT(m, CERA_WATCH_DONE, total, 0, 0, 0, 0);
+    cera_watch_close(m);
+
     cera_map_observe_stop(m);
     /* A borrowed pool belongs to the program that made it, and other
      * programs may still be running on it. */
@@ -3546,7 +3582,11 @@ int cera_map_deliver_value(cera_map_t *m, int station, int port, const void *val
      * single compare-and-swap and the copy that follows goes into
      * bytes this thread owns, so deliveries into one station never
      * serialize against each other — only task construction does. */
+    int grew_before = s->in_ports[port].growths;
     in_port_write(s, &s->in_ports[port], value);
+    if (s->in_ports[port].growths != grew_before)
+        CERA_EMIT(m, CERA_WATCH_GREW, station, port,
+                  atomic_load(&s->in_ports[port].capacity), 0, 0);
 
     STATS_MARK(wait_start);
     pthread_mutex_lock(&s->mutex);
@@ -3565,6 +3605,7 @@ int cera_map_deliver_value(cera_map_t *m, int station, int port, const void *val
     if (due) {
         /* Outside the lock: the copies, then the task. */
         station_release_claimed(s, claimed, taken);
+        CERA_EMIT(m, CERA_WATCH_DUE, station, 0, 0, 0, 0);
         cera_pool_push(m->pool, task_build(m, station, claimed, out_port));
     }
     return due;
@@ -3696,6 +3737,8 @@ static void map_deliver(void *ctx, cera_task_t *t)
     cera_station_t *s = cera_map_station(m, t->station);
 
     s->runs++;
+    CERA_EMIT(m, CERA_WATCH_RAN, t->station, 0, 0, 0, (uint64_t)t->box_ns);
+
     /* The box's own time, charged onto the task by the shim and moved
      * onto the station here — the one place that holds both.
      * Zero when timing is compiled out, so this costs an add of
@@ -3730,9 +3773,12 @@ static void map_deliver(void *ctx, cera_task_t *t)
      * this one worker before it takes more work — acceptable, because
      * each delivery may unblock a station, so this worker is busy
      * manufacturing parallelism for everyone else. */
-    for (int i = 0; i < set->n; i++)
+    for (int i = 0; i < set->n; i++) {
+        CERA_EMIT(m, CERA_WATCH_MOVED, t->station, out_port_index,
+                  set->items[i].station, set->items[i].port, 0);
         s->produced += cera_map_deliver_value(m, set->items[i].station,
                                          set->items[i].port, t->out);
+    }
 }
 /* }}} */
 
@@ -6751,6 +6797,7 @@ const char *cera_map_wire(cera_map_t *m, int from_station, int port,
     map_retire(m, old, free);
 
     pthread_mutex_unlock(&m->rewire_mutex);
+    CERA_EMIT(m, CERA_WATCH_WIRED, from_station, port, to_station, to_port, 0);
     return NULL;
 }
 /* }}} */
@@ -6804,6 +6851,7 @@ const char *cera_map_unwire(cera_map_t *m, int from_station, int port,
      * delivered a moment earlier and is fine. */
     map_retire(m, old, free);
 
+    CERA_EMIT(m, CERA_WATCH_UNWIRED, from_station, port, to_station, to_port, 0);
     return NULL;
 }
 /* }}} */
@@ -6971,6 +7019,7 @@ const char *cera_map_remove_station(cera_map_t *m, int station)
 
     map_retire(m, parts, reclaim_station);
     pthread_mutex_unlock(&m->rewire_mutex);
+    CERA_EMIT(m, CERA_WATCH_REMOVED, station, 0, 0, 0, 0);
     return NULL;
 }
 /* }}} */
@@ -8621,6 +8670,362 @@ void cera_stop_now(cera_map_t *m, int exit_code, const char *why)
     report_everything(m);
 
     _exit(exit_code);
+}
+/* }}} */
+
+/* }}} */
+
+/* {{{ 118 — watching a running program */
+/* ==================================================================
+ *
+ * 118 — watching a running program
+ * ================================================================== */
+/*
+ * A ring of fixed-size events in shared memory, written by every worker
+ * and read by anybody who opens the file. The program never waits for a
+ * reader, never learns one is there, and cannot be slowed by one: a
+ * writer that catches up with a reader overwrites it, and the reader
+ * works out exactly how much it missed from the sequence numbers.
+ *
+ * The emitting is compiled in only under CERA_WATCH. The reading is
+ * always compiled, because a watcher is a different program from the
+ * one being watched and has no reason to have been built with watching
+ * turned on. Both halves are here so the ring's shape is written down
+ * once.
+ */
+
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
+#define CERA_WATCH_MAGIC   0x43455241u   /* "CERA" */
+#define CERA_WATCH_VERSION 1u
+
+/* {{{ type cera_watch_head_t */
+/*
+ * What sits at the front of the ring file. `next` is the only thing
+ * writers contend on: claiming a slot is one atomic increment of it,
+ * and the slot claimed is that sequence modulo the slot count.
+ */
+typedef struct cera_watch_head {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t slots;
+    uint32_t slot_size;
+    uint64_t writer_pid;
+    _Atomic uint64_t next;
+} cera_watch_head_t;
+/* }}} */
+
+/* {{{ struct cera_watch */
+struct cera_watch {
+    cera_watch_head_t  *head;
+    cera_watch_event_t *ring;
+    size_t              bytes;
+    char                path[512];
+};
+/* }}} */
+
+/* {{{ struct cera_watch_reader */
+struct cera_watch_reader {
+    cera_watch_head_t  *head;
+    cera_watch_event_t *ring;
+    size_t              bytes;
+    uint64_t            cursor;
+};
+/* }}} */
+
+/* {{{ watch_slots_for() */
+/*
+ * Room for a few hundred events per station, rounded up to a power of
+ * two so the modulo is a mask, with a floor that keeps a two-station
+ * program from getting a ring too small to see anything in.
+ */
+static uint32_t watch_slots_for(int stations)
+{
+    uint64_t want = (uint64_t)(stations > 0 ? stations : 1) * 256u;
+    uint32_t slots = 1024;
+    while (slots < want && slots < (1u << 22))
+        slots <<= 1;
+    return slots;
+}
+/* }}} */
+
+#ifdef CERA_WATCH
+/* {{{ watch_now_ns() */
+static uint64_t watch_now_ns(void)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (uint64_t)t.tv_sec * 1000000000ull + (uint64_t)t.tv_nsec;
+}
+/* }}} */
+#endif
+
+/* {{{ cera_watch_compiled_in() */
+/* Whether this binary can be watched at all. A watcher pointed at a
+ * program built without the flag would otherwise wait forever for
+ * events that were never going to arrive. */
+int cera_watch_compiled_in(void)
+{
+#ifdef CERA_WATCH
+    return 1;
+#else
+    return 0;
+#endif
+}
+/* }}} */
+
+/* {{{ cera_watch_kind_name() */
+const char *cera_watch_kind_name(int kind)
+{
+    static const char *const names[CERA_WATCH_KIND_COUNT] = {
+        "came up", "due", "ran", "moved", "grew",
+        "added", "removed", "wired", "unwired", "finished"
+    };
+    if (kind < 0 || kind >= CERA_WATCH_KIND_COUNT)
+        return "?";
+    return names[kind];
+}
+/* }}} */
+
+/* {{{ cera_watch_open() */
+/*
+ * Create the ring and start emitting into it. Returns NULL, or a
+ * sentence saying why not.
+ *
+ * The path is the caller's: passing the same one every run overwrites
+ * the same ring and accumulates nothing, and passing a fresh one keeps
+ * a dead program's last moments to be read afterwards.
+ */
+const char *cera_watch_open(cera_map_t *m, const char *path)
+{
+    static char refusal[640];
+
+    if (!cera_watch_compiled_in())
+        return "this program was built without CERA_WATCH, so it emits nothing";
+
+    /* Two programs writing one ring would interleave two graphs into one
+     * stream with nothing saying which was which. Refusing costs one
+     * check; allowing would cost a field on every event.
+     *
+     * **The same process is not exempt.** Two maps in one process are
+     * two programs — that is the whole of what makes them separable —
+     * so a second one seizing the first's ring would truncate it under
+     * a reader that had been following it. Closing a trail clears the
+     * owner, which is how a program reuses its own path. */
+    int probe = open(path, O_RDONLY);
+    if (probe >= 0) {
+        cera_watch_head_t peek;
+        ssize_t got = read(probe, &peek, sizeof peek);
+        close(probe);
+        if (got == (ssize_t)sizeof peek && peek.magic == CERA_WATCH_MAGIC
+            && peek.writer_pid != 0
+            && kill((pid_t)peek.writer_pid, 0) == 0) {
+            snprintf(refusal, sizeof refusal,
+                     "%s is already being written by process %llu, which is "
+                     "still running", path, (unsigned long long)peek.writer_pid);
+            return refusal;
+        }
+    }
+
+    uint32_t slots = watch_slots_for(m->n_stations);
+    size_t bytes = sizeof(cera_watch_head_t) + (size_t)slots * sizeof(cera_watch_event_t);
+
+    int fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        snprintf(refusal, sizeof refusal, "cannot create the trail at %s: %s",
+                 path, strerror(errno));
+        return refusal;
+    }
+    if (ftruncate(fd, (off_t)bytes) != 0) {
+        close(fd);
+        snprintf(refusal, sizeof refusal, "cannot size the trail at %s: %s",
+                 path, strerror(errno));
+        return refusal;
+    }
+
+    void *at = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    close(fd);
+    if (at == MAP_FAILED) {
+        snprintf(refusal, sizeof refusal, "cannot map the trail at %s: %s",
+                 path, strerror(errno));
+        return refusal;
+    }
+
+    cera_watch_t *w = calloc(1, sizeof *w);
+    if (!w) {
+        munmap(at, bytes);
+        return "out of memory opening the trail";
+    }
+    w->head = at;
+    w->ring = (cera_watch_event_t *)((char *)at + sizeof(cera_watch_head_t));
+    w->bytes = bytes;
+    snprintf(w->path, sizeof w->path, "%s", path);
+
+    memset(at, 0, bytes);
+    w->head->slots = slots;
+    w->head->slot_size = (uint32_t)sizeof(cera_watch_event_t);
+    w->head->writer_pid = (uint64_t)getpid();
+    w->head->version = CERA_WATCH_VERSION;
+    atomic_store(&w->head->next, 1);   /* zero means "never written" */
+    /* Written last, so a reader that maps a half-built file sees no
+     * magic rather than a header it can believe. */
+    w->head->magic = CERA_WATCH_MAGIC;
+
+    m->watch = w;
+    return NULL;
+}
+/* }}} */
+
+/* {{{ cera_watch_close() */
+/* Stops the emitting and unmaps. The file stays: a reader attaching
+ * afterwards is the whole reason to keep it. */
+void cera_watch_close(cera_map_t *m)
+{
+    cera_watch_t *w = m->watch;
+    if (!w)
+        return;
+    m->watch = NULL;
+    w->head->writer_pid = 0;
+    munmap(w->head, w->bytes);
+    free(w);
+}
+/* }}} */
+
+/*
+ * Compiled only under CERA_WATCH: without it this function does not
+ * exist and neither does any call to it.
+ *
+ * One event. Claim a sequence, fill the slot it lands in, then publish
+ * by storing the sequence into the slot with release ordering — so a
+ * reader that sees the sequence sees the fields that came with it.
+ *
+ * Nothing here can block and nothing can fail. A writer that laps a
+ * reader simply overwrites, which is the only arrangement in which
+ * watching cannot slow the thing watched.
+ */
+#ifdef CERA_WATCH
+/* {{{ watch_emit() */
+static void watch_emit(cera_map_t *m, int kind,
+                       uint32_t a, uint32_t b, uint32_t c, uint32_t d,
+                       uint64_t ns)
+{
+    cera_watch_t *w = m ? m->watch : NULL;
+    if (!w)
+        return;
+
+    uint64_t seq = atomic_fetch_add(&w->head->next, 1);
+    cera_watch_event_t *slot = &w->ring[seq & (w->head->slots - 1)];
+
+    slot->ns = ns ? ns : watch_now_ns();
+    slot->kind = (uint32_t)kind;
+    slot->a = a; slot->b = b; slot->c = c; slot->d = d;
+    atomic_store_explicit((_Atomic uint64_t *)&slot->seq, seq, memory_order_release);
+}
+/* }}} */
+#endif
+
+/* {{{ cera_watch_attach() */
+/*
+ * Open somebody else's ring for reading. Read-only, and the reader is
+ * invisible to the program: nothing here writes, locks, or announces
+ * itself.
+ */
+cera_watch_reader_t *cera_watch_attach(const char *path)
+{
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return NULL;
+
+    struct stat st;
+    if (fstat(fd, &st) != 0 || (size_t)st.st_size < sizeof(cera_watch_head_t)) {
+        close(fd);
+        return NULL;
+    }
+    void *at = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    close(fd);
+    if (at == MAP_FAILED)
+        return NULL;
+
+    cera_watch_head_t *head = at;
+    if (head->magic != CERA_WATCH_MAGIC || head->version != CERA_WATCH_VERSION
+        || head->slot_size != sizeof(cera_watch_event_t)
+        || head->slots == 0 || (head->slots & (head->slots - 1)) != 0) {
+        munmap(at, (size_t)st.st_size);
+        return NULL;
+    }
+
+    cera_watch_reader_t *r = calloc(1, sizeof *r);
+    if (!r) {
+        munmap(at, (size_t)st.st_size);
+        return NULL;
+    }
+    r->head = head;
+    r->ring = (cera_watch_event_t *)((char *)at + sizeof(cera_watch_head_t));
+    r->bytes = (size_t)st.st_size;
+    r->cursor = 1;
+    return r;
+}
+/* }}} */
+
+/* {{{ cera_watch_next() */
+/*
+ * The next event, or 0 when there is nothing new yet.
+ *
+ * `lost` comes back with how many events were overwritten before this
+ * one could be read. A reader too slow for the ring is told exactly how
+ * far behind it fell rather than quietly showing an incomplete picture.
+ */
+int cera_watch_next(cera_watch_reader_t *r, cera_watch_event_t *into, uint64_t *lost)
+{
+    *lost = 0;
+
+    uint64_t produced = atomic_load_explicit(&r->head->next, memory_order_acquire);
+    if (r->cursor >= produced)
+        return 0;
+
+    /* Anything older than one lap is already overwritten. */
+    uint64_t oldest = produced > r->head->slots ? produced - r->head->slots : 1;
+    if (r->cursor < oldest) {
+        *lost = oldest - r->cursor;
+        r->cursor = oldest;
+        if (r->cursor >= produced)
+            return 0;
+    }
+
+    cera_watch_event_t *slot = &r->ring[r->cursor & (r->head->slots - 1)];
+    uint64_t seq = atomic_load_explicit((_Atomic uint64_t *)&slot->seq,
+                                        memory_order_acquire);
+    if (seq != r->cursor)
+        return 0;   /* claimed but not yet published, or already lapped */
+
+    *into = *slot;
+    r->cursor++;
+    return 1;
+}
+/* }}} */
+
+/* {{{ cera_watch_writer_alive() */
+/* Whether the program that wrote this ring is still running. A viewer
+ * uses it to say "this program has ended" rather than sitting on a
+ * stream that will never move again. */
+int cera_watch_writer_alive(cera_watch_reader_t *r)
+{
+    uint64_t pid = r->head->writer_pid;
+    if (pid == 0)
+        return 0;
+    return kill((pid_t)pid, 0) == 0;
+}
+/* }}} */
+
+/* {{{ cera_watch_detach() */
+void cera_watch_detach(cera_watch_reader_t *r)
+{
+    if (!r)
+        return;
+    munmap(r->head, r->bytes);
+    free(r);
 }
 /* }}} */
 /* }}} */

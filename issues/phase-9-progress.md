@@ -17,7 +17,7 @@ translation unit as its callers can be `static`.
 | [903 — everything else goes private](completed/903-everything-else-goes-private.md) | **complete** | 123 exported symbols became 100, and a test checks it on every run — the list was derived from the header rather than written, and the test was proven by being made to fail. Seven white-box tests now compile inside the engine. |
 | [904 — the old files are removed](completed/904-the-old-files-are-removed.md) | **complete** | Gone, with their eighteen interface files and the `libs/` directory. The `#line` directives went rather than being re-pointed, and the two include paths became one. |
 | [905 — the prefix](completed/905-the-prefix.md) | **complete** | Every one of the 100 exported symbols begins `cera_`. 3,008 renames and 706 respellings across 52 files, and not one byte of test output changed. The linker's export list collapsed to a single line. |
-| [909 — the blueprints name their calls](909-the-blueprints-name-their-calls.md) | open, **split out of 902** | Every completed blueprint saying which calls it produced. Cannot be derived — the house style keeps function names out of prose, so six issues in seventy-four name one — and so has to be decided a blueprint at a time. |
+| [909 — the blueprints name their calls](completed/909-the-blueprints-name-their-calls.md) | **refused** | Every completed blueprint saying which calls it produced. Cannot be derived — the house style keeps function names out of prose, so six issues in seventy-four name one — and so has to be decided a blueprint at a time. |
 | [906 — an error reaches the host](completed/906-an-error-reaches-the-host.md) | **complete** | An installable handler, called with the message and the exit code immediately before the engine dies. Building it meant building the funnel first: thirty places wrote to stderr and ended the process, each its own little ending. |
 | [907 — built outside the tree](completed/907-built-outside-the-tree.md) | **complete** | The capstone. `make test` builds a program with this engine in a scratch directory that cannot see this repository, runs it, and checks the answer. It caught two real faults on its first run. |
 | [908 — two maps in one process](completed/908-two-maps-in-one-process.md) | **complete**, and it needed no code | There is no process-wide active map — it went with the statics table. What was missing was a test, because a singleton is invisible until two of something exist. |
@@ -83,7 +83,7 @@ a return type.
 
 ## Where the phase stands
 
-**Eight of nine done, and the engine has left.** It is two files. It
+**Done. The engine has left.** It is two files. It
 publishes 101 symbols and every one says whose it is; nothing else
 escapes at all, and a test checks that on every run. A host installing
 one function hears why it stopped. Two programs run side by side in one
@@ -94,9 +94,10 @@ a directory that cannot see this repository, writes a box and a map and
 a program from nothing, builds them the way a consumer would, and checks
 the answer that comes back.
 
-What is left is [909](909-the-blueprints-name-their-calls.md), which is
-about the record rather than the engine: the blueprints describe
-behaviour without naming the calls that provide it.
+Nothing is left. [909](completed/909-the-blueprints-name-their-calls.md)
+was refused: a blueprint describes what to build, and the name a call
+ends up with is not part of that. The list of calls exists in
+`src/cera.info.md`, derived from the header, which was the useful half.
 
 ## What the last three turned up
 

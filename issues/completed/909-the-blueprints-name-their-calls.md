@@ -1,10 +1,24 @@
 # 909 — The blueprints name their calls
 
-Split out of [902](completed/902-the-header-says-what-is-public.md),
-which promised this and delivered the header instead. Filed separately
-rather than left inside a completed ticket, because a ticket with
-deferred work in it is not complete and saying otherwise is the kind of
-lie that is only discovered by somebody relying on it.
+**Refused.** A blueprint describes what to build and why it has the
+shape it has; the name a call ends up with is not part of that. Somebody
+rebuilding this project from `issues/completed/` is deciding what the
+engine should do, and the header is right there when they want to know
+what it is called.
+
+The list of calls exists and is derived rather than typed —
+`src/cera.info.md` carries all 101 with their signatures, generated from
+the header, grouped into the same components both source files use. That
+was the useful half. The arrow pointing back from each blueprint to the
+calls it produced is the half nobody needs.
+
+Kept rather than deleted, because a decision not to build something is
+worth as much as the decision to build it, and this one was reached by
+trying: the derivation was attempted, returned six issues out of
+seventy-four, and the reason it returned so few turned out to be the
+house style working exactly as intended.
+
+---
 
 ## Current behaviour
 

@@ -9,34 +9,48 @@ anybody, or behaving differently because somebody is there.
 The trail is the deliverable here. What reads it is
 [803](803-the-viewer.md), and it is deliberately not this issue.
 
-## Current behavior
+## Current behaviour
 
-**Everything the engine knows about itself is told afterwards, or on
-the way out.**
+**Built.** A program compiled with `CERA_WATCH` writes a fixed-size
+event into a ring in shared memory at each thing worth seeing, and
+anybody who can open the file can read them. The program never waits for
+a reader, never learns one is there, and cannot be slowed by one.
 
-- **Counters exist and are read at the end.** Every station keeps how
-  many tasks it ran and how many it made due elsewhere
-  ([702](completed/702-station-statistics.md)); every port keeps how
-  deep it got and how often it grew
-  ([701](completed/701-buffer-growth-reporting.md)). Something has to
-  ask, and asking is a walk of the whole table.
-- **A capture writes a report** of the same numbers when a program is
-  put down ([712](completed/712-capturing-a-running-program.md)).
-- **A dying program writes a diagnostic report**
-  ([106](completed/106-stopping-on-purpose.md)), which is the closest
-  thing to a live view and requires the program to be in trouble.
-- **The observer notices piles forming** and prints a line when results
-  stack up somewhere nobody is taking them from. That line goes to
-  stderr, mixed in with everything else, and cannot be read by a
-  program.
+Ten kinds of event: the program came up, a task became due, a station
+ran and for how long, a value moved from one station's port to another's,
+a buffer grew, a station was placed or removed, a wire was drawn or cut,
+and the program finished. Each is emitted at the place the thing
+actually happens rather than near it.
 
-So the shape of what a program *did* is recoverable, and the shape of
-what it is *doing* is not. Watching one means printing from inside a
-box, which changes the program to look at it.
+**The emitting is not in an ordinary build**, and that is read from the
+object file rather than asserted: without the flag neither the emitter
+nor the clock it reads exists as a symbol, and the object is about three
+kilobytes smaller. **The reading is always compiled**, because a watcher
+is a different program with no reason to have been built for watching,
+and having both halves in one place is what keeps the ring's shape
+written down once.
 
-**And nothing outside the process can see in at all.** There is no
-socket, no file, no shared area — the only channels out are stderr and
-whatever a program's result station is wired to.
+### What the test holds down
+
+Five things, and the last two are the ones worth having:
+
+- A program writes events and a reader that is not the program reads
+  them back in sequence.
+- Its account and the program's own counters agree exactly — two
+  independent tallies of one run, and they match.
+- **A ring already being written is refused, naming the process that
+  owns it.** The same process is not exempt: two maps in one process are
+  two programs, and a second seizing the first's ring truncates it under
+  a reader that was following it. That was found by writing the test —
+  the first version exempted the same process, and the rival promptly
+  wiped the ring the reader was reading.
+- **A reader too slow for the ring loses events and is told how many**,
+  and the arithmetic is checked rather than trusted: it lost 18,980, it
+  kept 1,024, and the first one it kept is number 18,981. A count that
+  did not add up would mean a reader quietly showing a shorter story
+  than the one that happened.
+- The trail says when the program it describes has ended, so a viewer
+  can stop waiting on a stream that will never move again.
 
 ## Intended behavior
 
@@ -146,26 +160,45 @@ the indices — which is the same trick a wire already is.
    comparing that reconstruction against a dump is the strongest test
    available.
 
+## What was undecided, and is now
+
+**The ring's path is the caller's, and the ring outlives the program.**
+`cera_watch_open` takes a path the way the crash report already takes
+one. A caller that passes the same path every run overwrites its own
+ring and accumulates nothing; a caller that wants yesterday's last
+moments picks a different name and keeps it. The engine does not choose,
+because it has no way to know which of those anybody wants — and a file
+in the RAM tier that the engine deleted on exit could never answer *what
+happened just before it wedged*, which is most of the point.
+
+**The ring's size is derived, and can be overridden.** Slots enough for
+a few hundred events per station, rounded up to a power of two, with a
+floor for tiny programs. A number in a build flag puts the decision on
+somebody with no way to make it; a guess from the station count is a
+guess with better manners, and a reader that cannot keep up is told
+exactly how much it missed and can ask for more.
+
+**Two programs cannot share one ring.** The header records the writing
+process, and opening a ring whose recorded process is still alive is
+refused, naming it. Allowing it would mean every event carrying which
+program it came from, for a situation nobody wants; refusing costs one
+check at startup.
+
+**Every event is the same kind of thing, in one stream, in one order.**
+A rewire and a delivery are one record shape discriminated by a field,
+because the only way a reader can know a wire was cut *before* a value
+tried to cross it is for both to be in the same sequence.
+
+**The emitting is behind the build flag; the reading is not.** A watcher
+is a different program from the one being watched, and it has no reason
+to have been built with watching turned on. Both halves live in the
+engine so that the ring's shape is defined once — two readers of one
+format are two things that must agree.
+
 ## Open questions
 
-- **How is the ring's size chosen?** A build flag with a number is the
-  obvious answer and it puts the decision on somebody who has no way to
-  know what a good number is. A size derived from the station count is
-  a guess with better manners. Undecided.
-- **Does the trail survive the program that wrote it?** A file in the
-  RAM tier outlives the process that made it, so a reader could attach
-  after a program died and read its last moments — which sounds
-  valuable and means the file cannot be removed on exit, and therefore
-  accumulates. Undecided.
-- **What does a second program watching the same map do?** Nothing
-  stops two programs writing one ring if they are handed the same path.
-  Refusing needs a lock; allowing needs the events to say which program
-  they came from. Undecided, and worth deciding before anybody hits it
-  by accident.
-- **Is the event for a rewire the same kind of thing as the event for a
-  delivery?** One says the graph changed shape and the other says
-  something moved through it. A reader has to handle both, and a single
-  stream in one order is the only way it can know which happened first.
+- **How much history does a viewer hold?** The ring holds what it holds;
+  what a *page* keeps is [803](803-the-viewer.md)'s question.
 
 ## Related
 
