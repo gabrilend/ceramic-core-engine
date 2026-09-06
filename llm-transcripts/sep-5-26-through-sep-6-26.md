@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 22:26:29
+Generated on: 2026-09-05 23:56:30
 
 --------------------------------------------------------------------------------
 
@@ -3020,6 +3020,427 @@ writable path; the trail is only a file.
 **`/dev/shm` must allow writes** — standard on Linux. If she's on macOS it
 won't exist; use `/tmp/live.ring` instead, which works fine since the trail is
 only read, never executed.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 19
+
+okay I tried compiling it on her computer and I get an error that's not present
+on mine at line 2648 - variable total is created but not used or something?
+What's up with that?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 19
+
+Let me look at that line and reproduce it, rather than guess at the difference.
+
+
+Reproduced in principle — let me confirm the exact diagnostic before fixing.
+
+
+My GCC won't warn even when asked. Let me see if there's a second compiler here
+that will.
+
+
+Reproduced exactly — **clang 18**, same line. She's on a different compiler,
+and it caught something mine let through.
+
+
+This isn't just a fussy warning. Without the watch flag, that loop still walks
+every station reading an atomic each — work an unwatched program does for an
+event it never emits. The ticket's own rule is that an unwatched program pays
+*nothing*.
+
+
+All four combinations clean. Now the durable fix — the reason this reached her
+is that only one compiler was ever looking.
+
+
+Found it, reproduced it exactly, and it was worse than a warning.
+
+
+## What happened
+
+
+She's on **clang**; you and I are on **gcc**. Clang 18 says:
+
+
+```
+
+cera.c:2648:10: error: variable 'total' set but not used [-Wunused-but-set-variable]
+
+```
+
+
+Same line you quoted. My gcc 14.2 stays silent about it even when I ask for that
+exact warning explicitly — so it never had a chance to reach me.
+
+
+## Why it's a real bug, not compiler fussiness
+
+
+The arguments to an emit vanish when watching is compiled out. **Anything
+computed on the line above it does not.**
+
+
+```c
+
+long total = 0;
+
+for (...) total += atomic_load(&s->runs);   /* still runs */
+
+CERA_EMIT(m, CERA_WATCH_DONE, total, ...);  /* becomes ((void)0) */
+
+```
+
+
+So an unwatched program was **walking every station and reading an atomic each,
+on every teardown**, to feed an event it never sends. There was a second one
+too: a before-and-after check on every single delivery, to notice buffer growth
+for an event that wasn't going anywhere.
+
+
+That breaks the rule the whole watching mechanism is built on — *a watched
+program may be slower; an unwatched one pays nothing.* Her compiler caught a
+design violation, not a style nit.
+
+
+Both are now inside the flag with the emits they feed.
+
+
+## The part that matters more
+
+
+The reason it reached her is that **only one compiler was ever looking**. So the
+engine is now compiled under every compiler on the machine, with the flag and
+without, warnings as errors:
+
+
+```
+
+== 131-test-a-second-opinion.sh
+
+  clean under gcc clang, watched and unwatched
+
+```
+
+
+I proved it by putting the fault back and watching clang name it. The half of a
+flag that usually isn't compiled is exactly where a mistake sits unseen.
+
+
+## What to do
+
+
+You've already pushed the earlier four. **One new commit to push:**
+
+
+```sh
+
+git push
+
+```
+
+
+Then on her side:
+
+
+```sh
+
+git pull
+
+make viewer
+
+tmp/build/128-watch-a-map --map=127-the-ladder.map \
+
+    --trail=/dev/shm/ceramic-core-engine/live.ring --view
+
+```
+
+
+If anything else fails on her machine, send me the compiler line — the error
+text plus `cc --version`. Different compiler is now a thing I can check locally
+rather than guess at.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 20
+
+okay we're done with the "girlfriend showcase" so let's get back to what we were
+working on. Where are we at?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 20
+
+Everything's pushed. Here's the state.
+
+
+## Done since you last asked "what next"
+
+
+**Phase 9 closed entirely.** The engine is two files, publishes 101 symbols all
+prefixed, everything else is `static` and a test enforces it, a host can hear
+why it stopped, two maps run in one process, and it builds from a directory that
+can't see this repository.
+
+
+**Phase 8's viewer is done** — both halves. `802` (the trail: a ring in shared
+memory, events emitted only under the build flag) and `803` (the forwarding
+reader and the page). Along the way we picked up a mechanism example, a ladder
+map, a general "watch any map" program, and a replay tool that checks the
+drawing's claims against the events without a browser.
+
+
+## What's actually open
+
+
+**Phase 8 — `801`, the workbench.** The last one in the phase. The canvas
+draws stations, names them, gives them kinds and boxes, wires them, and keeps
+several drawings in browser storage. **It still can't hand you a file.** The
+writer exists in C (`scripts/105-mapwrite.c`) and needs compiling to WebAssembly
+and wiring into the page. That's the door; everything else in phase 8 is the
+window, and the window is finished.
+
+
+**Phase 7 — three loose ends.** `705` (docs: two of five interactive pieces
+missing, though it did just gain the scroll-and-size fix), `709` (slideshow and
+transcripts), `711` (renumbering, explicitly low priority, nothing blocked).
+
+
+**Phase 7 — `713`, and this is the visible one.** `./run-demo` still prints an
+apology. The seven phase demos were deleted deliberately and their replacements
+were never built. It's the project's front door and it's shut.
+
+
+**Phase 1 — `107` and `108`.** Several queues, and a station naming which one
+its work goes to. Both still say *confer before building*, both have had a
+central decision reversed once, and 108 has seven unanswered questions.
+Conversations, not tasks — and the only open work that would change the engine
+rather than its surroundings.
+
+
+## Outside the repo
+
+
+**The train game still doesn't build.** Same error as when we started: it names
+the Lua generator that was replaced by the C one. It's the only existing
+consumer, and `907` proved a *new* program can be built with this engine but
+says nothing about an existing one surviving an upgrade.
+
+
+## Where I'd go
+
+
+**`801`**, to finish phase 8 — you said "we are!" walking through that door,
+and the viewer being done makes the workbench the obvious other half. The work
+is: compile the map writer to WebAssembly, wire it into the canvas, and add the
+validation the ticket already specifies. `wasm-ld` is present on this machine,
+so the blocker that stalled it originally is gone.
+
+
+**Then `713`**, because a project whose first command apologises is worse than
+it deserves — and the viewer now gives the demos somewhere much better to
+point.
+
+
+Want 801?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 21
+
+Okay I was reading the documentation with my girlfriend and... well, it needs a
+lot of work.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 22
+
+<local-command-caveat>Caveat: The messages below were generated by the user
+while running local commands. DO NOT respond to these messages or otherwise
+consider them in your response unless the user explicitly asks you
+to.</local-command-caveat>
+
+
+--------------------------------------------------------------------------------
+
+### User Request 23
+
+<command-name>/config</command-name>
+
+            <command-message>config</command-message>
+
+            <command-args></command-args>
+
+
+--------------------------------------------------------------------------------
+
+### User Request 24
+
+<local-command-stdout>Set output style to
+[1mConcise[22m</local-command-stdout>
+
+
+--------------------------------------------------------------------------------
+
+### User Request 25
+
+Okay I was reading the documentation with my girlfriend and... well, it needs a
+lot of work. Can we go through each document and, paragraph-by-paragraph, come
+up with ideas for how to improve it? Let's do one paragraph, one idea, one
+paragraph, one idea, etc, for each docs file. Let's start with the overview.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 25
+
+Two document-level problems first, because they affect every paragraph below:
+
+
+**It never shows anything.** No code, no picture, no worked example. The README
+has both; the overview — the first document in the reading order — has
+neither. Someone reads "a box is a plain C function" and never sees one.
+
+
+**The name is stale.** It says "Minimal SoraMech" throughout; the project's
+front door says *ceramic core engine* and the files are `cera.c`/`cera.h`. A
+newcomer meets two names in the first two documents.
+
+
+Now the walkthrough.
+
+
+---
+
+
+**¶1 — "an engine for building programs out of small C functions…"**
+
+Lead with the picture from the README instead of prose. Four boxes and two
+branches, then the sentence "nobody wrote down that `twice` and `plus` run at
+once." Show the claim before making it.
+
+
+**¶2 — "It is a distillation of the larger SoraMech project…"**
+
+Cut it from the opening, move it to the bottom. A reader who has never heard of
+SoraMech is being told what this *isn't* before they know what it is.
+
+
+**¶3 — "A box is a plain C function you write…"**
+
+Put an actual box next to it: `int add(int a, int b) { return a + b; }`. Three
+lines that make "plain C function" concrete and prove the "no registration"
+claim in passing.
+
+
+**¶4 — "A station is one placement of a box in a map…"**
+
+Add the sentence that distinguishes it: *two stations placing the same box are
+two independent things* — same code, different buffers, different wiring.
+That's the whole reason the word exists and it's currently buried mid-paragraph.
+
+
+**¶5 — "A task is one invocation…"**
+
+Say what it costs. The README is honest that a task allocates and copies; the
+overview presents tasks as free. A reader should meet the trade in the overview,
+not discover it later.
+
+
+**¶6 — "a chain of decreasing lifetime…"**
+
+Make it a three-row table: box / compiled in / forever; station / one placement
+/ life of the program; task / one call / microseconds. It's already a table
+pretending to be a sentence.
+
+
+**¶7 — the one rule (blockquote)**
+
+Leave it exactly as it is. It's the best sentence in the document.
+
+
+**¶8 — "Everything else is a consequence of that sentence."**
+
+Prove it once. Follow the rule to one surprising consequence — "which is why a
+box may not remember anything" — so the claim isn't just asserted.
+
+
+**¶9 — "Nothing polls. Nothing scans for ready work…"**
+
+Split it. The mechanism (the check is the tail of a write) and the consequence
+(no ready-queue, no work-stealing) are two thoughts sharing a paragraph, and the
+second is the one that surprises people.
+
+
+**¶10 — "the graph propagates the way a fire propagates…"**
+
+Cut the simile or earn it. Fire spreads to everything adjacent; a delivery
+starts *one* station and only when all its ports are full. The metaphor is doing
+the opposite of the rule stated three paragraphs above.
+
+
+**¶11 — "A value is atomic and independent."**
+
+Say what breaks before saying what's true. Open with the question a reader
+actually has — *if I send two values through, do the two halves stay
+together?* — then answer no.
+
+
+**¶12 — "easiest to see where a graph splits and rejoins…"**
+
+Draw it. This is the single hardest idea in the document and it's described in
+words only. Four boxes and two numbered values would end the confusion in one
+glance.
+
+
+**¶13 — "That is the design, not a gap in it."**
+
+Give the fix its own line, in bold: **things that must stay together have to be
+one value.** It's the actionable sentence and it's currently the third clause of
+a paragraph.
+
+
+**¶14 — "Parallelism is not something the programmer arranges…"**
+
+Add the negative case. Every claim here is upside; a reader has no idea when
+*not* to use this. The README says it plainly — boxes too small lose to a
+function call — and the overview doesn't.
+
+
+**¶15 — "The cost is that a box cannot keep state…"**
+
+Show the accumulator. "Route a box's output back into its own input" is
+abstract; two lines of map file make it obvious and connect back to ¶3.
+
+
+**¶16 — "What is deliberately absent" (four bullets)**
+
+Add what *is* present and might surprise: a running program can be rewired, a
+box can be compiled while it runs, a program can be written to disk and picked
+up again. The absences read as limitations without the capabilities beside them.
+
+
+**¶17 — "Reading order"**
+
+Say what each document answers, not what it describes. "002 describes what a
+station is made of" tells me nothing about whether I need it; "002 — why a
+station and not just a function" tells me whether to read it.
+
+
+---
+
+
+Want me to apply these to 001 now, or keep walking and collect ideas for 002
+through 010 first?
 
 
 --------------------------------------------------------------------------------

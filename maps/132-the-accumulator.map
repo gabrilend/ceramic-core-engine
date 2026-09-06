@@ -1,0 +1,21 @@
+# The overview's worked example: state living on a wire.
+#
+# `total` sends its result back into its own second port, so the
+# running sum travels round the loop and is waiting there when the
+# next value arrives. Nothing is stored in any box.
+#
+# The loop needs one value to start with. Deliver a zero to total.1
+# before the first input, or the station never has both ports full and
+# nothing ever runs.
+#
+# Fed 1, 2, 3, 4, 5, `seen` collects every running total: 1, 3, 6, 10,
+# 15. The order they come back out in is not promised.
+
+station feed keep p entry
+  out 0 - total.0
+
+station total add p
+  out 0 - total.1
+  out 0 - seen.0
+
+station seen keep p result

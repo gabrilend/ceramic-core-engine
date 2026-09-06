@@ -1,103 +1,193 @@
 # 001 — Overview
 
-Minimal SoraMech is an engine for building programs out of small C
-functions wired together, where the wiring decides what runs and when.
-There is no main loop. There is no scheduler you write. You describe a
-shape, and the shape executes itself across every core on the machine.
+```
+   in ─┬─ twice ──┐
+       │          ├─ total
+       └─ plus ───┘
+```
 
-It is a distillation of the larger SoraMech project. That one could
-bridge between languages; this one cannot, on purpose. Dropping the
-bridge buys focus on the thing underneath it — a runtime that is
-multi-threaded by default rather than by effort.
+`twice` and `plus` run at the same time. `total` waits until both have
+arrived. **Nobody wrote either of those facts down** — there is no line
+of code anywhere saying "run these two together" or "wait for both".
+They are what the picture *is*.
+
+That is the whole idea. You write small C functions, you say what feeds
+what, and the shape executes itself across every core on the machine.
+There is no main loop and no scheduler you write.
 
 ## The three nouns
 
-**A box** is a plain C function you write. It takes its arguments by
-value and returns one value. It is not permitted to remember anything
-between calls — **the station it is placed at does the remembering**,
-by holding a value the box's own output is wired back into.
+**A box** is a plain C function. No registration, no macro, no header
+to edit:
 
-**A station** is one placement of a box in a map. It owns the buffers
-that hold values waiting to be fed to that box, the mutex that guards
-them, and the list of places its output goes. The same box can appear
-at several stations; each keeps its own buffers and its own wiring.
+```c
+int add(int a, int b) { return a + b; }
+```
 
-**A task** is one invocation. It holds a copy of each input value and
-a pointer to the code that will run. It is created the moment a
-station's inputs are all present, and destroyed by the worker that
-runs it.
+It takes its arguments by value, returns one value, and **may not
+remember anything between calls** — no statics, no globals. The station
+does the remembering instead.
 
-The three form a chain of decreasing lifetime: the box is compiled into
-the binary, the station lives as long as the program, the task lives
-for one call.
+**A station** is one placement of a box. It owns the buffers holding
+values waiting for that box, the mutex guarding them, and the list of
+places its output goes.
+
+**Two stations placing the same box are two independent things.** Same
+compiled code, different buffers, different wiring, different
+neighbours. That is the whole reason the word exists: `add` is a
+function, but *this* `add` — fed from here, sending there — is a
+station.
+
+**A task** is one invocation: a copy of each input value plus a pointer
+to the code to run. It is created the moment a station's inputs are all
+present and destroyed by the worker that runs it.
+
+**A task is not free**, and that is the trade rather than a footnote.
+Every invocation allocates, copies each input, goes on a queue, and is
+freed at the end. For work measured in nanoseconds that loses to a
+plain function call and always will.
+
+| | lives | as long as |
+|---|---|---|
+| box | compiled into the binary | forever |
+| station | one placement in a map | the program |
+| task | one invocation | microseconds |
 
 ## The one rule
 
 > A station runs when, and only when, every one of its input ports
 > holds a value.
 
-Everything else in the engine is a consequence of that sentence.
+Everything else follows from that sentence, including things that look
+unrelated to it. **A box may not remember anything** because two
+invocations of one station can be in flight on two threads at once —
+so anything a box stored would be shared between them, and the rule
+that lets both run is the rule that forbids the storage.
 
-Nothing polls. Nothing scans for ready work. The check happens as the
-tail end of a write: whoever just delivered a value into a port then
-looks at that station's other ports, and if they are all occupied,
-takes one value from each and builds a task. That worker then hands the
-task to the pool and goes back to its own business.
+### Nothing looks for work
 
-So the graph propagates the way a fire propagates — each delivery is
-what discovers the next thing to run. There is no central authority
-looking for work to do, because the act of finishing is the act of
-scheduling.
+There is no ready-queue to scan, no work-stealing search, no thread
+waking to look around, no polling of any kind.
 
-## What travels on a wire
+The check is the tail end of a write. Whoever delivered a value into a
+port then looks at *that station's* other ports; if all are occupied, it
+takes one value from each, builds a task, hands it to the pool, and goes
+back to its own business. It never examines a station that did not just
+receive something.
 
-**A value is atomic and independent.** It carries no relationship to any
-other value, and none to whatever produced it. A station takes whatever
-is at the head of each of its input buffers and runs; it has no notion
-of a round, a batch, or a set of values that belong to each other.
+So scheduling costs nothing, because nothing schedules. The act of
+finishing is the act of discovering what runs next.
 
-This is easiest to see where a graph splits and rejoins. One station
-feeds two paths, and those paths meet again at a third. Send two values
-through and the two paths run on different threads at different speeds,
-so the station where they meet may pair the first value's result from
-one path with the second value's result from the other.
+## Do two values stay together?
 
-That is the design, not a gap in it. If two things must stay together,
-they must **be** one thing — a struct, travelling one wire. Correlation
-is something the map author builds out of the values, exactly as state
-is something the map author builds out of the wiring.
+**No.** This is the thing most worth understanding before you build
+anything, and the answer surprises everybody.
 
-## What that buys
+Send two values into a graph that splits and rejoins:
 
-Parallelism is not something the programmer arranges. Two stations
-whose inputs are both satisfied are simply two tasks in the pool, and
-whichever workers are free take them. A map with wide fan-out is
-parallel because it is wide, not because anyone asked.
+```
+        ┌─ slow ──┐
+   in ──┤         ├─ meet
+        └─ fast ──┘
+```
 
-The cost is that a box cannot keep state. Two invocations of the same
-station may be running at the same moment on different threads, so
-anything a box stored would be shared between them. State lives on the
-wires instead — to count, you route a box's output back into its own
-input, and the running total travels around the loop.
+The two paths run on different threads at different speeds. `meet` takes
+whatever is waiting at each of its ports and runs. So it can pair the
+**first** value's result from `slow` with the **second** value's result
+from `fast`, and the answer belongs to neither.
 
-## What is deliberately absent
+That is not a defect. It is the same independence that let the two
+paths run at once without anyone asking them to.
 
-- **No language bridge.** C functions only. If a program needs to call
-  into another language, it writes a box that does so.
-- **No visualization, no editor.** Those belong to whatever is built on
-  top.
-- **No box that can block.** Nothing waits. A worker that cannot make
-  progress is a worker that is not running the ten other things that
-  are ready.
+**Things that must stay together have to *be* one value** — a struct on
+one wire, not two values that happen to arrive near each other.
+
+## What it buys, and what it costs
+
+Parallelism is not arranged. Two stations whose inputs are satisfied are
+two tasks in the pool, and whichever workers are free take them. A map
+with wide fan-out is parallel because it is wide.
+
+State lives on wires. To count, wire a box's output back into its own
+input — the running total travels round the loop. This is
+[`maps/132-the-accumulator.map`](../maps/132-the-accumulator.map), and it
+runs:
+
+```
+station feed keep p entry
+  out 0 - total.0
+
+station total add p
+  out 0 - total.1     # back into itself: the running total
+  out 0 - seen.0      # and out to be collected
+
+station seen keep p result
+```
+
+Feed it 1, 2, 3, 4, 5 and `seen` collects **1, 3, 6, 10, 15** — every
+running total, because every run produces one.
+
+Two things this small example will teach you the hard way:
+
+**The loop needs one value to start with.** Deliver a zero to `total.1`
+before the first input, or the station never has both ports full and
+never runs at all. A back-edge with nothing on it is a program that sits
+still.
+
+**The order you take results out in is not promised.** Collecting the
+five and keeping the last one gave 15 four times and 6 once. A port has
+no head and no tail — which is the same rule as the section above,
+arriving somewhere you did not expect it.
+
+**It is a bad fit when the steps are too small.** A box that adds two
+integers costs more in task overhead than it saves in parallelism, and
+no amount of wiring fixes that. Make the boxes bigger or do it by hand.
+It is also a bad fit for work that does not want to be shaped as *run
+when every input is present*; fighting that sentence goes badly.
+
+## What is absent, and what is not
+
+Deliberately absent:
+
+- **No language bridge.** C functions only. A program that needs
+  another language writes a box that calls into it.
+- **No visualization or editor in the engine.** Those are built on top.
+- **No box that can block.** A worker that cannot make progress is a
+  worker not running the ten other things that are ready.
 - **No fallbacks.** A missing file, a mistyped wire, a box that cannot
-  be found — all of these stop the program and say why. A program that
+  be found — each stops the program and says why. A program that
   quietly does something else is worse than one that stops.
 
-## Reading order
+Present, and easy to miss:
 
-The documents are numbered to be read straight through.
-[002](002-stations-and-ports.md) describes what a station is made of.
-[003](003-datapath-delivery.md) follows a value from one box to the
-next, which is the core of the engine. Everything after that is either
-a variation on that path or the machinery that gets the map into
-memory in the first place.
+- **A running program can be rewired** — wires cut and drawn, stations
+  added and removed, while workers are in flight.
+- **A box can be compiled and placed while the program runs.**
+- **A running program can be written to disk and picked up again**,
+  because with no hidden state anywhere, everything a program is lives
+  in a graph that can be walked.
+
+## Where to go next
+
+| | answers |
+|---|---|
+| [002](002-stations-and-ports.md) | why a station, rather than just a function |
+| [003](003-datapath-delivery.md) | what actually happens when a value moves — the core of the engine |
+| [004](004-datapath-statics.md) | how a port holds a constant, and why writing one starts things |
+| [005](005-routing.md) | how a station sends to one of several exits |
+| [008](008-map-file-format.md) | how to write the file that says what feeds what |
+| [058-guarantees.md](058-guarantees.md) | every promise the runtime makes, and its price |
+
+Read 002 and 003 and you have the engine. The rest is variation on that
+path, or the machinery that gets a map into memory.
+
+## A note on the name
+
+This is a distillation of the larger **SoraMech** project, which lives
+on this repository's `original` branch and bridges between languages.
+This one deliberately cannot, and dropping the bridge is what buys the
+focus on the runtime underneath.
+
+The two names are one word: *soramech* and *ceramic* have the same
+consonants in the same order. The engine's own files are `cera.c` and
+`cera.h`.
