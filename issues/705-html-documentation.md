@@ -55,6 +55,31 @@ Both were checked by doing them: a directory nobody had named appeared
 on the site with its own heading, and vanished again when the
 directory went away.
 
+
+### Following a link stopped throwing away where you were
+
+Every page here is a whole document, so a link discarded everything the
+browser was holding — and with a hundred and fifty entries in the index,
+losing your place in it on every click is most of what made the site
+unpleasant to read.
+
+The index now keeps its scroll across pages, in the browser's own
+per-tab storage, so it survives a link and vanishes with the tab. A
+first visit has nothing to restore, so the page being read is brought
+into view instead, which is a better guess than the top.
+
+**And the text has a size of its own.** A browser's zoom is a browser
+setting and a page can neither read it nor keep it, so there is a size
+here that can be: buttons in the corner, `+` `-` `0` from the keyboard,
+remembered between pages and between visits.
+
+Writing it turned up the sweep working exactly as designed. The new file
+appeared and was deleted on the generator's next line, because the sweep
+removes anything in the output that no source produces and the list it
+checks against is built from the documents. A file this generator writes
+without a document behind it has to be named in that list too, which is
+now written down beside the two that were already there.
+
 ## Intended behavior
 
 A generated, cross-linked HTML documentation set at `docs/HTML/`, with

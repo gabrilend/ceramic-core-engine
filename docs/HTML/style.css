@@ -15,6 +15,20 @@ nav {
   border-right: 1px solid #2a2e36;
   font-family: 'DejaVu Sans Mono', Menlo, monospace; font-size: 12px;
 }
+.text-size {
+  position: fixed; right: 14px; bottom: 12px; z-index: 5;
+  display: flex; align-items: center; gap: 2px;
+  background: var(--panel); border: 1px solid #2a2e36; border-radius: 6px;
+  padding: 2px 4px; font-size: 12px;
+  font-family: 'DejaVu Sans Mono', Menlo, monospace;
+}
+.text-size button {
+  font: inherit; background: none; border: none; color: var(--dim);
+  cursor: pointer; padding: 2px 7px; border-radius: 4px;
+}
+.text-size button:hover { color: var(--ink); background: #2a2e36; }
+#text-size-now { color: var(--box); min-width: 40px; text-align: center; }
+
 nav h2 { color: var(--box); font-size: 12px; letter-spacing: 1px;
   text-transform: uppercase; margin: 18px 0 6px; }
 nav a { display: block; color: var(--dim); text-decoration: none;

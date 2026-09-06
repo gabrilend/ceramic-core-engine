@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 21:49:47
+Generated on: 2026-09-05 22:12:35
 
 --------------------------------------------------------------------------------
 
@@ -2810,6 +2810,94 @@ being checked is the arithmetic a browser would do.
 Left as it is, as you said — port 0 to one place, port 2 to another, and the
 equal exit unreachable rather than merely unwired. That still holds: exit 1
 fired zero times across 530 deliveries.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 17
+
+Okay now I want to show my girlfriend, what do we have to do to make it work on
+her computer? I can run it on mine, the viewer can just watch from her monitor.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 17
+
+Two things stand between you and that, and only one is code.
+
+
+Confirmed: the server binds to **loopback only**, so her machine can't reach it.
+The page itself uses only relative paths, so it'll work from anywhere once the
+socket does. Let me add the opt-in.
+
+
+The declaration missed one (different line shape), and `listen` shadows the
+POSIX call. Let me rename it in all three.
+
+
+**She needs nothing.** No install, no build, no repo — it's a browser opening
+a URL. The page asks for everything by relative path and never names a host.
+
+
+**You need one flag.** The viewer was listening on loopback only, so your
+machine was the only one that could see it. That's the right default —
+watching shouldn't be the act that puts a program on a network — but it needed
+a way to say otherwise.
+
+
+```sh
+
+make
+
+tmp/build/128-watch-a-map --map=127-the-ladder.map \
+
+    --trail=/dev/shm/minimal-soramech/live.ring \
+
+    --view --listen=all
+
+```
+
+
+It now prints the addresses for you, so you don't have to go find them:
+
+
+```
+
+viewer: open http://localhost:8723/
+
+viewer: or from another computer, http://192.168.1.100:8723/
+
+viewer: this port is open to anything that can reach this machine.
+
+        It only ever sends; nothing on the page can reach the program.
+
+```
+
+
+Send her that second line. I verified both halves: with the flag, the LAN
+address answers 200; without it, the same address is refused while localhost
+still works.
+
+
+Two things worth knowing before you try it:
+
+
+**A firewall may be between you.** I can only confirm the socket is open on this
+machine — whether her packets arrive is your network's business. If the URL
+hangs rather than refusing, that's what it is.
+
+
+**Anyone on your network can watch, while it's running.** That's genuinely all
+they can do — the server answers five paths, every one a read, and there is no
+request that writes anything anywhere. But it does serve the map, which
+describes the program's shape, so it's not nothing.
+
+
+If you want the prettier one, the four-station example is
+`123-a-program-to-watch --view --listen=all`. The ladder is the better demo
+though — five stations, the comparators visibly splitting the stream three
+ways, and `collect` sitting there with two full buffers waiting on the third.
 
 
 --------------------------------------------------------------------------------
