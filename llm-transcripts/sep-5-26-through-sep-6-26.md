@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 21:11:35
+Generated on: 2026-09-05 21:28:24
 
 --------------------------------------------------------------------------------
 
@@ -2549,6 +2549,157 @@ a reader and never grows without bound. A log would make the program do disk I/O
 proportional to its own work rate, which is the one thing the design refuses.
 The cost of that choice is that a reader who falls genuinely behind loses the
 oldest events — and now that's the only thing that says "lost".
+
+
+--------------------------------------------------------------------------------
+
+### User Request 15
+
+Wow, looking great. Okay instead of the dots moving, can we just have like,
+arrows, so we know the wire is active / was recently active? The dots are still
+moving along the wire while the box's inputs are drained, which is a little
+confusing but it's just a rendering bug. So let's get around it by removing the
+dots and just keeping the "live wire" display - maybe we can have arrows that
+sit just around the lines that only show up when it's active, and which "move"
+toward the destination to show movement but aren't actually representing
+individual values walking down the wire?
+
+
+Also, for the example program, we should just not wire up the == output, or we
+should adjust the comparator parameters to account for that. So like instead of
+3 wires coming out of under_ten() we'd have the three output ports but only two
+are wired up. If value < 10 then wire 1, if value is == whatever then NOP, if
+value > 9 then wire 3.
+
+
+Question. Can we write the 3 outputs of a comparator separately like that? Like
+what if I said "if less than 5 do wire 1, if equal to 77 then do wire 2, and if
+greater than -200 then do wire 3"? how would that be parsed if so? I mean it's
+obviously broken but I want to know about edge-cases.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 15
+
+Three things. Let me answer the parsing question with the actual parser rather
+than from memory — let me probe the edge cases.
+
+
+The generator only emits; validation happens at wiring and bring-up. Let me look
+at what those actually enforce.
+
+
+Now I can answer that precisely — the routing is four lines of C:
+
+
+```c
+
+int sign = s->compare(t->out, t->in[t->n_in - 1]);
+
+return sign + 1;
+
+```
+
+
+**One threshold, one comparison.** Exit 0/1/2 *are* less/equal/greater; that's
+fixed in the engine, not in the map. So `if <5 → wire 1, if ==77 → wire 2,
+if >-200 → wire 3` isn't expressible — the grammar has nowhere to put a
+second or third number. The only number is `in <last> = N`. And `out 3` on a
+comparator is refused: *"a port index beyond what this station kind can mean."*
+
+
+But your instinct about not wiring `equal` is right, and there's a way to make
+it genuinely unreachable.
+
+
+Exit 1 never fires — 130/130/122 across the three ports, only `less` and
+`greater` used. Now the arrows.
+
+
+Committed.
+
+
+```sh
+
+make
+
+tmp/build/128-watch-a-map --map=127-the-ladder.map \
+
+    --trail=/dev/shm/minimal-soramech/live.ring --view
+
+```
+
+
+## The dots
+
+
+You caught a lie, not a rendering bug. **The dots stood for nothing.** The trail
+carries no values, so a dot wasn't any particular value; it carries no durations
+either, so the speed was invented. A dot still crawling after the destination
+had already run and drained is what that looks like from outside.
+
+
+A wire now says it is *carrying*, not what. It brightens when something crosses
+and fades over about a second; while lit, chevrons march toward the destination.
+The marching says which way, the brightness says how recently, and the offset is
+a function of the clock alone — so every live wire flows at the same rate and
+none can be read as tracking one delivery. Direction is stated once at the end
+by an arrowhead rather than by anything travelling along it.
+
+
+## Your question — no, and here's exactly why
+
+
+The routing is four lines:
+
+
+```c
+
+int sign = s->compare(t->out, t->in[t->n_in - 1]);
+
+return sign + 1;
+
+```
+
+
+**One threshold, one comparison.** Exits 0/1/2 *are* less/equal/greater —
+fixed in the engine, not chosen in the map. `if <5 → wire 1, if ==77 → wire
+2, if >-200 → wire 3` has nowhere to live: the grammar's only number is `in
+<last> = N`, and `out 0 - x.0` names a destination and carries no condition at
+all.
+
+
+The other edges I probed:
+
+- **`out 3` on a comparator** — refused: *"a port index beyond what this
+  station kind can mean."* A comparator's limit is 3, a plain station's is 1, an
+  iterator's is unbounded.
+
+- **A comparator with no threshold** — never runs. The threshold is an
+  ordinary input port, so an empty one means the station is never ready. No
+  error, just silence.
+
+- **A threshold on a plain station** — accepted at generation; it's just a
+  constant on a port the box actually receives.
+
+
+## The unwired `equal`
+
+
+You were right to want it, and there's a way to make it *unreachable* rather
+than merely unwired — which matters, because an unwired exit **discards**, so
+leaving `equal` dangling with integer values silently throws one away.
+
+
+Doubling every value before the ladder puts the boundary *between* the integers:
+nineteen against evens splits at nine-and-a-half. Now each comparator has three
+exits, two wires, and an equal branch that cannot fire rather than one that
+fires into nothing.
+
+
+Measured: **130 / 130 / 122** to the collector's three ports, 122 runs, and
+**exit 1 never used by either comparator.**
 
 
 --------------------------------------------------------------------------------

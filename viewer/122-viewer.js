@@ -128,8 +128,28 @@ function parseMap(text) {
 /* {{{ the drawing's constants */
 const BOX_W = 190, HEAD_H = 40, PORT_H = 20, BOX_MIN = 62;
 const PAD_X = 130, PAD_Y = 80, MARGIN = 48;
-const GLOW_MS = 700;         /* how long a station stays lit after running */
 const FRAME_MS = 33;
+
+/*
+ * How long *just now* lasts, and it has to be short.
+ *
+ * These were most of a second, and a second is long enough to be wrong.
+ * The ladder alternates: a comparator sends ten values down one exit
+ * and then ten down another, which at a sixth of a second each is a
+ * burst of six hundred milliseconds. A wire that stayed lit for nine
+ * hundred was therefore still lit through the whole of the *other*
+ * exit's burst, so two exits of one comparator looked simultaneously
+ * live when only one of them can carry a given value.
+ *
+ * The floor is not zero. The server drains the ring on a forty
+ * millisecond poll and the page redraws every thirty-three, so about
+ * eighty milliseconds of lag is structural and no number here removes
+ * it. What these buy is that nothing is shown as live once it has
+ * stopped — a wire carrying steadily stays lit, and a wire that stops
+ * goes dark before anything else has time to happen.
+ */
+const GLOW_MS = 220;         /* a station, after running */
+const WIRE_WARM_MS = 160;    /* a wire, after carrying */
 
 /*
  * A wire shows that it is **carrying**, not what it carries.
@@ -146,7 +166,6 @@ const FRAME_MS = 33;
  * now*, and neither claims to be a particular value in a particular
  * place. What is true is what is drawn.
  */
-const WIRE_WARM_MS = 900;    /* how long a wire stays lit after carrying */
 const CHEVRON_SPEED = 46;    /* world units per second the marks travel */
 const CHEVRON_GAP = 26;
 /* }}} */

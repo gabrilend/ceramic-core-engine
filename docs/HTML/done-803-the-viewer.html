@@ -300,6 +300,31 @@ function of the clock alone, so every live wire flows at the same rate
 and none of them can be read as tracking one delivery.</p>
 <p>Direction is said once at the end of each wire by an arrowhead, which
 brightens with the wire.</p>
+<h3>How long <em>just now</em> lasts</h3>
+<p>A wire lit for most of a second is lit for longer than the program's own
+rhythm, and then the light outlives the truth. The ladder alternates:
+ten values down one exit of a comparator, then ten down another, which
+at a sixth of a second each is a <strong>burst of six hundred milliseconds</strong>.
+A wire staying lit for nine hundred was therefore still lit through the
+whole of the <em>other</em> exit's burst — so two exits of one comparator
+looked simultaneously live, which is a picture of something that cannot
+happen. One value goes to one exit.</p>
+<p>A wire is lit for 160 milliseconds now and a station glows for 220. The
+floor is not zero and no number removes it: the server drains the ring
+on a forty millisecond poll and the page redraws every thirty-three, so
+about eighty milliseconds of lag is structural. What the shorter window
+buys is that nothing is shown as live once it has stopped.</p>
+<p><strong>Checked rather than eyeballed.</strong> <code>scripts/130-replay-the-page.lua</code>
+applies the page's own rule to a captured event stream — reading the
+window out of the page's source rather than restating it — and reports
+how much of the time two exits of one comparator are shown live
+together. A little is honest, at the moment a burst hands over; a lot
+means the drawing is describing the past as the present.</p>
+<p>At 160 milliseconds it is 5.7% of the time. At the 900 it replaced,
+52.5%. <code>tests/129-test-what-the-page-shows.sh</code> fails above twenty, and
+was proved by putting the old number back and watching it fail.</p>
+<p>This is the only check in the project that tests a drawing, and it needs
+no browser: what is being checked is the arithmetic a browser would do.</p>
 <h3>Zoom, properly</h3>
 <p>The first attempt read the wheel's raw number, and a wheel reports its
 movement in one of three units — pixels, lines or pages — whichever the
