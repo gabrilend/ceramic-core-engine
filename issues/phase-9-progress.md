@@ -18,9 +18,9 @@ translation unit as its callers can be `static`.
 | [904 — the old files are removed](completed/904-the-old-files-are-removed.md) | **complete** | Gone, with their eighteen interface files and the `libs/` directory. The `#line` directives went rather than being re-pointed, and the two include paths became one. |
 | [905 — the prefix](completed/905-the-prefix.md) | **complete** | Every one of the 100 exported symbols begins `cera_`. 3,008 renames and 706 respellings across 52 files, and not one byte of test output changed. The linker's export list collapsed to a single line. |
 | [909 — the blueprints name their calls](909-the-blueprints-name-their-calls.md) | open, **split out of 902** | Every completed blueprint saying which calls it produced. Cannot be derived — the house style keeps function names out of prose, so six issues in seventy-four name one — and so has to be decided a blueprint at a time. |
-| [906 — an error reaches the host](906-an-error-reaches-the-host.md) | open | An installable handler called with the message before the engine dies. The engine still dies. |
-| [907 — built outside the tree](907-built-outside-the-tree.md) | open | The capstone: `make test` builds a program with this engine in a scratch directory that cannot see this repository, and runs it. |
-| [908 — two maps in one process](908-two-maps-in-one-process.md) | open, **not on the critical path** | The process-wide active map, threaded through the task instead. Or, failing that, written down where somebody will read it. |
+| [906 — an error reaches the host](completed/906-an-error-reaches-the-host.md) | **complete** | An installable handler, called with the message and the exit code immediately before the engine dies. Building it meant building the funnel first: thirty places wrote to stderr and ended the process, each its own little ending. |
+| [907 — built outside the tree](completed/907-built-outside-the-tree.md) | **complete** | The capstone. `make test` builds a program with this engine in a scratch directory that cannot see this repository, runs it, and checks the answer. It caught two real faults on its first run. |
+| [908 — two maps in one process](completed/908-two-maps-in-one-process.md) | **complete**, and it needed no code | There is no process-wide active map — it went with the statics table. What was missing was a test, because a singleton is invisible until two of something exist. |
 
 ## Why the amalgamation is the source rather than a build artifact
 
@@ -83,26 +83,47 @@ a return type.
 
 ## Where the phase stands
 
-**Five of nine done, and the engine can now leave.** It is two files,
-it publishes 100 symbols and every one of them says whose they are,
-nothing else escapes at all, and a test checks that on every run.
+**Eight of nine done, and the engine has left.** It is two files. It
+publishes 101 symbols and every one says whose it is; nothing else
+escapes at all, and a test checks that on every run. A host installing
+one function hears why it stopped. Two programs run side by side in one
+process on separate pools.
 
-What is left is not about shape:
+And the claim is no longer inference. `make test` copies the engine into
+a directory that cannot see this repository, writes a box and a map and
+a program from nothing, builds them the way a consumer would, and checks
+the answer that comes back.
 
-- **[906](906-an-error-reaches-the-host.md)** — a host cannot hear why
-  the engine stopped, only that it did.
-- **[907](907-built-outside-the-tree.md)** — nothing has yet compiled
-  this engine from a directory that cannot see this repository, so every
-  claim above is still inference from reading rather than from doing.
-- **[908](908-two-maps-in-one-process.md)** — one process-wide variable
-  means one map, silently.
+What is left is [909](909-the-blueprints-name-their-calls.md), which is
+about the record rather than the engine: the blueprints describe
+behaviour without naming the calls that provide it.
 
-And [909](909-the-blueprints-name-their-calls.md), which is about the
-record rather than the engine: the blueprints do not say what the calls
-they describe are called.
+## What the last three turned up
 
-907 is the one that matters most, because it is the only one that can
-prove the rest.
+**A funnel had to exist before a handler could hang off it.** Thirty
+places wrote a sentence to stderr and then ended the process, each its
+own little ending, so there was nowhere for a host to be told from.
+Collecting them named a distinction the code was already making without
+saying so: most refusals are a fault outside the engine and exit with a
+code, while six in the delivery path are the engine finding a fault in
+itself and abort, because a core is the evidence.
+
+**One death stays outside the funnel on purpose.** The quit signal's
+path takes no locks, since the reason it arrived may be a lock nobody
+will release — and a handler is somebody else's code, which may take
+one.
+
+**A singleton is invisible until two of something exist.** The
+process-wide active map had already gone with the statics table, and
+nothing had noticed either way, because no test ever built two programs
+and ran them at once.
+
+**The portability test caught two faults on its first run**, which is
+the whole argument for having it. It was writing its scratch tree into
+the RAM tier that is mounted without execute permission, and its map
+reached for one of this repository's own demo boxes — a test for
+portability quietly borrowing from home, which is the exact failure it
+exists to catch.
 
 ## The engine has one name and two spellings of it
 

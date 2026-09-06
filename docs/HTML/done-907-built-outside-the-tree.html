@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>906 — An error reaches the host before the engine stops</title>
+<title>907 — Built outside the tree</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -38,9 +38,6 @@
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
-<a href="issue-906-an-error-reaches-the-host.html" class="here">906 — An error reaches the host before the engine stops</a>
-<a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
-<a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
 <a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -132,6 +129,9 @@
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
 <a href="done-904-the-old-files-are-removed.html">904 — The old files are removed</a>
 <a href="done-905-the-prefix.html">905 — The prefix</a>
+<a href="done-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
+<a href="done-907-built-outside-the-tree.html" class="here">907 — Built outside the tree</a>
+<a href="done-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
 <h2>Interfaces</h2>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
@@ -156,59 +156,93 @@
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>906 — An error reaches the host before the engine stops</h1>
+<h1>907 — Built outside the tree</h1>
+<p>The capstone of phase 9. Everything above it makes the engine <em>look</em>
+portable; this is the issue that finds out.</p>
 <h2>Current behaviour</h2>
-<p><strong>Every refusal writes to standard error and ends the process.</strong> A
-malformed map file, a wire whose two ends disagree about a size, an
-out-of-memory task — each prints a sentence naming what was wrong and
-then the program is over.</p>
-<p>Inside this repository that is right and it is the house rule: errors
-over fallbacks, fail loudly, never silently substitute a default. A
-wrong answer that keeps flowing is worse than no answer.</p>
-<p>**In somebody else's program it is right and unusable at the same
-time.** A host with its own log has no way to capture what happened; the
-message goes to a stream they may have redirected, and then their
-process is gone. The engine's diagnosis is correct and illegible.</p>
+<p><strong>Done, and it passes.</strong> <code>make test</code> copies <code>cera.c</code>, <code>cera.h</code>, the
+export list and the generator into a scratch directory with no
+relationship to this repository, writes a box source and a map and a
+program from nothing, runs the three steps a consumer's build runs, and
+checks what the program printed. Twelve fed into a box that adds thirty
+comes back as forty-two.</p>
+<p>It also greps the generated file for this repository's path, so an
+emission that would not relocate fails here rather than in somebody
+else's tree.</p>
+<h3>Two things it caught immediately, which is the argument for having it</h3>
+<p><strong>The scratch tree was in the wrong RAM tier.</strong> It was written into the
+artifact tier under <code>/dev/shm</code>, which is mounted without execute
+permission, so the generator compiled and then could not be run. The
+project keeps two tiers for exactly this reason and the test now uses
+the executable one.</p>
+<p><strong>The map reached for one of this repository's own demo boxes.</strong> The
+first version placed <code>keep</code>, which exists here and would never exist in
+a consumer's tree. It passed nothing and proved nothing; the imaginary
+consumer now owns both the boxes its map names. A test for portability
+that quietly borrows from home is the failure it was written to catch.</p>
+<h2>What is still owed</h2>
+<p><strong>The train game in the sibling directory.</strong> It builds the engine by
+copying its source in and still names the Lua generator that was
+replaced by the C one, so it does not build. Fixing it is separate work
+in a separate project, and it is the natural second consumer now that
+the first one passes. This test proves a <em>new</em> program can be built; it
+says nothing about the existing one being repaired.</p>
 <h2>Intended behaviour</h2>
-<p>**An installable handler, called with the message immediately before the
-engine dies.** The host logs it, flushes its own state, and knows what
-happened. <strong>The engine still stops.</strong></p>
-<p>That last sentence is the whole design and it is not a compromise. What
-this must never become is an error code returned up a call chain that a
-consumer may ignore — that is a fallback wearing a return type. Breaking
-loudly is the feature; a map that is wrong should stop being a running
-program. A consumer who wants recovery restarts the engine, and that is
-the entire recovery story.</p>
-<p><strong>What the handler adds is legibility, and it opens no other door.</strong> It
-cannot return. It cannot suppress. It runs, and then the engine ends as
-it would have.</p>
-<h3>What the handler is given</h3>
-<p>The message the engine would have printed, and the exit code it is about
-to use. The codes already exist and are named — finished, a map file
-refused, an invalid construction call, out of resources, interrupted by
-a person — so a host can tell "your file is wrong" from "this machine is
-out of memory" without parsing English.</p>
-<h3>Where it is called from</h3>
-<p>One place. Every refusal in the engine already funnels through the same
-reporting path, which is what makes this a small change in code and a
-large one in decision. Handler absent, the behaviour is exactly today's.</p>
+<p>**A test that builds a program with this engine, outside this tree, and
+runs it.**</p>
+<p>Not a script that a person remembers to run. Part of <code>make test</code>, so a
+change that breaks the packaged shape fails the ordinary test run rather
+than being discovered by whoever tries to use it a month later.</p>
+<h3>What it does</h3>
+<p>1. Copies <code>cera.c</code>, <code>cera.h</code> and the generator into a scratch directory
+   in the RAM tier — somewhere with no relationship to this repository
+   and no include path pointing back at it.
+2. Writes a box source: one small C function.
+3. Writes a map file placing it.
+4. Runs the three steps a consumer's build runs — generate, compile,
+   link — with the two linker settings the engine requires.
+5. Runs the result and checks what it printed.</p>
+<h3>What it proves, one property per failure mode</h3>
+<ul>
+<li><strong>The header is sufficient.</strong> A missing declaration fails at step 4,</li>
+<p>  naming it.</p>
+<li><strong>The engine does not reach back into its own tree.</strong> Any leftover</li>
+<p>  include of a numbered filename fails at step 4 with no include path to
+  find it on.</p>
+<li><strong>The three-step build is really three steps</strong>, and the generator</li>
+<p>  really depends on nothing the engine provides.</p>
+<li><strong>The linker settings are stated somewhere a consumer can find them.</strong></li>
+<p>  Omitting the export list produces a program that builds and then fails
+  at run time when a box arrives, which is the failure mode most worth
+  catching automatically, because it looks like success.</p>
+</ul>
+<h3>And the worked example is the real documentation</h3>
+<p>The scratch directory's contents — one box, one map, one program, and
+the build rule tying them together — are exactly what a consumer needs
+to see. They should be readable as an example, not merely correct as a
+test, because the file that shows how the build-time half and the
+run-time half fit together is the thing nobody can infer from a header.</p>
+<h3>What it does not cover</h3>
+<p><strong>The train game.</strong> Fixing it is a separate piece of work in a separate
+project, and it is the natural second consumer once this one passes.
+Worth saying plainly: this test proves a <em>new</em> program can be built, not
+that the existing one has been repaired.</p>
 <h2>Suggested implementation steps</h2>
-<p>1. <strong>Find the funnel</strong> — the single place a refusal is reported and the
-   process ended — and confirm it is single. If it is not, that is the
-   first fix and it is worth doing regardless of this issue.
-2. <strong>Add the installer</strong> to the public header: one call taking a
-   function pointer, one taking nothing to remove it.
-3. <strong>Call it before ending</strong>, with the message and the exit code.
-4. <strong>Test that it is called</strong>, that it is called once, and that the
-   process still ends with the same code afterwards. The third is the
-   one that will rot if it is not tested, because it is the one somebody
-   will later think is a bug.</p>
+<p>1. <strong>Write the scratch build as a shell test</strong> beside the others, taking
+   the project root as its argument like the rest of them do.
+2. <strong>Copy rather than symlink</strong>, so a forgotten include path fails
+   rather than silently resolving.
+3. <strong>Check the output</strong>, not just the exit status.
+4. <strong>Make it run in the RAM tier</strong>, so it leaves nothing behind.
+5. <strong>Then fix the train game against the current engine</strong>, and record
+   what that took — it is the first honest measurement of what an
+   upgrade costs a consumer.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="done-106-stopping-on-purpose.html">106 — Stopping on purpose</a>, the</li>
-<p>  existing exit codes and the report a dying program writes</p>
-<li><a href="impl-057-packaging.html">057 — Packaging</a>,</li>
-<p>  where this was settled as a decision before being written as an issue</p>
+<li><a href="done-901-the-engine-becomes-one-file.html">901</a> through</li>
+<p>  <a href="done-906-an-error-reaches-the-host.html">906</a>, all of which this checks</p>
+<li><a href="impl-057-packaging.html">057 — Packaging</a>, step</li>
+<p>  6 of its rough order of work</p>
 </ul>
 
 </main>

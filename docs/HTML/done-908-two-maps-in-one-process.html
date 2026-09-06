@@ -38,9 +38,6 @@
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
-<a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
-<a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
-<a href="issue-908-two-maps-in-one-process.html" class="here">908 — Two maps in one process</a>
 <a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -132,6 +129,9 @@
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
 <a href="done-904-the-old-files-are-removed.html">904 — The old files are removed</a>
 <a href="done-905-the-prefix.html">905 — The prefix</a>
+<a href="done-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
+<a href="done-907-built-outside-the-tree.html">907 — Built outside the tree</a>
+<a href="done-908-two-maps-in-one-process.html" class="here">908 — Two maps in one process</a>
 <h2>Interfaces</h2>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
@@ -162,14 +162,25 @@ consumer can use the engine without it. It is here because a library
 with a hidden singleton is a defect that only shows up in somebody
 else's program, and because the fix is wanted for other reasons anyway.</p>
 <h2>Current behaviour</h2>
-<p><strong>One process-wide variable holds the active map</strong>, so that a box can
-reach the statics table while it runs. There used to be two; the other
-recorded where the last load's time went, broken into stages that
-stopped existing, and it went with them.</p>
-<p>The consequence is not a crash. **A host that wants two engines gets
-one, and the second quietly writes into the first.** Nothing says so —
-not the header, not the documents. It is the kind of restriction that is
-discovered by a wrong answer.</p>
+<p><strong>Already true, and now proven.</strong> There is no process-wide "active map"
+pointer. It went when statics moved onto the ports that read them: the
+only thing that needed it was a box reaching the statics table, and a
+box cannot write a static any more. The measurement hook that was its
+last remaining user now rides its timing out on the task instead.</p>
+<p>So this issue needed no code. What it needed was a test, because **a
+singleton is invisible until two of something exist**, and nothing built
+two.</p>
+<p>Two programs are now built with different constants, brought up on two
+separate pools, fed the same twenty values alternately, and checked
+against what each one's own constant says its answers should be. Then
+one is destroyed and the other is confirmed still standing.</p>
+<p>It is deliberately not the same as starting a program beside another,
+which shares one pool and reaches the second through its doors. These
+two share nothing and do not know about each other.</p>
+<h3>What is still process-wide, and is meant to be</h3>
+<p>The table of boxes that arrived after the program started, the signal
+state, and the report file. None is map state: a box compiled at run
+time belongs to the process, and so does a signal.</p>
 <h2>Intended behaviour</h2>
 <p><strong>A box reaches its map through its task</strong>, which is the thing that
 already knows which map it belongs to. The global goes away and two maps

@@ -25,6 +25,11 @@
  */
 #include "cera.h"
 
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 /* ==================================================================
  *
  * The joints — how the engine reaches itself
@@ -234,6 +239,83 @@ static void        map_scrap_free_all(cera_map_t *m);
  */
 #define CERA_TEST_ONLY __attribute__((unused))
 
+/* {{{ cera_on_error() / cera_fail() / cera_bug() */
+/*
+ * The one way the engine ends a program it refuses to continue.
+ *
+ * Every refusal formats its message, hands it to the installed handler
+ * if there is one, and then ends the process. There is one of these so
+ * that a host has one place to be told from; thirty scattered writes to
+ * stderr followed by thirty aborts gave it none.
+ *
+ * `cera_fail` exits with the code it is given: a fault outside the
+ * engine, which a caller may be able to correct. `cera_bug` aborts,
+ * leaving a core: the engine found a fault in itself, and the core is
+ * the evidence.
+ *
+ * The handler is read once, into a local, before it is called. Nothing
+ * stops a host installing one from another thread while a program is
+ * dying, and calling through a pointer that was read twice is a way to
+ * call through a null.
+ */
+static cera_error_fn error_handler = NULL;
+
+void cera_on_error(cera_error_fn fn)
+{
+    error_handler = fn;
+}
+
+/* The message reaches the handler without its trailing newline, since a
+ * host putting it in a structured log wants the sentence and not the
+ * line break the terminal wanted. */
+static void tell_the_host(const char *message, int exit_code)
+{
+    cera_error_fn fn = error_handler;
+    if (!fn)
+        return;
+
+    size_t n = strlen(message);
+    while (n > 0 && (message[n - 1] == '\n' || message[n - 1] == '\r'))
+        n--;
+
+    char trimmed[1024];
+    if (n >= sizeof trimmed)
+        n = sizeof trimmed - 1;
+    memcpy(trimmed, message, n);
+    trimmed[n] = '\0';
+    fn(trimmed, exit_code);
+}
+
+static void say_and_end(int exit_code, int leave_core, const char *fmt, va_list ap)
+{
+    char message[1024];
+    vsnprintf(message, sizeof message, fmt, ap);
+
+    fputs(message, stderr);
+    tell_the_host(message, exit_code);
+
+    if (leave_core)
+        abort();
+    exit(exit_code);
+}
+
+static void cera_fail(int exit_code, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    say_and_end(exit_code, 0, fmt, ap);
+    va_end(ap);
+}
+
+static void cera_bug(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    say_and_end(CERA_EXIT_BUG, 1, fmt, ap);
+    va_end(ap);
+}
+/* }}} */
+
 /* ================================================================== */
 
 
@@ -418,9 +500,8 @@ static void queue_grow(cera_pool_t *p)
     int new_capacity = p->capacity * 2;
     cera_task_t **fresh = malloc((size_t)new_capacity * sizeof *fresh);
     if (!fresh) {
-        fprintf(stderr, "pool: queue growth to %d entries failed: out of memory\n",
+        cera_fail(CERA_EXIT_NO_RESOURCE, "pool: queue growth to %d entries failed: out of memory\n",
                 new_capacity);
-        abort();
     }
 
     /* Copy oldest-first so the new ring starts at zero. Two paths:
@@ -764,16 +845,14 @@ static int decide_worker_count(int n_workers)
     if (env && *env) {
         int n = atoi(env);
         if (n <= 0) {
-            fprintf(stderr, "pool: CERAMIC_WORKERS is '%s', not a positive number\n", env);
-            abort();
+            cera_fail(CERA_EXIT_BAD_CALL, "pool: CERAMIC_WORKERS is '%s', not a positive number\n", env);
         }
         return n;
     }
 
     long online = sysconf(_SC_NPROCESSORS_ONLN);
     if (online < 1) {
-        fprintf(stderr, "pool: could not count online processors\n");
-        abort();
+        cera_fail(CERA_EXIT_NO_RESOURCE, "pool: could not count online processors\n");
     }
     return (int)online;
 }
@@ -784,15 +863,13 @@ cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *fi
 {
     cera_pool_t *p = calloc(1, sizeof *p);
     if (!p) {
-        fprintf(stderr, "pool: allocation failed\n");
-        abort();
+        cera_fail(CERA_EXIT_NO_RESOURCE, "pool: allocation failed\n");
     }
 
     p->capacity = POOL_INITIAL_CAPACITY;
     p->slots = malloc((size_t)p->capacity * sizeof *p->slots);
     if (!p->slots) {
-        fprintf(stderr, "pool: queue allocation failed\n");
-        abort();
+        cera_fail(CERA_EXIT_NO_RESOURCE, "pool: queue allocation failed\n");
     }
 
     pthread_mutex_init(&p->mutex, NULL);
@@ -809,8 +886,7 @@ cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *fi
      * wrote into it. */
     p->epochs = calloc((size_t)p->n_workers, sizeof *p->epochs);
     if (!p->epochs) {
-        fprintf(stderr, "pool: out of memory for the worker epochs\n");
-        exit(71);
+        cera_fail(CERA_EXIT_NO_RESOURCE, "pool: out of memory for the worker epochs\n");
     }
     /* A worker inside no station says so. Zeroed memory would claim
      * every worker is inside station zero, which is a real station
@@ -821,8 +897,7 @@ cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *fi
 
     p->workers = calloc((size_t)p->n_workers, sizeof *p->workers);
     if (!p->workers) {
-        fprintf(stderr, "pool: worker table allocation failed\n");
-        abort();
+        cera_fail(CERA_EXIT_NO_RESOURCE, "pool: worker table allocation failed\n");
     }
 
     for (int i = 0; i < p->n_workers; i++) {
@@ -831,9 +906,8 @@ cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *fi
         int err = pthread_create(&p->workers[i].thread, NULL,
                                  worker_main, &p->workers[i]);
         if (err != 0) {
-            fprintf(stderr, "pool: creating worker %d failed: %s\n",
+            cera_fail(CERA_EXIT_NO_RESOURCE, "pool: creating worker %d failed: %s\n",
                     i, strerror(err));
-            abort();
         }
     }
 
@@ -860,9 +934,8 @@ void cera_pool_join(cera_pool_t *p)
     for (int i = 0; i < p->n_workers; i++) {
         int err = pthread_join(p->workers[i].thread, NULL);
         if (err != 0) {
-            fprintf(stderr, "pool: joining worker %d failed: %s\n",
+            cera_fail(CERA_EXIT_NO_RESOURCE, "pool: joining worker %d failed: %s\n",
                     i, strerror(err));
-            abort();
         }
     }
 }
@@ -883,8 +956,7 @@ void cera_pool_submitter_unregister(cera_pool_t *p)
     pthread_mutex_lock(&p->mutex);
     p->outside--;
     if (p->outside < 0) {
-        fprintf(stderr, "pool: submitter unregistered more times than registered\n");
-        abort();
+        cera_fail(CERA_EXIT_BAD_CALL, "pool: submitter unregistered more times than registered\n");
     }
     /* If this was the last outside submitter and every worker is
      * already asleep over an empty queue, nobody is left to notice
@@ -1101,9 +1173,8 @@ static void *in_port_slot(const cera_in_port_t *sl, int index)
          * the scan bounds itself by the capacity, and the capacity is
          * the sum of the pages. Stopping is right because continuing
          * would read whatever follows the list. */
-        fprintf(stderr, "station: slot %d asked for on a port that has "
+        cera_fail(CERA_EXIT_BAD_CALL, "station: slot %d asked for on a port that has "
                         "%d\n", index, sl->capacity);
-        abort();
     }
     return pg->slots + (size_t)(index % sl->page_slots) * (size_t)sl->stride;
 }
@@ -2749,8 +2820,7 @@ static long stats_now_ns(void)
  * flowing is worse than no answer. */
 static void die(const char *what, int station)
 {
-    fprintf(stderr, "delivery: %s (station %d)\n", what, station);
-    abort();
+    cera_bug("delivery: %s (station %d)\n", what, station);
 }
 /* }}} */
 
@@ -2926,10 +2996,9 @@ static void in_port_write(cera_station_t *s, cera_in_port_t *sl, const void *val
         }
         pthread_mutex_unlock(&s->mutex);
         if (c < 0) {
-            fprintf(stderr, "delivery: a port with no free slot immediately "
+            cera_bug("delivery: a port with no free slot immediately "
                             "after growing to %d slots\n",
                     atomic_load(&sl->capacity));
-            abort();
         }
     }
 
@@ -2944,9 +3013,8 @@ static void in_port_write(cera_station_t *s, cera_in_port_t *sl, const void *val
      * visible to whoever later takes the slot from *ready*. */
     memcpy(slot, value, (size_t)sl->elem_size);
     if (!slot_move_at(slot, sl->elem_size, CERA_SLOT_RESERVED, CERA_SLOT_READY)) {
-        fprintf(stderr, "delivery: publishing a slot this thread had "
+        cera_bug("delivery: publishing a slot this thread had "
                         "reserved, and somebody else had moved it\n");
-        abort();
     }
 
     /* **Counted after it is published, never before.** A claimer asks
@@ -3023,9 +3091,8 @@ static void in_port_release(cera_in_port_t *sl, void *slot, void *into)
 {
     memcpy(into, slot, (size_t)sl->elem_size);
     if (!slot_move_at(slot, sl->elem_size, CERA_SLOT_CLAIMED, CERA_SLOT_EMPTY)) {
-        fprintf(stderr, "delivery: releasing a slot this thread had claimed, "
+        cera_bug("delivery: releasing a slot this thread had claimed, "
                         "and somebody else had moved it\n");
-        abort();
     }
 }
 /* }}} */
@@ -3109,9 +3176,8 @@ static void ring_claim(cera_in_port_t *sl, void *into, void **taken)
      * ports answer and the claim succeeds outright, or one does not
      * and nothing was ever taken. */
     if (!in_port_take_locked(sl, taken)) {
-        fprintf(stderr, "delivery: a port that answered ready had no ready "
+        cera_bug("delivery: a port that answered ready had no ready "
                         "slot when asked for one\n");
-        abort();
     }
     (void)into;
 }
@@ -3157,9 +3223,8 @@ static void none_claim(cera_in_port_t *sl, void *into, void **taken)
      * about the same port, which is an engine bug rather than a
      * situation to handle. */
     (void)sl; (void)into;
-    fprintf(stderr, "delivery: claimed from a port that has no source — the "
+    cera_bug("delivery: claimed from a port that has no source — the "
                     "readiness walk and the claim walk disagreed\n");
-    abort();
 }
 /* }}} */
 
@@ -3651,8 +3716,7 @@ static void station_hold_result(cera_map_t *m, int index, cera_station_t *s,
         void *bigger = realloc(s->held, (size_t)room * (size_t)s->out_size);
         if (!bigger) {
             pthread_mutex_unlock(&s->mutex);
-            fprintf(stderr, "delivery: out of memory holding a result\n");
-            abort();
+            cera_fail(CERA_EXIT_NO_RESOURCE, "delivery: out of memory holding a result\n");
         }
         s->held = bigger;
         s->held_room = room;
@@ -3999,11 +4063,9 @@ void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int ki
     if (station >= 0 && station < m->n_stations
         && atomic_load_explicit(&cera_map_station(m, station)->removed,
                                 memory_order_acquire)) {
-        fprintf(stderr,
-                "map: station %d was removed and is not reclaimed yet — "
+        cera_fail(CERA_EXIT_BAD_CALL, "map: station %d was removed and is not reclaimed yet — "
                 "something may still be inside a task built from it\n",
                 station);
-        abort();
     }
 
     const cera_box_place_t *bp = cera_box_place_find(box_name);
@@ -4024,10 +4086,8 @@ void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int ki
         bp = late_recover_box(box_name);
     }
     if (!bp) {
-        fprintf(stderr,
-                "map: no box named '%s' anywhere the build could see — misspelled, or its "
+        cera_fail(CERA_EXIT_BAD_CALL, "map: no box named '%s' anywhere the build could see — misspelled, or its "
                 "source is not under src/boxes/\n", box_name);
-        abort();
     }
 
     /*
@@ -5996,8 +6056,7 @@ static int (*const orderings[CERA_REPORT_ORDER_COUNT])(const void *, const void 
 void cera_map_report_stations(cera_map_t *m, FILE *out, int order)
 {
     if (order < 0 || order >= CERA_REPORT_ORDER_COUNT) {
-        fprintf(stderr, "observe: no such report ordering\n");
-        abort();
+        cera_fail(CERA_EXIT_BAD_CALL, "observe: no such report ordering\n");
     }
 
     static const char *const order_names[CERA_REPORT_ORDER_COUNT] = {
@@ -6072,13 +6131,11 @@ void cera_map_observe_start(cera_map_t *m, const char *path, int interval_ms)
         /* Refuse rather than default: an engine writing diagnostics
          * nobody reads is a background thread doing nothing useful.
          * Asking for zero means you did not want it. */
-        fprintf(stderr, "observe: a non-positive interval — if you do not "
+        cera_fail(CERA_EXIT_BAD_CALL, "observe: a non-positive interval — if you do not "
                         "want observation, do not start it\n");
-        abort();
     }
     if (m->observer_running) {
-        fprintf(stderr, "observe: already observing\n");
-        abort();
+        cera_fail(CERA_EXIT_BAD_CALL, "observe: already observing\n");
     }
     m->observer_path = strdup(path);
     m->observer_interval_ms = interval_ms;
@@ -6188,11 +6245,9 @@ void cera_map_dump(cera_map_t *m, FILE *out)
             continue;   /* an empty place is not a station */
         if (i < m->n_named && m->station_names && m->station_names[i])
             continue;
-        fprintf(stderr,
-                "dump: station %d has no name — a station line begins with "
+        cera_fail(CERA_EXIT_BAD_CALL, "dump: station %d has no name — a station line begins with "
                 "one, so this program cannot be written as a file that reads "
                 "back\n", i);
-        abort();
     }
 
     /*
@@ -6225,8 +6280,7 @@ void cera_map_dump(cera_map_t *m, FILE *out)
     char **written = calloc((size_t)(m->n_stations > 0 ? m->n_stations : 1),
                             sizeof *written);
     if (!written) {
-        fprintf(stderr, "dump: out of memory naming stations\n");
-        abort();
+        cera_fail(CERA_EXIT_NO_RESOURCE, "dump: out of memory naming stations\n");
     }
     for (int i = 0; i < m->n_stations; i++) {
         if (!cera_map_station(m, i)->call)
@@ -6245,8 +6299,7 @@ void cera_map_dump(cera_map_t *m, FILE *out)
         }
         written[i] = strdup(candidate);
         if (!written[i]) {
-            fprintf(stderr, "dump: out of memory naming stations\n");
-            abort();
+            cera_fail(CERA_EXIT_NO_RESOURCE, "dump: out of memory naming stations\n");
         }
     }
 
@@ -6409,8 +6462,7 @@ void cera_map_dump(cera_map_t *m, FILE *out)
                 int wanted = in_port_constant_text(sl, NULL, 0);
                 char *text = malloc((size_t)wanted + 1);
                 if (!text) {
-                    fprintf(stderr, "dump: out of memory writing a constant\n");
-                    abort();
+                    cera_fail(CERA_EXIT_NO_RESOURCE, "dump: out of memory writing a constant\n");
                 }
                 in_port_constant_text(sl, text, wanted + 1);
                 fprintf(out, "  in %d %s= %s   # %s, %d bytes\n", j, depth,
@@ -6436,9 +6488,8 @@ void cera_map_dump(cera_map_t *m, FILE *out)
                 if (waiting > 0) {
                     char *held = malloc((size_t)waiting + 1);
                     if (!held) {
-                        fprintf(stderr, "dump: out of memory writing "
+                        cera_fail(CERA_EXIT_NO_RESOURCE, "dump: out of memory writing "
                                         "waiting values\n");
-                        abort();
                     }
                     in_port_waiting_text(sl, held, waiting + 1);
                     fprintf(out, "  in %d %s[%s]   # %s, %d bytes, %d "
@@ -8026,9 +8077,8 @@ void cera_prepare(const char *report_path)
     sigaddset(&set, SIGQUIT);
     sigaddset(&set, finished_signal);
     if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0) {
-        fprintf(stderr, "stopping: could not block the signals this "
+        cera_fail(CERA_EXIT_NO_RESOURCE, "stopping: could not block the signals this "
                         "program answers\n");
-        exit(CERA_EXIT_NO_RESOURCE);
     }
 
     if (report_path && *report_path) {
@@ -8305,6 +8355,13 @@ int cera_wait(cera_map_t *m)
              * Then abort, which leaves a core, so a debugger sees
              * every thread's stack including the box that is not
              * returning.
+             *
+             * **This is the one death that does not go through the
+             * funnel**, and for the same reason it takes no locks: an
+             * error handler is somebody else's code, and somebody
+             * else's code may take a lock. The whole point of this
+             * path is that it works when a lock is held by something
+             * that will never release it.
              */
             report_without_locks(m);
             abort();

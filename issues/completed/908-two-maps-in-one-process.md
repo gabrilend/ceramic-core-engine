@@ -7,15 +7,30 @@ else's program, and because the fix is wanted for other reasons anyway.
 
 ## Current behaviour
 
-**One process-wide variable holds the active map**, so that a box can
-reach the statics table while it runs. There used to be two; the other
-recorded where the last load's time went, broken into stages that
-stopped existing, and it went with them.
+**Already true, and now proven.** There is no process-wide "active map"
+pointer. It went when statics moved onto the ports that read them: the
+only thing that needed it was a box reaching the statics table, and a
+box cannot write a static any more. The measurement hook that was its
+last remaining user now rides its timing out on the task instead.
 
-The consequence is not a crash. **A host that wants two engines gets
-one, and the second quietly writes into the first.** Nothing says so —
-not the header, not the documents. It is the kind of restriction that is
-discovered by a wrong answer.
+So this issue needed no code. What it needed was a test, because **a
+singleton is invisible until two of something exist**, and nothing built
+two.
+
+Two programs are now built with different constants, brought up on two
+separate pools, fed the same twenty values alternately, and checked
+against what each one's own constant says its answers should be. Then
+one is destroyed and the other is confirmed still standing.
+
+It is deliberately not the same as starting a program beside another,
+which shares one pool and reaches the second through its doors. These
+two share nothing and do not know about each other.
+
+### What is still process-wide, and is meant to be
+
+The table of boxes that arrived after the program started, the signal
+state, and the report file. None is map state: a box compiled at run
+time belongs to the process, and so does a signal.
 
 ## Intended behaviour
 

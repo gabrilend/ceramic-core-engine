@@ -2440,9 +2440,45 @@ const char *cera_late_source_text(const char *path);
 #define CERA_EXIT_BAD_CALL     70   /* an invalid construction call         */
 #define CERA_EXIT_NO_RESOURCE  71   /* out of memory; no edit fixes it      */
 #define CERA_EXIT_INTERRUPTED  130  /* a person interrupted it              */
+#define CERA_EXIT_BUG          134  /* an engine fault; aborts, leaving a core */
 /* The quit path is not in this list: it aborts, and the shell
  * computes 131 from the signal itself. Naming a number here would be
  * inventing an agreement that already exists. */
+/* }}} */
+
+/* {{{ cera_on_error() */
+/*
+ * **Hear why the engine is stopping, immediately before it stops.**
+ *
+ * The engine refuses a malformed map, a wire whose ends disagree about
+ * a size, an out-of-memory task, and about thirty other things, and
+ * every refusal ends the program. Inside a program built around the
+ * engine that is right; inside somebody else's application the message
+ * goes to a stream they may have redirected and then their process is
+ * gone, so the diagnosis is correct and unreadable.
+ *
+ * The handler is given the message and the code the process is about to
+ * exit with. A host logs it, flushes its own state, and knows what
+ * happened.
+ *
+ * **The engine still stops.** The handler cannot return control, cannot
+ * suppress the refusal, and cannot change the code. What it adds is
+ * legibility, and it opens no other door: an error a caller may ignore
+ * is a fallback wearing a return type, and a wrong answer that keeps
+ * flowing is worse than no answer. A consumer who wants to recover
+ * restarts the engine, and that is the whole recovery story.
+ *
+ * The message has no trailing newline. Codes are the CERA_EXIT_ values
+ * above, so a host can tell "your file is wrong" from "this machine is
+ * out of memory" without reading English. CERA_EXIT_BUG means the
+ * engine found a fault in itself and will abort rather than exit, so
+ * the handler runs and then a core is left.
+ *
+ * Passing NULL removes the handler. With none installed the behaviour
+ * is exactly what it was before one existed.
+ */
+typedef void (*cera_error_fn)(const char *message, int exit_code);
+void cera_on_error(cera_error_fn fn);
 /* }}} */
 
 /* {{{ cera_prepare() */

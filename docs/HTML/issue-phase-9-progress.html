@@ -38,9 +38,6 @@
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
 <a href="issue-802-a-program-you-can-watch.html">802 — A program you can watch</a>
 <a href="issue-803-the-viewer.html">803 — The viewer</a>
-<a href="issue-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
-<a href="issue-907-built-outside-the-tree.html">907 — Built outside the tree</a>
-<a href="issue-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
 <a href="issue-909-the-blueprints-name-their-calls.html">909 — The blueprints name their calls</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
@@ -132,6 +129,9 @@
 <a href="done-903-everything-else-goes-private.html">903 — Everything else goes private</a>
 <a href="done-904-the-old-files-are-removed.html">904 — The old files are removed</a>
 <a href="done-905-the-prefix.html">905 — The prefix</a>
+<a href="done-906-an-error-reaches-the-host.html">906 — An error reaches the host before the engine stops</a>
+<a href="done-907-built-outside-the-tree.html">907 — Built outside the tree</a>
+<a href="done-908-two-maps-in-one-process.html">908 — Two maps in one process</a>
 <h2>Interfaces</h2>
 <a href="info-065-gentext-h.html">065-gentext.h — the generator's support machinery</a>
 <a href="info-066-gentext-c.html">066-gentext.c — the support machinery, from inside</a>
@@ -173,9 +173,9 @@ translation unit as its callers can be <code>static</code>.</p>
 <tr><td><a href="done-904-the-old-files-are-removed.html">904 — the old files are removed</a></td><td><strong>complete</strong></td><td>Gone, with their eighteen interface files and the <code>libs/</code> directory. The <code>#line</code> directives went rather than being re-pointed, and the two include paths became one.</td></tr>
 <tr><td><a href="done-905-the-prefix.html">905 — the prefix</a></td><td><strong>complete</strong></td><td>Every one of the 100 exported symbols begins <code>cera_</code>. 3,008 renames and 706 respellings across 52 files, and not one byte of test output changed. The linker's export list collapsed to a single line.</td></tr>
 <tr><td><a href="issue-909-the-blueprints-name-their-calls.html">909 — the blueprints name their calls</a></td><td>open, <strong>split out of 902</strong></td><td>Every completed blueprint saying which calls it produced. Cannot be derived — the house style keeps function names out of prose, so six issues in seventy-four name one — and so has to be decided a blueprint at a time.</td></tr>
-<tr><td><a href="issue-906-an-error-reaches-the-host.html">906 — an error reaches the host</a></td><td>open</td><td>An installable handler called with the message before the engine dies. The engine still dies.</td></tr>
-<tr><td><a href="issue-907-built-outside-the-tree.html">907 — built outside the tree</a></td><td>open</td><td>The capstone: <code>make test</code> builds a program with this engine in a scratch directory that cannot see this repository, and runs it.</td></tr>
-<tr><td><a href="issue-908-two-maps-in-one-process.html">908 — two maps in one process</a></td><td>open, <strong>not on the critical path</strong></td><td>The process-wide active map, threaded through the task instead. Or, failing that, written down where somebody will read it.</td></tr>
+<tr><td><a href="done-906-an-error-reaches-the-host.html">906 — an error reaches the host</a></td><td><strong>complete</strong></td><td>An installable handler, called with the message and the exit code immediately before the engine dies. Building it meant building the funnel first: thirty places wrote to stderr and ended the process, each its own little ending.</td></tr>
+<tr><td><a href="done-907-built-outside-the-tree.html">907 — built outside the tree</a></td><td><strong>complete</strong></td><td>The capstone. <code>make test</code> builds a program with this engine in a scratch directory that cannot see this repository, runs it, and checks the answer. It caught two real faults on its first run.</td></tr>
+<tr><td><a href="done-908-two-maps-in-one-process.html">908 — two maps in one process</a></td><td><strong>complete</strong>, and it needed no code</td><td>There is no process-wide active map — it went with the statics table. What was missing was a test, because a singleton is invisible until two of something exist.</td></tr>
 </table>
 <h2>Why the amalgamation is the source rather than a build artifact</h2>
 <p>Note 057 surveyed three shapes and recommended the amalgamation, but as
@@ -220,29 +220,45 @@ the numbered sources go. A number is a position in a reading order, and
 a reused number makes two things claim one position; the gap is the
 record that something stood there. See
 <a href="issue-711-the-index-means-reading-order.html">711</a>.</p>
-<p><strong>Errors still end the program.</strong> <a href="issue-906-an-error-reaches-the-host.html">906</a>
+<p><strong>Errors still end the program.</strong> <a href="done-906-an-error-reaches-the-host.html">906</a>
 adds a way for a host to <em>hear</em> about a refusal, and deliberately no way
 to survive one. An error code a caller may ignore is a fallback wearing
 a return type.</p>
 <h2>Where the phase stands</h2>
-<p><strong>Five of nine done, and the engine can now leave.</strong> It is two files,
-it publishes 100 symbols and every one of them says whose they are,
-nothing else escapes at all, and a test checks that on every run.</p>
-<p>What is left is not about shape:</p>
-<ul>
-<li><strong><a href="issue-906-an-error-reaches-the-host.html">906</a></strong> — a host cannot hear why</li>
-<p>  the engine stopped, only that it did.</p>
-<li><strong><a href="issue-907-built-outside-the-tree.html">907</a></strong> — nothing has yet compiled</li>
-<p>  this engine from a directory that cannot see this repository, so every
-  claim above is still inference from reading rather than from doing.</p>
-<li><strong><a href="issue-908-two-maps-in-one-process.html">908</a></strong> — one process-wide variable</li>
-<p>  means one map, silently.</p>
-</ul>
-<p>And <a href="issue-909-the-blueprints-name-their-calls.html">909</a>, which is about the
-record rather than the engine: the blueprints do not say what the calls
-they describe are called.</p>
-<p>907 is the one that matters most, because it is the only one that can
-prove the rest.</p>
+<p><strong>Eight of nine done, and the engine has left.</strong> It is two files. It
+publishes 101 symbols and every one says whose it is; nothing else
+escapes at all, and a test checks that on every run. A host installing
+one function hears why it stopped. Two programs run side by side in one
+process on separate pools.</p>
+<p>And the claim is no longer inference. <code>make test</code> copies the engine into
+a directory that cannot see this repository, writes a box and a map and
+a program from nothing, builds them the way a consumer would, and checks
+the answer that comes back.</p>
+<p>What is left is <a href="issue-909-the-blueprints-name-their-calls.html">909</a>, which is
+about the record rather than the engine: the blueprints describe
+behaviour without naming the calls that provide it.</p>
+<h2>What the last three turned up</h2>
+<p><strong>A funnel had to exist before a handler could hang off it.</strong> Thirty
+places wrote a sentence to stderr and then ended the process, each its
+own little ending, so there was nowhere for a host to be told from.
+Collecting them named a distinction the code was already making without
+saying so: most refusals are a fault outside the engine and exit with a
+code, while six in the delivery path are the engine finding a fault in
+itself and abort, because a core is the evidence.</p>
+<p><strong>One death stays outside the funnel on purpose.</strong> The quit signal's
+path takes no locks, since the reason it arrived may be a lock nobody
+will release — and a handler is somebody else's code, which may take
+one.</p>
+<p><strong>A singleton is invisible until two of something exist.</strong> The
+process-wide active map had already gone with the statics table, and
+nothing had noticed either way, because no test ever built two programs
+and ran them at once.</p>
+<p><strong>The portability test caught two faults on its first run</strong>, which is
+the whole argument for having it. It was writing its scratch tree into
+the RAM tier that is mounted without execute permission, and its map
+reached for one of this repository's own demo boxes — a test for
+portability quietly borrowing from home, which is the exact failure it
+exists to catch.</p>
 <h2>The engine has one name and two spellings of it</h2>
 <p>Asking which prefix to use produced the observation that ends the
 question:</p>

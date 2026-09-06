@@ -5,19 +5,39 @@ portable; this is the issue that finds out.
 
 ## Current behaviour
 
-**Nothing has ever compiled this engine from outside this repository.**
-Every claim about packaging is inference from reading the code and the
-symbol table. The one consumer that exists — the train game in the
-sibling directory — builds by pointing at this tree with an include path
-and a wildcard, which is the source drop-in shape, and it currently does
-not build at all: it names a generator that was replaced when the
-generator was rewritten in C, and nothing noticed because nothing here
-runs it.
+**Done, and it passes.** `make test` copies `cera.c`, `cera.h`, the
+export list and the generator into a scratch directory with no
+relationship to this repository, writes a box source and a map and a
+program from nothing, runs the three steps a consumer's build runs, and
+checks what the program printed. Twelve fed into a box that adds thirty
+comes back as forty-two.
 
-That is the whole argument for this issue. **Packaging that has not been
-compiled somewhere else is a guess**, and a consumer that is not built
-by our own test run is a consumer that breaks silently the next time
-anything moves.
+It also greps the generated file for this repository's path, so an
+emission that would not relocate fails here rather than in somebody
+else's tree.
+
+### Two things it caught immediately, which is the argument for having it
+
+**The scratch tree was in the wrong RAM tier.** It was written into the
+artifact tier under `/dev/shm`, which is mounted without execute
+permission, so the generator compiled and then could not be run. The
+project keeps two tiers for exactly this reason and the test now uses
+the executable one.
+
+**The map reached for one of this repository's own demo boxes.** The
+first version placed `keep`, which exists here and would never exist in
+a consumer's tree. It passed nothing and proved nothing; the imaginary
+consumer now owns both the boxes its map names. A test for portability
+that quietly borrows from home is the failure it was written to catch.
+
+## What is still owed
+
+**The train game in the sibling directory.** It builds the engine by
+copying its source in and still names the Lua generator that was
+replaced by the C one, so it does not build. Fixing it is separate work
+in a separate project, and it is the natural second consumer now that
+the first one passes. This test proves a *new* program can be built; it
+says nothing about the existing one being repaired.
 
 ## Intended behaviour
 

@@ -2,19 +2,49 @@
 
 ## Current behaviour
 
-**Every refusal writes to standard error and ends the process.** A
-malformed map file, a wire whose two ends disagree about a size, an
-out-of-memory task — each prints a sentence naming what was wrong and
-then the program is over.
+**Done.** A host installs a handler and is told the engine's own message
+and the code the process is about to exit with, immediately before it
+exits. Passing NULL removes it; with none installed the behaviour is
+exactly what it was.
 
-Inside this repository that is right and it is the house rule: errors
-over fallbacks, fail loudly, never silently substitute a default. A
-wrong answer that keeps flowing is worse than no answer.
+**The engine still stops.** The handler cannot return control, suppress
+the refusal, or change the code.
 
-**In somebody else's program it is right and unusable at the same
-time.** A host with its own log has no way to capture what happened; the
-message goes to a stream they may have redirected, and then their
-process is gone. The engine's diagnosis is correct and illegible.
+### The funnel had to be built first
+
+This issue's first step was to find the single place a refusal is
+reported and confirm it was single. It was not: **thirty places wrote a
+sentence to stderr and then called abort or exit**, each its own little
+ending. So the funnel is the work, and the handler is the small part
+that hangs off it.
+
+Every one of the thirty now goes through one call that formats the
+message, writes it to stderr as before, hands it to the handler, and
+ends the process. Sorting them turned up a distinction the code was
+already making without naming: most refusals are a fault outside the
+engine and exit with a code a caller can act on, while six in the
+delivery path are the engine finding a fault in itself and abort,
+because a core is the evidence. That second kind got a name and a code
+of its own.
+
+**One death deliberately does not go through it.** The quit signal's
+path takes no locks, because the reason it arrived may be that a lock is
+held by something that will never release it — and an error handler is
+somebody else's code, which may take a lock. It aborts directly, and now
+says so.
+
+### What the test holds down
+
+That the handler is called, called exactly once, told the right code,
+handed a message with no trailing newline, and that the process still
+ends with that same code afterwards. The last one is the one that would
+rot unnoticed, because it is the one somebody will eventually read as a
+bug.
+
+Each case runs in a forked child, since each ends in a dead process, and
+the child reports down a pipe. The removal case installs a handler that
+shouts if it runs, so "not called" is proven rather than inferred from
+silence.
 
 ## Intended behaviour
 
