@@ -40,8 +40,9 @@ minimal-soramech/
 │   ├── cera.c                      the whole runtime, one translation
 │   │                               unit — the numbers inside it are the
 │   │                               reading order the filenames used to be
-│   └── cera.h                      everything a program may call
-├── libs/                           the pool, and anything reusable
+│   ├── cera.h                      everything a program may call
+│   └── cera.info.md                one document for both: what each call
+│                                   does, and what every field means
 ├── issues/                         one file per unit of work
 │   └── completed/
 │       └── demos/                  one runnable demo per finished phase

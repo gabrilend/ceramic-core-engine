@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>cera.h — the engine's interface</title>
+<title>cera.c and cera.h — the engine</title>
 <link rel="stylesheet" href="style.css">
 </head><body><div class="wrap">
 <nav>
@@ -149,22 +149,21 @@
 <a href="info-098-engine-surface-syms.html">098-engine-surface.syms — the engine's public surface</a>
 <a href="info-029-demo-boxes-c.html">029-demo-boxes.c — the boxes maps place, from outside</a>
 <a href="info-083-construction-boxes-c.html">083-construction-boxes.c — building a program from inside one</a>
-<a href="info-cera-c.html">cera.c — the engine, entire</a>
-<a href="info-cera-h.html" class="here">cera.h — the engine's interface</a>
+<a href="info-cera-html" class="here">cera.c and cera.h — the engine</a>
 <a href="info-093-test-stopping-c.html">093-test-stopping.c — what it proves</a>
 <a href="info-096-test-a-map-becomes-code-c.html">096-test-a-map-becomes-code.c — what it proves</a>
 <a href="info-101-test-capture-c.html">101-test-capture.c — a running program put down and picked up</a>
 </nav>
 <main>
-<h1>cera.h — the engine's interface</h1>
-<p>Every call a program built with this engine can make, and nothing else.
-With <code>cera.c</code> beside it this is the engine: two files, one include path,
-and nothing to install.</p>
-<p>The header itself is declarations and fold markers with almost no prose,
-because the prose is here. Both files carry the same eleven components
-in the same order, and within a component the header declares calls in
-the order the body defines them — <code>tests/117-test-header-mirrors-body.sh</code>
-fails if that stops being true.</p>
+<h1>cera.c and cera.h — the engine</h1>
+<p>Two files. <code>cera.c</code> is the whole runtime in one translation unit — the
+thread pool, the station table, the delivery path, constants, the
+reader, the reports, the parts that change a running program, the parts
+that compile new code into one, and the parts that end one. <code>cera.h</code> is
+what a program built with it may call, and nothing else.</p>
+<p>One document covers both, because they are one thing seen twice: the
+same components in the same order, the header declaring what the body
+defines.</p>
 <h2>Using it</h2>
 <pre class="code">
 #include <span class="st">"cera.h"</span>
@@ -192,6 +191,91 @@ than by choice, because that file calls them. A box or map compiled
 <em>while the program runs</em> binds to the same names through the
 executable's dynamic symbol table — see
 <a href="info-098-engine-surface-syms.html">098-engine-surface.syms</a>.</p>
+<h2>How it is arranged</h2>
+<p>Eleven sections in the project's reading order, each formerly a numbered
+file, each opening with a banner naming what it was:</p>
+<p>The header carries the same components in the same order, and declares
+each component's calls in the order this file defines them;
+<code>tests/117-test-header-mirrors-body.sh</code> fails if that stops being true.</p>
+<table>
+<tr><td>component</td><td>what it does</td></tr>
+<tr><td>012</td><td>the pool — the task ring, workers, sleeping, termination</td></tr>
+<tr><td>019</td><td>the station table and its growth</td></tr>
+<tr><td>020</td><td>delivery, the readiness check, and routing</td></tr>
+<tr><td>027</td><td>support for generated code</td></tr>
+<tr><td>033</td><td>constants, and values to and from text</td></tr>
+<tr><td>042</td><td>reading a description</td></tr>
+<tr><td>050</td><td>reports and the observer thread</td></tr>
+<tr><td>051</td><td>a live map written back out as a map file</td></tr>
+<tr><td>052</td><td>changing a running program</td></tr>
+<tr><td>074</td><td>boxes and maps compiled at run time</td></tr>
+<tr><td>092</td><td>signals, capture, and the end</td></tr>
+</table>
+<p>Markers are maintained by <code>scripts/113-refold.lua</code>, which discards every
+one and rewrites them from the code, so a fold cannot drift out of step
+with what it wraps.</p>
+<p><strong>The header folds only at the component level.</strong> A declaration is one
+line, so a fold around it would hide nothing; <code>cera.c</code> folds a second
+time, per definition, because a definition is a page.</p>
+<h2>Why one file</h2>
+<p>**A function in the same translation unit as its callers can be
+<code>static</code>, and a <code>static</code> function is not a linker symbol at all.**</p>
+<p>Eleven files meant every joint between them had to be a global name,
+because being in a header was the only way one file could reach another.
+A host program linking this engine inherited about forty ordinary
+English words it never asked for — <code>cera_map_create</code>, <code>cera_map_start</code>,
+<code>cera_pool_push</code> — and would fail to link if it had its own notion of a map.</p>
+<p>One file makes private the default and public a deliberate act, the act
+being a declaration in <code>cera.h</code>. <strong>That property cannot decay</strong>, and not
+because anybody is careful: <code>tests/112-test-public-surface.sh</code> compiles
+this file alone, asks the object what it publishes, and fails naming
+anything published without being declared. A function added next year is
+private unless somebody writes it into the header, and the build says so
+if they meant to and forgot.</p>
+<p>The engine exported 123 symbols before this and exports 100 now, and
+every one of the 100 begins <code>cera_</code> — so a host program with its own
+notion of a map or a pool has nothing to collide with.</p>
+<p>The cost is that any change recompiles the whole engine, which at this
+size is a fraction of a second and is paid by the consumer's build
+rather than by this one.</p>
+<h2>The joints</h2>
+<p>Near the top, under a banner, sit the declarations of everything this
+file does not publish — the slot state machine, the pages a ring grows
+by, the constant a port holds, the text the dump prints through, the
+output port lookup and its destination sets, task construction, the
+pool's own callback, the scrapyard, the box-table matcher. They are
+declared there rather than left to definition order because the sections
+call each other in both directions: delivery reaches a slot the station
+layer defines, and the station layer builds a task delivery owns.</p>
+<p><strong>Two of them are reached only by tests.</strong> The white-box tests compile
+as one unit with this file, so who calls a joint depends on which unit
+is being built — and when this file is built alone, the ordinal form of
+a slot move and the scrapyard's count have no caller at all. They are
+marked as expected-to-be-unused rather than deleted, because deleting
+one is a decision about the engine rather than about moving it.</p>
+<h2>Two things the merge had to be careful about</h2>
+<p><strong>Preprocessor definitions leak forward.</strong> In separate files a <code>#define</code>
+died at the end of its file; here it would run to the bottom. Three
+sections take their private macros with them by <code>#undef</code>ing at the end —
+the pool's initial queue capacity, delivery's two timing macros, the
+observer's growth threshold.</p>
+<p><strong>The build-time facts are deliberately not undefined.</strong> Which compiler
+built the binary, where the generator is, and the two RAM tiers are used
+by <em>two</em> sections — the one that compiles code at run time and the one
+that writes a report on the way out. Undefining them after the first
+would break the second. They arrive from the command line in an ordinary
+build; the <code>#ifndef</code> fallbacks in section 074 never fire.</p>
+<h2>What is not in here, and never will be</h2>
+<p><strong>The generated file.</strong> It is derived at build time from box sources
+this engine's author has never seen, so it is a separate translation
+unit by necessity. That is what makes <code>cera.h</code> a real boundary: whatever
+generated code calls is public whether anybody wants it to be or not.</p>
+<p><strong>The demo boxes.</strong> <code>src/boxes/</code> is example code the generator compiles
+per-consumer. It exports <code>add</code>, which is the most collidable symbol in
+C, and it is not part of the engine.</p>
+<h1>The components</h1>
+<p>Every call, what it does, and every type it needs. The order is the
+order both files use.</p>
 <h2>012 — the pool</h2>
 <h3>cera_task_t</h3>
 <pre class="code">
@@ -1970,9 +2054,8 @@ they just edited successfully.</p>
 <p><code>m</code> may be NULL when there is no program to describe yet.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="info-cera-c.html">cera.c</a> — the implementation</li>
 <li><a href="info-098-engine-surface-syms.html">098-engine-surface.syms</a> — what a</li>
-<p>  shared object may bind to</p>
+<p>  shared object may bind to when it arrives after the build</p>
 <li><a href="impl-057-packaging.html">057 — Packaging</a></li>
 </ul>
 

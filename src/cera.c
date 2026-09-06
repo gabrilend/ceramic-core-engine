@@ -12,6 +12,8 @@
  * Twelve components, in reading order: the joints the components use to
  * reach each other, then the runtime. The numbers are positions in that
  * order. Markers are maintained by scripts/113-refold.lua.
+ *
+ * What each call does is in cera.info.md.
  */
 #include "cera.h"
 

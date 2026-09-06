@@ -21,12 +21,21 @@ WORK="/dev/shm/$(basename "${DIR}")/mirror"
 mkdir -p "${WORK}"
 
 # The order a name is declared in the header, one per line, with the
-# component it sits in.
+# component it sits in. The header folds only at the component level — a
+# declaration is one line and a fold around it would hide nothing — so
+# the declarations themselves are what is read. A struct's fields are
+# indented and a declaration is not, which is the whole discriminator.
+# A static inline is skipped on both sides: it is defined where it is
+# declared, so there is no second place for it to disagree with.
 awk '
   /^\/\* \{\{\{ [0-9]{3} — / { comp = $0; sub(/^\/\* \{\{\{ /, "", comp); sub(/ \*\/$/, "", comp); next }
-  /^\/\* \{\{\{ cera_[a-z_]+\(\) \*\/$/ {
-      name = $0; sub(/^\/\* \{\{\{ /, "", name); sub(/\(\) \*\/$/, "", name)
-      print comp "\t" name
+  /^static/ { next }
+  /^[A-Za-z_]/ {
+      if (match($0, /cera_[a-z0-9_]+[ \t]*\(/)) {
+          name = substr($0, RSTART, RLENGTH)
+          sub(/[ \t]*\($/, "", name)
+          if (comp != "" && !(name in seen)) { seen[name] = 1; print comp "\t" name }
+      }
   }
 ' "${DIR}/src/cera.h" > "${WORK}/header.txt"
 

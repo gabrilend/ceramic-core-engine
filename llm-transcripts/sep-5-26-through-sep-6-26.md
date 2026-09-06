@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 17:56:58
+Generated on: 2026-09-05 18:20:33
 
 --------------------------------------------------------------------------------
 
@@ -1245,6 +1245,199 @@ now, generated from the header into `cera.h.info.md` — what's missing is the
 arrow pointing the other way, from each blueprint to the calls it produced. That
 can't be extracted from the text; it has to be decided one blueprint at a time
 by somebody holding both the blueprint and the header.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 7
+
+Okay so the single source-file looks great. Can we do the same thing with the
+header file? A lot of the comments in the header file seem to belong in the
+info.md file instead... The header should have very minimal comments. Also it's
+function declarations should exactly match the .c file in order and vimfold
+structure.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 7
+
+Let me map what the body defines, component by component, so the header can
+mirror it.
+
+
+A few names show up in two components. Let me check whether those are real
+definitions or regex artifacts.
+
+
+Those are redundant forward declarations in the body — the header already
+declares them. Let me look at why they're there.
+
+
+Leftovers from when this was many files — the reason given no longer exists.
+Let me remove them, then rebuild the header.
+
+
+101 definitions in one clean order. Now let me parse the header into its blocks.
+
+
+Let me first move the error funnel's definitions into the component where ending
+a program lives, so both files agree.
+
+
+The refold had already split those into separate folds. Let me find them.
+
+
+Now the header. Let me extract its folds and see what each declares.
+
+
+The header mixes types and functions inside single folds. Let me parse it into
+declaration units directly, the same way I parsed the body.
+
+
+Now the generator. Above-declaration prose goes to the info file; the header
+keeps declarations and fold names.
+
+
+Let me check the multi-line signatures survived, then compile.
+
+
+A dependency I broke — the generated-support types use the text types. Types
+must keep their existing order; only functions get reordered.
+
+
+Compiles clean. Full suite:
+
+
+All green. Let me verify nothing was dropped and see how much comment is left.
+
+
+59% is still mostly struct field comments. Let me look at one.
+
+
+Let me move the field documentation into the info file and leave the structs
+bare.
+
+
+The header is now 6 lines of prose. Let me assemble the info file that now
+carries everything.
+
+
+Two fixes needed — the markdown still carries C comment markers, and one
+struct lost its name. Let me regenerate cleanly from the old header.
+
+
+The prose got mis-attributed — a wrong attribution in a reference is worse
+than a missing one. Let me key it off the parser that already worked, run
+against the old header.
+
+
+Found it — I was keying off every identifier in the declaration, so a
+parameter type pulled in its own prose. Keying off the fold's own label instead.
+
+
+Attribution is right. Let me clean up the fold labels — a few came out as raw
+declaration text.
+
+
+Types should keep the author's own grouping — only functions need reordering.
+Let me rebuild using the old header's fold boundaries for types.
+
+
+The pool's typedefs live outside any fold in the old header, so my fold-based
+pass missed them. Let me collect the loose declarations too.
+
+
+One label names functions that moved elsewhere. Let me relabel type groups from
+what they actually declare.
+
+
+Now the test that keeps the two files in step.
+
+
+Only `cera_fail` and `cera_bug` — which are private and correctly absent from
+the header. The body scan must skip statics.
+
+
+The field tables aren't landing — the label and the table key differ. Let me
+key off what a declaration *defines*, not what it references.
+
+
+The prose landed correctly, but some phase-history sentences rode along from
+inside the struct bodies. Let me count them.
+
+
+Done. `cera.h` went from 2,601 lines to 807, of which six are prose.
+
+
+Shut, the two files fold to the same eleven lines:
+
+
+```
+
+/* {{{ 012 — the pool */
+
+/* {{{ 019 — the station table */
+
+/* {{{ 020 — delivery, readiness, routing */
+
+/* {{{ 027 — support for generated code */
+
+/* {{{ 033 — constants, and values from text */
+
+/* {{{ 042 — reading a description */
+
+/* {{{ 050 — reports and the observer */
+
+/* {{{ 051 — a live map written back out */
+
+/* {{{ 052 — changing a running program */
+
+/* {{{ 074 — boxes and maps compiled at run time */
+
+/* {{{ 092 — signals, capture, and the end */
+
+```
+
+
+Open a component on either side and you're in the same part of the engine, with
+the calls in the same order. **That order is invisible to a compiler** — a
+shuffled header builds exactly as well — so I added a test that reads the
+order out of each file and diffs them, naming any call declared somewhere other
+than where it's defined. I checked it by moving one declaration and watching it
+complain.
+
+
+Everything that left went to `cera.h.info.md`: what each call does, and every
+struct's fields as a table.
+
+
+Three things fell out of lining the two up:
+
+
+**Three dead forward declarations.** Public calls re-declared inside the body,
+with a comment saying it avoided including a whole header — true when this was
+eighteen files, meaningless now that the one header is included at the top of
+the one body.
+
+
+**The error funnel was in the wrong component.** I'd put it among the joints;
+it's moved in with the rest of the ending, where the header can mirror it. Its
+two private entry points stay declared with the joints, since every component
+calls them.
+
+
+**Types can't be reordered.** I tried moving the text types down beside the text
+calls and the build broke immediately — C wants a type declared before use,
+and the old order already satisfied that. Types keep their existing order; only
+functions follow the body.
+
+
+One thing I'd flag: keying a paragraph to every identifier in a declaration
+attaches it to the wrong call — a parameter's type drags its own explanation
+along. I caught it because `cera_task_call_t` came out documented as if it were
+a task. Keyed to what a declaration *defines* rather than what it mentions, it
+lands right. Worth knowing if you ever regenerate that file.
 
 
 --------------------------------------------------------------------------------
