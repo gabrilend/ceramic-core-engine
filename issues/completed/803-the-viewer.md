@@ -135,30 +135,49 @@ dealing round-robin.
 
 ### Routing by range, which needs a ladder
 
-A comparator answers one question — is this less than, equal to, or
-greater than the value on my last port — so **three ranges need two of
-them in succession**, each taking the values below its own threshold and
-handing the rest down. `maps/127-the-ladder.map` is that, and
-`viewer/128-watch-a-map.c` will run any map this binary was built with,
-so it can be watched without a program written for it.
+A comparator asks exactly one question — is my box's result less than,
+equal to, or greater than the value on my last port — and exits 0, 1
+and 2 **are** those three answers. Nothing in a map file chooses what an
+exit means, and there is nowhere to put a second threshold: the only
+number is the constant on the last port. So three ranges need two
+comparators in succession, each taking what falls below its own
+threshold and handing the rest down.
 
-```
-feed ──> under_ten ──less──────────────────> collect.0
-                   ├─equal───┐
-                   └─greater─┴─> under_twenty ──less──> collect.1
-                                              ├─equal───┐
-                                              └─greater─┴─> spare ──less──> collect.2
-```
+`maps/127-the-ladder.map` is that, and `viewer/128-watch-a-map.c` runs
+any map the binary was built with, so a shape can be watched without a
+program written for it.
 
-Measured: of 306 values, `under_ten` saw all 306, `under_twenty` saw the
-200 it passed down, `spare` saw the 100 left, and `collect` received 106,
-100 and 100 on its three ports and ran 100 times. An even three-way split
-by range, which is what a ladder of comparators is for.
+**Every comparator in it has an unwired equal exit that can never
+fire**, which is what the doubling at the front is for. A threshold of
+nineteen against values that are always even puts the boundary at
+nine-and-a-half: between the integers rather than on one. Compare
+against ten with the values undoubled and the number ten itself lands on
+`equal`, which then has to be wired somewhere or thrown away — an
+unwired exit discards, and a silently discarded value is worse than an
+extra wire.
 
-The last rung's equal and greater exits are wired nowhere, because
-nothing ever reaches thirty — the counter wrapped before it could. **An
-unwired exit discards**, which is the ordinary case rather than an
-omission: it is what an unused comparator branch always does.
+Measured: 130, 130 and 122 values reached `collect`'s three ports, it
+ran 122 times, and **exit 1 was never used by either comparator**.
+
+### Chevrons rather than dots
+
+There were dots crossing the wires, one per delivery, and they were a
+lie in two directions. The trail carries no values, so a dot stood for
+nothing in particular; it carries no durations either, so the speed was
+invented. And it showed: a dot was still crawling along a wire after the
+station at the far end had already run and drained the value it was
+pretending to be.
+
+A wire now shows that it is **carrying**, not what it carries. It
+brightens when something crosses and fades over about a second, and
+while it is lit, chevrons march along it toward the destination. The
+marching says *this way*; the brightness says *just now*; neither claims
+to be a particular value in a particular place. Their offset is a
+function of the clock alone, so every live wire flows at the same rate
+and none of them can be read as tracking one delivery.
+
+Direction is said once at the end of each wire by an arrowhead, which
+brightens with the wire.
 
 ### Zoom, properly
 

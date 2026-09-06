@@ -132,18 +132,23 @@ const GLOW_MS = 700;         /* how long a station stays lit after running */
 const FRAME_MS = 33;
 
 /*
- * A value crosses the page at a **fixed speed** rather than in a fixed
- * time. The trail says nothing about how long a delivery took — it
- * carries the moment, not a duration — so any speed here is a picture
- * rather than a measurement. Given that, the honest choice is the one
- * where distance on screen means something: a long wire takes longer
- * to cross than a short one, because it is longer.
+ * A wire shows that it is **carrying**, not what it carries.
  *
- * Bounded at both ends so a wire between neighbouring boxes is still
- * visible and one across the whole graph does not crawl.
+ * There were dots crossing the wires, one per delivery, and they were a
+ * lie in two directions: the trail carries no values, so a dot stood
+ * for nothing in particular, and it carries no durations either, so the
+ * speed was invented. Worse, a dot was still crawling along the wire
+ * after the station at the far end had already run and drained the
+ * value it was pretending to be.
+ *
+ * So: an active wire brightens and its chevrons march toward the
+ * destination. The marching says *this way*, the brightness says *just
+ * now*, and neither claims to be a particular value in a particular
+ * place. What is true is what is drawn.
  */
-const VALUE_SPEED = 0.42;    /* world units per millisecond */
-const FLIGHT_MIN = 180, FLIGHT_MAX = 1400;
+const WIRE_WARM_MS = 900;    /* how long a wire stays lit after carrying */
+const CHEVRON_SPEED = 46;    /* world units per second the marks travel */
+const CHEVRON_GAP = 26;
 /* }}} */
 
 /* {{{ boxHeight(s) */
@@ -258,7 +263,7 @@ const Picture = {
     byName: new Map(),
     placed: new Map(),        /* index -> {x, y, pinned} */
     lastRun: new Map(),       /* index -> timestamp */
-    flights: [],              /* values crossing a wire right now */
+    wireLast: new Map(),      /* wire -> when it last carried anything */
     lostTotal: 0,
     tally: { ran: 0, moved: 0, due: 0 },
 };
@@ -331,7 +336,6 @@ function placeNear(index, neighbours) {
 const svg = document.getElementById("canvas");
 const gridLayer = document.getElementById("grid");
 const wiresLayer = document.getElementById("wires");
-const flightLayer = document.getElementById("flights");
 const stationsLayer = document.getElementById("stations");
 const stateChip = document.getElementById("state");
 const lostChip = document.getElementById("lost");
@@ -366,30 +370,7 @@ function curveThrough(a, b) {
     const c = { d: `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`,
                 p0: a, p1: { x: a.x + bend, y: a.y },
                 p2: { x: b.x - bend, y: b.y }, p3: b };
-    /* Long enough for timing: the average of the straight line and the
-     * way round the control points, which is the usual cheap estimate
-     * and is nowhere near worth measuring properly for this. */
-    const span = (p, q) => Math.hypot(q.x - p.x, q.y - p.y);
-    const chord = span(c.p0, c.p3);
-    const net = span(c.p0, c.p1) + span(c.p1, c.p2) + span(c.p2, c.p3);
-    c.length = (chord + net) / 2;
-    c.duration = Math.min(FLIGHT_MAX,
-                          Math.max(FLIGHT_MIN, c.length / VALUE_SPEED));
     return c;
-}
-/* }}} */
-
-/* {{{ alongCurve(c, t) */
-/* A point on the cubic, worked out directly rather than by asking the
- * browser to measure the path: a value in flight has to move every
- * frame and a measurement per frame per value is the one thing that
- * would make this page cost something. */
-function alongCurve(c, t) {
-    const u = 1 - t, a = u * u * u, b = 3 * u * u * t, d = 3 * u * t * t, e = t * t * t;
-    return {
-        x: a * c.p0.x + b * c.p1.x + d * c.p2.x + e * c.p3.x,
-        y: a * c.p0.y + b * c.p1.y + d * c.p2.y + e * c.p3.y,
-    };
 }
 /* }}} */
 
@@ -435,8 +416,26 @@ function draw() {
             const c = curveThrough(a, b);
             const key = `${s.index}.${w.fromPort}>${target.index}.${w.toPort}`;
             curves.set(key, c);
-            const busy = Picture.flights.some((f) => f.key === key);
-            wiresLayer.appendChild(el("path", { d: c.d, class: busy ? "wire busy" : "wire" }));
+
+            const since = now - (Picture.wireLast.get(key) || -1e9);
+            const warmth = Math.max(0, 1 - since / WIRE_WARM_MS);
+
+            wiresLayer.appendChild(el("path", {
+                d: c.d, class: warmth > 0 ? "wire live" : "wire",
+                "marker-end": warmth > 0 ? "url(#arrow-live)" : "url(#arrow)",
+            }));
+
+            /* The chevrons, marching toward the destination. Their
+             * offset is a function of the clock alone, so every active
+             * wire flows at the same rate and none of them pretends to
+             * be tracking a particular delivery. */
+            if (warmth > 0)
+                wiresLayer.appendChild(el("path", {
+                    d: c.d, class: "flow",
+                    "stroke-dasharray": `6 ${CHEVRON_GAP - 6}`,
+                    "stroke-dashoffset": -((now / 1000) * CHEVRON_SPEED) % CHEVRON_GAP,
+                    opacity: 0.25 + 0.75 * warmth,
+                }));
         }
     }
 
@@ -505,25 +504,14 @@ function draw() {
         stationsLayer.appendChild(g);
     }
 
-    /* --- values in flight --- */
-    flightLayer.replaceChildren();
-    Picture.flights = Picture.flights.filter((f) => {
-        const c = curves.get(f.key);
-        return c ? now - f.t0 < c.duration : now - f.t0 < FLIGHT_MAX;
-    });
-    for (const f of Picture.flights) {
-        const c = curves.get(f.key);
-        if (!c) continue;
-        const t = Math.min(1, (now - f.t0) / c.duration);
-        const at = alongCurve(c, t);
-        flightLayer.appendChild(el("circle", { class: "value-halo", cx: at.x, cy: at.y, r: 9 }));
-        flightLayer.appendChild(el("circle", { class: "value", cx: at.x, cy: at.y, r: 4 }));
-    }
+    let live = 0;
+    for (const when of Picture.wireLast.values())
+        if (now - when < WIRE_WARM_MS) live++;
 
     tallyText.textContent =
         `${Picture.stations.length} stations · ${Picture.tally.ran} runs · ` +
         `${Picture.tally.moved} values moved · ${Picture.tally.due} tasks due · ` +
-        `${Picture.flights.length} in flight`;
+        `${live} wires carrying`;
 }
 /* }}} */
 
@@ -676,7 +664,7 @@ function receive(e) {
 
     case "moved": {
         Picture.tally.moved++;
-        Picture.flights.push({ key: `${e.a}.${e.b}>${e.c}.${e.d}`, t0: now });
+        Picture.wireLast.set(`${e.a}.${e.b}>${e.c}.${e.d}`, now);
         const to = stationAt(e.c);
         if (to && to.ports[e.d] && to.ports[e.d].kind === "ring")
             to.ports[e.d].held++;

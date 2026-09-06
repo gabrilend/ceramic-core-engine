@@ -1,43 +1,46 @@
-# A value routed by range, which the engine has no single primitive for.
+# Routing by range, which the engine has no single primitive for — and
+# how to do it without a branch that goes nowhere.
 #
-# A comparator answers one question: is this less than, equal to, or
-# greater than the value on my last port. Three ranges therefore need
-# two of them in succession, each handing what it did not claim to the
-# next — a ladder, where every rung takes the values below its own
-# threshold and passes the rest down.
+# A comparator asks exactly one question: is my box's result less than,
+# equal to, or greater than the value on my last port. Exits 0, 1 and 2
+# *are* those three answers; nothing in this file chooses what they
+# mean. So three ranges need two comparators in succession, each taking
+# what falls below its own threshold and handing the rest down.
 #
-#   feed ──> under_ten ──less──────────────────────> collect.0
-#                      ├─equal───┐
-#                      └─greater─┴─> under_twenty ──less──> collect.1
-#                                                  ├─equal───┐
-#                                                  └─greater─┴─> spare
+#   feed ──> double ──> under_ten ──less────────> collect.0
+#                                 └─greater──> under_twenty ──less────> collect.1
+#                                                            └─greater─> collect.2
 #
-# `feed` places a box that wraps at thirty, so of every thirty values
-# ten are under ten, ten are under twenty, and ten are the rest.
+# **Every comparator here has an unwired equal exit that can never
+# fire**, which is the point of the doubling.
 #
-# The last rung's own less-than exit is what carries the twenties, and
-# its equal and greater exits are wired nowhere at all: nothing ever
-# reaches thirty, because the counter wrapped before it could. An
-# unwired exit discards, which is the ordinary case rather than an
-# omission — it is what an unused comparator branch always does.
+# `double` makes every value even. A threshold of nineteen is odd, so
+# "equal" is not merely unwired — it is unreachable, and no value can be
+# silently dropped by leaving it so. Compare against ten with the values
+# undoubled and the number ten itself lands on `equal`, which then has
+# to be wired somewhere or thrown away.
+#
+# So: nineteen splits the doubled values at nine-and-a-half, and
+# thirty-nine at nineteen-and-a-half. The boundaries sit between the
+# integers rather than on one.
+#
+# Ten of every thirty go to each port. `collect` needs all three before
+# it runs, which is the readiness rule and the whole reason it waits.
 
 station feed cycle_thirty p entry
+  out 0 - double.0
+
+station double double_it p
   out 0 - under_ten.0
 
 station under_ten keep c
-  in 1 = 10
+  in 1 = 19
   out 0 - collect.0
-  out 1 - under_twenty.0
   out 2 - under_twenty.0
 
 station under_twenty keep c
-  in 1 = 20
+  in 1 = 39
   out 0 - collect.1
-  out 1 - spare.0
-  out 2 - spare.0
-
-station spare keep c
-  in 1 = 30
-  out 0 - collect.2
+  out 2 - collect.2
 
 station collect three_way p result

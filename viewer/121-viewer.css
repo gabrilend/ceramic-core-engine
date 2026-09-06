@@ -163,10 +163,19 @@ main { flex: 1; overflow: hidden; }
 .port text { font-size: 9px; fill: var(--quiet); pointer-events: none; }
 .port text.count { fill: var(--ink); font-family: ui-monospace, monospace; }
 
-.wire { stroke: var(--line); stroke-width: 1.4; fill: none; opacity: .75; }
-.wire.busy { stroke: var(--value); stroke-width: 2; opacity: 1; }
+.wire { stroke: var(--line); stroke-width: 1.4; fill: none; opacity: .7; }
+.wire.live { stroke: var(--value); stroke-width: 2; opacity: 1; }
 
-/* A value, in flight. The only thing on the page that moves because
- * something moved. */
-.value { fill: var(--value); stroke: none; }
-.value-halo { fill: var(--value); opacity: .25; stroke: none; }
+/* The chevrons on a wire that is carrying. They march toward the
+ * destination to say which way it runs and that it is busy; they are
+ * not values, and there is deliberately no way to read one as a value. */
+.flow {
+    stroke: var(--ground-deep);
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    fill: none;
+    pointer-events: none;
+}
+
+.head { fill: var(--line); }
+.head.live { fill: var(--value); }

@@ -33,9 +33,20 @@
 
 <main>
   <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- Which way a wire runs, said once at the end of it rather than
+           by anything travelling along it. -->
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 9 5 L 0 9 z" class="head"></path>
+      </marker>
+      <marker id="arrow-live" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 9 5 L 0 9 z" class="head live"></path>
+      </marker>
+    </defs>
     <g id="grid"></g>
     <g id="wires"></g>
-    <g id="flights"></g>
     <g id="stations"></g>
   </svg>
 </main>

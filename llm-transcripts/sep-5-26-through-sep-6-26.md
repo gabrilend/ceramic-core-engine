@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 20:53:59
+Generated on: 2026-09-05 21:11:35
 
 --------------------------------------------------------------------------------
 
@@ -2383,6 +2383,172 @@ fits and comes in to a readable size when it doesn't.
 
 Still unverified: how any of it looks. No working browser here — that part's
 yours.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 14
+
+  I built it from the engine's actual primitives rather than the range-routing
+  you sketched, because a comparator gives less/equal/greater against one
+  threshold, not three ranges.
+
+
+okay for completeness, can we see how you'd build what I describe, using the
+built-in primitives? Probably a succession of 3 comparator blocks right?
+
+
+  The jumping was a real bug: the viewBox was recomputed from content bounds
+  every frame, so dragging a box past the old boundary moved everything. Now
+  there's a camera — drag the paper to pan,
+
+  scroll to zoom about the pointer, and the grid coarsens as you pull back so it
+  doesn't become a wash of lines at low zoom. Nothing is resized to fit
+  anything.
+
+
+the zooming is a bit wonky, can you take another pass at it and try to do a
+better more comprehensive system? Just for the zooming, panning feels fine.
+
+
+also, why does it say this?
+
+
+11794 events lost — this view is behind
+
+
+we're writing to a log file right? why are there "missing" events?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 14
+
+Three things, and the third one I explained badly last time — let me be
+concrete.
+
+
+**It is not a log file.** It's a fixed-size ring in shared memory: 1024 slots
+for a small program, and slot N+1024 overwrites slot N. But that number you saw
+is almost certainly not "behind" at all — **every page reload starts a new
+reader**, and mine started it at event 1, so it reported everything that
+happened before you opened the tab as "lost". That's wrong labelling of a normal
+situation. Let me fix the engine, not the wording.
+
+
+The ring is now large enough that the old loss scenario doesn't overflow it —
+the test is doing its job. Let me make it genuinely lap, and add a scene for the
+new behaviour.
+
+
+Now the distinction is proven: 234,468 *lost* for a reader that fell behind,
+versus *joined at* 234,469 having lost nothing. Let me carry that through to the
+page.
+
+
+Now the zoom. The wonkiness is real — I never normalised `deltaMode`, so a
+line-scrolling mouse barely moves and a trackpad lurches.
+
+
+The ladder map compiles into the binary. Now a program that can watch any map,
+rather than another hand-built one.
+
+
+The ladder works exactly as designed. Let me record it and commit.
+
+
+Committed. To watch the ladder:
+
+
+```sh
+
+make
+
+tmp/build/128-watch-a-map --map=127-the-ladder.map \
+
+    --trail=/dev/shm/minimal-soramech/live.ring --view
+
+```
+
+
+## The range routing — yes, a ladder
+
+
+You were right. A comparator answers *one* question, so three ranges need two of
+them in succession, each taking the values below its own threshold and handing
+the rest down:
+
+
+```
+
+feed ──> under_ten ──less──────────────────> collect.0
+
+                   ├─equal───┐
+
+                   └─greater─┴─> under_twenty ──less──> collect.1
+
+                                              ├─equal───┐
+
+                                              └─greater─┴─> spare ──less──> collect.2
+
+```
+
+
+Measured over 306 values: `under_ten` saw all 306, `under_twenty` saw the 200
+passed down, `spare` saw the 100 left, and `collect` got 106/100/100 and ran 100
+times. An even three-way split by range.
+
+
+The last rung's `equal` and `greater` exits are wired nowhere, because nothing
+ever reaches thirty — the counter wrapped first. **An unwired exit discards**,
+which is the ordinary case, not an omission.
+
+
+I made it a **map file** rather than another program, since that's the clearest
+expression of the wiring, and added something that runs any map the binary was
+built with — so a shape can be watched without a program written for it.
+
+
+## The zoom
+
+
+Real bug, and a dull one: I read the wheel's raw number. **A wheel reports
+movement in pixels, lines or pages**, whichever the browser picks, so the same
+gesture arrives as `3` from a mouse and `300` from a trackpad. One barely
+zoomed; the other lurched. It converts first now and steps by a fixed ratio,
+bounded so one hard flick is one firm zoom, holding the point under the pointer
+still. Plus buttons and a percentage, `+`/`−`/`0`, and `f` or double-click to
+frame the whole graph — the way back from zooming into a corner.
+
+
+## The 11,794
+
+
+**Those events were not lost.** Every reload starts a new reader, and mine began
+at the first event the program ever wrote — so everything before you opened
+the tab was reported as loss. Arriving late, described as a fault.
+
+
+A reader now starts at the oldest event *still in the ring* and reports where it
+came in. Loss means what it should: events overwritten while that reader was
+already attached. The page shows the two differently — one quietly, one in red
+— because only one means the picture can't be trusted. The test proves the
+distinction: a reader that never looked lost 234,468; one attaching afterwards
+joined at the next event having lost nothing.
+
+
+I also grew the ring from ~1,000 slots to 65,536 minimum — two megabytes of
+shared memory, which is nothing against being told you missed something because
+the buffer was small rather than because you were slow.
+
+
+To be exact about the thing you keep asking, since my earlier answers clearly
+didn't land: **it is not a log file and never writes to disk.** It's a
+fixed-size ring in shared memory, chosen so the watched program never blocks on
+a reader and never grows without bound. A log would make the program do disk I/O
+proportional to its own work rate, which is the one thing the design refuses.
+The cost of that choice is that a reader who falls genuinely behind loses the
+oldest events — and now that's the only thing that says "lost".
 
 
 --------------------------------------------------------------------------------
