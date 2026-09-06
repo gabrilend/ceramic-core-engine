@@ -225,7 +225,10 @@ int main(void)
     cera_pool_submitter_register(b->pool);
     must_take(cera_map_bring_up(b), "the busy program");
     cera_pool_release(b->pool);
-    for (int i = 1; i <= 4000; i++)
+    /* Enough to lap a ring of sixty-odd thousand slots several times
+     * over. The ring is deliberately generous, so proving that a reader
+     * which never looks is told what it missed takes real volume. */
+    for (int i = 1; i <= 60000; i++)
         must_take(cera_map_deliver_argument(b, bin, 0, &i, sizeof i),
                   "an argument");
     cera_pool_submitter_unregister(b->pool);
@@ -256,6 +259,39 @@ int main(void)
     }
 
     cera_watch_detach(slow);
+
+    /*
+     * And the other half of that distinction. A reader attaching to a
+     * program already well under way has **not lost** anything: it was
+     * not there. It starts at the oldest event still in the ring and
+     * reports where it came in, which is a different fact from falling
+     * behind and must not be dressed up as one.
+     */
+    cera_watch_reader_t *late = cera_watch_attach(busy);
+    uint64_t first = 0, before = 0;
+    cera_watch_joined_at(late, &first, &before);
+
+    uint64_t late_lost = 0, late_read = 0;
+    while (cera_watch_next(late, &e, &lost)) {
+        late_lost += lost;
+        late_read++;
+    }
+    if (before == 0) {
+        fprintf(stderr, "  a reader joining a finished run thinks it saw the "
+                        "start of it\n");
+        failures++;
+    } else if (late_lost != 0) {
+        fprintf(stderr, "  a reader that arrived late reported %llu lost, "
+                        "which is arriving late described as a fault\n",
+                (unsigned long long)late_lost);
+        failures++;
+    } else {
+        printf("  a reader arriving late joined at event %llu with %llu behind "
+               "it, and lost nothing\n",
+               (unsigned long long)first, (unsigned long long)before);
+    }
+    cera_watch_detach(late);
+
     cera_map_destroy(b);
     unlink(busy);
 

@@ -8732,6 +8732,7 @@ struct cera_watch_reader {
     cera_watch_event_t *ring;
     size_t              bytes;
     uint64_t            cursor;
+    uint64_t            joined;
 };
 /* }}} */
 
@@ -8743,8 +8744,14 @@ struct cera_watch_reader {
  */
 static uint32_t watch_slots_for(int stations)
 {
-    uint64_t want = (uint64_t)(stations > 0 ? stations : 1) * 256u;
-    uint32_t slots = 1024;
+    /*
+     * Generous on purpose. A slot is thirty-two bytes, so even the
+     * floor here is two megabytes of shared memory — nothing, against
+     * the cost of a watcher being told it missed something because the
+     * ring was small rather than because it was slow.
+     */
+    uint64_t want = (uint64_t)(stations > 0 ? stations : 1) * 4096u;
+    uint32_t slots = 1u << 16;
     while (slots < want && slots < (1u << 22))
         slots <<= 1;
     return slots;
@@ -8964,7 +8971,25 @@ cera_watch_reader_t *cera_watch_attach(const char *path)
     r->head = head;
     r->ring = (cera_watch_event_t *)((char *)at + sizeof(cera_watch_head_t));
     r->bytes = (size_t)st.st_size;
-    r->cursor = 1;
+
+    /*
+     * **Start at the oldest event still in the ring, not at the first
+     * the program ever wrote.**
+     *
+     * A reader attaching to a program that has been running for an hour
+     * has not *lost* the hour: it was not there. Starting at one and
+     * then reporting the difference as loss told every fresh watcher
+     * that its view was unreliable, when the only thing that had
+     * happened was that it arrived late — which is the ordinary case
+     * and the one every page reload creates.
+     *
+     * What it did miss is still knowable: `joined` records where it
+     * came in, so a watcher can say how much of the run it did not see
+     * without calling it a fault.
+     */
+    uint64_t produced = atomic_load_explicit(&head->next, memory_order_acquire);
+    r->cursor = produced > head->slots ? produced - head->slots : 1;
+    r->joined = r->cursor;
     return r;
 }
 /* }}} */
@@ -9003,6 +9028,23 @@ int cera_watch_next(cera_watch_reader_t *r, cera_watch_event_t *into, uint64_t *
     *into = *slot;
     r->cursor++;
     return 1;
+}
+/* }}} */
+
+/* {{{ cera_watch_joined_at() */
+/*
+ * Which event this reader started from, and how many the program had
+ * already written by then.
+ *
+ * A reader that arrives late has not lost anything — it was not there —
+ * and a view that says otherwise makes every page reload look like a
+ * fault. Loss is what `cera_watch_next` reports: events that were
+ * overwritten *while this reader was already attached*.
+ */
+void cera_watch_joined_at(cera_watch_reader_t *r, uint64_t *first, uint64_t *before)
+{
+    if (first) *first = r->joined;
+    if (before) *before = r->joined > 1 ? r->joined - 1 : 0;
 }
 /* }}} */
 

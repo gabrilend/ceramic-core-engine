@@ -133,6 +133,67 @@ All three station kinds appear, which was not the point but is worth
 having: a plain station, a comparator with three exits, and an iterator
 dealing round-robin.
 
+### Routing by range, which needs a ladder
+
+A comparator answers one question — is this less than, equal to, or
+greater than the value on my last port — so **three ranges need two of
+them in succession**, each taking the values below its own threshold and
+handing the rest down. `maps/127-the-ladder.map` is that, and
+`viewer/128-watch-a-map.c` will run any map this binary was built with,
+so it can be watched without a program written for it.
+
+```
+feed ──> under_ten ──less──────────────────> collect.0
+                   ├─equal───┐
+                   └─greater─┴─> under_twenty ──less──> collect.1
+                                              ├─equal───┐
+                                              └─greater─┴─> spare ──less──> collect.2
+```
+
+Measured: of 306 values, `under_ten` saw all 306, `under_twenty` saw the
+200 it passed down, `spare` saw the 100 left, and `collect` received 106,
+100 and 100 on its three ports and ran 100 times. An even three-way split
+by range, which is what a ladder of comparators is for.
+
+The last rung's equal and greater exits are wired nowhere, because
+nothing ever reaches thirty — the counter wrapped before it could. **An
+unwired exit discards**, which is the ordinary case rather than an
+omission: it is what an unused comparator branch always does.
+
+### Zoom, properly
+
+The first attempt read the wheel's raw number, and a wheel reports its
+movement in one of three units — pixels, lines or pages — whichever the
+browser feels like. The same gesture arrives as 3 from a mouse and 300
+from a trackpad, so one barely zoomed and the other lurched.
+
+Now it converts first and moves in even steps of a fixed ratio, bounded
+so one violent flick is one firm zoom. Zooming holds the point under the
+pointer still, which is the whole of what makes it feel right. There are
+buttons and a percentage, `+` `-` `0` from the keyboard, and `f` or a
+double-click to frame the whole graph again — which is the way back from
+having zoomed into a corner and lost the rest.
+
+### Arriving late is not falling behind
+
+A page said **11,794 events lost** on a program that had lost nothing.
+Every reload starts a new reader, and a new reader began at the first
+event the program ever wrote, so everything before the tab was opened
+was reported as loss. That is arriving late described as a fault, and it
+made every reload look like a broken view.
+
+A reader now starts at the oldest event **still in the ring** and says
+where it came in. Loss means what it should: events overwritten while
+this reader was already attached. The page shows the two differently —
+one quietly, one in red — because only one of them means the picture is
+unreliable.
+
+The ring also grew. It was sized for a few hundred events per station;
+it is now a few thousand, with a floor of sixty-five thousand slots,
+which is two megabytes of shared memory and nothing at all against being
+told you missed something because the buffer was small rather than
+because you were slow.
+
 ### One command, still two processes
 
 `--view` has the watched program start the viewer as a child and stop it

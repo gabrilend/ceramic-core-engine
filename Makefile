@@ -174,7 +174,7 @@ TEST_BINS := $(patsubst $(DIR)/tests/%.c,$(BUILD)/%,$(TEST_SRC))
 
 .PHONY: all test clean
 
-all: $(TEST_BINS) $(EXAMPLE) $(VIEWER) $(WATCHED) $(MECHANISM) html
+all: $(TEST_BINS) $(EXAMPLE) $(VIEWER) $(WATCHED) $(MECHANISM) $(ANYMAP) html
 
 # The build tree lives in RAM (tmp/ -> /tmp/<project>). It must exist
 # before anything writes into it; a build that dies on a missing
@@ -271,6 +271,7 @@ $(BUILD)/118-test-the-trail: $(DIR)/tests/118-test-the-trail.c $(ENGINE_SRC) $(C
 VIEWER  := $(BUILD)/119-viewer
 WATCHED := $(BUILD)/123-a-program-to-watch
 MECHANISM := $(BUILD)/126-a-mechanism-to-watch
+ANYMAP    := $(BUILD)/128-watch-a-map
 
 $(VIEWER): $(DIR)/viewer/119-viewer.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
@@ -281,12 +282,19 @@ $(WATCHED): $(DIR)/viewer/123-a-program-to-watch.c $(ENGINE_SRC) $(CERA_H) $(SUR
 $(MECHANISM): $(DIR)/viewer/126-a-mechanism-to-watch.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
 	$(CC) $(CFLAGS) -DCERA_WATCH -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
 
+$(ANYMAP): $(DIR)/viewer/128-watch-a-map.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
+	$(CC) $(CFLAGS) -DCERA_WATCH -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
+
 # What to type to watch something. Two processes, so it says how rather
 # than starting them: the one being watched is somebody's own program.
 .PHONY: viewer
-viewer: $(VIEWER) $(WATCHED) $(MECHANISM)
+viewer: $(VIEWER) $(WATCHED) $(MECHANISM) $(ANYMAP)
 	@echo "One command:"
 	@echo "  $(MECHANISM) --trail=$(RAM_SHARED)/live.ring --view"
+	@echo ""
+	@echo "Or any map this binary was built with:"
+	@echo "  $(ANYMAP) --map=127-the-ladder.map \\"
+	@echo "      --trail=$(RAM_SHARED)/live.ring --view"
 	@echo ""
 	@echo "Or in two terminals:"
 	@echo "  $(WATCHED) --trail=$(RAM_SHARED)/live.ring"
@@ -301,7 +309,7 @@ TEST_SCRIPTS := $(wildcard $(DIR)/tests/*.sh)
 
 # Each test is run in order; the first failure stops the run, because
 # later tests build on machinery the earlier ones just proved broken.
-test: $(TEST_BINS) $(VIEWER) $(WATCHED) $(MECHANISM)
+test: $(TEST_BINS) $(VIEWER) $(WATCHED) $(MECHANISM) $(ANYMAP)
 	@for t in $(TEST_BINS); do \
 		echo "== $$(basename $$t)"; \
 		$$t || exit 1; \

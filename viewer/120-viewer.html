@@ -20,7 +20,14 @@
   <span id="mapname" class="quiet"></span>
   <span class="spacer"></span>
   <span id="state" class="state waiting">waiting for the program</span>
+  <span id="joined" class="joined" hidden></span>
   <span id="lost" class="lost" hidden></span>
+  <span class="zoom">
+    <button id="zoomout" type="button" title="zoom out  (−)">&minus;</button>
+    <span id="zoomlevel">100%</span>
+    <button id="zoomin" type="button" title="zoom in  (+)">+</button>
+    <button id="zoomfit" type="button" title="frame the whole graph  (f, or double-click)">fit</button>
+  </span>
   <button id="save" type="button">save this layout</button>
 </header>
 
@@ -36,8 +43,10 @@
 <footer>
   <span id="tally" class="quiet"></span>
   <span class="spacer"></span>
-  <span class="quiet">drag a station to move it, drag the paper to pan,
-  scroll to zoom &mdash; nothing you do here reaches the program</span>
+  <span class="quiet">drag a station to move it &middot; drag the paper to pan
+  &middot; scroll or <kbd>+</kbd><kbd>&minus;</kbd> to zoom &middot;
+  <kbd>f</kbd> or double-click to fit &middot; nothing you do here reaches
+  the program</span>
 </footer>
 
 <script src="/viewer.js"></script>

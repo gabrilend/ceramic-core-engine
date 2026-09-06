@@ -164,7 +164,21 @@ static void open_stream(struct client *c)
         const char *none =
             "event: notrail\ndata: {\"why\":\"the trail could not be opened\"}\n\n";
         send_all(c->fd, none, strlen(none));
+        return;
     }
+
+    /*
+     * Where this reader came in. A page opened an hour into a run has
+     * not lost the hour — it was not there — and saying so up front is
+     * what stops every reload looking like a fault.
+     */
+    uint64_t first = 0, before = 0;
+    cera_watch_joined_at(c->reader, &first, &before);
+    char joined[256];
+    int n = snprintf(joined, sizeof joined,
+                     "event: joined\ndata: {\"first\":%llu,\"before\":%llu}\n\n",
+                     (unsigned long long)first, (unsigned long long)before);
+    send_all(c->fd, joined, (size_t)n);
 }
 /* }}} */
 

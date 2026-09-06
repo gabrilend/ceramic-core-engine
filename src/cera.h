@@ -467,6 +467,7 @@ const char *cera_watch_open(cera_map_t *m, const char *path);
 void cera_watch_close(cera_map_t *m);
 cera_watch_reader_t *cera_watch_attach(const char *path);
 int cera_watch_next(cera_watch_reader_t *r, cera_watch_event_t *into, uint64_t *lost);
+void cera_watch_joined_at(cera_watch_reader_t *r, uint64_t *first, uint64_t *before);
 int cera_watch_writer_alive(cera_watch_reader_t *r);
 void cera_watch_detach(cera_watch_reader_t *r);
 /* }}} */

@@ -170,7 +170,55 @@ function gridFor(count) {
  * old boundary.
  */
 const View = { x: 0, y: 0, scale: 1 };
-const ZOOM_MIN = 0.15, ZOOM_MAX = 3;
+const ZOOM_MIN = 0.12, ZOOM_MAX = 4;
+
+/*
+ * Zoom in even steps of a fixed ratio, so every notch feels the same
+ * whatever it came from. A wheel reports its movement in one of three
+ * units — pixels, lines or pages — and a browser picks whichever it
+ * likes, so the raw number is meaningless until it is converted. Not
+ * converting it is what made a mouse barely zoom while a trackpad
+ * lurched: the same gesture arrives as 3 from one and 300 from the
+ * other.
+ */
+const ZOOM_STEP = 1.15;
+const WHEEL_UNIT = [1, 16, 800];   /* pixels, lines, pages */
+
+function wheelNotches(event) {
+    const unit = WHEEL_UNIT[event.deltaMode] || 1;
+    const pixels = event.deltaY * unit;
+    /* Bounded, so one violent flick is one firm zoom rather than a jump
+     * to the far end of the range. */
+    return Math.max(-4, Math.min(4, pixels / 100));
+}
+
+/* {{{ zoomAbout(scale, sx, sy) */
+/* Change the scale while holding one point of the drawing still under
+ * one point of the screen. Without this a zoom drifts, which is the
+ * whole of what makes zooming feel wrong. */
+function zoomAbout(scale, sx, sy) {
+    const box = svg.getBoundingClientRect();
+    const px = sx === undefined ? box.width / 2 : sx - box.left;
+    const py = sy === undefined ? box.height / 2 : sy - box.top;
+
+    const worldX = View.x + px / View.scale;
+    const worldY = View.y + py / View.scale;
+
+    View.scale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, scale));
+
+    View.x = worldX - px / View.scale;
+    View.y = worldY - py / View.scale;
+    applyView();
+    showZoom();
+}
+/* }}} */
+
+/* {{{ showZoom() */
+function showZoom() {
+    const chip = document.getElementById("zoomlevel");
+    if (chip) chip.textContent = Math.round(View.scale * 100) + "%";
+}
+/* }}} */
 
 function viewport() {
     const box = svg.getBoundingClientRect();
@@ -199,6 +247,7 @@ function lookAt(cx, cy, scale) {
     View.x = cx - w / View.scale / 2;
     View.y = cy - h / View.scale / 2;
     applyView();
+    showZoom();
 }
 /* }}} */
 /* }}} */
@@ -286,6 +335,7 @@ const flightLayer = document.getElementById("flights");
 const stationsLayer = document.getElementById("stations");
 const stateChip = document.getElementById("state");
 const lostChip = document.getElementById("lost");
+const joinedChip = document.getElementById("joined");
 const tallyText = document.getElementById("tally");
 const mapName = document.getElementById("mapname");
 const svgNS = "http://www.w3.org/2000/svg";
@@ -529,14 +579,39 @@ window.addEventListener("mouseup", () => {
 /* Zoom about the pointer, so whatever is under it stays under it. */
 svg.addEventListener("wheel", (event) => {
     event.preventDefault();
-    const before = pointAt(event);
-    const step = Math.exp(-event.deltaY * 0.0016);
-    View.scale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, View.scale * step));
-    applyView();
-    const after = pointAt(event);
-    View.x += before.x - after.x;
-    View.y += before.y - after.y;
+    zoomAbout(View.scale * Math.pow(ZOOM_STEP, -wheelNotches(event)),
+              event.clientX, event.clientY);
 }, { passive: false });
+
+/* Double-click frames the whole graph again, which is the way back from
+ * having zoomed into a corner and lost the rest of it. */
+svg.addEventListener("dblclick", (event) => {
+    event.preventDefault();
+    frameTheGraph();
+});
+
+/* The same steps from the keyboard, for anybody without a wheel. */
+window.addEventListener("keydown", (event) => {
+    if (event.target !== document.body) return;
+    if (event.key === "+" || event.key === "=")
+        zoomAbout(View.scale * ZOOM_STEP);
+    else if (event.key === "-" || event.key === "_")
+        zoomAbout(View.scale / ZOOM_STEP);
+    else if (event.key === "0")
+        zoomAbout(1);
+    else if (event.key === "f")
+        frameTheGraph();
+    else return;
+    event.preventDefault();
+});
+
+/* And the buttons, which are the only way somebody discovers any of
+ * this without being told. */
+document.getElementById("zoomin").addEventListener("click",
+    () => zoomAbout(View.scale * ZOOM_STEP));
+document.getElementById("zoomout").addEventListener("click",
+    () => zoomAbout(View.scale / ZOOM_STEP));
+document.getElementById("zoomfit").addEventListener("click", () => frameTheGraph());
 /* }}} */
 
 /* {{{ saving a layout */
@@ -570,10 +645,17 @@ document.getElementById("save").addEventListener("click", () => {
  * follows, applied to the same events the engine emitted.
  */
 function receive(e) {
+    /*
+     * Loss here means events overwritten **while this page was already
+     * watching**: the view really is behind and really is incomplete.
+     * Arriving after a run had started is a different thing entirely
+     * and is said elsewhere, quietly.
+     */
     if (e.lost) {
         Picture.lostTotal += e.lost;
         lostChip.hidden = false;
-        lostChip.textContent = `${Picture.lostTotal} events lost — this view is behind`;
+        lostChip.textContent =
+            `${Picture.lostTotal.toLocaleString()} events lost — this view is behind`;
     }
 
     const now = performance.now();
@@ -698,6 +780,7 @@ function frameTheGraph() {
         View.y += (midY - cy) * 0.6;
         applyView();
     }
+    showZoom();
 }
 /* }}} */
 
@@ -736,6 +819,12 @@ async function start() {
 
     const stream = new EventSource("/events");
     stream.onmessage = (m) => receive(JSON.parse(m.data));
+    stream.addEventListener("joined", (m) => {
+        const at = JSON.parse(m.data);
+        joinedChip.hidden = at.before === 0;
+        joinedChip.textContent =
+            `joined after ${at.before.toLocaleString()} events`;
+    });
     stream.addEventListener("ended", () => {
         if (!stateChip.classList.contains("ended")) {
             stateChip.className = "state ended";

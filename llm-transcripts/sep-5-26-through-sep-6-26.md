@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 20:35:22
+Generated on: 2026-09-05 20:53:59
 
 --------------------------------------------------------------------------------
 
@@ -2244,6 +2244,145 @@ buffer's capacity outright, which the page now reads instead of inferring.
 How it looks. This machine has no working browser — I tried headless Firefox
 on a blank page and it hangs, so it isn't my page. Everything the page is served
 is checked and its structure with it; the drawing wants your eyes.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 13
+
+Wow! Looks great! How do the dots know how fast to be? Can we make an example
+that intentionally uses the ring buffer system? Like maybe... a box with 3
+inputs, and another box that has an iterator output. If < 10 output to the first
+slot of the 3, if the output is < 20 then output to the second slot of the 3,
+and if the output is < 30 then output to the third slot of the three. If the
+output == 30 then reset to 0 and keep going. Once the 3-input-box has all three
+filled with at least one value, it'll run itself once. That should show us the
+mechanism of the ring buffers better.
+
+
+also we should be able to zoom the canvas. It shouldn't resize when I drag boxes
+around. It should just tile infinitely in all directions as much as we need,
+with the initial view upon loading in centered to the average position of all
+the boxes. Or rather, to the input box... I guess it doesn't matter so long as
+they're in view and not like, really really tiny or whatever. Can we zoom to the
+input box upon starting the viewer?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 13
+
+Three things, and the first one has an honest answer: **the dots don't know.**
+`FLIGHT_MS` is a fixed 520ms, so every dot takes the same time regardless of
+wire length — a long wire looks faster than a short one. The dot means "a
+value went this way, just now" and nothing about speed. I'll make it constant
+*velocity* instead, so distance on screen means something.
+
+
+Let me see what boxes exist before designing the example.
+
+
+`as_triple` takes three floats — close, but I want ints and a deliberately
+*uneven* split. Let me check how comparators route first.
+
+
+Confirmed — a comparator runs its box, compares the return to the threshold on
+its last port, and routes less/equal/greater. That gives a deliberately uneven
+split. Let me build the example.
+
+
+The graph is exactly the shape intended. Let me verify the buffers really do
+fill unevenly.
+
+
+Exactly the demonstration: **170 / 17 / 161** values arriving at collect's three
+ports, collect running 17 times — the rate of its slowest feed — while ports
+0 and 2 accumulate 153 and 144 and grow from 10 slots to 40. Now the canvas.
+
+
+Now the camera — pan, zoom, an endlessly tiling grid, and a view that doesn't
+move when you drag a box.
+
+
+Committed. To see the new one:
+
+
+```sh
+
+make
+
+tmp/build/126-a-mechanism-to-watch --trail=/dev/shm/minimal-soramech/live.ring --view
+
+```
+
+
+## How the dots knew how fast to be
+
+
+They didn't. Every dot took the same 520ms whatever wire it crossed, so a long
+wire looked *faster* than a short one. Worth being precise about why: **the
+trail carries the moment a value moved, not how long it took.** So any speed on
+that page is a picture, not a measurement — there's no true answer available.
+Given that, the honest picture is the one where distance means something, so
+it's fixed *speed* now, bounded at both ends.
+
+
+## The mechanism example
+
+
+I built it from the engine's actual primitives rather than the range-routing you
+sketched, because a comparator gives less/equal/greater against *one* threshold,
+not three ranges. But it lands in the same place, and better:
+
+
+```
+
+feed ──> gate ─┬─ less    ──────────────> collect.0
+
+        (comparator)
+
+               ├─ equal   ──────────────> collect.1
+
+               └─ greater ──> spread ─┬─> collect.2
+
+                            (iterator) └─> drain
+
+```
+
+
+`feed` counts 0–29, the threshold is 10, so **ten of every thirty go left,
+exactly one goes down the middle, nineteen go right** — and the iterator
+halves the right-hand stream again. `collect` has three inputs and can't run
+until all three hold a value.
+
+
+Measured over six seconds: **170, 17 and 161** values arrived at collect's three
+ports. It ran **17 times** — the rate of its slowest feed. The two fast ports
+were left holding **153 and 144**, and their buffers grew from ten slots to
+forty.
+
+
+That's the thing the engine's buffer report has always shouted about after the
+fact, now watchable while it happens. All three station kinds appear too, which
+wasn't the point but is worth having.
+
+
+## The canvas
+
+
+The jumping was a real bug: the viewBox was recomputed from content bounds every
+frame, so dragging a box past the old boundary moved everything. Now there's a
+camera — drag the paper to pan, scroll to zoom about the pointer, and the grid
+coarsens as you pull back so it doesn't become a wash of lines at low zoom.
+Nothing is resized to fit anything.
+
+
+It opens looking at the entrance, at a scale that frames the whole graph when it
+fits and comes in to a readable size when it doesn't.
+
+
+Still unverified: how any of it looks. No working browser here — that part's
+yours.
 
 
 --------------------------------------------------------------------------------
