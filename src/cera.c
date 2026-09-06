@@ -1,27 +1,17 @@
 /*
  * cera.c — the engine, entire.
  *
- * What this is: one translation unit holding every part of the
- * runtime — the thread pool, the station table, the delivery path,
- * constants, the reader, the reports, the parts that change a
- * running program, the parts that compile new code into one, and
- * the parts that end one.
+ * One translation unit holding every part of the runtime: the thread
+ * pool, the station table, the delivery path, constants, the reader,
+ * the reports, the parts that change a running program, the parts that
+ * compile new code into one, and the parts that end one.
  *
- * Why one file rather than eleven. A function in the same
- * translation unit as its callers can be static, and a static
- * function is not a linker symbol at all. Eleven files meant every
- * joint between them had to be a global name, so a host program
- * linking this engine inherited about forty ordinary English words
- * it never asked for. One file makes private the default and public
- * a deliberate act — the act being a declaration in cera.h.
+ * Everything not declared in cera.h is static, so the names this file
+ * publishes are exactly the names that file lists.
  *
- * How it is arranged: eleven sections in the project's reading
- * order, each formerly a numbered file, each opening with a banner
- * naming what it was. Those banners are all that is left of eighteen
- * filenames, and they are the part that was carrying the meaning.
- *
- * GENERATED ONCE from the numbered bodies by scripts/110-amalgamate.lua
- * and edited by hand from then on.
+ * Twelve components, in reading order: the joints the components use to
+ * reach each other, then the runtime. The numbers are positions in that
+ * order. Markers are maintained by scripts/113-refold.lua.
  */
 #include "cera.h"
 
@@ -30,14 +20,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* {{{ The joints — how the engine reaches itself */
 /* ==================================================================
  *
  * The joints — how the engine reaches itself
  *
- * Private to this file. Declared here rather than left to definition
- * order because the sections below call each other in both directions:
- * delivery reaches a slot the station layer defines, and the station
- * layer builds a task delivery owns.
+ * Private to this file. The components below call each other in both
+ * directions — delivery reaches a slot the station layer defines, and
+ * the station layer builds a task delivery owns — so their declarations
+ * come first.
  * ================================================================== */
 
 /* {{{ out_port_dests() */
@@ -54,6 +45,7 @@
  */
 static cera_dest_set_t *out_port_dests(const cera_out_port_t *p);
 /* }}} */
+
 /* {{{ dest_set_build() */
 static cera_dest_set_t *dest_set_build(const cera_dest_set_t *from, int add_station,
                            int add_port, int drop_station, int drop_port);
@@ -88,6 +80,7 @@ static void map_deliver(void *ctx, cera_task_t *t);
  */
 static void *in_port_slot(const cera_in_port_t *sl, int index);
 /* }}} */
+
 /* {{{ in_port_slot_move() */
 static int   in_port_slot_move(const cera_in_port_t *sl, int index, int from, int to);
 /* }}} */
@@ -142,6 +135,7 @@ static int in_port_waiting_text(const cera_in_port_t *sl, char *out, int room);
  */
 static cera_in_port_page_t *in_port_add_page(cera_in_port_t *sl);
 /* }}} */
+
 /* {{{ in_port_free_pages() */
 static void            in_port_free_pages(cera_in_port_t *sl);
 /* }}} */
@@ -222,12 +216,15 @@ static void  slot_set_at(void *slot, int elem_size, int to);
  */
 static void        map_retire(cera_map_t *m, void *p, void (*free_fn)(void *));
 /* }}} */
+
 /* {{{ map_scrap_sweep() */
 static void        map_scrap_sweep(cera_map_t *m);
 /* }}} */
+
 /* {{{ map_scrap_count() */
 static int         map_scrap_count(cera_map_t *m);
 /* }}} */
+
 /* {{{ map_scrap_free_all() */
 static void        map_scrap_free_all(cera_map_t *m);
 /* }}} */
@@ -239,7 +236,7 @@ static void        map_scrap_free_all(cera_map_t *m);
  */
 #define CERA_TEST_ONLY __attribute__((unused))
 
-/* {{{ cera_on_error() / cera_fail() / cera_bug() */
+/* {{{ error_handler */
 /*
  * The one way the engine ends a program it refuses to continue.
  *
@@ -259,12 +256,16 @@ static void        map_scrap_free_all(cera_map_t *m);
  * call through a null.
  */
 static cera_error_fn error_handler = NULL;
+/* }}} */
 
+/* {{{ cera_on_error() */
 void cera_on_error(cera_error_fn fn)
 {
     error_handler = fn;
 }
+/* }}} */
 
+/* {{{ tell_the_host() */
 /* The message reaches the handler without its trailing newline, since a
  * host putting it in a structured log wants the sentence and not the
  * line break the terminal wanted. */
@@ -285,7 +286,9 @@ static void tell_the_host(const char *message, int exit_code)
     trimmed[n] = '\0';
     fn(trimmed, exit_code);
 }
+/* }}} */
 
+/* {{{ say_and_end() */
 static void say_and_end(int exit_code, int leave_core, const char *fmt, va_list ap)
 {
     char message[1024];
@@ -298,7 +301,9 @@ static void say_and_end(int exit_code, int leave_core, const char *fmt, va_list 
         abort();
     exit(exit_code);
 }
+/* }}} */
 
+/* {{{ cera_fail() */
 static void cera_fail(int exit_code, const char *fmt, ...)
 {
     va_list ap;
@@ -306,7 +311,9 @@ static void cera_fail(int exit_code, const char *fmt, ...)
     say_and_end(exit_code, 0, fmt, ap);
     va_end(ap);
 }
+/* }}} */
 
+/* {{{ cera_bug() */
 static void cera_bug(const char *fmt, ...)
 {
     va_list ap;
@@ -318,7 +325,9 @@ static void cera_bug(const char *fmt, ...)
 
 /* ================================================================== */
 
+/* }}} */
 
+/* {{{ 012 — the pool */
 /* ==================================================================
  *
  * 012 — the pool
@@ -340,7 +349,6 @@ static void cera_bug(const char *fmt, ...)
  * may be reallocated to twice its size whenever it fills: growth moves
  * the shelf, never the boxes on it.
  */
-
 
 #include <pthread.h>
 #include <stdatomic.h>
@@ -1023,6 +1031,9 @@ void cera_pool_queue_stats(cera_pool_t *p, int *capacity, int *high_water, int *
 /* 012's private macros end with 012. */
 #undef POOL_INITIAL_CAPACITY
 
+/* }}} */
+
+/* {{{ 019 — the station table */
 /* ==================================================================
  *
  * 019 — the station table
@@ -1045,8 +1056,6 @@ void cera_pool_queue_stats(cera_pool_t *p, int *capacity, int *high_water, int *
  * Every cross-reference is an index, so nothing here ever needs
  * fixing up when storage grows elsewhere.
  */
-
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -2683,6 +2692,7 @@ int cera_map_in_port_depth(cera_map_t *m, int station, int port)
  * narrowly so teardown can call them without the whole header. */
 void cera_map_observe_stop(cera_map_t *m);
 /* }}} */
+
 /* {{{ cera_map_report_shutdown() */
 void cera_map_report_shutdown(cera_map_t *m);
 /* }}} */
@@ -2746,6 +2756,9 @@ void cera_map_destroy(cera_map_t *m)
 }
 /* }}} */
 
+/* }}} */
+
+/* {{{ 020 — delivery, readiness, routing */
 /* ==================================================================
  *
  * 020 — delivery, readiness, routing
@@ -2785,7 +2798,6 @@ void cera_map_destroy(cera_map_t *m)
  * There is no pull path; see
  * docs/implementation-notes/056-no-pull-path.md.
  */
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -2965,6 +2977,7 @@ static void in_port_grow_locked(cera_in_port_t *sl)
     sl->growths++;
 }
 /* }}} */
+
 /* {{{ in_port_write() */
 static void in_port_write(cera_station_t *s, cera_in_port_t *sl, const void *value)
 {
@@ -3809,6 +3822,9 @@ static void map_deliver(void *ctx, cera_task_t *t)
 #undef STATS_MARK
 #undef STATS_CHARGE
 
+/* }}} */
+
+/* {{{ 027 — support for generated code */
 /* ==================================================================
  *
  * 027 — support for generated code
@@ -3830,7 +3846,6 @@ static void map_deliver(void *ctx, cera_task_t *t)
  * wins over any table cleverness.
  */
 
-
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -3845,9 +3860,11 @@ static void map_deliver(void *ctx, cera_task_t *t)
  */
 static const cera_box_place_t *late_recover_box(const char *name);
 /* }}} */
+
 /* {{{ late_place_find() */
 static const cera_box_place_t *late_place_find(const char *name);
 /* }}} */
+
 /* {{{ cera_late_source_text() */
 const char        *cera_late_source_text(const char *path);
 /* }}} */
@@ -4125,6 +4142,9 @@ void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int ki
 }
 /* }}} */
 
+/* }}} */
+
+/* {{{ 033 — constants, and values from text */
 /* ==================================================================
  *
  * 033 — constants, and values from text
@@ -4176,10 +4196,6 @@ void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int ki
  * spoken. The two walk the same field table in opposite directions
  * and belong beside each other for exactly that reason.
  */
-
-
-
-
 
 #include <stdarg.h>
 #include <stdatomic.h>
@@ -4335,7 +4351,6 @@ static const char *read_quoted(const char *p, char *out, int room,
     return p + 1;
 }
 /* }}} */
-
 
 /* ------------------------------------------------------------------ */
 /* What a type name fundamentally is, engine-side. This mirrors the  */
@@ -4497,7 +4512,6 @@ static const char *skip_ws(const char *p)
 }
 /* }}} */
 
-
 /* ------------------------------------------------------------------ */
 /* Turning a value back into words. The exact mirror of   */
 /* the reader above, walking the same field table the other way.      */
@@ -4567,7 +4581,6 @@ static void write_quoted(textbuf_t *tb, const char *bytes, int len)
 }
 /* }}} */
 
-
 /* {{{ float_text() */
 /*
  * Enough digits that reading the text back gives the same value.
@@ -4588,7 +4601,6 @@ static void float_text(textbuf_t *tb, double v, int size)
         tb_addf(tb, "%.17g", v);
 }
 /* }}} */
-
 
 /* {{{ cera_text_expect() */
 /*
@@ -4902,7 +4914,6 @@ static void port_text_to_bytes(const cera_in_port_t *sl, const char *text,
     port_text_to_bytes_ending(sl, text, into, owned_string, w, NULL);
 }
 /* }}} */
-
 
 /* {{{ port_text_to_bytes_ending() */
 /*
@@ -5409,6 +5420,9 @@ void cera_map_in_port_static_write(cera_map_t *m, int station, int port,
 }
 /* }}} */
 
+/* }}} */
+
+/* {{{ 042 — reading a description */
 /* ==================================================================
  *
  * 042 — reading a description
@@ -5436,11 +5450,8 @@ void cera_map_in_port_static_write(cera_map_t *m, int station, int port,
  * person actually touches.
  */
 
-
 /* A description on disk becomes a program by being compiled, which
  * is the same door a box source goes through. */
-
-
 
 /* {{{ late_recover_box() */
 /* A box added while some earlier process ran; see 073-latebox.h. It
@@ -5473,9 +5484,6 @@ static void die_load(const char *path, int line, const char *station,
     cera_stop_now(NULL, CERA_EXIT_BAD_FILE, said);
 }
 /* }}} */
-
-
-
 
 /* {{{ read_whole_file() */
 /*
@@ -5905,6 +5913,9 @@ int cera_map_seed_count(cera_map_t *m)
 }
 /* }}} */
 
+/* }}} */
+
+/* {{{ 050 — reports and the observer */
 /* ==================================================================
  *
  * 050 — reports and the observer
@@ -5928,7 +5939,6 @@ int cera_map_seed_count(cera_map_t *m)
  * thread that is not a worker and pushes nothing, so termination
  * stays sound.
  */
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -6186,6 +6196,9 @@ void cera_map_report_shutdown(cera_map_t *m)
 /* 050's private macros end with 050. */
 #undef GROWTH_SHOUT_THRESHOLD
 
+/* }}} */
+
+/* {{{ 051 — a live map written back out */
 /* ==================================================================
  *
  * 051 — a live map written back out
@@ -6212,8 +6225,6 @@ void cera_map_report_shutdown(cera_map_t *m)
  * cannot say — types, sizes, indices, the gather depth — ride as
  * comments beside the lines that parse.
  */
-
-
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -6553,6 +6564,9 @@ void cera_map_dump(cera_map_t *m, FILE *out)
 }
 /* }}} */
 
+/* }}} */
+
+/* {{{ 052 — changing a running program */
 /* ==================================================================
  *
  * 052 — changing a running program
@@ -6587,9 +6601,6 @@ void cera_map_dump(cera_map_t *m, FILE *out)
  * program, which is what construction wants. Neither can be ignored
  * into a half-built program.
  */
-
-
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -6897,7 +6908,6 @@ void cera_map_disconnect(cera_map_t *m, int from_station, int port,
 }
 /* }}} */
 
-
 /* {{{ type removed_parts_t */
 /*
  * A removed station's parts, reclaimed by the scrapyard once nobody
@@ -7051,6 +7061,9 @@ const char *cera_map_remove_station(cera_map_t *m, int station)
 }
 /* }}} */
 
+/* }}} */
+
+/* {{{ 074 — boxes and maps compiled at run time */
 /* ==================================================================
  *
  * 074 — boxes and maps compiled at run time
@@ -7097,7 +7110,6 @@ const char *cera_map_remove_station(cera_map_t *m, int station)
  * a sequence of unrelated compilations, and it is why unloading is
  * careful: something bound to may still be bound to.
  */
-
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -7165,6 +7177,7 @@ typedef struct late_block {
 static late_block_t *late_head;   /* newest first */
 static int           late_total;
 /* }}} */
+
 /* {{{ cera_late_source_dir() */
 static int           late_serial; /* names the scratch files apart */
 
@@ -7273,7 +7286,6 @@ const char *cera_late_source_text(const char *path)
     return NULL;
 }
 /* }}} */
-
 
 /* {{{ ensure_dir() */
 static int ensure_dir(const char *path)
@@ -7947,6 +7959,9 @@ int cera_late_compile_source(const char *c_source)
 }
 /* }}} */
 
+/* }}} */
+
+/* {{{ 092 — signals, capture, and the end */
 /* ==================================================================
  *
  * 092 — signals, capture, and the end
@@ -7971,9 +7986,6 @@ int cera_late_compile_source(const char *c_source)
  * to anybody, and the one piece of work that must happen cannot be
  * the one piece of work standing in line.
  */
-
-
-
 
 #include <errno.h>
 #include <fcntl.h>
@@ -8004,6 +8016,7 @@ static int finished_signal;
  * because a dying program cannot answer for a failed open. */
 static int  report_fd = -1;
 /* }}} */
+
 /* {{{ report_where */
 static char report_where[512];
 /* }}} */
@@ -8608,4 +8621,5 @@ void cera_stop_now(cera_map_t *m, int exit_code, const char *why)
 
     _exit(exit_code);
 }
+/* }}} */
 /* }}} */

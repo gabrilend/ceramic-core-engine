@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 16:48:18
+Generated on: 2026-09-05 17:32:35
 
 --------------------------------------------------------------------------------
 
@@ -786,6 +786,344 @@ rather than from doing. That last one is the one that matters, because it's the
 only one that can prove the rest, and it exists because the train game in the
 sibling directory doesn't build against the current engine and nothing noticed
 for weeks.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 4
+
+I think the vimfolds in cera.c are a little off, at least the top one. The page
+opens to a single closed vimfold that says this:
+
+
++----/* {{{ out_port_dests() / dest_set_build() / dest_set_retire() - issue 214
+
+
+it's probably missing a closing bracket or there's an open bracket in a comment
+somewhere. The c files should read like header files, and opening a vimfold
+should be like "expanding" the implementation to display just there.
+
+
+also, can we remove all the justification text for why we did things from the
+comments? Just describe how it is, not how it got there.
+
+
+  Three tickets, none about shape. A host still can't hear why the engine
+  stopped, only that it did. One process-wide variable still means one map,
+  silently. And nothing has yet compiled this engine
+
+  from a directory that cannot see this repository — so every claim above is
+  inference from reading rather than from doing. That last one is the one that
+  matters, because it's the only one that can
+
+  prove the rest, and it exists because the train game in the sibling directory
+  doesn't build against the current engine and nothing noticed for weeks.
+
+
+
+let's work on these three.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 4
+
+Let me diagnose the fold breakage first — that's concrete.
+
+
+Three unclosed folds — so the first one swallows the whole file. Let me find
+exactly where the depth goes wrong.
+
+
+Now I see it — nested folds, and my chunk-mover took an outer fold's opener
+with an inner chunk. Let me check which of these I broke versus which were
+already broken.
+
+
+Two of these were already broken before the merge (the loader and the station
+header); my chunk-mover added a third. Let me load the project's own guidance
+for the comment pass, since it directly covers this.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 5
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 5
+
+The skill's gate: my work is committed, nothing is staged, exempt directories
+are known, phases 1–9 are discoverable. The only uncommitted files are the
+other session's, which you've released me from. Proceeding.
+
+
+Let me measure the comment mass before touching it.
+
+
+Nearly half of `cera.c` is comment. Let me fix the folds mechanically first —
+the two in `cera.h` by hand, since they're a stray closer and one missing.
+
+
+Now the `cera.c` rebuild. Let me write it as a tool and dry-run it first.
+
+
+Balanced, and nothing but markers changed. Let me see what the collapsed file
+actually reads like.
+
+
+Three folds came out unnamed. Let me look at what they are.
+
+
+Type definitions — my namer only looked for functions and variables. Let me
+teach it types and re-run.
+
+
+Every fold named. Verifying the build is unaffected.
+
+
+That's a growth report from one of the racy tests — present in one run, absent
+in the other. Let me confirm it varies run-to-run on the same binary rather than
+being caused by the refold.
+
+
+Comments can't change behaviour, but let me prove it rather than argue it —
+compile both versions and compare the objects.
+
+
+The filenames differ, which shifts string tables. Let me redo with identical
+filenames in separate directories.
+
+
+Proven identical object code — the test difference was the known race under
+build load. That's a real limitation of my output-comparison instrument worth
+recording.
+
+
+Now the comment pass. Let me extract just the comment blocks with their line
+ranges, so I review 4,000 lines of prose rather than 8,800 of file.
+
+
+This shows the real damage from my chunk move — a comment describing the
+public wiring call is stranded here. Let me check whether the header lost it.
+
+
+Confirmed — the header's wiring call lost both its fold and its comment to my
+move. Let me restore it and clear the stray.
+
+
+The header's folds are nested from the merge, so the wiring call ended up inside
+a neighbour's fold. Let me restore it and start the comment pass, staging
+genuine history for the progress files.
+
+
+Now the strip itself. Batch one — the joints block and the pool.
+
+
+Compiles-check, then a mechanical pass for the provenance references — those
+are safe to remove wholesale.
+
+
+37 remain, embedded in prose. Let me pull their context and rewrite each.
+
+
+Zero references left. Now the history and justification prose — let me find
+what still describes states the system isn't in.
+
+
+84 statements to work through. Let me pull the enclosing blocks so I rewrite
+whole thoughts, not fragments.
+
+
+Rich blocks — current fact welded to history. Let me cut at the weld,
+harvesting the complete transitions.
+
+
+The write never happened, so the header is untouched. Let me find the exact
+wording that didn't match.
+
+
+Those two are ordinary present-tense prose. The header's clean. Now the body's
+61.
+
+
+Line-spanning references keep tripping the matches. Let me handle those
+generally first.
+
+
+Let me make the applier report failures instead of aborting on the first.
+
+
+Now the second-range rewrites, with a tolerant applier.
+
+
+Most are false positives — present-tense prose. Let me check the four that
+aren't.
+
+
+Proven comments-only. Now filing the harvested history into the phase progress
+pages, where the development journey lives.
+
+
+My commit swept in the other session's progress-page edits, which link to two
+tickets still untracked — a dangling reference I created. Let me complete it
+rather than leave it broken.
+
+
+Tree's clean. Now the three tickets. Let me check the ground truth for both
+engine-side ones first — one of them may already be resolved.
+
+
+Two findings. Let me look closer at both.
+
+
+Consistent shape: a message to stderr, then `abort()` or `exit()`. Let me build
+the funnel. First the existing exit-code vocabulary.
+
+
+Now implementing 906. Let me see all thirty death sites at once so I can
+classify each.
+
+
+Clear classification: resource exhaustion, bad caller argument, and genuine
+engine bug. Let me build the funnel.
+
+
+Now routing all thirty sites through it.
+
+
+Both are correct — the funnel itself, and the quit path that must take no
+locks. Let me note why the second bypasses the funnel, then build.
+
+
+All green. Now a test for it — a handler that's never proven to fire is a
+handler nobody can rely on.
+
+
+906 is done and proven. Now 908 — let me check whether its premise still
+holds, since the globals list showed no active-map pointer.
+
+
+Two programs already share a pool. But 908 is about two *independent* maps. Let
+me look at how a test builds one, then prove it.
+
+
+Now the proof for 908 — two fully independent maps, each with its own pool.
+
+
+All green. Now 907, the capstone. Let me see how the example builds and runs a
+map, since the out-of-tree program must do the same.
+
+
+Now the out-of-tree build test — the one that proves everything else.
+
+
+`/dev/shm` is the non-executable tier — that's precisely what the project's
+two-tier rule is for. Moving the build to the exec tier.
+
+
+The map reached for one of this repo's demo boxes — exactly the leak this test
+exists to catch. Let me make the consumer own both.
+
+
+The engine builds and runs outside its own repository. Full suite:
+
+
+All four things are done and committed. Tree is clean apart from two files that
+aren't mine.
+
+
+## The folds
+
+
+You were right about the cause, and it was worse than one missing bracket. Three
+folds in the body opened and never closed, so the first swallowed everything
+after it, and the header had a doubled closer plus one that ran off the end.
+
+
+**Two of them predate the merge** — the loader and the station header were
+already unbalanced before eighteen files became two. Nobody would have seen it;
+a stray marker in a file you scroll through looks like nothing. **The third was
+mine**: the tool that moved the joints out of the header worked in
+blank-line-separated chunks, and folds don't respect blank lines, so an outer
+fold's opening line travelled with an inner chunk and left its closer behind.
+That same bug had also dragged the wiring call's entire explanation into the
+body, where it sat above an unrelated function while the declaration it belonged
+to stood bare. Both are fixed.
+
+
+I didn't patch them. Markers are now discarded wholesale and rewritten from the
+code — one fold per definition, from the top of its comment down to the brace
+that closes it, named for what it defines. **256 definitions, all named,
+balanced.** Shut, the file is a list of what it holds in the order it holds
+them; opening one expands that definition and nothing else. Section banners stay
+outside every fold so they remain visible as headings. Because it discards
+rather than repairs, a fold that has drifted from the code can't survive a run.
+
+
+## The justification text
+
+
+About 900 lines gone. Three hundred references to the tickets that built each
+piece, and the paragraphs explaining what a thing used to be, why the old shape
+was wrong, which alternative was refused, and why the present answer is good.
+
+
+What stayed is what the code can't say about itself: why a state byte sits
+*after* a slot's value rather than before it, which lock a copy is or isn't
+under, that a comparator's last port isn't one of the box's parameters. Those
+got shorter, not fewer.
+
+
+**Nine complete transitions were carried out rather than deleted** and filed
+under the phase whose work they belong to — a slot learning to say what's
+happening to it, destinations becoming an array nobody edits, the statics table
+going and taking the process-wide singleton with it. Each names the old state,
+why it was that way, the new state, and what changed the answer. Fragments that
+couldn't supply all four were residue and stayed in git history.
+
+
+Proof it changed nothing: the engine compiled before and after, from identical
+filenames in separate directories, is byte-for-byte the same object file.
+
+
+## The three tickets
+
+
+**A host can hear why the engine stopped.** This needed a funnel before it
+needed a handler — thirty places wrote to stderr and then ended the process,
+each its own little ending, so there was nowhere to be told from. Collecting
+them named a distinction the code was already making silently: most refusals are
+a fault outside the engine and exit with a code a caller can act on, while six
+in the delivery path are the engine finding a fault in *itself* and abort,
+because a core is the evidence. One death stays outside the funnel deliberately
+— the quit signal takes no locks, since the reason it arrived may be a lock
+nobody will release, and a handler is somebody else's code.
+
+
+**Two maps in one process needed no code.** The pointer had already gone when
+statics moved onto the ports that read them, and nobody had noticed either way,
+because a singleton is invisible until two of something exist and nothing had
+ever built two. There's a test now.
+
+
+**The engine builds outside its own repository.** `make test` copies it into a
+directory that can't see this one, writes a box and a map and a program from
+nothing, and checks the answer. It caught two faults on its first run — which
+is the argument for writing it rather than reasoning about it. It was putting
+its scratch tree in the RAM tier mounted *noexec*, which is exactly why the
+project keeps two tiers. And its map named one of this repo's own demo boxes, so
+it would have passed for a reason having nothing to do with portability.
+
+
+Phase 9 is eight of nine. What's left is ticket 909 — the blueprints describe
+behaviour without naming the calls that provide it, and that can't be derived
+because the house style keeps function names out of prose.
+
+
+Still owed, and outside this repo: the train game doesn't build against the
+current engine. It's the natural second consumer now that the first one passes.
 
 
 --------------------------------------------------------------------------------

@@ -1,18 +1,20 @@
--- 113-refold.lua — one fold per definition, so the engine reads like a header.
+-- 113-refold.lua — two tiers of fold, so the engine reads like a header.
 --
 -- What this is: the tool that maintains the vim fold markers in
--- src/cera.c. Collapsed, the file is a list of what it defines, in
--- order; opening one fold expands that definition and its comment and
--- nothing else. Section banners are left outside every fold so they
--- stay visible as headings when everything is shut.
+-- src/cera.c. Shut, the file is a list of its components; opening one
+-- component gives a list of what it defines; opening one of those gives
+-- the definition and its comment and nothing else.
 --
 -- How it does it, in general terms: throw away every marker that is
--- there and put fresh ones in. A definition runs from the top of the
--- comment block above it to the brace that closes it in column one; the
--- fold is named for what the definition declares. Because it discards
--- rather than repairs, running it twice does the same thing as running
--- it once, and a fold that has drifted out of step with the code cannot
--- survive a run.
+-- there and put fresh ones in. A component runs from one banner to the
+-- next. A definition runs from the top of the comment block above it to
+-- the brace that closes it in column one, and the fold is named for
+-- what the definition declares. One blank line separates a fold from
+-- the one after it.
+--
+-- Because it discards rather than repairs, running it twice does the
+-- same thing as running it once, and a fold that has drifted out of
+-- step with the code cannot survive a run.
 --
 -- Usage: luajit 113-refold.lua [project-dir] [--check]
 --   --check reports what it would do and writes nothing.
@@ -44,10 +46,22 @@ end
 -- }}}
 
 -- {{{ local function is_banner(line)
--- A section banner opens with a rule of equals signs. Banners are the
--- headings of the eleven sections and stay outside every fold.
+-- A component banner: a rule of equals signs with no comment close on
+-- the same line. The one-line form that ends a banner block is not one.
 local function is_banner(line)
-    return line:match("^/%* ==========") ~= nil
+    return line:match("^/%* =+$") ~= nil
+end
+-- }}}
+
+-- {{{ local function banner_title(lines, at)
+-- The heading inside a banner block, which names the component.
+local function banner_title(lines, at)
+    for i = at + 1, math.min(at + 8, #lines) do
+        local t = lines[i]:match("^%s*%*%s+(.-)%s*$")
+        if t and t ~= "" and not t:match("^=+") then return t end
+        if lines[i]:match("%*/") then break end
+    end
+    return "a component"
 end
 -- }}}
 
@@ -110,7 +124,13 @@ for _, l in ipairs(src) do
         -- drop the line entirely
     else
         l = l:gsub("{{{", ""):gsub("}}}", "")
-        body[#body + 1] = l
+        -- Two blank lines in a row can only be the gap a removed marker
+        -- left beside a gap that was already there. Collapsing them is
+        -- what makes a second run of this tool a no-op rather than a
+        -- file that grows a line per fold every time.
+        if not (l == "" and body[#body] == "") then
+            body[#body + 1] = l
+        end
     end
 end
 -- }}}
@@ -150,8 +170,25 @@ end
 
 -- {{{ write the folds back in
 local out, at, u = {}, 1, 1
+local in_component = false
+local components = 0
+
+local function close_component()
+    if in_component then
+        out[#out + 1] = "/* }}} */"
+        in_component = false
+    end
+end
+
 while at <= #body do
-    if u <= #units and units[u].top == at then
+    if is_banner(body[at]) then
+        close_component()
+        out[#out + 1] = "/* {{{ " .. banner_title(body, at) .. " */"
+        in_component = true
+        components = components + 1
+        out[#out + 1] = body[at]
+        at = at + 1
+    elseif u <= #units and units[u].top == at then
         local unit = units[u]
         out[#out + 1] = "/* {{{ " .. names_in(body, unit.first, unit.last) .. " */"
         for k = unit.top, unit.last do out[#out + 1] = body[k] end
@@ -163,9 +200,31 @@ while at <= #body do
         at = at + 1
     end
 end
+close_component()
 -- }}}
 
-print(string.format("%d definitions folded in %s", #units, FILE))
+-- {{{ exactly one blank line between a fold's close and the next open
+local tidy, i = {}, 1
+while i <= #out do
+    tidy[#tidy + 1] = out[i]
+    if out[i]:match("^%s*/%*%s*}}}%s*%*/%s*$") then
+        local j = i + 1
+        while out[j] == "" do j = j + 1 end
+        if out[j] and out[j]:match("^%s*/%*%s*{{{") then
+            tidy[#tidy + 1] = ""
+            i = j
+        else
+            i = i + 1
+        end
+    else
+        i = i + 1
+    end
+end
+out = tidy
+-- }}}
+
+print(string.format("%d components, %d definitions folded in %s",
+                    components, #units, FILE))
 if CHECK then
     print("--check: nothing written")
 else
