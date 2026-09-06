@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 19:48:24
+Generated on: 2026-09-05 20:08:13
 
 --------------------------------------------------------------------------------
 
@@ -1961,6 +1961,133 @@ for free.
 
 
 Shall I go with that?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 11
+
+ok
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 11
+
+Building the viewer. Let me check the map format the page has to parse.
+
+
+Now the forwarding reader. It maps the ring and does nothing but forward.
+
+
+Now the page — the graph from the map file, the near-square grid, and the
+lighting.
+
+
+Node is broken on this machine, so I'll prove the JS by fetching it end-to-end
+instead. First, something worth watching.
+
+
+Now the end-to-end test — a watched program, the viewer, and a browser's worth
+of requests.
+
+
+Firefox is here. Let me render the page and see it.
+
+
+Firefox headless is hanging. Let me check whether it works at all here before
+blaming the page.
+
+
+Firefox headless is broken on this machine even for a trivial page — so I
+can't render here. Let me fix a real gap I spotted while re-reading, and check
+the JS structurally.
+
+
+All endpoints correct. Let me turn what I just did by hand into a test.
+
+
+All green — 2,452 events in sequence across 5 kinds. Let me record the state
+and commit.
+
+
+`pkill -f` matched my own command line and killed the shell. Let me clean up
+more carefully and redo.
+
+
+Both halves of the viewer are built, tested, and committed. Phase 8 has one
+ticket left — the workbench.
+
+
+## What you can run now
+
+
+```sh
+
+make viewer
+
+```
+
+
+prints two commands. One terminal runs a program with a trail; the other runs
+the viewer; you open `http://localhost:8723/`.
+
+
+**The forwarding reader** maps the ring with the engine's own reader — so the
+ring's shape is defined once, not twice — and pushes events as server-sent
+events. One thread, one poll loop, and a reader per connected page, so two
+people watching don't interfere because neither holds anything the other needs.
+
+
+**The page** reads the map file for the graph, which is exact from the first
+frame including branches that may never run. Near-square grid, extra column
+preferred. Stations light as they run and fade; a pip under each input port
+fills as its backlog deepens; the header says plainly when the trail reports
+loss.
+
+
+**Dragging pins.** A pinned box is never moved by anything automatic again. A
+station that appears mid-run goes on the end of the grid — at that moment it
+has no wires — and when its wires arrive it moves once, to a spot equidistant
+from what it connects to, nudged until it overlaps nothing. Unless you've
+dragged it by then.
+
+
+**There is no write in it anywhere.** Saving a layout is a download the browser
+performs; putting the file beside the map is your own act, after which the
+viewer reads it back.
+
+
+## What's proven and what isn't
+
+
+The test starts a real program, starts the viewer, and checks the page and its
+parts come back, that anything the server doesn't know is refused, and that
+thousands of events arrive **in sequence** — out of order would be a picture
+that can't be trusted about what happened before what. Last run: 2,452 events, 5
+kinds.
+
+
+**The drawing is not proven.** This machine has no working browser — I tried
+headless Firefox and it hangs on a blank page, not just on mine. Everything the
+page is *served* is checked; how it *looks* wants you to open it. That's the one
+thing I'd like you to do before I call it good.
+
+
+Two things I'd flag from building it:
+
+
+**The `.lay` file location changed shape.** You suggested saving beside the map.
+The server writing it would have put a write into a program whose entire design
+is that it has none — so the browser downloads it and you place it. The viewer
+reads it back on load. Same outcome, and the "cannot touch" property stays true
+by construction rather than by discipline.
+
+
+**A reader attaching late loses everything before it arrived** — I saw 3,869
+events lost on one attach. That's correct and it's why reading the map file
+matters: a viewer that learned the graph from the trail alone would have drawn
+nothing at all in that case.
 
 
 --------------------------------------------------------------------------------

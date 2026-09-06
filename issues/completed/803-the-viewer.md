@@ -41,12 +41,53 @@ it does not know is refused, and that thousands of events arrive down a
 socket **in sequence**. A stream out of order would be a picture that
 cannot be trusted about what happened before what.
 
-### What is not verified here
+### The second pass
 
-**The drawing.** This machine has no working browser — headless Firefox
-hangs on a blank page, so nothing on it can render one. Everything the
-page is served has been checked; how it looks when drawn has not. That
-wants somebody to open it.
+Six things, after looking at the first one:
+
+**A blueprint.** Pale lines on blue, with the paper's own ruling under
+everything. The issue files here are called blueprints and read like
+them; this is the same drawing with the machine running inside it.
+
+**Ports on the edges, and wires between ports rather than boxes.**
+Which port a wire lands on is the whole of what a wire says, so the
+picture now says it. Inputs down the left, exits down the right, each
+one labelled and each one showing what it is: a ring buffer that can
+back up, a constant that always holds a value, or no source at all.
+
+**Values you can watch move.** A dot crosses the wire it moved along,
+over half a second, its position worked out from the curve directly
+rather than by asking the browser to measure the path — a measurement
+per frame per value is the one thing that would make this page cost
+something.
+
+**Buffer depth, derived rather than reported.** The trail never carries
+a value and never carries a depth. But a value arriving at a ring port
+is one more waiting, and a station running takes one from each of its
+ring ports — which is the readiness rule the engine itself follows,
+applied to the same events the engine emitted. The port fills as its
+backlog grows and turns when it gets deep.
+
+**A box is a function, so it is drawn as one**, with parentheses.
+
+**The program draws itself.** A trail carries station *indices*, and
+turning an index into a box by counting down a map file is how a
+picture ends up confidently wrong — point it at a map of the same shape
+in a different order and every event lands on the wrong station. The
+watched program now dumps its own live graph and the viewer reads that,
+so what is drawn is what is running by construction. The dump also says
+each station's index outright and each buffer's capacity, both of which
+the page now reads instead of inferring.
+
+### One command, still two processes
+
+`--view` has the watched program start the viewer as a child and stop it
+on the way out. Watching is one command; the server is still not inside
+the engine, because a program with a thread, a socket and clients is
+doing exactly what *never waits for a reader, never learns one is there*
+refuses.
+
+### What is not verified here
 
 ## Intended behavior
 

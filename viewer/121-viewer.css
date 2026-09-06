@@ -1,21 +1,29 @@
 /*
  * 121-viewer.css — how the window looks.
  *
- * Two things carry meaning and everything else stays out of their way:
- * a station's brightness, which says how recently it ran, and a port's
- * fill, which says how deep its backlog is.
+ * A blueprint: pale lines on blue. The issue files in this project are
+ * called blueprints and read like them, and this is the same drawing
+ * with the machine running inside it.
+ *
+ * Three things carry meaning and everything else stays out of their
+ * way: a station's glow, which says how recently it ran; a port's fill,
+ * which says how deep its backlog is; and a value in flight, which is
+ * the only thing on the page that moves because something moved.
  */
 :root {
-    --ink: #10151c;
-    --paper: #f4f2ee;
-    --line: #b9b3a8;
-    --quiet: #7d766a;
-    --station: #ffffff;
-    --edge: #3a4450;
-    --hot: #d8541f;
-    --warm: #e8a13c;
-    --deep: #7b3fa0;
-    --alarm: #b3261e;
+    --ground: #14324a;
+    --ground-deep: #0f2739;
+    --grid: #1d4364;
+    --ink: #dce9f4;
+    --quiet: #7ea3c0;
+    --line: #4e7ea6;
+    --box: #1a3d59;
+    --box-edge: #6b9dc4;
+    --hot: #ffb454;
+    --value: #ffd479;
+    --fill: #4fb3a5;
+    --deep: #d4713c;
+    --alarm: #ff7b6b;
 }
 
 * { box-sizing: border-box; }
@@ -25,7 +33,7 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background: var(--paper);
+    background: var(--ground);
     color: var(--ink);
     font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -35,12 +43,12 @@ header, footer {
     align-items: center;
     gap: 12px;
     padding: 10px 16px;
-    border-bottom: 1px solid var(--line);
-    background: #fbfaf8;
+    background: var(--ground-deep);
+    border-bottom: 1px solid var(--grid);
 }
-footer { border-bottom: none; border-top: 1px solid var(--line); }
+footer { border-bottom: none; border-top: 1px solid var(--grid); }
 
-h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .01em; }
+h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .02em; }
 .spacer { flex: 1; }
 .quiet { color: var(--quiet); font-size: 13px; }
 
@@ -49,10 +57,10 @@ h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .01em; }
     padding: 2px 10px;
     border-radius: 999px;
     border: 1px solid var(--line);
+    color: var(--quiet);
 }
-.state.waiting { color: var(--quiet); }
-.state.live    { color: #14532d; border-color: #86c8a0; background: #eaf6ee; }
-.state.ended   { color: var(--quiet); background: #eeece8; }
+.state.live  { color: #9fe6c4; border-color: #3f8f6d; background: #14392c; }
+.state.ended { color: var(--quiet); background: var(--grid); }
 
 .lost {
     font-size: 13px;
@@ -68,34 +76,55 @@ button {
     padding: 4px 12px;
     border: 1px solid var(--line);
     border-radius: 6px;
-    background: #fff;
+    background: var(--box);
     color: var(--ink);
     cursor: pointer;
 }
-button:hover { background: #f0eee9; }
+button:hover { background: var(--grid); }
 
 main { flex: 1; overflow: hidden; }
-#canvas { width: 100%; height: 100%; display: block; cursor: default; }
+#canvas { width: 100%; height: 100%; display: block; }
 
-.station rect {
-    fill: var(--station);
-    stroke: var(--edge);
-    stroke-width: 1.5;
-    rx: 7;
-}
-.station.pinned rect { stroke-dasharray: 4 3; }
-.station text { font-size: 12px; fill: var(--ink); pointer-events: none; }
-.station text.box { font-size: 10.5px; fill: var(--quiet); }
+/* The paper's own ruling, under everything. */
+#grid line { stroke: var(--grid); stroke-width: 1; }
+
+/* A station. The dash says pinned, and applies to the outline only —
+ * a selector that reached the ports as well is what made every slot on
+ * a dragged box look like a different kind of slot. */
 .station { cursor: grab; }
 .station.dragging { cursor: grabbing; }
+.station > rect.body {
+    fill: var(--box);
+    stroke: var(--box-edge);
+    stroke-width: 1.5;
+    rx: 8;
+}
+.station.pinned > rect.body { stroke-dasharray: 5 3; }
+.station > rect.glow { fill: var(--hot); stroke: none; rx: 8; }
 
-/* A station's heat is how recently it ran. */
-.station rect.heat { fill: var(--hot); stroke: none; rx: 7; }
+.station text { pointer-events: none; }
+.name { font-size: 13px; font-weight: 600; fill: var(--ink); }
+.fn   { font-size: 11px; fill: var(--quiet); font-family: ui-monospace, monospace; }
+.door { font-size: 10px; fill: var(--hot); letter-spacing: .08em; }
 
-.wire { stroke: var(--line); stroke-width: 1.5; fill: none; }
-.wire.busy { stroke: var(--hot); stroke-width: 2.5; }
+/* A port: the slot itself, how full it is, and what it is called. */
+.port rect.slot {
+    fill: var(--ground-deep);
+    stroke: var(--line);
+    stroke-width: 1;
+    rx: 3;
+}
+.port rect.level { fill: var(--fill); stroke: none; rx: 2; }
+.port.deep rect.level { fill: var(--deep); }
+.port.static rect.slot { stroke-dasharray: 2 2; fill: var(--grid); }
+.port.none rect.slot { stroke: var(--quiet); stroke-opacity: .4; fill: none; }
+.port text { font-size: 9px; fill: var(--quiet); pointer-events: none; }
+.port text.count { fill: var(--ink); font-family: ui-monospace, monospace; }
 
-.port { fill: #e6e2da; stroke: var(--edge); stroke-width: 1; }
-.port .fill { fill: var(--warm); stroke: none; }
-.port.deep .fill { fill: var(--deep); }
-.depth { font-size: 9px; fill: var(--quiet); pointer-events: none; }
+.wire { stroke: var(--line); stroke-width: 1.4; fill: none; opacity: .75; }
+.wire.busy { stroke: var(--value); stroke-width: 2; opacity: 1; }
+
+/* A value, in flight. The only thing on the page that moves because
+ * something moved. */
+.value { fill: var(--value); stroke: none; }
+.value-halo { fill: var(--value); opacity: .25; stroke: none; }

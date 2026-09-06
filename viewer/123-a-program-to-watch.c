@@ -10,14 +10,22 @@
  *
  * It exists for the viewer and is not part of the engine.
  *
- * usage: a-program-to-watch --trail=<ring> [--pace=ms]
+ * usage: a-program-to-watch --trail=<ring> [--pace=ms] [--view[=port]]
+ *
+ * `--view` starts the viewer as a child, so watching is one command
+ * rather than two terminals. It stays a separate process on purpose:
+ * putting the server inside would give the program a thread, a socket
+ * and clients, which is exactly what "the program never waits for a
+ * reader and never learns one is there" refuses.
  */
 #include "cera.h"
 
+#include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -41,10 +49,13 @@ int main(int argc, char **argv)
 {
     const char *trail = NULL;
     int pace_ms = 120;
+    int view_port = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strncmp(argv[i], "--trail=", 8) == 0) trail = argv[i] + 8;
         else if (strncmp(argv[i], "--pace=", 7) == 0) pace_ms = atoi(argv[i] + 7);
+        else if (strncmp(argv[i], "--view=", 7) == 0) view_port = atoi(argv[i] + 7);
+        else if (strcmp(argv[i], "--view") == 0) view_port = 8723;
     }
     if (!trail) {
         fprintf(stderr, "usage: a-program-to-watch --trail=<ring> [--pace=ms]\n");
@@ -95,8 +106,59 @@ int main(int argc, char **argv)
     must_take(cera_map_bring_up(m), "the program");
     cera_pool_release(m->pool);
 
-    printf("watch it with:\n");
-    printf("  viewer --trail=%s --map=<a map of this shape>\n", trail);
+    /*
+     * The viewer, started as a child if asked for. It is handed the
+     * trail this program is writing and a map of the same shape; it
+     * reads both and can reach neither this program nor anything else.
+     */
+    pid_t viewer = -1;
+    if (view_port > 0) {
+        /*
+         * **The program draws itself.** A trail carries station
+         * indices, and the page turns an index into a box by counting
+         * down the map file — so a map of a different shape, or the
+         * same shape in another order, would draw a confident lie.
+         * Dumping this program's own graph removes the question: what
+         * the viewer reads is what is running, by construction.
+         */
+        char drawn[512];
+        snprintf(drawn, sizeof drawn, "%s.map", trail);
+        FILE *shape = fopen(drawn, "w");
+        if (!shape) {
+            fprintf(stderr, "cannot write the shape to %s: %s\n",
+                    drawn, strerror(errno));
+            return 1;
+        }
+        cera_map_dump(m, shape);
+        fclose(shape);
+
+        char port_arg[32], trail_arg[600], map_arg[600], root_arg[600];
+        char self[600];
+        snprintf(port_arg, sizeof port_arg, "--port=%d", view_port);
+        snprintf(trail_arg, sizeof trail_arg, "--trail=%s", trail);
+        snprintf(map_arg, sizeof map_arg, "--map=%s", drawn);
+        snprintf(root_arg, sizeof root_arg, "--root=%s/viewer", CERA_ROOT);
+
+        snprintf(self, sizeof self, "%s/tmp/build/119-viewer", CERA_ROOT);
+
+        viewer = fork();
+        if (viewer == 0) {
+            execl(self, self, trail_arg, map_arg, root_arg, port_arg, (char *)NULL);
+            fprintf(stderr, "could not start the viewer at %s: %s\n",
+                    self, strerror(errno));
+            _exit(1);
+        }
+        /* Let it bind before saying where to look. */
+        struct timespec settle = { 0, 300000000L };
+        nanosleep(&settle, NULL);
+    }
+
+    if (view_port > 0)
+        printf("watching at http://localhost:%d/\n", view_port);
+    else {
+        printf("watch it with:\n");
+        printf("  119-viewer --trail=%s --map=<a map of this shape>\n", trail);
+    }
     printf("feeding one value every %dms — interrupt to stop\n", pace_ms);
     fflush(stdout);
 
@@ -122,6 +184,10 @@ int main(int argc, char **argv)
     }
 
     printf("\nstopping after %d values, %d results collected\n", value, drained);
+    if (viewer > 0) {
+        kill(viewer, SIGTERM);
+        waitpid(viewer, NULL, 0);
+    }
     cera_pool_submitter_unregister(m->pool);
     cera_map_destroy(m);
     return 0;
