@@ -81,3 +81,19 @@ stages (parse → validate → emit), sharing the pattern of the earlier
 phases — one mechanism, proven aspect by aspect. That separation is
 what makes the translation to C tractable, since the stages can be
 moved one at a time.
+
+## How it came to be this way
+
+These are the turns the design actually took, lifted out of the source
+comments where they had been sitting. They describe states the engine is
+no longer in, which is why they are here rather than beside the code: a
+comment is for what is true now.
+
+### A struct's layout stopped being a table and became two functions
+
+A struct static was turned into bytes by walking a generated table of
+field offsets and widths, and the port found that table by searching
+every emitted struct for one whose name matched. The generated pair now
+reaches each field by name, so no offset is stored or computed anywhere,
+and the placement function hands the pair over directly instead of
+leaving a search to answer a question it already knew.

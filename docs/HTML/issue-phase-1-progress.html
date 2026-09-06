@@ -244,6 +244,20 @@ already had its central default reversed once and its vocabulary is
 still unsettled, and 108 has had two decisions reversed and leaves
 seven questions open. Nothing in either has been built — every file
 touched while writing them is a document.</p>
+<h2>How it came to be this way</h2>
+<p>These are the turns the design actually took, lifted out of the source
+comments where they had been sitting. They describe states the engine is
+no longer in, which is why they are here rather than beside the code: a
+comment is for what is true now.</p>
+<h3>The lost-wakeup race turned out to have no window</h3>
+<p>The pool was designed around a re-scan by the last worker to fall
+asleep, closing a race where a worker preempted between deciding to
+sleep and registering itself would never be woken. Under the lock
+discipline that was actually built — the queue check and the sleep
+registration inside one hold of the mutex, and the wait releasing that
+same mutex atomically — the window never opens, and the race proved
+unreproducible. The re-scan stayed, as the last sleeper's final look at
+the queue before declaring the program finished.</p>
 
 </main>
 </div></body></html>

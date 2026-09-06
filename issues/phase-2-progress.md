@@ -141,3 +141,37 @@ phase's best finding: the two kinds of backlog (slot versus task ring)
 and which mismatch produces which — docs 002 was corrected to match.
 There is now a third kind, and it belongs beside them: an output buffer
 piling up means nobody is collecting the program's results at all.
+
+## How it came to be this way
+
+These are the turns the design actually took, lifted out of the source
+comments where they had been sitting. They describe states the engine is
+no longer in, which is why they are here rather than beside the code: a
+comment is for what is true now.
+
+### A slot learned to say what was happening to it
+
+Occupancy was implied by the ring's head and tail indices, which is why
+the station's mutex had to cover the whole copy: the indices called a
+slot occupied before its bytes had finished landing, so only exclusion
+could stop a reader arriving early. Giving every slot its own state —
+empty, reserved, ready, claimed — let the copy move outside the lock,
+and made the spare slot unnecessary, since a full buffer is now one
+where no slot answers empty rather than one where head meets tail.
+
+### A port's destinations became an immutable array
+
+Destinations were a linked list, and a rewire could free a node under a
+walker's feet. The delivery walk defended itself by copying every pair
+out under the station's mutex before visiting any of them, on every
+value the engine moved. Replacing the list with an array that is never
+edited — a new one is built and the port's pointer swapped in a single
+atomic write — took the mutex off the delivery walk entirely.
+
+### A bad starting depth stopped killing the program
+
+Setting a port's starting depth was the last port operation that ended
+the program on refusal, which made a bad depth the one fault in a map
+file capable of hiding every fault after it: a caller collecting
+mistakes cannot collect the one that killed it. It returns a sentence
+now, like every other port operation.

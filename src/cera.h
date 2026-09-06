@@ -12,14 +12,9 @@
  * meant to be read in sequence — the pool knows nothing of stations,
  * stations know nothing of the generator, and so on upward.
  *
- * What it does not yet do is distinguish what a consumer may call
- * from how the engine talks to itself. Every declaration here was in
- * a header because one engine file needed to reach another, and
- * narrowing that to a real public surface is issue 902.
- *
- * GENERATED ONCE from the numbered headers by scripts/110-amalgamate.lua
- * (issue 901) and edited by hand from then on. The script is removed
- * when issue 904 deletes the files it read.
+ * Everything declared here is public. Everything private lives in
+ * cera.c, and tests/112-test-public-surface.sh fails if the engine
+ * exports anything this file does not declare.
  */
 #ifndef CERA_H
 #define CERA_H
@@ -57,7 +52,7 @@
 #include <stdint.h>
 
 /*
- * A task is one invocation, made concrete (issue 206): created the
+ * A task is one invocation, made concrete: created the
  * moment a station's inputs are all present, destroyed by the worker
  * that ran it. The pool reads exactly one field — `call` — and treats
  * the rest as freight; everything the fields *mean* lives on the
@@ -79,7 +74,7 @@ typedef void (*cera_task_call_t)(cera_task_t *t);
 struct task {
     cera_task_call_t call;     /* the shim to run */
     /*
-     * **Which program this task belongs to** (issue 212), carried the
+     * **Which program this task belongs to**, carried the
      * same way `station` and `port` are — ferried without being
      * interpreted, which is what keeps the pool ignorant of maps. A
      * void pointer for exactly that reason: the pool must not know
@@ -105,7 +100,7 @@ struct task {
      * compiled in. The pool never reads it — it is carried here the
      * same way `station` and `port` are, as something the pool ferries
      * without interpreting, which is what keeps the pool ignorant of
-     * maps (issue 405).
+     * maps.
      *
      * It rides on the task because the alternative was a process-wide
      * pointer to the running map, so that a shim — which receives only
@@ -118,7 +113,7 @@ struct task {
 typedef struct pool cera_pool_t;
 
 /*
- * The finish hook is delivery's reserved seat (issue 205). After a
+ * The finish hook is delivery's reserved seat. After a
  * worker runs a task and before it frees it, the hook is called with
  * the context given at creation. Passing a null hook means "just free
  * it", which is all phase 1 needs. The hook is how the pool stays
@@ -126,17 +121,17 @@ typedef struct pool cera_pool_t;
  */
 typedef void (*cera_pool_finish_t)(void *ctx, cera_task_t *t);
 
-/* {{{ cera_pool_create() — issues 101, 102 */
+/* {{{ cera_pool_create() */
 /*
  * n_workers <= 0 means: use the CERAMIC_WORKERS environment variable
  * if set, otherwise one worker per online processor. Workers are
  * spawned immediately but parked at a starting barrier; nothing runs
- * until cera_pool_release. That gap is where a map is seeded (issue 605).
+ * until cera_pool_release. That gap is where a map is seeded.
  */
 cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *finish_ctx);
 /* }}} */
 
-/* {{{ cera_pool_push() — issues 101, 103 */
+/* {{{ cera_pool_push() */
 /*
  * Enqueue one task. Grows the ring if it is full (a bounded memory
  * copy, never a wait on user code) and wakes every sleeping worker.
@@ -146,36 +141,36 @@ cera_pool_t *cera_pool_create(int n_workers, cera_pool_finish_t finish, void *fi
 void cera_pool_push(cera_pool_t *p, cera_task_t *t);
 /* }}} */
 
-/* {{{ cera_pool_pop() — issue 101 */
+/* {{{ cera_pool_pop() */
 /*
  * Dequeue the oldest task, or return null when the queue is empty.
  * Never blocks: the decision to sleep on empty belongs to the worker
- * run loop (issue 103), not to the queue.
+ * run loop, not to the queue.
  */
 cera_task_t *cera_pool_pop(cera_pool_t *p);
 /* }}} */
 
-/* {{{ cera_pool_release() — issue 102 */
+/* {{{ cera_pool_release() */
 /* Release the workers past the starting barrier. Called once. */
 void cera_pool_release(cera_pool_t *p);
 /* }}} */
 
-/* {{{ cera_pool_join() — issue 104 */
+/* {{{ cera_pool_join() */
 /*
  * Wait until the pool has terminated itself — every task run, every
  * worker returned. Termination is decided by the last worker to fall
- * asleep re-checking the queue (issue 104), so this is a wait for
+ * asleep re-checking the queue, so this is a wait for
  * genuine completion, not a deadline.
  */
 void cera_pool_join(cera_pool_t *p);
 /* }}} */
 
-/* {{{ cera_pool_destroy() — issue 101 */
+/* {{{ cera_pool_destroy() */
 /* Free the pool. If workers were started, join them first. */
 void cera_pool_destroy(cera_pool_t *p);
 /* }}} */
 
-/* {{{ cera_pool_submitter_register() / cera_pool_submitter_unregister() — issue 104 */
+/* {{{ cera_pool_submitter_register() / cera_pool_submitter_unregister() */
 /*
  * The termination rule assumes nothing outside the pool pushes tasks
  * after the workers are released. Anything that does — a trickle-feed
@@ -188,7 +183,7 @@ void cera_pool_submitter_register(cera_pool_t *p);
 void cera_pool_submitter_unregister(cera_pool_t *p);
 /* }}} */
 
-/* {{{ cera_pool_worker_index() — issue 102 */
+/* {{{ cera_pool_worker_index() */
 /*
  * The index of the worker running the calling thread, or -1 when
  * called from a thread that is not a worker. Costs a thread-local
@@ -197,11 +192,11 @@ void cera_pool_submitter_unregister(cera_pool_t *p);
 int cera_pool_worker_index(void);
 /* }}} */
 
-/* {{{ cera_pool_worker_count() — issue 102 */
+/* {{{ cera_pool_worker_count() */
 /* How many workers this pool actually has, after defaulting. */
 int cera_pool_worker_count(cera_pool_t *p);
 
-/* {{{ cera_pool_worker_epoch() — issue 214 */
+/* {{{ cera_pool_worker_epoch() */
 /*
  * A worker's epoch: **odd while it is inside a task, even while it is
  * not.** Bumped once at the start of a whole task and once at the end,
@@ -223,7 +218,7 @@ int cera_pool_worker_count(cera_pool_t *p);
 uint64_t cera_pool_worker_epoch(cera_pool_t *p, int worker);
 /* }}} */
 
-/* {{{ stopping on purpose — issue 106 */
+/* {{{ stopping on purpose */
 /*
  * **cera_pool_signal_when_finished(pool, signal)** — raise this signal,
  * once, when the pool decides by itself that the work has run out.
@@ -267,13 +262,13 @@ int  cera_pool_worker_station(cera_pool_t *p, int worker);
  * work is over. For telling a caller that arrived too late, rather
  * than letting it push tasks nobody will ever run. The window it
  * detects is closed by making a standing promise before the gate
- * opens, which is issue 104's rule and has not changed.
+ * opens.
  */
 int  cera_pool_finished(cera_pool_t *p);
 /* }}} */
 /* }}} */
 
-/* {{{ cera_pool_queue_stats() — issue 105 */
+/* {{{ cera_pool_queue_stats() */
 /*
  * The queue's current capacity, its high-water occupancy, and how
  * many times it has grown. Written for the phase 1 demo: every number
@@ -307,8 +302,6 @@ void cera_pool_queue_stats(cera_pool_t *p, int *capacity, int *high_water, int *
  * never shared — which is the entire reason two invocations of one
  * station can run at the same moment without touching.
  *
- * Built across phase 2 (issues 201–207); grows port kinds in phase 4
- * and routing kinds in phase 5, as marked.
  */
 
 
@@ -320,29 +313,21 @@ void cera_pool_queue_stats(cera_pool_t *p, int *capacity, int *high_water, int *
 
 
 /*
- * The port kinds (issue 202). The tag is stored, never inferred:
+ * The port kinds. The tag is stored, never inferred:
  * asking "is my upstream input-less?" on every readiness check would
  * chase an index to answer a question that cannot change while the
  * program runs.
  *
- * There were three. The gatherer — a port whose value was produced by
- * running its upstream box inline at the moment a task was assembled
- * — is gone, and the reasoning is kept in
- * docs/implementation-notes/056-no-pull-path.md rather than repeated
- * here. What it bought was a value fresh at the moment of use; what
- * it cost was user code running on a thread that was in the middle of
- * assembling someone else's task, and a queue depth nothing kept in
- * step with the station's other ports. Writing a static now runs the
- * ordinary readiness check on its station, which is what replaced it
- * (issue 210).
+ * There is no pull path — no port that runs its upstream box inline to
+ * produce a value. Writing a static runs the ordinary readiness check
+ * on its station instead. See
+ * docs/implementation-notes/056-no-pull-path.md.
  *
- * The numbering closed up rather than leaving a hole where the
- * gatherer was, because nothing outside this file ever saw these as
- * numbers — the map file spells a port's kind as text, and the dump
- * writes text back.
+ * Nothing outside this file sees these as numbers: the map file spells
+ * a port's kind as text and the dump writes text back.
  *
  * CERA_IN_PORT_NONE is not a third kind of value; it is the absence of a
- * decision (issue 210b). A port in it has been given no source, and a
+ * decision. A port in it has been given no source, and a
  * station holding one can never be ready — which is what lets a
  * program be assembled from nothing, a station coming into existence
  * with every port unset and becoming runnable as its ports are given
@@ -360,7 +345,7 @@ enum in_port_kind {
  * Every port's ring buffer starts this deep, in slots of that port's
  * own element size — so a port carrying four-byte integers starts at
  * forty bytes and one carrying a two-hundred-byte struct at two
- * thousand (issue 210b).
+ * thousand.
  *
  * Ten is a magic number and is meant to be one. It barely matters: a
  * buffer that starts too small grows to whatever depth the program
@@ -369,16 +354,13 @@ enum in_port_kind {
  * slow. A port that knows better can say so through
  * cera_map_in_port_start_depth.
  *
- * Every slot is usable. A spare one used to be held back so that
- * head-equals-tail could mean empty rather than full, and with a
- * state on every slot there is nothing left for it to disambiguate —
- * a full buffer is one where no slot answers empty, which is a
- * question that gets asked directly now (issue 210c).
+ * Every slot is usable. A full buffer is one where no slot answers
+ * empty, which is asked directly rather than inferred from indices.
  */
 #define CERA_IN_PORT_DEFAULT_CAPACITY 10
 
 /*
- * What is happening to one slot (issue 210c), and who is allowed to
+ * What is happening to one slot, and who is allowed to
  * touch it while it is happening.
  *
  * | state    | meaning                    | who may touch it     |
@@ -394,7 +376,7 @@ enum in_port_kind {
  * never own one slot.
  *
  * **Only one transition is a compare-and-swap**, and knowing which is
- * worth more than assuming all of them are (issue 210d). Empty →
+ * worth more than assuming all of them are. Empty →
  * reserved is where two writers genuinely race for the same slot, so
  * the loser has to be told it lost. The other three have exactly one
  * possible mover: reserved → ready and claimed → empty are done by
@@ -403,23 +385,16 @@ enum in_port_kind {
  * want it. Those are an ordinary load and an ordinary store, with
  * acquire and release ordering so the bytes travel with the state.
  *
- * That distinction is not a micro-optimisation. The claim's *search*
- * asks this question of every candidate it walks past, so a
- * read-modify-write per candidate was measurable where a load is not.
- *
- * A slot's occupancy used to be *implied* by the head and tail
- * indices, and that is why the station's mutex had to cover the copy:
- * the indices said a slot was occupied before its bytes had finished
- * landing, so nothing but exclusion could stop a reader arriving
- * early. A slot that says what is happening to it needs no such help.
+ * The claim's *search* asks this question of every candidate it walks
+ * past, so a read-modify-write per candidate is measurable where a
+ * load is not.
  *
  * **Slots are not cleared when released.** Every write is a copy of
  * the port's full element size, so a stale value is always completely
  * covered and there is no such thing as a partial write into a slot.
  * The guarantee is not that a slot was cleaned but that its bytes are
  * never read unless its state says ready, which is this machine's
- * entire job. Zeroing on release would cost a full erase per claim
- * and buy nothing.
+ * entire job. Zeroing on release would cost a full erase per claim.
  *
  * Empty is zero so that a freshly allocated run of slots is a
  * freshly empty run of slots.
@@ -432,12 +407,12 @@ enum slot_state {
 };
 
 /*
- * The three station kinds (issue 201, consulted only in phase 5's
- * routing dispatch). Identical in every respect except which output
- * port a returned value goes down.
+ * The three station kinds, consulted only by the routing dispatch.
+ * Identical in every respect except which output port a returned value
+ * goes down.
  */
 /*
- * Which way a door faces (issues 209, 213). Not a station kind: a
+ * Which way a door faces. Not a station kind: a
  * door is an ordinary station of any kind, carrying a mark.
  */
 enum station_door {
@@ -462,26 +437,26 @@ enum station_kind {
  * of the parameter this port feeds, which is what makes a write a
  * memcpy with no allocation on the hot path.
  *
- * The `source` field went with the gatherer (issue 210): it held the
+ * The `source` field went with the gatherer: it held the
  * upstream station a port pulled from, and nothing pulls now.
  *
  * **The slots are allocated at instantiation and are never freed
- * until the map is** (issue 210b), whatever the tag currently says.
+ * until the map is**, whatever the tag currently says.
  * A port that is a static for the whole life of a program carries
  * slots it never uses, and that is the price: it is paid once, at
  * startup, in the cheapest moment a program has. What it buys is that
  * changing a port's source is a field write rather than an allocation
  * dance — there is never a moment when the storage a tag needs is
  * absent — and that values already waiting in a port survive it being
- * turned into something else and back (issue 210f).
+ * turned into something else and back.
  *
- * **Both storages are real** (issues 210b, 401): the slots, and the
+ * **Both storages are real**: the slots, and the
  * bytes of a static. Exactly one is in effect and the other sits idle,
  * which is what makes changing what a port is a field write in both
  * directions rather than only one.
  */
 /*
- * One page of a port's ring buffer (issue 210e).
+ * One page of a port's ring buffer.
  *
  * A buffer grows by adding one of these to the end of a short list,
  * never by copying, so **no slot that already exists ever moves**.
@@ -491,7 +466,7 @@ enum station_kind {
  * slot underneath it is precisely the thing that ownership does not
  * protect against. Copy-and-unwrap growth was safe only while the
  * station's mutex covered the whole copy, and it stops being safe the
- * moment the value copies leave that lock (issue 210d).
+ * moment the value copies leave that lock.
  *
  * Every page holds the same number of slots, so turning a slot's
  * ordinal into a page and an offset is a divide and a remainder.
@@ -503,7 +478,7 @@ enum station_kind {
 typedef struct in_port_page {
     /*
      * Atomic because a delivering writer walks this list holding no
-     * lock while a grower may be appending to it (issue 210d). Growth
+     * lock while a grower may be appending to it. Growth
      * publishes a page by storing it here with release, and bumps the
      * capacity only afterwards — so a scanner that sees the larger
      * capacity is guaranteed to find the page, and one that sees the
@@ -518,7 +493,7 @@ typedef struct in_port_page {
 typedef struct in_port {
     /*
      * Atomic because a delivery reads it holding no lock while a
-     * conversion may be writing it (issues 210d, 210f). Conversion
+     * conversion may be writing it. Conversion
      * takes the station's mutex, so it does not race the readiness
      * walk or the claim — but the two guard checks at the top of a
      * delivery run before any lock is taken, and a plain byte read
@@ -553,13 +528,13 @@ typedef struct in_port {
     _Atomic int capacity;
     /* Bytes from one slot to the next: the value's own size, plus its
      * state, rounded up so every value keeps the alignment its type
-     * needs (issue 210c). Computed once at allocation, because the
+     * needs. Computed once at allocation, because the
      * rounding is the only arithmetic on the delivery path that is
      * not a single operation. */
     int   stride;
 
-    /* Where to start looking, for a reader and for a writer (issue
-     * 210d). These replaced a head and a tail, and the difference is
+    /* Where to start looking, for a reader and for a writer.
+     * These replaced a head and a tail, and the difference is
      * the whole of that issue: **a position must be exact and is
      * therefore computed; a hint may be wrong and therefore is not.**
      *
@@ -572,7 +547,7 @@ typedef struct in_port {
      *
      * They are ordinals into the port's slots rather than pointers.
      * Under paging a pointer into a page would in fact stay valid,
-     * since pages never move (issue 210e) — but an ordinal survives
+     * since pages never move — but an ordinal survives
      * being read while another thread appends a page, and it is the
      * same shape the scan already needs to bound itself by. Same
      * reason a wire is a pair of integers rather than an address.
@@ -588,25 +563,17 @@ typedef struct in_port {
     _Atomic int held;
 
     /*
-     * What a static needs, and it is the value itself now rather than
-     * an index into a table everyone shared (issue 401).
+     * What a static needs: the value itself, on the port.
      *
      * A station is one instantiation of a box, wired its own way. Its
      * input ports are its own: one may be fed by a wire, another may
      * hold a value that is simply always there. Which of those a port
      * is, and what it holds, is a property of that port on that
-     * station and of nothing else — so there is nothing shared, and
-     * therefore nothing to share a table for.
+     * station and of nothing else — so nothing is shared.
      *
-     * Three things came out of the table with it. A process may hold
-     * more than one running program, because the table was the map
-     * state that forced the singleton. Claiming a static happens under
-     * the station's own mutex beside the ring pop, so the static half
-     * of an input set is as mutually consistent as the buffered half.
-     * And two ports of different types can no longer reference one
-     * entry and read the same bytes each their own way — that stops
-     * being a rule to document and becomes a thing that cannot be
-     * said.
+     * Claiming a static happens under the station's own mutex beside
+     * the ring pop, so the static half of an input set is as mutually
+     * consistent as the buffered half.
      *
      * `constant` is elem_size bytes, allocated at placement like the
      * slots and kept for the life of the map. `constant_string` is
@@ -625,40 +592,28 @@ typedef struct in_port {
      * become bytes of the right *shape*. Null on hand-placed stations,
      * which therefore cannot bind statics.
      *
-     * **This is not a precedent for carrying type names, and the
-     * difference is worth stating because it is easy to get wrong.**
-     * A wire is checked by width and never by name (issue 309): two
-     * boxes may spell one shape differently and mean the same data, so
-     * comparing names would refuse a sound connection. Nothing here is
-     * ever compared against anything. It is used to *find a layout* —
-     * which field sits at which offset — because turning
+     * **This is not a precedent for carrying type names.** A wire is
+     * checked by width and never by name: two boxes may spell one
+     * shape differently and mean the same data, so comparing names
+     * would refuse a sound connection. Nothing here is ever compared
+     * against anything — it names a layout, because turning
      * `{ 5, 2.0, "hey" }` into bytes needs more than a byte count.
-     *
-     * The *searching* half of that is gone already: the field table
-     * below is handed over at placement. What is left here is the
-     * spelling, which messages and the dump still read, and which goes
-     * when the binary carries its own box sources (issue 311c).
+     * Messages and the dump read the spelling.
      */
     const char *type_name;
 
     /*
      * How a value of this port's type is written down and read back —
      * the address of a generated pair, written by the placement
-     * function because it knows the type concretely (issues 311b, 408).
+     * function because it knows the type concretely.
      *
      * Null unless the type is a struct, and null on a hand-placed
-     * station, which is why the reader still checks before following
-     * it. It replaced a search of every emitted struct table for one
-     * whose name matched, which was a lookup performed to answer a
-     * question the placement already knew.
+     * station, so the reader checks before following it.
      *
-     * **It used to be a table of fields and is now two functions.**
-     * The table said where each field sits and how wide it is, and a
-     * generalized walk stepped it against the text. The generated pair
-     * reaches each field by name instead, so there is no offset stored
-     * anywhere and none computed — which is a stronger form of
-     * guarantee C1 than a correct number that has to be carried
-     * around.
+     * **Two functions rather than a table of fields.** The pair
+     * reaches each field by name, so there is no offset stored
+     * anywhere and none computed — a stronger form of guarantee C1
+     * than a correct number carried around.
      *
      * Declared as an incomplete type because the pair belongs to the
      * build path and this header must not depend on it — the
@@ -666,10 +621,10 @@ typedef struct in_port {
      */
     const struct struct_text *text;
 
-    /* The growth story, written by issue 203 and read by phase 7:
-     * how many times this buffer has doubled, and the deepest the
-     * backlog ever got. A growing port is one input side outpacing
-     * its siblings, with memory absorbing the imbalance. */
+    /* How many times this buffer has doubled, and the deepest the
+     * backlog ever got; the reports read both. A growing port is one
+     * input side outpacing its siblings, with memory absorbing the
+     * imbalance. */
     int growths;
     int high_water;
 } cera_in_port_t;
@@ -689,7 +644,7 @@ typedef struct destination {
 
 /* {{{ cera_dest_set_t */
 /*
- * A port's destinations, as **one immutable array** (issue 214).
+ * A port's destinations, as **one immutable array**.
  *
  * Nothing ever edits one. Drawing or removing a wire builds a whole
  * new set and swaps the port's pointer in a single atomic write, so a
@@ -698,14 +653,9 @@ typedef struct destination {
  * walk: there is no lock, no copy onto the walker's stack, and no way
  * to see a half-edited set.
  *
- * It replaced a linked list whose nodes a rewire could free under a
- * walker's feet — which is why the walk used to copy every pair out
- * under the lock before visiting any of them, on every value the
- * engine moved.
- *
- * An array is also the better shape on its own terms: the destinations
- * are visited in order, immediately, one after another, and a
- * contiguous run of pairs is what a processor wants for that.
+ * An array is the right shape on its own terms: the destinations are
+ * visited in order, immediately, one after another, and a contiguous
+ * run of pairs is what a processor wants for that.
  */
 typedef struct dest_set {
     int           n;
@@ -738,7 +688,7 @@ typedef int (*cera_station_compare_t)(const void *a, const void *b);
 
 /* {{{ struct station */
 /*
- * Fixed-size on purpose (issue 201): the array of these must stay
+ * Fixed-size on purpose: the array of these must stay
  * indexable, and growing a buffer must never move a station. The
  * kind and cursor were placed in phase 2 and came alive in phase 5,
  * exactly as planned — routing arrived as a change to delivery, not
@@ -755,8 +705,8 @@ typedef struct station {
     int             cursor;     /* iterator's next port; the one memory a station keeps */
 
     /*
-     * Set when this station has been removed and not yet reclaimed
-     * (issue 216).
+     * Set when this station has been removed and not yet reclaimed.
+     *
      *
      * **Its fields stay readable until the scrapyard frees them**,
      * and that is the whole trick. A task is built from a station's
@@ -779,31 +729,24 @@ typedef struct station {
 
     /*
      * The name this station was placed as, written by the generated
-     * placement function as a literal (issue 311b).
+     * placement function as a literal.
      *
-     * **This is not a lookup and never was worth being one.** The dump
-     * used to find a station's box by scanning every box record for
-     * one whose call site matched — the emitted table read backwards, which
-     * is a linear search to answer a question the station could simply
-     * have been told the answer to. The literal costs one pointer per
-     * station, the string is read-only data the compiler was going to
-     * emit anyway, nothing is allocated and nothing is freed.
+     * **Not a lookup.** The literal costs one pointer per station, the
+     * string is read-only data the compiler emits anyway, and nothing
+     * is allocated or freed.
      *
      * **Null for a station placed by hand with no name given**, which
      * is honest rather than awkward: nothing on disk describes such a
      * program either, so there is nothing for a station line to say.
      * The dump says so plainly instead of inventing something.
      *
-     * It carries the bare function name today because that is what a
-     * map file says. When the format learns to carry a box's file as
-     * well (issue 311a), this literal becomes the full address and the
-     * dump follows without changing.
+     * It carries the bare function name, which is what a map file says.
      */
     const char     *box_name;
 
     /*
      * Whether this station has already been set going by a
-     * bring-up (issue 212).
+     * bring-up.
      *
      * The pass that starts a program is **repeatable**: a station
      * added to a running program is checked and started by the next
@@ -816,8 +759,8 @@ typedef struct station {
     unsigned char   seeded;
 
     /*
-     * **Whether this station is a door, and which way it faces**
-     * (issues 209, 213).
+     * **Whether this station is a door, and which way it faces**.
+     *
      *
      * One mark rather than two flags, because the two are one design
      * seen from either side: a program's inputs are the ports the
@@ -866,10 +809,10 @@ typedef struct station {
 
     /* Comparator only: the three-way compare for the box's return
      * type, resolved by the placement function so the delivery
-     * path does a call rather than a lookup (issue 503). */
+     * path does a call rather than a lookup. */
     cera_station_compare_t compare;
 
-    /* Phase 7's counters (issue 702). The counts are atomics updated
+    /* Phase 7's counters. The counts are atomics updated
      * where the work already is, costing nearly nothing, and are
      * always on. The times are only ever written when CERA_STATS is
      * compiled in — the fields stay so the struct never changes
@@ -883,31 +826,18 @@ typedef struct station {
 
 /* {{{ struct map */
 /*
- * **There was a statics table here and it is gone** (issue 401). It
- * held numbered entries, each a piece of text from the map file and
- * the bytes that text parsed into, shared by every port that named
- * the entry and guarded by a mutex of its own.
+ * The `statics` section of a map file is notation and nothing else: a
+ * way to write a value down once while describing the map. Reading it
+ * copies the value into each port that names it, and from that moment
+ * the entry has done its job — there is no table, and nothing is
+ * shared between ports.
  *
- * What it cost was out of proportion to what it was: a way to write a
- * value once in a file and point several ports at it. Being map-level
- * mutable state, it was the reason a process could hold only one
- * running program. Its mutex was a second lock a claim had to take,
- * nested inside the station's. And because an entry's bytes were
- * shaped by whichever port bound it first, two ports of different
- * types could name one entry and read the same bytes each their own
- * way — a footgun that had to be documented because it could not be
- * prevented.
- *
- * The `statics` section of a map file is now notation and nothing
- * else: a way to write a value down once while describing the map.
- * Reading it copies the value into each port that names it, and from
- * that moment the entry has done its job. Sharing, when it is wanted,
- * is drawn — one station holds the value and everyone who needs it
- * has an arrow from it, which costs a station and gains a wire
- * somebody can see.
+ * Sharing, when it is wanted, is drawn: one station holds the value
+ * and everyone who needs it has an arrow from it, which costs a
+ * station and gains a wire somebody can see.
  */
 /*
- * How many station records sit on one shelf (issue 211). A power of
+ * How many station records sit on one shelf. A power of
  * two, so turning a station number into a shelf and a position within
  * it is one shift and one mask rather than a division.
  *
@@ -944,7 +874,7 @@ typedef struct station {
  */
 typedef struct map {
     /*
-     * **The table is shelves, not one array** (issue 211).
+     * **The table is shelves, not one array**.
      *
      * A flat array grows by reallocation, and reallocation moves the
      * mutexes — a thread parked on one would be waiting at an address
@@ -975,24 +905,24 @@ typedef struct map {
     _Atomic int n_stations;
     cera_pool_t    *pool;            /* set by cera_map_start; delivery pushes here */
 
-    /* How many stations the seed sweep enqueued (issue 605). Zero
+    /* How many stations the seed sweep enqueued. Zero
      * on hand-built maps that seed by delivering. */
     int seeded;
 
     /* Station names, retained from the map file (null on hand-built
      * maps). The engine itself never reads them — every wire is an
-     * index — but the dump (issue 703) must write a file that reads
+     * index — but the dump must write a file that reads
      * back, and a person watching a live view deserves names. The
      * loader's throwaway lookup table and this are different things:
      * that one resolved arrows and died; this one is for speaking. */
     char **station_names;
     /* How many of them the array has room for, which is not always
      * the station count: stations are added one at a time now, so the
-     * names grow behind them (issue 212). */
+     * names grow behind them. */
     int    n_named;
 
     /*
-     * **The outside door is shut** (issue 106).
+     * **The outside door is shut**.
      *
      * Set when a supervisor has politely asked the program to wind
      * down. Delivering an argument from outside is refused from that
@@ -1011,19 +941,19 @@ typedef struct map {
 
     /*
      * True when this program was started beside another and shares
-     * its workers (issue 212). It borrows the pool and must not
+     * its workers. It borrows the pool and must not
      * destroy it — the program that made it owns it, and tearing down
      * a pool other programs are still running on would take them with
      * it.
      */
     int    pool_is_borrowed;
 
-    /* The rewiring lock (issue 704): edge validation and list
+    /* The rewiring lock: edge validation and list
      * mutation are one operation under it, never two. */
     pthread_mutex_t rewire_mutex;
 
     /*
-     * The scrapyard (issue 214): destination sets a rewire replaced,
+     * The scrapyard: destination sets a rewire replaced,
      * kept until nothing can still be walking them.
      *
      * **It owns a lock, and not against tearing.** Nothing ever reads
@@ -1046,7 +976,7 @@ typedef struct map {
     pthread_mutex_t   scrap_mutex;
     struct scrap_item *scrap_head;
 
-    /* The observer (issue 701): a small reporting thread, not a
+    /* The observer: a small reporting thread, not a
      * worker, pushing nothing. */
     pthread_t observer;
     int       observer_running;
@@ -1056,19 +986,19 @@ typedef struct map {
 /* }}} */
 
 /* ------------------------------------------------------------------ */
-/* Construction calls (issue 207).                                    */
+/* Construction calls.                                    */
 /*                                                                    */
 /* SCAFFOLDING, kept deliberately minimal enough to be irritating.    */
-/* Phase 6's loader (issue 602) becomes the caller of these; a human  */
+/* Phase 6's loader becomes the caller of these; a human  */
 /* building maps this way in anger means phase 6 has quietly become   */
 /* optional, which is a different and worse project.                  */
 /* ------------------------------------------------------------------ */
 
-/* {{{ cera_map_create() — issue 201 */
+/* {{{ cera_map_create() */
 /* N places reserved up front. The table grows a shelf at a time
- * afterwards (issue 211), so this is a convenience rather than a
+ * afterwards, so this is a convenience rather than a
  * commitment. */
-/* {{{ cera_map_station() — issue 211 */
+/* {{{ cera_map_station() */
 /*
  * Station number n: one shift, one mask, one extra dereference where
  * a flat array had one add. On the delivery path, which is why the
@@ -1080,14 +1010,14 @@ static inline cera_station_t *cera_map_station(cera_map_t *m, int n)
 }
 /* }}} */
 
-/* {{{ cera_map_add_station() — issue 211 */
+/* {{{ cera_map_add_station() */
 /*
  * Make room for one more station and return its index, adding a shelf
  * when the current ones are full.
  *
  * **A removed station's place is reused before the table grows.** A
  * freed position holds nothing stale, because removing a station is
- * what removes the wires to it (issue 216), so the next station placed
+ * what removes the wires to it, so the next station placed
  * can simply take it. That makes a program which adds and removes
  * forever reach a steady size rather than climbing.
  *
@@ -1098,7 +1028,7 @@ int cera_map_add_station(cera_map_t *m);
 
 cera_map_t *cera_map_create(int n_stations);
 
-/* {{{ cera_map_create_empty() — issue 211 */
+/* {{{ cera_map_create_empty() */
 /*
  * A map with no stations at all, grown one at a time afterwards. This
  * is what reading a file does now, so that reading a map and adding a
@@ -1111,7 +1041,7 @@ cera_map_t *cera_map_create_empty(void);
 /* }}} */
 /* }}} */
 
-/* {{{ cera_map_place() — issues 201, 202, 207 */
+/* {{{ cera_map_place() */
 /*
  * Place a box at station index: its shim, its kind, one ring-buffer
  * port per element size given, and the byte size of its return value
@@ -1122,7 +1052,7 @@ void cera_map_place(cera_map_t *m, int station, cera_task_call_t shim, int kind,
                int n_in_ports, const int *elem_sizes, int out_size);
 /* }}} */
 
-/* {{{ cera_map_in_port_start_depth() — issue 210b */
+/* {{{ cera_map_in_port_start_depth() */
 /*
  * Tell one port how deep its ring buffer should start, in slots.
  *
@@ -1138,27 +1068,14 @@ void cera_map_place(cera_map_t *m, int station, cera_task_call_t shim, int kind,
  * depth set after the start is a different and much harder operation:
  * it would have to move values that other threads may be reading.
  *
- * Issue 210b asked for this as an argument on the call that creates
- * the station. It landed as its own call instead, for two reasons.
- * The array of capacities would have been null at roughly eighty
- * existing call sites across the tests and the phase demos, which is
- * a lot of churn to say "no opinion"; and issue 210g is about to
- * collapse placement and port configuration into one surface, where
- * this is a case of configuring a port rather than a parameter of
- * building a station. Naming a station, a port, and what that port
- * should be is the shape that surface already has.
- *
- * **Returns NULL when it took, or a sentence saying why not** (issue
- * 210g). It used to stop the program, and it was the last port
- * operation that did — which made a bad depth the one fault in a map
- * file capable of hiding every fault after it, since a caller
- * collecting mistakes cannot collect the one that killed it.
+ * **Returns NULL when it took, or a sentence saying why not**, so a
+ * caller reading a file can collect this fault along with the rest.
  */
 const char *cera_map_in_port_start_depth(cera_map_t *m, int station, int port,
                                     int slots);
 /* }}} */
 
-/* {{{ cera_map_in_port_convert() — issues 210b, 210f */
+/* {{{ cera_map_in_port_convert() */
 /*
  * Change what one port is: name the station, the port, and the tag it
  * is becoming.
@@ -1174,7 +1091,7 @@ const char *cera_map_in_port_start_depth(cera_map_t *m, int station, int port,
  * That "slightly late" is the honest cost: a port turned into
  * something else and back may deliver a value that arrived before the
  * conversion after values that arrived during it. Arrival order is
- * not promised (issue 210d), so this costs nothing that was still
+ * not promised, so this costs nothing that was still
  * being offered — but it is a second reason for the same
  * non-guarantee, and the scan is not the only thing that opens gaps.
  *
@@ -1194,7 +1111,7 @@ const char *cera_map_in_port_start_depth(cera_map_t *m, int station, int port,
 void cera_map_in_port_convert(cera_map_t *m, int station, int port, int kind);
 /* }}} */
 
-/* {{{ cera_map_configure_port() — issue 210g */
+/* {{{ cera_map_configure_port() */
 /*
  * **Where a port's values come from**, as one operation: a station, a
  * port, a source, and — when the source is a value — the value
@@ -1222,7 +1139,7 @@ const char *cera_map_configure_port(cera_map_t *m, int station, int port,
                                int source, const char *text);
 /* }}} */
 
-/* {{{ cera_map_check_sources() — issue 210g */
+/* {{{ cera_map_check_sources() */
 /*
  * Every parameter that has nowhere to get a value, collected into one
  * sentence. NULL when every port on every station has a source.
@@ -1237,25 +1154,21 @@ const char *cera_map_configure_port(cera_map_t *m, int station, int port,
  * about a typo.
  *
  * **No exceptions.** A parameter a box could do without was proposed
- * and refused (issue 210h), because it would have been the only
+ * and refused, because it would have been the only
  * exemption to the rule that a station runs when every one of its
  * slots holds a value.
  */
 const char *cera_map_check_sources(cera_map_t *m);
 /* }}} */
 
-/* {{{ cera_map_bring_up() — issue 212 */
+/* {{{ cera_map_bring_up() */
 /*
  * **Declare a program finished, check the whole of it, and set going
  * whatever can run without waiting for an arrival.**
  *
- * This is the pass that used to live inside reading a file, which is
- * what made reading a file a privileged act: it validated and seeded
- * in a phase nothing else could enter, and there was a state called
- * *still loading* that only the loader could be in. There is no such
- * state now. A caller assembles a program by whatever route — reading
- * a file, calling the surface, or both — and then says it is
- * finished.
+ * A caller assembles a program by whatever route — reading a file,
+ * calling the construction surface, or both — and then says it is
+ * finished. There is no privileged loading state.
  *
  * **Repeatable.** A station added to a running program is checked and
  * started by the next call; a station already started is not started
@@ -1271,7 +1184,7 @@ const char *cera_map_check_sources(cera_map_t *m);
 const char *cera_map_bring_up(cera_map_t *m);
 /* }}} */
 
-/* {{{ cera_map_designate_output() and collecting — issue 209 */
+/* {{{ cera_map_designate_output() and collecting */
 /*
  * **Where a program's results come from.**
  *
@@ -1293,7 +1206,7 @@ const char *cera_map_bring_up(cera_map_t *m);
  */
 const char *cera_map_designate_output(cera_map_t *m, int station);
 
-/* {{{ cera_map_station_set_cursor() — issue 712 */
+/* {{{ cera_map_station_set_cursor() */
 /*
  * Put an iterator back where it had got to: which of its exits the
  * next value takes.
@@ -1324,7 +1237,7 @@ const char *cera_map_station_set_cursor(cera_map_t *m, int station, int at);
  */
 const char *cera_map_designate_input(cera_map_t *m, int station);
 
-/* {{{ cera_map_start_beside() — issue 212 */
+/* {{{ cera_map_start_beside() */
 /*
  * **Start a fresh program beside this one, sharing its workers.**
  *
@@ -1366,7 +1279,7 @@ cera_map_t *cera_map_start_beside(cera_map_t *parent);
  */
 const char *cera_map_deliver_argument(cera_map_t *m, int station, int port,
                                  const void *value, int size);
-/* {{{ cera_map_deliver_argument_text() / cera_map_deliver_command_line() — issue 213 */
+/* {{{ cera_map_deliver_argument_text() / cera_map_deliver_command_line() */
 /*
  * **Arguments written as text.** The constant reader pointed at a
  * command line instead of at a map file — same code, same
@@ -1398,7 +1311,7 @@ int cera_map_output_waiting(cera_map_t *m, int station);
 int cera_map_output_take(cera_map_t *m, int station, void *into, int size);
 /* }}} */
 
-/* {{{ cera_map_name_station() — issue 212 */
+/* {{{ cera_map_name_station() */
 /*
  * What to call a station. NULL when taken, or a sentence saying why
  * not.
@@ -1411,7 +1324,7 @@ int cera_map_output_take(cera_map_t *m, int station, void *into, int size);
 const char *cera_map_name_station(cera_map_t *m, int station, const char *name);
 /* }}} */
 
-/* {{{ cera_map_wire() — issue 212 */
+/* {{{ cera_map_wire() */
 /*
  * Draw a wire from a station's output port to another station's input
  * port, **at any moment** — while a program is being assembled or on
@@ -1437,15 +1350,15 @@ const char *cera_map_wire(cera_map_t *m, int from_station, int port,
  * It began as a place for destination sets a rewire replaced, and it
  * is general because the same question is asked about three different
  * things: a replaced destination set, a removed station's ports and
- * buffers (issue 216), and the compiled code of a box nobody places
- * any more (issue 310). One mechanism rather than three that drift.
+ * buffers, and the compiled code of a box nobody places
+ * any more. One mechanism rather than three that drift.
  *
  * map_retire sweeps before filing, so a program that changes shape
  * forever reclaims as it goes rather than growing forever.
  */
 /* }}} */
 
-/* {{{ cera_map_remove_station() — issue 216 */
+/* {{{ cera_map_remove_station() */
 /*
  * Take a station out of a running program and free its place for the
  * next one.
@@ -1459,10 +1372,8 @@ const char *cera_map_wire(cera_map_t *m, int from_station, int port,
  * place can be reused with no tag, no version, and no cost anywhere
  * on the delivery path.
  *
- * The guarantee this changes gets **sharper**, not weaker. It used to
- * say a wire written down today is valid forever, held by nothing
- * ever being removed. It now says a wire never names a station that
- * is not there, held by removal removing the wires to it.
+ * The guarantee is that a wire never names a station that is not
+ * there, held by removal removing the wires to it.
  *
  * The station's ports and buffers go to the scrapyard rather than
  * being freed, because a worker may be running a task from this
@@ -1479,25 +1390,32 @@ const char *cera_map_wire(cera_map_t *m, int from_station, int port,
 const char *cera_map_remove_station(cera_map_t *m, int station);
 /* }}} */
 
+/* {{{ cera_map_connect() */
+/*
+ * Wire: from a station's output port to a destination station's port.
+ * Ports are created on first use, in index order. Repeat with the
+ * same port to fan out.
+ */
 void cera_map_connect(cera_map_t *m, int from_station, int port,
                  int to_station, int to_port);
 /* }}} */
+/* }}} */
 
-/* {{{ cera_map_start() / cera_map_destroy() — issue 207 */
+/* {{{ cera_map_start() / cera_map_destroy() */
 /*
  * cera_map_start creates the pool with delivery as its finish hook.
  * Values injected before cera_pool_release(m->pool) are the seed; the
- * formal seed sweep arrives in phase 6 (issue 605).
+ * formal seed sweep arrives in phase 6.
  */
 void cera_map_start(cera_map_t *m, int n_workers);
 void cera_map_destroy(cera_map_t *m);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
-/* The push path (issues 202–206).                                    */
+/* The push path.                                                     */
 /* ------------------------------------------------------------------ */
 
-/* {{{ cera_map_deliver_value() — issues 204, 205 */
+/* {{{ cera_map_deliver_value() */
 /*
  * Deliver one value into one port of one station: take the mutex,
  * write, run the readiness check, claim if complete, release, then
@@ -1509,13 +1427,13 @@ void cera_map_destroy(cera_map_t *m);
 int cera_map_deliver_value(cera_map_t *m, int station, int port, const void *value);
 /* }}} */
 
-/* {{{ cera_map_in_port_depth() — issue 208 */
+/* {{{ cera_map_in_port_depth() */
 /* How many values are waiting in a port right now. Takes the mutex.
  * Exists for demos and diagnostics, not for engine decisions. */
 int cera_map_in_port_depth(cera_map_t *m, int station, int port);
 /* }}} */
 
-/* {{{ cera_map_station_try_start() — issues 401, 605 */
+/* {{{ cera_map_station_try_start() */
 /*
  * Ask a station whether it is ready, and if it is, claim one value
  * from every port, build a task, and push it. Returns whether one
@@ -1538,7 +1456,7 @@ int cera_map_in_port_depth(cera_map_t *m, int station, int port);
  */
 int cera_map_station_try_start(cera_map_t *m, int station);
 
-/* {{{ cera_map_station_start_while_ready() — issue 712 */
+/* {{{ cera_map_station_start_while_ready() */
 /*
  * Keep starting while the station stays ready, and say how many tasks
  * became due.
@@ -1572,7 +1490,7 @@ int cera_map_station_keep_starting(cera_map_t *m, int station);
 
 /*
  * The same thing, with a piece of work done inside the station's hold
- * before the check runs (issue 210d).
+ * before the check runs.
  *
  * There is one caller and it is writing a static. A write and the
  * readiness check it triggers both want the station's mutex, and two
@@ -1587,9 +1505,8 @@ int cera_map_station_start_after(cera_map_t *m, int station,
 /* }}} */
 
 /* ------------------------------------------------------------------ */
-/* Statics, which live on the ports that read them (issues 401, 402,  */
-/* 405). In 033-statics.c, which is now a reader and a writer of      */
-/* values rather than the keeper of a table.                          */
+/* Statics, which live on the ports that read them. A reader and a    */
+/* writer of values rather than the keeper of a table.                */
 /* ------------------------------------------------------------------ */
 
 /* {{{ cera_map_in_port_static_text() */
@@ -1608,16 +1525,15 @@ int cera_map_station_start_after(cera_map_t *m, int station,
  * entry's text end up with two independent values, and writing one
  * does not disturb the other.
  *
- * A static is always full, never consumed, and never affects
- * readiness — but setting one runs the readiness check on its
- * station, because a port that was the last one missing is no longer
- * missing.
+ * A static is always full, never consumed, and never gates readiness —
+ * but setting one runs the readiness check on its station, since a
+ * port that was the last one missing is now filled.
  */
 void cera_map_in_port_static_text(cera_map_t *m, int station, int port,
                              const char *text);
 /* }}} */
 
-/* {{{ cera_map_in_port_static_write() — issue 405 */
+/* {{{ cera_map_in_port_static_write() */
 /*
  * Change a static while the program runs. It names a station and a
  * port, because that is where the value lives, and it is size-checked
@@ -1639,32 +1555,16 @@ void cera_map_in_port_static_text(cera_map_t *m, int station, int port,
  *
  * Like setting one, writing one runs the readiness check on the
  * station — and keeps asking while it stays ready, so a buffer with
- * work stacked up in it drains rather than releasing one task
- * (issue 712). Writing does not *consume* anything, so a station that
- * was already able to run runs again — which is what makes a chain of
- * stations wired through static ports recalculate.
+ * work stacked up in it drains rather than releasing one task.
+ * Writing does not *consume* anything, so a station that was already
+ * able to run runs again, which is what makes a chain of stations
+ * wired through static ports recalculate.
  *
- * **A box may no longer write a static, and that is the point of the
- * removal.** There used to be a bare-name variant taking an entry
- * number and reaching a process-wide "active map" pointer, because a
- * box receives only values and has no handle to anything. It worked,
- * and it was always described as deserving the suspicion a global
- * variable deserves — a box could stash a value and read it back on
- * its next run, with none of it visible in the wiring, so a map
- * showing no connection between two stations might still have them
- * talking.
- *
- * What was not obvious until it was traced is what it cost: reaching
- * a map from inside a box requires a process-wide map pointer, and a
- * process-wide map pointer means a process can only ever run one map.
- * A feature the design already distrusted was quietly charging the
- * whole engine its ability to compose.
- *
- * A box that needs to affect something later in the run does it the
- * way everything else does: it returns a value, and the value is
- * wired somewhere. Writers are otherwise all outside the graph — a
- * debugger, a control socket, a person turning a knob, or a parent
- * program configuring a child.
+ * **A box cannot write a static.** A box that needs to affect
+ * something later in the run returns a value and the value is wired
+ * somewhere. Every writer is outside the graph: a debugger, a control
+ * socket, a person turning a knob, or a parent program configuring a
+ * child.
  */
 void cera_map_in_port_static_write(cera_map_t *m, int station, int port,
                            const void *bytes, int size);
@@ -1675,7 +1575,7 @@ void cera_map_in_port_static_write(cera_map_t *m, int station, int port,
 /* surface a map author touches.                                      */
 /* ------------------------------------------------------------------ */
 
-/* {{{ cera_map_in_port_queue_text() — issue 712 */
+/* {{{ cera_map_in_port_queue_text() */
 /*
  * Values put back into a buffer, from the text a capture wrote:
  * comma separated, read one at a time because a struct value has
@@ -1735,7 +1635,7 @@ const char *cera_map_in_port_queue_text(cera_map_t *m, int station, int port,
  * can hold every type's; each generated body copies the bytes into
  * real typed variables first, because comparing raw bytes gives
  * wrong answers — a negative float reads as larger than a positive
- * one byte-wise (issue 305).
+ * one byte-wise.
  */
 typedef int (*cera_compare_fn_t)(const void *a, const void *b);
 
@@ -1768,42 +1668,23 @@ struct struct_info {
 };
 /* }}} */
 
-/* {{{ the box record, deleted — issue 311b */
+/* {{{ the box record, deleted */
 /*
- * **There was a record per box here and it is gone.**
+ * **There is no record per box.** A station holds its own shim, its
+ * own slot sizes, its own return size and its own comparison, and the
+ * station header carries no reference back to anything describing the
+ * box. Generated placement functions write all of it at placement.
  *
- * It held a name, a shim pointer, a parameter count, an array of
- * parameter type names and sizes, a return type name and size, the
- * exact task allocation, and a comparison function. A station was
- * built by reading it once at placement and copying out the parts a
- * station keeps.
+ * Every number is a `sizeof` the compiler folds into an immediate, so
+ * none of them is stored anywhere. Guarantee C1 holds.
  *
- * The observation that removed it: **the record was read exactly
- * once, at placement, and never again.** Nothing in a running engine
- * consulted it — a station holds its own shim, its own slot sizes,
- * its own return size and its own comparison, and the station header
- * is deliberately free of any reference back. So the record existed
- * only to be read at the one moment generated code could just as well
- * do the writing, which is what a placement function does.
- *
- * Every number in it was a `sizeof` the compiler folded. They did not
- * become guesses by moving: they moved from a table into a function
- * and the compiler folds them into immediates, so they are not stored
- * anywhere at all. Guarantee C1 is untouched.
- *
- * The last three things that still read it went one at a time. The
- * two comparator refusals moved into the placement function, where
- * they were already duplicated and where they name the box by its
- * full address rather than by whatever bare word a map used. The wire
- * refusal stopped fetching a return type's spelling, because a
- * refusal now names both ends by position and size — a name is not
- * what makes a wire legal. And the tests that asked the record what
- * it held now ask a *station* what it got, which is the thing that
- * matters and the thing that is used.
+ * A comparator refusal names the box by its full address; a wire
+ * refusal names both ends by position and size, since a name is not
+ * what makes a wire legal.
  */
 /* }}} */
 
-/* {{{ struct box_place — issue 311b */
+/* {{{ struct box_place */
 /*
  * One box's **placement function**, and the two names it answers to.
  *
@@ -1817,7 +1698,7 @@ struct struct_info {
  *
  * **This table is temporary and says so.** Once the generator reads
  * maps itself it emits the calls, and a placement function is reached
- * by being called rather than by being found (issue 311d). Both names
+ * by being called rather than by being found. Both names
  * are carried meanwhile: the bare function name, which is what map
  * files say today, and the file-and-function address, which is what
  * they will say.
@@ -1841,24 +1722,16 @@ extern const cera_struct_info_t  struct_layouts[];
 extern const int            n_struct_layouts;
 /* }}} */
 
-/* {{{ writing a value down and reading it back — issue 408 */
+/* {{{ writing a value down and reading it back */
 /*
  * **Each struct gets a reader and a writer of its own, emitted.**
  *
- * There used to be one generalized walk in each direction, stepping a
- * field table and the text together: for every field, read an offset,
- * a size and a kind out of a table, switch on the kind, and do the
- * arithmetic. That is the one place left in the engine where a port
- * pointed at a table and something walked it, and the rest of the
- * engine stopped working that way when placement functions replaced
- * the box record (issue 311b).
- *
- * What replaces it is straight-line code per type, where every field
- * is reached **by name** and its size is a `sizeof` at the point of
- * use. No offsets are stored or computed anywhere: the compiler
- * places the fields and the generated code names them, which is a
- * stronger version of guarantee C1 than a table of offsets, because
- * there is no number to be wrong.
+ * Straight-line code per type, where every field is reached **by
+ * name** and its size is a `sizeof` at the point of use. No offsets
+ * are stored or computed anywhere: the compiler places the fields and
+ * the generated code names them, which is a stronger version of
+ * guarantee C1 than a table of offsets, because there is no number to
+ * be wrong.
  *
  * A nested struct is read by calling that struct's own reader. So the
  * recursion is in the code rather than in a chain of table pointers.
@@ -1870,9 +1743,8 @@ extern const int            n_struct_layouts;
 
 /*
  * Where a fault was, threaded through so a refusal can name somewhere
- * a person can go and look. A station and a port, because that is an
- * address; the messages used to name an entry number, which named a
- * row in a table rather than anything in the program.
+ * a person can go and look: a station and a port, which is an address
+ * in the program.
  */
 typedef struct cera_where {
     int station;
@@ -1948,7 +1820,7 @@ const cera_struct_info_t *cera_struct_find(const char *type_name);
 /* {{{ cera_emitted_print() */
 /* Every box, its parameter types and sizes, its return, its task
  * size — so a build problem is diagnosed by reading what was
- * emitted, not by guessing (issue 303). */
+ * emitted, not by guessing. */
 void cera_emitted_print(FILE *out);
 /* }}} */
 
@@ -1957,15 +1829,14 @@ void cera_emitted_print(FILE *out);
 /*
  * Place a box at a station by name, sizes drawn from the emitted file
  * instead of typed in by hand — the moment phase 2's hand-supplied
- * element sizes become correct by construction (issue 303). A
+ * element sizes become correct by construction. A
  * comparator gets its extra threshold port here, typed to the box's
- * return value (issue 502's shape, placed early so the loader needs
- * no special case).
+ * return value, so the loader needs no special case.
  */
 void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int kind);
 /* }}} */
 
-/* {{{ box sources, as text — issue 311c */
+/* {{{ box sources, as text */
 /*
  * **The C a program was made from, carried inside it.**
  *
@@ -1997,7 +1868,7 @@ extern const int          cera_n_box_sources;
 const char *cera_box_source_text(const char *path);
 /* }}} */
 
-/* {{{ maps compiled into code — issue 311d */
+/* {{{ maps compiled into code */
 /*
  * **A map the build was told about, as the calls it describes.**
  *
@@ -2036,7 +1907,7 @@ typedef struct map_build {
      * Adding one hands back a freed place before it grows the table,
      * so a program that has had removals gets whatever holes exist in
      * whatever order. A parent bringing a description inside itself
-     * needs this to find the copy's doors (issue 217); a caller
+     * needs this to find the copy's doors; a caller
      * building a whole program passes null and ignores the count.
      */
     int       (*build)(cera_map_t *m, int *landed, int cap);
@@ -2069,8 +1940,8 @@ const cera_map_build_t *cera_map_build_find(const char *path);
  * is either a box or a description and the caller need not know
  * which.
  *
- * How it does it, in general terms: **by compiling, not by reading**
- * (issue 311d). The text goes to the generator, which turns it into
+ * How it does it, in general terms: **by compiling, not by reading**.
+ * The text goes to the generator, which turns it into
  * the construction calls it describes, and the compiler that built
  * this binary compiles them. So a description becomes a program
  * exactly one way, and this header is a caller of that way rather
@@ -2089,7 +1960,7 @@ const cera_map_build_t *cera_map_build_find(const char *path);
 
 
 
-/* {{{ cera_map_load_file() — issues 602–605 */
+/* {{{ cera_map_load_file() */
 /*
  * The whole journey: parse, build every station from its placement function
  * (first pass), resolve and type-check every arrow (second pass),
@@ -2109,8 +1980,8 @@ const cera_map_build_t *cera_map_build_find(const char *path);
 cera_map_t *cera_map_load_file(const char *path, int n_workers);
 
 /*
- * The same, for an artifact that says at the top that it lost work
- * (issue 712). Reading one through the ordinary door is refused,
+ * The same, for an artifact that says at the top that it lost work.
+ * Reading one through the ordinary door is refused,
  * because a program quietly missing results somebody computed is the
  * failure this engine refuses everywhere. Salvaging is a different
  * act and has a different name so that whoever does it has said out
@@ -2119,13 +1990,13 @@ cera_map_t *cera_map_load_file(const char *path, int n_workers);
 cera_map_t *cera_map_load_salvage(const char *path, int n_workers);
 /* }}} */
 
-/* {{{ cera_map_seed_count() — issue 605's reading */
+/* {{{ cera_map_seed_count() */
 /* How many stations the seed enqueued on load — a map that seeds one
  * when its author expected ten has a wiring mistake. */
 int cera_map_seed_count(cera_map_t *m);
 /* }}} */
 
-/* {{{ cera_map_instantiate_file() — issue 217 */
+/* {{{ cera_map_instantiate_file() */
 /*
  * **A description brought inside a program that already exists.**
  *
@@ -2170,7 +2041,7 @@ int  cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int 
 void cera_map_instance_free(cera_map_instance_t *in);
 /* }}} */
 
-/* {{{ cera_map_add_part() / cera_map_connect_parts() — issue 217 */
+/* {{{ cera_map_add_part() / cera_map_connect_parts() */
 /*
  * **Adding a box and adding a map are one operation.**
  *
@@ -2239,10 +2110,10 @@ const char *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, int from
 
 
 /* ------------------------------------------------------------------ */
-/* Reporting (issues 701, 702).                                       */
+/* Reporting.                                       */
 /* ------------------------------------------------------------------ */
 
-/* {{{ cera_map_report_buffers() — issue 701 */
+/* {{{ cera_map_report_buffers() */
 /*
  * Every port's growth story: doublings, current capacity, high-water
  * occupancy — plus the pool ring's own, because the two piles form
@@ -2253,17 +2124,14 @@ const char *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, int from
 void cera_map_report_buffers(cera_map_t *m, FILE *out);
 /* }}} */
 
-/* {{{ cera_map_report_stations() — issue 702 */
+/* {{{ cera_map_report_stations() */
 /*
  * Per station: runs, tasks produced for others, and — when compiled
  * with CERA_STATS — time inside the box and time spent waiting on the
  * station's mutex. Three orderings of the same data, because the
  * interesting station is a different one under each.
  *
- * A third time was reported until issue 210: gather time, charged to
- * the station that pulled rather than to the one that ran, because
- * that is where a pulled value was actually paid for. Nothing pulls
- * now, so a station's own box time is the whole of its cost.
+ * Nothing pulls, so a station's own box time is the whole of its cost.
  */
 enum report_order {
     CERA_REPORT_BY_TIME = 0,
@@ -2274,7 +2142,7 @@ enum report_order {
 void cera_map_report_stations(cera_map_t *m, FILE *out, int order);
 /* }}} */
 
-/* {{{ cera_map_observe_start() / cera_map_observe_stop() — issue 701 */
+/* {{{ cera_map_observe_start() / cera_map_observe_stop() */
 /*
  * Periodic emission of both reports to a file, from a small thread
  * that is not a worker and pushes nothing (so termination stays
@@ -2285,7 +2153,7 @@ void cera_map_observe_start(cera_map_t *m, const char *path, int interval_ms);
 void cera_map_observe_stop(cera_map_t *m);
 /* }}} */
 
-/* {{{ cera_map_report_shutdown() — issue 701's loud parting word */
+/* {{{ cera_map_report_shutdown() */
 /* Called by cera_map_destroy: any port grown past the shout threshold is
  * named on stderr, so a quietly-absorbing map gets decided about. */
 void cera_map_report_shutdown(cera_map_t *m);
@@ -2303,7 +2171,7 @@ void cera_stats_box_time(cera_task_t *t, long ns);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
-/* The dump (issue 703). Lives in 051-dump.c.                         */
+/* The dump. Lives in 051-dump.c.                         */
 /* ------------------------------------------------------------------ */
 
 /* {{{ cera_map_dump() */
@@ -2319,23 +2187,19 @@ void cera_map_dump(cera_map_t *m, FILE *out);
 /* }}} */
 
 /* ------------------------------------------------------------------ */
-/* Rewiring (issue 704). Lives in 052-rewire.c.                       */
+/* Rewiring. Lives in 052-rewire.c.                       */
 /* ------------------------------------------------------------------ */
 
-/* {{{ cera_map_unwire() / cera_map_disconnect() — issues 704, 106 */
+/* {{{ cera_map_unwire() / cera_map_disconnect() */
 /*
  * Cut one wire on a live map, by rebuilding the destination list
  * without it. `cera_map_unwire` hands a refusal back so a caller can
  * collect it; `cera_map_disconnect` stops the program.
  *
- * **A third face used to sit here and it is gone** (issue 106). It
- * printed the refusal and returned minus one, which 704 chose
- * deliberately — a loader that dies serves its author, while a
- * running engine that dies for one bad control instruction takes the
- * plant down with it. The cost was booked at the time as a debt in
- * plain words: *a caller can ignore a return value*, and an ignored
- * refusal leaves a program running that somebody believes they just
- * edited successfully. The debt is paid off rather than serviced.
+ * There are two faces and not three: a caller either collects the
+ * refusal or the program stops. Nothing prints a refusal and returns
+ * a code that can be ignored, which would leave a program running
+ * that somebody believes they just edited successfully.
  */
 const char *cera_map_unwire(cera_map_t *m, int from_station, int port,
                        int to_station, int to_port);
@@ -2364,7 +2228,7 @@ void        cera_map_disconnect(cera_map_t *m, int from_station, int port,
  * compiler the build used, invoked as programs. **The same compiler
  * matters and is not incidental** — the build records which one it
  * was and this uses that one, so a program has exactly one answer to
- * `sizeof` by construction rather than by checking (issue 310).
+ * `sizeof` by construction rather than by checking.
  *
  * Why a signature is not enough, since it is the obvious idea: a
  * signature gives names — the box's name, its parameter type names,
@@ -2432,7 +2296,7 @@ const cera_box_place_t *cera_late_box_at(int i);
  *
  * The expensive half is that a worker may be *inside* that code right
  * now, having picked up a task for it a moment ago. That is answered
- * by the same per-worker counter the scrapyard uses (issue 214) — the
+ * by the same per-worker counter the scrapyard uses — the
  * counter deliberately spans a whole task rather than a delivery
  * walk, so it answers "might somebody be inside this box" and "might
  * somebody be inside this station" with one number. The library is
@@ -2457,7 +2321,7 @@ int cera_late_unload_box(cera_map_t *m, const char *name);
 const char *cera_late_source_dir(void);
 /* }}} */
 
-/* {{{ cera_late_compile_map() — issue 311d */
+/* {{{ cera_late_compile_map() */
 /*
  * **A description handed to a running program, compiled into it.**
  *
@@ -2488,7 +2352,7 @@ const char *cera_late_source_dir(void);
 const cera_map_build_t *cera_late_compile_map(const char *map_text);
 /* }}} */
 
-/* {{{ cera_late_spill_sources() — issue 712 */
+/* {{{ cera_late_spill_sources() */
 /*
  * Write every source this program is made of into a directory, under
  * the paths it was compiled as — what the build put in, and everything
@@ -2506,7 +2370,7 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text);
 int cera_late_spill_sources(const char *dir);
 /* }}} */
 
-/* {{{ cera_late_source_text() — issue 311d */
+/* {{{ cera_late_source_text() */
 /*
  * **The C one late-arriving source was compiled from**, by the path
  * it was compiled under, or NULL.
@@ -2535,13 +2399,12 @@ const char *cera_late_source_text(const char *path);
  * reading order, which is the only thing the filename ever said.
  * ================================================================== */
 /*
- * 091-stopping.h — every way a program ends except the happy one.
+ * Every way a program ends except the happy one.
  *
- * What this is: issue 106. Running out of work is handled and proven
- * elsewhere — the last worker to fall asleep looks once more, finds
- * nothing, and stops everyone. This is the rest: a program told to
- * stop, and a program that found something it refuses to continue
- * past.
+ * Running out of work is handled elsewhere: the last worker to fall
+ * asleep looks once more, finds nothing, and stops everyone. This is
+ * the rest — a program told to stop, and a program that found
+ * something it refuses to continue past.
  *
  * How it does it, in general terms: **no handler is installed
  * anywhere.** The three signals are blocked in every thread, and the
@@ -2561,7 +2424,7 @@ const char *cera_late_source_text(const char *path);
 
 
 
-/* {{{ exit codes — issue 106 */
+/* {{{ exit codes */
 /*
  * **Everything below the signal offset belongs to the program**; the
  * offset and above belongs to signals by convention, so no meaning
@@ -2582,7 +2445,7 @@ const char *cera_late_source_text(const char *path);
  * inventing an agreement that already exists. */
 /* }}} */
 
-/* {{{ cera_prepare() — issue 106 */
+/* {{{ cera_prepare() */
 /*
  * **Block the three signals in every thread, and open the report's
  * destination.** Call this before any thread exists, because a thread
@@ -2608,7 +2471,7 @@ void cera_prepare(const char *report_path);
 const char *cera_report_path(void);
 /* }}} */
 
-/* {{{ cera_wait() — issue 106 */
+/* {{{ cera_wait() */
 /*
  * **Wait for the program to end, however it ends**, and return the
  * code the process should exit with.
@@ -2642,14 +2505,13 @@ const char *cera_report_path(void);
  * on a fast one.
  *
  * **A second interrupt skips everything and exits at once.** Ctrl+C
- * twice has to always work; a diagnostic path that can itself get
- * stuck would trap the person it was written for, which is the exact
- * failure it exists to prevent.
+ * twice always works, so a diagnostic path that gets stuck cannot
+ * trap the person it was written for.
  */
 int cera_wait(cera_map_t *m);
 /* }}} */
 
-/* {{{ cera_capture() / cera_capture_now() — issue 712 */
+/* {{{ cera_capture() / cera_capture_now() */
 /*
  * **Put a running program down on disk so it can be picked up again.**
  *
@@ -2675,11 +2537,9 @@ int cera_wait(cera_map_t *m);
  * statement that their inputs are lost and their results were never
  * delivered.
  *
- * **The incompleteness is stated, never inferred.** A program reviving
- * such an artifact without being told would be quietly missing work
- * somebody computed, which is the standing rule of this engine wearing
- * a different hat: a fallback is a warning and a warning is an error.
- * Reading one back is refused unless the caller asks for salvage.
+ * **The incompleteness is stated, never inferred.** Reading such an
+ * artifact back is refused unless the caller asks for salvage, so a
+ * revived program is never quietly missing work somebody computed.
  *
  * Both return 0, or -1 with a reason on stderr.
  */
@@ -2714,7 +2574,7 @@ int cera_capture_now(cera_map_t *m, const char *path);
 int cera_capture_whole(cera_map_t *m, const char *dir);
 /* }}} */
 
-/* {{{ cera_stop_now() — issue 106 */
+/* {{{ cera_stop_now() */
 /*
  * **An invalid operation ends the program**, having first said
  * everything it can about what went wrong.

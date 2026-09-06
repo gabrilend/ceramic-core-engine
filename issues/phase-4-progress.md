@@ -60,3 +60,35 @@ produced inside an invocation has to run user code somewhere it does
 not belong. Between those two, the promise was not worth its price.
 This engine is not for timing-critical work, and saying so plainly is
 worth more than the mechanism was.
+
+## How it came to be this way
+
+These are the turns the design actually took, lifted out of the source
+comments where they had been sitting. They describe states the engine is
+no longer in, which is why they are here rather than beside the code: a
+comment is for what is true now.
+
+### The statics table was removed and values moved onto the ports
+
+Statics were numbered entries in a map-level table, each holding a piece
+of text and the bytes it parsed into, shared by every port that named
+the entry and guarded by its own mutex. Three costs followed: the table
+was the map state that limited a process to one running program; its
+mutex was a second lock nested inside the station's on every claim; and
+because an entry's bytes took their shape from whichever port bound it
+first, two ports of different types could read one entry's bytes each
+their own way — a hazard that could be documented but not prevented.
+Moving the value onto the port that reads it ended all three, and left
+the map file's statics section as pure notation.
+
+### A box lost the ability to write a static
+
+A box could write a static by naming an entry number, reaching a
+process-wide "active map" pointer to find the table, because a box
+receives only values and holds no handle to anything. It was distrusted
+from the start — a box could stash a value and read it back next run
+with none of it visible in the wiring — but what ended it was tracing
+the cost: reaching a map from inside a box requires a process-wide map
+pointer, and that pointer is what limits a process to one running map. A
+feature already under suspicion was charging the engine its ability to
+compose.

@@ -57,3 +57,19 @@ build. The gather input line resolved in the second pass rather than
 the first, because its source was a name and names may point forward —
 a wrinkle in 602's split that the report records, and one that stopped
 existing along with the line itself.
+
+## How it came to be this way
+
+These are the turns the design actually took, lifted out of the source
+comments where they had been sitting. They describe states the engine is
+no longer in, which is why they are here rather than beside the code: a
+comment is for what is true now.
+
+### Validation and seeding stopped belonging to the loader
+
+Reading a map file was a privileged act: it validated the whole program
+and seeded the first tasks in a phase nothing else could enter, so there
+was a state called *still loading* that only the loader could be in. A
+station added any other way had no route through those checks. Both
+became one repeatable call a caller makes after assembling a program by
+whatever route, and the privileged state stopped existing.

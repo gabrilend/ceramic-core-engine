@@ -16,7 +16,7 @@ confidence.
 | 709 — slideshow and transcripts | open, **unblocked** | An introduction, and the conversation logs as a book. The generator fix it waited on has landed; what keeps the transcripts off the site is now one deliberate exclusion in the generator's file search rather than a directory nobody listed. |
 | [710 — demos after the pull path](completed/710-demos-after-the-pull-path.md) | **superseded, and filed** | Every scene that showed pulling is rewritten; the launcher reads a list instead of globbing. The three programs it repairs no longer exist — see 713. Moved to `completed/` because it has no subject left, not because the work in it was done: what it repairs was deleted instead. It is kept for its account of which demonstrations were load-bearing. |
 | [711 — the index means reading order](711-the-index-means-reading-order.md) | **rule written, tool built**, order not yet changed | An index means where a file sits in the reading order and nothing else — stated in the table of contents, where a reader arrives. The renumbering tool takes a desired order, refuses anything missing or duplicated, renames through git and rewrites every reference; its `--check` mode reports indexed filenames mentioned anywhere that are not files, and found two stale ones in a header on its first run. What is left is the judgement: four places the sequence stops reading well are written down, and moving fifty files should be argued about first. |
-| [712 — capturing a running program](completed/712-capturing-a-running-program.md) | **complete** | Not the schematic but the whole thing: shut the entrance, let the pool drain, write out every value still sitting in a port and every iterator's place in its exits, and revive it exactly there. Feasible only because a box may not remember anything between calls, so there is no hidden state to miss. Two doors, because a program that cannot drain is when a capture is worth most — the second writes anyway and names what it lost, and reading such an artifact is refused unless the caller asks for salvage by a different name. A program that grew boxes captures into a directory carrying its sources, since a description of one otherwise names a function nobody has. Proving it exposed a readiness gap the engine had carried since constants went onto ports. |
+| [712 — capturing a running program](completed/712-capturing-a-running-program.md) | **complete** | Not the schematic but the whole thing: shut the entrance, let the pool drain, write out every value still sitting in a port and every iterator's place in its exits, and revive it exactly there. Feasible because memory in this engine belongs to a **station** — a value on a static port, put there by a wire from a box's output — rather than to the box, so there is no hidden state to miss and no need to know which port values were meant as memory. Two doors, because a program that cannot drain is when a capture is worth most — the second writes anyway and names what it lost, and reading such an artifact is refused unless the caller asks for salvage by a different name. A program that grew boxes captures into a directory carrying its sources, since a description of one otherwise names a function nobody has. Proving it exposed a readiness gap the engine had carried since constants went onto ports. |
 | [713 — the demos you can steer](713-demos-you-can-steer.md) | open, **in progress** | The paged demos are deleted and replaced by one live control panel per phase: three regions, levers the reader moves, and a log of what the engine did about it. |
 
 **The demos were deleted, and the reason is a disagreement about
@@ -66,3 +66,20 @@ meant, and the number turned out to be wrong — the two builds were
 being timed in two blocks, so the second inherited a warm machine.
 Writing down what a measurement is supposed to show is a way of
 checking that it shows it.
+
+## How it came to be this way
+
+These are the turns the design actually took, lifted out of the source
+comments where they had been sitting. They describe states the engine is
+no longer in, which is why they are here rather than beside the code: a
+comment is for what is true now.
+
+### Rewiring lost the face that returned a code
+
+Cutting a wire on a live map had three faces, the third of which printed
+its refusal and returned minus one. It was chosen deliberately: a loader
+that dies serves its author, while a running engine that dies for one
+bad control instruction takes the plant down with it. The debt was
+booked in plain words at the time — a caller can ignore a return value,
+and an ignored refusal leaves a program running that somebody believes
+they just edited. Two faces remain: collect the refusal, or stop.

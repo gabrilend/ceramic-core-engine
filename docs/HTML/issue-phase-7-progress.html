@@ -216,6 +216,19 @@ meant, and the number turned out to be wrong — the two builds were
 being timed in two blocks, so the second inherited a warm machine.
 Writing down what a measurement is supposed to show is a way of
 checking that it shows it.</p>
+<h2>How it came to be this way</h2>
+<p>These are the turns the design actually took, lifted out of the source
+comments where they had been sitting. They describe states the engine is
+no longer in, which is why they are here rather than beside the code: a
+comment is for what is true now.</p>
+<h3>Rewiring lost the face that returned a code</h3>
+<p>Cutting a wire on a live map had three faces, the third of which printed
+its refusal and returned minus one. It was chosen deliberately: a loader
+that dies serves its author, while a running engine that dies for one
+bad control instruction takes the plant down with it. The debt was
+booked in plain words at the time — a caller can ignore a return value,
+and an ignored refusal leaves a program running that somebody believes
+they just edited. Two faces remain: collect the refusal, or stop.</p>
 
 </main>
 </div></body></html>
