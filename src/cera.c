@@ -43,13 +43,12 @@
  * machinery, and the machinery is here.
  * ================================================================== */
 
-/* {{{ cera_map_connect() — issues 201, 205, 207 */
+/* {{{ out_port_dests() */
 /*
  * Wire: from a station's output port to a destination station's port.
  * Ports are created on first use, in index order. Repeat with the
  * same port to fan out.
  */
-/* {{{ out_port_dests() / dest_set_build() / dest_set_retire() — issue 214 */
 /*
  * out_port_dests reads a port's current set. One atomic load, no lock,
  * and the pointer it returns is to something nobody will modify.
@@ -62,10 +61,13 @@
  * takes the scrap lock and nothing else.
  */
 static cera_dest_set_t *out_port_dests(const cera_out_port_t *p);
+/* }}} */
+/* {{{ dest_set_build() */
 static cera_dest_set_t *dest_set_build(const cera_dest_set_t *from, int add_station,
                            int add_port, int drop_station, int drop_port);
+/* }}} */
 
-/* {{{ map_deliver() — issue 205 */
+/* {{{ map_deliver() */
 /*
  * The delivery walk: the pool's finish hook. Takes a finished task,
  * chooses the outgoing port by the station's kind, and walks that
@@ -74,7 +76,7 @@ static cera_dest_set_t *dest_set_build(const cera_dest_set_t *from, int add_stat
 static void map_deliver(void *ctx, cera_task_t *t);
 /* }}} */
 
-/* {{{ in_port_slot() / in_port_slot_move() — issue 210c */
+/* {{{ in_port_slot() */
 /*
  * One slot, and the one way its state ever changes.
  *
@@ -100,8 +102,12 @@ static void map_deliver(void *ctx, cera_task_t *t);
  * for.
  */
 static void *in_port_slot(const cera_in_port_t *sl, int index);
+/* }}} */
+/* {{{ in_port_slot_move() */
 static int   in_port_slot_move(const cera_in_port_t *sl, int index, int from, int to);
+/* }}} */
 
+/* {{{ slot_move_at() */
 /*
  * The same transition on a slot the caller has already located.
  * The scan walks pages and therefore holds the address already; going
@@ -110,7 +116,9 @@ static int   in_port_slot_move(const cera_in_port_t *sl, int index, int from, in
  * (issue 210e).
  */
 static int   slot_move_at(void *slot, int elem_size, int from, int to);
+/* }}} */
 
+/* {{{ slot_state_at() */
 /*
  * Reading a slot's state, and setting it without a compare-and-swap.
  *
@@ -122,8 +130,9 @@ static int   slot_move_at(void *slot, int elem_size, int from, int to);
  * compare-and-swap above is what makes the loser go elsewhere.
  */
 static int   slot_state_at(const void *slot, int elem_size);
+/* }}} */
 
-/* {{{ in_port_waiting_text() — issue 712 */
+/* {{{ in_port_waiting_text() */
 /*
  * Every value waiting in this port's buffer, written down as text,
  * comma separated. Returns how many characters it wanted — ask with
@@ -138,7 +147,7 @@ static int   slot_state_at(const void *slot, int elem_size);
 static int in_port_waiting_text(const cera_in_port_t *sl, char *out, int room);
 /* }}} */
 
-/* {{{ in_port_add_page() / in_port_free_pages() — issue 210e */
+/* {{{ in_port_add_page() */
 /*
  * Growing a ring buffer, and the one act that gives it its first page
  * as well — they are the same thing, which is what paging buys.
@@ -152,10 +161,12 @@ static int in_port_waiting_text(const cera_in_port_t *sl, char *out, int room);
  * depth, which may only be set while the port is empty.
  */
 static cera_in_port_page_t *in_port_add_page(cera_in_port_t *sl);
+/* }}} */
+/* {{{ in_port_free_pages() */
 static void            in_port_free_pages(cera_in_port_t *sl);
 /* }}} */
 
-/* {{{ in_port_kind_name() — issue 210b */
+/* {{{ in_port_kind_name() */
 /*
  * What a port's tag is called, in the words a person would use. Every
  * refusal that turns somebody away from a port has to say which of the
@@ -174,13 +185,13 @@ static const char *in_port_kind_name(unsigned char kind);
 static cera_out_port_t *station_out_port(cera_station_t *s, int index);
 /* }}} */
 
-/* {{{ in_port_constant_free() — teardown joint */
+/* {{{ in_port_constant_free() */
 /* A port's constant and, for a string, the characters it points at.
  * Owned by the port and freed with the map. */
 static void in_port_constant_free(cera_in_port_t *sl);
 /* }}} */
 
-/* {{{ in_port_constant_text() — issue 401 */
+/* {{{ in_port_constant_text() */
 /*
  * A port's constant, turned back into the text a map file would use.
  * Writes at most `room` bytes including the terminator, and returns
@@ -203,7 +214,7 @@ static void in_port_constant_free(cera_in_port_t *sl);
 static int in_port_constant_text(const cera_in_port_t *sl, char *out, int room);
 /* }}} */
 
-/* {{{ task_build() — the one way a task comes into existence */
+/* {{{ task_build() */
 /*
  * Exposed so the seed sweep (issue 605) creates its first tasks
  * through the same path delivery uses — one way, not two. The claimed
@@ -215,6 +226,7 @@ static cera_task_t *task_build(cera_map_t *m, int station_index,
                    const unsigned char *claimed, int port);
 /* }}} */
 
+/* {{{ box_place_matches() */
 /*
  * Whether one row is what a name refers to. Three forms, one rule: a
  * bare function name, a basename and a function, or a path and a
@@ -225,6 +237,7 @@ static cera_task_t *task_build(cera_map_t *m, int station_index,
 static int box_place_matches(const cera_box_place_t *row, const char *name);
 /* }}} */
 
+/* {{{ slot_set_at() */
 /*
  * Two joints that shared a documentation block with a call that is
  * public, which is why they arrived here separately: splitting a block
@@ -234,7 +247,9 @@ static int box_place_matches(const cera_box_place_t *row, const char *name);
  * was sitting under an unrelated one.
  */
 static void  slot_set_at(void *slot, int elem_size, int to);
+/* }}} */
 
+/* {{{ map_retire() */
 /*
  * The scrapyard, entire. A thing the engine has stopped using cannot
  * be freed at once, because a worker may still be reading it; it is
@@ -249,9 +264,16 @@ static void  slot_set_at(void *slot, int elem_size, int to);
  * forever reclaims as it goes rather than growing forever.
  */
 static void        map_retire(cera_map_t *m, void *p, void (*free_fn)(void *));
+/* }}} */
+/* {{{ map_scrap_sweep() */
 static void        map_scrap_sweep(cera_map_t *m);
+/* }}} */
+/* {{{ map_scrap_count() */
 static int         map_scrap_count(cera_map_t *m);
+/* }}} */
+/* {{{ map_scrap_free_all() */
 static void        map_scrap_free_all(cera_map_t *m);
+/* }}} */
 
 /*
  * A joint that only a white-box test reaches.
@@ -318,7 +340,7 @@ static void        map_scrap_free_all(cera_map_t *m);
  */
 #define POOL_INITIAL_CAPACITY 8
 
-/* {{{ struct worker */
+/* {{{ type worker_t */
 /*
  * One worker thread's identity: which pthread it is, which index it
  * answers to, and the pool it belongs to. The index is what phase 7
@@ -331,7 +353,6 @@ typedef struct worker {
 } worker_t;
 /* }}} */
 
-/* {{{ struct pool */
 /* {{{ struct pool_epoch */
 /*
  * A worker's epoch, padded to a cache line. Two workers bumping their
@@ -365,6 +386,7 @@ struct pool_epoch {
 };
 /* }}} */
 
+/* {{{ struct pool */
 struct pool {
     /* The ring. `slots` holds pointers out to tasks; capacity is the
      * array length; head is the oldest task, tail the next free slot.
@@ -545,7 +567,7 @@ cera_task_t *cera_pool_pop(cera_pool_t *p)
 }
 /* }}} */
 
-/* {{{ worker identity — thread-local index */
+/* {{{ this_worker_index */
 /*
  * Each worker thread notes its own index here at startup. Any code
  * running on that thread — a box, a shim, the statistics — can ask
@@ -553,7 +575,9 @@ cera_task_t *cera_pool_pop(cera_pool_t *p)
  * as the main thread, read the initial -1.
  */
 static __thread int this_worker_index = -1;
+/* }}} */
 
+/* {{{ cera_pool_worker_index() */
 int cera_pool_worker_index(void)
 {
     return this_worker_index;
@@ -787,7 +811,7 @@ int cera_pool_finished(cera_pool_t *p)
 }
 /* }}} */
 
-/* {{{ cera_pool_queued() / cera_pool_worker_station() */
+/* {{{ cera_pool_queued() */
 int cera_pool_queued(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
@@ -795,7 +819,9 @@ int cera_pool_queued(cera_pool_t *p)
     pthread_mutex_unlock(&p->mutex);
     return n;
 }
+/* }}} */
 
+/* {{{ cera_pool_worker_station() */
 /*
  * **Readable from any thread, holding nothing.** This is the one
  * measurement the report written under a held lock is allowed to
@@ -931,14 +957,16 @@ void cera_pool_join(cera_pool_t *p)
 }
 /* }}} */
 
-/* {{{ cera_pool_submitter_register() / cera_pool_submitter_unregister() */
+/* {{{ cera_pool_submitter_register() */
 void cera_pool_submitter_register(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
     p->outside++;
     pthread_mutex_unlock(&p->mutex);
 }
+/* }}} */
 
+/* {{{ cera_pool_submitter_unregister() */
 void cera_pool_submitter_unregister(cera_pool_t *p)
 {
     pthread_mutex_lock(&p->mutex);
@@ -1075,6 +1103,7 @@ static void fail(const char *what)
     snprintf(said, sizeof said, "map construction: %s", what);
     cera_stop_now(NULL, CERA_EXIT_BAD_CALL, said);
 }
+/* }}} */
 
 /* {{{ fail_resource() */
 /*
@@ -1089,7 +1118,6 @@ static void fail_resource(const char *what)
     snprintf(said, sizeof said, "map construction: %s", what);
     cera_stop_now(NULL, CERA_EXIT_NO_RESOURCE, said);
 }
-/* }}} */
 /* }}} */
 
 /* {{{ slot_stride() */
@@ -1261,7 +1289,7 @@ static int slot_move_at(void *slot, int elem_size, int from, int to)
 }
 /* }}} */
 
-/* {{{ slot_state_at() / slot_take_at() */
+/* {{{ slot_state_at() */
 /*
  * The claim side's transition, without a compare-and-swap (issue
  * 210d, step 6).
@@ -1290,7 +1318,9 @@ static int slot_state_at(const void *slot, int elem_size)
         ((const unsigned char *)slot + elem_size);
     return atomic_load_explicit(state, memory_order_acquire);
 }
+/* }}} */
 
+/* {{{ slot_set_at() */
 static void slot_set_at(void *slot, int elem_size, int to)
 {
     _Atomic unsigned char *state = (_Atomic unsigned char *)
@@ -1312,7 +1342,7 @@ CERA_TEST_ONLY static int in_port_slot_move(const cera_in_port_t *sl, int index,
 }
 /* }}} */
 
-/* {{{ static int add_shelf() */
+/* {{{ add_shelf() */
 /*
  * One more shelf, and its pointer written into the short array that
  * names them. That array holds addresses rather than mutexes, so
@@ -1337,7 +1367,7 @@ static int add_shelf(cera_map_t *m)
 }
 /* }}} */
 
-/* {{{ cera_map_create() */
+/* {{{ cera_map_create_empty() */
 cera_map_t *cera_map_create_empty(void)
 {
     cera_map_t *m = calloc(1, sizeof *m);
@@ -1495,7 +1525,7 @@ void cera_map_place(cera_map_t *m, int station, cera_task_call_t shim, int kind,
 }
 /* }}} */
 
-/* {{{ static void station_label_into() */
+/* {{{ station_label_into() */
 /*
  * The name a map file gave a station, or its index when nothing gave
  * it one. A program built by calling the surface has no names, and a
@@ -1510,7 +1540,7 @@ static void station_label_into(cera_map_t *m, int i, char *out, size_t room)
 }
 /* }}} */
 
-/* {{{ static void no_such_port_into() */
+/* {{{ no_such_port_into() */
 /*
  * **One sentence for "that port does not exist", written once**
  * (issue 210g).
@@ -1846,7 +1876,7 @@ const char *cera_map_name_station(cera_map_t *m, int station, const char *name)
 }
 /* }}} */
 
-/* {{{ cera_map_station_set_cursor() — issue 712 */
+/* {{{ cera_map_station_set_cursor() */
 /*
  * **Put an iterator back where it had got to.**
  *
@@ -2088,7 +2118,7 @@ const char *cera_map_deliver_argument(cera_map_t *m, int station, int port,
 }
 /* }}} */
 
-/* {{{ cera_map_output_waiting() / cera_map_output_take() */
+/* {{{ cera_map_output_waiting() */
 /*
  * The two halves of collecting a program's results from outside,
  * mirroring the call that writes a constant in (issue 209).
@@ -2114,7 +2144,9 @@ int cera_map_output_waiting(cera_map_t *m, int station)
     pthread_mutex_unlock(&s->mutex);
     return n;
 }
+/* }}} */
 
+/* {{{ cera_map_output_take() */
 int cera_map_output_take(cera_map_t *m, int station, void *into, int size)
 {
     if (station < 0 || station >= m->n_stations)
@@ -2505,7 +2537,7 @@ struct scrap_item {
 };
 /* }}} */
 
-/* {{{ static int nobody_can_hold() */
+/* {{{ nobody_can_hold() */
 /*
  * True when no worker can still be inside the task it was in when
  * this was filed.
@@ -2707,12 +2739,16 @@ int cera_map_in_port_depth(cera_map_t *m, int station, int port)
 }
 /* }}} */
 
-/* {{{ cera_map_destroy() */
+/* {{{ cera_map_observe_stop() */
 /* Phase 7 joints, implemented in the observe module; declared here
  * narrowly so teardown can call them without the whole header. */
 void cera_map_observe_stop(cera_map_t *m);
+/* }}} */
+/* {{{ cera_map_report_shutdown() */
 void cera_map_report_shutdown(cera_map_t *m);
+/* }}} */
 
+/* {{{ cera_map_destroy() */
 void cera_map_destroy(cera_map_t *m)
 {
     cera_map_observe_stop(m);
@@ -2827,12 +2863,14 @@ void cera_map_destroy(cera_map_t *m)
  */
 #ifdef CERA_STATS
 #include <time.h>
+/* {{{ stats_now_ns() */
 static long stats_now_ns(void)
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return ts.tv_sec * 1000000000L + ts.tv_nsec;
 }
+/* }}} */
 #define STATS_MARK(var) long var = stats_now_ns()
 #define STATS_CHARGE(counter, since) (counter) += stats_now_ns() - (since)
 #else
@@ -3007,7 +3045,7 @@ static void in_port_grow_locked(cera_in_port_t *sl)
     sl->growths++;
 }
 /* }}} */
-/* {{{ in_port_write_locked() */
+/* {{{ in_port_write() */
 static void in_port_write(cera_station_t *s, cera_in_port_t *sl, const void *value)
 {
     /* Look for somewhere to put it, and grow only if there is
@@ -3153,7 +3191,7 @@ static void in_port_release(cera_in_port_t *sl, void *slot, void *into)
 /* functions that must be kept in agreement.                          */
 /* ------------------------------------------------------------------ */
 
-/* {{{ filled: ring / static */
+/* {{{ ring_filled() */
 static int ring_filled(const cera_in_port_t *sl)
 {
     /* A maintained count rather than two indices differing. The
@@ -3163,14 +3201,18 @@ static int ring_filled(const cera_in_port_t *sl)
      * describes a contiguous run, and there is no longer one. */
     return sl->held > 0;
 }
+/* }}} */
 
+/* {{{ static_filled() */
 static int static_filled(const cera_in_port_t *sl)
 {
     /* A static's value is simply always there (issue 401). */
     (void)sl;
     return 1;
 }
+/* }}} */
 
+/* {{{ none_filled() */
 static int none_filled(const cera_in_port_t *sl)
 {
     /* Nobody has said where this port's value comes from, so there is
@@ -3182,7 +3224,9 @@ static int none_filled(const cera_in_port_t *sl)
     (void)sl;
     return 0;
 }
+/* }}} */
 
+/* {{{ int() */
 static int (*const in_port_filled[CERA_IN_PORT_KIND_COUNT])(const cera_in_port_t *) = {
     [CERA_IN_PORT_RING]   = ring_filled,
     [CERA_IN_PORT_STATIC] = static_filled,
@@ -3190,7 +3234,7 @@ static int (*const in_port_filled[CERA_IN_PORT_KIND_COUNT])(const cera_in_port_t
 };
 /* }}} */
 
-/* {{{ claim: ring / static */
+/* {{{ ring_claim() */
 /*
  * Claiming happens in two moments. Ring values are popped here,
  * under the mutex, which is what makes them spoken-for. A static is
@@ -3229,7 +3273,9 @@ static void ring_claim(cera_in_port_t *sl, void *into, void **taken)
     }
     (void)into;
 }
+/* }}} */
 
+/* {{{ static_claim_locked() */
 static void static_claim_locked(cera_in_port_t *sl, void *into, void **taken)
 {
     /* Nothing is taken, so nothing is released afterwards: a static is
@@ -3261,7 +3307,9 @@ static void static_claim_locked(cera_in_port_t *sl, void *into, void **taken)
      * reason the kind exists. */
     memcpy(into, sl->constant, (size_t)sl->elem_size);
 }
+/* }}} */
 
+/* {{{ none_claim() */
 static void none_claim(cera_in_port_t *sl, void *into, void **taken)
 {
     (void)taken;
@@ -3276,7 +3324,9 @@ static void none_claim(cera_in_port_t *sl, void *into, void **taken)
                     "readiness walk and the claim walk disagreed\n");
     abort();
 }
+/* }}} */
 
+/* {{{ void() */
 /*
  * **No row here is an absence any more** (issues 210b, 401). The
  * static row was a null, and the caller tested the function pointer
@@ -3462,7 +3512,7 @@ static cera_task_t *task_build(cera_map_t *m, int station_index,
 /* Delivery itself (issues 204, 205).                                 */
 /* ------------------------------------------------------------------ */
 
-/* {{{ cera_map_station_try_start() */
+/* {{{ cera_map_station_start_after() */
 /*
  * Readiness, claim, build, push — a delivery with the delivering taken
  * out. Three callers wanted exactly this and were each doing their own
@@ -3541,7 +3591,7 @@ int cera_map_station_try_start(cera_map_t *m, int station)
 }
 /* }}} */
 
-/* {{{ cera_map_station_start_while_ready() — issue 712 */
+/* {{{ cera_map_station_keep_starting() */
 /*
  * **Keep starting while the station stays ready**, which is what the
  * one rule says should happen and what asking once does not do.
@@ -3589,7 +3639,9 @@ drain:;
         started++;
     return started;
 }
+/* }}} */
 
+/* {{{ cera_map_station_start_while_ready() */
 int cera_map_station_start_while_ready(cera_map_t *m, int station)
 {
     int started = cera_map_station_try_start(m, station) ? 1 : 0;
@@ -3706,14 +3758,16 @@ int cera_map_deliver_value(cera_map_t *m, int station, int port, const void *val
 /* kind is a row.                                                     */
 /* ------------------------------------------------------------------ */
 
-/* {{{ route: plain / comparator / iterator */
+/* {{{ route_plain() */
 static int route_plain(cera_station_t *s, cera_task_t *t)
 {
     (void)s; (void)t;
     /* A plain box has one exit. */
     return 0;
 }
+/* }}} */
 
+/* {{{ route_comparator() */
 static int route_comparator(cera_station_t *s, cera_task_t *t)
 {
     /* The threshold rode along as the task's last input — claimed
@@ -3724,7 +3778,9 @@ static int route_comparator(cera_station_t *s, cera_task_t *t)
     int sign = s->compare(t->out, t->in[t->n_in - 1]);
     return sign + 1;
 }
+/* }}} */
 
+/* {{{ route_iterator() */
 static int route_iterator(cera_station_t *s, cera_task_t *t)
 {
     (void)s;
@@ -3734,7 +3790,9 @@ static int route_iterator(cera_station_t *s, cera_task_t *t)
      * first. Reading it here is the whole row. */
     return t->port;
 }
+/* }}} */
 
+/* {{{ int() */
 static int (*const route_choose[CERA_STATION_KIND_COUNT])(cera_station_t *, cera_task_t *) = {
     [CERA_STATION_PLAIN]      = route_plain,
     [CERA_STATION_COMPARATOR] = route_comparator,
@@ -3896,6 +3954,7 @@ static void map_deliver(void *ctx, cera_task_t *t)
 #include <stdlib.h>
 #include <string.h>
 
+/* {{{ late_recover_box() */
 /*
  * Rows added while the program runs live next door (issue 310). They
  * are declared here rather than in a header because only these two
@@ -3903,10 +3962,15 @@ static void map_deliver(void *ctx, cera_task_t *t)
  * was already handed.
  */
 static const cera_box_place_t *late_recover_box(const char *name);
+/* }}} */
+/* {{{ late_place_find() */
 static const cera_box_place_t *late_place_find(const char *name);
+/* }}} */
+/* {{{ cera_late_source_text() */
 const char        *cera_late_source_text(const char *path);
+/* }}} */
 
-/* {{{ cera_box_place_find() */
+/* {{{ box_place_matches() */
 /*
  * Which generated placement function writes this box's station
  * (issue 311b). Compiled-in rows first, then anything that arrived
@@ -3966,7 +4030,9 @@ static int box_place_matches(const cera_box_place_t *row, const char *name)
     return a > n && row->address[a - n - 1] == '/'
            && strcmp(row->address + a - n, name) == 0;
 }
+/* }}} */
 
+/* {{{ cera_box_place_find() */
 const cera_box_place_t *cera_box_place_find(const char *name)
 {
     if (!name || !*name)
@@ -4255,6 +4321,7 @@ void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int ki
 #include <stdlib.h>
 #include <string.h>
 
+/* {{{ where_t */
 /*
  * Where an error happened. Published as cera_where_t (issue 408),
  * because generated readers name the same place, and spelled `where_t`
@@ -4262,6 +4329,7 @@ void cera_map_place_box(cera_map_t *m, int station, const char *box_name, int ki
  * the way it did.
  */
 typedef cera_where_t where_t;
+/* }}} */
 
 /* {{{ die_static() */
 static void die_static(const where_t *w, const char *what)
@@ -4290,7 +4358,7 @@ static void die_static(const where_t *w, const char *what)
 }
 /* }}} */
 
-/* {{{ the escape table, and the two routines that share it — issue 408 */
+/* {{{ escapes */
 /*
  * **One table, two directions**, so the writer and the reader cannot
  * disagree about what a backslash introduces.
@@ -4324,8 +4392,9 @@ static const struct { char spelled; unsigned char is; } escapes[] = {
     { 't',  '\t' },
     { 'r',  '\r' },
 };
+/* }}} */
 
-/* {{{ static const char *read_quoted() */
+/* {{{ read_quoted() */
 /*
  * The other direction, reading from `p` — which must be sitting on
  * the opening quote — into at most `room` bytes, and saying how many
@@ -4405,7 +4474,6 @@ static const char *read_quoted(const char *p, char *out, int room,
     return p + 1;
 }
 /* }}} */
-/* }}} */
 
 
 /* ------------------------------------------------------------------ */
@@ -4415,9 +4483,11 @@ static const char *read_quoted(const char *p, char *out, int room,
 /* pass to unify.                                                     */
 /* ------------------------------------------------------------------ */
 
+/* {{{ type type_class_t */
 typedef enum {
     TN_INT, TN_UINT, TN_FLOAT, TN_STRING, TN_STRUCT, TN_UNKNOWN
 } type_class_t;
+/* }}} */
 
 /* {{{ classify_port() */
 /*
@@ -4473,7 +4543,7 @@ static type_class_t classify_port(const cera_in_port_t *sl,
 /* Number and string writing, width by width.                         */
 /* ------------------------------------------------------------------ */
 
-/* {{{ write_integer() / write_unsigned() / write_float() */
+/* {{{ write_integer() */
 static void write_integer(long long v, unsigned char *out, int size,
                           const where_t *w)
 {
@@ -4487,7 +4557,9 @@ static void write_integer(long long v, unsigned char *out, int size,
     default: die_static(w, "an integer field of a width the reader does not know");
     }
 }
+/* }}} */
 
+/* {{{ write_unsigned() */
 static void write_unsigned(unsigned long long v, unsigned char *out, int size,
                            const where_t *w)
 {
@@ -4499,7 +4571,9 @@ static void write_unsigned(unsigned long long v, unsigned char *out, int size,
     default: die_static(w, "an unsigned field of a width the reader does not know");
     }
 }
+/* }}} */
 
+/* {{{ write_float() */
 static void write_float(double v, unsigned char *out, int size,
                         const where_t *w)
 {
@@ -4509,7 +4583,7 @@ static void write_float(double v, unsigned char *out, int size,
 }
 /* }}} */
 
-/* {{{ read_integer() / read_unsigned() / read_float() */
+/* {{{ read_integer() */
 /*
  * The other direction, for turning a value back into text. Each width
  * is read through its own type for the same reason it is written
@@ -4528,7 +4602,9 @@ static long long read_integer(const unsigned char *p, int size,
     }
     return 0;
 }
+/* }}} */
 
+/* {{{ read_unsigned() */
 static unsigned long long read_unsigned(const unsigned char *p, int size,
                                         const where_t *w)
 {
@@ -4541,7 +4617,9 @@ static unsigned long long read_unsigned(const unsigned char *p, int size,
     }
     return 0;
 }
+/* }}} */
 
+/* {{{ read_float() */
 static double read_float(const unsigned char *p, int size, const where_t *w)
 {
     if (size == 4) { float x;  memcpy(&x, p, 4); return x; }
@@ -4566,7 +4644,7 @@ static const char *skip_ws(const char *p)
 /* the reader above, walking the same field table the other way.      */
 /* ------------------------------------------------------------------ */
 
-/* {{{ struct textbuf / tb_addf() */
+/* {{{ textbuf_t */
 /*
  * A growing piece of text that never overflows and always reports how
  * much it wanted. `used` counts characters the caller asked for, which
@@ -4575,9 +4653,13 @@ static const char *skip_ws(const char *p)
  * snprintf offers.
  */
 typedef cera_textbuf_t textbuf_t;
+/* }}} */
 
+/* {{{ tb_addf() */
 static void tb_addf(textbuf_t *tb, const char *fmt, ...);
+/* }}} */
 
+/* {{{ tb_addf() */
 static void tb_addf(textbuf_t *tb, const char *fmt, ...)
 {
     va_list args;
@@ -4596,7 +4678,7 @@ static void tb_addf(textbuf_t *tb, const char *fmt, ...)
 }
 /* }}} */
 
-/* {{{ static void write_quoted() */
+/* {{{ write_quoted() */
 /*
  * `len` bytes, written as a quoted string with everything escaped
  * that has to be. The length is given rather than found, because a
@@ -4649,7 +4731,7 @@ static void float_text(textbuf_t *tb, double v, int size)
 /* }}} */
 
 
-/* {{{ the helpers a generated reader and writer call — issue 408 */
+/* {{{ cera_text_expect() */
 /*
  * **One grammar, shared; one routine per struct, emitted.**
  *
@@ -4675,7 +4757,9 @@ const char *cera_text_expect(const char *p, char c, const cera_where_t *w,
     }
     return skip_ws(p + 1);
 }
+/* }}} */
 
+/* {{{ cera_text_signed() */
 const char *cera_text_signed(const char *p, void *out, int size,
                              const cera_where_t *w, const char *field)
 {
@@ -4690,7 +4774,9 @@ const char *cera_text_signed(const char *p, void *out, int size,
     write_integer(v, (unsigned char *)out, size, w);
     return skip_ws(end);
 }
+/* }}} */
 
+/* {{{ cera_text_unsigned() */
 const char *cera_text_unsigned(const char *p, void *out, int size,
                                const cera_where_t *w, const char *field)
 {
@@ -4705,7 +4791,9 @@ const char *cera_text_unsigned(const char *p, void *out, int size,
     write_unsigned(v, (unsigned char *)out, size, w);
     return skip_ws(end);
 }
+/* }}} */
 
+/* {{{ cera_text_floating() */
 const char *cera_text_floating(const char *p, void *out, int size,
                                const cera_where_t *w, const char *field)
 {
@@ -4720,7 +4808,9 @@ const char *cera_text_floating(const char *p, void *out, int size,
     write_float(v, (unsigned char *)out, size, w);
     return skip_ws(end);
 }
+/* }}} */
 
+/* {{{ cera_text_chars() */
 const char *cera_text_chars(const char *p, char *out, int room,
                             const cera_where_t *w, const char *field)
 {
@@ -4737,30 +4827,40 @@ const char *cera_text_chars(const char *p, char *out, int room,
         out[i] = '\0';
     return skip_ws(p);
 }
+/* }}} */
 
+/* {{{ cera_text_put() */
 void cera_text_put(cera_textbuf_t *tb, const char *literal)
 {
     tb_addf(tb, "%s", literal);
 }
+/* }}} */
 
+/* {{{ cera_text_put_signed() */
 void cera_text_put_signed(cera_textbuf_t *tb, const void *bytes, int size)
 {
     where_t w = { -1, -1 };
     tb_addf(tb, "%lld", read_integer((const unsigned char *)bytes, size, &w));
 }
+/* }}} */
 
+/* {{{ cera_text_put_unsigned() */
 void cera_text_put_unsigned(cera_textbuf_t *tb, const void *bytes, int size)
 {
     where_t w = { -1, -1 };
     tb_addf(tb, "%llu", read_unsigned((const unsigned char *)bytes, size, &w));
 }
+/* }}} */
 
+/* {{{ cera_text_put_floating() */
 void cera_text_put_floating(cera_textbuf_t *tb, const void *bytes, int size)
 {
     where_t w = { -1, -1 };
     float_text(tb, read_float((const unsigned char *)bytes, size, &w), size);
 }
+/* }}} */
 
+/* {{{ cera_text_put_chars() */
 void cera_text_put_chars(cera_textbuf_t *tb, const char *chars, int room)
 {
     /* Bounded by the array rather than trusted to a terminator,
@@ -4773,7 +4873,7 @@ void cera_text_put_chars(cera_textbuf_t *tb, const char *chars, int room)
 }
 /* }}} */
 
-/* {{{ static void value_text() */
+/* {{{ value_text() */
 /*
  * One value of this port's type, written down. The bytes are given
  * rather than taken from the port, because two different things are
@@ -4848,7 +4948,7 @@ static int in_port_constant_text(const cera_in_port_t *sl, char *out, int room)
 }
 /* }}} */
 
-/* {{{ in_port_waiting_text() — issue 712 */
+/* {{{ in_port_waiting_text() */
 /*
  * **Every value waiting in this port's buffer, written down**, so a
  * running program can be put on disk and picked up again rather than
@@ -4908,7 +5008,7 @@ static void in_port_constant_free(cera_in_port_t *sl)
 }
 /* }}} */
 
-/* {{{ port_text_to_bytes() */
+/* {{{ port_text_to_bytes_ending() */
 /*
  * **Text into the bytes one port's type wants**, which is the one
  * thing this file knows how to do and the reason two very different
@@ -4934,15 +5034,19 @@ static void port_text_to_bytes_ending(const cera_in_port_t *sl, const char *text
                                       char **owned_string,
                                       const where_t *w,
                                       const char **end);
+/* }}} */
 
+/* {{{ port_text_to_bytes() */
 static void port_text_to_bytes(const cera_in_port_t *sl, const char *text,
                                unsigned char *into, char **owned_string,
                                const where_t *w)
 {
     port_text_to_bytes_ending(sl, text, into, owned_string, w, NULL);
 }
+/* }}} */
 
 
+/* {{{ port_text_to_bytes_ending() */
 /*
  * The same reading, saying where it stopped. A list of waiting values
  * is comma separated and a struct value has commas inside it, so the
@@ -5242,7 +5346,7 @@ const char *cera_map_deliver_command_line(cera_map_t *m, int argc, char **argv)
 }
 /* }}} */
 
-/* {{{ cera_map_in_port_queue_text() — issue 712 */
+/* {{{ cera_map_in_port_queue_text() */
 /*
  * **Values put back into a buffer**, from the text a capture wrote.
  *
@@ -5352,7 +5456,7 @@ const char *cera_map_in_port_queue_text(cera_map_t *m, int station, int port,
 }
 /* }}} */
 
-/* {{{ static_write_under_lock() */
+/* {{{ type static_write_t */
 /*
  * The copy itself, as something the delivery path can be asked to do
  * while it holds the station's mutex (issue 210d). It exists as a
@@ -5381,7 +5485,9 @@ typedef struct {
     const void *bytes;
     int         size;
 } static_write_t;
+/* }}} */
 
+/* {{{ static_write_under_lock() */
 static void static_write_under_lock(void *ctx)
 {
     static_write_t *j = ctx;
@@ -5480,10 +5586,12 @@ void cera_map_in_port_static_write(cera_map_t *m, int station, int port,
 
 
 
+/* {{{ late_recover_box() */
 /* A box added while some earlier process ran; see 073-latebox.h. It
  * is declared here rather than included, because the loader needs one
  * function from that file and nothing else it offers. */
 static const cera_box_place_t *late_recover_box(const char *name);
+/* }}} */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -5513,7 +5621,7 @@ static void die_load(const char *path, int line, const char *station,
 
 
 
-/* {{{ static char *read_whole_file() */
+/* {{{ read_whole_file() */
 /*
  * A description, as text. Small by nature — a description names
  * stations and wires, and a program with a thousand of either is
@@ -5543,7 +5651,7 @@ static char *read_whole_file(const char *path)
 }
 /* }}} */
 
-/* {{{ static int build_from_file() */
+/* {{{ build_from_file() */
 /*
  * **A description on disk becomes the calls it describes, and then
  * those calls are made** (issue 311d).
@@ -5596,8 +5704,7 @@ static void build_from_file(cera_map_t *m, const char *path, cera_map_instance_t
 }
 /* }}} */
 
-/* {{{ cera_map_load_file() */
-/* {{{ static int marked_incomplete() */
+/* {{{ marked_incomplete() */
 /*
  * **An artifact that says it lost work** (issue 712). A capture taken
  * while workers were still inside boxes never got their results, and
@@ -5615,9 +5722,11 @@ static int marked_incomplete(const char *text)
 }
 /* }}} */
 
+/* {{{ load_file() */
 static cera_map_t *load_file(const char *path, int n_workers, int salvaging);
+/* }}} */
 
-/* {{{ cera_map_load_file() / cera_map_load_salvage() */
+/* {{{ cera_map_load_file() */
 /*
  * **Reading a description back is refused when it says it lost work**,
  * unless the caller asks for salvage (issue 712). A program picked up
@@ -5633,12 +5742,16 @@ cera_map_t *cera_map_load_file(const char *path, int n_workers)
 {
     return load_file(path, n_workers, 0);
 }
+/* }}} */
 
+/* {{{ cera_map_load_salvage() */
 cera_map_t *cera_map_load_salvage(const char *path, int n_workers)
 {
     return load_file(path, n_workers, 1);
 }
+/* }}} */
 
+/* {{{ load_file() */
 static cera_map_t *load_file(const char *path, int n_workers, int salvaging)
 {
     /*
@@ -5765,7 +5878,7 @@ cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path)
 }
 /* }}} */
 
-/* {{{ map_instance_door() / cera_map_instance_free() */
+/* {{{ map_instance_door() */
 /*
  * **The nth station of this instance facing that way**, or -1.
  *
@@ -5790,17 +5903,23 @@ static int map_instance_door(cera_map_t *m, const cera_map_instance_t *in,
     }
     return -1;
 }
+/* }}} */
 
+/* {{{ cera_map_instance_entrance() */
 int cera_map_instance_entrance(cera_map_t *m, const cera_map_instance_t *in, int nth)
 {
     return map_instance_door(m, in, CERA_DOOR_IN, nth);
 }
+/* }}} */
 
+/* {{{ cera_map_instance_result() */
 int cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int nth)
 {
     return map_instance_door(m, in, CERA_DOOR_OUT, nth);
 }
+/* }}} */
 
+/* {{{ cera_map_instance_free() */
 /*
  * The handle goes; the stations stay. Nothing in the running program
  * refers to this — it was the reader's note to itself about where
@@ -6037,7 +6156,7 @@ void cera_map_report_buffers(cera_map_t *m, FILE *out)
 }
 /* }}} */
 
-/* {{{ the three orderings — a dispatch table of comparators */
+/* {{{ station_time() */
 static cera_map_t *sorting_map;   /* qsort has no context argument */
 
 /* Time attributable to a station's own work. This used to add the
@@ -6049,7 +6168,9 @@ static long station_time(const cera_station_t *s)
 {
     return s->box_ns;
 }
+/* }}} */
 
+/* {{{ by_time() */
 static int by_time(const void *a, const void *b)
 {
     const cera_station_t *sa = cera_map_station(sorting_map, *(const int *)a);
@@ -6057,7 +6178,9 @@ static int by_time(const void *a, const void *b)
     return (station_time(sb) > station_time(sa))
          - (station_time(sb) < station_time(sa));
 }
+/* }}} */
 
+/* {{{ by_contention() */
 static int by_contention(const void *a, const void *b)
 {
     const cera_station_t *sa = cera_map_station(sorting_map, *(const int *)a);
@@ -6065,14 +6188,18 @@ static int by_contention(const void *a, const void *b)
     return (sb->mutex_wait_ns > sa->mutex_wait_ns)
          - (sb->mutex_wait_ns < sa->mutex_wait_ns);
 }
+/* }}} */
 
+/* {{{ by_count() */
 static int by_count(const void *a, const void *b)
 {
     const cera_station_t *sa = cera_map_station(sorting_map, *(const int *)a);
     const cera_station_t *sb = cera_map_station(sorting_map, *(const int *)b);
     return (sb->runs > sa->runs) - (sb->runs < sa->runs);
 }
+/* }}} */
 
+/* {{{ int() */
 static int (*const orderings[CERA_REPORT_ORDER_COUNT])(const void *, const void *) = {
     [CERA_REPORT_BY_TIME]       = by_time,
     [CERA_REPORT_BY_CONTENTION] = by_contention,
@@ -6142,7 +6269,7 @@ void cera_stats_box_time(cera_task_t *t, long ns)
 }
 /* }}} */
 
-/* {{{ the observer thread */
+/* {{{ observer_main() */
 static void *observer_main(void *arg)
 {
     cera_map_t *m = arg;
@@ -6158,7 +6285,9 @@ static void *observer_main(void *arg)
     }
     return NULL;
 }
+/* }}} */
 
+/* {{{ cera_map_observe_start() */
 void cera_map_observe_start(cera_map_t *m, const char *path, int interval_ms)
 {
     if (interval_ms <= 0) {
@@ -6178,7 +6307,9 @@ void cera_map_observe_start(cera_map_t *m, const char *path, int interval_ms)
     m->observer_running = 1;
     pthread_create(&m->observer, NULL, observer_main, m);
 }
+/* }}} */
 
+/* {{{ cera_map_observe_stop() */
 void cera_map_observe_stop(cera_map_t *m)
 {
     if (!m->observer_running)
@@ -7014,7 +7145,7 @@ void cera_map_disconnect(cera_map_t *m, int from_station, int port,
 /* }}} */
 
 
-/* {{{ removed_parts_t / reclaim_station() */
+/* {{{ type removed_parts_t */
 /*
  * A removed station's parts, reclaimed by the scrapyard once nobody
  * can still be inside a task built from it.
@@ -7031,7 +7162,9 @@ typedef struct removed_parts {
     int         n_in_ports;
     char       *name;
 } removed_parts_t;
+/* }}} */
 
+/* {{{ reclaim_station() */
 static void reclaim_station(void *p)
 {
     removed_parts_t *r = p;
@@ -7224,7 +7357,6 @@ const char *cera_map_remove_station(cera_map_t *m, int station)
 #include <sys/types.h>
 #include <unistd.h>
 
-/* {{{ the build's own answers, baked in */
 /*
  * Which compiler built this binary, where the generator is, and where
  * the headers generated code includes live. Defaults exist only so
@@ -7246,9 +7378,8 @@ const char *cera_map_remove_station(cera_map_t *m, int station)
 #ifndef CERA_RAM_EXEC
 #define CERA_RAM_EXEC "/tmp/minimal-soramech"
 #endif
-/* }}} */
 
-/* {{{ struct late_block */
+/* {{{ type late_block_t */
 /*
  * One dlopen's worth of rows. The arrays belong to the loaded object
  * and live as long as it does, which is forever — see the note about
@@ -7277,13 +7408,15 @@ typedef struct late_block {
     int                 n_sources;
     void              *handle;
 } late_block_t;
-
-static late_block_t *late_head;   /* newest first */
-static int           late_total;
-static int           late_serial; /* names the scratch files apart */
 /* }}} */
 
-/* {{{ cera_late_source_dir() / late_library_dir() */
+/* {{{ late_head */
+static late_block_t *late_head;   /* newest first */
+static int           late_total;
+/* }}} */
+/* {{{ cera_late_source_dir() */
+static int           late_serial; /* names the scratch files apart */
+
 /*
  * **Two tiers, and which goes where is not arbitrary.** The project
  * keeps RAM-backed scratch in two places: `/dev/shm` for artifacts
@@ -7303,19 +7436,23 @@ const char *cera_late_source_dir(void)
 {
     return CERA_RAM_SHARED "/late-boxes";
 }
+/* }}} */
 
+/* {{{ late_library_dir() */
 static const char *late_library_dir(void)
 {
     return CERA_RAM_EXEC "/late-boxes";
 }
 /* }}} */
 
-/* {{{ cera_late_box_count() / cera_late_box_at() */
+/* {{{ cera_late_box_count() */
 int cera_late_box_count(void)
 {
     return late_total;
 }
+/* }}} */
 
+/* {{{ cera_late_box_at() */
 const cera_box_place_t *cera_late_box_at(int i)
 {
     /* Blocks are newest first, so walking them in order and counting
@@ -7339,7 +7476,9 @@ const cera_box_place_t *cera_late_box_at(int i)
  * still loaded and still callable by anything already placed.
  */
 static const cera_box_place_t *late_place_find(const char *name);
+/* }}} */
 
+/* {{{ late_place_find() */
 static const cera_box_place_t *late_place_find(const char *name)
 {
     for (late_block_t *b = late_head; b; b = b->next)
@@ -7385,7 +7524,7 @@ const char *cera_late_source_text(const char *path)
 /* }}} */
 
 
-/* {{{ static int ensure_dir() */
+/* {{{ ensure_dir() */
 static int ensure_dir(const char *path)
 {
     if (mkdir(path, 0755) == 0 || errno == EEXIST)
@@ -7395,7 +7534,7 @@ static int ensure_dir(const char *path)
 }
 /* }}} */
 
-/* {{{ static int write_text() */
+/* {{{ write_text() */
 static int write_text(const char *path, const char *text)
 {
     FILE *f = fopen(path, "w");
@@ -7418,7 +7557,7 @@ static int write_text(const char *path, const char *text)
 }
 /* }}} */
 
-/* {{{ static int run() */
+/* {{{ run() */
 /*
  * Runs a command and reports whether it succeeded. The child's own
  * output goes wherever ours goes, deliberately: when a box source
@@ -7438,7 +7577,7 @@ static int run(const char *command)
 }
 /* }}} */
 
-/* {{{ static void close_library() */
+/* {{{ close_library() */
 static void close_library(void *handle)
 {
     dlclose(handle);
@@ -7545,7 +7684,9 @@ int cera_late_unload_box(cera_map_t *m, const char *name)
  * caller's message for that is the best one in the program.
  */
 static const cera_box_place_t *late_recover_box(const char *name);
+/* }}} */
 
+/* {{{ late_recover_box() */
 static const cera_box_place_t *late_recover_box(const char *name)
 {
     if (!name || !*name)
@@ -7591,7 +7732,7 @@ static const cera_box_place_t *late_recover_box(const char *name)
 }
 /* }}} */
 
-/* {{{ static int ensure_path_dirs() */
+/* {{{ ensure_path_dirs() */
 /*
  * Create every directory leading to a file path, the way `mkdir -p`
  * does. Needed because the sources a program carries are filed under
@@ -7627,7 +7768,7 @@ static int ensure_path_dirs(const char *path)
 }
 /* }}} */
 
-/* {{{ static int spill_sources() */
+/* {{{ spill_sources() */
 /*
  * Write every source this program is made of into a directory, under
  * the path it was compiled as. The generator is then pointed at that
@@ -7710,7 +7851,7 @@ static int spill_sources(const char *dir, const char **paths, int cap)
 }
 /* }}} */
 
-/* {{{ static int gather_missing_boxes() */
+/* {{{ gather_missing_boxes() */
 /*
  * **A description may name a box this program does not hold**, and
  * getting it is the ordinary path rather than a rescue (issue 311d).
@@ -7760,7 +7901,7 @@ static void gather_missing_boxes(const char *map_path, const char *list_path)
 }
 /* }}} */
 
-/* {{{ cera_late_spill_sources() — issue 712 */
+/* {{{ cera_late_spill_sources() */
 /*
  * **Every source this program is made of, written out under the paths
  * it was compiled as**, so that a captured program can be built again
@@ -8103,6 +8244,7 @@ int cera_late_compile_source(const char *c_source)
 #include <sys/stat.h>
 #include <unistd.h>
 
+/* {{{ finished_signal */
 /*
  * The signal the pool raises when the work runs out.
  *
@@ -8114,17 +8256,24 @@ int cera_late_compile_source(const char *c_source)
  * baked into the comparisons below.
  */
 static int finished_signal;
+/* }}} */
 
+/* {{{ report_fd */
 /* Where a report goes. Opened during preparation and never after,
  * because a dying program cannot answer for a failed open. */
 static int  report_fd = -1;
+/* }}} */
+/* {{{ report_where */
 static char report_where[512];
+/* }}} */
 
+/* {{{ interrupts */
 /* How many interrupts have arrived. The second one is an escape
  * hatch and takes no other path with it. */
 static int interrupts;
+/* }}} */
 
-/* {{{ static void escape_now() */
+/* {{{ escape_now() */
 /*
  * The only signal handler in this file, installed for the length of
  * one gather and doing the one thing a handler is unarguably allowed
@@ -8138,7 +8287,7 @@ static void escape_now(int sig)
 }
 /* }}} */
 
-/* {{{ static void say() */
+/* {{{ say() */
 /*
  * One line into the report. Formatted into a stack buffer and written
  * with one call, because **write is the only file operation available
@@ -8147,7 +8296,9 @@ static void escape_now(int sig)
  */
 static void say(const char *fmt, ...)
     __attribute__((format(printf, 1, 2)));
+/* }}} */
 
+/* {{{ say() */
 static void say(const char *fmt, ...)
 {
     if (report_fd < 0)
@@ -8226,7 +8377,7 @@ const char *cera_report_path(void)
 }
 /* }}} */
 
-/* {{{ static void report_without_locks() */
+/* {{{ report_without_locks() */
 /*
  * **Maximum evidence, no cooperation** — the report for a program
  * that may be holding a lock nobody will ever release.
@@ -8280,7 +8431,7 @@ static void report_without_locks(cera_map_t *m)
 }
 /* }}} */
 
-/* {{{ static void report_everything() */
+/* {{{ report_everything() */
 /*
  * **The full picture**, gathered on the thread that received the
  * signal. Somebody is standing there and wants to know what happened,
@@ -8473,7 +8624,7 @@ int cera_wait(cera_map_t *m)
 }
 /* }}} */
 
-/* {{{ static int write_capture() */
+/* {{{ write_capture() */
 static int write_capture(cera_map_t *m, const char *path)
 {
     FILE *f = fopen(path, "w");
@@ -8522,7 +8673,7 @@ int cera_capture(cera_map_t *m, const char *path)
 }
 /* }}} */
 
-/* {{{ static int write_capture_report() */
+/* {{{ write_capture_report() */
 /*
  * **What a person wants to know about the program they just put
  * down**, beside the artifact rather than inside it.

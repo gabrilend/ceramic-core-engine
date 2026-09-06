@@ -1690,7 +1690,6 @@ void cera_map_in_port_static_write(cera_map_t *m, int station, int port,
 const char *cera_map_in_port_queue_text(cera_map_t *m, int station, int port,
                                    const char *text);
 /* }}} */
-/* }}} */
 
 
 
@@ -1840,6 +1839,7 @@ const cera_box_place_t *cera_box_place_find(const char *name);
  * generator rewrites on every build where a box source changed. */
 extern const cera_struct_info_t  struct_layouts[];
 extern const int            n_struct_layouts;
+/* }}} */
 
 /* {{{ writing a value down and reading it back — issue 408 */
 /*

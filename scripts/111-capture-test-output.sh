@@ -22,6 +22,19 @@
 #      name and every number in them is flattened, so what is compared
 #      is the shape of what they said rather than the values.
 #
+# What this instrument cannot do, which is worth knowing before trusting
+# it. Flattening the numbers in a racing test does not flatten whether a
+# line appears at all: the readiness test reports a buffer growing only
+# when a producer actually outran its sibling, and under heavy load it
+# sometimes does not. So a diff on those four can show a line present in
+# one capture and absent in the other with nothing having changed.
+#
+# For a change that should not affect behaviour at all — moving comments,
+# renaming, refolding — the stronger check is to compile the engine
+# before and after into object files, from identical filenames in
+# separate directories, and compare those byte for byte. Identical object
+# code settles the question that identical output only suggests.
+#
 # Anything else that differs between two builds is a finding.
 #
 # Usage: capture-tests.sh <project-dir> <output-dir>
