@@ -99,7 +99,7 @@ the tool and the whole tree is the target:
    companions**, in one commit, so the removal is one thing in the
    record rather than scattered.
 3. **Delete the eighteen interface files.** Their replacements —
-   `cera.c.info.md` and `cera.h.info.md` — were written alongside the
+   `cera.info.md` and `cera.info.md` — were written alongside the
    sources in [901](completed/901-the-engine-becomes-one-file.md),
    because a source file without one is a file a reader has to open.
    The header's is the important one: it is the document a consumer

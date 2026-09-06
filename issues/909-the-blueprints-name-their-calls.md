@@ -9,7 +9,7 @@ lie that is only discovered by somebody relying on it.
 ## Current behaviour
 
 **The complete public surface exists in one place and is derived** —
-`src/cera.h.info.md` carries all 101 calls in seven sections, generated
+`src/cera.info.md` carries all 101 calls in seven sections, generated
 from the header, so it cannot drift from what the engine actually
 publishes.
 
@@ -78,4 +78,4 @@ renamed, and none of them produced any of those calls.
   this and settled the surface it needs
 - [905](completed/905-the-prefix.md), which fixed the names, so the
   tables can be written once rather than twice
-- `src/cera.h.info.md`, the derived list this has to be reconciled with
+- `src/cera.info.md`, the derived list this has to be reconciled with

@@ -91,7 +91,7 @@ style working, not failing. The mapping cannot be derived from the text;
 it has to be decided one blueprint at a time.
 
 What this issue did produce is the list itself: all 101 calls with their
-signatures, generated from the header into `src/cera.h.info.md`, which
+signatures, generated from the header into `src/cera.info.md`, which
 is the thing 909 has to reconcile blueprints against.
 
 ## Suggested implementation steps
