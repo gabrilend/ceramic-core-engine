@@ -79,6 +79,60 @@ so what is drawn is what is running by construction. The dump also says
 each station's index outright and each buffer's capacity, both of which
 the page now reads instead of inferring.
 
+### The third pass: a camera, and a speed that means something
+
+**The paper has no edges.** The window used to be resized to fit its
+contents on every frame, so dragging a box past the old boundary made
+the whole graph jump. There is a camera now: drag the paper to pan,
+scroll to zoom about the pointer, and the ruling coarsens as you pull
+back so it never becomes a wash of lines. Nothing is ever resized to
+fit anything.
+
+**It opens looking at the entrance**, at a scale that shows the whole
+graph if the whole graph will fit comfortably and comes in to a
+readable size if it will not. A program is read from its way in
+outward; a picture nobody can read is not an improvement on no picture.
+
+**A value crosses at a fixed speed rather than in a fixed time.** It
+used to take the same half second down every wire, so a long wire
+looked faster than a short one. The trail says nothing about how long a
+delivery took — it carries the moment, not a duration — so any speed
+here is a picture rather than a measurement. Given that, the honest
+choice is the one where distance on screen means something.
+
+### A program built to show its own workings
+
+`viewer/126-a-mechanism-to-watch.c`, and it is the answer to *what does
+a ring buffer actually look like*:
+
+```
+feed ──> gate ─┬─ less    ──────────────> collect.0
+        (comparator)
+               ├─ equal   ──────────────> collect.1
+               └─ greater ──> spread ─┬─> collect.2
+                            (iterator) └─> drain
+```
+
+`feed` counts, so `gate` sees 0 to 29 over and over. A comparator routes
+by its box's result against the threshold on its last port — ten here —
+so of every thirty values **ten go left, exactly one goes down the
+middle, and nineteen go right**, and the iterator halves the right-hand
+stream again by dealing alternate values to a drain.
+
+`collect` takes three inputs and cannot run until all three hold a
+value, so it runs at the rate of its slowest feed while the other two
+buffers grow. Measured over six seconds: 170, 17 and 161 values arrived
+at its three ports, it ran 17 times, and the two fast ports were left
+holding 153 and 144 while their buffers grew from ten slots to forty.
+
+**That is the whole demonstration.** Memory quietly absorbing an
+imbalance is what a ring buffer does, and this is what it looks like
+while it happens.
+
+All three station kinds appear, which was not the point but is worth
+having: a plain station, a comparator with three exits, and an iterator
+dealing round-robin.
+
 ### One command, still two processes
 
 `--view` has the watched program start the viewer as a child and stop it

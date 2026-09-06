@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 20:08:13
+Generated on: 2026-09-05 20:35:22
 
 --------------------------------------------------------------------------------
 
@@ -2088,6 +2088,162 @@ by construction rather than by discipline.
 events lost on one attach. That's correct and it's why reading the map file
 matters: a viewer that learned the graph from the trail alone would have drawn
 nothing at all in that case.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 12
+
+It looks great! Question - there's two rounded slots on each box, but some of
+them have dashed lines and some are solid. What's that about?
+
+
+Also, I can't see any values flowing through the system. Like, I get that they
+probably are, but the point of the viewer is to WATCH them move between boxes.
+
+
+Can we change the background to a light dark blue? Think about it and it'll make
+sense. Then can we add ()'s after the box function name? Or is that the box
+title? Can we also put the names of each of the input ports? I want to be able
+to watch the mechanism of the ring buffers and such. Basically, it looks great,
+can we take another pass and add more of the missing functionality?
+
+
+Question. Why are there any "missed" events at all? We're writing to a log file,
+right? Actually, why do we need two programs running again? We compiled this
+version specifically for watching, which is why it's emitting, so why don't we
+have it also handle the display-ing, since this is the display build?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 12
+
+Good questions, and one of them is a real bug. Let me check the facts before
+answering.
+
+
+Both confirmed. Answers first, then the work.
+
+
+**The dashed slots are a bug.** My CSS says `.station.pinned rect` — which
+matches *every* rect inside a station, including the port pips, not just the
+outline. So any box you dragged got dashed ports too. That's the difference
+you're seeing: dashed means pinned.
+
+
+**Missed events only happen when a reader attaches late or falls behind.** I
+just measured a steady watcher: 969 events, zero gaps. The 3,869 I reported
+earlier were all from attaching after the program had been running — the ring
+had lapped before the reader existed. It's a fixed-size ring rather than a log
+on purpose: a log grows without bound and makes the watched program do disk I/O,
+and the whole rule is that watching can't slow what's watched.
+
+
+**On one program instead of two** — you're right that this is a watch build,
+so the usual objection doesn't fully apply. But the property the design rests on
+is that the program *never waits for a reader, never learns one is there*. An
+HTTP server inside it means a thread, a socket, and clients — the program
+would be doing exactly what it promises not to. What I can do is make it *one
+command*: a flag that has the watched program spawn the viewer as a child. Same
+guarantee, no second terminal.
+
+
+And `double_it` is a box, which is a plain C function — so `double_it()` is
+right.
+
+
+Let me take the pass.
+
+
+Now the page — ports on the edges, wires port-to-port, and values you can
+actually watch move.
+
+
+One command, and the viewer dies with the program. One fragility left though:
+the page maps event indices onto the map file's station order, so pointing it at
+a *different* map would draw a lie. Let me have the program dump its own.
+
+
+The program now draws itself, and the dump carries more than I was using —
+explicit indices and buffer capacities. Let me read those too.
+
+
+Committed. To see it:
+
+
+```sh
+
+make
+
+tmp/build/123-a-program-to-watch --trail=/dev/shm/minimal-soramech/live.ring --view
+
+```
+
+
+Then `http://localhost:8801/` — one command, and the viewer stops when you
+interrupt the program.
+
+
+## The dashed slots
+
+
+A bug, and thanks for spotting it. `.station.pinned rect` matched *every*
+rectangle inside a station, ports included. So any box you'd dragged had dashed
+ports too, and the page silently claimed there were two kinds of slot. The dash
+means pinned and now applies to the outline only.
+
+
+## What changed
+
+
+**Blueprint** — pale lines on blue with the paper's own ruling underneath.
+That's what I took "light dark blue" to be pointing at: the issue files here are
+called blueprints and read like them, and this is the same drawing with the
+machine running inside it. Tell me if you meant something else.
+
+
+**Ports moved to the edges, and wires now join ports rather than boxes.** Which
+port a wire lands on is the whole of what a wire says, so the picture says it.
+Each port shows what it *is* — a ring buffer that can back up, a constant that
+always holds a value, or no source at all.
+
+
+**Values move.** A dot crosses the wire it went down. Its position comes from
+the curve arithmetic directly rather than asking the browser to measure the path
+— a measurement per frame per value is the one thing that would make watching
+cost something.
+
+
+**Buffer depth is derived.** The trail carries no values and no depths,
+deliberately. But a value arriving at a ring port is one more waiting, and a
+station running takes one from each of its ring ports — that's the readiness
+rule the engine itself follows, applied to the events the engine emitted. The
+port fills as the backlog grows and turns colour when it gets deep.
+
+
+**`double_it()`** — you were right, it's a box, which is a plain C function.
+
+
+## The one I'd underline
+
+
+Your questions made me look at how the page turns an event into a box, and it
+was **counting down the map file**. The trail carries station *indices*. Point
+the viewer at a map of the same shape in a different order and every event would
+have landed on the wrong station — confidently, with no way to tell. The
+watched program now dumps its own live graph and the viewer reads that, so
+drawing the right thing is a property of the wiring rather than of who
+remembered to pass the right file. The dump also states each index and each
+buffer's capacity outright, which the page now reads instead of inferring.
+
+
+## Still not verified
+
+
+How it looks. This machine has no working browser — I tried headless Firefox
+on a blank page and it hangs, so it isn't my page. Everything the page is served
+is checked and its structure with it; the drawing wants your eyes.
 
 
 --------------------------------------------------------------------------------

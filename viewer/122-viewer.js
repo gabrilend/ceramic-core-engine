@@ -129,8 +129,21 @@ function parseMap(text) {
 const BOX_W = 190, HEAD_H = 40, PORT_H = 20, BOX_MIN = 62;
 const PAD_X = 130, PAD_Y = 80, MARGIN = 48;
 const GLOW_MS = 700;         /* how long a station stays lit after running */
-const FLIGHT_MS = 520;       /* how long a value takes to cross a wire */
 const FRAME_MS = 33;
+
+/*
+ * A value crosses the page at a **fixed speed** rather than in a fixed
+ * time. The trail says nothing about how long a delivery took — it
+ * carries the moment, not a duration — so any speed here is a picture
+ * rather than a measurement. Given that, the honest choice is the one
+ * where distance on screen means something: a long wire takes longer
+ * to cross than a short one, because it is longer.
+ *
+ * Bounded at both ends so a wire between neighbouring boxes is still
+ * visible and one across the whole graph does not crawl.
+ */
+const VALUE_SPEED = 0.42;    /* world units per millisecond */
+const FLIGHT_MIN = 180, FLIGHT_MAX = 1400;
 /* }}} */
 
 /* {{{ boxHeight(s) */
@@ -146,6 +159,48 @@ function gridFor(count) {
     const cols = Math.ceil(Math.sqrt(count));
     return { cols, rows: Math.ceil(count / cols) };
 }
+/* }}} */
+
+/* {{{ View */
+/*
+ * Where the window is looking, in the drawing's own coordinates. The
+ * paper has no edges: the grid is drawn to cover whatever is in view
+ * and the picture is never resized to fit its contents, which is what
+ * made the whole graph jump every time a box was dragged past the
+ * old boundary.
+ */
+const View = { x: 0, y: 0, scale: 1 };
+const ZOOM_MIN = 0.15, ZOOM_MAX = 3;
+
+function viewport() {
+    const box = svg.getBoundingClientRect();
+    return { w: box.width || 1200, h: box.height || 700 };
+}
+
+function applyView() {
+    const { w, h } = viewport();
+    svg.setAttribute("viewBox",
+        `${View.x} ${View.y} ${w / View.scale} ${h / View.scale}`);
+}
+
+/* Screen to drawing, which every pointer event needs. */
+function pointAt(event) {
+    const box = svg.getBoundingClientRect();
+    return {
+        x: View.x + (event.clientX - box.left) / View.scale,
+        y: View.y + (event.clientY - box.top) / View.scale,
+    };
+}
+
+/* {{{ lookAt(cx, cy, scale) */
+function lookAt(cx, cy, scale) {
+    const { w, h } = viewport();
+    View.scale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, scale));
+    View.x = cx - w / View.scale / 2;
+    View.y = cy - h / View.scale / 2;
+    applyView();
+}
+/* }}} */
 /* }}} */
 
 /* {{{ Picture */
@@ -258,9 +313,19 @@ function portAnchor(s, side, index) {
 /* {{{ curveThrough(a, b) */
 function curveThrough(a, b) {
     const bend = Math.max(40, Math.abs(b.x - a.x) / 2);
-    return { d: `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`,
-             p0: a, p1: { x: a.x + bend, y: a.y },
-             p2: { x: b.x - bend, y: b.y }, p3: b };
+    const c = { d: `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`,
+                p0: a, p1: { x: a.x + bend, y: a.y },
+                p2: { x: b.x - bend, y: b.y }, p3: b };
+    /* Long enough for timing: the average of the straight line and the
+     * way round the control points, which is the usual cheap estimate
+     * and is nowhere near worth measuring properly for this. */
+    const span = (p, q) => Math.hypot(q.x - p.x, q.y - p.y);
+    const chord = span(c.p0, c.p3);
+    const net = span(c.p0, c.p1) + span(c.p1, c.p2) + span(c.p2, c.p3);
+    c.length = (chord + net) / 2;
+    c.duration = Math.min(FLIGHT_MAX,
+                          Math.max(FLIGHT_MIN, c.length / VALUE_SPEED));
+    return c;
 }
 /* }}} */
 
@@ -279,28 +344,33 @@ function alongCurve(c, t) {
 /* }}} */
 
 /* {{{ drawGrid(w, h) */
-function drawGrid(w, h) {
+function drawGrid() {
+    const { w, h } = viewport();
+    const wide = w / View.scale, tall = h / View.scale;
+
+    /* The ruling coarsens as you pull back, so it never becomes a
+     * solid wash of lines at low zoom. */
+    let step = 40;
+    while (step * View.scale < 18) step *= 4;
+
+    const x0 = Math.floor(View.x / step) * step;
+    const y0 = Math.floor(View.y / step) * step;
+
     gridLayer.replaceChildren();
-    for (let x = 0; x < w; x += 40)
-        gridLayer.appendChild(el("line", { x1: x, y1: 0, x2: x, y2: h }));
-    for (let y = 0; y < h; y += 40)
-        gridLayer.appendChild(el("line", { x1: 0, y1: y, x2: w, y2: y }));
+    for (let x = x0; x < View.x + wide + step; x += step)
+        gridLayer.appendChild(el("line",
+            { x1: x, y1: y0, x2: x, y2: View.y + tall + step }));
+    for (let y = y0; y < View.y + tall + step; y += step)
+        gridLayer.appendChild(el("line",
+            { x1: x0, y1: y, x2: View.x + wide + step, y2: y }));
 }
 /* }}} */
 
 /* {{{ draw() */
 function draw() {
     const now = performance.now();
-
-    let widest = 600, tallest = 400;
-    for (const s of Picture.stations) {
-        const p = Picture.placed.get(s.index);
-        if (!p) continue;
-        widest = Math.max(widest, p.x + BOX_W + MARGIN);
-        tallest = Math.max(tallest, p.y + boxHeight(s) + MARGIN);
-    }
-    svg.setAttribute("viewBox", `0 0 ${widest} ${tallest}`);
-    drawGrid(widest, tallest);
+    applyView();
+    drawGrid();
 
     /* --- wires, port to port --- */
     wiresLayer.replaceChildren();
@@ -387,11 +457,14 @@ function draw() {
 
     /* --- values in flight --- */
     flightLayer.replaceChildren();
-    Picture.flights = Picture.flights.filter((f) => now - f.t0 < FLIGHT_MS);
+    Picture.flights = Picture.flights.filter((f) => {
+        const c = curves.get(f.key);
+        return c ? now - f.t0 < c.duration : now - f.t0 < FLIGHT_MAX;
+    });
     for (const f of Picture.flights) {
         const c = curves.get(f.key);
         if (!c) continue;
-        const t = (now - f.t0) / FLIGHT_MS;
+        const t = Math.min(1, (now - f.t0) / c.duration);
         const at = alongCurve(c, t);
         flightLayer.appendChild(el("circle", { class: "value-halo", cx: at.x, cy: at.y, r: 9 }));
         flightLayer.appendChild(el("circle", { class: "value", cx: at.x, cy: at.y, r: 4 }));
@@ -412,33 +485,58 @@ function draw() {
  * one in the wrong order.
  */
 let dragging = null;
-function pointAt(event) {
-    const box = svg.getBoundingClientRect();
-    const view = svg.viewBox.baseVal;
-    return {
-        x: (event.clientX - box.left) / box.width * view.width,
-        y: (event.clientY - box.top) / box.height * view.height,
-    };
-}
+let panning = null;
+
 svg.addEventListener("mousedown", (event) => {
     const g = event.target.closest(".station");
-    if (!g) return;
-    const index = +g.dataset.index;
-    const at = Picture.placed.get(index);
     const p = pointAt(event);
-    dragging = { index, dx: p.x - at.x, dy: p.y - at.y };
-    g.classList.add("dragging");
+    if (g) {
+        const index = +g.dataset.index;
+        const at = Picture.placed.get(index);
+        dragging = { index, dx: p.x - at.x, dy: p.y - at.y };
+        g.classList.add("dragging");
+    } else {
+        /* Anywhere else is the paper, and dragging the paper moves the
+         * window over it. */
+        panning = { fromX: event.clientX, fromY: event.clientY,
+                    atX: View.x, atY: View.y };
+        svg.style.cursor = "grabbing";
+    }
     event.preventDefault();
 });
+
 window.addEventListener("mousemove", (event) => {
-    if (!dragging) return;
-    const p = pointAt(event);
-    const at = Picture.placed.get(dragging.index);
-    at.x = p.x - dragging.dx;
-    at.y = p.y - dragging.dy;
-    at.pinned = true;
+    if (dragging) {
+        const p = pointAt(event);
+        const at = Picture.placed.get(dragging.index);
+        at.x = p.x - dragging.dx;
+        at.y = p.y - dragging.dy;
+        at.pinned = true;
+        return;
+    }
+    if (panning) {
+        View.x = panning.atX - (event.clientX - panning.fromX) / View.scale;
+        View.y = panning.atY - (event.clientY - panning.fromY) / View.scale;
+    }
 });
-window.addEventListener("mouseup", () => { dragging = null; });
+
+window.addEventListener("mouseup", () => {
+    dragging = null;
+    panning = null;
+    svg.style.cursor = "";
+});
+
+/* Zoom about the pointer, so whatever is under it stays under it. */
+svg.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const before = pointAt(event);
+    const step = Math.exp(-event.deltaY * 0.0016);
+    View.scale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, View.scale * step));
+    applyView();
+    const after = pointAt(event);
+    View.x += before.x - after.x;
+    View.y += before.y - after.y;
+}, { passive: false });
 /* }}} */
 
 /* {{{ saving a layout */
@@ -560,6 +658,49 @@ function receive(e) {
 }
 /* }}} */
 
+/* {{{ frameTheGraph() */
+function frameTheGraph() {
+    if (Picture.stations.length === 0) return;
+
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const s of Picture.stations) {
+        const p = Picture.placed.get(s.index);
+        if (!p) continue;
+        left = Math.min(left, p.x);
+        top = Math.min(top, p.y);
+        right = Math.max(right, p.x + BOX_W);
+        bottom = Math.max(bottom, p.y + boxHeight(s));
+    }
+    if (!isFinite(left)) return;
+
+    const { w, h } = viewport();
+    const fits = Math.min(w / (right - left + 2 * MARGIN),
+                          h / (bottom - top + 2 * MARGIN));
+
+    /* The entrance if there is one, otherwise the middle of everything. */
+    const door = Picture.stations.find((s) => s.door === "in");
+    const at = door ? Picture.placed.get(door.index) : null;
+    const cx = at ? at.x + BOX_W / 2 : (left + right) / 2;
+    const cy = at ? at.y + BOX_MIN / 2 : (top + bottom) / 2;
+
+    /*
+     * If the graph fits, frame the whole of it centred on the entrance.
+     * If it does not, come in to a readable size and let the rest be
+     * found by panning — which is the point of the paper being endless.
+     */
+    lookAt(cx, cy, Math.min(1.1, Math.max(0.45, fits)));
+
+    /* Centred on the entrance can push everything else off one side, so
+     * pull back toward the middle when the whole thing would fit. */
+    if (fits >= 0.45 && at) {
+        const midX = (left + right) / 2, midY = (top + bottom) / 2;
+        View.x += (midX - cx) * 0.6;
+        View.y += (midY - cy) * 0.6;
+        applyView();
+    }
+}
+/* }}} */
+
 /* {{{ start() */
 async function start() {
     try {
@@ -583,6 +724,14 @@ async function start() {
         }
     } catch (ignored) { /* no layout is the ordinary case */ }
 
+    /*
+     * Open looking at the way in. A program is read from its entrance
+     * outward, so that is where a first glance belongs — and the scale
+     * is chosen to fit the whole graph if it will fit comfortably,
+     * because a picture nobody can read is not an improvement on no
+     * picture.
+     */
+    frameTheGraph();
     draw();
 
     const stream = new EventSource("/events");
@@ -602,6 +751,7 @@ async function start() {
      * to move whether or not anything arrived, and a program moving
      * fast would otherwise spend every frame on layout. */
     setInterval(draw, FRAME_MS);
+    window.addEventListener("resize", applyView);
 }
 /* }}} */
 
