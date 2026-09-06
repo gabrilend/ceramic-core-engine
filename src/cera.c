@@ -2645,6 +2645,17 @@ int cera_map_in_port_depth(cera_map_t *m, int station, int port)
 /* {{{ cera_map_destroy() */
 void cera_map_destroy(cera_map_t *m)
 {
+    /*
+     * The count that rides out on the closing event, and **the walk
+     * that produces it, both inside the flag**.
+     *
+     * The arguments to an emit vanish when watching is compiled out,
+     * but anything computed on the line above it does not: an unwatched
+     * program was reading an atomic per station on every teardown to
+     * feed an event it never sends. A watched program may be slower
+     * than an unwatched one; an unwatched one pays nothing.
+     */
+#ifdef CERA_WATCH
     long total = 0;
     for (int i = 0; i < m->n_stations; i++) {
         cera_station_t *s = cera_map_station(m, i);
@@ -2652,6 +2663,7 @@ void cera_map_destroy(cera_map_t *m)
             total += atomic_load_explicit(&s->runs, memory_order_relaxed);
     }
     CERA_EMIT(m, CERA_WATCH_DONE, total, 0, 0, 0, 0);
+#endif
     cera_watch_close(m);
 
     cera_map_observe_stop(m);
@@ -3582,11 +3594,19 @@ int cera_map_deliver_value(cera_map_t *m, int station, int port, const void *val
      * single compare-and-swap and the copy that follows goes into
      * bytes this thread owns, so deliveries into one station never
      * serialize against each other — only task construction does. */
+    /* Whether the write grew the buffer, which is only knowable by
+     * looking before and after — so the looking is inside the flag with
+     * the emit it feeds. This is the delivery path, where a comparison
+     * per value is exactly the cost that must not be paid unasked. */
+#ifdef CERA_WATCH
     int grew_before = s->in_ports[port].growths;
+#endif
     in_port_write(s, &s->in_ports[port], value);
+#ifdef CERA_WATCH
     if (s->in_ports[port].growths != grew_before)
         CERA_EMIT(m, CERA_WATCH_GREW, station, port,
                   atomic_load(&s->in_ports[port].capacity), 0, 0);
+#endif
 
     STATS_MARK(wait_start);
     pthread_mutex_lock(&s->mutex);

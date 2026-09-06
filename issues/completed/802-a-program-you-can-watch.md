@@ -30,6 +30,29 @@ is a different program with no reason to have been built for watching,
 and having both halves in one place is what keeps the ring's shape
 written down once.
 
+### What the flag has to cover, learned the hard way
+
+The arguments to an emit vanish when watching is compiled out. **Anything
+computed on the line above it does not.**
+
+Two places got that wrong: the closing event's tally of how many tasks
+ran in all, and the check for whether a write grew a buffer. Both left
+their working behind — an unwatched program was reading an atomic per
+station on every teardown and comparing a growth count on every
+delivery, feeding events it would never send. That is the rule this
+issue is built on, broken by the code that implements it: a watched
+program may be slower, an unwatched one pays nothing.
+
+It surfaced as a build failure on somebody else's machine, because their
+compiler said *variable set but not used* where the one here said
+nothing at all. The warning was the smaller half of it.
+
+`tests/131-test-a-second-opinion.sh` now compiles the engine under every
+compiler on the machine, with the flag and without, warnings as errors.
+**One compiler is one opinion**, and the half of a flag that is usually
+not compiled is exactly where a mistake can sit unseen. It was proved by
+putting the fault back and watching the second compiler find it.
+
 ### What the test holds down
 
 Five things, and the last two are the ones worth having:

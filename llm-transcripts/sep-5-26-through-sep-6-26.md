@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 22:12:35
+Generated on: 2026-09-05 22:26:29
 
 --------------------------------------------------------------------------------
 
@@ -2898,6 +2898,128 @@ If you want the prettier one, the four-station example is
 `123-a-program-to-watch --view --listen=all`. The ladder is the better demo
 though — five stations, the comparators visibly splitting the stream three
 ways, and `collect` sitting there with two full buffers waiting on the third.
+
+
+--------------------------------------------------------------------------------
+
+### User Request 18
+
+The HTML documentation is resetting the zoom level everytime the user switches
+to a different page.
+
+
+Okay she's just going to run it from her computer instead. Can you tell me what
+to run? Also, are we up to date on git commits so I can push so she can pull?
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 18
+
+Let me look at all three — starting with the docs, since I should see the
+actual behaviour rather than guess at it.
+
+
+The nav is its own scroll region (`overflow-y: auto`) over ~150 entries, and
+every page is a full reload — so you lose your place in the index each time.
+Let me see what script the pages already carry.
+
+
+The sweep deleted it — it removes anything no source produces, and it doesn't
+know about this file yet.
+
+
+`make viewer` doesn't touch the docs, so it needs only a C compiler. Let me
+prove that from clean.
+
+
+Fixed, and yes — you're clear to push.
+
+
+## The documentation
+
+
+Two things were throwing your place away, and I fixed both.
+
+
+**The index scroll.** Every page is a whole document, so following a link
+discarded everything the browser held — and with ~150 entries in that sidebar,
+you lost your position on every click. It now keeps its scroll across pages in
+per-tab storage, so it survives a link and vanishes with the tab. On a first
+visit there's nothing to restore, so it scrolls the page you're reading into
+view instead.
+
+
+**The text size.** A browser's own zoom is a browser setting — a page can't
+read it or keep it, and on some setups it genuinely resets per document with
+nothing able to stop it. So there's now a size of its own: buttons bottom-right,
+`+` `-` `0` from the keyboard, remembered between pages *and* between visits.
+
+
+Writing it caught the sweep doing its job — the new file appeared and was
+deleted again on the generator's very next line, because the sweep removes
+anything no source produced. A file the generator writes without a document
+behind it has to be named in that list, which is now stated.
+
+
+## Git
+
+
+```
+
+branch:   minimal
+
+unpushed: 4 commits
+
+dirty:    CLAUDE.md only — not mine, I've left it alone
+
+```
+
+
+`git push` and you're done. (You may want to deal with `CLAUDE.md` first or
+leave it; it's been modified since before this session.)
+
+
+## What she runs
+
+
+```sh
+
+git clone https://github.com/gabrilend/ceramic-core-engine.git
+
+cd ceramic-core-engine
+
+make viewer
+
+tmp/build/128-watch-a-map --map=127-the-ladder.map \
+
+    --trail=/dev/shm/ceramic-core-engine/live.ring --view
+
+```
+
+
+Then `http://localhost:8723/` on her machine. Ctrl-C stops both the program and
+the viewer.
+
+
+**She needs a C compiler and nothing else.** I checked that from clean: `make
+viewer` builds the four programs without invoking LuaJIT once. LuaJIT is only
+for regenerating the documentation site, and the site is committed, so she can
+just open `docs/HTML/index.html` in a browser without building anything.
+
+
+Two things that might bite:
+
+
+**The RAM directory.** `make viewer` creates `/tmp/<project>` and
+`/dev/shm/<project>` for her clone's own name — if she clones to a directory
+called something else, use that name in the `--trail` path. Or just use any
+writable path; the trail is only a file.
+
+
+**`/dev/shm` must allow writes** — standard on Linux. If she's on macOS it
+won't exist; use `/tmp/live.ring` instead, which works fine since the trail is
+only read, never executed.
 
 
 --------------------------------------------------------------------------------
