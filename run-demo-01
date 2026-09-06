@@ -1,0 +1,4 @@
+#!/bin/bash
+
+make viewer
+tmp/build/128-watch-a-map --map=127-the-ladder.map --trail=/dev/shm/ceramic-core-engine/live.ring --view
