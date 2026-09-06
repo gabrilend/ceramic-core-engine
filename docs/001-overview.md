@@ -1,5 +1,19 @@
 # 001 — Overview
 
+**The ceramic core engine is a C library, in one source file, that runs
+your program on every core of the machine without you writing a single
+thread.**
+
+You write ordinary C functions. You write a second file saying which
+function feeds which. That is the whole of it — the engine turns the
+shape you drew into work spread across every core, and there is no main
+loop, no thread, and no scheduler anywhere in what you wrote.
+
+It is two files to add to a project (`cera.c` and `cera.h`), it needs a
+C compiler and nothing else, and it is licensed AGPLv3.
+
+---
+
 ```
    in ─┬─ twice ──┐
        │          ├─ total
@@ -15,41 +29,56 @@ That is the whole idea. You write small C functions, you say what feeds
 what, and the shape executes itself across every core on the machine.
 There is no main loop and no scheduler you write.
 
-## The three nouns
+## The pieces
 
-**A box** is a plain C function. No registration, no macro, no header
-to edit:
+**A box function** is a plain C function you write. No registration, no
+macro, no header to edit:
 
 ```c
 int add(int a, int b) { return a + b; }
 ```
 
 It takes its arguments by value, returns one value, and **may not
-remember anything between calls** — no statics, no globals. The station
-does the remembering instead.
+remember anything between calls** — no statics, no globals.
 
-**A station** is one placement of a box. It owns the buffers holding
-values waiting for that box, the mutex guarding them, and the list of
-places its output goes.
+**A box** is that function as the engine knows it: a template, not yet
+anywhere in particular.
+
+**A station** is one placement of a box. It has its own **input ports**,
+its own **output ports**, and its own **wiring** saying where each output
+goes. The ports and the wiring are what make a shape out of a pile of
+functions — the topology of the program is nothing but stations and the
+lines between them.
 
 **Two stations placing the same box are two independent things.** Same
-compiled code, different buffers, different wiring, different
-neighbours. That is the whole reason the word exists: `add` is a
-function, but *this* `add` — fed from here, sending there — is a
-station.
+compiled code, different ports, different neighbours. That is why the
+word exists: `add` is a function, but *this* `add` — fed from here,
+sending there — is a station.
 
-**A task** is one invocation: a copy of each input value plus a pointer
-to the code to run. It is created the moment a station's inputs are all
-present and destroyed by the worker that runs it.
+**A task** is one invocation made concrete: a copy of each input value,
+a pointer to the function to run, and somewhere to put what it returns.
+
+**The thread pool** is a queue of tasks. A worker thread with nothing to
+do asks the pool for one, takes ownership of it, runs the function
+inside it, and delivers the returned value into whichever input ports
+the wiring names.
+
+**A readiness check** happens at the instant a value is delivered — by
+the worker that just delivered it, before it goes back to its own
+business. It looks at the receiving station's other ports. If every one
+of them now holds a value, it takes one from each, builds a task, and
+puts it on the pool.
+
+Those two paragraphs are the engine. Everything else is detail.
 
 **A task is not free**, and that is the trade rather than a footnote.
 Every invocation allocates, copies each input, goes on a queue, and is
-freed at the end. For work measured in nanoseconds that loses to a
-plain function call and always will.
+freed at the end. For work measured in nanoseconds that loses to a plain
+function call and always will.
 
 | | lives | as long as |
 |---|---|---|
-| box | compiled into the binary | forever |
+| box function | compiled into the binary | forever |
 | station | one placement in a map | the program |
 | task | one invocation | microseconds |
 
@@ -86,9 +115,9 @@ anything, and the answer surprises everybody.
 Send two values into a graph that splits and rejoins:
 
 ```
-        ┌─ slow ──┐
-   in ──┤         ├─ meet
-        └─ fast ──┘
+             ┌─ slow() ──┐
+   input() ──┤           ├─ meet()
+             └─ fast() ──┘
 ```
 
 The two paths run on different threads at different speeds. `meet` takes
@@ -109,25 +138,64 @@ two tasks in the pool, and whichever workers are free take them. A map
 with wide fan-out is parallel because it is wide.
 
 State lives on wires. To count, wire a box's output back into its own
-input — the running total travels round the loop. This is
-[`maps/132-the-accumulator.map`](../maps/132-the-accumulator.map), and it
+input — the running total travels round the loop.
+
+The two functions it uses are these, and they are the whole of the C:
+
+```c
+int keep(int x)         { return x; }        /* hands a value on unchanged */
+int add(int a, int b)   { return a + b; }    /* the arithmetic */
+```
+
+`keep` looks pointless and is not: a station has to place *some*
+function, and a station whose job is to be a door — the way in, the
+place results collect — wants one that changes nothing.
+
+Here is the map, which is
+[`maps/132-the-accumulator.map`](../maps/132-the-accumulator.map) and
 runs:
 
 ```
-station feed keep p entry
+station feed src/boxes/029-demo-boxes.c:keep p entry
   out 0 - total.0
 
-station total add p
+station total src/boxes/029-demo-boxes.c:add p
   out 0 - total.1     # back into itself: the running total
   out 0 - seen.0      # and out to be collected
 
-station seen keep p result
+station seen src/boxes/029-demo-boxes.c:keep p result
 ```
+
+Each station names **a file and a function inside it**. The bare form —
+`keep` — means the same thing when only one file defines that name.
+Note that `feed` and `seen` place the *same function* and are still two
+entirely separate stations, which is the point made further up.
+
+### Following one value through
+
+Deliver a `0` to `total.1` to prime the loop, then send in a `1`:
+
+1. `1` arrives at `feed`'s input port. `feed` has one port and it is now
+   full, so the readiness check passes and a task goes on the pool.
+2. A worker runs `keep(1)`, which returns `1`. The wiring says exit 0
+   goes to `total.0`, so the worker writes it into that port's ring
+   buffer and then checks `total`.
+3. `total` has two ports. Port 0 now holds `1`; port 1 holds the `0` we
+   primed it with. **Both are full**, so the worker takes one value from
+   each, builds a task, and pushes it.
+4. A worker runs `add(1, 0)` and gets `1`. That exit is wired to two
+   places, so the value goes to both: back into `total.1`, and out to
+   `seen`.
+5. `seen` runs `keep(1)` and, being a result station with nothing wired
+   after it, holds the value instead of discarding it.
+
+Now `total.1` holds `1` and `total.0` is empty, so nothing runs until
+the next input arrives. Send `2` and the same walk produces `3`.
 
 Feed it 1, 2, 3, 4, 5 and `seen` collects **1, 3, 6, 10, 15** — every
 running total, because every run produces one.
 
-Two things this small example will teach you the hard way:
+Two things this small example teaches:
 
 **The loop needs one value to start with.** Deliver a zero to `total.1`
 before the first input, or the station never has both ports full and
@@ -135,9 +203,9 @@ never runs at all. A back-edge with nothing on it is a program that sits
 still.
 
 **The order you take results out in is not promised.** Collecting the
-five and keeping the last one gave 15 four times and 6 once. A port has
-no head and no tail — which is the same rule as the section above,
-arriving somewhere you did not expect it.
+five and keeping the last gave 15 four times and 6 once. A port has no
+head and no tail — which is the rule from the section above, arriving
+somewhere you did not expect it.
 
 **It is a bad fit when the steps are too small.** A box that adds two
 integers costs more in task overhead than it saves in parallelism, and

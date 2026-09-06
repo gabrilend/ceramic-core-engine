@@ -1,6 +1,6 @@
 # Conversation Summary: e1dd3730-6b88-4b9f-a4bb-32130c092d39
 
-Generated on: 2026-09-05 23:56:30
+Generated on: 2026-09-06 00:23:11
 
 --------------------------------------------------------------------------------
 
@@ -3441,6 +3441,87 @@ station and not just a function" tells me whether to read it.
 
 Want me to apply these to 001 now, or keep walking and collect ideas for 002
 through 010 first?
+
+
+--------------------------------------------------------------------------------
+
+### User Request 26
+
+Let's try fixing 001 and see how it goes.
+
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 26
+
+Let me verify the accumulator actually works before I put it in a document.
+
+
+The self-wire is accepted; my test was wrong — a designated result only holds
+when nothing is wired to it. Let me fan out instead.
+
+
+Verified — 15, deterministic. The loop needs a seed on the back-edge port or
+the station never becomes ready; that's worth documenting too.
+
+
+Let me check the map in the document actually loads, since I wrote it from
+memory of the C version.
+
+
+The accumulator is nondeterministic in what I *measured* — `last = 6` on one
+run. Results come out of a port in no guaranteed order, so "the last one taken"
+isn't "the final total". Let me check properly.
+
+
+Better — it holds *every* running total: **1, 3, 6, 10, 15**. And my first run
+took them out in a different order, which is the document's own no-ordering rule
+biting the document's own example. Let me say that.
+
+
+001 rewritten and committed. 180 lines, all 17 ideas applied.
+
+
+**Two things I got wrong writing it, both caught by running the example:**
+
+
+The accumulator doesn't hold *one* total — it holds **every running total**,
+1/3/6/10/15, one per run. Obvious once seen, and not what the old text implied.
+
+
+And collecting those five and keeping the last gave **15 four times and 6
+once**. A port has no head and no tail, so the take order isn't promised. The
+document's own rule caught the document's own example — so both facts are now
+stated where a reader will hit them, and the example teaches the no-ordering
+rule instead of just asserting it.
+
+
+The map is real and compiled in: `maps/132-the-accumulator.map`.
+
+
+**Structure now:**
+
+
+| was | is |
+
+|---|---|
+
+| three prose paragraphs before anything concrete | picture first, then a three-line box, then a map file |
+
+| "distillation of SoraMech" in ¶2 | a note at the bottom, after you know what it is |
+
+| pairing described in prose, mid-section | its own heading, *"Do two values stay together?"*, with a diagram and the answer **No** |
+
+| "propagates the way a fire propagates" | cut — fire spreads to everything adjacent, which is the opposite of the rule |
+
+| "Minimal SoraMech" throughout | ceramic core engine, with the name note explaining both |
+
+| four absences, no capabilities | absences *and* the three things easy to miss: rewiring, late boxes, capture |
+
+| reading order describing documents | a table saying what each one **answers** |
+
+
+Next: **002 — stations and ports**?
 
 
 --------------------------------------------------------------------------------
