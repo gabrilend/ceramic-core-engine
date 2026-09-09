@@ -110,6 +110,112 @@ static void removal_cuts_every_wire_first(void)
 }
 /* }}} */
 
+/* {{{ static void a_whole_subgraph_comes_out_at_once() */
+/*
+ * **A set of stations removed in one sweep** (issue 216a), which is
+ * what ending a program made of several stations actually needs.
+ *
+ * Six stations: three that belong together and are wired to each
+ * other, one outsider feeding into the group, one the group feeds, and
+ * a wire between the two outsiders that has nothing to do with any of
+ * it. Removing the three in one call has to cut the wires *into* the
+ * group, the wires *inside* it, and nothing else — the interior wires
+ * needing no special handling, because a wire from one member to
+ * another is named by a member like any other.
+ *
+ * The surviving outsider-to-outsider wire is the half that makes the
+ * rest mean something: a sweep that cut everything would pass every
+ * other check here.
+ */
+static void a_whole_subgraph_comes_out_at_once(void)
+{
+    cera_map_t *m = cera_map_create(6);
+    /* 0, 1, 2 belong together. 3 feeds them; 4 is fed by them. */
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 2, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 3, "seven", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 4, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 5, "keep", CERA_STATION_PLAIN);
+
+    cera_map_connect(m, 0, 0, 1, 0);   /* interior */
+    cera_map_connect(m, 1, 0, 2, 0);   /* interior */
+    cera_map_connect(m, 3, 0, 1, 0);   /* from outside, into the group */
+    cera_map_connect(m, 2, 0, 4, 0);   /* out of the group */
+    cera_map_connect(m, 3, 0, 5, 0);   /* outsider to outsider */
+
+    check(wires_naming(m, 1) == 2, "two wires name the middle of the group");
+    check(wires_naming(m, 5) == 1, "and one names the unrelated outsider");
+
+    cera_map_start(m, 4);
+
+    const int group[] = { 0, 1, 2 };
+    check(cera_map_remove_stations(m, group, 3) == 0, "the group came out");
+
+    check(wires_naming(m, 0) == 0 && wires_naming(m, 1) == 0
+          && wires_naming(m, 2) == 0,
+          "no wire names any member — the ones from outside and the ones "
+          "inside went together");
+    check(wires_naming(m, 5) == 1,
+          "and the wire between two stations that were never in the group "
+          "is untouched");
+
+    cera_pool_release(m->pool);
+    cera_pool_join(m->pool);
+    map_scrap_sweep(m);
+    check(cera_map_station(m, 0)->call == NULL
+          && cera_map_station(m, 1)->call == NULL
+          && cera_map_station(m, 2)->call == NULL,
+          "and all three places came free together");
+    check(cera_map_station(m, 3)->call != NULL
+          && cera_map_station(m, 4)->call != NULL,
+          "while the stations that stayed are still standing");
+
+    cera_map_destroy(m);
+    printf("  three stations wired to each other and to outsiders came out "
+           "in one sweep\n");
+}
+/* }}} */
+
+/* {{{ static void a_bad_member_changes_nothing() */
+/*
+ * **A set with one bad member leaves the program exactly as it was.**
+ *
+ * Every index is checked before anything is marked, so the refusal
+ * cannot land halfway — which matters more here than for a single
+ * station, because half a pruned program is a shape nobody described
+ * and nobody can reason about.
+ */
+static void a_bad_member_changes_nothing(void)
+{
+    cera_map_t *m = cera_map_create(3);
+    cera_map_place_box(m, 0, "seven", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 1, "keep", CERA_STATION_PLAIN);
+    cera_map_place_box(m, 2, "keep", CERA_STATION_PLAIN);
+    cera_map_connect(m, 0, 0, 1, 0);
+    cera_map_connect(m, 1, 0, 2, 0);
+
+    const int reaching_past[] = { 0, 1, 99 };
+    check(cera_map_remove_stations(m, reaching_past, 3) != NULL,
+          "a station outside the table refused the whole set");
+    check(cera_map_station(m, 0)->call != NULL
+          && cera_map_station(m, 1)->call != NULL,
+          "and the members that were fine are still there");
+    check(wires_naming(m, 1) == 1 && wires_naming(m, 2) == 1,
+          "with every wire still standing");
+
+    const int twice[] = { 1, 1 };
+    check(cera_map_remove_stations(m, twice, 2) != NULL,
+          "and naming one station twice is refused rather than removed "
+          "twice, because the second pass would be removing something "
+          "that is no longer there");
+
+    cera_map_destroy(m);
+    printf("  a set with a bad member refused whole, leaving the map "
+           "untouched\n");
+}
+/* }}} */
+
 /* {{{ static void the_place_is_reused() */
 /*
  * The point of removing anything: a program that adds and removes
@@ -271,6 +377,8 @@ static void an_unplaced_box_unloads(void)
 int main(void)
 {
     removal_cuts_every_wire_first();
+    a_whole_subgraph_comes_out_at_once();
+    a_bad_member_changes_nothing();
     the_place_is_reused();
     removal_under_load();
     an_unplaced_box_unloads();

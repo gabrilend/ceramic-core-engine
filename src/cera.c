@@ -6980,35 +6980,105 @@ static void reclaim_station(void *p)
 /* {{{ cera_map_remove_station() */
 const char *cera_map_remove_station(cera_map_t *m, int station)
 {
+    return cera_map_remove_stations(m, &station, 1);
+}
+/* }}} */
+
+/* {{{ names_one_of() */
+/*
+ * Whether an index is in the set being removed. A linear scan, because
+ * a set is small and removal is rare — the walk that calls this is
+ * already the expensive part, and an index structure to make a
+ * ten-element search faster would be machinery answering a question
+ * nobody asks often.
+ */
+static int names_one_of(const int *stations, int count, int which)
+{
+    for (int i = 0; i < count; i++)
+        if (stations[i] == which)
+            return 1;
+    return 0;
+}
+/* }}} */
+
+/* {{{ cera_map_remove_stations() */
+/*
+ * **A set of stations, removed in one sweep of the table.**
+ *
+ * A wire lives in exactly one place — a destination record on the
+ * producing station's output port — and an input port carries nothing
+ * saying what feeds it. So finding every wire that points at a station
+ * means asking every station. For one that is right and cheap; for a
+ * set it was the same walk repeated, once per member, each taking and
+ * releasing a mutex per station visited.
+ *
+ * **The back-reference that would avoid the walk is deliberately not
+ * built.** An input port could carry a list of its sources, and removal
+ * would then ask only those. It is not worth it: every wire operation
+ * would maintain two structures that can disagree, and the destination
+ * set's entire safety argument is that it is immutable and swapped
+ * whole. Delivery — the hot path, run constantly — only ever asks
+ * *where does this value go*. Removal is rare. One sweep is the right
+ * price.
+ *
+ * **Everything is marked before any wire is cut**, so the whole set
+ * stops starting new work at one moment rather than one at a time. A
+ * wire from one removed station to another is named by a member of the
+ * set, so it is cut by the same pass — nothing has to know it was
+ * interior.
+ */
+const char *cera_map_remove_stations(cera_map_t *m, const int *stations,
+                                     int count)
+{
+    if (count <= 0)
+        return NULL;
+    if (!stations)
+        return said("removing stations from a list that is not there");
+
     pthread_mutex_lock(&m->rewire_mutex);
 
-    if (station < 0 || station >= m->n_stations) {
-        pthread_mutex_unlock(&m->rewire_mutex);
-        return said("removing a station outside the table");
-    }
-    cera_station_t *s = cera_map_station(m, station);
-    if (!s->call || atomic_load_explicit(&s->removed, memory_order_acquire)) {
-        pthread_mutex_unlock(&m->rewire_mutex);
-        return said("removing a station that is not there");
-    }
-
     /*
-     * Marked first, so nothing new starts from it while the wires are
-     * being cut. Values already on their way are discarded when they
-     * arrive, which is what this engine already does with a value
-     * that has nowhere to go.
+     * Every index checked before anything changes, so a set with one
+     * bad member leaves the program exactly as it was rather than
+     * half-pruned. After this the only way to fail is running out of
+     * memory.
      */
-    pthread_mutex_lock(&s->mutex);
-    atomic_store_explicit(&s->removed, 1, memory_order_release);
-    pthread_mutex_unlock(&s->mutex);
+    for (int i = 0; i < count; i++) {
+        int station = stations[i];
+        if (station < 0 || station >= m->n_stations) {
+            pthread_mutex_unlock(&m->rewire_mutex);
+            return said("removing a station outside the table");
+        }
+        cera_station_t *s = cera_map_station(m, station);
+        if (!s->call
+            || atomic_load_explicit(&s->removed, memory_order_acquire)) {
+            pthread_mutex_unlock(&m->rewire_mutex);
+            return said("removing a station that is not there");
+        }
+        for (int j = 0; j < i; j++)
+            if (stations[j] == station) {
+                pthread_mutex_unlock(&m->rewire_mutex);
+                return said("the same station named twice in one removal");
+            }
+    }
 
     /*
-     * Every wire that names this station, cut before the station
-     * goes. A wire lives only as a destination record on some
-     * station's output port, so this walk finds all of them — and
-     * because it happens first, nothing stale can survive to be
-     * followed afterwards. That is what makes reusing the place safe
-     * without a version on every wire.
+     * Marked first, so nothing new starts from any of them while the
+     * wires are being cut. Values already on their way are discarded
+     * when they arrive, which is what this engine already does with a
+     * value that has nowhere to go.
+     */
+    for (int i = 0; i < count; i++) {
+        cera_station_t *s = cera_map_station(m, stations[i]);
+        pthread_mutex_lock(&s->mutex);
+        atomic_store_explicit(&s->removed, 1, memory_order_release);
+        pthread_mutex_unlock(&s->mutex);
+    }
+
+    /*
+     * One pass. Because the marking happened first, nothing stale can
+     * survive to be followed afterwards, which is what makes reusing a
+     * place safe without a version on every wire.
      */
     for (int i = 0; i < m->n_stations; i++) {
         cera_station_t *other = cera_map_station(m, i);
@@ -7019,15 +7089,15 @@ const char *cera_map_remove_station(cera_map_t *m, int station)
             cera_dest_set_t *old = out_port_dests(p);
             if (!old)
                 continue;
-            int names_it = 0;
+            int names_any = 0;
             for (int d = 0; d < old->n; d++)
-                if (old->items[d].station == station)
-                    names_it = 1;
-            if (!names_it)
+                if (names_one_of(stations, count, old->items[d].station))
+                    names_any = 1;
+            if (!names_any)
                 continue;
-            /* Rebuilt without every wire to this station, in one new
-             * set rather than one per wire, so a walker sees the
-             * before or the after and never a partial cut. */
+            /* Rebuilt without every wire to any member of the set, in
+             * one new set rather than one per wire, so a walker sees
+             * the before or the after and never a partial cut. */
             cera_dest_set_t *fresh =
                 calloc(1, sizeof *fresh
                           + (size_t)(old->n > 0 ? old->n : 1)
@@ -7039,7 +7109,7 @@ const char *cera_map_remove_station(cera_map_t *m, int station)
             }
             int out = 0;
             for (int d = 0; d < old->n; d++)
-                if (old->items[d].station != station)
+                if (!names_one_of(stations, count, old->items[d].station))
                     fresh->items[out++] = old->items[d];
             fresh->n = out;
             atomic_store_explicit(&p->dests, fresh, memory_order_release);
@@ -7049,29 +7119,39 @@ const char *cera_map_remove_station(cera_map_t *m, int station)
     }
 
     /*
-     * Its parts handed to the scrapyard, which frees them and clears
+     * Their parts handed to the scrapyard, which frees them and clears
      * the record once nobody can still be inside a task built from
-     * this station. Nothing is detached here: a task being built
-     * right now reads the port count and the return size, and they
-     * have to still be there.
+     * them. Nothing is detached here: a task being built right now
+     * reads the port count and the return size, and they have to still
+     * be there.
      */
-    removed_parts_t *parts = calloc(1, sizeof *parts);
-    if (!parts) {
-        pthread_mutex_unlock(&m->rewire_mutex);
-        return said("out of memory removing a station");
-    }
-    parts->station = s;
-    parts->out_ports = s->out_ports;
-    parts->in_ports = s->in_ports;
-    parts->n_in_ports = s->n_in_ports;
-    if (m->station_names) {
-        parts->name = m->station_names[station];
-        m->station_names[station] = NULL;
+    for (int i = 0; i < count; i++) {
+        int station = stations[i];
+        cera_station_t *s = cera_map_station(m, station);
+
+        removed_parts_t *parts = calloc(1, sizeof *parts);
+        if (!parts) {
+            pthread_mutex_unlock(&m->rewire_mutex);
+            return said("out of memory removing a station");
+        }
+        parts->station = s;
+        parts->out_ports = s->out_ports;
+        parts->in_ports = s->in_ports;
+        parts->n_in_ports = s->n_in_ports;
+        if (m->station_names) {
+            parts->name = m->station_names[station];
+            m->station_names[station] = NULL;
+        }
+        map_retire(m, parts, reclaim_station);
     }
 
-    map_retire(m, parts, reclaim_station);
     pthread_mutex_unlock(&m->rewire_mutex);
-    CERA_EMIT(m, CERA_WATCH_REMOVED, station, 0, 0, 0, 0);
+
+    /* Said after the lock is dropped, one per station, because a
+     * watcher wants to see what happened rather than to be told about
+     * it while it is still happening. */
+    for (int i = 0; i < count; i++)
+        CERA_EMIT(m, CERA_WATCH_REMOVED, stations[i], 0, 0, 0, 0);
     return NULL;
 }
 /* }}} */

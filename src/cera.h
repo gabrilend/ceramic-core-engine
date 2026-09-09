@@ -401,6 +401,9 @@ void        cera_map_disconnect(cera_map_t *m, int from_station, int port,
                            int to_station, int to_port);
 
 const char *cera_map_remove_station(cera_map_t *m, int station);
+
+const char *cera_map_remove_stations(cera_map_t *m, const int *stations,
+                                     int count);
 /* }}} */
 
 /* {{{ 074 — boxes and maps compiled at run time */

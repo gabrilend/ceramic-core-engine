@@ -2091,6 +2091,42 @@ defended — a program is reached through its input and output
 stations, and holding anything else across a removal is your own
 affair.
 
+This is the set-of-one case of the call below, so there is one path
+rather than two that must agree.
+
+### cera_map_remove_stations()
+
+```c
+const char *cera_map_remove_stations(cera_map_t *m, const int *stations,
+                                     int count);
+```
+
+Take a set of stations out in **one** sweep of the table, which is
+what ending a program made of several stations needs.
+
+Finding every wire that points at a station means asking every
+station, because a wire lives only on the producing side and an
+input port carries nothing saying what feeds it. Done one at a
+time, pruning a fifty-station program meant fifty sweeps of the
+whole table, each locking and unlocking a mutex per station
+visited. One call does one sweep.
+
+**Every member is marked before any wire is cut**, so the whole set
+stops starting new work at one moment. A wire from one member to
+another is named by a member like any other, so interior wires need
+no special handling.
+
+**Every index is checked before anything changes**, so a set with
+one bad member leaves the program exactly as it was rather than
+half-pruned. Naming the same station twice is refused. After the
+checks the only way to fail is running out of memory.
+
+The back-reference that would avoid the sweep is deliberately not
+built: every wire operation would then maintain two structures that
+can disagree, and the destination set's whole safety argument is
+that it is immutable and swapped whole. Delivery — the hot path —
+only ever asks where a value goes. Removal is rare.
+
 
 ## 074 — boxes and maps compiled at run time
 

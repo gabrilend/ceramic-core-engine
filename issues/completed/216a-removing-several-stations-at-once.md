@@ -2,21 +2,18 @@
 
 ## Current behavior
 
-**Removing one station sweeps the whole table.** A wire exists in
-exactly one place — an entry in the destination set on the producing
-station's output port — and an input port has no field naming what feeds
-it. So finding every wire that points at a station means asking every
-station in the table.
+**Built.** One call takes a set and does one sweep; removing a single
+station is the set-of-one case, so there is one path rather than two.
 
-For one station that is correct and cheap. For a *set* of them it is the
-same walk repeated: pruning a fifty-station program from a five-thousand
-station table means fifty sweeps of five thousand stations, each taking
-and releasing a mutex per station visited.
+Every member is marked before any wire is cut. Every index is checked
+before anything is marked, so a set holding one bad member — an index
+outside the table, a station already gone, or the same station named
+twice — refuses whole and leaves the program exactly as it was. After
+the checks the only way to fail is running out of memory.
 
-**The one-at-a-time shape also leaves the graph inconsistent in the
-middle.** Between the first station going and the last, the program
-being removed is half there — some of its interior wires cut, others
-still live, and values still moving along the ones that remain.
+A wire from one removed station to another needs no special handling: it
+is named by a member of the set like any other wire, so the same pass
+cuts it.
 
 ## Intended behavior
 
