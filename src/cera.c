@@ -4878,10 +4878,19 @@ static void in_port_constant_free(cera_in_port_t *sl)
  * pointer that was written into `into` — because a string value *is*
  * that pointer, and freeing what it points at is freeing something a
  * box may still be looking at.
+ *
+ * **`must_be_quoted` says which of the two callers this is**, and it
+ * only ever matters for a string. Text written down in a map file
+ * sits beside other notation — `in 0 - fire` draws a wire and
+ * `in 0 = fire` sets a constant — so a string there is quoted, and an
+ * unquoted word is refused rather than guessed at. Text handed over
+ * by a shell arrived as one whole argument with the quoting already
+ * done, so requiring more would be asking somebody to quote twice.
  */
 static void port_text_to_bytes_ending(const cera_in_port_t *sl, const char *text,
                                       unsigned char *into,
                                       char **owned_string,
+                                      int must_be_quoted,
                                       const where_t *w,
                                       const char **end);
 /* }}} */
@@ -4889,9 +4898,10 @@ static void port_text_to_bytes_ending(const cera_in_port_t *sl, const char *text
 /* {{{ port_text_to_bytes() */
 static void port_text_to_bytes(const cera_in_port_t *sl, const char *text,
                                unsigned char *into, char **owned_string,
-                               const where_t *w)
+                               int must_be_quoted, const where_t *w)
 {
-    port_text_to_bytes_ending(sl, text, into, owned_string, w, NULL);
+    port_text_to_bytes_ending(sl, text, into, owned_string, must_be_quoted,
+                              w, NULL);
 }
 /* }}} */
 
@@ -4906,6 +4916,7 @@ static void port_text_to_bytes(const cera_in_port_t *sl, const char *text,
 static void port_text_to_bytes_ending(const cera_in_port_t *sl, const char *text,
                                       unsigned char *into,
                                       char **owned_string,
+                                      int must_be_quoted,
                                       const where_t *w,
                                       const char **end)
 {
@@ -4946,11 +4957,8 @@ static void port_text_to_bytes_ending(const cera_in_port_t *sl, const char *text
          * port for the life of the map, which is what makes handing
          * the pointer to a box sound.
          *
-         * **Quoted text goes through the shared escape routines**.
-         * Unquoted text is taken as itself, which is what
-         * lets somebody write `in 0 config.txt` without ceremony — and
-         * is why a value that needs escaping has to be quoted, because
-         * an unquoted backslash is a backslash. */
+         * **Quoted text goes through the shared escape routines**,
+         * and in a map file that is the only form there is. */
         int len;
         if (*text == '"') {
             int room = (int)strlen(text);
@@ -4960,15 +4968,34 @@ static void port_text_to_bytes_ending(const cera_in_port_t *sl, const char *text
             const char *stop = read_quoted(text, fresh_string, room, &len,
                                            "a string constant", w);
             if (end) *end = stop;
+        } else if (must_be_quoted) {
+            /*
+             * **A bare word written down is refused, and the message
+             * names the collision it is almost certainly.** `= fire`
+             * and `- fire` differ by one character and mean unrelated
+             * things — a constant and a wire from a station called
+             * `fire` — so accepting the bare form leaves two spellings
+             * for one value sitting next to a third that means
+             * something else entirely. The dump has always written the
+             * quoted form, so requiring it is what makes a
+             * hand-written file and a dumped one agree.
+             */
+            die_static(w,
+                       "a string constant is quoted: write '= \"fire\"'. "
+                       "An unquoted word is refused because '- fire' on "
+                       "the same line would mean a wire from a station "
+                       "called fire, which is a different thing entirely");
+            return;
         } else {
+            /* Handed over by a shell, which already decided where this
+             * value started and stopped. It runs to the end of what it
+             * was given, so it can only be the last of a list — which
+             * costs nothing, because an argument list is not a list. */
             len = (int)strlen(text);
             fresh_string = malloc((size_t)len + 1);
             if (!fresh_string)
                 die_static(w, "out of memory for string storage");
             memcpy(fresh_string, text, (size_t)len);
-            /* Unquoted text runs to the end of what it was given, so
-             * it can only be the last value — which is why a list of
-             * waiting strings has to quote every one of them. */
             if (end) *end = text + len;
         }
         fresh_string[len] = 0;
@@ -5022,7 +5049,8 @@ void cera_map_in_port_static_text(cera_map_t *m, int station, int port, const ch
     if (!fresh)
         die_static(&w, "out of memory parsing a constant");
     char *fresh_string = NULL;
-    port_text_to_bytes(sl, text, fresh, &fresh_string, &w);
+    /* Written down, so a string is quoted. */
+    port_text_to_bytes(sl, text, fresh, &fresh_string, 1, &w);
 
     /* One of the four rare structural operations: the
      * install and the tag together, under the station's mutex, so no
@@ -5102,7 +5130,9 @@ const char *cera_map_deliver_argument_text(cera_map_t *m, int station, int port,
         return "out of memory parsing an argument";
 
     char *owned = NULL;
-    port_text_to_bytes(sl, text, bytes, &owned, &w);
+    /* Handed over, one whole argument at a time, quoting already done
+     * by whoever split the command line. */
+    port_text_to_bytes(sl, text, bytes, &owned, 0, &w);
 
     const char *no = cera_map_deliver_argument(m, station, port, bytes,
                                           sl->elem_size);
@@ -5264,7 +5294,9 @@ const char *cera_map_in_port_queue_text(cera_map_t *m, int station, int port,
 
         char *owned = NULL;
         const char *end = p;
-        port_text_to_bytes_ending(sl, p, bytes, &owned, &w, &end);
+        /* Written down, in a captured file, so a string is quoted —
+         * which is also what lets a list of them be separated at all. */
+        port_text_to_bytes_ending(sl, p, bytes, &owned, 1, &w, &end);
 
         /* Through the ordinary door, so the readiness check runs and
          * the station wakes exactly as it would have. `owned` is a

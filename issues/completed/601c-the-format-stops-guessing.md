@@ -7,37 +7,34 @@ one issue.
 
 ## Current behavior
 
-**A bare word is accepted where a string belongs.** Writing a value
-without quotes works:
+**Built.** All three refusals are in place, along with a fourth mistake
+the same walk turned out to be making.
 
-```
-station a read_int_file p result
-  in 0 = fire
-```
+**A string written down is quoted, and a bare word is refused** naming
+the spelling it collides with: `in 0 = fire` and `in 0 - fire` differ by
+one character and mean unrelated things.
 
-loads, and the dump writes it back as `in 0 = "fire"`. So the format has
-two spellings for one value, and the loose one collides with a line that
-means something entirely different: `in 0 - fire` draws a wire from a
-station called `fire`, and `in 0 = fire` sets a constant. One character
-apart, unrelated meanings, and one of them accepts a bare word.
+**A command line is not a map file.** Text handed over by a shell
+arrives as one whole argument with the quoting already done, so it is
+taken as itself. The distinction is a parameter on the one
+text-to-bytes routine both callers share, so there is still one reader
+rather than two that can drift.
 
-**A value cannot continue past the end of a line.** The reader takes one
-line at a time into a fixed buffer, so a brace-delimited struct value has
-to fit on one line however many fields it has. Nothing says so; it simply
-fails in whatever way the truncation happens to produce.
+**A brace-delimited value continues across as many physical lines as it
+needs**, leading whitespace of each continuation dropped. A file ending
+with braces open is refused, naming the line where they opened.
 
-**A line longer than the buffer is silently split in two.** The reader
-fills its buffer and carries on, with no check that what it read ended in
-a newline. The tail becomes a fresh line as far as the parser is
-concerned, so:
+**A physical line the reader cannot hold is refused, not split.** The
+tail used to become a fresh line as far as the parser was concerned —
+every line number after it wrong, and whether anything was noticed
+depending on where the cut landed.
 
-- the line numbers in every message after the split are wrong
-- whether an error is reported at all depends on where the cut lands —
-  a cut inside whitespace produces a confusing but honest refusal, and a
-  cut inside a value can produce two lines that each parse
-
-This is the silent-corruption shape the project refuses everywhere else,
-and it exists here only because nobody wrote the check.
+**And a `#` inside a quoted string is a character.** The comment scanner
+used to search for the first `#` anywhere on the line, which quietly
+truncated any value containing one. Both questions the reader has —
+where a comment starts, and how much the braces opened — now come from
+one walk that tracks the quote state, so they cannot disagree about
+where a string begins.
 
 ## Intended behavior
 

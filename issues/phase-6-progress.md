@@ -22,6 +22,7 @@ editing a running one stopped being two things.
 | 605 — the seed sweep | **moved, not removed** | Nothing replaced it: construction's own writes are what start a program. |
 | 606 — phase 6 demo | complete | One binary, three programs; edits followed; every refusal shown; everything at once. |
 | [607 — no reserved words](completed/607-no-reserved-words.md) | complete | Every line announces itself — `station`, `in`, `out`, `statics` — so a name never sits where a keyword sits and no word is reserved. The three words were the symptom; the problem was that a station line was defined as *what remains*, and a negative definition can only narrow. |
+| [601c — the format stops guessing](completed/601c-the-format-stops-guessing.md) | complete | Strings are quoted, braced values continue across lines, an over-long line is refused rather than split, and a `#` inside a string is a character. Four places where the reader decided for itself what somebody probably meant. |
 
 ## What the phase established, and what survived being widened
 

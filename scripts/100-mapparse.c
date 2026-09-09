@@ -467,6 +467,48 @@ static void handle_station(parse_state_t *st, const char *name,
 }
 /* }}} */
 
+/* {{{ line_scan() */
+/*
+ * **One walk over a physical line that answers both questions the
+ * reader has**: where a comment starts, and how much the braces
+ * opened or closed. Returns the net brace change; writes the comment's
+ * offset into `comment_at`, or -1 when there is none.
+ *
+ * One walk rather than two because both questions have the same
+ * awkward case — **a quoted string, where a `#` is a character and a
+ * `{` is a character**. Finding the comment by searching for the first
+ * `#` anywhere was wrong before this and quietly truncated any value
+ * containing one; counting braces the same way would break every
+ * struct holding text with a brace in it. Tracking the quote state
+ * once answers both correctly and cannot drift between them.
+ *
+ * A backslash inside a string hides whatever follows it, so a quote
+ * that was escaped does not end the string.
+ */
+static int line_scan(const char *line, int *comment_at)
+{
+    int depth = 0;
+    int inside = 0;
+    *comment_at = -1;
+
+    for (int i = 0; line[i]; i++) {
+        char c = line[i];
+        if (inside) {
+            if (c == '\\' && line[i + 1])
+                i++;
+            else if (c == '"')
+                inside = 0;
+            continue;
+        }
+        if (c == '"')       inside = 1;
+        else if (c == '{')  depth++;
+        else if (c == '}')  depth--;
+        else if (c == '#') { *comment_at = i; break; }
+    }
+    return depth;
+}
+/* }}} */
+
 /* {{{ mapfile_parse() */
 map_description_t *mapfile_parse(const char *path)
 {
@@ -485,21 +527,88 @@ map_description_t *mapfile_parse(const char *path)
     st.station_tail = &d->stations;
     st.path = path;
 
-    char line[1024];
-    while (fgets(line, sizeof line, f)) {
+    /*
+     * **A logical line, assembled from as many physical ones as its
+     * braces need.**
+     *
+     * `physical` is one line as the file has it; `logical` is what the
+     * parser sees. They are usually the same, and differ exactly when a
+     * struct value is spread over several lines to be readable.
+     *
+     * This does not weaken *the first word of a line is always a
+     * keyword* (issue 607). A continuation is not a new line — it is
+     * the same logical line still being assembled — and the keyword
+     * rule was always about logical lines.
+     */
+    char physical[1024];
+    char logical[8192];
+    while (fgets(physical, sizeof physical, f)) {
         st.line++;
+        int opened_at = st.line;
 
-        /* Comments to end of line, then trailing whitespace. */
-        char *hash = strchr(line, '#');
-        if (hash)
-            *hash = 0;
-        size_t len = strlen(line);
-        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'
-                           || line[len - 1] == ' ' || line[len - 1] == '\t'))
-            line[--len] = 0;
+        size_t used = 0;
+        int depth = 0;
+        for (;;) {
+            /*
+             * **A physical line that does not end is refused rather
+             * than split.** Filling the buffer with no newline means
+             * the reader is about to hand the parser half a line and
+             * then treat the rest as a fresh one — every line number
+             * after it wrong, and whether anything is noticed at all
+             * depending on where the cut happened to land. With
+             * continuations in place this only fires on a single token
+             * longer than the buffer, which is a file nobody meant.
+             */
+            size_t got = strlen(physical);
+            if (got == sizeof physical - 1 && physical[got - 1] != '\n'
+                && !feof(f))
+                die_parse(path, st.line,
+                          "this line is longer than the reader's 1023-byte "
+                          "limit; a value that needs more room than that "
+                          "belongs behind a box that reads it");
+
+            int comment_at = -1;
+            depth += line_scan(physical, &comment_at);
+            if (comment_at >= 0)
+                physical[comment_at] = 0;
+
+            size_t len = strlen(physical);
+            while (len > 0 && (physical[len - 1] == '\n'
+                               || physical[len - 1] == '\r'
+                               || physical[len - 1] == ' '
+                               || physical[len - 1] == '\t'))
+                physical[--len] = 0;
+
+            /* Leading whitespace goes on a continuation, so a value
+             * indented to line up with the one above reads as one
+             * value rather than as text with gaps in it. The first
+             * physical line keeps its own, since indentation there has
+             * never meant anything either way. */
+            const char *add = physical;
+            if (used > 0)
+                while (*add == ' ' || *add == '\t')
+                    add++;
+
+            size_t adding = strlen(add);
+            if (used + adding >= sizeof logical)
+                die_parse(path, opened_at,
+                          "this value needs more room than one line can "
+                          "hold, even continued");
+            memcpy(logical + used, add, adding);
+            used += adding;
+            logical[used] = 0;
+
+            if (depth <= 0)
+                break;
+            if (!fgets(physical, sizeof physical, f))
+                die_parse(path, opened_at,
+                          "a '{' opened here and the file ended before "
+                          "anything closed it");
+            st.line++;
+        }
 
         char first[128];
-        const char *rest = next_word(line, first, sizeof first);
+        const char *rest = next_word(logical, first, sizeof first);
         if (!first[0])
             continue;
 
@@ -534,7 +643,7 @@ map_description_t *mapfile_parse(const char *path)
             st.in_statics = 1;
             st.current = NULL;
         } else if (st.in_statics && isdigit((unsigned char)first[0])) {
-            handle_static_entry(&st, line);
+            handle_static_entry(&st, logical);
         } else if (strcmp(first, "station") == 0) {
             char name[128];
             rest = next_word(rest, name, sizeof name);

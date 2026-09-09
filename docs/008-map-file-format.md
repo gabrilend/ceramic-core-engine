@@ -73,13 +73,46 @@ Indentation still means nothing. The attribute lines are indented
 because it reads well, and a file that has been reflowed or pasted
 still parses.
 
+## A line, and a line that keeps going
+
+**A value in braces may run across as many lines as it needs.** While
+its braces are open the reader keeps taking lines, dropping the
+leading whitespace of each, so a struct with several fields can be
+written the way anybody would want to read one:
+
+```
+in 0 = {
+    1.5,
+    2.5,
+    3.5
+}
+```
+
+This does not weaken *the first word of a line is always a keyword*. A
+continuation is not a new line — it is the same line, still being
+assembled — and the keyword rule was always about the assembled line.
+A file that ends with braces still open is refused, naming the line
+where they opened.
+
+**A line the reader cannot hold is refused rather than split.** There
+is a limit on one physical line, and reaching it used to mean the tail
+became a fresh line as far as the parser was concerned: every line
+number after it wrong, and whether anything was noticed at all
+depending on where the cut landed. With continuations in place this
+only fires on a single token too long to hold, which is a file nobody
+meant to write.
+
 ## Comments
 
-A `#` starts a comment that runs to the end of the line. Added in
-the first build pass: the dump (issue 703) writes derived facts —
-resolved types, element sizes, station indices — as comments beside
-the lines that parse, and the format as originally written had no
-way to carry them.
+A `#` starts a comment that runs to the end of the line — **unless it
+is inside a quoted string**, where it is an ordinary character. The
+same walk that finds the comment counts the braces, so the two cannot
+disagree about where a string begins.
+
+Added in the first build pass: the dump (issue 703) writes derived
+facts — resolved types, element sizes, station indices — as comments
+beside the lines that parse, and the format as originally written had
+no way to carry them.
 
 ## The station line
 
@@ -501,10 +534,19 @@ can find, which makes `"\x41" "2"` and `"\x412"` mean different
 things and one of them a compile error. Two digits covers every byte
 and never runs on into the next character.
 
-**Unquoted text is taken as itself**, which is what lets somebody
-write `in 0 = config.txt` without ceremony — and is why a value that
-needs escaping has to be quoted, since an unquoted backslash is just a
-backslash.
+**A string written down is always quoted, and a bare word is
+refused.** `in 0 = fire` and `in 0 - fire` differ by one character and
+mean unrelated things — a constant, and a wire from a station called
+`fire` — so a format that accepted both spellings of the first would
+be putting two of them next to a third that means something else. The
+dump has always written the quoted form; requiring it is what makes a
+hand-written file and a dumped one agree.
+
+**A command line is the exception, and it is not one.** An argument
+arrives from a shell that already decided where the value started and
+stopped, so `./program /etc/hosts` needs no further quoting. Nothing
+is being relaxed there: the quoting happened, in the shell, which is
+the only place that could have done it.
 
 The reader and the writer share one table, so they cannot disagree
 about what a backslash introduces.
