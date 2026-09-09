@@ -11,3 +11,7 @@ tmp
 # toolchain in history would also be a several-hundred-megabyte answer
 # to a question nobody asked when cloning.
 toolchain/
+# The HTML mirror of the documentation. Generated from the markdown by
+# `make html` on every build, so a copy in history is a copy that can
+# disagree with the documents it was made from (issue 306, again).
+docs/HTML/

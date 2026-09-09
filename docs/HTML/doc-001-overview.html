@@ -23,6 +23,7 @@
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
+<a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
@@ -157,42 +158,35 @@
 <main>
 <h1>001 — Overview</h1>
 <p>**The ceramic core engine is a C library, in one source file, that runs
-your program on every core of the machine without you writing a single
-thread.**</p>
+your program on every core of the machine automatically.**</p>
 <p>You write ordinary C functions. You write a second file saying which
-function feeds which. That is the whole of it — the engine turns the
-shape you drew into work spread across every core, and there is no main
-loop, no thread, and no scheduler anywhere in what you wrote.</p>
+function feeds which, and the engine figures out how to most efficiently
+parallelize your program according to your design.</p>
 <p>It is two files to add to a project (<code>cera.c</code> and <code>cera.h</code>), it needs a
 C compiler and nothing else, and it is licensed AGPLv3.</p>
 <p>---</p>
+<p>Here's an example. These are all simple C functions, you can probably guess
+what they do. It's not important.</p>
 <pre class="code">
-   in ─┬─ twice ──┐
-       │          ├─ total
-       └─ plus ───┘
+   input() ─┬─ twice() ──┐
+            │            ├─ total() ── print()
+            └─ plus() ───┘
 </pre>
-<p><code>twice</code> and <code>plus</code> run at the same time. <code>total</code> waits until both have
-arrived. <strong>Nobody wrote either of those facts down</strong> — there is no line
-of code anywhere saying "run these two together" or "wait for both".
-They are what the picture <em>is</em>.</p>
-<p>That is the whole idea. You write small C functions, you say what feeds
-what, and the shape executes itself across every core on the machine.
-There is no main loop and no scheduler you write.</p>
+<p><code>twice</code> and <code>plus</code> run at the same time. <code>total</code> waits until the results
+from both have arrived before <code>print</code>ing.</p>
+<p>That's the whole idea. You write C functions, you say what feeds what, and the
+shape executes itself across every core on the machine.</p>
 <h2>The pieces</h2>
-<p><strong>A box function</strong> is a plain C function you write. No registration, no
-macro, no header to edit:</p>
+<p><strong>A box</strong> is a template of a box station.</p>
+<p><strong>A box station</strong> is a placement of a box. It has its own <strong>input ports</strong>,
+its own <strong>output ports</strong>, and its own <strong>wiring</strong> saying where each output
+goes and where it's inputs come from.</p>
+<p><strong>A box function</strong> is a plain C function you write:</p>
 <pre class="code">
 <span class="kw">int</span> add(<span class="kw">int</span> a, <span class="kw">int</span> b) { <span class="kw">return</span> a + b; }
 </pre>
 <p>It takes its arguments by value, returns one value, and **may not
-remember anything between calls** — no statics, no globals.</p>
-<p><strong>A box</strong> is that function as the engine knows it: a template, not yet
-anywhere in particular.</p>
-<p><strong>A station</strong> is one placement of a box. It has its own <strong>input ports</strong>,
-its own <strong>output ports</strong>, and its own <strong>wiring</strong> saying where each output
-goes. The ports and the wiring are what make a shape out of a pile of
-functions — the topology of the program is nothing but stations and the
-lines between them.</p>
+remember anything between calls** — no statics, no globals, no pointers. (CONFIRM??)</p>
 <p><strong>Two stations placing the same box are two independent things.</strong> Same
 compiled code, different ports, different neighbours. That is why the
 word exists: <code>add</code> is a function, but <em>this</em> <code>add</code> — fed from here,
@@ -203,6 +197,7 @@ a pointer to the function to run, and somewhere to put what it returns.</p>
 do asks the pool for one, takes ownership of it, runs the function
 inside it, and delivers the returned value into whichever input ports
 the wiring names.</p>
+<p><code>return values from functions can only be placed into input ports</code></p>
 <p><strong>A readiness check</strong> happens at the instant a value is delivered — by
 the worker that just delivered it, before it goes back to its own
 business. It looks at the receiving station's other ports. If every one
@@ -220,8 +215,7 @@ function call and always will.</p>
 <tr><td>task</td><td>one invocation</td><td>microseconds</td></tr>
 </table>
 <h2>The one rule</h2>
-<blockquote>A station runs when, and only when, every one of its input ports</blockquote>
-<blockquote>holds a value.</blockquote>
+<blockquote>A station only can run when each of its input ports holds a value.</blockquote>
 <p>Everything else follows from that sentence, including things that look
 unrelated to it. <strong>A box may not remember anything</strong> because two
 invocations of one station can be in flight on two threads at once —
@@ -242,9 +236,13 @@ finishing is the act of discovering what runs next.</p>
 anything, and the answer surprises everybody.</p>
 <p>Send two values into a graph that splits and rejoins:</p>
 <pre class="code">
-             ┌─ slow() ──┐
-   input() ──┤           ├─ meet()
-             └─ fast() ──┘
+                slow()
+   input()   ┌─ 0    0 ──┐
+         0 ──┘           ├─ meet()
+         1      fast()   |                                                      
+            ─── 0    0 ──┘
+
+## FIXME: should be box drawing vertical lines, not pipes like this |
 </pre>
 <p>The two paths run on different threads at different speeds. <code>meet</code> takes
 whatever is waiting at each of its ports and runs. So it can pair the

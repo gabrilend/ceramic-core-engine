@@ -191,7 +191,7 @@ this repository.
 | | |
 |---|---|
 | [`vision`](vision) | why it is shaped this way. Start here if the ideas interest you more than the code. |
-| [`docs/`](docs/) | the documentation, in reading order. `docs/HTML/` is a generated site of the same thing. |
+| [`docs/`](docs/) | the documentation, in reading order. `make html` builds `docs/HTML/`, a cross-linked site of the same thing — generated, so it is not in the repository. |
 | [`docs/058-guarantees.md`](docs/058-guarantees.md) | every promise the runtime makes, numbered, with what each one costs. |
 | [`issues/completed/`](issues/completed/) | **the real documentation.** Blueprints, not work logs: what stood before, what should stand after, why the alternatives were refused. The project is meant to be rebuildable by working through them in order. |
 | [`src/`](src/) | the engine — two files, `cera.c` and `cera.h`, each with a `.info.md` beside it. Read those first unless you are debugging the source itself. |
