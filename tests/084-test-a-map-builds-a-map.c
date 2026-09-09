@@ -104,16 +104,28 @@ int main(void)
               "the program to mark a door in");
     /* Port 1 arrives by wire — it is the part the first operation
      * made, travelling whole. Nothing takes it apart. */
+    /* Which result this is (issue 209a): a door is a port now and
+     * carries the number of the door it is, so marking one says which
+     * rather than relying on the order they were marked in. */
+    must_take(cera_map_configure_port(builder, doorman, 3, CERA_IN_PORT_STATIC, "0"),
+              "the result's number");
     must_take(cera_map_configure_port(builder, doorman, 2, CERA_IN_PORT_STATIC, "2"),
               "which way the door faces");
     must_take(cera_map_wire(builder, adder, 0, doorman, 1),
               "the wire carrying a station index between two operations");
 
     /* The builder's own way out is the answer to "did it work". */
-    must_take(cera_map_designate_output(builder, doorman), "the builder's way out");
+    must_take(cera_map_designate_result(builder, doorman, 0, 0), "the builder's way out");
 
     cera_map_start(builder, 2);
     must_take(cera_map_bring_up(builder), "the builder");
+    /* Somewhere to put the builder's own answer, said before its
+     * workers are let go. */
+    static int worked[4];
+    must_take(cera_map_collect(builder, doorman, 0, worked, 4,
+                               (int)sizeof worked[0]),
+              "somewhere to put the builder's answer");
+
     cera_pool_release(builder->pool);
     cera_pool_join(builder->pool);
 
@@ -142,14 +154,14 @@ int main(void)
                 made->box_name ? made->box_name : "(nothing)");
         return 1;
     }
-    if (made->door != CERA_DOOR_OUT) {
+    int marked_station = -1, marked_port = -1;
+    if (!cera_map_result_at(built, 0, &marked_station, &marked_port)
+        || marked_station != 0) {
         fprintf(stderr, "the builder placed the station but did not mark "
                         "it as the way out\n");
         return 1;
     }
-    int worked = 0;
-    if (!cera_map_output_take(builder, doorman, &worked, sizeof worked)
-        || worked != 1) {
+    if (cera_map_collected(builder, doorman, 0) < 1 || worked[0] != 1) {
         fprintf(stderr, "the builder's own result says the door was not "
                         "marked\n");
         return 1;

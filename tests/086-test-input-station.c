@@ -64,10 +64,10 @@ static void check(int ok, const char *what)
  * free**, which is what this scene exists to show: nothing was built
  * to make them work.
  *
- * A program's arguments are the input ports of the stations it
- * declared as entrances, taken in station order and then port order.
- * Two entrances of one port each is a program that takes two
- * arguments.
+ * A program's arguments are its marked ports, in the order their
+ * numbers say. Two ports marked as argument zero and argument one is
+ * a program that takes two arguments, and moving either line in the
+ * file changes nothing.
  */
 static void the_command_line_is_an_argument_list(void)
 {
@@ -77,13 +77,13 @@ static void the_command_line_is_an_argument_list(void)
     int shape = cera_map_add_station(m);
     cera_map_place_box(m, shape, "magnitude_squared", CERA_STATION_PLAIN); /* (vec3) */
     must_take(cera_map_name_station(m, shape, "shape"), "a name");
-    must_take(cera_map_designate_input(m, shape), "an entrance");
+    must_take(cera_map_designate_argument(m, shape, 0, 0), "an entrance");
 
     /* One entrance taking a plain number. */
     int count = cera_map_add_station(m);
     cera_map_place_box(m, count, "double_it", CERA_STATION_PLAIN);         /* (int) */
     must_take(cera_map_name_station(m, count, "count"), "a name");
-    must_take(cera_map_designate_input(m, count), "a second entrance");
+    must_take(cera_map_designate_argument(m, count, 0, 1), "a second entrance");
 
     int shape_out = cera_map_add_station(m);
     cera_map_place_box(m, shape_out, "swallow", CERA_STATION_PLAIN);
@@ -93,7 +93,7 @@ static void the_command_line_is_an_argument_list(void)
     int answer = cera_map_add_station(m);
     cera_map_place_box(m, answer, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, answer, "answer"), "a name");
-    must_take(cera_map_designate_output(m, answer), "a way out");
+    must_take(cera_map_designate_result(m, answer, 0, 0), "a way out");
     must_take(cera_map_wire(m, count, 0, answer, 0), "a wire");
 
     cera_map_start(m, 2);
@@ -108,6 +108,12 @@ static void the_command_line_is_an_argument_list(void)
      * a task nobody runs.
      */
     cera_pool_submitter_register(m->pool);
+
+    int doubled[4] = { 0 };
+    must_take(cera_map_collect(m, answer, 0, doubled, 4,
+                               (int)sizeof doubled[0]),
+              "somewhere to put the answer");
+
     cera_pool_release(m->pool);
 
     /* A wrong count is refused rather than half delivered, and says
@@ -125,8 +131,7 @@ static void the_command_line_is_an_argument_list(void)
     cera_pool_submitter_unregister(m->pool);
     cera_pool_join(m->pool);
 
-    int got = 0;
-    check(cera_map_output_take(m, answer, &got, sizeof got) && got == 42,
+    check(cera_map_collected(m, answer, 0) == 1 && doubled[0] == 42,
           "the number argument arrived and was doubled");
     check(atomic_load(&cera_map_station(m, shape)->runs) == 1,
           "and the struct argument arrived as a struct, in brace syntax "
@@ -163,12 +168,21 @@ int main(void)
     must_take(cera_map_wire(m, entrance, 0, middle, 0), "a wire");
     must_take(cera_map_wire(m, middle, 0, results, 0), "a wire");
 
-    must_take(cera_map_designate_input(m, entrance), "the entrance");
-    must_take(cera_map_designate_output(m, results), "the results");
+    must_take(cera_map_designate_argument(m, entrance, 0, 0), "the entrance");
+    must_take(cera_map_designate_result(m, results, 0, 0), "the results");
 
     cera_map_start(m, 2);
     cera_pool_submitter_register(m->pool);
     must_take(cera_map_bring_up(m), "the program");
+
+    /* Somewhere to put them, said before the workers are let go: a
+     * result that arrives before anybody has asked for it is
+     * discarded like any other unwired value. */
+    int answers[8] = { 0 };
+    must_take(cera_map_collect(m, results, 0, answers, 8,
+                               (int)sizeof answers[0]),
+              "somewhere to put the results");
+
     cera_pool_release(m->pool);
 
     /*
@@ -187,9 +201,9 @@ int main(void)
     cera_pool_submitter_unregister(m->pool);
     cera_pool_join(m->pool);
 
-    if (cera_map_output_waiting(m, results) != 3) {
+    if (cera_map_collected(m, results, 0) != 3) {
         fprintf(stderr, "three arguments produced %d results\n",
-                cera_map_output_waiting(m, results));
+                cera_map_collected(m, results, 0));
         return 1;
     }
     /*
@@ -197,21 +211,17 @@ int main(void)
      * set rather than as a sequence, and the distinction is real
      * rather than caution.
      *
-     * Results are *held* oldest-first, so the order they are taken in
-     * is the order they arrived at this station. That is not the
-     * order the arguments went in: three values fed to a program with
-     * two workers are in flight at once, and which finishes first is
-     * a schedule. Asserting the sequence here would be asserting the
-     * scheduler, which is the thing this engine most deliberately
-     * does not promise.
+     * A slot in the array is claimed when a value arrives, so the
+     * order of the array is the order values reached this port. That
+     * is not the order the arguments went in: three values fed to a
+     * program with two workers are in flight at once, and which
+     * finishes first is a schedule. Asserting the sequence here would
+     * be asserting the scheduler, which is the thing this engine most
+     * deliberately does not promise.
      */
     int seen[3] = { 0, 0, 0 };
     for (int i = 0; i < 3; i++) {
-        int got = 0;
-        if (!cera_map_output_take(m, results, &got, sizeof got)) {
-            fprintf(stderr, "result %d was missing\n", i + 1);
-            return 1;
-        }
+        int got = answers[i];
         int which = got / 4 - 1;
         if (got % 4 != 0 || which < 0 || which > 2 || seen[which]) {
             fprintf(stderr, "an unexpected or repeated result: %d\n", got);
@@ -242,12 +252,22 @@ int main(void)
     printf("  and reaching past the doors was refused, by station and by "
            "size\n");
 
-    /* A station cannot be both doors. */
-    if (cera_map_designate_input(m, results) == NULL) {
-        fprintf(stderr, "one station was accepted as both doors\n");
-        return 1;
-    }
-    printf("  a station was refused as both entrance and exit\n");
+    /*
+     * **A station may hold ports of both kinds** (issue 213a), and the
+     * old refusal is gone with the thing that made it necessary. The
+     * mark used to be on the station, and a station is one thing, so
+     * being both doors was somebody having named the wrong one. A port
+     * is a smaller thing: a station with an argument port and a result
+     * port is ordinary, and this scene now proves it is accepted
+     * rather than refused.
+     *
+     * The number is one, because argument zero is already taken and
+     * two ports claiming the same number is the thing that *is*
+     * refused.
+     */
+    must_take(cera_map_designate_argument(m, results, 0, 1),
+              "a second argument on the station that also holds a result");
+    printf("  a station holds an argument port and a result port at once\n");
 
     cera_map_destroy(m);
 
@@ -276,15 +296,19 @@ int main(void)
         fprintf(stderr, "cannot write %s\n", path);
         return 1;
     }
-    fputs("station gate keep p entry\n"
+    fputs("station gate keep p\n"
+          "  in 0 $0\n"
           "  out 0 - answer.0\n"
-          "station answer double_it p result\n"
-          "  in 0 - gate.0\n", f);
+          "station answer double_it p\n"
+          "  in 0 - gate.0\n"
+          "  out 0 $0\n", f);
     fclose(f);
 
     cera_map_t *loaded = cera_map_load_file(path, 2);
-    if (cera_map_station(loaded, 0)->door != CERA_DOOR_IN
-        || cera_map_station(loaded, 1)->door != CERA_DOOR_OUT) {
+    int at = -1, which = -1;
+    if (!cera_map_argument_at(loaded, 0, &at, &which) || at != 0 || which != 0
+        || !cera_map_result_at(loaded, 0, &at, &which) || at != 1
+        || which != 0) {
         fprintf(stderr, "the doors did not survive being read\n");
         return 1;
     }
@@ -296,8 +320,9 @@ int main(void)
     fclose(f);
 
     cera_map_t *again = cera_map_load_file(dumped, 2);
-    if (cera_map_station(again, 0)->door != CERA_DOOR_IN
-        || cera_map_station(again, 1)->door != CERA_DOOR_OUT) {
+    if (!cera_map_argument_at(again, 0, &at, &which) || at != 0 || which != 0
+        || !cera_map_result_at(again, 0, &at, &which) || at != 1
+        || which != 0) {
         fprintf(stderr, "the doors did not survive being written down\n");
         return 1;
     }

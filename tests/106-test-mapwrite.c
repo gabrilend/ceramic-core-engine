@@ -60,10 +60,15 @@ static int same_inputs(const desc_input_t *a, const desc_input_t *b)
 {
     while (a && b) {
         if (a->port != b->port || a->depth != b->depth
-            || a->is_none != b->is_none || a->is_static != b->is_static
+            || a->is_none != b->is_none || a->is_argument != b->is_argument
+            || a->is_source != b->is_source
             || a->is_waiting != b->is_waiting)
             return 0;
-        if (a->is_static && a->static_id != b->static_id)
+        if (a->is_argument && a->argument != b->argument)
+            return 0;
+        if (a->is_source
+            && (a->source_port != b->source_port
+                || strcmp(a->source_station, b->source_station) != 0))
             return 0;
         if ((a->text == NULL) != (b->text == NULL))
             return 0;
@@ -79,9 +84,15 @@ static int same_inputs(const desc_input_t *a, const desc_input_t *b)
 static int same_outputs(const desc_output_t *a, const desc_output_t *b)
 {
     while (a && b) {
-        if (a->port != b->port || a->dest_port != b->dest_port
-            || strcmp(a->dest_station, b->dest_station) != 0)
+        if (a->port != b->port || a->is_result != b->is_result)
             return 0;
+        if (a->is_result) {
+            if (a->result != b->result)
+                return 0;
+        } else if (a->dest_port != b->dest_port
+                   || strcmp(a->dest_station, b->dest_station) != 0) {
+            return 0;
+        }
         a = a->next; b = b->next;
     }
     return a == NULL && b == NULL;
@@ -95,19 +106,10 @@ static int same_description(const map_description_t *a,
     if (a->n_stations != b->n_stations)
         return 0;
 
-    const desc_static_t *sa = a->statics, *sb = b->statics;
-    while (sa && sb) {
-        if (sa->id != sb->id || strcmp(sa->text, sb->text) != 0)
-            return 0;
-        sa = sa->next; sb = sb->next;
-    }
-    if (sa || sb)
-        return 0;
-
     const desc_station_t *x = a->stations, *y = b->stations;
     while (x && y) {
         if (strcmp(x->name, y->name) != 0 || strcmp(x->box, y->box) != 0
-            || x->kind != y->kind || x->door != y->door
+            || x->kind != y->kind
             || x->cursor != y->cursor)
             return 0;
         if (!same_inputs(x->inputs, y->inputs))
@@ -175,23 +177,21 @@ int main(void)
         "station only add p\n");
 
     round_trips("doors, kinds and arrows survived",
-        "station gate keep p entry\n"
+        "station gate keep p\n"
+        "  in 0 $0\n"
         "  out 0 - sum.0\n"
         "\n"
-        "station sum add p result\n"
+        "station sum add p\n"
+        "  out 0 $0\n"
         "  in 0 - gate.0\n"
         "  in 1 = 5\n");
 
     round_trips("a statics section and the ports pointing into it survived",
-        "statics\n"
-        "  0 = 7\n"
-        "  1 = { 1.5, 2.5, 3.5 }\n"
-        "\n"
         "station one add p\n"
-        "  in 1 $0\n"
+        "  in 1 = 7\n"
         "\n"
         "station two nudge p\n"
-        "  in 0 $1\n");
+        "  in 0 = { 1.5, 2.5, 3.5 }\n");
 
     round_trips("depths, unfinished ports and buffers survived",
         "station wide add p\n"
@@ -214,9 +214,11 @@ int main(void)
         "  in 0 - spread.2\n");
 
     round_trips("values waiting in a buffer survived, inner commas and all",
-        "station gate keep p entry\n"
+        "station gate keep p\n"
+        "  in 0 $0\n"
         "\n"
-        "station held nudge p result\n"
+        "station held nudge p\n"
+        "  out 0 $0\n"
         "  in 0 x64 [{ 1.5, 2.5, 3.5 }, { 4.5, 5.5, 6.5 }]\n"
         "  in 1 -\n");
 

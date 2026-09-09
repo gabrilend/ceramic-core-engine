@@ -45,7 +45,7 @@ int main(void)
     int keeper = cera_map_add_station(first);
     cera_map_place_box(first, keeper, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(first, keeper, "keeper"), "a name");
-    must_take(cera_map_designate_input(first, keeper), "an entrance");
+    must_take(cera_map_designate_argument(first, keeper, 0, 0), "an entrance");
 
     /*
      * A way out, with nothing wired into it yet. Every program
@@ -60,7 +60,7 @@ int main(void)
     int outcome = cera_map_add_station(first);
     cera_map_place_box(first, outcome, "double_it", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(first, outcome, "outcome"), "a name");
-    must_take(cera_map_designate_output(first, outcome), "a result");
+    must_take(cera_map_designate_result(first, outcome, 0, 0), "a result");
 
     cera_map_start(first, 3);
     cera_pool_submitter_register(first->pool);
@@ -70,6 +70,14 @@ int main(void)
     printf("  (the notice below is a way out nobody has wired yet)\n");
     fflush(stdout);
     must_take(cera_map_bring_up(first), "the first program");
+    /* Somewhere to put each program's results, said before the
+     * workers are let go: a value reaching a result with nowhere
+     * registered is discarded like any other unwired value. */
+    int homeward_landed[4] = { 0 };
+    int answers[8] = { 0 };
+    must_take(cera_map_collect(first, outcome, 0, homeward_landed, 4,
+                               (int)sizeof homeward_landed[0]),
+              "somewhere to put the first program's result");
     cera_pool_release(first->pool);
 
     /*
@@ -86,8 +94,8 @@ int main(void)
     must_take(cera_map_name_station(second, answer, "answer"), "a name");
 
     must_take(cera_map_wire(second, gate, 0, answer, 0), "a wire");
-    must_take(cera_map_designate_input(second, gate), "an entrance");
-    must_take(cera_map_designate_output(second, answer), "a result");
+    must_take(cera_map_designate_argument(second, gate, 0, 0), "an entrance");
+    must_take(cera_map_designate_result(second, answer, 0, 0), "a result");
     must_take(cera_map_bring_up(second), "the second program");
 
     if (second->pool != first->pool) {
@@ -122,6 +130,11 @@ int main(void)
     must_take(cera_map_wire(first, keeper, 0, 1, 0),
               "a wire that looks like it crosses");
 
+    /* The second program's turn, once it exists. */
+    must_take(cera_map_collect(second, answer, 0, answers, 8,
+                               (int)sizeof answers[0]),
+              "somewhere to put the second program's results");
+
     int homeward = 21;
     must_take(cera_map_deliver_argument(first, keeper, 0, &homeward,
                                    sizeof homeward),
@@ -140,16 +153,13 @@ int main(void)
 
     /*
      * The value went to the first program's own station 1 — doubled
-     * to 42 and held at its way out — rather than to the second
+     * to 42 and landed in the first program's own array — rather than to the second
      * program's station 1, which doubles too and would have produced
      * the same number somewhere else entirely. Two stations, one
      * index, and the wire stayed home.
      */
-    int homeward_result = 0;
-    if (cera_map_output_waiting(first, outcome) != 1
-        || !cera_map_output_take(first, outcome, &homeward_result,
-                            sizeof homeward_result)
-        || homeward_result != 42) {
+    if (cera_map_collected(first, outcome, 0) != 1
+        || homeward_landed[0] != 42) {
         fprintf(stderr, "the wire that looked like it crossed did not "
                         "land in the first program\n");
         return 1;
@@ -157,17 +167,14 @@ int main(void)
     printf("  a wire naming another program's index drew an ordinary wire "
            "at home instead; indices do not cross\n");
 
-    if (cera_map_output_waiting(second, answer) != 4) {
+    if (cera_map_collected(second, answer, 0) != 4) {
         fprintf(stderr, "the second program produced %d results, not 4\n",
-                cera_map_output_waiting(second, answer));
+                cera_map_collected(second, answer, 0));
         return 1;
     }
     int total = 0;
-    for (int i = 0; i < 4; i++) {
-        int got = 0;
-        cera_map_output_take(second, answer, &got, sizeof got);
-        total += got;
-    }
+    for (int i = 0; i < 4; i++)
+        total += answers[i];
     if (total != 2 + 4 + 6 + 8) {
         fprintf(stderr, "the results summed to %d, not %d\n",
                 total, 2 + 4 + 6 + 8);

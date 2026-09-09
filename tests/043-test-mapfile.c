@@ -183,7 +183,8 @@ static void test_half_built_round_trips(void)
          * Nothing is wired out of it, which is exactly the case the
          * requirement is built to make legible: the declaration is
          * the interface, and what flows through it is separate. */
-        "station runner add p result\n"
+        "station runner add p\n"
+        "  out 0 $0\n"
         "  in 0 = 3\n"
         "  in 1 = 4\n"
         "\n"
@@ -250,29 +251,26 @@ static void test_a_program_is_a_text_file(void)
      * file. A comment rides along to prove comments parse. */
     snprintf(map_text, sizeof map_text,
         "# a whole program, as text\n"
-        "statics\n"
-        "  0 = \"%s\"\n"
-        "  1 = 5\n"
-        "\n"
         "station head seven p\n"
         "  out 0 - decide.0\n"
         "\n"
         "station decide keep c\n"
         "  in 0 - head.0\n"
-        "  in 1 $1\n"
+        "  in 1 = 5\n"
         "  out 2 - doubler.0\n"
         "\n"
         /* The way out is the doubler rather than the sink, because a
          * station that returns nothing has no output port to be one
          * with (issue 209). Its value goes on to the sink as well —
          * being the way out adds a rule only when nothing is wired. */
-        "station doubler double_it p result\n"
+        "station doubler double_it p\n"
+        "  out 0 $0\n"
         "  in 0 - decide.2\n"
         "  out 0 - sink.1\n"
         "\n"
         "station sink write_int_file p\n"
         "  in 1 - doubler.0\n"
-        "  in 0 $0\n",
+        "  in 0 = \"%s\"\n",
         result_path);
     write_text(map_path, map_text);
 
@@ -320,17 +318,24 @@ static void a_box_can_be_addressed_three_ways(void)
         "  in 0 - source.0\n"
         "  out 0 - answer.0\n"
         /* The whole path and a function. */
-        "station answer src/boxes/029-demo-boxes.c:keep p result\n"
+        "station answer src/boxes/029-demo-boxes.c:keep p\n"
+        "  out 0 $0\n"
         "  in 0 - middle.0\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
     check(m->n_stations == 3, "all three forms placed a box");
 
+    /* Somewhere to put the answer, said before the workers are let
+     * go — a result that arrives before anybody has asked for it is
+     * discarded like any other unwired value. */
+    int got[4] = { 0 };
+    check(cera_map_collect(m, 2, 0, got, 4, sizeof got[0]) == NULL,
+          "somewhere to put the result was accepted");
+
     cera_pool_release(m->pool);
     cera_pool_join(m->pool);
 
-    int got = 0;
-    check(cera_map_output_take(m, 2, &got, sizeof got) && got == 14,
+    check(cera_map_collected(m, 2, 0) == 1 && got[0] == 14,
           "and the program ran: seven, doubled, kept");
 
     /* Every station carries the full address, whichever form the file
@@ -390,7 +395,8 @@ static void an_awkward_constant_survives_a_file(void)
     snprintf(dump2, sizeof dump2, "%s/awkward-2.map", work_dir);
 
     write_text(map_path,
-        "station source seven p result\n"
+        "station source seven p\n"
+        "  out 0 $0\n"
         "station holder write_int_file p\n"
         "  in 0 = \"say \\\"hi\\\" \\tand \\xc3\\xa9 done\"\n");
 
@@ -463,14 +469,12 @@ static void the_keywords_are_not_reserved(void)
     snprintf(dump_path, sizeof dump_path, "%s/keywords-dump.map", work_dir);
 
     write_text(map_path,
-        "statics\n"
-        "  0 = 5\n"
-        "\n"
         "station in seven p\n"
         "  out 0 - out.0\n"
-        "station out add p result\n"
+        "station out add p\n"
+        "  out 0 $0\n"
         "  in 0 - in.0\n"
-        "  in 1 $0\n"
+        "  in 1 = 5\n"
         "  out 0 - statics.0\n"
         "station statics double_it p\n"
         "  in 0 - out.0\n"
@@ -582,11 +586,8 @@ static void test_every_refusal(void)
      * have: a port number past the end of a box that takes nothing.
      */
     expect_death_saying(
-        "statics\n"
-        "  0 = 5\n"
-        "\n"
         "station head seven p\n"
-        "  in 3 $0\n",
+        "  in 3 = 5\n",
         /* Likewise the input side: the port check is the
          * configuration surface's now, so the words are the ones it
          * speaks (issue 210g). */
@@ -625,7 +626,8 @@ static void test_every_refusal(void)
      * tests, where the write it performs lives.
      */
     expect_death_saying(
-        "station head seven p result\n"
+        "station head seven p\n"
+        "  out 0 $0\n"
         "  out 0 - eater.0\n"
         "station eater double_it p\n"
         "  in 0 - head.0\n"
@@ -650,14 +652,28 @@ static void test_every_refusal(void)
      * having said where its results come from, and the refusal under
      * test never runs. */
     expect_death_saying(
-        "station lonely add p result\n",
+        "station lonely add p\n"
+        "  out 0 $0\n",
         "nothing to seed",
         "a map that can never start was accepted");
 
+    /*
+     * **A program need no longer declare a result** (issue 209a). The
+     * requirement existed so an interface would be *total* — so that
+     * "I produce nothing" and "I forgot to say" were different
+     * statements. An interface made of numbered ports is total by
+     * being read: a map with no result mark produces nothing outward,
+     * which is a complete sentence.
+     *
+     * What is refused instead is a numbering with a hole in it, which
+     * the old scheme could not detect at all, because the order was
+     * the order stations happened to sit in the table.
+     */
     expect_death_saying(
-        "station head seven p\n",
-        "never says where its results come from",
-        "a program that never says what it produces was accepted");
+        "station head seven p\n"
+        "  out 0 $1\n",
+        "nothing is result 0",
+        "a result numbered past a gap was accepted");
 
     expect_death_saying(
         "station silent swallow c\n",

@@ -72,12 +72,14 @@ static void write_the_part(void)
      */
     static const char text[] =
         "# a part, meant to be used inside something else\n"
-        "station way_in keep p entry\n"
+        "station way_in keep p\n"
+        "  in 0 $0\n"
         "  out 0 - middle.0\n"
         "station middle double_it p\n"
         "  in 0 - way_in.0\n"
         "  out 0 - way_out.0\n"
-        "station way_out keep p result\n"
+        "station way_out keep p\n"
+        "  out 0 $0\n"
         "  in 0 - middle.0\n";
 
     snprintf(part_path, sizeof part_path, "%s/part.map", work_dir);
@@ -191,16 +193,21 @@ static void a_parent_cannot_tell(void)
     int answer = cera_map_add_station(m);
     cera_map_place_box(m, answer, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, answer, "answer"), "a name");
-    must_take(cera_map_designate_output(m, answer), "the parent's way out");
+    must_take(cera_map_designate_result(m, answer, 0, 0), "the parent's way out");
     must_take(cera_map_wire(m, out_b, 0, answer, 0), "the wire to the answer");
 
     cera_map_start(m, 2);
     must_take(cera_map_bring_up(m), "the composed program");
+
+    int landed[4] = { 0 };
+    must_take(cera_map_collect(m, answer, 0, landed, 4,
+                               (int)sizeof landed[0]),
+              "somewhere to put the answer");
+
     cera_pool_release(m->pool);
     cera_pool_join(m->pool);
 
-    int got = 0;
-    check(cera_map_output_take(m, answer, &got, sizeof got) && got == 28,
+    check(cera_map_collected(m, answer, 0) == 1 && landed[0] == 28,
           "seven went in, was doubled by each of two instances, and "
           "twenty-eight came out");
 
@@ -245,12 +252,12 @@ static void instantiating_into_a_running_program(void)
     int gate = cera_map_add_station(m);
     cera_map_place_box(m, gate, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, gate, "gate"), "a name");
-    must_take(cera_map_designate_input(m, gate), "an entrance");
+    must_take(cera_map_designate_argument(m, gate, 0, 0), "an entrance");
 
     int kept = cera_map_add_station(m);
     cera_map_place_box(m, kept, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, kept, "kept"), "a name");
-    must_take(cera_map_designate_output(m, kept), "a way out");
+    must_take(cera_map_designate_result(m, kept, 0, 0), "a way out");
     must_take(cera_map_wire(m, gate, 0, kept, 0), "the first wire");
 
     cera_map_start(m, 3);
@@ -275,9 +282,21 @@ static void instantiating_into_a_running_program(void)
     int landing = cera_map_add_station(m);
     cera_map_place_box(m, landing, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, landing, "landing"), "a name");
-    must_take(cera_map_designate_output(m, landing), "a second way out");
+    /* Result *one*: the program already has a result zero, and two
+     * ports claiming the same number is refused — which is the whole
+     * value of numbering them rather than counting them off in table
+     * order, where this collision was undetectable. */
+    must_take(cera_map_designate_result(m, landing, 0, 1), "a second way out");
     must_take(cera_map_wire(m, out_p, 0, landing, 0), "the wire out of it");
     must_take(cera_map_wire(m, gate, 0, in_p, 0), "the wire into it");
+
+    /* Somewhere to put what the new subgraph produces, said before
+     * the next batch is sent. */
+    static int arrived[64];
+    must_take(cera_map_collect(m, landing, 0, arrived, 64,
+                               (int)sizeof arrived[0]),
+              "somewhere to put the subgraph's results");
+
     must_take(cera_map_bring_up(m), "the grown program");
 
     for (int i = 0; i < BATCH; i++) {
@@ -289,7 +308,7 @@ static void instantiating_into_a_running_program(void)
     cera_pool_submitter_unregister(m->pool);
     cera_pool_join(m->pool);
 
-    check(cera_map_output_waiting(m, landing) == BATCH,
+    check(cera_map_collected(m, landing, 0) == BATCH,
           "the subgraph added mid-run produced one result per value it "
           "was sent");
     check(atomic_load(&cera_map_station(m, kept)->runs) == 2 * BATCH,
@@ -373,29 +392,44 @@ static void a_map_adds_a_map(void)
     must_take(cera_map_wire(builder, add_part, 0, door, 1), "the part to mark");
     must_take(cera_map_configure_port(builder, door, 2, CERA_IN_PORT_STATIC, "2"),
               "facing out");
-    must_take(cera_map_designate_output(builder, door), "the builder's answer");
+    /* Which result this is (issue 209a): a door carries the number of
+     * the door it is, so marking one says which. */
+    must_take(cera_map_configure_port(builder, door, 3, CERA_IN_PORT_STATIC, "0"),
+              "the result's number");
+    must_take(cera_map_designate_result(builder, door, 0, 0), "the builder's answer");
 
     cera_map_start(builder, 2);
     must_take(cera_map_bring_up(builder), "the builder");
+
+    int worked[4] = { 0 };
+    must_take(cera_map_collect(builder, door, 0, worked, 4,
+                               (int)sizeof worked[0]),
+              "somewhere to put the builder's answer");
+
     cera_pool_release(builder->pool);
     cera_pool_join(builder->pool);
 
-    int worked = 0;
-    check(cera_map_output_take(builder, door, &worked, sizeof worked)
-          && worked == 1,
+    check(cera_map_collected(builder, door, 0) == 1 && worked[0] == 1,
           "the builder added a box and a map through one operation and "
           "wired them together");
 
     must_take(cera_map_bring_up(built), "the program the builder made");
+
+    /* The way out, found by asking for result zero rather than by
+     * walking the table looking for a marked station. */
+    int way_out = -1, way_port = -1;
+    int found = cera_map_result_at(built, 0, &way_out, &way_port);
+    int made[4] = { 0 };
+    if (found)
+        must_take(cera_map_collect(built, way_out, way_port, made, 4,
+                                   (int)sizeof made[0]),
+                  "somewhere to put what it built produced");
+
     cera_pool_release(built->pool);
     cera_pool_join(built->pool);
 
-    int got = 0;
-    int found = 0;
-    for (int i = 0; i < built->n_stations && !found; i++)
-        if (cera_map_station(built, i)->door == CERA_DOOR_OUT)
-            found = cera_map_output_take(built, i, &got, sizeof got);
-    check(found && got == 14,
+    check(found && cera_map_collected(built, way_out, way_port) == 1
+          && made[0] == 14,
           "and what it built ran: seven from the box, doubled by the "
           "map, fourteen at the way out");
 

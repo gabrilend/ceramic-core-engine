@@ -39,18 +39,10 @@ static void must_take(const char *refusal, const char *what)
 }
 /* }}} */
 
-/* {{{ static int door_of(cera_map_t *m, int which) */
-/* The station a map declares as its way in or its way out, or -1. */
-static int door_of(cera_map_t *m, int which)
-{
-    for (int i = 0; i < m->n_stations; i++) {
-        cera_station_t *s = cera_map_station(m, i);
-        if (s->call && s->door == which)
-            return i;
-    }
-    return -1;
-}
-/* }}} */
+/* How many results a run of this is willing to remember. A watcher
+ * cares about the shape of a program rather than its output, so this
+ * is a window on the stream and not a record of it. */
+#define KEPT 4096
 
 /* {{{ int main(int argc, char **argv) */
 int main(int argc, char **argv)
@@ -96,10 +88,24 @@ int main(int argc, char **argv)
     cera_map_start(m, 4);
     cera_pool_submitter_register(m->pool);
     must_take(cera_map_bring_up(m), which);
-    cera_pool_release(m->pool);
 
-    int way_in = door_of(m, CERA_DOOR_IN);
-    int way_out = door_of(m, CERA_DOOR_OUT);
+    int way_in = -1, in_port = 0;
+    int way_out = -1, out_port = 0;
+    if (!cera_map_argument_at(m, 0, &way_in, &in_port))
+        way_in = -1;
+    if (!cera_map_result_at(m, 0, &way_out, &out_port))
+        way_out = -1;
+
+    /* Registered before the workers are let go, because a result that
+     * arrives before somebody has said where to put it is discarded
+     * like any other unwired value. */
+    static int kept[KEPT];
+    if (way_out >= 0)
+        must_take(cera_map_collect(m, way_out, out_port, kept, KEPT,
+                                   (int)sizeof kept[0]),
+                  "somewhere to put the results");
+
+    cera_pool_release(m->pool);
     if (way_in < 0) {
         fprintf(stderr, "%s declares no entrance, so there is nowhere to "
                         "feed it\n", which);
@@ -148,15 +154,13 @@ int main(int argc, char **argv)
     int value = 0, results = 0;
 
     while (!stopping) {
-        must_take(cera_map_deliver_argument(m, way_in, 0, &value, sizeof value),
+        must_take(cera_map_deliver_argument(m, way_in, in_port, &value,
+                                            sizeof value),
                   "an argument");
         value++;
 
-        if (way_out >= 0) {
-            int got = 0;
-            while (cera_map_output_take(m, way_out, &got, sizeof got))
-                results++;
-        }
+        if (way_out >= 0)
+            results = cera_map_collected(m, way_out, out_port);
         nanosleep(&gap, NULL);
     }
 

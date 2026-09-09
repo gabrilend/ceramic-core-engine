@@ -49,12 +49,12 @@ static cera_map_t *a_program(const char *path, int *entrance, int *result)
     int in = cera_map_add_station(m);
     cera_map_place_box(m, in, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, in, "in"), "a name");
-    must_take(cera_map_designate_input(m, in), "an entrance");
+    must_take(cera_map_designate_argument(m, in, 0, 0), "an entrance");
 
     int add = cera_map_add_station(m);
     cera_map_place_box(m, add, "add", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, add, "total"), "a name");
-    must_take(cera_map_designate_output(m, add), "a result");
+    must_take(cera_map_designate_result(m, add, 0, 0), "a result");
 
     must_take(cera_map_wire(m, in, 0, add, 0), "a wire");
     cera_map_in_port_static_text(m, add, 1, "30");
@@ -102,6 +102,15 @@ int main(void)
     cera_map_start(m, 2);
     cera_pool_submitter_register(m->pool);
     must_take(cera_map_bring_up(m), "the program");
+    /* Somewhere to put the results, said before the workers are let
+     * go: a value reaching a result with nowhere registered is
+     * discarded like any other unwired value. */
+    static int landed[64];
+    must_take(cera_map_collect(m, out, 0, landed,
+                               (int)(sizeof landed / sizeof landed[0]),
+                               (int)sizeof landed[0]),
+              "somewhere to put the results");
+
     cera_pool_release(m->pool);
 
     /* Few enough that the ring cannot lap: this scene is about the two
@@ -114,11 +123,14 @@ int main(void)
     cera_pool_submitter_unregister(m->pool);
     cera_pool_join(m->pool);
 
-    /* Drain the results so the observer has nothing to complain about,
-     * and so the counters below are of a finished program. */
-    int value = 0, taken = 0;
-    while (cera_map_output_take(m, out, &value, sizeof value))
-        taken++;
+    /* Every value that went in came out, which the trail below has
+     * to agree with. A reading rather than a drain: a value reaching
+     * a result goes straight into the array registered for it. */
+    if (cera_map_collected(m, out, 0) != values) {
+        fprintf(stderr, "%d values in, %d results out\n",
+                values, cera_map_collected(m, out, 0));
+        return 1;
+    }
 
     /* What the program says about itself, before it is destroyed. */
     long counted_runs[2];
@@ -233,8 +245,6 @@ int main(void)
                   "an argument");
     cera_pool_submitter_unregister(b->pool);
     cera_pool_join(b->pool);
-    while (cera_map_output_take(b, bout, &value, sizeof value))
-        ;
 
     uint64_t missed = 0, read_back = 0, first_seq = 0;
     while (cera_watch_next(slow, &e, &lost)) {

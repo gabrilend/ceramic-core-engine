@@ -192,6 +192,13 @@ static const char *in_port_kind_name(unsigned char kind);
 static cera_out_port_t *station_out_port(cera_station_t *s, int index);
 /* }}} */
 
+/* {{{ station_out_port_make() */
+/* The same, creating it and everything before it. The caller holds
+ * the station's mutex, because this appends to a list a delivery walk
+ * may be reading. */
+static cera_out_port_t *station_out_port_make(cera_station_t *s, int index);
+/* }}} */
+
 /* {{{ in_port_constant_free() */
 /* A port's constant and, for a string, the characters it points at.
  * Owned by the port and freed with the map. */
@@ -1460,6 +1467,11 @@ void cera_map_place(cera_map_t *m, int station, cera_task_call_t shim, int kind,
         if (!sl->constant) fail_resource("out of memory for a port's constant");
         sl->constant_string = NULL;
         sl->constant_set = 0;
+
+        /* Not a door until something says otherwise, and said
+         * explicitly because zero is a perfectly good argument
+         * number. */
+        sl->argument = CERA_NOT_A_DOOR;
     }
 
     CERA_EMIT(m, CERA_WATCH_ADDED, station, kind, n_in_ports, out_size, 0);
@@ -1836,27 +1848,32 @@ const char *cera_map_station_set_cursor(cera_map_t *m, int station, int at)
 }
 /* }}} */
 
-/* {{{ cera_map_designate_output() */
+/* {{{ cera_map_designate_result() */
 /*
- * **Say that this station is a place the program's results come
- * from**.
+ * **Say that this port is where one of the program's results leaves**
+ * (issue 209a).
  *
- * It stays an ordinary station: same shape, same readiness, running
- * whatever box it was placed with or none. The designation adds
- * exactly one rule — when its output port is wired nowhere, values
- * are held rather than discarded — and one meaning, which is that a
- * parent composing this program has somewhere to wire from and a
- * person reading it can tell which station is the point.
+ * It stays an ordinary output port: same routing, same fan-out, values
+ * discarded when nothing is wired to it. The mark adds no rule at all
+ * on its own — what it does is give an embedding caller a number to
+ * ask for, so that registering somewhere to put the values becomes
+ * possible. Until somebody registers, a marked port and an unmarked
+ * one behave identically, which is why a program nobody collects from
+ * cannot pile anything up.
  *
- * A program may have **several**, each with its own input ports and
- * its one output port, because a box returns one value and so a
- * station has one output port and so a program output is one station.
- * The alternative — one station whose output ports each owned a
- * subset of its inputs — needs a box returning several values, which
- * C does not have, and would be the only thing in the engine with
- * several readiness checks over subsets of its ports.
+ * **The number is the result's identity**, chosen by whoever wrote the
+ * map rather than derived from where the line sits in it. Reorder
+ * every line and nothing changes; delete one and that result is gone
+ * rather than silently becoming what the next one was.
+ *
+ * A program may have as many as it likes, on as many stations as it
+ * likes, and they are **not synchronised with one another** — two
+ * results are two stations on two threads at two unrelated moments.
+ * That is stated wherever anybody has to act on it, because two arrays
+ * filling side by side look like columns of a table and are not.
  */
-const char *cera_map_designate_output(cera_map_t *m, int station)
+const char *cera_map_designate_result(cera_map_t *m, int station, int port,
+                                      int nth)
 {
     static _Thread_local char said[192];
 
@@ -1874,15 +1891,31 @@ const char *cera_map_designate_output(cera_map_t *m, int station)
     }
     if (s->out_size == 0) {
         /* A station whose box returns nothing has no output port, so
-         * there is nothing for a parent to wire from and nothing to
-         * hold. Refused rather than accepted-and-useless, because the
-         * mistake is almost certainly the wrong station. */
+         * there is nothing to leave by. Refused rather than
+         * accepted-and-useless, because the mistake is almost
+         * certainly the wrong station. */
         snprintf(said, sizeof said,
                  "station %d returns nothing, so it has no results to be "
                  "the source of", station);
         return said;
     }
-    s->door = CERA_DOOR_OUT;
+    if (nth < 0) {
+        snprintf(said, sizeof said,
+                 "a result's number says which result it is, so it cannot "
+                 "be negative");
+        return said;
+    }
+
+    /* Under the station's own mutex: creating a port appends to a list
+     * a delivery walk may be reading. */
+    pthread_mutex_lock(&s->mutex);
+    cera_out_port_t *p = station_out_port_make(s, port);
+    if (p)
+        p->result = nth;
+    pthread_mutex_unlock(&s->mutex);
+
+    if (!p)
+        return "the output port would not be created";
     return NULL;
 }
 /* }}} */
@@ -1908,35 +1941,40 @@ cera_map_t *cera_map_start_beside(cera_map_t *parent)
 
 /* {{{ cera_map_designate_input() */
 /*
- * **Say that this station is where the outside delivers**,
- * which is the other door and the same design.
+ * **Say that this port is one of the program's arguments** (issue
+ * 213a), which is the other door and the same design.
  *
- * Without it, a value gets into a running program exactly one way:
- * somebody holding the program calls the delivery entry naming a
- * station and a port. That works and it is what every test does, and
- * it means **the caller has to know the program's insides**. Rename
- * an interior station and every caller breaks. That is not
- * encapsulation — the program has no surface, only internals that
- * happen to be reachable.
+ * Without a mark somewhere, a value gets into a running program
+ * exactly one way: somebody holding it names a station and a port.
+ * That works, and it means **the caller has to know the program's
+ * insides** — rename an interior station and every caller breaks.
+ * That is not encapsulation; the program has no surface, only
+ * internals that happen to be reachable.
  *
- * The mark says which ports the outside is allowed to deliver to.
- * Everything after that is an ordinary delivery down an ordinary
- * wire, which is why this needs no new mechanism in the delivery
- * path at all.
+ * **The mark is on the port, and an argument therefore costs
+ * nothing.** It used to be on the station, and because a station
+ * carries one value inward — a C function returns one thing — a map
+ * taking three arguments needed three stations running the identity
+ * function, each with its own mutex and ring buffer, each turning one
+ * delivery into a task, a dispatch, a call that returns its argument,
+ * a readiness check and a second delivery. All of that was the mark
+ * having nowhere smaller to live.
  *
- * **One output port, so one station per argument group.** A box
- * returns one value, so a station has one output port, so a program
- * taking several unrelated arguments has several input stations. The
- * alternative wants a C function returning several values, and faking
- * it with a struct something downstream takes apart means a function
- * written to satisfy the engine — which is the thing this design will
- * not ask anybody for.
+ * **A port that is both marked and wired is fed both ways**, and that
+ * is legal. Being an argument is a fact about who may deliver here;
+ * being wired is a fact about what already does. Command-line
+ * delivery, which needs one value per argument in a fixed order, asks
+ * for the ports that nothing feeds — derived, so nothing can go stale
+ * and nothing has to be closed when an enclosing map wires in.
  *
- * Fan-out is a different thing and was always free: one input
- * station's output port may feed as many interior stations as it is
- * wired to.
+ * A station may hold ports of both kinds. The old refusal — a station
+ * cannot be both doors — existed because the mark was on the station
+ * and a station is one thing; a port is a smaller thing, and a station
+ * with an argument port and a result port is ordinary rather than a
+ * mistake.
  */
-const char *cera_map_designate_input(cera_map_t *m, int station)
+const char *cera_map_designate_argument(cera_map_t *m, int station, int port,
+                                        int nth)
 {
     static _Thread_local char said[192];
 
@@ -1952,17 +1990,123 @@ const char *cera_map_designate_input(cera_map_t *m, int station)
                  station);
         return said;
     }
-    if (s->door == CERA_DOOR_OUT) {
-        /* A program whose entrance is its exit is not a program with
-         * two doors; it is somebody having designated the wrong
-         * station. Refused rather than quietly overwritten. */
+    if (port < 0 || port >= s->n_in_ports) {
         snprintf(said, sizeof said,
-                 "station %d is already where results come from — a station "
-                 "cannot be both doors", station);
+                 "station %d has no port %d — it has %d",
+                 station, port, s->n_in_ports);
         return said;
     }
-    s->door = CERA_DOOR_IN;
+    if (nth < 0) {
+        snprintf(said, sizeof said,
+                 "an argument's number says which argument it is, so it "
+                 "cannot be negative");
+        return said;
+    }
+
+    s->in_ports[port].argument = nth;
     return NULL;
+}
+/* }}} */
+
+/* {{{ port_is_fed() */
+/* Whether any station's output port names this one as a destination.
+ * The same sweep removal does, and for the same reason: a wire lives
+ * on the producing side, and an input port carries nothing saying what
+ * feeds it. */
+static int port_is_fed(cera_map_t *m, int station, int port)
+{
+    for (int i = 0; i < m->n_stations; i++) {
+        cera_station_t *s = cera_map_station(m, i);
+        if (!s->call)
+            continue;
+        for (cera_out_port_t *p = s->out_ports; p; p = p->next) {
+            cera_dest_set_t *set = out_port_dests(p);
+            for (int d = 0; set && d < set->n; d++)
+                if (set->items[d].station == station
+                    && set->items[d].port == port)
+                    return 1;
+        }
+    }
+    return 0;
+}
+/* }}} */
+
+/* {{{ argument_slots() */
+/*
+ * **The marked ports a command line fills**, in the order their
+ * numbers say, and how many there are.
+ *
+ * A port that is both marked and wired is fed both ways and is *not* a
+ * slot: a command line hands over one value per position, and a port
+ * already receiving values from inside the program has no position to
+ * be at. Skipped rather than refused, because it is a perfectly
+ * ordinary thing for an enclosing map to have done.
+ *
+ * This is what replaced closing a door. Nothing is stored, so nothing
+ * can go stale, and wiring into a marked port needs no bookkeeping at
+ * all — the answer is recomputed from the wires that exist.
+ */
+static int argument_slots(cera_map_t *m, int *station, int *port, int room)
+{
+    int found = 0;
+    for (int nth = 0; found < room; nth++) {
+        int at = -1, which = -1;
+        if (!cera_map_argument_at(m, nth, &at, &which))
+            break;
+        if (port_is_fed(m, at, which))
+            continue;
+        station[found] = at;
+        port[found] = which;
+        found++;
+    }
+    return found;
+}
+/* }}} */
+
+/* {{{ cera_map_argument_at() */
+/*
+ * **Where the nth argument goes**, or zero when the program has no
+ * such argument.
+ *
+ * Walked rather than indexed, because the numbers are the author's
+ * and need not be dense or in table order — a map may write its
+ * arguments in any sequence, and the whole point of numbering them is
+ * that where the line sits does not matter.
+ */
+int cera_map_argument_at(cera_map_t *m, int nth, int *station, int *port)
+{
+    for (int i = 0; i < m->n_stations; i++) {
+        cera_station_t *s = cera_map_station(m, i);
+        if (!s->call)
+            continue;
+        for (int j = 0; j < s->n_in_ports; j++)
+            if (s->in_ports[j].argument == nth) {
+                if (station) *station = i;
+                if (port)    *port = j;
+                return 1;
+            }
+    }
+    return 0;
+}
+/* }}} */
+
+/* {{{ cera_map_result_at() */
+/* The same question about the other direction. */
+int cera_map_result_at(cera_map_t *m, int nth, int *station, int *port)
+{
+    for (int i = 0; i < m->n_stations; i++) {
+        cera_station_t *s = cera_map_station(m, i);
+        if (!s->call)
+            continue;
+        int j = 0;
+        for (cera_out_port_t *p = s->out_ports; p; p = p->next, j++)
+            if (p->result == nth) {
+                if (station) *station = i;
+                if (port)    *port = j;
+                return 1;
+            }
+    }
+    return 0;
 }
 /* }}} */
 
@@ -2012,16 +2156,17 @@ const char *cera_map_deliver_argument(cera_map_t *m, int station, int port,
         return said;
     }
     cera_station_t *s = cera_map_station(m, station);
-    if (s->door != CERA_DOOR_IN) {
-        snprintf(said, sizeof said,
-                 "station %d is not a declared entrance — the outside may "
-                 "only deliver to a program's input stations", station);
-        return said;
-    }
     if (port < 0 || port >= s->n_in_ports) {
         snprintf(said, sizeof said,
                  "station %d has no port %d — it has %d",
                  station, port, s->n_in_ports);
+        return said;
+    }
+    if (s->in_ports[port].argument == CERA_NOT_A_DOOR) {
+        snprintf(said, sizeof said,
+                 "station %d port %d is not one of this program's arguments "
+                 "— the outside may only deliver to a marked port", station,
+                 port);
         return said;
     }
     if (size != s->in_ports[port].elem_size) {
@@ -2036,61 +2181,101 @@ const char *cera_map_deliver_argument(cera_map_t *m, int station, int port,
 }
 /* }}} */
 
-/* {{{ cera_map_output_waiting() */
+/* {{{ cera_map_collect() */
 /*
- * The two halves of collecting a program's results from outside,
- * mirroring the call that writes a constant in.
+ * **Where an embedding caller wants a result's values put** (issue
+ * 209a), and the end of the pile that used to grow behind its back.
  *
- * **Both, because one is not usable without the other.** A caller
- * asked to drain results needs to know whether there are any, and
- * asking by taking and checking for failure makes "none waiting"
- * indistinguishable from "not an output station" without a second
- * question anyway.
+ * What was here before held every value a marked station produced, in
+ * an array that doubled whenever it filled, and shouted from the first
+ * growth that *results are piling up and nobody is taking them*. That
+ * warning was written instead of a fix: a program whose results nobody
+ * drained grew until memory ran out, having been told so on the way.
  *
- * Under the station's own mutex, which is the same lock a worker
- * finishing a box takes to put a result there — unlike a slot, which
- * belongs to one worker, a held result belongs to the station until
- * somebody takes it.
+ * **Nothing is held unless somebody asks for it.** Registering is the
+ * missing arrow. Before it, a marked output behaves exactly like any
+ * other unwired output — the value is discarded — so the state the
+ * warning described cannot happen.
+ *
+ * **The caller owns the memory.** An address, a count, and an element
+ * size; the engine allocates nothing and therefore has nothing that
+ * can grow.
+ *
+ * **Wire before starting.** This is not new discipline — it is the
+ * rule the pool already enforces, that a standing promise is held from
+ * before the workers are released until the last argument is in, and
+ * the engine already has a message for somebody who got that backwards.
+ * Registering after the values have started arriving loses the ones
+ * that arrived first, silently, which is the shape this refuses to
+ * have.
  */
-int cera_map_output_waiting(cera_map_t *m, int station)
+const char *cera_map_collect(cera_map_t *m, int station, int port,
+                             void *into, int room, int elem_size)
 {
-    if (station < 0 || station >= m->n_stations)
-        return 0;
+    static _Thread_local char said[224];
+
+    if (station < 0 || station >= m->n_stations) {
+        snprintf(said, sizeof said, "station %d is outside the table",
+                 station);
+        return said;
+    }
     cera_station_t *s = cera_map_station(m, station);
+    if (!s->call) {
+        snprintf(said, sizeof said,
+                 "station %d has no box placed, so it produces nothing to "
+                 "collect", station);
+        return said;
+    }
+    if (!into || room <= 0) {
+        snprintf(said, sizeof said,
+                 "collecting into nowhere — an address and a count say "
+                 "where the values go and how many fit");
+        return said;
+    }
+    if (elem_size != s->out_size) {
+        snprintf(said, sizeof said,
+                 "that station produces %d bytes and the array holds %d "
+                 "per slot", s->out_size, elem_size);
+        return said;
+    }
+
     pthread_mutex_lock(&s->mutex);
-    int n = s->n_held;
+    cera_out_port_t *p = station_out_port_make(s, port);
+    if (p) {
+        p->into = into;
+        p->room = room;
+        p->elem_size = elem_size;
+        atomic_store_explicit(&p->taken, 0, memory_order_release);
+    }
     pthread_mutex_unlock(&s->mutex);
-    return n;
+
+    if (!p)
+        return "the output port would not be created";
+    return NULL;
 }
 /* }}} */
 
-/* {{{ cera_map_output_take() */
-int cera_map_output_take(cera_map_t *m, int station, void *into, int size)
+/* {{{ cera_map_collected() */
+/*
+ * **How many values landed**, which is a count and not a position.
+ *
+ * There is no progress through a program to report — a map is
+ * runnable or not, and nothing about it is ordered. What this number
+ * distinguishes is the two ways a run ends: reaching the count means
+ * the program produced at least everything that was asked for, and
+ * falling short of it while the pool has finished means the program
+ * ran dry and that was all there was.
+ */
+int cera_map_collected(cera_map_t *m, int station, int port)
 {
     if (station < 0 || station >= m->n_stations)
         return 0;
     cera_station_t *s = cera_map_station(m, station);
-    if (size != s->out_size)
-        fail("taking a result into something the wrong size for it");
-
-    pthread_mutex_lock(&s->mutex);
-    if (s->n_held == 0) {
-        pthread_mutex_unlock(&s->mutex);
+    cera_out_port_t *p = station_out_port(s, port);
+    if (!p || !p->into)
         return 0;
-    }
-    /* Oldest first, and the shuffle is deliberate over the
-     * alternative. Results are taken far less often than they are
-     * produced, and a caller draining them wants them in the order
-     * the program produced them — which is the one ordering this
-     * engine can still honestly offer, because a single station
-     * produced them all in sequence. */
-    memcpy(into, s->held, (size_t)size);
-    s->n_held--;
-    if (s->n_held > 0)
-        memmove(s->held, (unsigned char *)s->held + size,
-                (size_t)s->n_held * (size_t)size);
-    pthread_mutex_unlock(&s->mutex);
-    return 1;
+    int n = atomic_load_explicit(&p->taken, memory_order_acquire);
+    return n > p->room ? p->room : n;
 }
 /* }}} */
 
@@ -2243,7 +2428,12 @@ const char *cera_map_bring_up(cera_map_t *m)
          * telling somebody that the thing they just declared might
          * not happen.
          */
-        if (has_ring && !any_arrow && s->door != CERA_DOOR_IN)
+        int any_argument = 0;
+        for (int j = 0; j < s->n_in_ports; j++)
+            if (s->in_ports[j].argument != CERA_NOT_A_DOOR)
+                any_argument = 1;
+
+        if (has_ring && !any_arrow && !any_argument)
             fprintf(stderr,
                     "map: WARNING: station %s has buffered inputs that no "
                     "arrow feeds — unless something outside delivers into "
@@ -2254,51 +2444,121 @@ const char *cera_map_bring_up(cera_map_t *m)
     free(first_port);
 
     /*
-     * **A program says where its results come from, or it is not
-     * finished**.
+     * **The doors are numbered without gaps and without repeats**
+     * (issues 213a, 209a), which is the whole of what numbering them
+     * costs and the reason it is worth anything.
      *
-     * Bringing a program up is a caller declaring it finished, and a
-     * finished program that has never said what it produces has not
-     * said what it is for. The parallel is a C function returning
-     * void: it still declares its return, and the declaration is what
-     * a caller reads.
+     * A number is the door's identity, chosen by whoever wrote the map
+     * rather than derived from where the line sits in it. That is only
+     * true if the engine holds the author to it: two ports both
+     * claiming to be argument one is a program with no answer to
+     * "which one does the first value go to", and argument two with no
+     * argument one is a command line that cannot be counted.
      *
-     * What the requirement buys is that a program's interface is
-     * **total**. Without it there are two different ways to produce
-     * nothing — no result station at all, and a result station nobody
-     * wired anything into — and only the second is legible. The
-     * engine cannot tell a program that deliberately does all its work
-     * by side effect from one whose author forgot the results, because
-     * a box is a C function and nothing about it says whether it
-     * touches the world. Requiring the declaration moves that from
-     * something the engine would have to guess into something the
-     * program states, and a program that writes to disk and returns
-     * nothing then declares exactly that.
+     * Neither was detectable at all under the old scheme, where the
+     * order was the order stations happened to sit in the table.
      *
-     * **A station with nothing wired into it satisfies this**, which
-     * is the whole point: the declaration is the interface, and what
-     * flows through it is a separate matter.
-     *
-     * It is asked here rather than while a program is being built,
-     * because a program under construction legitimately has no result
-     * station yet — the same reason the other whole-program checks
-     * live here. A caller that never says it is finished is never
-     * asked.
+     * **A program need no longer declare a result.** That requirement
+     * existed so a program's interface would be *total* — so that "I
+     * produce nothing" and "I forgot to say" were different
+     * statements. An interface made of numbered ports is total by
+     * being read: a map with no result mark produces nothing outward,
+     * and that is a complete sentence needing no separate declaration.
      */
-    int has_result = 0;
-    for (int i = 0; i < m->n_stations; i++) {
-        cera_station_t *s = cera_map_station(m, i);
-        if (s->call && s->door == CERA_DOOR_OUT)
-            has_result = 1;
+    /*
+     * **Only the doors nobody inside has taken over count**, which is
+     * what makes this safe under composition. One description
+     * instantiated twice puts two ports in the table both marked
+     * argument zero — and they are not two of the program's arguments,
+     * they are each copy's own, and the enclosing map has wired both.
+     * A port something feeds is not a way in from outside, so it is not
+     * one of these numbers; the same derivation the command line uses.
+     */
+    for (int nth = 0; ; nth++) {
+        int found = 0;
+        for (int i = 0; i < m->n_stations; i++) {
+            cera_station_t *s = cera_map_station(m, i);
+            if (!s->call)
+                continue;
+            for (int j = 0; j < s->n_in_ports; j++)
+                if (s->in_ports[j].argument == nth && !port_is_fed(m, i, j))
+                    found++;
+        }
+        if (found > 1) {
+            faults++;
+            if (used < (int)sizeof said - 128)
+                used += snprintf(said + used, sizeof said - (size_t)used,
+                                 "%s%d ports each say they are argument %d, "
+                                 "so there is no answer to which one a "
+                                 "value goes to", used ? "; " : "",
+                                 found, nth);
+        }
+        if (found == 0) {
+            /* The end of the run, unless something numbered higher is
+             * sitting past the gap — in which case the gap is the
+             * fault, because an argument list with a hole in it cannot
+             * be counted off a command line. */
+            int beyond = 0;
+            for (int i = 0; i < m->n_stations && !beyond; i++) {
+                cera_station_t *s = cera_map_station(m, i);
+                if (!s->call)
+                    continue;
+                for (int j = 0; j < s->n_in_ports; j++)
+                    if (s->in_ports[j].argument > nth
+                        && !port_is_fed(m, i, j))
+                        beyond = 1;
+            }
+            if (beyond) {
+                faults++;
+                if (used < (int)sizeof said - 128)
+                    used += snprintf(said + used,
+                                     sizeof said - (size_t)used,
+                                     "%snothing is argument %d, and "
+                                     "something is numbered past it — an "
+                                     "argument list cannot have a hole in "
+                                     "it", used ? "; " : "", nth);
+            }
+            break;
+        }
     }
-    if (!has_result) {
-        faults++;
-        if (used < (int)sizeof said - 128)
-            used += snprintf(said + used, sizeof said - (size_t)used,
-                             "%sthis program never says where its results "
-                             "come from — one station has to be marked as "
-                             "the way out, even when nothing is wired into "
-                             "it", used ? "; " : "");
+
+    for (int nth = 0; ; nth++) {
+        int found = 0, beyond = 0;
+        for (int i = 0; i < m->n_stations; i++) {
+            cera_station_t *s = cera_map_station(m, i);
+            if (!s->call)
+                continue;
+            for (cera_out_port_t *p = s->out_ports; p; p = p->next) {
+                /* A result wired onward is feeding something inside the
+                 * program, which is what an enclosing map does to a
+                 * sub-map's way out. Only the ones going nowhere are
+                 * the program's own. */
+                cera_dest_set_t *set = out_port_dests(p);
+                if (set && set->n > 0)
+                    continue;
+                if (p->result == nth)   found++;
+                if (p->result > nth)    beyond = 1;
+            }
+        }
+        if (found > 1) {
+            faults++;
+            if (used < (int)sizeof said - 128)
+                used += snprintf(said + used, sizeof said - (size_t)used,
+                                 "%s%d ports each say they are result %d",
+                                 used ? "; " : "", found, nth);
+        }
+        if (found == 0) {
+            if (beyond) {
+                faults++;
+                if (used < (int)sizeof said - 128)
+                    used += snprintf(said + used,
+                                     sizeof said - (size_t)used,
+                                     "%snothing is result %d, and something "
+                                     "is numbered past it",
+                                     used ? "; " : "", nth);
+            }
+            break;
+        }
     }
 
     if (faults) {
@@ -2370,6 +2630,37 @@ static cera_out_port_t *station_out_port(cera_station_t *s, int index)
     for (int i = 0; p && i < index; i++)
         p = p->next;
     return p;
+}
+/* }}} */
+
+/* {{{ station_out_port_make() */
+/*
+ * The port at an index, creating it and every port before it if they
+ * are not there yet. Two callers want this — drawing a wire and
+ * marking a result — and having one of them build ports inline while
+ * the other did it differently is how two ports end up meaning
+ * slightly different things.
+ *
+ * **The caller holds the station's mutex.** Creating a port appends to
+ * a list a delivery walk may be reading.
+ *
+ * A fresh port is not a door: `calloc` gives zero, and zero is a
+ * perfectly good result number, so the mark is written explicitly.
+ */
+static cera_out_port_t *station_out_port_make(cera_station_t *s, int index)
+{
+    while (s->n_out_ports <= index) {
+        cera_out_port_t *fresh = calloc(1, sizeof *fresh);
+        if (!fresh)
+            return NULL;
+        fresh->result = CERA_NOT_A_DOOR;
+        cera_out_port_t **link = &s->out_ports;
+        while (*link)
+            link = &(*link)->next;
+        *link = fresh;
+        s->n_out_ports++;
+    }
+    return station_out_port(s, index);
 }
 /* }}} */
 
@@ -2687,13 +2978,6 @@ void cera_map_destroy(cera_map_t *m)
             pthread_mutex_destroy(&s->mutex);
             continue;
         }
-        /* Results nobody took. Freed rather than reported, because
-         * the pile-up was already shouted about from the first
-         * doubling — saying it twice at teardown would be the same
-         * fault wearing a different hat. */
-        free(s->held);
-        s->held = NULL;
-
         for (int j = 0; j < s->n_in_ports; j++) {
             in_port_free_pages(&s->in_ports[j]);
             /* Both storages, because a port carries both whatever it
@@ -3681,51 +3965,38 @@ static int (*const route_choose[CERA_STATION_KIND_COUNT])(cera_station_t *, cera
 };
 /* }}} */
 
-/* {{{ station_hold_result() */
+/* {{{ station_collect_result() */
 /*
- * Keep one result for somebody outside to take.
+ * **One value into the caller's array**, and the bound enforced where
+ * it has to be (issue 209a).
  *
- * Under the station's own mutex, because a worker finishing a box and
- * a caller draining results genuinely meet here — unlike a slot,
- * which belongs to exactly one worker and needs no lock around its
- * bytes, a held result belongs to the station until it is taken.
+ * **The reservation is the bound, not the winding down.** A worker
+ * takes the next index with one atomic add; a worker handed an index
+ * at or past the room writes nothing. Winding down when an array fills
+ * happens alongside and is an optimisation — it stops the machine
+ * spending effort on results nobody will keep — but it can never be
+ * what keeps the array in bounds, because it is asynchronous and
+ * workers are still inside boxes when the last slot goes.
  *
- * Doubling, and **the growth is shouted from the first one** rather
- * than summarised at the end like the other two piles. A port backing
- * up means uneven inputs and the task ring backing up means slow
- * consumers; both are performance signals worth a line at teardown.
- * This backing up means nobody is collecting the program's results at
- * all, which is not a performance signal — it is a program computing
- * into somewhere nobody is looking, and waiting until shutdown to
- * mention it wastes the entire run.
+ * **No lock, and no state on a slot.** A ring slot needs empty,
+ * reserved, ready and claimed because it is reused and a reader has to
+ * know what it is looking at. One of these is written exactly once and
+ * read by nobody until the caller looks, so the index is the whole
+ * mechanism and two workers writing adjacent slots touch different
+ * bytes.
+ *
+ * The counter keeps climbing past the room. That is deliberate: a
+ * caller comparing it against the room learns not only that the array
+ * filled but by how much it was overrun, which is the difference
+ * between a program that finished and one that is still going.
  */
-static void station_hold_result(cera_map_t *m, int index, cera_station_t *s,
-                                const void *value)
+static void station_collect_result(cera_out_port_t *p, const void *value)
 {
-    pthread_mutex_lock(&s->mutex);
-    if (s->n_held == s->held_room) {
-        int room = s->held_room ? s->held_room * 2 : 8;
-        void *bigger = realloc(s->held, (size_t)room * (size_t)s->out_size);
-        if (!bigger) {
-            pthread_mutex_unlock(&s->mutex);
-            cera_fail(CERA_EXIT_NO_RESOURCE, "delivery: out of memory holding a result\n");
-        }
-        s->held = bigger;
-        s->held_room = room;
-        if (s->held_growths++ > 0 || room > 8)
-            fprintf(stderr,
-                    "observe: results are piling up at %s — %d waiting and "
-                    "nobody taking them; this program is computing into "
-                    "somewhere nobody is looking\n",
-                    (m->station_names && index < m->n_named
-                     && m->station_names[index])
-                        ? m->station_names[index] : "an output station",
-                    s->n_held);
-    }
-    memcpy((unsigned char *)s->held + (size_t)s->n_held * (size_t)s->out_size,
-           value, (size_t)s->out_size);
-    s->n_held++;
-    pthread_mutex_unlock(&s->mutex);
+    int slot = atomic_fetch_add_explicit(&p->taken, 1, memory_order_acq_rel);
+    if (slot >= p->room)
+        return;
+    memcpy((unsigned char *)p->into + (size_t)slot * (size_t)p->elem_size,
+           value, (size_t)p->elem_size);
 }
 /* }}} */
 
@@ -3771,21 +4042,34 @@ static void map_deliver(void *ctx, cera_task_t *t)
     int out_port_index = route_choose[s->kind](s, t);
 
     cera_out_port_t *port = station_out_port(s, out_port_index);
+
+    /*
+     * **A value that leaves the map goes wherever the caller said**
+     * (issue 209a), and this is the whole of what registering does to
+     * the delivery path.
+     *
+     * It happens before the wires rather than instead of them, because
+     * a result may also feed something inside: a station's answer can
+     * be both what the program produces and what its next stage
+     * consumes, and there is no reason to make an author choose.
+     */
+    if (port && port->into)
+        station_collect_result(port, t->out);
+
     cera_dest_set_t *set = out_port_dests(port);
     if (!set || set->n == 0) {
         /*
-         * Nobody is wired here. For almost every station that means
-         * **discard**, deliberately: an unwired comparator branch is
-         * the ordinary case, and a program that sends everything below
-         * a threshold somewhere means to drop the rest.
+         * Nobody is wired here, so **discard**, deliberately and for
+         * every station alike: an unwired comparator branch is the
+         * ordinary case, and a program that sends everything below a
+         * threshold somewhere means to drop the rest.
          *
-         * For a designated output it means **hold**, and that is the
-         * one rule the designation adds. A program's own
-         * results are the one thing discarding makes meaningless —
-         * a program that computed them and dropped them did nothing.
+         * A marked result is no exception. It used to be — an unwired
+         * one *held*, in an array that doubled forever behind the
+         * caller's back — and now a value nobody registered for is
+         * dropped like any other. Registering is the arrow that was
+         * missing.
          */
-        if (s->door == CERA_DOOR_OUT)
-            station_hold_result(m, t->station, s, t->out);
         return;
     }
 
@@ -5168,12 +5452,25 @@ const char *cera_map_deliver_command_line(cera_map_t *m, int argc, char **argv)
 {
     static _Thread_local char said[256];
 
-    int wanted = 0;
-    for (int i = 0; i < m->n_stations; i++) {
-        cera_station_t *s = cera_map_station(m, i);
-        if (s->call && s->door == CERA_DOOR_IN)
-            wanted += s->n_in_ports;
-    }
+    /*
+     * **A program's arguments are its marked ports that nothing
+     * feeds**, in the order their numbers say (issues 213a, 601b).
+     *
+     * Derived rather than stored, which is what makes the old
+     * closing-a-door problem disappear instead of being solved. When
+     * an enclosing map wires into one of these ports, that port stops
+     * being an argv slot on its own — there is no mark to clear, and a
+     * port fed both by a wire and by an outside caller stays legal,
+     * because being an argument and being fed are different facts.
+     *
+     * Counted by walking the numbers rather than the table, because a
+     * number is the author's name for an argument and the table's
+     * order has nothing to do with it. Bring-up has already refused
+     * gaps and repeats, so counting up until nothing answers is safe.
+     */
+    int station[64], port[64];
+    int wanted = argument_slots(m, station, port,
+                                (int)(sizeof station / sizeof *station));
 
     int given = argc > 0 ? argc - 1 : 0;
     if (given != wanted) {
@@ -5209,15 +5506,10 @@ const char *cera_map_deliver_command_line(cera_map_t *m, int argc, char **argv)
         return said;
     }
 
-    int taken = 0;
     const char *no = NULL;
-    for (int i = 0; i < m->n_stations && !no; i++) {
-        cera_station_t *s = cera_map_station(m, i);
-        if (!s->call || s->door != CERA_DOOR_IN)
-            continue;
-        for (int j = 0; j < s->n_in_ports && !no; j++)
-            no = cera_map_deliver_argument_text(m, i, j, argv[1 + taken++]);
-    }
+    for (int k = 0; k < wanted && !no; k++)
+        no = cera_map_deliver_argument_text(m, station[k], port[k],
+                                            argv[1 + k]);
 
     return no;
 }
@@ -5687,10 +5979,7 @@ static cera_map_t *load_file(const char *path, int n_workers, int salvaging)
      * is a station something outside delivers to, which makes the
      * second half of that false.
      */
-    int has_entrance = 0;
-    for (int i = 0; i < m->n_stations; i++)
-        if (cera_map_station(m, i)->door == CERA_DOOR_IN)
-            has_entrance = 1;
+    int has_entrance = cera_map_argument_at(m, 0, NULL, NULL);
 
     if (cera_map_seed_count(m) == 0 && !has_entrance)
         die_load(path, 0, NULL,
@@ -5749,9 +6038,9 @@ cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path)
 }
 /* }}} */
 
-/* {{{ map_instance_door() */
+/* {{{ cera_map_instance_entrance() */
 /*
- * **The nth station of this instance facing that way**, or -1.
+ * **The station holding this instance's nth argument**, or -1.
  *
  * This is the whole of what a parent is entitled to know about
  * something it brought inside itself. It could reach any of the
@@ -5759,34 +6048,40 @@ cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path)
  * right there — and doing so would be reaching inside a thing whose
  * author may rename or restructure anything that is not a door.
  *
- * A program may have several of each, so the nth rather than the
- * only. They come back in the order the description declared them,
- * which is the one order a description can be said to have.
+ * **The nth is the number the description wrote down**, not a count of
+ * doors in table order (issue 213a). Under the old scheme the parent
+ * got them in the order the stations happened to land, so moving two
+ * lines in the sub-map silently swapped two of the parent's arguments.
+ * Now the sub-map's author says which is which, and reordering the
+ * file changes nothing.
  */
-static int map_instance_door(cera_map_t *m, const cera_map_instance_t *in,
-                             int facing, int nth)
+int cera_map_instance_entrance(cera_map_t *m, const cera_map_instance_t *in, int nth)
 {
-    int seen = 0;
     for (int i = 0; i < in->count; i++) {
         cera_station_t *s = cera_map_station(m, in->station[i]);
-        if (s->call && s->door == facing && seen++ == nth)
-            return in->station[i];
+        if (!s->call)
+            continue;
+        for (int j = 0; j < s->n_in_ports; j++)
+            if (s->in_ports[j].argument == nth)
+                return in->station[i];
     }
     return -1;
 }
 /* }}} */
 
-/* {{{ cera_map_instance_entrance() */
-int cera_map_instance_entrance(cera_map_t *m, const cera_map_instance_t *in, int nth)
-{
-    return map_instance_door(m, in, CERA_DOOR_IN, nth);
-}
-/* }}} */
-
 /* {{{ cera_map_instance_result() */
+/* The same question about the other direction. */
 int cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int nth)
 {
-    return map_instance_door(m, in, CERA_DOOR_OUT, nth);
+    for (int i = 0; i < in->count; i++) {
+        cera_station_t *s = cera_map_station(m, in->station[i]);
+        if (!s->call)
+            continue;
+        for (cera_out_port_t *p = s->out_ports; p; p = p->next)
+            if (p->result == nth)
+                return in->station[i];
+    }
+    return -1;
 }
 /* }}} */
 
@@ -6407,13 +6702,12 @@ void cera_map_dump(cera_map_t *m, FILE *out)
          * marker is deliberately not a legal box name, so a dump
          * carrying one cannot be read back in silence.
          */
-        /* The door, if it is one. A program whose
-         * doors did not survive being written down could not be
-         * composed after a round trip, which is most of what naming
-         * them was for. */
-        const char *door = s->door == CERA_DOOR_IN  ? " entry"
-                         : s->door == CERA_DOOR_OUT ? " result"
-                         : "";
+        /* A door is a port now (issues 213a, 209a), so the station
+         * line says nothing about one and the port lines say it all.
+         * A program whose doors did not survive being written down
+         * could not be composed after a round trip, which is most of
+         * what marking them was for. */
+        const char *door = "";
 
         /*
          * **Whichever form is unambiguous**. A station
@@ -6489,6 +6783,15 @@ void cera_map_dump(cera_map_t *m, FILE *out)
              * where the port's values come from and the line after
              * says what the port is.
              */
+            /*
+             * **This port is one of the map's arguments** (issue
+             * 601b). Written before its wires and its value, because
+             * it says what the port *is* to anyone outside, and the
+             * lines after say what happens to it inside.
+             */
+            if (sl->argument != CERA_NOT_A_DOOR)
+                fprintf(out, "  in %d $%d\n", j, sl->argument);
+
             int sources = 0;
             for (int pass = 0; pass < 2; pass++) {
                 int seen = 0;
@@ -6623,6 +6926,13 @@ void cera_map_dump(cera_map_t *m, FILE *out)
          * running engine reads that order or means anything by it. */
         int out_port_index = 0;
         for (cera_out_port_t *p = s->out_ports; p; p = p->next, out_port_index++) {
+            /* This port is one of the map's results (issue 601b).
+             * Written before its wires, for the same reason an
+             * argument mark comes before a port's: it says what the
+             * port is to anyone outside. */
+            if (p->result != CERA_NOT_A_DOOR)
+                fprintf(out, "  out %d $%d\n", out_port_index, p->result);
+
             cera_dest_set_t *set = out_port_dests(p);
             for (int di = 0; set && di < set->n; di++)
                 fprintf(out, "  out %d - %s.%d\n", out_port_index,
@@ -6882,20 +7192,12 @@ const char *cera_map_wire(cera_map_t *m, int from_station, int port,
      * snapshot is mid-walk. Ports are created empty up to the index,
      * exactly as the loader would. */
     pthread_mutex_lock(&from->mutex);
-    while (from->n_out_ports <= port) {
-        cera_out_port_t *fresh = calloc(1, sizeof *fresh);
-        if (!fresh) {
-            pthread_mutex_unlock(&from->mutex);
-            pthread_mutex_unlock(&m->rewire_mutex);
-            return said("out of memory for a port");
-        }
-        cera_out_port_t **link = &from->out_ports;
-        while (*link)
-            link = &(*link)->next;
-        *link = fresh;
-        from->n_out_ports++;
+    cera_out_port_t *p = station_out_port_make(from, port);
+    if (!p) {
+        pthread_mutex_unlock(&from->mutex);
+        pthread_mutex_unlock(&m->rewire_mutex);
+        return said("out of memory for a port");
     }
-    cera_out_port_t *p = station_out_port(from, port);
 
     /*
      * A whole new set, published by one write. Walkers

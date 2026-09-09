@@ -545,23 +545,27 @@ entire job. Zeroing on release would cost a full erase per claim.
 Empty is zero so that a freshly allocated run of slots is a
 freshly empty run of slots.
 
-### enum station_door
+### CERA_NOT_A_DOOR
 
 ```c
-enum station_door {
-    CERA_DOOR_NONE = 0,   /* an interior station, which is most of them */
-    CERA_DOOR_IN   = 1,   /* the outside may deliver here */
-    CERA_DOOR_OUT  = 2,   /* results wait here to be taken */
-};
+#define CERA_NOT_A_DOOR (-1)
 ```
 
-The three station kinds, consulted only by the routing dispatch.
-Identical in every respect except which output port a returned value
-goes down.
+**A door is a port, not a station** (issues 213a, 209a). A port carries
+the number of the argument or result it is, or this when it is neither,
+which is most of them.
 
+The number is a name the author chose that happens to sort: reordering
+every line in a file changes nothing, and a gap or a duplicate is
+refused when the program is brought up. It means the same thing whoever
+supplies the value — a shell, a C caller, or an enclosing map — the way
+a C function's first parameter does not care who called it.
 
-Which way a door faces. Not a station kind: a
-door is an ordinary station of any kind, carrying a mark.
+What it replaced: a mark on the whole station. Because a station carries
+one value inward, a map taking three arguments needed three stations
+running the identity function, each with a mutex and a ring buffer, each
+turning one delivery into a task, a dispatch, a call that returns its
+argument, a readiness check and a second delivery.
 
 ### enum station_kind
 
@@ -1047,29 +1051,71 @@ Refused on anything that is not an iterator, because there is
 nothing for it to mean: a plain station has one exit and a
 comparator chooses by comparing.
 
-### cera_map_designate_output()
+### cera_map_designate_result()
 
 ```c
-const char *cera_map_designate_output(cera_map_t *m, int station);
+const char *cera_map_designate_result(cera_map_t *m, int station, int port,
+                                      int nth);
 ```
 
-**Where a program's results come from.**
+**This port is where one of the program's results leaves.**
 
-A designated station stays an ordinary station — same shape, same
-readiness, running whatever box it was placed with or none. The
-designation adds one rule: when its output port is wired nowhere,
-values are **held** rather than discarded. Discarding is right for
-every other port and wrong for this one, because a program that
-computed its results and dropped them did nothing.
+It stays an ordinary output port: same routing, same fan-out, values
+discarded when nothing is wired to it. **The mark adds no rule of its
+own.** What it does is give an embedding caller a number to ask for, so
+that registering somewhere to put the values becomes possible.
 
-A program may have several. A box returns one value, so a station
-has one output port, so a program output is one station; several
-results are several stations, and each gets the readiness check
-that already exists rather than a new shape.
+Until somebody registers, a marked port and an unmarked one behave
+identically — which is why a program nobody collects from cannot pile
+anything up.
 
-`cera_map_output_waiting` says how many are held; `cera_map_output_take`
-takes the oldest, returning 1 or 0. Both exist because a caller
-asked to drain results cannot write the loop with only one of them.
+A program may have as many as it likes, on as many stations as it likes,
+and they are **not synchronised with one another**: two results are two
+stations on two threads at two unrelated moments.
+
+### cera_map_collect()
+
+```c
+const char *cera_map_collect(cera_map_t *m, int station, int port,
+                             void *into, int room, int elem_size);
+```
+
+**Where an embedding caller wants a result's values put**, and the end
+of the pile that used to grow behind its back.
+
+The caller owns the memory: an address, a count, and an element size.
+The engine allocates nothing and therefore has nothing that can grow.
+
+**Wire before starting.** This is not new discipline — it is the rule
+the pool already enforces, that a standing promise is held from before
+the workers are released until the last argument is in. Registering
+after values have started arriving loses the ones that arrived first,
+silently.
+
+The bound is the **reservation**: a worker takes the next index with one
+atomic add and writes nothing when the index is at or past the room.
+Winding down when an array fills happens alongside and can never be what
+keeps the array in bounds, because workers are still inside boxes when
+the last slot goes.
+
+No slot state machine. A ring slot needs empty, reserved, ready and
+claimed because it is reused and a reader has to know what it is looking
+at; one of these is written once and read by nobody until the caller
+looks.
+
+### cera_map_collected()
+
+```c
+int cera_map_collected(cera_map_t *m, int station, int port);
+```
+
+**How many values landed**, which is a count and not a position — there
+is no progress through a program to report.
+
+What it distinguishes is the two ways a run ends: reaching the count
+means the program produced at least everything that was asked for, and
+falling short of it while the pool has finished means the program ran
+dry and that was all there was.
 
 ### cera_map_start_beside()
 
@@ -1102,23 +1148,41 @@ doors. The across-processors case is the same shape with a pool
 each, and it needs nothing added here — a door does not ask where
 its caller is.
 
-### cera_map_designate_input()
+### cera_map_designate_argument()
 
 ```c
-const char *cera_map_designate_input(cera_map_t *m, int station);
+const char *cera_map_designate_argument(cera_map_t *m, int station, int port,
+                                        int nth);
 ```
 
-The other door: the station the outside is allowed to deliver to.
+The other door: **this port is one of the program's arguments.**
 
-Without it a caller reaches a program by naming one of its interior
-stations, which means knowing what they are called — rename one and
-every caller breaks. The mark is what turns internals that happen
-to be reachable into a surface, and it is what lets a parent wire
-to a sub-program without knowing anything inside it.
+Without a mark somewhere, a caller reaches a program by naming one
+of its interior stations, which means knowing what they are called —
+rename one and every caller breaks. The mark is what turns internals
+that happen to be reachable into a surface, and what lets a parent
+wire to a sub-program without knowing anything inside it.
 
-A station cannot be both doors; being both would mean a program
-whose entrance is its exit, and asking for it is almost certainly a
-mis-named station.
+**A port that is both marked and wired is fed both ways**, and that
+is legal: being an argument is a fact about who *may* deliver here,
+being wired is a fact about what already does. A station may hold
+ports of both kinds — the old refusal, that a station could not be
+both doors, existed because the mark was on the station and a
+station is one thing.
+
+### cera_map_argument_at() / cera_map_result_at()
+
+```c
+int cera_map_argument_at(cera_map_t *m, int nth, int *station, int *port);
+int cera_map_result_at(cera_map_t *m, int nth, int *station, int *port);
+```
+
+Where the nth door is, or zero when the program has no such door.
+
+Walked rather than indexed, because the numbers are the author's and
+need not be dense or in table order — a map may write its arguments
+in any sequence, and the whole point of numbering them is that where
+the line sits does not matter.
 
 ### cera_map_deliver_argument()
 
@@ -1131,23 +1195,12 @@ Deliver into a program from outside it. NULL when taken, or a
 sentence saying why not.
 
 Underneath it is the ordinary delivery. What differs is who may use
-it: this refuses any station that is not a declared entrance, and
-that refusal is the whole of what gives a program a surface. The
-size is checked here because a caller from outside is the one least
-likely to be right about it — inside the graph a wire was checked
-when it was drawn, and here there is no wire.
-
-### cera_map_output_waiting()
-
-```c
-int cera_map_output_waiting(cera_map_t *m, int station);
-```
-
-### cera_map_output_take()
-
-```c
-int cera_map_output_take(cera_map_t *m, int station, void *into, int size);
-```
+it: this refuses any port that is not marked as one of the
+program's arguments, and that refusal is the whole of what gives a
+program a surface. The size is checked here because a caller from
+outside is the one least likely to be right about it — inside the
+graph a wire was checked when it was drawn, and here there is no
+wire.
 
 ### cera_map_bring_up()
 

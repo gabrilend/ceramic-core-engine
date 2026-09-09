@@ -66,10 +66,12 @@ int add_up(int a, int b)
 BOX
 
 cat > "${AWAY}/away.map" <<'MAP'
-station feed carry p entry
+station feed carry p
+  in 0 $0
   out 0 - total.0
 
-station total add_up p result
+station total add_up p
+  out 0 $0
   in 0 - feed.0
   in 1 = 30
 MAP
@@ -105,15 +107,20 @@ int main(void)
         return 1;
     }
 
+    int answers[4] = { 0 };
+    if (cera_map_collect(m, 1, 0, answers, 4, (int)sizeof answers[0])) {
+        fprintf(stderr, "nowhere to put the answer\n");
+        return 1;
+    }
+
     cera_pool_release(m->pool);
     cera_pool_join(m->pool);
 
-    int answer = 0;
-    if (!cera_map_output_take(m, 1, &answer, sizeof answer)) {
+    if (cera_map_collected(m, 1, 0) < 1) {
         fprintf(stderr, "nothing came back\n");
         return 1;
     }
-    printf("%d\n", answer);
+    printf("%d\n", answers[0]);
     cera_map_destroy(m);
     return 0;
 }

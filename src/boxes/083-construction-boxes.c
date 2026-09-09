@@ -204,29 +204,34 @@ int program_set_constant(program p, part which, int port,
  * reachable internals into a surface is exactly this mark — and a map
  * that could build only graphs could build nothing that would run.
  *
- * `facing` is 1 for the way in and 2 for the way out, matching the
- * mark the engine keeps. A number rather than text because a wire
- * carries values, and this is one; a box that took a word would need
- * the text to have come from somewhere, and the somewhere would be a
- * constant nobody can see from the map.
+ * `facing` is 1 for the way in and 2 for the way out. A number rather
+ * than text because a wire carries values, and this is one; a box that
+ * took a word would need the text to have come from somewhere, and the
+ * somewhere would be a constant nobody can see from the map.
+ *
+ * **`nth` is which argument or result this is** (issues 213a, 209a).
+ * A door is a port now, and the number is the door's identity — so a
+ * map that builds a program says which of its arguments it is marking
+ * rather than relying on the order it happened to mark them in.
+ *
+ * Port zero on the marked station, which is what a part means: a
+ * part's way in is its first input port and its way out is its output
+ * port, and reaching past that is reaching inside.
  */
-int program_set_door(program p, part which, int facing)
+int program_set_door(program p, part which, int facing, int nth)
 {
     cera_map_t *m = program_of(p, "marking a door");
-    /* Marking a part as one of this program's own doors: the way in
-     * for an entrance, the way out for a result. A single box has one
-     * station for both, so either mark lands where it should. */
     const char *no;
-    if (facing == CERA_DOOR_IN)
-        no = cera_map_designate_input(m, which.entrance);
-    else if (facing == CERA_DOOR_OUT)
-        no = cera_map_designate_output(m, which.result);
+    if (facing == 1)
+        no = cera_map_designate_argument(m, which.entrance, 0, nth);
+    else if (facing == 2)
+        no = cera_map_designate_result(m, which.result, 0, nth);
     else {
-        char which[128];
-        snprintf(which, sizeof which,
-                 "%d is neither the way in (%d) nor the way out (%d)",
-                 facing, CERA_DOOR_IN, CERA_DOOR_OUT);
-        refused(m, "a door", which);
+        char said[128];
+        snprintf(said, sizeof said,
+                 "%d is neither the way in (1) nor the way out (2)",
+                 facing);
+        refused(m, "a door", said);
         return 0;
     }
     if (no)

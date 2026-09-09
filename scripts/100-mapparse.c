@@ -90,7 +90,6 @@ typedef struct parse_state {
     map_description_t *d;
     desc_station_t    *current;      /* the station in lines attach to */
     desc_station_t   **station_tail;
-    int                in_statics;
     const char        *path;
     int                line;
 } parse_state_t;
@@ -192,17 +191,27 @@ static void handle_in(parse_state_t *st, const char *rest)
             value++;
         if (!*value)
             die_parse(st->path, st->line, "an input with no value after '='");
-        in->is_static = 0;
+        
         in->text = copy_string(value, st->path, st->line);
     } else if (ref[0] == '$') {
+        /*
+         * **`$N` says this port is the map's argument N** (issue
+         * 601b). It used to point at a numbered entry in a `statics`
+         * section — a second spelling of a constant, which the dump
+         * never wrote — and it read as a shell positional while
+         * meaning nothing of the sort. Now it means the one thing
+         * everybody guesses it means: this crosses the map's
+         * boundary, at this position.
+         */
         char extra[8];
         next_word(after_ref, extra, sizeof extra);
         if (extra[0])
             die_parse(st->path, st->line,
                       "unexpected trailing words on an 'in' line");
-        in->is_static = 1;
-        if (!parse_number(ref + 1, &in->static_id))
-            die_parse(st->path, st->line, "expected a number after '$'");
+        in->is_argument = 1;
+        if (!parse_number(ref + 1, &in->argument) || in->argument < 0)
+            die_parse(st->path, st->line,
+                      "expected an argument number after '$', as 'in 0 $0'");
     } else if (ref[0] == '-' && !ref[1]) {
         /*
          * **A dash with a source after it is a wire; a dash alone is
@@ -268,7 +277,7 @@ static void handle_in(parse_state_t *st, const char *rest)
         held[len] = 0;
 
         in->is_waiting = 1;
-        in->is_static = 0;
+        
         in->text = held;
     } else if (!ref[0] && in->depth > 0) {
         /*
@@ -285,7 +294,7 @@ static void handle_in(parse_state_t *st, const char *rest)
          * survive.
          */
         in->is_none = 0;
-        in->is_static = 0;
+        
         in->text = NULL;
     } else {
         die_parse(st->path, st->line,
@@ -317,8 +326,36 @@ static void handle_out(parse_state_t *st, const char *rest)
     int port;
     if (!parse_number(port_word, &port))
         die_parse(st->path, st->line, "expected a port number after 'out'");
+
+    /*
+     * **`$N` says this port is the map's result N** (issue 601b), the
+     * mirror of the same mark on an input line. The `in` or `out`
+     * keyword carries the direction, so one notation covers both ends
+     * and there is no second form to learn.
+     */
+    if (dash[0] == '$') {
+        if (dest[0])
+            die_parse(st->path, st->line,
+                      "unexpected trailing words after a result number");
+        desc_output_t *mark = need(calloc(1, sizeof *mark), st->path,
+                                   st->line);
+        mark->port = port;
+        mark->line = st->line;
+        mark->is_result = 1;
+        if (!parse_number(dash + 1, &mark->result) || mark->result < 0)
+            die_parse(st->path, st->line,
+                      "expected a result number after '$', as 'out 0 $0'");
+        desc_output_t **at = &st->current->outputs;
+        while (*at)
+            at = &(*at)->next;
+        *at = mark;
+        return;
+    }
+
     if (strcmp(dash, "-") != 0)
-        die_parse(st->path, st->line, "expected '-' between port and destination");
+        die_parse(st->path, st->line,
+                  "expected '-' between port and destination, or '$N' "
+                  "saying this port is one of the map's results");
     if (extra[0])
         die_parse(st->path, st->line, "unexpected trailing words on an 'out' line");
 
@@ -339,44 +376,6 @@ static void handle_out(parse_state_t *st, const char *rest)
     while (*tail)
         tail = &(*tail)->next;
     *tail = out;
-}
-/* }}} */
-
-/* {{{ handle_static_entry() */
-static void handle_static_entry(parse_state_t *st, const char *line_text)
-{
-    /* Inside the statics section: `N = value`, the value kept as
-     * text to the end of the line — turning it into bytes needs a
-     * type, which arrives when a port binds it. */
-    char id_word[64];
-    const char *p = next_word(line_text, id_word, sizeof id_word);
-    int id;
-    if (!parse_number(id_word, &id))
-        die_parse(st->path, st->line, "expected an entry number in the statics section");
-    while (*p == ' ' || *p == '\t')
-        p++;
-    if (*p != '=')
-        die_parse(st->path, st->line, "expected '=' after the entry number");
-    p++;
-    while (*p == ' ' || *p == '\t')
-        p++;
-    if (!*p)
-        die_parse(st->path, st->line, "an entry with no value after '='");
-
-    desc_static_t *entry = need(calloc(1, sizeof *entry), st->path, st->line);
-    entry->id = id;
-    entry->line = st->line;
-    entry->text = copy_string(p, st->path, st->line);
-
-    desc_static_t **tail = &st->d->statics;
-    while (*tail) {
-        if ((*tail)->id == id)
-            die_parse(st->path, st->line, "this statics entry was already given");
-        tail = &(*tail)->next;
-    }
-    *tail = entry;
-    if (id > st->d->max_static_id)
-        st->d->max_static_id = id;
 }
 /* }}} */
 
@@ -434,7 +433,6 @@ static void handle_station(parse_state_t *st, const char *name,
      * differs from `@2 result` and making somebody remember which
      * comes first buys nothing.
      */
-    int door = CERA_DOOR_NONE;
     int cursor = 0;
     const char *trailing[2] = { door_word, extra };
     for (int t = 0; t < 2; t++) {
@@ -460,17 +458,21 @@ static void handle_station(parse_state_t *st, const char *name,
              * writing it down is not wrong, only redundant. */
             continue;
         }
-        if (door != CERA_DOOR_NONE)
+        /*
+         * **A door is a port now** (issues 213a, 601b), so a station
+         * line no longer carries one. The two words that used to sit
+         * here are named in the refusal because a file written before
+         * the change will have them, and "unexpected word" would send
+         * somebody looking for a typo they did not make.
+         */
+        if (strcmp(word, "entry") == 0 || strcmp(word, "result") == 0)
             die_parse(st->path, st->line,
-                      "a station line names a door twice, and a station is "
-                      "one door or neither");
-        if (strcmp(word, "entry") == 0)       door = CERA_DOOR_IN;
-        else if (strcmp(word, "result") == 0) door = CERA_DOOR_OUT;
-        else
-            die_parse(st->path, st->line,
-                      "after the kind, only 'entry' (the outside delivers "
-                      "here), 'result' (results come from here), or '@N' "
-                      "(where an iterator had got to)");
+                      "'entry' and 'result' marked a whole station, and a "
+                      "door is a port now — write '$0' on the port itself, "
+                      "as 'in 0 $0' or 'out 0 $0'");
+        die_parse(st->path, st->line,
+                  "after the kind, only '@N' (where an iterator had got "
+                  "to)");
     }
 
     for (desc_station_t *s = st->d->stations; s; s = s->next)
@@ -481,7 +483,6 @@ static void handle_station(parse_state_t *st, const char *name,
     s->name = copy_string(name, st->path, st->line);
     s->box = copy_string(box, st->path, st->line);
     s->kind = kind;
-    s->door = door;
     s->cursor = cursor;
     s->line = st->line;
 
@@ -489,7 +490,6 @@ static void handle_station(parse_state_t *st, const char *name,
     st->station_tail = &s->next;
     st->d->n_stations++;
     st->current = s;
-    st->in_statics = 0;
 }
 /* }}} */
 
@@ -546,7 +546,6 @@ map_description_t *mapfile_parse(const char *path)
 
     map_description_t *d = need(calloc(1, sizeof *d), path, 0);
     d->path = copy_string(path, path, 0);
-    d->max_static_id = -1;
 
     parse_state_t st = { 0 };
     st.d = d;
@@ -666,10 +665,21 @@ map_description_t *mapfile_parse(const char *path)
         } else if (strcmp(first, "out") == 0) {
             handle_out(&st, rest);
         } else if (strcmp(first, "statics") == 0) {
-            st.in_statics = 1;
-            st.current = NULL;
-        } else if (st.in_statics && isdigit((unsigned char)first[0])) {
-            handle_static_entry(&st, logical);
+            /*
+             * **The statics section is gone** (issue 601b). It let a
+             * value be written once and pointed at by number, which
+             * was a second spelling of a constant — and the dump
+             * never wrote one, so a hand-written file and a dumped
+             * one differed by notation that meant nothing.
+             *
+             * Named in the refusal rather than reported as an unknown
+             * word, because a file written before the change will
+             * have one and its author wants to be told what replaced
+             * it, not sent hunting for a typo.
+             */
+            die_parse(path, st.line,
+                      "the 'statics' section is gone — write each value on "
+                      "the port that reads it, as 'in 1 = 5'");
         } else if (strcmp(first, "station") == 0) {
             char name[128];
             rest = next_word(rest, name, sizeof name);
@@ -682,8 +692,7 @@ map_description_t *mapfile_parse(const char *path)
              * because a reader who wrote something wrong wants the
              * list of what is right. */
             die_parse(path, st.line,
-                      "a line starts with 'station', 'in', 'out' or "
-                      "'statics'");
+                      "a line starts with 'station', 'in' or 'out'");
         }
     }
     fclose(f);
@@ -722,13 +731,6 @@ void mapfile_free(map_description_t *d)
         free(s->box);
         free(s);
         s = next;
-    }
-    desc_static_t *e = d->statics;
-    while (e) {
-        desc_static_t *next = e->next;
-        free(e->text);
-        free(e);
-        e = next;
     }
     free(d->path);
     free(d);

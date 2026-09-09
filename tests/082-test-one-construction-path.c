@@ -170,15 +170,17 @@ static int a_station_joins_a_running_program(void)
     int results = cera_map_add_station(m);
     cera_map_place_box(m, results, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, results, "results"), "a name");
-    must_take(cera_map_designate_output(m, results), "the results door");
+    must_take(cera_map_designate_result(m, results, 0, 0), "the results door");
 
-    /* This scene collects at the end rather than as it goes, which is
-     * precisely the condition the output door shouts about: results
-     * accumulating with nobody taking them. Announced so the lines
-     * below read as the engine working rather than as trouble. */
-    printf("  (the pile-up notices below are this scene not draining "
-           "until the end)\n");
-    fflush(stdout);
+    /* Somewhere to put them, said before the wire that starts values
+     * flowing. Nothing piles up any more — a result with nowhere
+     * registered is discarded like any other unwired value — so this
+     * scene reads at the end from an array that filled as it went. */
+    static int collected[64];
+    must_take(cera_map_collect(m, results, 0, collected,
+                               (int)(sizeof collected / sizeof collected[0]),
+                               (int)sizeof collected[0]),
+              "somewhere to put the results");
 
     /* Configure: the second addend is a constant. Written while the
      * program runs, through the same call a map file's `in 1 = 1000`
@@ -215,12 +217,9 @@ static int a_station_joins_a_running_program(void)
      * and demand the list ends empty.
      */
     int seen[64] = { 0 };
-    int taken = 0;
-    for (;;) {
-        int got = 0;
-        if (!cera_map_output_take(m, results, &got, sizeof got))
-            break;
-        taken++;
+    int taken = cera_map_collected(m, results, 0);
+    for (int k = 0; k < taken; k++) {
+        int got = collected[k];
         int which = (got - 1000) / 2;
         if (got != 1000 + 2 * which || which < 0 || which >= BATCH) {
             fprintf(stderr, "a result of %d is not two times anything "
@@ -293,7 +292,8 @@ int main(void)
          * this is another thing the two paths have to agree about:
          * the file says it in a fourth word, the surface says it in a
          * call, and the dumps have to come out the same. */
-        "station twice double_it p result\n"
+        "station twice double_it p\n"
+        "  out 0 $0\n"
         "  in 0 - adder.0\n"
         "  in 0 x64\n"
         "station waiting add p\n"
@@ -343,7 +343,7 @@ int main(void)
     cera_map_in_port_start_depth(built, 2, 0, 64);
     must_take(cera_map_configure_port(built, 3, 1, CERA_IN_PORT_NONE, NULL),
               "a port left unwired");
-    must_take(cera_map_designate_output(built, 2), "the way out");
+    must_take(cera_map_designate_result(built, 2, 0, 0), "the way out");
 
     cera_map_connect(built, 0, 0, 1, 0);   /* source -> adder.0 */
     cera_map_connect(built, 1, 0, 2, 0);   /* adder  -> twice.0 */

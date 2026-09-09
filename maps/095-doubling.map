@@ -9,7 +9,8 @@
 # build has to see it: the maps a program declares are also a
 # manifest, and a map the build never saw cannot be compiled in.
 
-station gate keep p entry
+station gate keep p
+  in 0 $0
   out 0 - adder.0
 
 station adder add p
@@ -18,7 +19,8 @@ station adder add p
   out 0 - twice.0
   out 0 - waiting.0
 
-station twice double_it p result
+station twice double_it p
+  out 0 $0
   in 0 - adder.0
   in 0 x64
 

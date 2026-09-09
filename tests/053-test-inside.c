@@ -80,7 +80,8 @@ static void test_buffer_report_names_the_right_slot(void)
         /* Somewhere for results to come from, which every program has
          * to declare (issue 209). The pairer is the station whose
          * value is the point of the graph. */
-        "station pairer add p result\n"
+        "station pairer add p\n"
+        "  out 0 $0\n"
         "  in 0 - feeder.0\n"
         "  out 0 - drain.0\n"
         "station drain swallow p\n"
@@ -123,16 +124,15 @@ static void test_station_counts(void)
     snprintf(report_path, sizeof report_path, "%s/counts.txt", work_dir);
     snprintf(out_path, sizeof out_path, "%s/counts-out.txt", work_dir);
     snprintf(map_text, sizeof map_text,
-        "statics\n"
-        "  0 = \"%s\"\n"
         "station head seven p\n"
         "  out 0 - mid.0\n"
-        "station mid double_it p result\n"
+        "station mid double_it p\n"
+        "  out 0 $0\n"
         "  in 0 - head.0\n"
         "  out 0 - sink.1\n"
         "station sink write_int_file p\n"
         "  in 1 - mid.0\n"
-        "  in 0 $0\n", out_path);
+        "  in 0 = \"%s\"\n", out_path);
     write_text(map_path, map_text);
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
@@ -171,26 +171,23 @@ static void test_round_trip(void)
      * input is a static now, which lands the same 14 and exercises
      * the same round trip. */
     snprintf(map_text, sizeof map_text,
-        "statics\n"
-        "  0 = 5\n"
-        "  1 = \"%s\"\n"
-        "  2 = 7\n"
         "station first seven p\n"
         "  out 0 - judge.0\n"
         "station judge keep c\n"
         "  in 0 - first.0\n"
-        "  in 1 $0\n"
+        "  in 1 = 5\n"
         "  out 2 - boost.0\n"
-        "station boost add p result\n"
+        "station boost add p\n"
+        "  out 0 $0\n"
         "  in 0 - judge.2\n"
-        "  in 1 $2\n"
+        "  in 1 = 7\n"
         "  out 0 - deal.0\n"
         "station deal keep i\n"
         "  in 0 - boost.0\n"
         "  out 0 - sink.1\n"
         "station sink write_int_file p\n"
         "  in 1 - deal.0\n"
-        "  in 0 $1\n", out_path);
+        "  in 0 = \"%s\"\n", out_path);
     write_text(map_path, map_text);
 
     /* Load, dump before running (so capacities are virgin), then
@@ -235,19 +232,17 @@ static void test_rewire_mid_run(void)
      * between issues 605 and 604's own warning, recorded in the
      * first-pass report. */
     snprintf(map_text, sizeof map_text,
-        "statics\n"
-        "  0 = \"%s\"\n"
-        "  1 = \"%s\"\n"
         "station head seven p\n"
         "  out 0 - hold.0\n"
-        "station hold keep p result\n"
+        "station hold keep p\n"
+        "  out 0 $0\n"
         "  in 0 - head.0\n"
         "  out 0 - writer_a.1\n"
         "station writer_a write_int_file p\n"
         "  in 1 - hold.0\n"
-        "  in 0 $0\n"
+        "  in 0 = \"%s\"\n"
         "station writer_b write_int_file p\n"
-        "  in 0 $1\n", a_path, b_path);
+        "  in 0 = \"%s\"\n", a_path, b_path);
     write_text(map_path, map_text);
 
     unlink(a_path);

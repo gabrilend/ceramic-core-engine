@@ -29,6 +29,11 @@ Options:
              migrated in place, with whatever followed the closing
              quote — a comma, the arguments of a printf — left where
              it was.
+  --doors    take `entry` and `result` off station lines and put them
+             on ports as `$N`, numbering them in file order. Handles
+             port zero, which is every entrance in this project; a
+             station with several argument ports needs a person, and
+             the loader will say so.
   --quiet    write the files and say nothing.
 
 Usage:
@@ -187,6 +192,92 @@ local function is_filler(line)
 end
 -- }}}
 
+-- {{{ local function move_doors()
+-- Take `entry` and `result` off station lines and put them on ports as
+-- `$N` (issues 213a, 209a, 601b). A door used to mark a whole station;
+-- it marks a port now, and the numbers are what used to be position in
+-- the table.
+--
+-- **Port zero, and that is the limit of what can be derived.** Under
+-- the old scheme every input port of an entrance was an argument, in
+-- port order — but a map file does not say how many ports a box has,
+-- so a station with several is one this cannot finish. Every entrance
+-- in this project has one. A file where that is untrue needs a person,
+-- and gets one, because the loader refuses a map whose argument
+-- numbers have a hole in them.
+local function move_doors(lines)
+    local out, added, arguments, results = {}, 0, 0, 0
+
+    for _, line in ipairs(lines) do
+        local before, word = line:match("^(.*)%s+(entry)%s*$")
+        if not before then
+            before, word = line:match("^(.*)%s+(result)%s*$")
+        end
+        if before and station_of(line) then
+            out[#out + 1] = before
+            if word == "entry" then
+                out[#out + 1] = string.format("  in 0 $%d", arguments)
+                arguments = arguments + 1
+            else
+                out[#out + 1] = string.format("  out 0 $%d", results)
+                results = results + 1
+            end
+            added = added + 1
+        else
+            out[#out + 1] = line
+        end
+    end
+    return out, added
+end
+-- }}}
+
+-- {{{ local function move_doors_c()
+-- The door move, applied to map text written as C string literals.
+-- Same rule as `move_doors`, wrapped: the door word comes off inside
+-- the quotes, and the port line that replaces it is a new literal
+-- carrying the original line's trailing part if it had one.
+local function move_doors_c(lines)
+    local out, added, arguments, results = {}, 0, 0, 0
+
+    for _, line in ipairs(lines) do
+        local lead, body, tail = c_map_line(line)
+        -- **The numbers restart at every map.** A file holding several
+        -- map literals numbers each one's doors from zero; carrying a
+        -- running count across them would give the second map an
+        -- argument one with no argument zero, and the loader refuses
+        -- an argument list with a hole in it.
+        if not body and not is_filler(line) then
+            arguments, results = 0, 0
+        end
+        local word = nil
+        if body and station_of(body) then
+            if body:match("%s+entry%s*$") then word = "entry"
+            elseif body:match("%s+result%s*$") then word = "result" end
+        end
+
+        if word then
+            local shorn = body:gsub("%s+" .. word .. "%s*$", "")
+            out[#out + 1] = string.format('%s"%s\\n"', lead, shorn)
+            local mark
+            if word == "entry" then
+                mark = string.format('%s"  in 0 $%d\\n"%s', lead, arguments,
+                                     tail or "")
+                arguments = arguments + 1
+            else
+                mark = string.format('%s"  out 0 $%d\\n"%s', lead, results,
+                                     tail or "")
+                results = results + 1
+            end
+            out[#out + 1] = mark
+            added = added + 1
+        else
+            out[#out + 1] = line
+        end
+    end
+    return out, added
+end
+-- }}}
+
 -- {{{ local function rewrite_c()
 -- The same migration, applied to every run of consecutive map-text
 -- lines in a C source. A run is one map: the lines of a map literal
@@ -297,11 +388,12 @@ end
 -- }}}
 
 -- {{{ main
-local check, quiet, c_mode, paths = false, false, false, {}
+local check, quiet, c_mode, doors_mode, paths = false, false, false, false, {}
 for i = 1, #arg do
     if arg[i] == "--check" then check = true
     elseif arg[i] == "--quiet" then quiet = true
     elseif arg[i] == "--c" then c_mode = true
+    elseif arg[i] == "--doors" then doors_mode = true
     else paths[#paths + 1] = arg[i] end
 end
 if #paths == 0 then paths = maps_under(DIR) end
@@ -315,7 +407,11 @@ for _, path in ipairs(paths) do
     end
 
     local fixed, added
-    if c_mode then
+    if doors_mode and c_mode then
+        fixed, added = move_doors_c(lines)
+    elseif doors_mode then
+        fixed, added = move_doors(lines)
+    elseif c_mode then
         fixed, added = rewrite_c(lines)
     else
         fixed, added = rewrite(lines)

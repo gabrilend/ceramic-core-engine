@@ -44,6 +44,11 @@ static volatile sig_atomic_t stopping = 0;
 static void note_stop(int signo) { (void)signo; stopping = 1; }
 /* }}} */
 
+/* How many results a run of this is willing to remember. A watcher
+ * cares about the shape of a program rather than its output, so this
+ * is a window on the stream and not a record of it. */
+#define KEPT 4096
+
 /* {{{ static void must_take(const char *refusal, const char *what) */
 static void must_take(const char *refusal, const char *what)
 {
@@ -89,7 +94,7 @@ int main(int argc, char **argv)
     int feed = cera_map_add_station(m);
     cera_map_place_box(m, feed, "cycle_thirty", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, feed, "feed"), "a name");
-    must_take(cera_map_designate_input(m, feed), "an entrance");
+    must_take(cera_map_designate_argument(m, feed, 0, 0), "an entrance");
 
     /* The comparator's own port count is its box's parameters plus one:
      * the threshold sits on the last port, and is set like any other
@@ -106,7 +111,7 @@ int main(int argc, char **argv)
     int collect = cera_map_add_station(m);
     cera_map_place_box(m, collect, "three_way", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, collect, "collect"), "a name");
-    must_take(cera_map_designate_output(m, collect), "a result");
+    must_take(cera_map_designate_result(m, collect, 0, 0), "a result");
 
     int drain = cera_map_add_station(m);
     cera_map_place_box(m, drain, "swallow", CERA_STATION_PLAIN);
@@ -122,6 +127,13 @@ int main(int argc, char **argv)
     cera_map_start(m, 4);
     cera_pool_submitter_register(m->pool);
     must_take(cera_map_bring_up(m), "the program");
+    /* Registered before the workers are let go: a result that arrives
+     * before somebody has said where to put it is discarded like any
+     * other unwired value. */
+    static int kept[KEPT];
+    must_take(cera_map_collect(m, collect, 0, kept, KEPT, (int)sizeof kept[0]),
+              "somewhere to put the results");
+
     cera_pool_release(m->pool);
 
     pid_t viewer = -1;
@@ -176,9 +188,7 @@ int main(int argc, char **argv)
                   "an argument");
         value++;
 
-        int got = 0;
-        while (cera_map_output_take(m, collect, &got, sizeof got))
-            results++;
+        results = cera_map_collected(m, collect, 0);
 
         nanosleep(&gap, NULL);
     }

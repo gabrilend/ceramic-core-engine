@@ -34,6 +34,11 @@ static volatile sig_atomic_t stopping = 0;
 static void note_stop(int signo) { (void)signo; stopping = 1; }
 /* }}} */
 
+/* How many results a run of this is willing to remember. A watcher
+ * cares about the shape of a program rather than its output, so this
+ * is a window on the stream and not a record of it. */
+#define KEPT 4096
+
 /* {{{ static void must_take(const char *refusal, const char *what) */
 static void must_take(const char *refusal, const char *what)
 {
@@ -82,7 +87,7 @@ int main(int argc, char **argv)
     int in = cera_map_add_station(m);
     cera_map_place_box(m, in, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, in, "in"), "a name");
-    must_take(cera_map_designate_input(m, in), "an entrance");
+    must_take(cera_map_designate_argument(m, in, 0, 0), "an entrance");
 
     int twice = cera_map_add_station(m);
     cera_map_place_box(m, twice, "double_it", CERA_STATION_PLAIN);
@@ -96,7 +101,7 @@ int main(int argc, char **argv)
     int total = cera_map_add_station(m);
     cera_map_place_box(m, total, "add", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, total, "total"), "a name");
-    must_take(cera_map_designate_output(m, total), "a result");
+    must_take(cera_map_designate_result(m, total, 0, 0), "a result");
 
     must_take(cera_map_wire(m, in, 0, twice, 0), "a wire");
     must_take(cera_map_wire(m, in, 0, plus, 0), "a wire");
@@ -106,6 +111,13 @@ int main(int argc, char **argv)
     cera_map_start(m, 4);
     cera_pool_submitter_register(m->pool);
     must_take(cera_map_bring_up(m), "the program");
+    /* Registered before the workers are let go: a result that arrives
+     * before somebody has said where to put it is discarded like any
+     * other unwired value. */
+    static int kept[KEPT];
+    must_take(cera_map_collect(m, total, 0, kept, KEPT, (int)sizeof kept[0]),
+              "somewhere to put the results");
+
     cera_pool_release(m->pool);
 
     /*
@@ -174,16 +186,11 @@ int main(int argc, char **argv)
         must_take(cera_map_deliver_argument(m, in, 0, &value, sizeof value),
                   "an argument");
 
-        /*
-         * Every twentieth round the results are left to pile up for a
-         * while, so a watcher sees a backlog form and drain rather than
-         * a picture that is always the same.
-         */
-        if (value % 20 != 0) {
-            int got = 0;
-            while (cera_map_output_take(m, total, &got, sizeof got))
-                drained++;
-        }
+        /* Nothing piles up any more — a value reaching a result goes
+         * straight into the caller's array — so this is a reading of
+         * how many have arrived rather than an act of taking them
+         * away. */
+        drained = cera_map_collected(m, total, 0);
         nanosleep(&gap, NULL);
     }
 

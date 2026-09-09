@@ -69,7 +69,8 @@ station left seven p
 station right seven p
   out 0 - sink.0
 
-station sink keep p result
+station sink keep p
+  out 0 $0
   in 0 - left.0
   in 0 - right.0
 MAP
@@ -88,7 +89,8 @@ cat > "${WORK}/no-in.map" <<'MAP'
 station feed seven p
   out 0 - sink.0
 
-station sink keep p result
+station sink keep p
+  out 0 $0
 MAP
 
 GOT=$("${WORK}/reader" "${WORK}/no-in.map" 2>&1)
@@ -102,7 +104,8 @@ echo "  an arrow whose destination does not admit to being fed is refused"
 cat > "${WORK}/no-out.map" <<'MAP'
 station feed seven p
 
-station sink keep p result
+station sink keep p
+  out 0 $0
   in 0 - feed.0
 MAP
 
@@ -118,7 +121,8 @@ cat > "${WORK}/mismatch.map" <<'MAP'
 station feed seven p
   out 0 - sink.0
 
-station sink add p result
+station sink add p
+  out 0 $0
   in 1 - feed.0
 MAP
 
@@ -131,7 +135,8 @@ echo "  two ends naming different ports are refused"
 
 # {{{ a source that names nobody
 cat > "${WORK}/nowhere.map" <<'MAP'
-station sink keep p result
+station sink keep p
+  out 0 $0
   in 0 - ghost.0
 MAP
 

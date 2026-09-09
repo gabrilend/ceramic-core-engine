@@ -575,13 +575,13 @@ static void a_wire_computes_a_constant(void)
     int gate = cera_map_add_station(m);
     cera_map_place_box(m, gate, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, gate, "gate"), "a name");
-    must_take(cera_map_designate_input(m, gate), "an entrance");
+    must_take(cera_map_designate_argument(m, gate, 0, 0), "an entrance");
     must_take(cera_map_wire(m, gate, 0, adder, 0), "the ordinary input");
 
     int out = cera_map_add_station(m);
     cera_map_place_box(m, out, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, out, "out"), "a name");
-    must_take(cera_map_designate_output(m, out), "a way out");
+    must_take(cera_map_designate_result(m, out, 0, 0), "a way out");
 
     cera_map_start(m, 2);
     cera_pool_submitter_register(m->pool);

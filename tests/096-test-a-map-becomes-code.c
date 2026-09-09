@@ -218,10 +218,19 @@ int main(void)
     check(twice->n_stations == 2 * after_first,
           "building a compiled description twice made two of everything");
 
+    /* A door is a port now, so the count walks ports rather than
+     * stations — and both copies mark result zero, which is exactly
+     * the collision a program built from one description twice is
+     * supposed to have. */
     int doors = 0;
-    for (int i = 0; i < twice->n_stations; i++)
-        if (cera_map_station(twice, i)->door == CERA_DOOR_OUT)
-            doors++;
+    for (int i = 0; i < twice->n_stations; i++) {
+        cera_station_t *s = cera_map_station(twice, i);
+        if (!s->call)
+            continue;
+        for (cera_out_port_t *p = s->out_ports; p; p = p->next)
+            if (p->result != CERA_NOT_A_DOOR)
+                doors++;
+    }
     check(doors == 2,
           "and each copy brought its own way out, so the second was not "
           "built on top of the first");

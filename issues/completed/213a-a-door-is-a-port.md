@@ -6,36 +6,30 @@ half, and they are one design.
 
 ## Current behavior
 
-**A door is one byte on the station struct.** `unsigned char door`,
-holding none, in, or out. Marking a station as the entrance means the
-outside may deliver to it, and delivering from outside refuses any
-station without the mark.
+**Built.** The mark lives on an input port and carries the number of the
+argument it is.
 
-**So an entrance costs a whole station.** A map that takes three
-arguments needs three stations, each running the identity function,
-because an entrance carries exactly one value inward — a station's
-output is what reaches the interior, and a C function returns one thing.
-Each one costs a station struct, a mutex, a ring buffer, and per value a
-task built, a pool dispatch, a call to a function that returns its
-argument, a readiness check, and a delivery.
+An argument costs nothing now. It used to cost a whole station running
+the identity function — a station struct, a mutex, a ring buffer, and
+per value a task, a pool dispatch, a call that returns its argument, a
+readiness check and a second delivery.
 
-**Which argument is which is decided by position.** Command-line
-delivery walks the station table in index order and, within each
-entrance, its ports in order. Argument zero is the first port of the
-first entrance. Nothing is written down, so **reordering two lines in a
-map file silently swaps two arguments**, and a map instantiated inside
-another has the same problem — its doors come back in declaration order,
-which is line position wearing a different name.
+**Which argument a port is, is stated rather than positional.** A gap or
+a repeat is refused at bring-up, neither of which the old scheme could
+detect: the order was the order stations happened to sit in the table,
+so moving two lines in a sub-map silently swapped two of the parent's
+arguments.
 
-**A station cannot be both doors.** Marking an entrance refuses a
-station already marked as a result, because a program whose entrance is
-its exit is somebody having named the wrong station.
+**Being an argv slot is derived**: a marked port that something inside
+feeds is fed both ways and simply is not one. That replaced the idea of
+closing a door when an enclosing map wires in — there is nothing stored,
+so nothing can go stale, and no bookkeeping is needed at the moment of
+wiring. The same derivation makes the bring-up numbering checks safe
+under composition, where one description instantiated twice puts two
+ports in the table both marked argument zero.
 
-**The mark rides into a composed program.** Instantiating a map calls
-the same designation the map file asked for, so after inserting a
-two-entrance sub-map, the combined program has two more stations marked
-as entrances — and command-line delivery counts their ports as arguments
-of the whole program, though the enclosing map already wired them.
+**A station may hold ports of both kinds.** The old refusal existed
+because the mark was on the station and a station is one thing.
 
 ## Intended behavior
 

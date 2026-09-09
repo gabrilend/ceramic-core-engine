@@ -75,15 +75,23 @@ int main(void)
     /* The workers have been parked at the gate until now, so
      * everything above was seeding. Letting them go starts the
      * program; joining waits until nothing is left to run. */
+    /* Somewhere to put the answer, said before the workers are let
+     * go — a result that arrives before anybody has asked for it is
+     * discarded like any other unwired value. */
+    int answers[4] = { 0 };
+    if (cera_map_collect(m, 3, 0, answers, 4, (int)sizeof answers[0])) {
+        fprintf(stderr, "nowhere to put the answer\n");
+        return 1;
+    }
+
     cera_pool_release(m->pool);
     cera_pool_join(m->pool);
 
-    int answer = 0;
-    if (cera_map_output_waiting(m, 3) <= 0) {
+    if (cera_map_collected(m, 3, 0) <= 0) {
         fprintf(stderr, "the program produced nothing\n");
         return 1;
     }
-    cera_map_output_take(m, 3, &answer, (int)sizeof answer);
+    int answer = answers[0];
 
     printf("   fed %d  ->  twice gave %d, plus gave %d  ->  total gave %d\n",
            value, value * 2, value + 10, answer);

@@ -98,22 +98,17 @@ char *mapfile_write(const map_description_t *d)
     add(&o, "%s", "");   /* so an empty description is "" and not null */
 
     /*
-     * The statics section first, because a port line may point into it
-     * and a reader meeting `$3` should already have seen entry 3.
-     * Written only when there is one: an empty section is a heading
-     * with nothing under it.
+     * There is no section before the stations any more. The statics
+     * section used to sit here, because a port line could point into
+     * it and a reader meeting `$3` should already have seen entry 3.
+     * It was a second spelling of a constant that the dump never
+     * wrote, and it went with issue 601b — every value is now on the
+     * port that reads it, so the file is stations all the way down.
      */
-    if (d->statics) {
-        add(&o, "statics\n");
-        for (desc_static_t *e = d->statics; e; e = e->next)
-            add(&o, "  %d = %s\n", e->id, e->text);
-        add(&o, "\n");
-    }
-
     for (desc_station_t *s = d->stations; s; s = s->next) {
         add(&o, "station %s %s %c", s->name, s->box, kind_letter(s->kind));
-        if (s->door == CERA_DOOR_IN)       add(&o, " entry");
-        else if (s->door == CERA_DOOR_OUT) add(&o, " result");
+        /* A door is a port now (issues 213a, 209a), so a station
+         * line carries no door word and the port lines carry it all. */
         /* Where an iterator had got to, written only when it says
          * something: zero is where one starts. */
         if (s->kind == CERA_STATION_ITERATOR && s->cursor > 0)
@@ -140,8 +135,9 @@ char *mapfile_write(const map_description_t *d)
                 add(&o, "  in %d %s-\n", in->port, depth);
             else if (in->is_waiting)
                 add(&o, "  in %d %s[%s]\n", in->port, depth, in->text);
-            else if (in->is_static)
-                add(&o, "  in %d %s$%d\n", in->port, depth, in->static_id);
+            else if (in->is_argument)
+                /* This port is the map's argument N (issue 601b). */
+                add(&o, "  in %d %s$%d\n", in->port, depth, in->argument);
             else if (in->text)
                 add(&o, "  in %d %s= %s\n", in->port, depth, in->text);
             else
@@ -153,9 +149,16 @@ char *mapfile_write(const map_description_t *d)
                 add(&o, "  in %d %s\n", in->port, depth);
         }
 
-        for (desc_output_t *out = s->outputs; out; out = out->next)
+        for (desc_output_t *out = s->outputs; out; out = out->next) {
+            if (out->is_result) {
+                /* A mark rather than an arrow: this port is the map's
+                 * result N, so there is no destination to write. */
+                add(&o, "  out %d $%d\n", out->port, out->result);
+                continue;
+            }
             add(&o, "  out %d - %s.%d\n",
                 out->port, out->dest_station, out->dest_port);
+        }
 
         if (s->next)
             add(&o, "\n");

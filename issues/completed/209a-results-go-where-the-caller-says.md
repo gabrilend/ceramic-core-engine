@@ -5,29 +5,27 @@ of the holding queue. [213a](213a-a-door-is-a-port.md) is the other half.
 
 ## Current behavior
 
-**A result is a marked station, and the mark changes one thing.** When a
-value comes out an output port with no wire on it, an ordinary station
-discards it and a marked station *holds* it. Held values queue on the
-station and come out oldest-first when somebody outside takes one.
+**Built.** The mark lives on an output port and carries the number of
+the result it is, and **nothing is held unless somebody asks for it**.
 
-**The queue is unbounded, and the engine knows it.** The holding array
-doubles whenever it fills, and from the first growth past eight slots it
-prints:
+A marked output behaves exactly like any other unwired output — the
+value is discarded — until a caller registers an address, a count and an
+element size. Registering is the arrow that was missing. The doubling
+array and the warning it shouted from its first growth are both gone,
+along with the state they described.
 
-> results are piling up at *name* — *n* waiting and nobody taking them;
-> this program is computing into somewhere nobody is looking
+**The caller owns the memory**, so the engine has nothing that can grow.
+The bound is the reservation: one atomic add hands out the next index,
+and a worker holding an index at or past the room writes nothing. There
+is no slot state machine, because a collection slot is written once and
+read by nobody until the caller looks.
 
-That warning was written instead of a fix. A program whose results
-nobody drains grows until memory runs out, having been told so on the
-way.
+**The count keeps climbing past the room**, deliberately — comparing it
+against the size is how a caller tells a program that filled the array
+from one that ran dry.
 
-**A program must declare a result or it is refused at bring-up**, even
-when nothing is wired into it, so that a program's interface is total —
-there is otherwise no way to tell a program that deliberately works by
-side effect from one whose author forgot.
-
-**A station cannot be both doors**, and the mark rides into a composed
-program the same way the entrance mark does.
+**A program need no longer declare a result.** An interface made of
+numbered ports is total by being read.
 
 ## Intended behavior
 

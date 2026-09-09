@@ -15,63 +15,59 @@ the map had grown into by then.
 ## A complete example
 
 ```
-statics
-  0 = 5
-  1 = 100
-  2 = "config.txt"
-  3 = { 5, 2.0, { 0, 0, 0 }, "hey there", 2 }
+station reader io.c:read_config p
+  in 0 x64 $0
+  out 0 - config.0
+
+station config io.c:load p
+  in 0 - reader.0
+  in 1 -
+  in 2 = { 5, 2.0, { 0, 0, 0 }, "hey there", 2 }
+  out 0 - adder.0
 
 station adder math.c:add p
-  in 0 - reader.0
-  in 1 $0
+  in 0 - config.0
+  in 1 = 5
   out 0 - printer.0
   out 0 - logger.0
 
 station depth compare.c:measure c
   in 0 - adder.0
-  in 1 $1
+  in 1 = 100
   out 0 - shallow.0
   out 1 - exact.0
   out 2 - deep.0
 
 station split route.c:spread i
   in 0 - depth.0
-  out 0 - poet.0
+  out 0 $0
   out 1 - mailer.0
-
-station reader io.c:read_config p
-  in 0 x64 $2
-  out 0 - config.0
-
-station config io.c:load p
-  in 0 - reader.0
-  in 1 -
-  in 2 $3
 ```
 
 Every wire appears twice — `reader` says its port zero feeds `config`,
 and `config` says its port zero is fed by `reader`. Reading one station
-tells you what it takes and what it gives without looking anywhere
-else.
+tells you what it takes and what it gives without looking anywhere else.
+
+`reader` takes the map's one argument and `split` produces its one
+result, both marked with `$` on the port rather than on the station.
 
 The stations this fragment sends values to and does not declare —
-`printer`, `logger`, `shallow`, `poet` — would each carry their own
+`printer`, `logger`, `shallow`, `mailer` — would each carry their own
 `in` line in a whole file. It is showing the forms, not a program that
 would load.
 
 ## Every line announces itself
 
-Four kinds, and the first word of a line always says which:
+Three kinds, and the first word of a line always says which:
 
 | first word | the line is |
 |---|---|
-| `station` | a placement: a name, a box, a kind, and optionally a door |
+| `station` | a placement: a name, a box, and a kind |
 | `in` | where one of that station's input ports gets its value |
-| `out` | an arrow leaving one of its output ports |
-| `statics` | the header of the notation section |
+| `out` | where one of its output ports sends one |
 
 **A station line used to be what remained** — anything whose first
-word was none of the other three. That is a negative definition, and a
+word was none of the others. That is a negative definition, and a
 negative definition can only narrow: every keyword the format ever
 gained would take another name away from every map already written,
 silently, with the failure appearing as a parse error about something
@@ -353,91 +349,92 @@ written with a suffix; nothing is lost, because a label carrying no
 meaning can be spelled differently without the program changing. The
 names on the running program are untouched.
 
-### A station may be one of the program's doors
-
-A fourth word on a station line says that this station is where the
-outside delivers, or where the program's results come from:
+### A port may be one of the program's doors
 
 ```
-station gate    keep      p entry     the outside delivers here
-station answer  double_it p result    results wait here to be taken
-station middle  add       p           an interior station, which is most
+in 0 $0        this port is the map's argument 0
+out 0 $1       this port is the map's result 1
 ```
 
-**`entry` and `result` rather than `in` and `out`**, and the reason is
-worth stating because the obvious choice is the wrong one. Those two
-words already name a *port* on the indented lines beneath a station. A
-file in which one word means a port in one place and a whole station
-in another reads perfectly well and round-trips wrong, which is
-exactly the failure a depth followed by a dash produced before it was
-given a form of its own.
+**`$` means: this crosses the map's boundary, at this position.** The
+`in` or `out` keyword says which direction, so one notation covers both
+ends and there is no second form to learn.
 
-A station may be one door or neither. Being both is refused: a program
-whose entrance is its exit is somebody having named the wrong station.
+It used to point at a numbered entry in a `statics` section, which was
+a second spelling of a constant. That section is gone, and the sigil
+now means the one thing everybody guesses it means — it always read
+like a shell positional while being nothing of the sort.
 
-**Every program has at least one `result`, and a file that names none
-is refused.** Not because the engine needs it — a program with no
-result station would run perfectly — but because without the
-requirement there are two different ways to produce nothing, and only
-one of them is legible. A program that does all its work by side
-effect and a program whose author forgot the results look identical
-from outside: a box is a C function, and nothing about it says whether
-it touches the world.
+**A door is a port, not a station.** The mark used to sit on the
+station line as `entry` or `result`, and because a station carries one
+value inward — a C function returns one thing — a map taking three
+arguments needed three stations running the identity function. Each of
+those cost a station, a mutex, a ring buffer, and per value a task, a
+dispatch, a call that returns its argument, a readiness check and a
+second delivery. All of it was the mark having nowhere smaller to live.
 
-The parallel is a C function returning void. It still declares its
-return, and the declaration is what a caller reads. Here the station
-is the declaration, and **what flows through it is a separate
-matter** — a `result` station with nothing wired into it is the
-ordinary way to say "this program produces nothing", and it is exactly
-as valid as one carrying a value.
+**The number is the door's identity**, chosen by the author rather than
+derived from where the line sits. Reorder every line in the file and
+nothing changes; delete one and that argument is gone rather than
+silently becoming what the next one was. Under the old scheme the order
+was the order stations happened to sit in the table, so moving two lines
+in a sub-map silently swapped two of the parent's arguments.
 
-An entrance is not required, because a program that takes no arguments
-is a complete thought. A program that produces nothing has to say so.
+**A gap or a repeat is refused** when the program is brought up —
+neither was detectable at all before. A station may hold ports of both
+kinds: the old refusal, that a station could not be both doors, existed
+because the mark was on the station and a station is one thing.
 
-**A program may have several of each.** A box returns one value, so a
-station has one output port, so one station is one result. A program
-producing three things has three stations marked `result`, each with
-its own inputs — which gets the readiness check that already exists
-rather than needing a station whose ports come in groups.
-
-**What the marks buy.** A parent composing this program wires to its
-doors and never names anything inside it; rename an interior station
-and nothing outside breaks. And two things that used to assume the
-worst stop doing so — a station whose buffered inputs no arrow feeds
-is no longer warned about when it is a declared entrance, and a
-program in which nothing can start is no longer refused when it has
-one, because both of those were written when there was no way for a
-program to say it expected to be fed.
+**The number means the same to whoever supplies the value** — a shell,
+a C caller, or an enclosing map — the way a C function's first
+parameter does not care who called it. That is what lets a map stand
+where a box stands.
 
 ### What a program's arguments are
 
-**The input ports of the stations it declared as entrances**, in
-station order and then port order. A program with two entrances of one
-port each takes two arguments, and a person reading the file can see
-which is which.
+**The marked input ports that nothing feeds, in the order their numbers
+say.** Derived rather than stored, which is what makes composition work
+without bookkeeping: when an enclosing map wires into a sub-map's
+argument port, that port stops being an argv slot on its own. There is
+no mark to clear and nothing to go stale.
 
-Nothing in the file declares argument *types*, and nothing needs to:
-an entrance runs an ordinary box, so its ports are typed by that box's
-parameters. That keeps the format's standing rule that it carries no
-types anywhere.
-
-**Arguments arrive as text and become bytes through the same reader
-that turns a constant into bytes** — the one that walks the field
-table the generator emitted, using compiler-computed offsets. So a
-struct argument is written the way a struct constant is:
+A port that is both marked and wired is fed both ways, and that stays
+legal — being an argument is a fact about who *may* deliver, being wired
+is a fact about what already does.
 
 ```
-./program '{ 1.0, 2.0, 2.0 }' 21
+./program "{ 1.0, 2.0, 2.0 }" 21
 ```
 
-and the messages naming a field that was wrong are the same messages.
+Text becomes bytes through the same reader that turns `= 5` into a
+value, so **struct arguments in brace syntax come along for free** —
+nothing was built to make them work. A wrong count is refused saying how
+many the program wanted. Quote a struct argument, because it has spaces
+in it and the shell would otherwise split it.
 
-Two refusals rather than two silences. A count that does not match is
-refused, saying how many the program wanted, because half a command
-line is a program waiting forever for the rest. And a program that has
-already finished is refused rather than handed arguments nobody will
-run — which happens when nothing held a standing promise across the
-moment the workers were released.
+### Where a program's results go
+
+**Nothing is held unless somebody asks for it.** A marked output port
+behaves exactly like any other unwired output — the value is discarded —
+until an embedding caller registers an address and a count to put values
+in. Registering is the arrow that was missing.
+
+What that replaced: a marked station used to *hold* every value it
+produced, in an array that doubled whenever it filled, shouting from the
+first growth that results were piling up and nobody was taking them.
+That warning was written instead of a fix.
+
+**Results are not synchronised with each other.** Two results are two
+stations on two threads at two unrelated moments. Two arrays filling
+side by side look like columns of a table and are not: entry three of
+one and entry three of another did not come from the same input. The
+rule for anyone building on it is to **make the outputs fungible** — if
+two values must stay together, they have to be one value.
+
+**A program need no longer declare a result.** That requirement existed
+so a program's interface would be *total*; an interface made of numbered
+ports is total by being read, and a map with no result mark produces
+nothing outward, which is a complete sentence.
 
 ### A starting depth, which any of the three may carry
 
@@ -607,57 +604,20 @@ the only place that could have done it.
 The reader and the writer share one table, so they cannot disagree
 about what a backslash introduces.
 
-## The statics table
+## There is no statics table
 
-Entries are numbered and hold a value's shape. Nothing more.
+A file used to be able to open with a numbered list of values that
+ports pointed at by `$N`. It was **notation**: the engine kept no table
+behind it, each value ended up on the port that read it, and two ports
+naming one entry got two independent copies.
 
-```
-statics
-  0 = 5
-  2 = "config.txt"
-  3 = { 5, 2.0, { 0, 0, 0 }, "hey there", 2 }
-```
+It went for two reasons. It was a second spelling of a constant that the
+dump never wrote, so a hand-written file and a dumped one differed by
+something that meant nothing. And `$0` sitting in a file whose other
+keywords are English words read exactly like a shell positional while
+being nothing of the sort — which is now what it means.
 
-**The table carries no types.** A port that references an entry knows
-what type it is, because the box function's parameter at that position
-says so, and the generator knows what that is. The text is read into
-bytes when the port is **bound**, walking the field table the
-generator emitted for that struct — once, not on every claim. Text
-resolves its layout when it is read, which is what makes it survive a
-rebuild that would silently change what the same bytes meant; doing
-that work per claim would pay for the property on every value instead
-of once.
-
-This is the same reason the wiring carries no types: if the table said
-`int` where the box wanted `float`, there would be two sources of truth
-and the file would be the one that was wrong.
-
-**The section is notation and nothing else**: a way to write a value
-once while describing the map, and point ports at it by number. It is
-resolved as the file is read, and the running program holds no table.
-
-That is worth stating plainly because it used to be otherwise, and the
-difference is visible. Each port that names an entry gets **its own
-copy** of that value, so two ports written from one entry are
-independent from the moment they are written — changing one cannot
-change the other, and neither can be shaped by the other's type. The
-engine used to keep the table alive for the whole run, shared, behind a
-mutex of its own, and two consequences followed that were never
-features: two ports of different types could reference one entry and
-read the same bytes each their own way, and a box could write to the
-table, which was a back channel through which one box reached
-another's world and, by requiring a process-wide pointer to the
-running map, the reason a process could hold only one program.
-
-**Sharing, when it is wanted, is drawn.** One station holds the value
-and everyone who needs it has an arrow from it. That costs a station
-and gains visibility: a constant five stations read appears in the
-wiring as five wires rather than as five references to a number that
-appears nowhere in the shape of the map.
-
-A dump therefore has no `statics` section. Every constant is written
-out beside the port that holds it, from its bytes — including anything
-a runtime write changed, which the old form could not say.
+Every value is written on the port that reads it.
 
 ## What reading a map checks
 

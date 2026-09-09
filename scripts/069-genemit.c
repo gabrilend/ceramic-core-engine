@@ -753,7 +753,8 @@ static int declared_by_outputs(const map_description_t *md,
         if (strcmp(s->name, from) != 0)
             continue;
         for (desc_output_t *out = s->outputs; out; out = out->next)
-            if (out->port == from_port && out->dest_port == to_port
+            if (!out->is_result && out->port == from_port
+                && out->dest_port == to_port
                 && strcmp(out->dest_station, to) == 0)
                 n++;
     }
@@ -812,6 +813,11 @@ static void check_both_ends_agree(const map_description_t *md,
 
     for (desc_station_t *s = md->stations; s; s = s->next) {
         for (desc_output_t *out = s->outputs; out; out = out->next) {
+            /* A result mark is not an arrow — it says the value goes
+             * outside the map, so there is no far end in this file to
+             * agree with it, and no destination to look up. */
+            if (out->is_result)
+                continue;
             /*
              * An arrow at a station that does not exist is a different
              * mistake with a better message, and the wire walk below
@@ -1052,14 +1058,17 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
             if (s->cursor > 0)
                 buf_line(w, "    cera_built_take(cera_map_station_set_cursor(m, "
                             "at[%d], %d));", index, s->cursor);
-            if (s->door == CERA_DOOR_IN)
-                buf_line(w, "    cera_built_take(cera_map_designate_input(m, "
-                            "at[%d]));", index);
-            else if (s->door == CERA_DOOR_OUT)
-                buf_line(w, "    cera_built_take(cera_map_designate_output(m, "
-                            "at[%d]));", index);
-
             for (desc_input_t *in = s->inputs; in; in = in->next) {
+                /* **This port is one of the map's arguments** (issues
+                 * 213a, 601b). A door is a port now, so the mark is
+                 * emitted here beside the port's other facts rather
+                 * than once per station. */
+                if (in->is_argument) {
+                    buf_line(w, "    cera_built_take("
+                                "cera_map_designate_argument(m, at[%d], %d, "
+                                "%d));", index, in->port, in->argument);
+                    continue;
+                }
                 if (in->depth > 0)
                     buf_line(w, "    cera_built_take(cera_map_in_port_start_depth"
                                 "(m, at[%d], %d, %d));",
@@ -1071,20 +1080,6 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
                     continue;
                 }
                 const char *text = in->text;
-                if (in->is_static) {
-                    for (desc_static_t *e = md->statics; e; e = e->next)
-                        if (e->id == in->static_id) {
-                            text = e->text;
-                            break;
-                        }
-                    if (!text) {
-                        fprintf(stderr, "generator: %s:%d: 'in %d $%d' names "
-                                        "a statics entry the file does not "
-                                        "give a value for\n",
-                                maps[mi], in->line, in->port, in->static_id);
-                        exit(65);
-                    }
-                }
                 if (!text)
                     continue;   /* a depth and nothing else */
                 /*
@@ -1133,6 +1128,15 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
         index = 0;
         for (desc_station_t *s = md->stations; s; s = s->next, index++) {
             for (desc_output_t *out = s->outputs; out; out = out->next) {
+                /* **This port is one of the map's results** (issues
+                 * 209a, 601b) — a mark rather than an arrow, so there
+                 * is no destination to resolve. */
+                if (out->is_result) {
+                    buf_line(w, "    cera_built_take("
+                                "cera_map_designate_result(m, at[%d], %d, "
+                                "%d));", index, out->port, out->result);
+                    continue;
+                }
                 int dest = 0, found = -1;
                 for (desc_station_t *t = md->stations; t; t = t->next, dest++)
                     if (strcmp(t->name, out->dest_station) == 0) {

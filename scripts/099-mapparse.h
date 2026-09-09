@@ -16,9 +16,9 @@
  * a linked list of stations with their inputs and outputs hanging off
  * them. Everything is allocated per description and freed together.
  *
- * What it touches of the engine: three enumerations — the station
- * kinds and the door marks — and nothing else. That is what makes it
- * something a build tool can hold.
+ * What it touches of the engine: one enumeration — the station kinds —
+ * and nothing else. That is what makes it something a build tool can
+ * hold.
  */
 #ifndef CERA_MAPPARSE_H
 #define CERA_MAPPARSE_H
@@ -28,31 +28,24 @@
 /* {{{ the description — what the file said, nothing more */
 /*
  * An input line says where one port's value comes from, and there are
- * two ways to say it.
+ * four ways to say it: a wire from another station, a constant carried
+ * on the line, `$N` saying the port is one of the map's arguments, or
+ * a bare dash saying nothing feeds it yet. The list is closed.
  *
- * `in 1 $0` points at an entry in the `statics` section. That section
- * is **notation** (issue 401): a way to write a value down once while
- * describing a map and point several ports at it, resolved as the file
- * is read and retained nowhere afterwards. Two ports naming one entry
- * end up with two independent values.
- *
- * `in 1 = 5` carries the value on the line itself, which is what the
- * dump writes — it has values on ports and no entry numbers to refer
- * to, and inventing a section of numbers to point back at would be
- * notation the engine made up rather than something a person wrote.
- *
- * Both end in the same place, so `text` is what the loader uses and
- * `static_id` only says which entry the text was fetched from, for an
- * error message.
- *
- * There was a third form — a bare station name, meaning "gather from
+ * There was a fifth form — a bare station name, meaning "gather from
  * there" — which went with the pull path (issue 210). The reader still
  * refuses it by name rather than reinterpreting it.
  */
 typedef struct desc_input {
     int   port;
-    int   is_static;      /* $n rather than an inline value */
-    int   static_id;      /* which entry, when is_static */
+    /*
+     * **`$N`: this port is the map's argument N** (issue 601b). It
+     * used to mean "the value at entry N of the statics section",
+     * which was a second spelling of a constant and read like a shell
+     * positional while being nothing of the sort.
+     */
+    int   is_argument;
+    int   argument;
     char *text;           /* the value as written, when inline */
     /* A bare dash: this port has no source yet (issue 210b). Not a
      * value and not a third kind of value — a state, in which the
@@ -119,22 +112,17 @@ typedef struct desc_output {
     int   port;
     char *dest_station;
     int   dest_port;
+    /* **`$N`: this port is the map's result N** (issue 601b). A mark
+     * rather than an arrow — `dest_station` is null on one of these,
+     * because it says where the value goes to *outside* rather than to
+     * another station. */
+    int   is_result;
+    int   result;
     int   line;
     struct desc_output *next;
 } desc_output_t;
 
 typedef struct desc_station {
-    /*
-     * Which door this station is, if any (issues 209, 213): written
-     * as a fourth word on the station line, `entry` or `result`.
-     *
-     * **Deliberately not `in` and `out`.** Those already mean a port
-     * on the indented lines beneath a station, and one file in which
-     * a word means a port in one place and a whole station in another
-     * is the shape of mistake that survives review — the same trap a
-     * depth followed by a dash fell into.
-     */
-    int   door;
     /*
      * **Where an iterator had got to**, written `@N` (issue 712). The
      * one memory a station keeps: an iterator takes its exits in turn,
@@ -155,19 +143,11 @@ typedef struct desc_station {
     struct desc_station *next;
 } desc_station_t;
 
-typedef struct desc_static {
-    int   id;
-    char *text;
-    int   line;
-    struct desc_static *next;
-} desc_static_t;
 
 typedef struct map_description {
     char           *path;
     desc_station_t *stations;   /* in file order */
     int             n_stations;
-    desc_static_t  *statics;
-    int             max_static_id;   /* -1 when no statics section */
 } map_description_t;
 /* }}} */
 

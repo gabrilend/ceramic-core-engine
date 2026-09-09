@@ -15,7 +15,8 @@
 # Fed 1, 2, 3, 4, 5, `seen` collects every running total: 1, 3, 6, 10,
 # 15. The order they come back out in is not promised.
 
-station feed src/boxes/029-demo-boxes.c:keep p entry
+station feed src/boxes/029-demo-boxes.c:keep p
+  in 0 $0
   out 0 - total.0
 
 station total src/boxes/029-demo-boxes.c:add p
@@ -24,5 +25,6 @@ station total src/boxes/029-demo-boxes.c:add p
   out 0 - total.1
   out 0 - seen.0
 
-station seen src/boxes/029-demo-boxes.c:keep p result
+station seen src/boxes/029-demo-boxes.c:keep p
+  out 0 $0
   in 0 - total.0

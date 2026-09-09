@@ -8,7 +8,8 @@
 # says "wait for both": the station has two input ports, so it runs
 # when both hold a value, and not before.
 
-station in keep p entry
+station in keep p
+  in 0 $0
   out 0 - twice.0
   out 0 - plus.0
 
@@ -21,6 +22,7 @@ station plus add p
   in 1 = 10
   out 0 - total.1
 
-station total add p result
+station total add p
+  out 0 $0
   in 0 - twice.0
   in 1 - plus.0

@@ -49,12 +49,12 @@ static cera_map_t *a_program(int constant, int *entrance, int *result)
     int in = cera_map_add_station(m);
     cera_map_place_box(m, in, "keep", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, in, "in"), "a name");
-    must_take(cera_map_designate_input(m, in), "an entrance");
+    must_take(cera_map_designate_argument(m, in, 0, 0), "an entrance");
 
     int add = cera_map_add_station(m);
     cera_map_place_box(m, add, "add", CERA_STATION_PLAIN);
     must_take(cera_map_name_station(m, add, "total"), "a name");
-    must_take(cera_map_designate_output(m, add), "a result");
+    must_take(cera_map_designate_result(m, add, 0, 0), "a result");
 
     must_take(cera_map_wire(m, in, 0, add, 0), "a wire");
 
@@ -93,6 +93,15 @@ int main(void)
         return 1;
     }
 
+    /* Somewhere to put each program's answers, said before its
+     * workers are let go. Separate arrays for separate programs,
+     * which is the whole point of the scene. */
+    static int from_a[64], from_b[64];
+    must_take(cera_map_collect(a, a_out, 0, from_a, 64, (int)sizeof from_a[0]),
+              "somewhere to put the first program's results");
+    must_take(cera_map_collect(b, b_out, 0, from_b, 64, (int)sizeof from_b[0]),
+              "somewhere to put the second program's results");
+
     cera_pool_release(a->pool);
     cera_pool_release(b->pool);
 
@@ -115,14 +124,10 @@ int main(void)
     int wanted_a = 0, wanted_b = 0;
     for (int i = 1; i <= 20; i++) { wanted_a += i + 100; wanted_b += i + 200; }
 
-    int got_a = 0, seen_a = 0, value = 0;
-    while (cera_map_output_take(a, a_out, &value, sizeof value)) {
-        got_a += value; seen_a++;
-    }
-    int got_b = 0, seen_b = 0;
-    while (cera_map_output_take(b, b_out, &value, sizeof value)) {
-        got_b += value; seen_b++;
-    }
+    int got_a = 0, seen_a = cera_map_collected(a, a_out, 0);
+    for (int i = 0; i < seen_a; i++) got_a += from_a[i];
+    int got_b = 0, seen_b = cera_map_collected(b, b_out, 0);
+    for (int i = 0; i < seen_b; i++) got_b += from_b[i];
 
     if (seen_a != 20 || seen_b != 20) {
         fprintf(stderr, "  %d results from the first and %d from the second, "

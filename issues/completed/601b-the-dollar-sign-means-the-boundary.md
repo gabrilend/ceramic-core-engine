@@ -6,31 +6,22 @@ the notation it displaces.
 
 ## Current behavior
 
-**`$N` points at the statics section**, which is a block of numbered
-values at the top of a file that ports can refer to:
+**Built.** `$N` means one thing: this port crosses the map's boundary,
+at this position. The `in` or `out` keyword carries the direction.
 
-```
-statics
-  0 = 5
+The `statics` section is gone — the keyword, the numbered entries, and
+the reference to them — and so are `entry` and `result` on the station
+line. All three are refused by name rather than reported as unknown
+words, because a file written before the change will have them and its
+author wants to be told what replaced them.
 
-station adder add p
-  in 1 $0        port 1 holds 5
-```
+Braces stay. A struct constant is the only spelling of a different
+thing rather than a second spelling of the same thing, and removing it
+would mean a program with a struct on a port could not be written down
+at all.
 
-`in 1 $0` and `in 1 = 5` produce the identical result — the number five,
-parsed into that port's own storage. The section is notation only: the
-engine keeps no table behind it, each value ends up on the port that
-reads it, and two ports sharing an entry become two ports each holding
-their own copy. **The dump never writes a statics section**, so a
-hand-written file and a dumped one differ by a spelling that means
-nothing.
-
-**And it reads as a shell positional and is not one.** `$0` sitting in a
-file whose other keywords are English words looks exactly like an
-argument reference, which is what it is not.
-
-**A door is a word on the station line.** `entry` and `result` after the
-kind letter, marking the whole station.
+**The dump writes the marks on the ports**, so a program's doors survive
+a round trip — which is most of what marking them was for.
 
 ## Intended behavior
 

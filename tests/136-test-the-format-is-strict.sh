@@ -79,7 +79,7 @@ EOF
 # }}}
 
 # {{{ a struct value spread over four lines
-printf 'station a triple_sum p result\n  in 0 = {\n      1.5,\n      2.5,\n      3.5\n  }\n' \
+printf 'station a triple_sum p\n  out 0 $0\n  in 0 = {\n      1.5,\n      2.5,\n      3.5\n  }\n' \
     > "${WORK}/multi.map"
 
 GOT=$("${WORK}/reader" "${WORK}/multi.map" 2>&1)
@@ -89,7 +89,7 @@ echo "  a struct value spread over four lines is one value"
 # }}}
 
 # {{{ a bare word where a string belongs
-printf 'station a read_int_file p result\n  in 0 = fire\n' > "${WORK}/bare.map"
+printf 'station a read_int_file p\n  out 0 $0\n  in 0 = fire\n' > "${WORK}/bare.map"
 
 GOT=$("${WORK}/reader" "${WORK}/bare.map" 2>&1)
 [ $? -eq 0 ] && fail "a bare word was accepted where a string belongs"
@@ -101,7 +101,7 @@ echo "  a bare word is refused, naming the spelling it collides with"
 # }}}
 
 # {{{ the quoted form still works, and a '#' inside it survives
-printf 'station a read_int_file p result\n  in 0 = "a#b.txt"   # a real comment\n' \
+printf 'station a read_int_file p\n  out 0 $0\n  in 0 = "a#b.txt"   # a real comment\n' \
     > "${WORK}/hash.map"
 
 GOT=$("${WORK}/reader" "${WORK}/hash.map" 2>&1)
@@ -112,7 +112,7 @@ echo "  a '#' inside a string is a character, not a comment"
 
 # {{{ a physical line longer than the reader's buffer
 {
-    printf 'station a read_int_file p result\n  in 0 = "'
+    printf 'station a read_int_file p\n  out 0 $0\n  in 0 = "'
     awk 'BEGIN { for (i = 0; i < 1100; i++) printf "x" }'
     printf '"\n'
 } > "${WORK}/toolong.map"
@@ -121,20 +121,20 @@ GOT=$("${WORK}/reader" "${WORK}/toolong.map" 2>&1)
 [ $? -eq 0 ] && fail "an over-long line was accepted"
 echo "${GOT}" | grep -q 'longer than' \
     || fail "the refusal does not say the line was too long: ${GOT}"
-echo "${GOT}" | grep -q ':2:' \
+echo "${GOT}" | grep -q ':3:' \
     || fail "the refusal names the wrong line: ${GOT}"
 echo "  a line longer than the buffer is refused, not split"
 # }}}
 
 # {{{ a brace that never closes
-printf 'station a triple_sum p result\n  in 0 = {\n      1.5,\n      2.5,\n' \
+printf 'station a triple_sum p\n  out 0 $0\n  in 0 = {\n      1.5,\n      2.5,\n' \
     > "${WORK}/unclosed.map"
 
 GOT=$("${WORK}/reader" "${WORK}/unclosed.map" 2>&1)
 [ $? -eq 0 ] && fail "an unclosed brace was accepted"
 echo "${GOT}" | grep -q "opened here" \
     || fail "the refusal does not say where the brace opened: ${GOT}"
-echo "${GOT}" | grep -q ':2:' \
+echo "${GOT}" | grep -q ':3:' \
     || fail "the refusal names a line other than where the brace opened: ${GOT}"
 echo "  an unclosed brace is refused, naming the line that opened it"
 # }}}
@@ -142,7 +142,7 @@ echo "  an unclosed brace is refused, naming the line that opened it"
 # {{{ a command line still hands over bare text
 # The shell already decided where this value started and stopped, so
 # asking for quotes here would be asking somebody to quote twice.
-printf 'station a read_int_file p entry\nstation b keep p result\n' \
+printf 'station a read_int_file p\n  in 0 $0\nstation b keep p\n  out 0 $0\n' \
     > "${WORK}/argument.map"
 
 GOT=$("${WORK}/reader" "${WORK}/argument.map" /etc/hostname 2>&1)

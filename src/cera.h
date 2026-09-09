@@ -67,11 +67,20 @@ enum slot_state {
     CERA_SLOT_CLAIMED  = 3,
 };
 
-enum station_door {
-    CERA_DOOR_NONE = 0,   /* an interior station, which is most of them */
-    CERA_DOOR_IN   = 1,   /* the outside may deliver here */
-    CERA_DOOR_OUT  = 2,   /* results wait here to be taken */
-};
+/*
+ * **A door is a port, not a station** (issues 213a, 209a).
+ *
+ * A port carries the number of the argument or result it is, or this
+ * when it is neither — which is most of them. The number is a name the
+ * author chose that happens to sort: reordering every line in a file
+ * changes nothing, and a gap or a duplicate is refused at bring-up.
+ *
+ * It means the same thing whoever supplies the value — a shell, a C
+ * caller, or an enclosing map — the way a C function's first parameter
+ * does not care who called it. That is what lets a map stand where a
+ * box stands.
+ */
+#define CERA_NOT_A_DOOR (-1)
 
 enum station_kind {
     CERA_STATION_PLAIN      = 0,
@@ -102,6 +111,10 @@ typedef struct in_port {
     const struct struct_text *text;
     int growths;
     int high_water;
+    /* Which of the map's arguments this port is, or CERA_NOT_A_DOOR.
+     * Being an argument and being fed by a wire are independent: a port
+     * that is both is fed both ways, and simply is not an argv slot. */
+    int argument;
 } cera_in_port_t;
 
 typedef struct destination {
@@ -117,6 +130,27 @@ typedef struct dest_set {
 typedef struct out_port {
     _Atomic(cera_dest_set_t *) dests;
     struct out_port      *next;
+    /* Which of the map's results this port is, or CERA_NOT_A_DOOR. */
+    int    result;
+    /*
+     * **Where an embedding caller wants these values put** (issue
+     * 209a), and nothing until it says. A marked port with no
+     * receptacle discards like any other unwired output, so a program
+     * nobody is collecting from grows nothing.
+     *
+     * The memory is the caller's. `taken` is claimed with one atomic
+     * add, and a worker handed a slot at or past `room` writes
+     * nothing — the bound is the reservation, never the winding down,
+     * because workers are still inside boxes when the array fills.
+     *
+     * No slot state machine: a ring slot needs one because it is
+     * reused and a reader must know what it is looking at, and one of
+     * these is written once and read by nobody until the caller looks.
+     */
+    void  *into;
+    int    room;
+    int    elem_size;
+    _Atomic int taken;
 } cera_out_port_t;
 
 typedef int (*cera_station_compare_t)(const void *a, const void *b);
@@ -134,11 +168,6 @@ typedef struct station {
     int             out_size;
     const char     *box_name;
     unsigned char   seeded;
-    unsigned char   door;
-    void           *held;
-    int             n_held;
-    int             held_room;
-    int             held_growths;
     cera_station_compare_t compare;
     _Atomic long runs;
     _Atomic long produced;
@@ -193,15 +222,22 @@ const char *cera_map_configure_port(cera_map_t *m, int station, int port,
 const char *cera_map_check_sources(cera_map_t *m);
 const char *cera_map_name_station(cera_map_t *m, int station, const char *name);
 const char *cera_map_station_set_cursor(cera_map_t *m, int station, int at);
-const char *cera_map_designate_output(cera_map_t *m, int station);
+const char *cera_map_designate_result(cera_map_t *m, int station, int port,
+                                      int nth);
 cera_map_t *cera_map_start_beside(cera_map_t *parent);
-const char *cera_map_designate_input(cera_map_t *m, int station);
+const char *cera_map_designate_argument(cera_map_t *m, int station, int port,
+                                        int nth);
+
+int cera_map_argument_at(cera_map_t *m, int nth, int *station, int *port);
+int cera_map_result_at(cera_map_t *m, int nth, int *station, int *port);
 
 const char *cera_map_deliver_argument(cera_map_t *m, int station, int port,
                                  const void *value, int size);
 
-int cera_map_output_waiting(cera_map_t *m, int station);
-int cera_map_output_take(cera_map_t *m, int station, void *into, int size);
+const char *cera_map_collect(cera_map_t *m, int station, int port,
+                             void *into, int room, int elem_size);
+
+int cera_map_collected(cera_map_t *m, int station, int port);
 const char *cera_map_bring_up(cera_map_t *m);
 
 void cera_map_connect(cera_map_t *m, int from_station, int port,

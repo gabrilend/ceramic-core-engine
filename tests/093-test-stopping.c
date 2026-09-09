@@ -89,7 +89,7 @@ static cera_map_t *a_busy_program(void)
     int gate = cera_map_add_station(m);
     cera_map_place_box(m, gate, "keep", CERA_STATION_PLAIN);
     cera_map_name_station(m, gate, "gate");
-    cera_map_designate_input(m, gate);
+    cera_map_designate_argument(m, gate, 0, 0);
 
     int work = cera_map_add_station(m);
     cera_map_place_box(m, work, "slow_double", CERA_STATION_PLAIN);
@@ -98,7 +98,7 @@ static cera_map_t *a_busy_program(void)
     int out = cera_map_add_station(m);
     cera_map_place_box(m, out, "keep", CERA_STATION_PLAIN);
     cera_map_name_station(m, out, "out");
-    cera_map_designate_output(m, out);
+    cera_map_designate_result(m, out, 0, 0);
 
     cera_map_wire(m, gate, 0, work, 0);
     cera_map_wire(m, work, 0, out, 0);
@@ -527,11 +527,11 @@ static void a_wedged_program_still_reports(void)
         int gate = cera_map_add_station(m);
         cera_map_place_box(m, gate, "keep", CERA_STATION_PLAIN);
         cera_map_name_station(m, gate, "gate");
-        cera_map_designate_input(m, gate);
+        cera_map_designate_argument(m, gate, 0, 0);
         int stuck = cera_map_add_station(m);
         cera_map_place_box(m, stuck, "wedge", CERA_STATION_PLAIN);
         cera_map_name_station(m, stuck, "stuck");
-        cera_map_designate_output(m, stuck);
+        cera_map_designate_result(m, stuck, 0, 0);
         cera_map_wire(m, gate, 0, stuck, 0);
 
         cera_map_start(m, 2);
