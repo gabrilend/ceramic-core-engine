@@ -293,7 +293,7 @@ int main(void)
          * the file says it in a fourth word, the surface says it in a
          * call, and the dumps have to come out the same. */
         "station twice double_it p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - adder.0\n"
         "  in 0 x64\n"
         "station waiting add p\n"

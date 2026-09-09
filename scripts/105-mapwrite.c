@@ -137,7 +137,7 @@ char *mapfile_write(const map_description_t *d)
                 add(&o, "  in %d %s[%s]\n", in->port, depth, in->text);
             else if (in->is_argument)
                 /* This port is the map's argument N (issue 601b). */
-                add(&o, "  in %d %s$%d\n", in->port, depth, in->argument);
+                add(&o, "  in %d %s- %d$\n", in->port, depth, in->argument);
             else if (in->text)
                 add(&o, "  in %d %s= %s\n", in->port, depth, in->text);
             else
@@ -153,7 +153,7 @@ char *mapfile_write(const map_description_t *d)
             if (out->is_result) {
                 /* A mark rather than an arrow: this port is the map's
                  * result N, so there is no destination to write. */
-                add(&o, "  out %d $%d\n", out->port, out->result);
+                add(&o, "  out %d - %d$\n", out->port, out->result);
                 continue;
             }
             add(&o, "  out %d - %s.%d\n",

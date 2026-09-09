@@ -19,14 +19,19 @@ puts them on that station.
 Wiring takes two part numbers and two door numbers, and is the same
 call for every combination of box and map on either end.
 
-**One caveat the change exposed rather than created.** Placing a map
-brings its door marks with it, and an unwired one becomes a way out of
-the program that placed it. That is correct — an unwired marked port is
-a way out from outside, whoever put it there — and it means a caller
-who places a map and ignores its result has a door it did not ask for.
-Wiring the result somewhere, even to a sink, says what was meant.
-Scoping the numbers per receipt would remove the surprise and is not
-built.
+**A placed map's doors are scoped to it**, which is what the receipt
+turned out to be for. They say *this port is a useful place to put
+values in or take them out of this description* and nothing about the
+program that placed it, so placing one description twice does not give
+the parent two argument zeros and ignoring a placed result costs
+nothing.
+
+The engine tells them apart without being told: loading a description
+makes no receipt and placing one does. Bring-up's numbering therefore
+counts only stations no part names, and the dump renumbers what it
+writes — a file has no parts in it, so two placed copies would spell
+two argument zeros and the reader would refuse. The dump already did
+exactly this for station names, for exactly this reason.
 
 ## Intended behavior
 

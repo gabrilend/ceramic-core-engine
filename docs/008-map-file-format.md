@@ -16,7 +16,7 @@ the map had grown into by then.
 
 ```
 station reader io.c:read_config p
-  in 0 x64 $0
+  in 0 x64 - 0$
   out 0 - config.0
 
 station config io.c:load p
@@ -40,7 +40,7 @@ station depth compare.c:measure c
 
 station split route.c:spread i
   in 0 - depth.0
-  out 0 $0
+  out 0 - 0$
   out 1 - mailer.0
 ```
 
@@ -238,11 +238,11 @@ about the file looks incorrect.
 four ways for a line to say otherwise, and all carry the port index:
 
 ```
-in 1 $0        port 1 holds the value written at statics entry 0
+in 1 - 0$        port 1 holds the value written at statics entry 0
 in 1 = 5       port 1 holds 5
 in 2 = { 1.5, 2.5, 3.5 }       and a struct is written the same way
 in 3 -         port 3 has no source yet
-in 4 x64 $1    port 4 reads statics entry 1, starting 64 slots deep
+in 4 x64 - 1$    port 4 reads statics entry 1, starting 64 slots deep
 in 5 [7, 9]    port 5 is a buffer with two values waiting in it
 ```
 
@@ -352,8 +352,8 @@ names on the running program are untouched.
 ### A port may be one of the program's doors
 
 ```
-in 0 $0        this port is the map's argument 0
-out 0 $1       this port is the map's result 1
+in 0 - 0$        this port is the map's argument 0
+out 0 - 1$       this port is the map's result 1
 ```
 
 **`$` means: this crosses the map's boundary, at this position.** The
@@ -384,6 +384,20 @@ in a sub-map silently swapped two of the parent's arguments.
 neither was detectable at all before. A station may hold ports of both
 kinds: the old refusal, that a station could not be both doors, existed
 because the mark was on the station and a station is one thing.
+
+**A placed map's marks are its own, not the enclosing program's.** They
+say *this port is a useful place to put values in or take them out of
+this description*, and nothing about the program that placed it — which
+is why placing one description twice does not give the parent two
+argument zeros, and why ignoring a placed map's result costs nothing.
+A part's doors are reached through the part.
+
+**The dump renumbers them on the way out**, the way it makes station
+names unique, and for the same reason: a file is one flat description
+with no parts in it, so two placed copies would write two argument
+zeros and the reader would refuse. The numbers are labels their author
+chose, and a program with different labels is the same program by every
+measure this project has.
 
 **The number means the same to whoever supplies the value** — a shell,
 a C caller, or an enclosing map — the way a C function's first
@@ -443,7 +457,7 @@ it needs to. A port may be told to start deeper, written **before the
 source** as a count:
 
 ```
-in 0 x64 $0      reads statics entry 0, room for 64 to begin with
+in 0 x64 - 0$      reads statics entry 0, room for 64 to begin with
 in 1 x256 -      no source yet, room for 256 when it gets one
 in 2 x8 = 5      a constant, and eight slots standing idle behind it
 in 3 = 5         a constant, and the default ten

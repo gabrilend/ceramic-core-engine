@@ -213,17 +213,17 @@ static void a_program_ends_by_being_pruned(const char *doubler_path)
     must_take(cera_map_join(m, feed, 0, staying, 0), "into the one that stays");
 
     /*
-     * The doomed part's own result goes somewhere, because **a sub-map
-     * brings its door marks with it** and an unwired one becomes a way
-     * out of the program that placed it. That is right — an unwired
-     * marked port is a way out from outside, whoever put it there — and
-     * it is the rough edge a caller meets: place a map, ignore its
-     * result, and you have a door you did not ask for. Wiring it to a
-     * sink says what was meant.
+     * **The doomed part's own result goes nowhere, and that is fine.**
+     *
+     * A placed map's `$` marks are local to it: they say this port is a
+     * useful place to take values out *of that description*, and they
+     * have no relation to the enclosing program's own doors. So an
+     * ignored result is simply ignored — no sink to wire, and nothing
+     * to remember to prune before attaching something real later.
+     *
+     * This scene used to need a swallow box here, when a part's marks
+     * still counted as the program's own.
      */
-    int sink = -1;
-    must_take(cera_map_add_part(m, "swallow", &sink), "a sink");
-    must_take(cera_map_join(m, going, 0, sink, 0), "the doomed part's output");
 
     int in_at = -1, in_port = -1, stay_at = -1, stay_port = -1;
     check(cera_map_part_door(m, feed, 0, 1, &in_at, &in_port), "the way in");
@@ -288,8 +288,8 @@ int main(void)
      * nothing about their position says which argument is which. */
     write_text(path,
         "station twice double_it p\n"
-        "  in 0 $0\n"
-        "  out 0 $0\n");
+        "  in 0 - 0$\n"
+        "  out 0 - 0$\n");
 
     a_box_and_a_map_are_one_operation(path);
     two_programs_share_one_table(path);

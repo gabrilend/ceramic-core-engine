@@ -193,25 +193,6 @@ static void handle_in(parse_state_t *st, const char *rest)
             die_parse(st->path, st->line, "an input with no value after '='");
         
         in->text = copy_string(value, st->path, st->line);
-    } else if (ref[0] == '$') {
-        /*
-         * **`$N` says this port is the map's argument N** (issue
-         * 601b). It used to point at a numbered entry in a `statics`
-         * section — a second spelling of a constant, which the dump
-         * never wrote — and it read as a shell positional while
-         * meaning nothing of the sort. Now it means the one thing
-         * everybody guesses it means: this crosses the map's
-         * boundary, at this position.
-         */
-        char extra[8];
-        next_word(after_ref, extra, sizeof extra);
-        if (extra[0])
-            die_parse(st->path, st->line,
-                      "unexpected trailing words on an 'in' line");
-        in->is_argument = 1;
-        if (!parse_number(ref + 1, &in->argument) || in->argument < 0)
-            die_parse(st->path, st->line,
-                      "expected an argument number after '$', as 'in 0 $0'");
     } else if (ref[0] == '-' && !ref[1]) {
         /*
          * **A dash with a source after it is a wire; a dash alone is
@@ -225,8 +206,26 @@ static void handle_in(parse_state_t *st, const char *rest)
                                              sizeof source);
         next_word(after_source, extra, sizeof extra);
 
+        size_t len = strlen(source);
         if (!source[0]) {
             in->is_none = 1;
+        } else if (len > 1 && source[len - 1] == '$') {
+            /*
+             * **`0$` says this port is the map's argument 0** (issue
+             * 601b), and it sits after the dash because that is what
+             * the dash is for: everything after it is where this
+             * port's values come from, and this one says they come
+             * from outside.
+             *
+             * The number is the argument's identity, chosen by the
+             * author rather than derived from where the line sits.
+             */
+            source[len - 1] = 0;
+            in->is_argument = 1;
+            if (!parse_number(source, &in->argument) || in->argument < 0)
+                die_parse(st->path, st->line,
+                          "expected an argument number before '$', as "
+                          "'in 0 - 0$'");
         } else if (extra[0]) {
             die_parse(st->path, st->line,
                       "unexpected trailing words on an 'in' line — a dash "
@@ -333,18 +332,28 @@ static void handle_out(parse_state_t *st, const char *rest)
      * keyword carries the direction, so one notation covers both ends
      * and there is no second form to learn.
      */
-    if (dash[0] == '$') {
-        if (dest[0])
+    if (strcmp(dash, "-") != 0)
+        die_parse(st->path, st->line,
+                  "expected '-' between the port and where its values go");
+
+    size_t dest_len = strlen(dest);
+    if (dest_len > 1 && dest[dest_len - 1] == '$') {
+        /* **`0$` says this port is the map's result 0** (issue 601b),
+         * the mirror of the same mark on an input line and in the same
+         * place: after the dash, which is where a port's values go. */
+        if (extra[0])
             die_parse(st->path, st->line,
                       "unexpected trailing words after a result number");
+        dest[dest_len - 1] = 0;
         desc_output_t *mark = need(calloc(1, sizeof *mark), st->path,
                                    st->line);
         mark->port = port;
         mark->line = st->line;
         mark->is_result = 1;
-        if (!parse_number(dash + 1, &mark->result) || mark->result < 0)
+        if (!parse_number(dest, &mark->result) || mark->result < 0)
             die_parse(st->path, st->line,
-                      "expected a result number after '$', as 'out 0 $0'");
+                      "expected a result number before '$', as "
+                      "'out 0 - 0$'");
         desc_output_t **at = &st->current->outputs;
         while (*at)
             at = &(*at)->next;
@@ -352,10 +361,6 @@ static void handle_out(parse_state_t *st, const char *rest)
         return;
     }
 
-    if (strcmp(dash, "-") != 0)
-        die_parse(st->path, st->line,
-                  "expected '-' between port and destination, or '$N' "
-                  "saying this port is one of the map's results");
     if (extra[0])
         die_parse(st->path, st->line, "unexpected trailing words on an 'out' line");
 

@@ -297,11 +297,11 @@ int main(void)
         return 1;
     }
     fputs("station gate keep p\n"
-          "  in 0 $0\n"
+          "  in 0 - 0$\n"
           "  out 0 - answer.0\n"
           "station answer double_it p\n"
           "  in 0 - gate.0\n"
-          "  out 0 $0\n", f);
+          "  out 0 - 0$\n", f);
     fclose(f);
 
     cera_map_t *loaded = cera_map_load_file(path, 2);

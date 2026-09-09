@@ -67,11 +67,11 @@ BOX
 
 cat > "${AWAY}/away.map" <<'MAP'
 station feed carry p
-  in 0 $0
+  in 0 - 0$
   out 0 - total.0
 
 station total add_up p
-  out 0 $0
+  out 0 - 0$
   in 0 - feed.0
   in 1 = 30
 MAP

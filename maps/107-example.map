@@ -9,7 +9,7 @@
 # when both hold a value, and not before.
 
 station in keep p
-  in 0 $0
+  in 0 - 0$
   out 0 - twice.0
   out 0 - plus.0
 
@@ -23,6 +23,6 @@ station plus add p
   out 0 - total.1
 
 station total add p
-  out 0 $0
+  out 0 - 0$
   in 0 - twice.0
   in 1 - plus.0

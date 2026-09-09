@@ -145,7 +145,7 @@ int twin(int x)
 EOF
 cat > "${WORK}/ambiguous.map" <<'EOF'
 station only twin p
-  out 0 $0
+  out 0 - 0$
 EOF
 
 set +e
@@ -167,7 +167,7 @@ echo "  an ambiguous box name refuses and names both paths"
 # only in how the line addresses the box, builds.
 cat > "${WORK}/settled.map" <<'EOF'
 station only right/twins.c:twin p
-  out 0 $0
+  out 0 - 0$
 EOF
 "${GENERATOR}" "${WORK}/out5.c" "--map=${WORK}/settled.map" \
     "${WORK}/left/twins.c" "${WORK}/right/twins.c" \

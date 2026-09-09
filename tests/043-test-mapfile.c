@@ -184,7 +184,7 @@ static void test_half_built_round_trips(void)
          * requirement is built to make legible: the declaration is
          * the interface, and what flows through it is separate. */
         "station runner add p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 = 3\n"
         "  in 1 = 4\n"
         "\n"
@@ -264,7 +264,7 @@ static void test_a_program_is_a_text_file(void)
          * with (issue 209). Its value goes on to the sink as well —
          * being the way out adds a rule only when nothing is wired. */
         "station doubler double_it p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - decide.2\n"
         "  out 0 - sink.1\n"
         "\n"
@@ -319,7 +319,7 @@ static void a_box_can_be_addressed_three_ways(void)
         "  out 0 - answer.0\n"
         /* The whole path and a function. */
         "station answer src/boxes/029-demo-boxes.c:keep p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - middle.0\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
@@ -396,7 +396,7 @@ static void an_awkward_constant_survives_a_file(void)
 
     write_text(map_path,
         "station source seven p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "station holder write_int_file p\n"
         "  in 0 = \"say \\\"hi\\\" \\tand \\xc3\\xa9 done\"\n");
 
@@ -472,7 +472,7 @@ static void the_keywords_are_not_reserved(void)
         "station in seven p\n"
         "  out 0 - out.0\n"
         "station out add p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - in.0\n"
         "  in 1 = 5\n"
         "  out 0 - statics.0\n"
@@ -597,7 +597,7 @@ static void test_every_refusal(void)
     expect_death_saying(
         "station head seven p\n"
         "  out 0 broken.0\n",
-        "expected '-' between port and destination",
+        "expected '-' between the port and where its values go",
         "a malformed out line was accepted");
 
     expect_death_saying(
@@ -627,7 +627,7 @@ static void test_every_refusal(void)
      */
     expect_death_saying(
         "station head seven p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  out 0 - eater.0\n"
         "station eater double_it p\n"
         "  in 0 - head.0\n"
@@ -653,7 +653,7 @@ static void test_every_refusal(void)
      * test never runs. */
     expect_death_saying(
         "station lonely add p\n"
-        "  out 0 $0\n",
+        "  out 0 - 0$\n",
         "nothing to seed",
         "a map that can never start was accepted");
 
@@ -671,7 +671,7 @@ static void test_every_refusal(void)
      */
     expect_death_saying(
         "station head seven p\n"
-        "  out 0 $1\n",
+        "  out 0 - 1$\n",
         "nothing is result 0",
         "a result numbered past a gap was accepted");
 

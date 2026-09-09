@@ -114,11 +114,11 @@ static void work_in_flight_survives(void)
      * the adder, which is the station being captured. */
     write_text(map_path,
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "  out 0 - adder.0\n"
         "\n"
         "station adder add p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - gate.0\n"
         "  in 1 -\n");
 
@@ -190,11 +190,11 @@ static void the_revived_program_finishes_the_work(void)
 
     write_text(map_path,
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "  out 0 - adder.0\n"
         "\n"
         "station adder add p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - gate.0\n"
         "  in 1 -\n");
 
@@ -264,10 +264,10 @@ static void a_struct_queue_survives(void)
          * the work goes straight into the shifter's buffer, which is
          * the state being captured. */
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "\n"
         "station shifter nudge p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 1 -\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
@@ -323,10 +323,10 @@ static void a_deep_buffer_drains_when_the_constant_arrives(void)
 
     write_text(map_path,
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "\n"
         "station adder add p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 x64\n"
         "  in 1 -\n");
 
@@ -370,10 +370,10 @@ static void writing_a_constant_drains_what_was_waiting(void)
 
     write_text(map_path,
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "\n"
         "station adder add p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 x64\n"
         "  in 1 = 1\n");
 
@@ -425,7 +425,7 @@ static void a_station_of_only_constants_runs_once_per_change(void)
 
     write_text(map_path,
         "station adder add p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 = 2\n"
         "  in 1 = 3\n");
 
@@ -485,7 +485,7 @@ static void writing_the_same_value_still_counts(void)
 
     write_text(map_path,
         "station adder add p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 = 2\n"
         "  in 1 = 3\n");
 
@@ -529,10 +529,10 @@ static void a_write_drains_whatever_is_waiting(void)
 
     write_text(map_path,
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "\n"
         "station maker stamp_record p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 x64\n"
         "  in 1 x64\n"
         "  in 2 = 7\n");
@@ -596,7 +596,7 @@ static void an_iterator_remembers_where_it_was(void)
      * keeps what it is given. */
     write_text(map_path,
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "\n"
         "station spread double_it i\n"
         "  out 0 - first.0\n"
@@ -604,7 +604,7 @@ static void an_iterator_remembers_where_it_was(void)
         "  out 2 - third.0\n"
         "\n"
         "station first keep p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - spread.0\n"
         "station second keep p\n"
         "  in 0 - spread.1\n"
@@ -665,11 +665,11 @@ static void draining_produces_a_complete_capture(void)
 
     write_text(map_path,
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "  out 0 - twice.0\n"
         "\n"
         "station twice double_it p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - gate.0\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
@@ -722,11 +722,11 @@ static void an_incomplete_capture_says_so_and_is_refused(void)
 
     write_text(map_path,
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "  out 0 - stuck.0\n"
         "\n"
         "station stuck wedge p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - gate.0\n");
 
     pid_t child = fork();
@@ -794,11 +794,11 @@ static void reviving_a_lossy_capture_is_refused(const char *self)
         "#   stuck  (station 1)\n"
         "\n"
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "  out 0 - twice.0\n"
         "\n"
         "station twice double_it p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - gate.0\n");
 
     char cmd[1024];
@@ -855,11 +855,11 @@ static void a_grown_program_captures_whole(void)
 
     write_text(map_path,
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "  out 0 - four.0\n"
         "\n"
         "station four quadruple p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - gate.0\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);

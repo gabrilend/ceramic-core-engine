@@ -178,11 +178,11 @@ int main(void)
 
     round_trips("doors, kinds and arrows survived",
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "  out 0 - sum.0\n"
         "\n"
         "station sum add p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 - gate.0\n"
         "  in 1 = 5\n");
 
@@ -215,10 +215,10 @@ int main(void)
 
     round_trips("values waiting in a buffer survived, inner commas and all",
         "station gate keep p\n"
-        "  in 0 $0\n"
+        "  in 0 - 0$\n"
         "\n"
         "station held nudge p\n"
-        "  out 0 $0\n"
+        "  out 0 - 0$\n"
         "  in 0 x64 [{ 1.5, 2.5, 3.5 }, { 4.5, 5.5, 6.5 }]\n"
         "  in 1 -\n");
 

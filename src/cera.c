@@ -1996,25 +1996,36 @@ const char *cera_map_designate_argument(cera_map_t *m, int station, int port,
 }
 /* }}} */
 
-/* {{{ port_is_fed() */
-/* Whether any station's output port names this one as a destination.
- * The same sweep removal does, and for the same reason: a wire lives
- * on the producing side, and an input port carries nothing saying what
- * feeds it. */
-static int port_is_fed(cera_map_t *m, int station, int port)
+/* {{{ station_is_placed() */
+/*
+ * **Whether this station came in as part of a placing** (issues 217a,
+ * 212a), which is the whole of what scopes a door.
+ *
+ * A map placed inside another brings its own `$` marks with it, and
+ * those marks are *local to it*: they say "this port is a useful place
+ * to put values in or take them out" of that description, and they
+ * have no relation at all to the enclosing program's own doors. A
+ * program's arguments are its own; a part's are the part's, reached
+ * through the part.
+ *
+ * The engine already knows which is which without being told, because
+ * loading a description makes no receipt and placing one does. So the
+ * question is answerable by asking whether any receipt names this
+ * station.
+ *
+ * What this replaced: deriving it from the wires — a marked port
+ * something feeds is not a way in — which is true and was not enough.
+ * A parent that placed a map and left its result unwired ended up
+ * with a way out it never declared, and had to wire it to a sink to
+ * say otherwise. Nobody should have to remember that, and then
+ * remember to prune it before attaching their own.
+ */
+static int station_is_placed(cera_map_t *m, int station)
 {
-    for (int i = 0; i < m->n_stations; i++) {
-        cera_station_t *s = cera_map_station(m, i);
-        if (!s->call)
-            continue;
-        for (cera_out_port_t *p = s->out_ports; p; p = p->next) {
-            cera_dest_set_t *set = out_port_dests(p);
-            for (int d = 0; set && d < set->n; d++)
-                if (set->items[d].station == station
-                    && set->items[d].port == port)
-                    return 1;
-        }
-    }
+    for (int i = 0; i < m->n_parts; i++)
+        for (int j = 0; j < m->parts[i].count; j++)
+            if (m->parts[i].station[j] == station)
+                return 1;
     return 0;
 }
 /* }}} */
@@ -2041,7 +2052,7 @@ static int argument_slots(cera_map_t *m, int *station, int *port, int room)
         int at = -1, which = -1;
         if (!cera_map_argument_at(m, nth, &at, &which))
             break;
-        if (port_is_fed(m, at, which))
+        if (station_is_placed(m, at))
             continue;
         station[found] = at;
         port[found] = which;
@@ -2454,13 +2465,12 @@ const char *cera_map_bring_up(cera_map_t *m)
      * and that is a complete sentence needing no separate declaration.
      */
     /*
-     * **Only the doors nobody inside has taken over count**, which is
-     * what makes this safe under composition. One description
-     * instantiated twice puts two ports in the table both marked
-     * argument zero — and they are not two of the program's arguments,
-     * they are each copy's own, and the enclosing map has wired both.
-     * A port something feeds is not a way in from outside, so it is not
-     * one of these numbers; the same derivation the command line uses.
+     * **Only the program's own doors count**, which is what makes this
+     * safe under composition. One description placed twice puts two
+     * ports in the table both marked argument zero — and they are not
+     * two of the program's arguments, they are each copy's own. A
+     * placed station's marks belong to the part it came in with, and
+     * are reached through the part.
      */
     for (int nth = 0; ; nth++) {
         int found = 0;
@@ -2469,7 +2479,8 @@ const char *cera_map_bring_up(cera_map_t *m)
             if (!s->call)
                 continue;
             for (int j = 0; j < s->n_in_ports; j++)
-                if (s->in_ports[j].argument == nth && !port_is_fed(m, i, j))
+                if (s->in_ports[j].argument == nth
+                    && !station_is_placed(m, i))
                     found++;
         }
         if (found > 1) {
@@ -2493,7 +2504,7 @@ const char *cera_map_bring_up(cera_map_t *m)
                     continue;
                 for (int j = 0; j < s->n_in_ports; j++)
                     if (s->in_ports[j].argument > nth
-                        && !port_is_fed(m, i, j))
+                        && !station_is_placed(m, i))
                         beyond = 1;
             }
             if (beyond) {
@@ -2516,14 +2527,9 @@ const char *cera_map_bring_up(cera_map_t *m)
             cera_station_t *s = cera_map_station(m, i);
             if (!s->call)
                 continue;
+            if (station_is_placed(m, i))
+                continue;
             for (cera_out_port_t *p = s->out_ports; p; p = p->next) {
-                /* A result wired onward is feeding something inside the
-                 * program, which is what an enclosing map does to a
-                 * sub-map's way out. Only the ones going nowhere are
-                 * the program's own. */
-                cera_dest_set_t *set = out_port_dests(p);
-                if (set && set->n > 0)
-                    continue;
                 if (p->result == nth)   found++;
                 if (p->result > nth)    beyond = 1;
             }
@@ -6043,6 +6049,19 @@ cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path)
      */
     cera_map_instance_t in;
     build_from_file(m, path, &in);
+
+    /*
+     * **A receipt, kept, because placing a description is what makes
+     * one** (issues 217a, 212a). It is what scopes the description's
+     * own `$` marks to itself — a placed map's doors are its own, not
+     * the enclosing program's — and it is what ending that program
+     * later prunes.
+     *
+     * The caller still gets its own list to wire from and free. This
+     * is the engine's copy.
+     */
+    if (part_remember(m, &in, NULL))
+        fail_resource("out of memory remembering a placed description");
     return in;
 }
 /* }}} */
@@ -6170,12 +6189,19 @@ const char *cera_map_add_part(cera_map_t *m, const char *what, int *part)
             return "out of memory placing a part";
         out->station[0] = at;
         out->count = 1;
-        return part_remember(m, out, part);
+        const char *no = part_remember(m, out, part);
+        cera_map_instance_free(out);
+        return no;
     }
 
     if (described) {
+        /* Instantiating already records a receipt, so this only has to
+         * say which one — the last, since it was just made. */
         *out = cera_map_instantiate_file(m, what);
-        return part_remember(m, out, part);
+        cera_map_instance_free(out);
+        if (part)
+            *part = m->n_parts - 1;
+        return NULL;
     }
 
     snprintf(said, sizeof said,
@@ -6202,7 +6228,21 @@ static const char *part_remember(cera_map_t *m, const cera_map_instance_t *in,
     if (!grown)
         return "out of memory remembering a part";
     m->parts = grown;
-    m->parts[m->n_parts] = *in;
+
+    /* **A copy, so the receipt owns its own list.** The caller of an
+     * instantiation gets a list too, and frees it when it has finished
+     * wiring; the engine's copy outlives that, because ending a program
+     * is pruning exactly these stations. One array with two owners is
+     * the shape a double free comes in. */
+    cera_map_instance_t *at = &m->parts[m->n_parts];
+    at->count = in->count;
+    at->station = calloc((size_t)(in->count > 0 ? in->count : 1),
+                         sizeof *at->station);
+    if (!at->station)
+        return "out of memory remembering a part";
+    for (int i = 0; i < in->count; i++)
+        at->station[i] = in->station[i];
+
     if (part)
         *part = m->n_parts;
     m->n_parts++;
@@ -6756,6 +6796,12 @@ void cera_map_dump(cera_map_t *m, FILE *out)
      * a dot: an arrow destination is split on its *last* dot to find
      * the port, so `gate.2` would read as station `gate`, port 2.
      */
+    /* Door numbers are handed out in table order on the way out, for
+     * the same reason station names are made unique here: a file has
+     * to be readable back, and two placed copies of one description
+     * carry the same numbers. */
+    int arguments = 0, results = 0;
+
     char **written = calloc((size_t)(m->n_stations > 0 ? m->n_stations : 1),
                             sizeof *written);
     if (!written) {
@@ -6949,9 +6995,17 @@ void cera_map_dump(cera_map_t *m, FILE *out)
              * 601b). Written before its wires and its value, because
              * it says what the port *is* to anyone outside, and the
              * lines after say what happens to it inside.
+             *
+             * **Renumbered on the way out, the way names are.** A
+             * file has no parts — it is one flat description — so two
+             * placed copies of one map would write two argument zeros,
+             * which the reader refuses. The numbers are labels their
+             * author chose, and a program with different labels is the
+             * same program by every measure this project has, which is
+             * exactly what the dump already says about station names.
              */
             if (sl->argument != CERA_NOT_A_DOOR)
-                fprintf(out, "  in %d $%d\n", j, sl->argument);
+                fprintf(out, "  in %d - %d$\n", j, arguments++);
 
             int sources = 0;
             for (int pass = 0; pass < 2; pass++) {
@@ -7087,12 +7141,12 @@ void cera_map_dump(cera_map_t *m, FILE *out)
          * running engine reads that order or means anything by it. */
         int out_port_index = 0;
         for (cera_out_port_t *p = s->out_ports; p; p = p->next, out_port_index++) {
-            /* This port is one of the map's results (issue 601b).
-             * Written before its wires, for the same reason an
-             * argument mark comes before a port's: it says what the
-             * port is to anyone outside. */
+            /* This port is one of the map's results (issue 601b),
+             * renumbered like the arguments above and for the same
+             * reason. Written before its wires: it says what the port
+             * is to anyone outside. */
             if (p->result != CERA_NOT_A_DOOR)
-                fprintf(out, "  out %d $%d\n", out_port_index, p->result);
+                fprintf(out, "  out %d - %d$\n", out_port_index, results++);
 
             cera_dest_set_t *set = out_port_dests(p);
             for (int di = 0; set && di < set->n; di++)

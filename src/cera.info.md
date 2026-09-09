@@ -1958,12 +1958,16 @@ The receipt is emptied rather than removed, because a part is an index
 and an index means what it meant. Ending one twice is refused rather
 than silently doing nothing.
 
-**One caveat worth knowing.** Placing a map brings its door marks with
-it, and an unwired one becomes a way out of the program that placed it
-— which is right, an unwired marked port being a way out from outside
-whoever put it there, and is also how a caller ends up with a door it
-did not ask for. Wire a placed map's result somewhere, even to a sink,
-to say what was meant.
+**A placed map's marks are its own.** They say *this port is a useful
+place to put values in or take them out of this description*, and
+nothing about the program that placed it. So placing one description
+twice does not give the parent two argument zeros, and ignoring a
+placed map's result costs nothing — there is no sink to wire and
+nothing to remember to prune before attaching something real.
+
+The engine knows which is which without being told: loading a
+description makes no receipt and placing one does, so a station belongs
+to a part or it does not.
 
 ### cera_map_seed_count()
 
