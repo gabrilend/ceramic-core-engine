@@ -179,6 +179,21 @@ typedef struct station {
 #define CERA_STATION_SHELF_SHIFT 6
 #define CERA_STATION_SHELF_MASK  (CERA_STATIONS_PER_SHELF - 1)
 
+/*
+ * **A receipt**: the stations one placing created, in the order the
+ * description declared them. Placing a box and placing a map hand back
+ * the same kind of thing, which is what makes them one operation
+ * (issue 217a).
+ *
+ * It sits here rather than beside the composition calls because the
+ * map holds a table of them: a program *is* one of these, and ending a
+ * program is pruning the stations it names (issue 212a).
+ */
+typedef struct map_instance {
+    int *station;
+    int  count;
+} cera_map_instance_t;
+
 typedef struct map {
     cera_station_t **shelves;
     int         n_shelves;
@@ -188,10 +203,23 @@ typedef struct map {
     char **station_names;
     int    n_named;
     _Atomic int closing;
-    int    pool_is_borrowed;
     pthread_mutex_t rewire_mutex;
     pthread_mutex_t   scrap_mutex;
     struct scrap_item *scrap_head;
+    /*
+     * **A program is a kept receipt** (issues 217a, 212a): the list of
+     * stations one placing created. It used to be handed to the caller
+     * and freed as soon as wiring was done, because nothing needed it
+     * afterwards — and then ending a program became pruning its
+     * stations, which is exactly that list.
+     *
+     * A part is an index into this, because a part travels on a wire
+     * when a map builds a map, and a wire carries values rather than
+     * pointers. Entries are never moved, so an index means what it
+     * meant; an ended one is left empty rather than removed.
+     */
+    cera_map_instance_t *parts;
+    int                  n_parts;
     pthread_t observer;
     int       observer_running;
     char     *observer_path;
@@ -224,7 +252,6 @@ const char *cera_map_name_station(cera_map_t *m, int station, const char *name);
 const char *cera_map_station_set_cursor(cera_map_t *m, int station, int at);
 const char *cera_map_designate_result(cera_map_t *m, int station, int port,
                                       int nth);
-cera_map_t *cera_map_start_beside(cera_map_t *parent);
 const char *cera_map_designate_argument(cera_map_t *m, int station, int port,
                                         int nth);
 
@@ -382,15 +409,6 @@ void cera_map_in_port_static_write(cera_map_t *m, int station, int port,
 /* }}} */
 
 /* {{{ 042 — reading a description */
-typedef struct map_instance {
-    int *station;
-    int  count;
-} cera_map_instance_t;
-
-typedef struct map_part {
-    int entrance;
-    int result;
-} cera_map_part_t;
 
 cera_map_t *cera_map_load_file(const char *path, int n_workers);
 cera_map_t *cera_map_load_salvage(const char *path, int n_workers);
@@ -398,10 +416,15 @@ cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path);
 int  cera_map_instance_entrance(cera_map_t *m, const cera_map_instance_t *in, int nth);
 int  cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int nth);
 void cera_map_instance_free(cera_map_instance_t *in);
-const char *cera_map_add_part(cera_map_t *m, const char *what, cera_map_part_t *out);
+const char *cera_map_add_part(cera_map_t *m, const char *what, int *part);
 
-const char *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, int from_port,
-                              cera_map_part_t to, int to_port);
+const char *cera_map_join(cera_map_t *m, int from, int result,
+                          int to, int argument);
+
+int  cera_map_part_door(cera_map_t *m, int part, int nth, int facing_in,
+                        int *station, int *port);
+
+const char *cera_map_end_part(cera_map_t *m, int part);
 
 int cera_map_seed_count(cera_map_t *m);
 /* }}} */

@@ -2,46 +2,31 @@
 
 ## Current behavior
 
-**Adding a box and adding a map are one operation with two return
-shapes.** Adding a part resolves its argument as either a box compiled
-into the binary or a description on disk, refuses when it is both, and
-then does the appropriate thing. That much is the intended design and
-it works.
+**Built.** Placing a box and placing a map both hand back a **part
+number**, and the caller cannot tell which it placed.
 
-**But the two hand back different things.** A box becomes one station,
-and its way in and way out are that station. A map is instantiated and
-then reduced to a pair:
+A number rather than the list itself, because a part travels on a wire
+when a map builds a map and a wire carries values. The engine keeps the
+receipts in a table that only grows and never moves a row.
 
-```c
-typedef struct map_part {
-    int entrance;
-    int result;
-} cera_map_part_t;
-```
+**A box's doors are its ports; a map's are its marks.** A part naming
+one station whose ports carry no marks is a box, so its argument N is
+input port N and its result N is output port N. Those are not two rules
+with a fallback between them — they are one rule, *the doors are
+wherever the description put them*, and a description of one station
+puts them on that station.
 
-Two integers. **A map with two entrances has the second one looked up
-and then discarded**, because there is no field to put it in. So a
-two-argument map cannot be composed through this path at all; a caller
-has to drop to instantiation and walk the station list itself.
+Wiring takes two part numbers and two door numbers, and is the same
+call for every combination of box and map on either end.
 
-**The receipt already exists and is already right.** Instantiating hands
-back every station it created, in the order the description declared
-them:
-
-```c
-typedef struct map_instance {
-    int *station;
-    int  count;
-} cera_map_instance_t;
-```
-
-It is a note to the caller about where things landed, freed once wiring
-is done, and nothing in the running program refers to it.
-
-**So the asymmetry is the whole difference between a box and a map.**
-Not how many values go in, not how many come out, not what runs when —
-what the act of placing something hands back. Because the shapes differ,
-everything downstream has to know which it is holding.
+**One caveat the change exposed rather than created.** Placing a map
+brings its door marks with it, and an unwired one becomes a way out of
+the program that placed it. That is correct — an unwired marked port is
+a way out from outside, whoever put it there — and it means a caller
+who places a map and ignores its result has a door it did not ask for.
+Wiring the result somewhere, even to a sink, says what was meant.
+Scoping the numbers per receipt would remove the surprise and is not
+built.
 
 ## Intended behavior
 

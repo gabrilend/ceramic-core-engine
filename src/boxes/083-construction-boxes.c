@@ -97,10 +97,14 @@ static void refused(cera_map_t *m, const char *what, const char *why)
 /*
  * **What a program is made of, from a program's point of view.**
  *
- * Where values go in and where they come out. For a map brought
- * inside this one those are the stations it declared as doors; for a
- * single box they are the same station, because a box's own input
- * ports are its way in and its own output port is its way out.
+ * A receipt: the number the engine gave the stations that one placing
+ * created. Placing a box and placing a map hand back the same kind of
+ * thing, which is the whole of what makes them one operation.
+ *
+ * **A number rather than the list itself**, because a part travels on
+ * a wire when a map builds a map, and a wire carries values. The
+ * engine keeps the list and never moves a row, so the number means
+ * what it meant.
  *
  * Its own name, so a port typed `part` is one somebody had to mean —
  * which buys nothing from the engine, a wire being checked by width,
@@ -112,8 +116,7 @@ static void refused(cera_map_t *m, const char *what, const char *why)
  * anybody write.
  */
 typedef struct {
-    int entrance;
-    int result;
+    int which;
 } part;
 
 /*
@@ -137,13 +140,10 @@ typedef struct {
 part program_add(program p, const char *what)
 {
     cera_map_t *m = program_of(p, "adding a part");
-    part made = { -1, -1 };
-    cera_map_part_t got;
-    const char *no = cera_map_add_part(m, what, &got);
+    part made = { -1 };
+    const char *no = cera_map_add_part(m, what, &made.which);
     if (no)
         refused(m, "a part", no);
-    made.entrance = got.entrance;
-    made.result = got.result;
     return made;
 }
 
@@ -156,13 +156,12 @@ part program_add(program p, const char *what)
  * wire has always had, so a comparator's three outcomes are reachable
  * exactly as before.
  */
-int program_connect(program p, part from, int from_port,
-                    part to, int to_port)
+int program_connect(program p, part from, int from_result,
+                    part to, int to_argument)
 {
     cera_map_t *m = program_of(p, "drawing a wire");
-    cera_map_part_t a = { from.entrance, from.result };
-    cera_map_part_t b = { to.entrance, to.result };
-    const char *no = cera_map_connect_parts(m, a, from_port, b, to_port);
+    const char *no = cera_map_join(m, from.which, from_result,
+                                   to.which, to_argument);
     if (no)
         refused(m, "a wire", no);
     return 1;
@@ -179,10 +178,12 @@ int program_set_constant(program p, part which, int port,
                          const char *text)
 {
     cera_map_t *m = program_of(p, "setting a constant");
-    /* A part's way *in* is what takes a value, whether it is a single
-     * box's own port or a brought-in map's entrance. Both read the
-     * same way: give this thing's port a value. */
-    const char *no = cera_map_configure_port(m, which.entrance, port,
+    /* The part's own port, found the way every other door is: a box's
+     * doors are its ports, and a map's are its marks. */
+    int station = -1, at = -1;
+    if (!cera_map_part_door(m, which.which, port, 1, &station, &at))
+        refused(m, "a constant", "that part has no such argument");
+    const char *no = cera_map_configure_port(m, station, at,
                                         CERA_IN_PORT_STATIC, text);
     if (no)
         refused(m, "a constant", no);
@@ -222,10 +223,16 @@ int program_set_door(program p, part which, int facing, int nth)
 {
     cera_map_t *m = program_of(p, "marking a door");
     const char *no;
-    if (facing == 1)
-        no = cera_map_designate_argument(m, which.entrance, 0, nth);
-    else if (facing == 2)
-        no = cera_map_designate_result(m, which.result, 0, nth);
+    int station = -1, at = -1;
+    if (facing == 1) {
+        if (!cera_map_part_door(m, which.which, 0, 1, &station, &at))
+            refused(m, "a door", "that part has no argument to mark");
+        no = cera_map_designate_argument(m, station, at, nth);
+    } else if (facing == 2) {
+        if (!cera_map_part_door(m, which.which, 0, 0, &station, &at))
+            refused(m, "a door", "that part has no result to mark");
+        no = cera_map_designate_result(m, station, at, nth);
+    }
     else {
         char said[128];
         snprintf(said, sizeof said,
@@ -250,7 +257,13 @@ int program_name_station(program p, part which, const char *name)
      * itself and for a brought-in map is the station a parent knows
      * about. The rest of a map's stations were named by its own
      * description and keep those names. */
-    const char *no = cera_map_name_station(m, which.entrance, name);
+    /* The station holding the part's first argument, which for a box
+     * is the box itself and for a map is wherever it put argument
+     * zero — the same resolution every other operation here uses. */
+    int station = -1, at = -1;
+    if (!cera_map_part_door(m, which.which, 0, 1, &station, &at))
+        refused(m, "a name", "that part has no argument to name it by");
+    const char *no = cera_map_name_station(m, station, name);
     if (no)
         refused(m, "a name", no);
     return 1;

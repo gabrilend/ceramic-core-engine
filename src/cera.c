@@ -199,6 +199,13 @@ static cera_out_port_t *station_out_port(cera_station_t *s, int index);
 static cera_out_port_t *station_out_port_make(cera_station_t *s, int index);
 /* }}} */
 
+/* {{{ part_remember() */
+/* Keep a receipt in the map's table and hand back its number, which is
+ * what a part is. */
+static const char *part_remember(cera_map_t *m, const cera_map_instance_t *in,
+                                 int *part);
+/* }}} */
+
 /* {{{ in_port_constant_free() */
 /* A port's constant and, for a string, the characters it points at.
  * Owned by the port and freed with the map. */
@@ -1920,26 +1927,7 @@ const char *cera_map_designate_result(cera_map_t *m, int station, int port,
 }
 /* }}} */
 
-/* {{{ cera_map_start_beside() */
-cera_map_t *cera_map_start_beside(cera_map_t *parent)
-{
-    if (!parent->pool)
-        fail("starting a program beside one that has not started itself");
-
-    cera_map_t *m = cera_map_create_empty();
-    /*
-     * The same workers, and nothing else shared. A task now says
-     * which program it belongs to, so a worker finishing one does not
-     * need to know whose pool it is running on — which is what makes
-     * this a field assignment rather than a mechanism.
-     */
-    m->pool = parent->pool;
-    m->pool_is_borrowed = 1;
-    return m;
-}
-/* }}} */
-
-/* {{{ cera_map_designate_input() */
+/* {{{ cera_map_designate_argument() */
 /*
  * **Say that this port is one of the program's arguments** (issue
  * 213a), which is the other door and the same design.
@@ -2960,9 +2948,15 @@ void cera_map_destroy(cera_map_t *m)
     cera_map_observe_stop(m);
     /* A borrowed pool belongs to the program that made it, and other
      * programs may still be running on it. */
-    if (m->pool && !m->pool_is_borrowed)
+    if (m->pool)
         cera_pool_destroy(m->pool);
     cera_map_report_shutdown(m);
+    for (int i = 0; i < m->n_parts; i++)
+        free(m->parts[i].station);
+    free(m->parts);
+    m->parts = NULL;
+    m->n_parts = 0;
+
     if (m->station_names) {
         /* Over what the array actually holds, not over the station
          * count: stations are added one at a time and the names grow
@@ -2971,6 +2965,24 @@ void cera_map_destroy(cera_map_t *m)
             free(m->station_names[i]);
         free(m->station_names);
     }
+
+    /*
+     * **The scrapyard first, and the order is the whole of it.**
+     *
+     * A removed station's ports are *filed* rather than freed, and
+     * reclaiming them is what clears the station's shim — which is what
+     * the walk below tests to decide whether a station has anything to
+     * free. Walking first would free a removed station's ports and then
+     * reclaim them a second time, because the shim it checks is still
+     * set until the sweep runs.
+     *
+     * That was reachable the moment a program could be ended by pruning
+     * its stations (issue 212a): before it, everything that removed a
+     * station happened to sweep before destroying.
+     *
+     * By now the pool is gone, so nothing can be walking any of it.
+     */
+    map_scrap_free_all(m);
 
     for (int i = 0; i < m->n_stations; i++) {
         cera_station_t *s = cera_map_station(m, i);
@@ -2994,9 +3006,6 @@ void cera_map_destroy(cera_map_t *m)
         }
         pthread_mutex_destroy(&s->mutex);
     }
-    /* Everything a rewire replaced and left filed. By now the pool is
-     * gone, so nothing can be walking any of it. */
-    map_scrap_free_all(m);
     pthread_mutex_destroy(&m->scrap_mutex);
     pthread_mutex_destroy(&m->rewire_mutex);
     for (int i = 0; i < m->n_shelves; i++)
@@ -6127,9 +6136,11 @@ void cera_map_instance_free(cera_map_instance_t *in)
  * order nobody can see; finding neither is refused naming both places
  * that were searched.
  */
-const char *cera_map_add_part(cera_map_t *m, const char *what, cera_map_part_t *out)
+const char *cera_map_add_part(cera_map_t *m, const char *what, int *part)
 {
     static _Thread_local char said[512];
+    cera_map_instance_t made = { NULL, 0 };
+    cera_map_instance_t *out = &made;
 
     if (!what || !*what)
         return "adding a part with no name";
@@ -6148,28 +6159,23 @@ const char *cera_map_add_part(cera_map_t *m, const char *what, cera_map_part_t *
     }
 
     if (box) {
-        /* A list of one. Its doors are itself. */
+        /* A list of one, and its doors are itself. */
         int at = cera_map_add_station(m);
         if (at < 0)
             return "the station table would not grow";
         cera_map_place_box(m, at, what, CERA_STATION_PLAIN);
-        out->entrance = at;
-        out->result = at;
-        return NULL;
+
+        out->station = calloc(1, sizeof *out->station);
+        if (!out->station)
+            return "out of memory placing a part";
+        out->station[0] = at;
+        out->count = 1;
+        return part_remember(m, out, part);
     }
 
     if (described) {
-        cera_map_instance_t in = cera_map_instantiate_file(m, what);
-        out->entrance = cera_map_instance_entrance(m, &in, 0);
-        out->result = cera_map_instance_result(m, &in, 0);
-        cera_map_instance_free(&in);
-        if (out->result < 0) {
-            snprintf(said, sizeof said,
-                     "'%s' declares no way out, so nothing can be taken "
-                     "from it", what);
-            return said;
-        }
-        return NULL;
+        *out = cera_map_instantiate_file(m, what);
+        return part_remember(m, out, part);
     }
 
     snprintf(said, sizeof said,
@@ -6179,37 +6185,192 @@ const char *cera_map_add_part(cera_map_t *m, const char *what, cera_map_part_t *
 }
 /* }}} */
 
-/* {{{ cera_map_connect_parts() */
+/* {{{ part_remember() */
 /*
- * **A wire from one part's way out to another part's way in**, which
- * is the only wire a composing caller ever needs to draw.
+ * **Keep a receipt and hand back its number** (issues 217a, 212a).
  *
- * For two single boxes this is the ordinary wire, because a box's
- * doors are itself. For two maps there is no seam to cross: after
- * instantiation there are stations with indices, like any others.
- *
- * The port numbers are the ones a wire has always had: which output
- * port of the producing station, and which input port of the
- * receiving one. A comparator's three outcomes are reachable this way
- * exactly as before.
+ * A part is a number rather than a pointer because a part travels on a
+ * wire when a map builds a map, and a wire carries values. The table
+ * only grows and never moves a row, so a number means what it meant —
+ * the same discipline every other index in this engine follows.
  */
-const char *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, int from_port,
-                              cera_map_part_t to, int to_port)
+static const char *part_remember(cera_map_t *m, const cera_map_instance_t *in,
+                                 int *part)
+{
+    cera_map_instance_t *grown =
+        realloc(m->parts, (size_t)(m->n_parts + 1) * sizeof *grown);
+    if (!grown)
+        return "out of memory remembering a part";
+    m->parts = grown;
+    m->parts[m->n_parts] = *in;
+    if (part)
+        *part = m->n_parts;
+    m->n_parts++;
+    return NULL;
+}
+/* }}} */
+
+/* {{{ instance_door() */
+/*
+ * **Where a receipt's nth argument or result is**, as a station and a
+ * port, or zero when it has no such door (issue 217a).
+ *
+ * **A box's doors are its ports.** A receipt naming one station whose
+ * ports carry no marks is a box: its argument N is input port N and its
+ * result N is output port N, because a box's own ports are already
+ * numbered and marking them would be writing down what counting
+ * already says.
+ *
+ * **A map's doors are its marks**, because a map's ports are scattered
+ * across several stations and nothing about their position says which
+ * argument is which. That was the whole reason for numbering them.
+ *
+ * These are not two rules with a fallback between them. They are one
+ * rule — *the doors are wherever the description put them* — and a
+ * description of one station puts them on that station.
+ */
+static int instance_door(cera_map_t *m, const cera_map_instance_t *in,
+                         int nth, int facing_in, int *station, int *port)
+{
+    if (!in || in->count <= 0)
+        return 0;
+
+    int marked = 0;
+    for (int i = 0; i < in->count; i++) {
+        cera_station_t *s = cera_map_station(m, in->station[i]);
+        if (!s->call)
+            continue;
+        for (int j = 0; j < s->n_in_ports; j++)
+            if (s->in_ports[j].argument != CERA_NOT_A_DOOR)
+                marked = 1;
+        for (cera_out_port_t *p = s->out_ports; p; p = p->next)
+            if (p->result != CERA_NOT_A_DOOR)
+                marked = 1;
+    }
+
+    if (!marked && in->count == 1) {
+        cera_station_t *s = cera_map_station(m, in->station[0]);
+        if (!s->call)
+            return 0;
+        if (facing_in) {
+            if (nth < 0 || nth >= s->n_in_ports)
+                return 0;
+            if (station) *station = in->station[0];
+            if (port)    *port = nth;
+            return 1;
+        }
+        if (nth != 0 || s->out_size == 0)
+            return 0;
+        if (station) *station = in->station[0];
+        if (port)    *port = 0;
+        return 1;
+    }
+
+    for (int i = 0; i < in->count; i++) {
+        cera_station_t *s = cera_map_station(m, in->station[i]);
+        if (!s->call)
+            continue;
+        if (facing_in) {
+            for (int j = 0; j < s->n_in_ports; j++)
+                if (s->in_ports[j].argument == nth) {
+                    if (station) *station = in->station[i];
+                    if (port)    *port = j;
+                    return 1;
+                }
+        } else {
+            int j = 0;
+            for (cera_out_port_t *p = s->out_ports; p; p = p->next, j++)
+                if (p->result == nth) {
+                    if (station) *station = in->station[i];
+                    if (port)    *port = j;
+                    return 1;
+                }
+        }
+    }
+    return 0;
+}
+/* }}} */
+
+/* {{{ cera_map_join() */
+/*
+ * **A wire from one part's nth result to another part's nth argument**,
+ * which is the only wire a composing caller ever needs to draw.
+ *
+ * For two boxes this is the ordinary wire, because a box's doors are
+ * its ports. For two maps there is no seam to cross: after placing,
+ * both are stations with indices like any others. The caller cannot
+ * tell which kind it is holding, and does not need to.
+ */
+const char *cera_map_join(cera_map_t *m, int from, int result,
+                          int to, int argument)
 {
     static _Thread_local char said[256];
 
-    if (from.result < 0) {
+    int from_station = -1, from_port = -1;
+    int to_station = -1, to_port = -1;
+
+    if (!cera_map_part_door(m, from, result, 0, &from_station, &from_port)) {
         snprintf(said, sizeof said,
-                 "wiring out of a part that has no way out");
+                 "wiring out of a part that has no result %d", result);
         return said;
     }
-    if (to.entrance < 0) {
+    if (!cera_map_part_door(m, to, argument, 1, &to_station, &to_port)) {
         snprintf(said, sizeof said,
-                 "wiring into a part that declares no way in — a program "
-                 "that takes no arguments cannot be fed");
+                 "wiring into a part that has no argument %d — a program "
+                 "that takes no arguments cannot be fed", argument);
         return said;
     }
-    return cera_map_wire(m, from.result, from_port, to.entrance, to_port);
+    return cera_map_wire(m, from_station, from_port, to_station, to_port);
+}
+/* }}} */
+
+/* {{{ cera_map_part_door() */
+/* The same question asked by part number, which is what a caller
+ * holding one has. */
+int cera_map_part_door(cera_map_t *m, int part, int nth, int facing_in,
+                       int *station, int *port)
+{
+    if (part < 0 || part >= m->n_parts)
+        return 0;
+    return instance_door(m, &m->parts[part], nth, facing_in, station, port);
+}
+/* }}} */
+
+/* {{{ cera_map_end_part() */
+/*
+ * **Ending a program is pruning its stations** (issue 212a), which is
+ * what the receipt was kept for.
+ *
+ * One sweep of the table cuts every wire naming any of them, interior
+ * wires included — a wire from one member to another is named by a
+ * member like any other, so nothing has to know it was interior.
+ *
+ * The receipt is emptied rather than removed, because a part is an
+ * index and an index means what it meant. Ending one twice is refused
+ * rather than silently doing nothing.
+ */
+const char *cera_map_end_part(cera_map_t *m, int part)
+{
+    static _Thread_local char said[160];
+
+    if (part < 0 || part >= m->n_parts) {
+        snprintf(said, sizeof said, "part %d was never placed here", part);
+        return said;
+    }
+    cera_map_instance_t *in = &m->parts[part];
+    if (in->count <= 0) {
+        snprintf(said, sizeof said, "part %d has already ended", part);
+        return said;
+    }
+
+    const char *no = cera_map_remove_stations(m, in->station, in->count);
+    if (no)
+        return no;
+
+    free(in->station);
+    in->station = NULL;
+    in->count = 0;
+    return NULL;
 }
 /* }}} */
 

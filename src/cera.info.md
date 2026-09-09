@@ -1117,37 +1117,6 @@ means the program produced at least everything that was asked for, and
 falling short of it while the pool has finished means the program ran
 dry and that was all there was.
 
-### cera_map_start_beside()
-
-```c
-cera_map_t *cera_map_start_beside(cera_map_t *parent);
-```
-
-**Start a fresh program beside this one, sharing its workers.**
-
-Composing and starting are two different acts and this is the
-second. A program started beside another has its own station table,
-its own rewiring lock, its own everything — except the pool.
-
-**You cannot wire to it**, and that is the point rather than a
-limitation. A wire is a station index and a port index, and an
-index only means anything inside one station table; two stations
-can be wired together exactly when they sit in the same table.
-Reaching a program started beside you is what its entrance is for.
-
-Which of the two you want follows from whether you want isolation.
-A composed program is one graph and a parent wires across the seam
-like it wires anything. A started one is separate, reached only
-through its doors, and a program that runs other programs wants
-that.
-
-
-**This is the within-one-processor case.** Several programs, one
-pool, one processor's cores, reaching each other only through their
-doors. The across-processors case is the same shape with a pool
-each, and it needs nothing added here — a door does not ask where
-its caller is.
-
 ### cera_map_designate_argument()
 
 ```c
@@ -1847,46 +1816,29 @@ Legal at any moment, because every operation it is made of is.
 |---|---|
 | `station` | Where each of the description's stations landed, in the order the description declared them. The engine needs it; a parent should want the doors instead. |
 
-### cera_map_part_t
+### A part is a number
 
 ```c
-typedef struct map_part {
-    int entrance;
-    int result;
-} cera_map_part_t;
+const char *cera_map_add_part(cera_map_t *m, const char *what, int *part);
 ```
 
 **Adding a box and adding a map are one operation.**
 
-A map is a list of boxes and the wiring between them; a box is a
-list of one. Adding a map walks its list, instantiates each box and
-connects them the way it says; adding a box walks a list of length
-one and connects nothing.
+A map is a list of boxes and the wiring between them; a box is a list
+of one. Adding a map walks its list, instantiates each box and connects
+them the way it says; adding a box walks a list of length one and
+connects nothing. **What comes back is the same kind of thing either
+way** — a part number — which is what makes them one operation rather
+than two that resemble each other.
 
-**A part is where values go in and where they come out.** For a map
-those are the stations it declared as doors. For a single box they
-are the same station, because a box's own input ports are its way
-in and its own output port is its way out — a box is a map of one
-station whose doors are itself.
+A number rather than the list itself, because a part travels on a wire
+when a map builds a map, and a wire carries values. The engine keeps
+the list and never moves a row, so the number means what it meant.
 
-That is what lets a handle be passed around without ever being
-taken apart: everything that consumes one takes it whole, so
-nothing has to exist whose only job is to pull a field out of it.
-
-Which kind a name refers to is **resolved rather than guessed**: a
-box lives in the binary and a description lives on disk, both are
-looked for, and finding both or neither is refused with the places
-that were searched named.
-
-| field | meaning |
-|---|---|
-| `entrance` | where values go in, or -1 if nothing may be fed |
-| `result` | where values come out |
-
-| field | meaning |
-|---|---|
-| `entrance` | where values go in, or -1 if nothing may be fed |
-| `result` | where values come out |
+Which kind the name refers to is resolved rather than guessed: a box
+lives in the binary and a description lives on disk, both are looked
+for, and finding both or neither is refused naming the places that were
+searched.
 
 ### cera_map_load_file()
 
@@ -1951,18 +1903,67 @@ int  cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int 
 void cera_map_instance_free(cera_map_instance_t *in);
 ```
 
-### cera_map_add_part()
+### cera_map_join()
 
 ```c
-const char *cera_map_add_part(cera_map_t *m, const char *what, cera_map_part_t *out);
+const char *cera_map_join(cera_map_t *m, int from, int result,
+                          int to, int argument);
 ```
 
-### cera_map_connect_parts()
+**A wire from one part's nth result to another part's nth argument**,
+which is the only wire a composing caller ever needs to draw.
+
+For two boxes this is the ordinary wire, because a box's doors are its
+ports. For two maps there is no seam to cross: after placing, both are
+stations with indices like any others. The caller cannot tell which
+kind it is holding, and does not need to.
+
+### cera_map_part_door()
 
 ```c
-const char *cera_map_connect_parts(cera_map_t *m, cera_map_part_t from, int from_port,
-                              cera_map_part_t to, int to_port);
+int cera_map_part_door(cera_map_t *m, int part, int nth, int facing_in,
+                       int *station, int *port);
 ```
+
+Where a part's nth argument or result is, as a station and a port, or
+zero when it has no such door.
+
+**A box's doors are its ports.** A part naming one station whose ports
+carry no marks is a box: its argument N is input port N and its result
+N is output port N, because a box's ports are already numbered and
+marking them would be writing down what counting already says.
+
+**A map's doors are its marks**, because a map's ports are scattered
+across several stations and nothing about their position says which
+argument is which.
+
+Those are not two rules with a fallback between them. They are one —
+*the doors are wherever the description put them* — and a description
+of one station puts them on that station.
+
+### cera_map_end_part()
+
+```c
+const char *cera_map_end_part(cera_map_t *m, int part);
+```
+
+**Ending a program is pruning its stations**, which is what the receipt
+was kept for.
+
+One sweep of the table cuts every wire naming any of them, interior
+wires included — a wire from one member to another is named by a member
+like any other, so nothing has to know it was interior.
+
+The receipt is emptied rather than removed, because a part is an index
+and an index means what it meant. Ending one twice is refused rather
+than silently doing nothing.
+
+**One caveat worth knowing.** Placing a map brings its door marks with
+it, and an unwired one becomes a way out of the program that placed it
+— which is right, an unwired marked port being a way out from outside
+whoever put it there, and is also how a caller ends up with a door it
+did not ask for. Wire a placed map's result somewhere, even to a sink,
+to say what was meant.
 
 ### cera_map_seed_count()
 
