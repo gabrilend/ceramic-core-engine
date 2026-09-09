@@ -59,6 +59,28 @@ typedef struct desc_input {
      * station simply never becomes ready. */
     int   is_none;
     /*
+     * **A wire, named from the receiving end** — `in 0 - feed.0`
+     * (issue 601a). Every wire is written twice, once on each end, and
+     * the loader refuses when the two declarations disagree; reading
+     * one station then tells the whole truth about that station with
+     * no scanning.
+     *
+     * The dash is the same dash. It has always been an arrow, and the
+     * keyword says which way it points: on an `out` line away, on an
+     * `in` line toward. `in 3 -` keeps its meaning exactly — an arrow
+     * from nothing — because the form is unchanged and only the
+     * source is absent.
+     *
+     * Nothing here reaches the running program. The second
+     * declaration is checked while loading and then dropped; a wire
+     * still exists once, as a destination record on the producing
+     * station's output port, because that is the only direction
+     * delivery ever asks about.
+     */
+    int   is_source;
+    char *source_station;
+    int   source_port;
+    /*
      * **Values waiting in the buffer**, written `[a, b, c]` (issue
      * 712). This is the one form that describes what a program
      * *holds* rather than what it is shaped like — the difference

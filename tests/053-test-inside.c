@@ -81,8 +81,10 @@ static void test_buffer_report_names_the_right_slot(void)
          * to declare (issue 209). The pairer is the station whose
          * value is the point of the graph. */
         "station pairer add p result\n"
+        "  in 0 - feeder.0\n"
         "  out 0 - drain.0\n"
-        "station drain swallow p\n");
+        "station drain swallow p\n"
+        "  in 0 - pairer.0\n");
     write_text(map_path, map_text);
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
@@ -126,8 +128,10 @@ static void test_station_counts(void)
         "station head seven p\n"
         "  out 0 - mid.0\n"
         "station mid double_it p result\n"
+        "  in 0 - head.0\n"
         "  out 0 - sink.1\n"
         "station sink write_int_file p\n"
+        "  in 1 - mid.0\n"
         "  in 0 $0\n", out_path);
     write_text(map_path, map_text);
 
@@ -174,14 +178,18 @@ static void test_round_trip(void)
         "station first seven p\n"
         "  out 0 - judge.0\n"
         "station judge keep c\n"
+        "  in 0 - first.0\n"
         "  in 1 $0\n"
         "  out 2 - boost.0\n"
         "station boost add p result\n"
+        "  in 0 - judge.2\n"
         "  in 1 $2\n"
         "  out 0 - deal.0\n"
         "station deal keep i\n"
+        "  in 0 - boost.0\n"
         "  out 0 - sink.1\n"
         "station sink write_int_file p\n"
+        "  in 1 - deal.0\n"
         "  in 0 $1\n", out_path);
     write_text(map_path, map_text);
 
@@ -233,8 +241,10 @@ static void test_rewire_mid_run(void)
         "station head seven p\n"
         "  out 0 - hold.0\n"
         "station hold keep p result\n"
+        "  in 0 - head.0\n"
         "  out 0 - writer_a.1\n"
         "station writer_a write_int_file p\n"
+        "  in 1 - hold.0\n"
         "  in 0 $0\n"
         "station writer_b write_int_file p\n"
         "  in 0 $1\n", a_path, b_path);

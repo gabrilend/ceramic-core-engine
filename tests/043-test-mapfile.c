@@ -258,6 +258,7 @@ static void test_a_program_is_a_text_file(void)
         "  out 0 - decide.0\n"
         "\n"
         "station decide keep c\n"
+        "  in 0 - head.0\n"
         "  in 1 $1\n"
         "  out 2 - doubler.0\n"
         "\n"
@@ -266,9 +267,11 @@ static void test_a_program_is_a_text_file(void)
          * with (issue 209). Its value goes on to the sink as well —
          * being the way out adds a rule only when nothing is wired. */
         "station doubler double_it p result\n"
+        "  in 0 - decide.2\n"
         "  out 0 - sink.1\n"
         "\n"
         "station sink write_int_file p\n"
+        "  in 1 - doubler.0\n"
         "  in 0 $0\n",
         result_path);
     write_text(map_path, map_text);
@@ -314,9 +317,11 @@ static void a_box_can_be_addressed_three_ways(void)
         "  out 0 - middle.0\n"
         /* A basename and a function. */
         "station middle 029-demo-boxes.c:double_it p\n"
+        "  in 0 - source.0\n"
         "  out 0 - answer.0\n"
         /* The whole path and a function. */
-        "station answer src/boxes/029-demo-boxes.c:keep p result\n");
+        "station answer src/boxes/029-demo-boxes.c:keep p result\n"
+        "  in 0 - middle.0\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
     check(m->n_stations == 3, "all three forms placed a box");
@@ -464,11 +469,14 @@ static void the_keywords_are_not_reserved(void)
         "station in seven p\n"
         "  out 0 - out.0\n"
         "station out add p result\n"
+        "  in 0 - in.0\n"
         "  in 1 $0\n"
         "  out 0 - statics.0\n"
         "station statics double_it p\n"
+        "  in 0 - out.0\n"
         "  out 0 - station.0\n"
-        "station station keep p\n");
+        "station station keep p\n"
+        "  in 0 - statics.0\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
     check(m->n_stations == 4,
@@ -537,7 +545,8 @@ static void test_every_refusal(void)
     expect_death_saying(
         "station head seven p\n"
         "  out 0 - other.5\n"
-        "station other double_it p\n",
+        "station other double_it p\n"
+        "  in 5 - head.0\n",
         /* The refusal moved into the wiring operation (issue 210g)
          * and gained the box's name on the way, which is what let the
          * loader stop keeping a second copy of this check. What is
@@ -554,7 +563,8 @@ static void test_every_refusal(void)
     expect_death_saying(
         "station head seven p\n"
         "  out 0 - wrong.1\n"
-        "station wrong mix p\n",
+        "station wrong mix p\n"
+        "  in 1 - head.0\n",
         /* Both ends, by position and by size (issues 311b, 311c).
          * A type name is not what makes a wire legal or illegal — the
          * width is — so the message points at the two places that
@@ -618,6 +628,7 @@ static void test_every_refusal(void)
         "station head seven p result\n"
         "  out 0 - eater.0\n"
         "station eater double_it p\n"
+        "  in 0 - head.0\n"
         "  in 0 -\n",
         "that port is a port with no source yet",
         "an arrow onto a port with no source was accepted");

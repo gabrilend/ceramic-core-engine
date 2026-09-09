@@ -2,32 +2,39 @@
 
 ## Current behavior
 
-**A wire is stated once, by the station producing it.** The map file
-says where a value goes and never says where it came from:
+**Built.** Every wire is written twice in a map file, and the loader
+refuses when the two declarations disagree.
 
-```
-station feed keep p entry
-  out 0 - total.0
+Four mistakes are told apart rather than lumped together, because they
+are four different things to have done: an arrow with no receiving end,
+a receiving end with no arrow, two ends naming different ports, and a
+source naming a station the map does not declare. The whole file is
+checked before anything is refused, so somebody fixing a map sees every
+mismatch at once.
 
-station total add p
-  out 0 - seen.0
-```
+**`-` on an input line still means no source when nothing follows it.**
+The dash was always the arrow and the keyword always said which way it
+pointed, so the two readings are one form with and without its far end.
 
-Reading `total` tells you nothing about what feeds it. To learn that, a
-reader scans every other station in the file looking for an arrow that
-names `total`, which in a large map means reading the whole file to
-understand one station.
+**Nothing changed at run time.** The second declaration is checked while
+loading and then dropped; a wire still exists once, as a destination
+record on the producing station's output port. An input port still has
+no field naming its source, because delivery only ever asks *where does
+this value go*.
 
-**`-` on an input line means no source at all.** `in 3 -` says port 3
-has nowhere for a value to come from — a port on a station still being
-built. It is an arrow pointing at nothing, which is why it shares the
-character with the arrow on an output line.
+**The dump writes both ends**, derived on the spot by asking every
+station what its output ports point at — the same sweep removal does,
+for the same reason. Derived rather than remembered means those lines
+cannot disagree with the wires they describe. Without this a dump would
+produce a file its own reader refuses.
 
-**At run time the wire genuinely exists once**, as an entry in the
-destination set on the producing station's output port. An input port
-has no field naming its source and never needed one: delivery only ever
-asks *where does this value go*, and that is the direction the data
-structure is built for.
+**A migration tool came with it**, because five maps and eight test
+files were suddenly missing half their wires, and hand-editing
+forty-three of them is how a mistake gets in. It reads the arrows a map
+already has and writes the receiving ends back into the file, leaving
+every existing line untouched — including a mode for map text embedded
+in C string literals, which is how every test in this project writes a
+map.
 
 ## Intended behavior
 

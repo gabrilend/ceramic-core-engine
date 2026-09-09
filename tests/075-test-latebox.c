@@ -461,7 +461,8 @@ static void a_dump_reloads_in_a_fresh_process(const char *self)
         "  in 0 $0\n"
         "  out 0 - keeper.0\n"
         "\n"
-        "station keeper keep p result\n");
+        "station keeper keep p result\n"
+        "  in 0 - grower.0\n");
     FILE *w = fopen(map_path, "w");
     check(w != NULL, "the grown program could be written as text");
     if (w) {

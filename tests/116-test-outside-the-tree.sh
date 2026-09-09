@@ -70,6 +70,7 @@ station feed carry p entry
   out 0 - total.0
 
 station total add_up p result
+  in 0 - feed.0
   in 1 = 30
 MAP
 

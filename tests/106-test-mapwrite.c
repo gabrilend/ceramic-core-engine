@@ -179,6 +179,7 @@ int main(void)
         "  out 0 - sum.0\n"
         "\n"
         "station sum add p result\n"
+        "  in 0 - gate.0\n"
         "  in 1 = 5\n");
 
     round_trips("a statics section and the ports pointing into it survived",
@@ -204,10 +205,13 @@ int main(void)
         "  out 2 - c.0\n"
         "\n"
         "station a keep p\n"
+        "  in 0 - spread.0\n"
         "\n"
         "station b keep p\n"
+        "  in 0 - spread.1\n"
         "\n"
-        "station c keep p\n");
+        "station c keep p\n"
+        "  in 0 - spread.2\n");
 
     round_trips("values waiting in a buffer survived, inner commas and all",
         "station gate keep p entry\n"

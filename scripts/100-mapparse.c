@@ -204,13 +204,39 @@ static void handle_in(parse_state_t *st, const char *rest)
         if (!parse_number(ref + 1, &in->static_id))
             die_parse(st->path, st->line, "expected a number after '$'");
     } else if (ref[0] == '-' && !ref[1]) {
-        char extra[8];
-        next_word(after_ref, extra, sizeof extra);
-        if (extra[0])
+        /*
+         * **A dash with a source after it is a wire; a dash alone is
+         * an arrow from nothing** (issue 601a). The dash has always
+         * been the arrow and the keyword has always said which way it
+         * points — away on an `out` line, toward on an `in` line — so
+         * the two readings are one form with and without its far end.
+         */
+        char source[192], extra[8];
+        const char *after_source = next_word(after_ref, source,
+                                             sizeof source);
+        next_word(after_source, extra, sizeof extra);
+
+        if (!source[0]) {
+            in->is_none = 1;
+        } else if (extra[0]) {
             die_parse(st->path, st->line,
                       "unexpected trailing words on an 'in' line — a dash "
-                      "means this port has no source, so nothing follows it");
-        in->is_none = 1;
+                      "takes one source, written station.port, or nothing "
+                      "at all");
+        } else {
+            char *dot = strrchr(source, '.');
+            if (!dot || dot == source || !dot[1])
+                die_parse(st->path, st->line,
+                          "expected the source as station.port, like "
+                          "feed.0 — or nothing after the dash, meaning "
+                          "this port has no source yet");
+            *dot = 0;
+            in->is_source = 1;
+            in->source_station = copy_string(source, st->path, st->line);
+            if (!parse_number(dot + 1, &in->source_port))
+                die_parse(st->path, st->line,
+                          "expected a port number after the dot");
+        }
     } else if (ref[0] == '[') {
         /*
          * **Values waiting in the buffer** (issue 712), the form that
@@ -677,9 +703,10 @@ void mapfile_free(map_description_t *d)
         desc_input_t *in = s->inputs;
         while (in) {
             desc_input_t *next = in->next;
-            /* Null unless the line carried its value inline; free
-             * copes either way. */
+            /* Both null unless the line carried a value inline or
+             * named a source; free copes either way. */
             free(in->text);
+            free(in->source_station);
             free(in);
             in = next;
         }

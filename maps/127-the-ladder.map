@@ -31,16 +31,22 @@ station feed cycle_thirty p entry
   out 0 - double.0
 
 station double double_it p
+  in 0 - feed.0
   out 0 - under_ten.0
 
 station under_ten keep c
+  in 0 - double.0
   in 1 = 19
   out 0 - collect.0
   out 2 - under_twenty.0
 
 station under_twenty keep c
+  in 0 - under_ten.2
   in 1 = 39
   out 0 - collect.1
   out 2 - collect.2
 
 station collect three_way p result
+  in 0 - under_ten.0
+  in 1 - under_twenty.0
+  in 2 - under_twenty.2

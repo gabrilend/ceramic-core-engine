@@ -6472,6 +6472,65 @@ void cera_map_dump(cera_map_t *m, FILE *out)
             if (sl->capacity != CERA_IN_PORT_DEFAULT_CAPACITY)
                 snprintf(depth, sizeof depth, "x%d ", sl->capacity);
 
+            /*
+             * **The receiving end of every wire that arrives here**
+             * (issue 601a). A wire is written twice in the format, so
+             * a dump that wrote only the arrows leaving each station
+             * would produce a file its own reader refuses.
+             *
+             * Derived, every time, by asking every station what its
+             * output ports point at — which is the same sweep removal
+             * does, for the same reason: a wire lives on the producing
+             * side and an input port carries nothing saying what feeds
+             * it. Derived rather than remembered means these lines
+             * cannot disagree with the wires they describe.
+             *
+             * Written before the port's own line, because they say
+             * where the port's values come from and the line after
+             * says what the port is.
+             */
+            int sources = 0;
+            for (int pass = 0; pass < 2; pass++) {
+                int seen = 0;
+                for (int from = 0; from < m->n_stations; from++) {
+                    cera_station_t *feeder = cera_map_station(m, from);
+                    if (!feeder->call)
+                        continue;
+                    int from_port = 0;
+                    for (cera_out_port_t *p = feeder->out_ports; p;
+                         p = p->next, from_port++) {
+                        cera_dest_set_t *set = out_port_dests(p);
+                        for (int d = 0; set && d < set->n; d++) {
+                            if (set->items[d].station != i
+                                || set->items[d].port != j)
+                                continue;
+                            if (pass == 0) {
+                                sources++;
+                                continue;
+                            }
+                            /* The derived facts ride on the last of
+                             * these rather than standing alone, so a
+                             * port with wires reads as lines about
+                             * that port rather than as lines with a
+                             * note wedged between them. */
+                            seen++;
+                            if (seen == sources
+                                && sl->kind == CERA_IN_PORT_RING
+                                && !depth[0])
+                                fprintf(out,
+                                        "  in %d - %s.%d   # buffer, %s, "
+                                        "%d bytes, %d slots\n",
+                                        j, written[from], from_port,
+                                        sl->type_name ? sl->type_name : "?",
+                                        sl->elem_size, sl->capacity);
+                            else
+                                fprintf(out, "  in %d - %s.%d\n",
+                                        j, written[from], from_port);
+                        }
+                    }
+                }
+            }
+
             switch (sl->kind) {
             case CERA_IN_PORT_STATIC: {
                 /* The value itself, spoken from its bytes rather than
@@ -6535,7 +6594,9 @@ void cera_map_dump(cera_map_t *m, FILE *out)
                     fprintf(out, "  in %d %s  # buffer, %s, %d bytes\n",
                             j, depth, sl->type_name ? sl->type_name : "?",
                             sl->elem_size);
-                else
+                else if (!sources)
+                    /* Nothing feeds this port, so there is no line to
+                     * hang the facts on and they stand alone. */
                     fprintf(out,
                             "  # port %d: buffer, %s, %d bytes, %d slots\n",
                             j, sl->type_name ? sl->type_name : "?",

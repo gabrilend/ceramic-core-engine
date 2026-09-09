@@ -285,6 +285,7 @@ int main(void)
         "station source seven p\n"
         "  out 0 - adder.0\n"
         "station adder add p\n"
+        "  in 0 - source.0\n"
         "  in 1 = 1000\n"
         "  out 0 - twice.0\n"
         "  out 0 - waiting.0\n"
@@ -293,8 +294,10 @@ int main(void)
          * the file says it in a fourth word, the surface says it in a
          * call, and the dumps have to come out the same. */
         "station twice double_it p result\n"
+        "  in 0 - adder.0\n"
         "  in 0 x64\n"
         "station waiting add p\n"
+        "  in 0 - adder.0\n"
         "  in 1 -\n";
     FILE *f = fopen(map_path, "w");
     if (!f) {

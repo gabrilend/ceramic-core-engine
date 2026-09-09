@@ -22,17 +22,20 @@ statics
   3 = { 5, 2.0, { 0, 0, 0 }, "hey there", 2 }
 
 station adder math.c:add p
+  in 0 - reader.0
   in 1 $0
   out 0 - printer.0
   out 0 - logger.0
 
 station depth compare.c:measure c
+  in 0 - adder.0
   in 1 $1
   out 0 - shallow.0
   out 1 - exact.0
   out 2 - deep.0
 
 station split route.c:spread i
+  in 0 - depth.0
   out 0 - poet.0
   out 1 - mailer.0
 
@@ -41,9 +44,20 @@ station reader io.c:read_config p
   out 0 - config.0
 
 station config io.c:load p
-  in 0 $3
+  in 0 - reader.0
   in 1 -
+  in 2 $3
 ```
+
+Every wire appears twice — `reader` says its port zero feeds `config`,
+and `config` says its port zero is fed by `reader`. Reading one station
+tells you what it takes and what it gives without looking anywhere
+else.
+
+The stations this fragment sends values to and does not declare —
+`printer`, `logger`, `shallow`, `poet` — would each carry their own
+`in` line in a whole file. It is showing the forms, not a program that
+would load.
 
 ## Every line announces itself
 
@@ -491,6 +505,48 @@ out 0 - printer.0
 Port zero of this station delivers to port zero of the station named
 `printer`. Repeat the line to fan out; one port may carry any number of
 destinations.
+
+**And the station at the other end says the same thing.** Every wire
+appears twice, once on each end:
+
+```
+station adder math.c:add p
+  out 0 - printer.0
+
+station printer io.c:show p
+  in 0 - adder.0
+```
+
+Reading one station now tells you the whole truth about that station.
+Before this, an `in` line said only what a port *held*, never what fed
+it, so learning where a value came from meant scanning every other
+station in the file for an arrow that named this one — in a large map,
+reading the whole file to understand one station.
+
+**The loader refuses when the two disagree**, naming both stations and
+saying which line to add. Four mistakes are told apart, because they
+are four different things to have done: an arrow with no receiving end,
+a receiving end with no arrow, two ends naming different ports, and a
+source naming a station the map does not declare.
+
+**The dash is the same dash.** It has always been an arrow, and the
+keyword says which way it points — away on an `out` line, toward on an
+`in` line. `in 3 -` keeps its meaning exactly: an arrow from nothing.
+
+**Fan-in repeats the `in` line**, the way fan-out repeats the `out`
+line. Two wires into one port are two lines with the same port number.
+
+**A constant gains no counterpart.** `in 1 = 5` has no producing
+station, so there is nothing to write on the other side. A port is fed
+by exactly one of: a constant, one or more wires, or nothing.
+
+**Nothing of this reaches the running program.** The second declaration
+is checked while loading and then dropped. At run time a wire still
+exists once, as a destination record on the producing station's output
+port, because that is the only direction delivery ever asks about — and
+two structures that can disagree is what the format is deliberately
+paying for here, in the one place it can be paid off before anything
+runs.
 
 An arrow whose destination port holds a static **overwrites that
 static** rather than queueing into a ring buffer — so a value can

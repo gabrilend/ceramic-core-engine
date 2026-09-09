@@ -19,7 +19,10 @@ station feed src/boxes/029-demo-boxes.c:keep p entry
   out 0 - total.0
 
 station total src/boxes/029-demo-boxes.c:add p
+  in 0 - feed.0
+  in 1 - total.0
   out 0 - total.1
   out 0 - seen.0
 
 station seen src/boxes/029-demo-boxes.c:keep p result
+  in 0 - total.0

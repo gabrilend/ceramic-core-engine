@@ -129,7 +129,14 @@ char *mapfile_write(const map_description_t *d)
             if (in->depth > 0)
                 snprintf(depth, sizeof depth, "x%d ", in->depth);
 
-            if (in->is_none)
+            if (in->is_source)
+                /* The receiving end of a wire (issue 601a). The same
+                 * dash as an arrow leaving a station, because it is
+                 * the same arrow — the keyword says which way it
+                 * points. */
+                add(&o, "  in %d %s- %s.%d\n", in->port, depth,
+                    in->source_station, in->source_port);
+            else if (in->is_none)
                 add(&o, "  in %d %s-\n", in->port, depth);
             else if (in->is_waiting)
                 add(&o, "  in %d %s[%s]\n", in->port, depth, in->text);

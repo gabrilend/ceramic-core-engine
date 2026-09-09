@@ -117,6 +117,7 @@ static void work_in_flight_survives(void)
         "  out 0 - adder.0\n"
         "\n"
         "station adder add p result\n"
+        "  in 0 - gate.0\n"
         "  in 1 -\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
@@ -190,6 +191,7 @@ static void the_revived_program_finishes_the_work(void)
         "  out 0 - adder.0\n"
         "\n"
         "station adder add p result\n"
+        "  in 0 - gate.0\n"
         "  in 1 -\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
@@ -585,8 +587,11 @@ static void an_iterator_remembers_where_it_was(void)
         "  out 2 - third.0\n"
         "\n"
         "station first keep p result\n"
+        "  in 0 - spread.0\n"
         "station second keep p\n"
-        "station third keep p\n");
+        "  in 0 - spread.1\n"
+        "station third keep p\n"
+        "  in 0 - spread.2\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
 
@@ -644,7 +649,8 @@ static void draining_produces_a_complete_capture(void)
         "station gate keep p entry\n"
         "  out 0 - twice.0\n"
         "\n"
-        "station twice double_it p result\n");
+        "station twice double_it p result\n"
+        "  in 0 - gate.0\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
     for (int v = 0; v < 5; v++) {
@@ -698,7 +704,8 @@ static void an_incomplete_capture_says_so_and_is_refused(void)
         "station gate keep p entry\n"
         "  out 0 - stuck.0\n"
         "\n"
-        "station stuck wedge p result\n");
+        "station stuck wedge p result\n"
+        "  in 0 - gate.0\n");
 
     pid_t child = fork();
     if (child == 0) {
@@ -767,7 +774,8 @@ static void reviving_a_lossy_capture_is_refused(const char *self)
         "station gate keep p entry\n"
         "  out 0 - twice.0\n"
         "\n"
-        "station twice double_it p result\n");
+        "station twice double_it p result\n"
+        "  in 0 - gate.0\n");
 
     char cmd[1024];
     snprintf(cmd, sizeof cmd, "%s --load-lossy %s", self, lossy_path);
@@ -825,7 +833,8 @@ static void a_grown_program_captures_whole(void)
         "station gate keep p entry\n"
         "  out 0 - four.0\n"
         "\n"
-        "station four quadruple p result\n");
+        "station four quadruple p result\n"
+        "  in 0 - gate.0\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
     int value = 3;

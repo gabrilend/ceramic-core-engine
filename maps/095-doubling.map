@@ -13,12 +13,15 @@ station gate keep p entry
   out 0 - adder.0
 
 station adder add p
+  in 0 - gate.0
   in 1 = 1000
   out 0 - twice.0
   out 0 - waiting.0
 
 station twice double_it p result
+  in 0 - adder.0
   in 0 x64
 
 station waiting add p
+  in 0 - adder.0
   in 1 -

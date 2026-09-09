@@ -722,6 +722,169 @@ static int map_station_count(const char *path)
 }
 /* }}} */
 
+/* {{{ static const desc_station_t *station_named() */
+/* The station a name refers to, or null. Names are unique within one
+ * file — the reader refuses a second station with the same name — so
+ * the first match is the only one. */
+static const desc_station_t *station_named(const map_description_t *md,
+                                           const char *name)
+{
+    for (const desc_station_t *s = md->stations; s; s = s->next)
+        if (strcmp(s->name, name) == 0)
+            return s;
+    return NULL;
+}
+/* }}} */
+
+/* {{{ static int declared_by_outputs() */
+/*
+ * How many `out` lines in this description draw the wire
+ * `from.from_port -> to.to_port`. Counted rather than merely looked
+ * for, because "the two ends agree" has to mean agree — a wire written
+ * twice on one side and once on the other is a disagreement even
+ * though both sides mention it.
+ */
+static int declared_by_outputs(const map_description_t *md,
+                               const char *from, int from_port,
+                               const char *to, int to_port)
+{
+    int n = 0;
+    for (desc_station_t *s = md->stations; s; s = s->next) {
+        if (strcmp(s->name, from) != 0)
+            continue;
+        for (desc_output_t *out = s->outputs; out; out = out->next)
+            if (out->port == from_port && out->dest_port == to_port
+                && strcmp(out->dest_station, to) == 0)
+                n++;
+    }
+    return n;
+}
+/* }}} */
+
+/* {{{ static int declared_by_inputs() */
+/* The same wire, counted from the receiving side. */
+static int declared_by_inputs(const map_description_t *md,
+                              const char *from, int from_port,
+                              const char *to, int to_port)
+{
+    int n = 0;
+    for (desc_station_t *s = md->stations; s; s = s->next) {
+        if (strcmp(s->name, to) != 0)
+            continue;
+        for (desc_input_t *in = s->inputs; in; in = in->next)
+            if (in->is_source && in->port == to_port
+                && in->source_port == from_port
+                && strcmp(in->source_station, from) == 0)
+                n++;
+    }
+    return n;
+}
+/* }}} */
+
+/* {{{ static void check_both_ends_agree() */
+/*
+ * **Every wire is written twice, once on each end, and the two have to
+ * say the same thing** (issue 601a).
+ *
+ * What it buys: reading one station tells the whole truth about that
+ * station. Before this a station's `in` lines said only what it held,
+ * never what fed it, so learning where a value came from meant scanning
+ * every other station in the file for an arrow that named this one.
+ *
+ * What it costs: a wire is a fact in two places, which is exactly the
+ * shape this project spends its time deleting. It is affordable only
+ * because of what happens next — the second declaration is checked here
+ * and then dropped, so nothing downstream of loading can be told two
+ * different things. At run time a wire still exists once.
+ *
+ * Both directions are walked, because the two failures are different
+ * mistakes and a reader wants to be told which they made: an `out`
+ * with no `in` is a wire whose destination does not admit to being fed,
+ * and an `in` with no `out` is a wire nobody draws.
+ *
+ * The whole file is checked before anything is refused, so somebody
+ * fixing a map sees every mismatch at once rather than one per run.
+ */
+static void check_both_ends_agree(const map_description_t *md,
+                                  const char *path)
+{
+    int faults = 0;
+
+    for (desc_station_t *s = md->stations; s; s = s->next) {
+        for (desc_output_t *out = s->outputs; out; out = out->next) {
+            /*
+             * An arrow at a station that does not exist is a different
+             * mistake with a better message, and the wire walk below
+             * already says it. Telling somebody their nonexistent
+             * station failed to declare its end would be answering a
+             * question they did not ask.
+             */
+            if (!station_named(md, out->dest_station))
+                continue;
+            int said_out = declared_by_outputs(md, s->name, out->port,
+                                               out->dest_station,
+                                               out->dest_port);
+            int said_in = declared_by_inputs(md, s->name, out->port,
+                                             out->dest_station,
+                                             out->dest_port);
+            if (said_out == said_in)
+                continue;
+            fprintf(stderr,
+                    "generator: %s:%d: '%s' says its port %d feeds "
+                    "'%s.%d', and '%s' does not say so — every wire is "
+                    "written at both ends, so add 'in %d - %s.%d' to "
+                    "station '%s'\n",
+                    path, out->line, s->name, out->port,
+                    out->dest_station, out->dest_port, out->dest_station,
+                    out->dest_port, s->name, out->port, out->dest_station);
+            faults++;
+        }
+    }
+
+    for (desc_station_t *s = md->stations; s; s = s->next) {
+        for (desc_input_t *in = s->inputs; in; in = in->next) {
+            if (!in->is_source)
+                continue;
+            /*
+             * The mirror of the arrow into the void, and it has no
+             * other check to fall to — nothing else in the file ever
+             * reads a source name, so this is the only place it can
+             * be told it names nobody.
+             */
+            if (!station_named(md, in->source_station)) {
+                fprintf(stderr,
+                        "generator: %s:%d: '%s' says its port %d is fed "
+                        "by '%s', which this map does not declare\n",
+                        path, in->line, s->name, in->port,
+                        in->source_station);
+                faults++;
+                continue;
+            }
+            int said_out = declared_by_outputs(md, in->source_station,
+                                               in->source_port,
+                                               s->name, in->port);
+            int said_in = declared_by_inputs(md, in->source_station,
+                                             in->source_port,
+                                             s->name, in->port);
+            if (said_out == said_in)
+                continue;
+            fprintf(stderr,
+                    "generator: %s:%d: '%s' says its port %d is fed by "
+                    "'%s.%d', and '%s' does not say so — every wire is "
+                    "written at both ends, so add 'out %d - %s.%d' to "
+                    "station '%s'\n",
+                    path, in->line, s->name, in->port,
+                    in->source_station, in->source_port, in->source_station,
+                    in->source_port, s->name, in->port, in->source_station);
+            faults++;
+        }
+    }
+
+    if (faults)
+        exit(65);
+}
+/* }}} */
+
 /* {{{ static void emit_maps() */
 /*
  * **A map compiled into the calls it describes** (issue 311d).
@@ -959,8 +1122,14 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
             }
         }
 
+        /* Both ends of every wire agree, or nothing is drawn. */
+        check_both_ends_agree(md, maps[mi]);
+
         /* Every wire, after every station exists — which is all that
-         * survives of the reader's two passes. */
+         * survives of the reader's two passes. Drawn from the `out`
+         * lines alone: the `in` lines have already been checked to say
+         * the same thing, and drawing from both would be drawing each
+         * wire twice. */
         index = 0;
         for (desc_station_t *s = md->stations; s; s = s->next, index++) {
             for (desc_output_t *out = s->outputs; out; out = out->next) {

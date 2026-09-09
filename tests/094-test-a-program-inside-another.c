@@ -75,8 +75,10 @@ static void write_the_part(void)
         "station way_in keep p entry\n"
         "  out 0 - middle.0\n"
         "station middle double_it p\n"
+        "  in 0 - way_in.0\n"
         "  out 0 - way_out.0\n"
-        "station way_out keep p result\n";
+        "station way_out keep p result\n"
+        "  in 0 - middle.0\n";
 
     snprintf(part_path, sizeof part_path, "%s/part.map", work_dir);
     FILE *f = fopen(part_path, "w");
