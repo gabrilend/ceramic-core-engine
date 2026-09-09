@@ -50,3 +50,4 @@ somebody with a different workload can correctly disagree.
 |---|---|
 | [056 — Why there is no pull path](056-no-pull-path.md) | Values used to be pullable — produced on demand so they could be fresh at the moment of use. Three timings were weighed for that, and then the capability was removed rather than timed. What it was for, what killed it, and what replaced it. |
 | [057 — Packaging](057-packaging.md) | What it would take to hand the engine to another project. Nothing built yet; a survey and the decisions it waits on. |
+| [135 — A box and a map are one thing](135-a-box-and-a-map-are-one-thing.md) | Placing a box and placing a map hand back different shapes, which is the only real difference between them. What collapsing that costs, and five designs — field selection, a spreader kind, out-parameter boxes, poison-filled buffers, a side file for constants — that were worked out in full and turned down. Nothing built yet. |
