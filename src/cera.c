@@ -1528,6 +1528,131 @@ static void no_such_port_into(cera_map_t *m, int station, int port,
 }
 /* }}} */
 
+/* {{{ station_produces() */
+/*
+ * **How far behind this station can fall**, which is what its
+ * downstream ports have to be sized against.
+ *
+ * The minimum over the ports that gate it, because a station runs when
+ * *every* input port holds a value: fed a hundred from one side and ten
+ * from the other, it runs ten times and produces ten. Taking the
+ * maximum would size everything below an uneven join for a backlog that
+ * cannot arrive.
+ *
+ * Static ports are skipped rather than counted, because a static is
+ * always full and gates nothing. A port with no source at all gates
+ * everything — the station never runs — so it answers zero.
+ */
+static int station_produces(cera_station_t *s)
+{
+    if (!s->call || s->out_size == 0)
+        return 0;
+
+    int least = -1;
+    for (int i = 0; i < s->n_in_ports; i++) {
+        unsigned char kind = atomic_load_explicit(&s->in_ports[i].kind,
+                                                  memory_order_relaxed);
+        if (kind == CERA_IN_PORT_STATIC)
+            continue;
+        if (kind == CERA_IN_PORT_NONE)
+            return 0;
+        int room = atomic_load_explicit(&s->in_ports[i].capacity,
+                                        memory_order_relaxed);
+        if (least < 0 || room < least)
+            least = room;
+    }
+    /* No gating ports at all: a station of constants, seeded once. */
+    return least < 0 ? 1 : least;
+}
+/* }}} */
+
+/* {{{ size_downstream() */
+/*
+ * **A backlog one station can hold, the stations below it can hold
+ * too**, so they are made deep enough now rather than a page at a time
+ * while values are arriving.
+ *
+ * Growth is not expensive — it appends a page and copies nothing — but
+ * it happens on the delivery path under the station's own mutex, which
+ * is the lock the readiness check also wants. A burst of a hundred
+ * values into a ten-slot buffer takes that lock about nine extra times
+ * for no reason anybody can see from the map.
+ *
+ * **The fixed point is "already deep enough", and it is what makes a
+ * cycle safe.** An accumulator's output feeds its own input, so this
+ * walk arrives back where it started; the second visit finds the port
+ * at the size the first visit gave it and stops. No visited set, no
+ * depth limit, and nothing to keep in step with the graph changing.
+ *
+ * By kind, because the kinds differ in exactly one way — where a
+ * returned value goes:
+ *
+ *   plain       every wire on port zero gets the whole backlog, because
+ *               fan-out duplicates a value rather than dividing it
+ *   iterator    each exit gets its share, since the exits are taken in
+ *               turn; the remainder rides on the ones the cursor
+ *               reaches first
+ *   comparator  **stops here.** One of three exits per run, chosen by
+ *               the data, so any of them could take everything. Sizing
+ *               all three for the whole backlog is defensible and
+ *               costs three times the memory for a guess; sizing none
+ *               of them costs a page-at-a-time growth on whichever one
+ *               turns out busy. The cheaper mistake is the one that
+ *               only costs time.
+ *   void        nothing to send.
+ *
+ * The caller holds the rewire mutex. This is a construction-time
+ * operation — declaring a depth, or drawing a wire — and never runs on
+ * the path that delivers values.
+ */
+static void size_downstream(cera_map_t *m, int station, int backlog)
+{
+    if (backlog <= 0 || station < 0 || station >= m->n_stations)
+        return;
+
+    cera_station_t *s = cera_map_station(m, station);
+    if (!s->call || s->out_size == 0 || s->kind == CERA_STATION_COMPARATOR)
+        return;
+
+    int exits = s->n_out_ports > 0 ? s->n_out_ports : 1;
+    int share = s->kind == CERA_STATION_ITERATOR
+              ? (backlog + exits - 1) / exits
+              : backlog;
+    if (share <= 0)
+        return;
+
+    int which = 0;
+    for (cera_out_port_t *p = s->out_ports; p; p = p->next, which++) {
+        cera_dest_set_t *set = out_port_dests(p);
+        for (int d = 0; set && d < set->n; d++) {
+            int to = set->items[d].station;
+            int at = set->items[d].port;
+            if (to < 0 || to >= m->n_stations)
+                continue;
+            cera_station_t *dest = cera_map_station(m, to);
+            if (!dest->call || at < 0 || at >= dest->n_in_ports)
+                continue;
+
+            cera_in_port_t *sl = &dest->in_ports[at];
+            if (atomic_load_explicit(&sl->kind, memory_order_relaxed)
+                != CERA_IN_PORT_RING)
+                continue;
+            if (atomic_load_explicit(&sl->capacity, memory_order_relaxed)
+                >= share)
+                continue;   /* already deep enough — the fixed point */
+
+            pthread_mutex_lock(&dest->mutex);
+            while (atomic_load_explicit(&sl->capacity, memory_order_relaxed)
+                   < share)
+                in_port_add_page(sl);
+            pthread_mutex_unlock(&dest->mutex);
+
+            size_downstream(m, to, station_produces(dest));
+        }
+    }
+}
+/* }}} */
+
 /* {{{ cera_map_in_port_start_depth() */
 /*
  * **A refusal travels rather than stopping here.** A caller reading a
@@ -1582,6 +1707,13 @@ const char *cera_map_in_port_start_depth(cera_map_t *m, int station, int port, i
     in_port_add_page(sl);
     sl->read_hint = 0;
     sl->write_hint = 0;
+
+    /* **And everything below it**, because a station that can fall a
+     * hundred behind feeds stations that can too. Saying the depth
+     * once says it for the chain. */
+    pthread_mutex_lock(&m->rewire_mutex);
+    size_downstream(m, station, station_produces(s));
+    pthread_mutex_unlock(&m->rewire_mutex);
     return NULL;
 }
 /* }}} */
@@ -6747,6 +6879,36 @@ static char kind_letter(unsigned char kind)
 }
 /* }}} */
 
+/* {{{ door_number_for() */
+/*
+ * The number a door keeps on the way out: the one it wants, or the
+ * first free one when that is taken.
+ *
+ * Taken is the exception rather than the rule — it happens only when a
+ * program holds placed parts, whose marks are their own and therefore
+ * repeat. Everything else dumps with the numbering it was written
+ * with, which is what a round trip should preserve.
+ */
+static int door_number_for(int wanted, int *used, int room)
+{
+    if (wanted >= 0 && wanted < room && !used[wanted]) {
+        used[wanted] = 1;
+        return wanted;
+    }
+    for (int n = 0; n < room; n++)
+        if (!used[n]) {
+            used[n] = 1;
+            return n;
+        }
+    /* More doors than the table can name. A program with two hundred
+     * and fifty-six of them is past what this was designed for, and
+     * saying so beats writing a file that cannot be read back. */
+    cera_fail(CERA_EXIT_NO_RESOURCE,
+              "dump: more doors than can be numbered on the way out\n");
+    return 0;
+}
+/* }}} */
+
 /* {{{ cera_map_dump() */
 void cera_map_dump(cera_map_t *m, FILE *out)
 {
@@ -6796,11 +6958,22 @@ void cera_map_dump(cera_map_t *m, FILE *out)
      * a dot: an arrow destination is split on its *last* dot to find
      * the port, so `gate.2` would read as station `gate`, port 2.
      */
-    /* Door numbers are handed out in table order on the way out, for
-     * the same reason station names are made unique here: a file has
-     * to be readable back, and two placed copies of one description
-     * carry the same numbers. */
-    int arguments = 0, results = 0;
+    /*
+     * **A door keeps the number its author gave it, unless another
+     * door already has that number.**
+     *
+     * A file has to be readable back, and two placed copies of one
+     * description carry the same numbers — so *something* has to give
+     * on the way out. Renumbering everything in table order would do
+     * it, and would also throw away the ordering of every program that
+     * never had a collision, which is almost all of them.
+     *
+     * So it is the same shape as the station names below: ask for what
+     * was wanted, and take the next free number only when it is taken.
+     * A program with no placed parts dumps with the numbers it was
+     * written with.
+     */
+    int used_argument[256] = { 0 }, used_result[256] = { 0 };
 
     char **written = calloc((size_t)(m->n_stations > 0 ? m->n_stations : 1),
                             sizeof *written);
@@ -7005,7 +7178,10 @@ void cera_map_dump(cera_map_t *m, FILE *out)
              * exactly what the dump already says about station names.
              */
             if (sl->argument != CERA_NOT_A_DOOR)
-                fprintf(out, "  in %d - %d$\n", j, arguments++);
+                fprintf(out, "  in %d - %d$\n", j,
+                        door_number_for(sl->argument, used_argument,
+                                        (int)(sizeof used_argument
+                                              / sizeof used_argument[0])));
 
             int sources = 0;
             for (int pass = 0; pass < 2; pass++) {
@@ -7146,7 +7322,10 @@ void cera_map_dump(cera_map_t *m, FILE *out)
              * reason. Written before its wires: it says what the port
              * is to anyone outside. */
             if (p->result != CERA_NOT_A_DOOR)
-                fprintf(out, "  out %d - %d$\n", out_port_index, results++);
+                fprintf(out, "  out %d - %d$\n", out_port_index,
+                        door_number_for(p->result, used_result,
+                                        (int)(sizeof used_result
+                                              / sizeof used_result[0])));
 
             cera_dest_set_t *set = out_port_dests(p);
             for (int di = 0; set && di < set->n; di++)
@@ -7425,6 +7604,23 @@ const char *cera_map_wire(cera_map_t *m, int from_station, int port,
     atomic_store_explicit(&p->dests, fresh_set, memory_order_release);
     pthread_mutex_unlock(&from->mutex);
     map_retire(m, old, free);
+
+    /*
+     * **A new wire carries the backlog its source can hold**, so a
+     * station wired below a deep one is deep before the first value
+     * arrives rather than a page at a time while they do.
+     *
+     * This is also what makes a *file* size itself: loading draws every
+     * wire, so a depth declared on one station reaches the chain below
+     * it without the author writing it again on each. Two stations
+     * fresh out of the box both sit at the default depth, so wiring
+     * them propagates that default and changes nothing — the common
+     * case costs one comparison per destination.
+     *
+     * Still holding the rewire mutex, which is the lock this whole
+     * operation runs under. Nothing here is on the delivery path.
+     */
+    size_downstream(m, from_station, station_produces(from));
 
     pthread_mutex_unlock(&m->rewire_mutex);
     CERA_EMIT(m, CERA_WATCH_WIRED, from_station, port, to_station, to_port, 0);

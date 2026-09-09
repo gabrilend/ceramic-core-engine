@@ -464,6 +464,24 @@ in 3 = 5         a constant, and the default ten
 in 4 x64         a buffer, fed by arrows, 64 deep
 ```
 
+**A depth says it for the chain below it.** The stations this port
+feeds are sized to match, and the ones they feed, so an author who
+knows a burst is coming says so once rather than on every station in
+its path. Each kind passes it on the way its own routing works: a plain
+station gives the whole backlog to **every** wire on its output port,
+because fan-out duplicates a value rather than dividing it; an iterator
+divides it among its exits, which it takes in turn; and a **comparator
+stops it**, because one of its three exits is chosen by the data and
+any of them could take everything.
+
+What a station passes on is the **minimum** over the ports that gate
+it, since it runs only when every input port holds a value: fed a
+hundred from one side and ten from the other, it runs ten times.
+
+**A wire carries it too**, so a station added to a running program is
+as deep as one the file started with — and so a file sizes itself,
+since loading draws every wire it names.
+
 **The last of those — a depth with nothing after it — says only how
 deep.** The port's source is the default, arrows, so there is nothing
 else for the line to say.
