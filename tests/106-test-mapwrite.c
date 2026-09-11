@@ -174,50 +174,50 @@ int main(void)
     }
 
     round_trips("the plainest description survived",
-        "station only (add)\n");
+        "station only (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n");
 
     round_trips("doors, kinds and arrows survived",
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "  out 0 - sum.0\n"
         "\n"
-        "station sum (add)\n"
+        "station sum (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  out 0 - 0$\n"
         "  in 0 - gate.0\n"
         "  in 1 = 5\n");
 
     round_trips("a statics section and the ports pointing into it survived",
-        "station one (add)\n"
+        "station one (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  in 1 = 7\n"
         "\n"
-        "station two (nudge)\n"
+        "station two (" CERA_ROOT "/src/boxes/029-demo-boxes.c:nudge)\n"
         "  in 0 = { 1.5, 2.5, 3.5 }\n");
 
     round_trips("depths, unfinished ports and buffers survived",
-        "station wide (add)\n"
+        "station wide (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  in 0 x64\n"
         "  in 1 -\n");
 
     round_trips("an iterator's place in its exits survived",
-        "iterator spread (double_it) @2\n"
+        "iterator spread (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it) @2\n"
         "  out 0 - a.0\n"
         "  out 1 - b.0\n"
         "  out 2 - c.0\n"
         "\n"
-        "station a (keep)\n"
+        "station a (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - spread.0\n"
         "\n"
-        "station b (keep)\n"
+        "station b (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - spread.1\n"
         "\n"
-        "station c (keep)\n"
+        "station c (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - spread.2\n");
 
     round_trips("values waiting in a buffer survived, inner commas and all",
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "\n"
-        "station held (nudge)\n"
+        "station held (" CERA_ROOT "/src/boxes/029-demo-boxes.c:nudge)\n"
         "  out 0 - 0$\n"
         "  in 0 x64 [{ 1.5, 2.5, 3.5 }, { 4.5, 5.5, 6.5 }]\n"
         "  in 1 -\n");

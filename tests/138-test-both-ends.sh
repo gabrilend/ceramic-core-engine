@@ -61,13 +61,13 @@ EOF
 # Two stations feed one port. Fan-in has always worked; what is new is
 # that the receiving station says so twice, once per wire.
 cat > "${WORK}/whole.map" <<'MAP'
-station left (seven)
+station left (029-demo-boxes.c:seven)
   out 0 - sink.0
 
-station right (seven)
+station right (029-demo-boxes.c:seven)
   out 0 - sink.0
 
-station sink (keep)
+station sink (029-demo-boxes.c:keep)
   out 0 - 0$
   in 0 - left.0
   in 0 - right.0
@@ -84,10 +84,10 @@ echo "  two wires into one port, each written at both ends"
 
 # {{{ an arrow with no receiving end
 cat > "${WORK}/no-in.map" <<'MAP'
-station feed (seven)
+station feed (029-demo-boxes.c:seven)
   out 0 - sink.0
 
-station sink (keep)
+station sink (029-demo-boxes.c:keep)
   out 0 - 0$
 MAP
 
@@ -100,9 +100,9 @@ echo "  an arrow whose destination does not admit to being fed is refused"
 
 # {{{ a receiving end with no arrow
 cat > "${WORK}/no-out.map" <<'MAP'
-station feed (seven)
+station feed (029-demo-boxes.c:seven)
 
-station sink (keep)
+station sink (029-demo-boxes.c:keep)
   out 0 - 0$
   in 0 - feed.0
 MAP
@@ -116,10 +116,10 @@ echo "  a wire nobody draws is refused from the receiving side"
 
 # {{{ the two ends naming different ports
 cat > "${WORK}/mismatch.map" <<'MAP'
-station feed (seven)
+station feed (029-demo-boxes.c:seven)
   out 0 - sink.0
 
-station sink (add)
+station sink (029-demo-boxes.c:add)
   out 0 - 0$
   in 1 - feed.0
 MAP
@@ -133,7 +133,7 @@ echo "  two ends naming different ports are refused"
 
 # {{{ a source that names nobody
 cat > "${WORK}/nowhere.map" <<'MAP'
-station sink (keep)
+station sink (029-demo-boxes.c:keep)
   out 0 - 0$
   in 0 - ghost.0
 MAP

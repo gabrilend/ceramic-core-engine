@@ -29,6 +29,7 @@
  * fails, naming the first line where they part.
  */
 #include "cera.h"
+#include "149-same-program.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -281,9 +282,9 @@ int main(void)
      * something one path could get right and the other wrong.
      */
     static const char *const text =
-        "station source (seven)\n"
+        "station source (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - adder.0\n"
-        "station adder (add)\n"
+        "station adder (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  in 0 - source.0\n"
         "  in 1 = 1000\n"
         "  out 0 - twice.0\n"
@@ -292,11 +293,11 @@ int main(void)
          * this is another thing the two paths have to agree about:
          * the file says it in a fourth word, the surface says it in a
          * call, and the dumps have to come out the same. */
-        "station twice (double_it)\n"
+        "station twice (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
         "  out 0 - 0$\n"
         "  in 0 - adder.0\n"
         "  in 0 x64\n"
-        "station waiting (add)\n"
+        "station waiting (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  in 0 - adder.0\n"
         "  in 1 -\n";
     FILE *f = fopen(map_path, "w");
@@ -355,6 +356,23 @@ int main(void)
 
     char *a = slurp(from_file);
     char *b = slurp(from_calls);
+    /*
+     * **The one field left out, and why.** A station's box address says
+     * which file the box was compiled from, shortened against whatever
+     * root that compile used. The two paths compile from two roots: a
+     * map file is compiled where it sits (issue 611), so its boxes are
+     * named relative to the map's own directory, while the boxes this
+     * binary was built with are named relative to the tree that built
+     * it. Same box, same code, two provenances.
+     *
+     * That is a fact about where the code came from rather than about
+     * the program, and this test is about the program. Everything else
+     * — every port, every arrow, every value, every kind, every order —
+     * is still compared byte for byte, which is the whole reason the
+     * comparison is a text comparison.
+     */
+    drop_box_paths(a);
+    drop_box_paths(b);
     if (strcmp(a, b) != 0) {
         /* Name the first line where they part, because "these differ"
          * about two hundred-line files is not a finding anybody can

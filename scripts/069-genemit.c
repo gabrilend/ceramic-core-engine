@@ -629,78 +629,79 @@ static void emit_placements(buf_t *w, const description_t *d,
  * author's machine, naming the map line** (issue 311d step 4).
  *
  * None of this was checkable before, because the build had never seen
- * a map. A name that matches nothing and a name that matches two
- * files are both stopped here rather than at somebody else's startup.
+ * a map. A name that matches nothing is stopped here rather than at
+ * somebody else's startup.
  *
- * A bare name is what a map line carries today. When the format
- * learns to say `file:function` (issue 311a) this gains a path to
- * settle a tie with, and the ambiguity below stops being fatal for
- * anybody who says which they meant.
+ * **The description says where to look, and this asks it** (issues 609,
+ * 610). An address names a file; the description's shortcuts and its
+ * own directory turn that into a path; and the box wanted is the one
+ * parsed from that file. Nothing is searched and nothing is matched by
+ * suffix — there was a suffix rule here, and it was a second opinion
+ * about what a file name means, which the compiler did not share.
+ *
+ * Compared as real paths rather than as strings, because
+ * `maps/../src/boxes/math.c` and `src/boxes/math.c` are the same file
+ * and only one of them is what somebody typed.
  */
-static const box_t *box_named(const description_t *d, const char *name,
-                              const char *root,
+static char *real_of(const char *path)
+{
+    char *r = realpath(path, NULL);
+    if (r)
+        return r;
+    /* Unresolvable is not fatal here: the caller is about to fail with
+     * a better message than this could give, and a path that cannot be
+     * canonicalised simply matches nothing. */
+    char *copy = malloc(strlen(path) + 1);
+    if (copy)
+        strcpy(copy, path);
+    return copy;
+}
+
+static const box_t *box_named(const description_t *d,
+                              const map_description_t *md,
+                              const char *name, const char *root,
                               const char *map_path, int line)
 {
-    /*
-     * **Three forms, and the path is not a fallback** (issue 311a).
-     * A bare function name, a basename and a function, or a path and
-     * a function — the last being a more specific way of saying the
-     * same thing, so nobody has to guess which form is the real one
-     * and an author who prefers paths everywhere is not fighting the
-     * format.
-     */
+    (void)root;
+
     const char *colon = strrchr(name, ':');
-    const char *want_fn = colon ? colon + 1 : name;
+    if (!colon) {
+        fprintf(stderr, "generator: %s:%d: '%s' does not say which file "
+                        "it is in\n", map_path, line, name);
+        exit(65);
+    }
+    const char *want_fn = colon + 1;
+
+    char *wanted = mapfile_source_of(md, name);
+    if (!wanted) {
+        fprintf(stderr, "generator: %s:%d: '%s' does not say which file "
+                        "it is in\n", map_path, line, name);
+        exit(65);
+    }
+    char *wanted_real = real_of(wanted);
 
     const box_t *found = NULL;
-    int matches = 0;
-    for (int i = 0; i < d->boxes.n; i++) {
+    for (int i = 0; i < d->boxes.n && !found; i++) {
         const box_t *b = vec_at(&d->boxes, i);
         if (strcmp(b->name, want_fn) != 0)
             continue;
-        if (colon) {
-            /* The part before the colon must be the box's path, or a
-             * suffix of it beginning at a slash — which is what makes
-             * `math.c:add` reach `src/boxes/math.c:add` while
-             * `path.c` cannot reach `mypath.c`. */
-            const char *where = path_within(b->file, root);
-            size_t want = (size_t)(colon - name);
-            size_t have = strlen(where);
-            int same = (have == want && strncmp(where, name, want) == 0)
-                    || (have > want && where[have - want - 1] == '/'
-                        && strncmp(where + have - want, name, want) == 0);
-            if (!same)
-                continue;
-        }
-        found = b;
-        matches++;
+        char *have = real_of(b->file);
+        if (have && wanted_real && strcmp(have, wanted_real) == 0)
+            found = b;
+        free(have);
     }
 
-    if (matches == 0) {
+    if (!found) {
         fprintf(stderr, "generator: %s:%d: nothing this build was given "
-                        "answers to '%s'\n", map_path, line, name);
+                        "answers to '%s' — it resolves to %s\n",
+                map_path, line, name, wanted);
+        free(wanted);
+        free(wanted_real);
         exit(65);
     }
-    if (matches > 1) {
-        /*
-         * **A collision is fatal, and it names both paths** (issue
-         * 311a), because the author's fix is to write one of them out
-         * in full and they cannot do that without being told which
-         * two files are in question. It is not a warning and it does
-         * not pick one.
-         */
-        fprintf(stderr, "generator: %s:%d: '%s' names a box in more than "
-                        "one source, and the line does not say which:\n",
-                map_path, line, name);
-        for (int i = 0; i < d->boxes.n; i++) {
-            const box_t *b = vec_at(&d->boxes, i);
-            if (strcmp(b->name, want_fn) == 0)
-                fprintf(stderr, "generator:   %s:%s\n",
-                        path_within(b->file, root), b->name);
-        }
-        fprintf(stderr, "generator: write one of those out in full\n");
-        exit(65);
-    }
+
+    free(wanted);
+    free(wanted_real);
     return found;
 }
 /* }}} */
@@ -961,7 +962,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
         for (int mi = 0; mi < n_maps; mi++) {
             map_description_t *md = mapfile_parse(maps[mi]);
             for (desc_station_t *st = md->stations; st; st = st->next) {
-                const box_t *b = box_named(d, st->box, root, maps[mi],
+                const box_t *b = box_named(d, md, st->box, root, maps[mi],
                                            st->line);
                 char *place = gt_box_symbol(a, path_within(b->file, root),
                                             b->name);
@@ -973,7 +974,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
                          e && !said; e = e->next) {
                         if (pm == mi && e == st)
                             break;
-                        const box_t *eb = box_named(d, e->box, root,
+                        const box_t *eb = box_named(d, md, e->box, root,
                                                     maps[pm], e->line);
                         char *esym = gt_box_symbol(a,
                                         path_within(eb->file, root), eb->name);
@@ -1040,7 +1041,7 @@ static void emit_maps(buf_t *w, const description_t *d, arena_t *a,
 
         int index = 0;
         for (desc_station_t *s = md->stations; s; s = s->next, index++) {
-            const box_t *b = box_named(d, s->box, root, maps[mi], s->line);
+            const box_t *b = box_named(d, md, s->box, root, maps[mi], s->line);
             char *place = gt_box_symbol(a, path_within(b->file, root),
                                         b->name);
             const char *kind = s->kind == CERA_STATION_COMPARATOR
@@ -1383,7 +1384,7 @@ static int result_marks(const description_t *d, map_description_t *md,
         for (desc_station_t *s = md->stations; s && !b; s = s->next)
             for (desc_output_t *o = s->outputs; o; o = o->next)
                 if (o->is_result && o->result == nth) {
-                    b = box_named(d, s->box, root, map_path, s->line);
+                    b = box_named(d, md, s->box, root, map_path, s->line);
                     break;
                 }
         if (!b)

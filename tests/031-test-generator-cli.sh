@@ -143,6 +143,13 @@ int twin(int x)
     return x + 2;
 }
 EOF
+# A bare name is refused before ambiguity can even arise (issue 609).
+# This used to be the ambiguity test: two files defining `twin`, a map
+# naming it bare, and a refusal that had to list both paths. The
+# ambiguity is gone because the form that could be ambiguous is gone,
+# and what is checked now is the refusal that replaced it — which fires
+# on one file as readily as on two, because it is about what the line
+# says rather than about what happens to be on the command line.
 cat > "${WORK}/ambiguous.map" <<'EOF'
 station only (twin)
   out 0 - 0$
@@ -153,12 +160,12 @@ MESSAGE="$("${GENERATOR}" "${WORK}/out4.c" "--map=${WORK}/ambiguous.map" \
            "${WORK}/left/twins.c" "${WORK}/right/twins.c" 2>&1)"
 STATUS=$?
 set -e
-[[ ${STATUS} -ne 0 ]] || fail "an ambiguous box name was accepted"
-echo "${MESSAGE}" | grep -q "more than" || fail "the refusal does not say it is ambiguous"
-echo "${MESSAGE}" | grep -q "left/twins.c:twin" || fail "the refusal omits the first path"
-echo "${MESSAGE}" | grep -q "right/twins.c:twin" || fail "the refusal omits the second path"
+[[ ${STATUS} -ne 0 ]] || fail "a bare box name was accepted"
+echo "${MESSAGE}" | grep -q "does not say which file" \
+    || fail "the refusal does not say what is missing: ${MESSAGE}"
+echo "${MESSAGE}" | grep -q "twin" || fail "the refusal does not name the address"
 [[ ! -f "${WORK}/out4.c" ]] || fail "a refused map left output in place"
-echo "  an ambiguous box name refuses and names both paths"
+echo "  a box name that does not say its file is refused, naming the form"
 
 # --- and writing one out in full settles it ------------------------
 #

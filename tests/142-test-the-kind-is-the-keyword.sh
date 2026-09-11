@@ -69,27 +69,27 @@ EOF
 # nothing to recognise. The dump writing only the long forms is what
 # keeps one spelling per kind on disk.
 {
-    printf 'station plainly (double_it)\n  in 0 - 0$\n  out 0 - short_comp.0\n'
+    printf 'station plainly ('${DIR}/src/boxes/029-demo-boxes.c:double_it)\n  in 0 - 0$\n  out 0 - short_comp.0\n'
     printf 'comp short_comp (keep)\n  in 0 - plainly.0\n  in 1 = 5\n'
     printf '  out 0 - long_comp.0\n'
-    printf 'comparator long_comp (keep)\n  in 0 - short_comp.0\n  in 1 = 5\n'
+    printf 'comparator long_comp ('${DIR}/src/boxes/029-demo-boxes.c:keep)\n  in 0 - short_comp.0\n  in 1 = 5\n'
     printf '  out 0 - short_iter.0\n'
     printf 'iter short_iter (keep)\n  in 0 - long_comp.0\n  out 0 - long_iter.0\n'
-    printf 'iterator long_iter (keep)\n  in 0 - short_iter.0\n  out 0 - 0$\n'
+    printf 'iterator long_iter ('${DIR}/src/boxes/029-demo-boxes.c:keep)\n  in 0 - short_iter.0\n  out 0 - 0$\n'
 } > "${WORK}/spellings.map"
 
 GOT=$("${WORK}/reader" "${WORK}/spellings.map" 2>&1) \
     || fail "a map using every kind spelling did not load: ${GOT}"
 
-echo "${GOT}" | grep -q '^station plainly (double_it)' \
+echo "${GOT}" | grep -q '^station plainly ('${DIR}/src/boxes/029-demo-boxes.c:double_it)' \
     || fail "a plain station did not come back as one: ${GOT}"
-echo "${GOT}" | grep -q '^comparator short_comp (keep)' \
+echo "${GOT}" | grep -q '^comparator short_comp ('${DIR}/src/boxes/029-demo-boxes.c:keep)' \
     || fail "'comp' did not place a comparator, or the dump wrote the short form: ${GOT}"
-echo "${GOT}" | grep -q '^comparator long_comp (keep)' \
+echo "${GOT}" | grep -q '^comparator long_comp ('${DIR}/src/boxes/029-demo-boxes.c:keep)' \
     || fail "'comparator' did not place a comparator: ${GOT}"
-echo "${GOT}" | grep -q '^iterator short_iter (keep)' \
+echo "${GOT}" | grep -q '^iterator short_iter ('${DIR}/src/boxes/029-demo-boxes.c:keep)' \
     || fail "'iter' did not place an iterator, or the dump wrote the short form: ${GOT}"
-echo "${GOT}" | grep -q '^iterator long_iter (keep)' \
+echo "${GOT}" | grep -q '^iterator long_iter ('${DIR}/src/boxes/029-demo-boxes.c:keep)' \
     || fail "'iterator' did not place an iterator: ${GOT}"
 echo "${GOT}" | grep -q ' comp \| iter ' \
     && fail "the dump wrote a short spelling: ${GOT}"

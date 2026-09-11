@@ -28,6 +28,57 @@
  */
 #include "cera.h"
 
+#include <stdlib.h>
+#include <string.h>
+
+#include "149-same-program.h"
+
+/* {{{ static char *say_where_the_program_keeps_it() */
+/*
+ * Rewrites a description's shortcut so it names the box sources the way
+ * the program that will read it does — `../src/boxes/` becomes
+ * `src/boxes/`.
+ *
+ * **Not tidiness, and not an absolute path either.** A program handed
+ * text writes out the sources it carries, under the paths they were
+ * filed under when it was built, and compiles the text against those.
+ * The symbol a box compiles to carries that path, and it has to be the
+ * path the program already published or the result loads and fails to
+ * resolve. An absolute path names the real file and produces a
+ * different symbol, which is the failure this exists to avoid.
+ *
+ * So text handed to a running program is written against *that
+ * program's* source layout. A caller who does not want to think about
+ * it hands over the file instead, which has a home and needs no help.
+ *
+ * The caller frees what comes back.
+ */
+static char *say_where_the_program_keeps_it(const char *text)
+{
+    static const char relative[] = "../src/boxes/";
+    static const char absolute[] = "src/boxes/";
+
+    size_t room = strlen(text) + sizeof absolute + 64;
+    char *out = malloc(room);
+    if (!out)
+        return NULL;
+
+    const char *r = text;
+    char *w = out;
+    while (*r) {
+        if (strncmp(r, relative, sizeof relative - 1) == 0) {
+            memcpy(w, absolute, sizeof absolute - 1);
+            w += sizeof absolute - 1;
+            r += sizeof relative - 1;
+            continue;
+        }
+        *w++ = *r++;
+    }
+    *w = '\0';
+    return out;
+}
+/* }}} */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -138,7 +189,25 @@ int main(void)
      * are published at all.
      */
     char *description = slurp(CERA_ROOT "/maps/095-doubling.map");
-    const cera_map_build_t *compiled_now = cera_late_compile_map(description);
+
+    /*
+     * **Text has no home, so its shortcut is made absolute first**
+     * (issues 610, 611).
+     *
+     * Every path in a description is relative to the description, and
+     * this description's own is `../src/boxes/` — which is right where
+     * it lives and wrong everywhere else. Handing over *text* is
+     * handing over a description with no location, so the engine gives
+     * it one: a scratch directory. The shortcut then points at
+     * somewhere beside that directory, which is nowhere.
+     *
+     * So text is written against the layout of the program that will
+     * read it, which the program knows and the text's author has to be
+     * told. A caller who does not want to think about it hands over the
+     * *file* instead, which has a home and needs no help.
+     */
+    char *absolute = say_where_the_program_keeps_it(description);
+    const cera_map_build_t *compiled_now = cera_late_compile_map(absolute);
     check(compiled_now != NULL,
           "a description handed to the running program compiled into it");
 
@@ -166,6 +235,12 @@ int main(void)
 
     char *a = slurp(from_text);
     char *b = slurp(from_code);
+    /* Compared on what they say about the program rather than on
+     * where its code came from: the two paths compile from two
+     * roots, so the same box carries two addresses (issue 611).
+     * Everything else is still byte for byte. */
+    drop_box_paths(a);
+    drop_box_paths(b);
     if (strcmp(a, b) != 0) {
         const char *pa = a, *pb = b;
         int line = 1;

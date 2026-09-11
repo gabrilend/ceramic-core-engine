@@ -296,10 +296,10 @@ int main(void)
         fprintf(stderr, "cannot write %s\n", path);
         return 1;
     }
-    fputs("station gate (keep)\n"
+    fputs("station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
           "  in 0 - 0$\n"
           "  out 0 - answer.0\n"
-          "station answer (double_it)\n"
+          "station answer (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
           "  in 0 - gate.0\n"
           "  out 0 - 0$\n", f);
     fclose(f);
@@ -332,7 +332,7 @@ int main(void)
     char bad[320];
     snprintf(bad, sizeof bad, "%s/bad.map", dir);
     f = fopen(bad, "w");
-    fputs("station gate (keep) sideways\n", f);
+    fputs("station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep) sideways\n", f);
     fclose(f);
 
     cera_pool_release(loaded->pool);

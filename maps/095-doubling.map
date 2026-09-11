@@ -9,21 +9,23 @@
 # build has to see it: the maps a program declares are also a
 # manifest, and a map the build never saw cannot be compiled in.
 
-station gate (keep)
+boxes = ../src/boxes/
+
+station gate (boxes/029-demo-boxes.c:keep)
   in 0 - 0$
   out 0 - adder.0
 
-station adder (add)
+station adder (boxes/029-demo-boxes.c:add)
   in 0 - gate.0
   in 1 = 1000
   out 0 - twice.0
   out 0 - waiting.0
 
-station twice (double_it)
+station twice (boxes/029-demo-boxes.c:double_it)
   out 0 - 0$
   in 0 - adder.0
   in 0 x64
 
-station waiting (add)
+station waiting (boxes/029-demo-boxes.c:add)
   in 0 - adder.0
   in 1 -

@@ -4330,8 +4330,31 @@ static int box_place_matches(const cera_box_place_t *row, const char *name)
         return 1;
     size_t n = strlen(name);
     size_t a = strlen(row->address);
-    return a > n && row->address[a - n - 1] == '/'
-           && strcmp(row->address + a - n, name) == 0;
+    if (a > n && row->address[a - n - 1] == '/'
+        && strcmp(row->address + a - n, name) == 0)
+        return 1;
+
+    /*
+     * **And the address of a box whose source is filed under its own
+     * name** — `triple_it.c:triple_it` (issue 609).
+     *
+     * A box compiled while a program runs was handed over in a
+     * serial-numbered scratch file belonging to that process, so its
+     * recorded address names somewhere nothing will be next time. What
+     * *is* stable is the copy filed under the box's own name, which
+     * exists precisely so a later process can find it — so that is the
+     * address a dump writes, and this is the rule that reads it back.
+     *
+     * It is not a special case for late boxes. Any box whose function
+     * name and filename agree answers to this, which is a thing that
+     * happens to be true of every late box and may be true of somebody
+     * else's ordinary source too.
+     */
+    size_t fn = strlen(row->name);
+    return n == fn + fn + 3
+           && strncmp(name, row->name, fn) == 0
+           && strncmp(name + fn, ".c:", 3) == 0
+           && strcmp(name + fn + 3, row->name) == 0;
 }
 /* }}} */
 
@@ -5966,6 +5989,12 @@ static char *read_whole_file(const char *path)
 }
 /* }}} */
 
+/* Defined with the rest of the code that brings boxes in at run time,
+ * much further down this file. A joint rather than a call: loading a
+ * map file is what the engine offers, and how it does it is nobody
+ * else's business. */
+static const cera_map_build_t *late_compile_map_file(const char *path);
+
 /* {{{ build_from_file() */
 /*
  * **A description on disk becomes the calls it describes, and then
@@ -5991,9 +6020,7 @@ static char *read_whole_file(const char *path)
  */
 static void build_from_file(cera_map_t *m, const char *path, cera_map_instance_t *out)
 {
-    char *text = read_whole_file(path);
-    const cera_map_build_t *built = cera_late_compile_map(text);
-    free(text);
+    const cera_map_build_t *built = late_compile_map_file(path);
 
     if (!built)
         die_load(path, 0, NULL, "could not be compiled into this program");
@@ -6918,8 +6945,226 @@ static int door_number_for(int wanted, int *used, int room)
 }
 /* }}} */
 
+/* {{{ dump_source_named() */
+/*
+ * **Which file inside a dump's own directory holds this box**, writing
+ * the source out the first time it is asked (issue 611).
+ *
+ * A dump is a map file and a directory of C beside it, and the only
+ * other thing needed to build it again is `serac`. So every source a
+ * station actually places is copied in, and every address is pointed at
+ * the copy.
+ *
+ * **The unit is the file, not the box.** A box's source may need a
+ * struct, a helper or an include sitting beside it, so a file cut down
+ * to one function is a file that may not compile. A source is written
+ * out when a station places any of its boxes, and a source nothing
+ * places is not written at all.
+ *
+ * **The basename is kept**, because a person opening a dump wants to see
+ * `029-demo-boxes.c`. Two sources sharing a basename are told apart by a
+ * number, since a name that collides is a file that overwrites another
+ * and takes its boxes with it.
+ *
+ * The table is what has been written so far in this dump, and it is
+ * also the deduplication: a source placed by four stations is written
+ * once and named the same way four times.
+ */
+/* Both live with the code that brings boxes in at run time, further
+ * down this file than the dump does. Declared rather than moved,
+ * because moving them would put file-writing in the middle of a section
+ * about describing a program. */
+static int write_text(const char *path, const char *text);
+static int ensure_dir(const char *path);
+
+typedef struct dump_source {
+    char  address[512];      /* the path part of the box address */
+    /* As wide as the address it is derived from: a basename cannot be
+     * longer than the path it came from, but nothing a compiler can see
+     * says so. */
+    char  filename[600];     /* what it was called inside the dump */
+    struct dump_source *next;
+} dump_source_t;
+
+static dump_source_t *dump_written;
+
+static void dump_sources_forget(void)
+{
+    dump_source_t *p = dump_written;
+    while (p) {
+        dump_source_t *next = p->next;
+        free(p);
+        p = next;
+    }
+    dump_written = NULL;
+}
+
+/* `dir` is where the file is written and `named` is what an address
+ * calls that directory — the full path and the relative one, which
+ * differ because a dump's addresses are relative to the dump and its
+ * writing is not. */
+static int dump_source_named(const char *box_address, const char *dir,
+                             char *out, size_t out_len)
+{
+    const char *colon = strrchr(box_address, ':');
+    if (!colon)
+        return 0;
+
+    char path[512];
+    size_t plen = (size_t)(colon - box_address);
+    if (plen >= sizeof path)
+        return 0;
+    memcpy(path, box_address, plen);
+    path[plen] = '\0';
+
+    for (dump_source_t *p = dump_written; p; p = p->next)
+        if (strcmp(p->address, path) == 0) {
+            snprintf(out, out_len, "%s", p->filename);
+            return 1;
+        }
+
+    const char *text = cera_box_source_text(path);
+    if (!text) {
+        /*
+         * **The engine finding a fault in itself**, which is why this
+         * aborts rather than warning.
+         *
+         * Every box placed by name arrives through a generated
+         * placement function, and the same emission that writes that
+         * function writes the box's source out as text beside it —
+         * whether the box was compiled into the binary, compiled from
+         * text while the program ran, or arrived in a shared object. A
+         * station placed by hand with no name given has no address
+         * either, and never reaches here.
+         *
+         * So a station carrying an address whose source is not held
+         * means the emitter and the source table have come apart, and
+         * a core is the evidence for what went wrong.
+         */
+        cera_bug("dump: a station names a box whose source this program "
+                 "does not hold, which cannot happen unless the emitted "
+                 "tables disagree with each other\n");
+        return 0;
+    }
+
+    const char *slash = strrchr(path, '/');
+    const char *base = slash ? slash + 1 : path;
+
+    char chosen[600];
+    snprintf(chosen, sizeof chosen, "%s", base);
+    for (int n = 2; n < 1000; n++) {
+        int taken = 0;
+        for (dump_source_t *p = dump_written; p && !taken; p = p->next)
+            taken = strcmp(p->filename, chosen) == 0;
+        if (!taken)
+            break;
+        /* A second `math.c` becomes `math-2.c`, before the extension so
+         * the file is still C to everything that looks at a name. */
+        const char *dot = strrchr(base, '.');
+        if (dot)
+            snprintf(chosen, sizeof chosen, "%.*s-%d%s",
+                     (int)(dot - base), base, n, dot);
+        else
+            snprintf(chosen, sizeof chosen, "%s-%d", base, n);
+    }
+
+    char full[1024];
+    if (snprintf(full, sizeof full, "%s/%s", dir, chosen) >= (int)sizeof full)
+        return 0;
+    if (write_text(full, text) != 0)
+        return 0;
+
+    dump_source_t *row = calloc(1, sizeof *row);
+    if (!row)
+        return 0;
+    snprintf(row->address, sizeof row->address, "%s", path);
+    snprintf(row->filename, sizeof row->filename, "%s", chosen);
+    row->next = dump_written;
+    dump_written = row;
+
+    snprintf(out, out_len, "%s", chosen);
+    return 1;
+}
+/* }}} */
+
 /* {{{ cera_map_dump() */
+static void dump_into(cera_map_t *m, FILE *out, const char *dir,
+                      const char *dir_named);
+
 void cera_map_dump(cera_map_t *m, FILE *out)
+{
+    /* The text alone, with every address exactly as its station carries
+     * it. Whoever wants a dump that can be built without this program
+     * asks for the other form. */
+    dump_into(m, out, NULL, NULL);
+}
+/* }}} */
+
+/* {{{ cera_map_dump_program() */
+/*
+ * **A dump that builds**, which is a map file and a directory of C
+ * beside it named after it (issue 611):
+ *
+ *     grown.map
+ *     grown.functions/029-demo-boxes.c
+ *
+ * `serac grown.map` turns those two into a program, and nothing else is
+ * needed — no source tree, no matching build, and nothing that knows
+ * anything about the program that wrote it.
+ *
+ * Every source a station actually places is copied in; one nothing
+ * places is not. A box built into the program and a box that arrived
+ * while it ran come out identical, because by the time a dump exists
+ * the difference between them is a fact about history.
+ *
+ * Returns 0, or -1 with a reason on stderr.
+ */
+int cera_map_dump_program(cera_map_t *m, const char *map_path)
+{
+    if (!m || !map_path || !*map_path) {
+        fprintf(stderr, "dump: asked to write a program to nowhere\n");
+        return -1;
+    }
+
+    /* The directory is named after the map rather than called
+     * `functions`, so two dumps can sit in one directory without one
+     * quietly taking the other's code. */
+    char dir[1024];
+    const char *dot = strrchr(map_path, '.');
+    const char *slash = strrchr(map_path, '/');
+    if (dot && (!slash || dot > slash))
+        snprintf(dir, sizeof dir, "%.*s.functions",
+                 (int)(dot - map_path), map_path);
+    else
+        snprintf(dir, sizeof dir, "%s.functions", map_path);
+
+    if (ensure_dir(dir) != 0)
+        return -1;
+
+    FILE *f = fopen(map_path, "w");
+    if (!f) {
+        fprintf(stderr, "dump: cannot write %s: %s\n",
+                map_path, "cannot open it for writing");
+        return -1;
+    }
+
+    /* The address written is relative to the map file, which is what a
+     * description's paths always are — so only the last part of the
+     * directory's name goes into it. */
+    const char *dir_name = strrchr(dir, '/');
+    dir_name = dir_name ? dir_name + 1 : dir;
+
+    dump_sources_forget();
+    dump_into(m, f, dir, dir_name[0] ? dir_name : dir);
+    dump_sources_forget();
+    fclose(f);
+    return 0;
+}
+/* }}} */
+
+/* {{{ dump_into() */
+static void dump_into(cera_map_t *m, FILE *out, const char *dir,
+                      const char *dir_named)
 {
     /*
      * **Every station needs a name**, because a station line begins
@@ -7099,29 +7344,40 @@ void cera_map_dump(cera_map_t *m, FILE *out)
         const char *door = "";
 
         /*
-         * **Whichever form is unambiguous**. A station
-         * carries the box's full address — the file it lives in and
-         * the function within it — and the dump writes the bare
-         * function name when that resolves to the same box, or the
-         * whole address when it does not.
+         * **The address, pointed wherever this dump keeps its code.**
          *
-         * Not tidiness. A box compiled while the program ran lives at
-         * a serial-numbered path in a scratch directory that belongs
-         * to *that* process, so writing its address down produces a
-         * file naming somewhere nothing will be next time. The bare
-         * name is what a later process can act on: recovery looks for
-         * a source saved under the box's own name, which is exactly
-         * what makes a grown program's dump reloadable.
+         * A station carries the box's full address — the file it lives
+         * in and the function within it — and that is what gets
+         * written when nobody said otherwise.
+         *
+         * When this dump is writing out its own sources (issue 611),
+         * the address is repointed into the directory they went to, so
+         * that what the map says and what sits beside it agree. A box
+         * built into the program and a box that arrived while it ran
+         * come out looking the same, because by the time a dump exists
+         * the difference is a fact about history rather than about the
+         * program.
+         *
+         * The alternative, which this replaces, was writing a bare
+         * function name for a late box, because its real address named
+         * a scratch file belonging to a process that had ended. There
+         * is no bare form any more (issue 609), and there no longer
+         * needs to be: the file is named, and it is a file that will be
+         * there.
          */
         const char *written_as = s->box_name;
-        if (written_as) {
+        /* The directory's name, the file's, and the function's, none of
+         * which a compiler can bound from what it can see here. */
+        char repointed[1536];
+        if (written_as && dir) {
             const char *colon = strrchr(written_as, ':');
             if (colon) {
-                const char *bare = colon + 1;
-                const cera_box_place_t *by_bare = cera_box_place_find(bare);
-                const cera_box_place_t *by_address = cera_box_place_find(written_as);
-                if (by_bare && by_bare == by_address)
-                    written_as = bare;
+                char kept[600];
+                if (dump_source_named(written_as, dir, kept, sizeof kept)) {
+                    snprintf(repointed, sizeof repointed, "%s/%s:%s",
+                             dir_named, kept, colon + 1);
+                    written_as = repointed;
+                }
             }
         }
 
@@ -8610,6 +8866,75 @@ static int spill_sources(const char *dir, const char **paths, int cap)
             n++;
         }
     }
+
+    /*
+     * **And each late box again, under its own name** (issue 609).
+     *
+     * A description written by a grown program addresses a late box as
+     * `<name>.c:<name>`, because the serial-numbered file it was handed
+     * over in belongs to a process that has ended and the copy filed
+     * under the box's own name is the one that will be there. So the
+     * compiler resolving that description has to find a file of that
+     * name, and this is where it comes from.
+     *
+     * The same text twice under two names, which is what it already is
+     * on disk for the same reason. A source defining several boxes gets
+     * a copy per box, and the compiler parsing all of them would see
+     * each box several times — so these go to a directory of their own,
+     * and only the ones a description actually names get compiled,
+     * which is what asking the compiler for a description's box list is
+     * for.
+     */
+    for (int i = 0; i < cera_late_box_count() && n < cap; i++) {
+        const cera_box_place_t *place = cera_late_box_at(i);
+        if (!place || !place->name || !place->address)
+            continue;
+
+        /* A row's address is `<path>:<function>`, and the source table
+         * is keyed on the path alone, so the function has to come off
+         * before asking. Getting this wrong finds nothing and skips
+         * silently, which is how it was got wrong once. */
+        const char *colon = strrchr(place->address, ':');
+        if (!colon)
+            continue;
+        char just_path[512];
+        size_t plen = (size_t)(colon - place->address);
+        if (plen >= sizeof just_path)
+            continue;
+        memcpy(just_path, place->address, plen);
+        just_path[plen] = '\0';
+
+        const char *text = cera_box_source_text(just_path);
+        if (!text) {
+            fprintf(stderr, "latebox: '%s' has no source filed under %s, so a "
+                            "description naming it will not compile in a "
+                            "fresh process\n", place->name, just_path);
+            continue;
+        }
+
+        if (snprintf(full, sizeof full, "%s/%s.c", dir, place->name)
+                >= (int)sizeof full) {
+            fprintf(stderr, "latebox: path too long: %s\n", place->name);
+            return -1;
+        }
+        int already = 0;
+        for (int k = 0; k < n && !already; k++)
+            already = strcmp(paths[k], full) == 0;
+        if (already)
+            continue;
+
+        if (ensure_path_dirs(full) != 0)
+            return -1;
+        if (write_text(full, text) != 0)
+            return -1;
+        paths[n] = strdup(full);
+        if (!paths[n]) {
+            fprintf(stderr, "latebox: out of memory\n");
+            return -1;
+        }
+        n++;
+    }
+
     return n;
 }
 /* }}} */
@@ -8704,6 +9029,76 @@ int cera_late_spill_sources(const char *dir)
 }
 /* }}} */
 
+/* {{{ cera_late_compile_map_file() */
+/*
+ * **A map file is compiled where it sits, and whole** (issue 611).
+ *
+ * This is one of two ways a description comes into a program, and the
+ * two differ in one fact that decides everything else: whether the
+ * description has a home.
+ *
+ * Text handed to a running program has none. It is written into a
+ * scratch directory, the sources the program carries are written out
+ * beside it, and what gets compiled binds to the boxes that program
+ * already published — because there is nothing else it could mean.
+ *
+ * **A file has a home, and names its own sources relative to it.** So
+ * nothing is copied and nothing is spilled, and what gets compiled is
+ * the whole program: every box the map names, from the files the map
+ * points at. Nothing binds to anything, so nothing can fail to bind —
+ * which is what makes a dump buildable by a compiler and no other
+ * thing, and what removes the question of whether two paths produce
+ * the same symbol.
+ *
+ * It costs a second copy of any box the loading program already holds.
+ * A box is forbidden to remember anything between calls, so two copies
+ * of one are indistinguishable; the alternative was a description only
+ * readable by a program that already had it.
+ */
+static const cera_map_build_t *late_compile_map_file(const char *path)
+{
+    const char *serac = find_compiler();
+    if (!serac)
+        return NULL;
+
+    const char *libdir = late_library_dir();
+    if (ensure_dir(CERA_RAM_EXEC) != 0 || ensure_dir(libdir) != 0)
+        return NULL;
+
+    int serial = late_serial++;
+    char lib_path[512], cmd[2048];
+    snprintf(lib_path, sizeof lib_path, "%s/whole-%d-%d.so",
+             libdir, (int)getpid(), serial);
+
+    int wrote = snprintf(cmd, sizeof cmd, "%s --shared -o %s %s",
+                         serac, lib_path, path);
+    if (wrote <= 0 || wrote >= (int)sizeof cmd) {
+        fprintf(stderr, "latebox: the paths involved do not fit on one "
+                        "command line\n");
+        return NULL;
+    }
+    if (run(cmd) != 0) {
+        fprintf(stderr, "latebox: the compiler refused %s\n", path);
+        return NULL;
+    }
+
+    void *handle = dlopen(lib_path, RTLD_NOW | RTLD_GLOBAL);
+    if (!handle) {
+        fprintf(stderr, "latebox: cannot load %s: %s\n", lib_path, dlerror());
+        return NULL;
+    }
+
+    const cera_map_build_t *builds = dlsym(handle, "cera_map_builds");
+    const int *count = dlsym(handle, "cera_n_map_builds");
+    if (!builds || !count || *count <= 0) {
+        fprintf(stderr, "latebox: %s builds no description\n", path);
+        dlclose(handle);
+        return NULL;
+    }
+    return &builds[0];
+}
+/* }}} */
+
 /* {{{ cera_late_compile_map() */
 const cera_map_build_t *cera_late_compile_map(const char *map_text)
 {
@@ -8720,12 +9115,23 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text)
         return NULL;
 
     int serial = late_serial++;
-    char map_path[512], src_root[512], lib_path[512];
+    /* The description's path is built from the source directory's, so
+     * it needs room for that plus a name rather than the same room. */
+    char map_path[768], src_root[512], lib_path[512];
     char cmd[8192];
-    snprintf(map_path, sizeof map_path, "%s/map-%d-%d.map",
-             dir, (int)getpid(), serial);
+    /*
+     * **The description goes in with its sources** (issue 609). Every
+     * station line names the file its box is in, and the compiler takes
+     * its source list from the description rather than from a command
+     * line — so the two have to be in one directory for those names to
+     * find anything. That directory is the self-contained thing the
+     * compiler is handed, which is the same arrangement a person builds
+     * by hand.
+     */
     snprintf(src_root, sizeof src_root, "%s/sources-%d-%d",
              dir, (int)getpid(), serial);
+    snprintf(map_path, sizeof map_path, "%s/map-%d-%d.map",
+             src_root, (int)getpid(), serial);
     /* There is no third path here any more. The emitted C used to be
      * written out so that a compiler could be pointed at it; the
      * compiler is handed it down a pipe now and it never becomes a
@@ -8739,9 +9145,9 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text)
      * source is: a dump may be taken at any moment, including while
      * something is going wrong, and a failure path is the worst
      * possible time to discover something needed saving. */
-    if (write_text(map_path, map_text) != 0)
-        return NULL;
     if (ensure_dir(src_root) != 0)
+        return NULL;
+    if (write_text(map_path, map_text) != 0)
         return NULL;
 
     /*
@@ -8781,31 +9187,28 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text)
     if (!serac)
         return NULL;
 
+    /*
+     * **The description alone, because it says what it is made of.**
+     * Every source it names was just spilled beside it, and naming them
+     * here a second time is the thing that could disagree with the
+     * description and be believed anyway (issue 609).
+     *
+     * It also settles a fault this used to have. A source defining
+     * several boxes is filed once per box under each box's name, so
+     * handing every spilled file to the compiler made it read the same
+     * structs several times and refuse them as defined twice. Only the
+     * files a description actually names are read now, and a
+     * description names each of its files once.
+     */
     int at = snprintf(cmd, sizeof cmd,
-                      "%s --shared --root=%s -o %s %s",
+                      "%s --shared --external-boxes --root=%s -o %s %s",
                       serac, src_root, lib_path, map_path);
-    /* Each source name appended with its length measured first rather
-     * than formatted and checked afterwards. A command line that did
-     * not fit is not one that nearly fitted — the last name would be
-     * cut in half and the compiler asked for a file nobody has — so the
-     * room is established before anything is written into it. */
-    int fits = at > 0 && at < (int)sizeof cmd;
-    for (int i = 0; i < n_spilled && fits; i++) {
-        size_t len = strlen(spilled[i]);
-        if ((size_t)at + len + 2 > sizeof cmd) {
-            fits = 0;
-            break;
-        }
-        cmd[at++] = ' ';
-        memcpy(cmd + at, spilled[i], len);
-        at += (int)len;
-        cmd[at] = '\0';
-    }
-    if (!fits) {
-        fprintf(stderr, "latebox: too many sources to name on one command "
-                        "line\n");
+    if (at <= 0 || at >= (int)sizeof cmd) {
+        fprintf(stderr, "latebox: the paths involved do not fit on one "
+                        "command line\n");
         return NULL;
     }
+    (void)spilled;
     if (run(cmd) != 0) {
         fprintf(stderr, "latebox: the compiler refused %s\n", map_path);
         return NULL;

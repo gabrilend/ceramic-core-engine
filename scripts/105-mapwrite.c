@@ -109,12 +109,26 @@ char *mapfile_write(const map_description_t *d)
     add(&o, "%s", "");   /* so an empty description is "" and not null */
 
     /*
-     * There is no section before the stations any more. The statics
-     * section used to sit here, because a port line could point into
-     * it and a reader meeting `$3` should already have seen entry 3.
-     * It was a second spelling of a constant that the dump never
-     * wrote, and it went with issue 601b — every value is now on the
-     * port that reads it, so the file is stations all the way down.
+     * **Where this description says to look, before it looks** (issue
+     * 610). A block of shortcuts when there are any, and nothing at all
+     * when there are none — the format writes exceptions, and a
+     * description that spells out every path in full is not one.
+     *
+     * Written back exactly as it came in, trailing slash and all. The
+     * slash means nothing, so there is nothing to normalise and nothing
+     * that would be lost by leaving somebody's habit alone.
+     */
+    for (desc_shortcut_t *sc = d->shortcuts; sc; sc = sc->next)
+        add(&o, "%s = %s\n", sc->name, sc->path);
+    if (d->shortcuts)
+        add(&o, "\n");
+
+    /*
+     * The statics section used to sit here too, because a port line
+     * could point into it and a reader meeting `$3` should already have
+     * seen entry 3. It was a second spelling of a constant that the
+     * dump never wrote, and it went with issue 601b — every value is
+     * now on the port that reads it.
      */
     for (desc_station_t *s = d->stations; s; s = s->next) {
         add(&o, "%s %s (%s)", kind_keyword(s->kind), s->name, s->box);

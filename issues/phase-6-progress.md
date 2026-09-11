@@ -27,6 +27,44 @@ editing a running one stopped being two things.
 | [601c — the format stops guessing](completed/601c-the-format-stops-guessing.md) | complete | Strings are quoted, braced values continue across lines, an over-long line is refused rather than split, and a `#` inside a string is a character. Four places where the reader decided for itself what somebody probably meant. |
 | [608 — the station line reads at a glance](completed/608-the-station-line-reads-at-a-glance.md) | complete | The kind is the first word of the line and spelled out; the box function is in brackets. Five kind words parse and the writers emit the three long ones. This is the change that collected on 607's promise — the format gained four keywords and took no name away from any map, which the reserved-word test now demonstrates rather than asserts. Two writers turned out to exist where the plan assumed one. |
 
+
+## What naming the file turned up
+
+**Three issues, and each one was the next one's precondition.**
+[609](609-a-station-line-names-its-file.md) made every station line say
+which file its box is in. That made the question *what does a file name
+mean* unavoidable, which is [610](610-a-map-says-where-to-look.md):
+relative to the description, with a block of shortcuts so a path is not
+spelled out every time. And that made a dump able to name its own
+directory, which is [611](611-a-dump-is-a-program.md).
+
+**The generator and the compiler had two ideas of what a filename
+meant.** The generator matched it as a suffix of a box's path; the
+compiler joined it to the description's directory and opened exactly
+that. A description could satisfy one and be refused by the other, and
+for a while every description in this project did. They call one
+function now.
+
+**The migration tool was blind twice.** It could not see boxes written
+into a shell heredoc — it mis-resolved a test's own `swallow` against a
+project box of the same name — and it could not see map text inside C
+string literals, which was ninety-eight addresses across eight files.
+The second was fixable and the tool was extended. The first is not: the
+tool would have to run the shell script to know what it writes. So it
+reports every name it could not place, and that is the whole of the
+defence.
+
+**Addresses got longer and a fixed buffer noticed.** A test held its map
+text in a thousand bytes, which was ample for bare function names and
+not for paths.
+
+**And the shortcut's trailing slash meant something for about an hour.**
+It was going to be how a directory shortcut was told from a file one.
+There is no such distinction: a shortcut is a piece of path standing in
+for the first segment of an address, and `libs` and `libs/` are the same
+piece of path, the way they are to a shell. Doubled slashes collapse for
+the same reason.
+
 ## What the phase established, and what survived being widened
 
 **The parser reads and never constructs.** This is the decision that

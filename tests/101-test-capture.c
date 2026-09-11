@@ -113,11 +113,11 @@ static void work_in_flight_survives(void)
      * therefore allowed to sit waiting; the work is put straight into
      * the adder, which is the station being captured. */
     write_text(map_path,
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "  out 0 - adder.0\n"
         "\n"
-        "station adder (add)\n"
+        "station adder (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  out 0 - 0$\n"
         "  in 0 - gate.0\n"
         "  in 1 -\n");
@@ -189,11 +189,11 @@ static void the_revived_program_finishes_the_work(void)
              work_dir);
 
     write_text(map_path,
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "  out 0 - adder.0\n"
         "\n"
-        "station adder (add)\n"
+        "station adder (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  out 0 - 0$\n"
         "  in 0 - gate.0\n"
         "  in 1 -\n");
@@ -263,10 +263,10 @@ static void a_struct_queue_survives(void)
          * entrance and is allowed to sit waiting. It feeds nothing:
          * the work goes straight into the shifter's buffer, which is
          * the state being captured. */
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "\n"
-        "station shifter (nudge)\n"
+        "station shifter (" CERA_ROOT "/src/boxes/029-demo-boxes.c:nudge)\n"
         "  out 0 - 0$\n"
         "  in 1 -\n");
 
@@ -322,10 +322,10 @@ static void a_deep_buffer_drains_when_the_constant_arrives(void)
     snprintf(map_path, sizeof map_path, "%s/deep.map", work_dir);
 
     write_text(map_path,
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "\n"
-        "station adder (add)\n"
+        "station adder (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  out 0 - 0$\n"
         "  in 0 x64\n"
         "  in 1 -\n");
@@ -369,10 +369,10 @@ static void writing_a_constant_drains_what_was_waiting(void)
     snprintf(map_path, sizeof map_path, "%s/written.map", work_dir);
 
     write_text(map_path,
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "\n"
-        "station adder (add)\n"
+        "station adder (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  out 0 - 0$\n"
         "  in 0 x64\n"
         "  in 1 = 1\n");
@@ -424,7 +424,7 @@ static void a_station_of_only_constants_runs_once_per_change(void)
     snprintf(map_path, sizeof map_path, "%s/constants.map", work_dir);
 
     write_text(map_path,
-        "station adder (add)\n"
+        "station adder (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  out 0 - 0$\n"
         "  in 0 = 2\n"
         "  in 1 = 3\n");
@@ -484,7 +484,7 @@ static void writing_the_same_value_still_counts(void)
     snprintf(map_path, sizeof map_path, "%s/unchanged.map", work_dir);
 
     write_text(map_path,
-        "station adder (add)\n"
+        "station adder (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  out 0 - 0$\n"
         "  in 0 = 2\n"
         "  in 1 = 3\n");
@@ -528,10 +528,10 @@ static void a_write_drains_whatever_is_waiting(void)
     snprintf(map_path, sizeof map_path, "%s/stalled.map", work_dir);
 
     write_text(map_path,
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "\n"
-        "station maker (stamp_record)\n"
+        "station maker (" CERA_ROOT "/src/boxes/029-demo-boxes.c:stamp_record)\n"
         "  out 0 - 0$\n"
         "  in 0 x64\n"
         "  in 1 x64\n"
@@ -595,20 +595,20 @@ static void an_iterator_remembers_where_it_was(void)
     /* One iterator with three exits, each landing somewhere that
      * keeps what it is given. */
     write_text(map_path,
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "\n"
-        "iterator spread (double_it)\n"
+        "iterator spread (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
         "  out 0 - first.0\n"
         "  out 1 - second.0\n"
         "  out 2 - third.0\n"
         "\n"
-        "station first (keep)\n"
+        "station first (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  out 0 - 0$\n"
         "  in 0 - spread.0\n"
-        "station second (keep)\n"
+        "station second (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - spread.1\n"
-        "station third (keep)\n"
+        "station third (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - spread.2\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
@@ -664,11 +664,11 @@ static void draining_produces_a_complete_capture(void)
              work_dir);
 
     write_text(map_path,
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "  out 0 - twice.0\n"
         "\n"
-        "station twice (double_it)\n"
+        "station twice (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
         "  out 0 - 0$\n"
         "  in 0 - gate.0\n");
 
@@ -721,11 +721,11 @@ static void an_incomplete_capture_says_so_and_is_refused(void)
              work_dir);
 
     write_text(map_path,
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "  out 0 - stuck.0\n"
         "\n"
-        "station stuck (wedge)\n"
+        "station stuck (" CERA_ROOT "/src/boxes/029-demo-boxes.c:wedge)\n"
         "  out 0 - 0$\n"
         "  in 0 - gate.0\n");
 
@@ -793,11 +793,11 @@ static void reviving_a_lossy_capture_is_refused(const char *self)
         "# 1 task was still running and did not finish:\n"
         "#   stuck  (station 1)\n"
         "\n"
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "  out 0 - twice.0\n"
         "\n"
-        "station twice (double_it)\n"
+        "station twice (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
         "  out 0 - 0$\n"
         "  in 0 - gate.0\n");
 
@@ -850,15 +850,29 @@ static void a_grown_program_captures_whole(void)
           "a box arrived after the program started");
 
     char map_path[512], out_dir[192], described[512], probe[1024];
+    char late_path[512];
     snprintf(map_path, sizeof map_path, "%s/grown.map", work_dir);
     snprintf(out_dir, sizeof out_dir, "%s/whole", work_dir);
+    snprintf(late_path, sizeof late_path, "%s/quadruple.c", work_dir);
+
+    /*
+     * **The box the build never saw is put where the description can
+     * name it** (issues 609, 611).
+     *
+     * A map file names the file each of its boxes lives in, and is
+     * compiled where it sits — so a box that arrived at run time is
+     * named the same way as any other: a file beside the description.
+     * There is no second spelling for a box with an unusual history,
+     * which is the point.
+     */
+    write_text(late_path, source);
 
     write_text(map_path,
-        "station gate (keep)\n"
+        "station gate (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - 0$\n"
         "  out 0 - four.0\n"
         "\n"
-        "station four (quadruple)\n"
+        "station four (quadruple.c:quadruple)\n"
         "  out 0 - 0$\n"
         "  in 0 - gate.0\n");
 

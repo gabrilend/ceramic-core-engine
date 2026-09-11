@@ -440,41 +440,50 @@ static void a_grown_program_knows_what_it_is_made_of(void)
  */
 static void a_dump_reloads_in_a_fresh_process(const char *self)
 {
-    char src_path[512], map_path[512], dump_path[512], text[1024];
-    snprintf(src_path, sizeof src_path,
+    char dump_path[512];
+    snprintf(dump_path, sizeof dump_path,
              "/dev/shm/minimal-soramech/late-boxes/grown-%d.map",
              (int)getpid());
-    snprintf(map_path, sizeof map_path, "%s", src_path);
-    snprintf(dump_path, sizeof dump_path,
-             "/dev/shm/minimal-soramech/late-boxes/grown-dump-%d.map",
-             (int)getpid());
 
-    /* A program naming the box that was compiled a moment ago, wired
-     * into one the binary has always had. Written as text and loaded,
-     * because only a loaded map carries the station names a dump
-     * needs to speak. */
-    snprintf(text, sizeof text,
-        "station grower (triple_it)\n"
-        "  in 0 = 4\n"
-        "  out 0 - keeper.0\n"
-        "\n"
-        "station keeper (keep)\n"
-        "  out 0 - 0$\n"
-        "  in 0 - grower.0\n");
-    FILE *w = fopen(map_path, "w");
-    check(w != NULL, "the grown program could be written as text");
-    if (w) {
-        fputs(text, w);
-        fclose(w);
-    }
+    /*
+     * **The program is built rather than written down**, and that is
+     * the change (issue 611).
+     *
+     * It used to be map text naming the late box by a path, written to
+     * a file and loaded. There is no path a person can write: the box
+     * was compiled from a scratch file belonging to this process, and
+     * the symbol the program published carries that name. Only the
+     * program knows it.
+     *
+     * So the program is assembled by placing boxes by name — which is
+     * how a program grows in the first place — and the *dump* is what
+     * writes an address down, because the dump is the thing that knows
+     * one.
+     */
+    /* Added and placed one at a time, which is the order the generated
+     * build functions use and the order the table requires: an empty
+     * place is a free place, so a station added and not yet filled is
+     * the one the next add hands back. */
+    cera_map_t *m = cera_map_create_empty();
+    int grower = cera_map_add_station(m);
+    cera_map_name_station(m, grower, "grower");
+    cera_map_place_box(m, grower, "triple_it", CERA_STATION_PLAIN);
 
-    cera_map_t *m = cera_map_load_file(map_path, 2);
-    FILE *f = fopen(dump_path, "w");
-    check(f != NULL, "the grown program could be dumped");
-    if (f) {
-        cera_map_dump(m, f);
-        fclose(f);
-    }
+    int keeper = cera_map_add_station(m);
+    cera_map_name_station(m, keeper, "keeper");
+    cera_map_place_box(m, keeper, "keep", CERA_STATION_PLAIN);
+    cera_map_wire(m, grower, 0, keeper, 0);
+    cera_map_in_port_static_text(m, grower, 0, "4");
+    cera_map_designate_result(m, keeper, 0, 0);
+    cera_map_start(m, 2);
+    check(cera_map_bring_up(m) == NULL, "the grown program came up");
+    /* **A dump that builds** (issue 611): the map, and a directory
+     * beside it holding every source a station places — the box this
+     * program was built with and the one that arrived while it ran,
+     * written out identically, because by now the difference between
+     * them is a fact about history. */
+    check(cera_map_dump_program(m, dump_path) == 0,
+          "the grown program could be dumped with its own code");
     cera_pool_release(m->pool);
     cera_pool_join(m->pool);
     cera_map_destroy(m);

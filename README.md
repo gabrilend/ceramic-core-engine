@@ -125,21 +125,21 @@ below.
 runs:
 
 ```
-station in (keep)
+station in (029-demo-boxes.c:keep)
   in 0 - 0$
   out 0 - twice.0
   out 0 - plus.0
 
-station twice (double_it)
+station twice (029-demo-boxes.c:double_it)
   in 0 - in.0
   out 0 - total.0
 
-station plus (add)
+station plus (029-demo-boxes.c:add)
   in 0 - in.0
   in 1 = 10
   out 0 - total.1
 
-station total (add)
+station total (029-demo-boxes.c:add)
   out 0 - 0$
   in 0 - twice.0
   in 1 - plus.0

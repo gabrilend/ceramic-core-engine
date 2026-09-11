@@ -447,6 +447,12 @@ void cera_map_report_shutdown(cera_map_t *m);
 
 /* {{{ 051 — a live map written back out */
 void cera_map_dump(cera_map_t *m, FILE *out);
+
+/* **A dump that builds** (issue 611): the map file at this path, and a
+ * directory beside it named after it holding every source a station
+ * places. `serac <that map>` turns the two into a program, and nothing
+ * else is needed. Returns 0, or -1 with a reason on stderr. */
+int cera_map_dump_program(cera_map_t *m, const char *map_path);
 /* }}} */
 
 /* {{{ 052 — changing a running program */

@@ -183,12 +183,12 @@ static void test_half_built_round_trips(void)
          * Nothing is wired out of it, which is exactly the case the
          * requirement is built to make legible: the declaration is
          * the interface, and what flows through it is separate. */
-        "station runner (add)\n"
+        "station runner (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  out 0 - 0$\n"
         "  in 0 = 3\n"
         "  in 1 = 4\n"
         "\n"
-        "station waiting (mix)\n"
+        "station waiting (" CERA_ROOT "/src/boxes/029-demo-boxes.c:mix)\n"
         "  in 0 x64 -\n"
         "  in 1 = 2.5\n");
     write_text(map_path, map_text);
@@ -251,10 +251,10 @@ static void test_a_program_is_a_text_file(void)
      * file. A comment rides along to prove comments parse. */
     snprintf(map_text, sizeof map_text,
         "# a whole program, as text\n"
-        "station head (seven)\n"
+        "station head (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - decide.0\n"
         "\n"
-        "comparator decide (keep)\n"
+        "comparator decide (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - head.0\n"
         "  in 1 = 5\n"
         "  out 2 - doubler.0\n"
@@ -263,12 +263,12 @@ static void test_a_program_is_a_text_file(void)
          * station that returns nothing has no output port to be one
          * with (issue 209). Its value goes on to the sink as well —
          * being the way out adds a rule only when nothing is wired. */
-        "station doubler (double_it)\n"
+        "station doubler (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
         "  out 0 - 0$\n"
         "  in 0 - decide.2\n"
         "  out 0 - sink.1\n"
         "\n"
-        "station sink (write_int_file)\n"
+        "station sink (" CERA_ROOT "/src/boxes/029-demo-boxes.c:write_int_file)\n"
         "  in 1 - doubler.0\n"
         "  in 0 = \"%s\"\n",
         result_path);
@@ -310,20 +310,27 @@ static void a_box_can_be_addressed_three_ways(void)
     snprintf(map_path, sizeof map_path, "%s/addressed.map", work_dir);
     snprintf(dump_path, sizeof dump_path, "%s/addressed-dump.map", work_dir);
 
+    /* **One form, and it is a path and a function** (issue 609). There
+     * were three — a bare name, a basename, and a whole path — and the
+     * first two were searched for among whatever sources a build
+     * happened to hold. A description says which file now, so there is
+     * nothing to search and nothing to be ambiguous about.
+     *
+     * The path is relative to the description, which for a description
+     * handed to a running program means relative to where the engine
+     * spills the sources it carries (issue 610). */
     write_text(map_path,
-        "station source (seven)\n"
+        "station source (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - middle.0\n"
-        /* A basename and a function. */
-        "station middle (029-demo-boxes.c:double_it)\n"
+        "station middle (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
         "  in 0 - source.0\n"
         "  out 0 - answer.0\n"
-        /* The whole path and a function. */
-        "station answer (src/boxes/029-demo-boxes.c:keep)\n"
+        "station answer (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  out 0 - 0$\n"
         "  in 0 - middle.0\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
-    check(m->n_stations == 3, "all three forms placed a box");
+    check(m->n_stations == 3, "three stations, each naming its file");
 
     /* Somewhere to put the answer, said before the workers are let
      * go — a result that arrives before anybody has asked for it is
@@ -350,13 +357,15 @@ static void a_box_can_be_addressed_three_ways(void)
     fclose(f);
     cera_map_destroy(m);
 
-    /* The dump shortened all three back to bare names, because each
-     * resolves uniquely — so a map written briefly stays brief. */
+    /* **The dump writes the address whole**, because that is the only
+     * form the format has. It used to shorten each one back to a bare
+     * function name when that resolved uniquely, which made a map
+     * written briefly stay brief — and which stopped meaning anything
+     * the moment a bare name stopped being readable. */
     char *written = slurp_file(dump_path);
-    check(written && strstr(written, "station middle (double_it)") != NULL,
-          "the dump wrote the bare name, which is the unambiguous form");
-    check(written && strstr(written, "029-demo-boxes.c:double_it") == NULL,
-          "and did not write the address it did not need");
+    check(written && strstr(written,
+              "station middle (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)") != NULL,
+          "the dump wrote the whole address, which is the only form");
 
     /* And what it wrote reads back. */
     cera_map_t *again = cera_map_load_file(dump_path, 2);
@@ -395,9 +404,9 @@ static void an_awkward_constant_survives_a_file(void)
     snprintf(dump2, sizeof dump2, "%s/awkward-2.map", work_dir);
 
     write_text(map_path,
-        "station source (seven)\n"
+        "station source (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - 0$\n"
-        "station holder (write_int_file)\n"
+        "station holder (" CERA_ROOT "/src/boxes/029-demo-boxes.c:write_int_file)\n"
         "  in 0 = \"say \\\"hi\\\" \\tand \\xc3\\xa9 done\"\n");
 
     cera_map_t *m = cera_map_load_file(map_path, 2);
@@ -473,28 +482,28 @@ static void the_keywords_are_not_reserved(void)
     snprintf(dump_path, sizeof dump_path, "%s/keywords-dump.map", work_dir);
 
     write_text(map_path,
-        "station in (seven)\n"
+        "station in (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - out.0\n"
-        "station out (add)\n"
+        "station out (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  in 0 - in.0\n"
         "  in 1 = 5\n"
         "  out 0 - statics.0\n"
-        "station statics (double_it)\n"
+        "station statics (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
         "  in 0 - out.0\n"
         "  out 0 - station.0\n"
-        "station station (keep)\n"
+        "station station (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - statics.0\n"
         "  out 0 - comparator.0\n"
-        "station comparator (keep)\n"
+        "station comparator (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - station.0\n"
         "  out 0 - iterator.0\n"
-        "station iterator (keep)\n"
+        "station iterator (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - comparator.0\n"
         "  out 0 - comp.0\n"
-        "station comp (keep)\n"
+        "station comp (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - iterator.0\n"
         "  out 0 - iter.0\n"
-        "station iter (keep)\n"
+        "station iter (" CERA_ROOT "/src/boxes/029-demo-boxes.c:keep)\n"
         "  in 0 - comp.0\n"
         "  out 0 - 0$\n");
 
@@ -561,20 +570,28 @@ static void test_every_refusal(void)
      * draw them, wherever those are called from.
      */
     expect_death_saying(
-        "station head (sevn)\n",
-        "nothing this build was given answers to 'sevn'",
+        /* A misspelled function in a file that is really there, so
+         * this stays a test of a name that resolves to nothing rather
+         * than becoming a test of an address with no file in it — the
+         * reader refuses that one earlier and for a different reason
+         * (issue 609). */
+        "station head (" CERA_ROOT "/src/boxes/029-demo-boxes.c:sevn)\n",
+        /* Matched on the part that is a fact about the description
+         * rather than on the whole path, which is wherever this
+         * repository happens to be checked out. */
+        "nothing this build was given answers to",
         "a misspelled box was accepted");
 
     expect_death_saying(
-        "station head (seven)\n"
+        "station head (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - nowhere.0\n",
         "arrow to 'nowhere', which this map does not declare",
         "an arrow into the void was accepted");
 
     expect_death_saying(
-        "station head (seven)\n"
+        "station head (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - other.5\n"
-        "station other (double_it)\n"
+        "station other (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
         "  in 5 - head.0\n",
         /* The refusal moved into the wiring operation (issue 210g)
          * and gained the box's name on the way, which is what let the
@@ -590,9 +607,9 @@ static void test_every_refusal(void)
         "an arrow to a port beyond the box was accepted");
 
     expect_death_saying(
-        "station head (seven)\n"
+        "station head (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - wrong.1\n"
-        "station wrong (mix)\n"
+        "station wrong (" CERA_ROOT "/src/boxes/029-demo-boxes.c:mix)\n"
         "  in 1 - head.0\n",
         /* Both ends, by position and by size (issues 311b, 311c).
          * A type name is not what makes a wire legal or illegal — the
@@ -611,7 +628,7 @@ static void test_every_refusal(void)
      * have: a port number past the end of a box that takes nothing.
      */
     expect_death_saying(
-        "station head (seven)\n"
+        "station head (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  in 3 = 5\n",
         /* Likewise the input side: the port check is the
          * configuration surface's now, so the words are the ones it
@@ -620,7 +637,7 @@ static void test_every_refusal(void)
         "an input line beyond the box was accepted");
 
     expect_death_saying(
-        "station head (seven)\n"
+        "station head (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 broken.0\n",
         "expected '-' between the port and where its values go",
         "a malformed out line was accepted");
@@ -674,10 +691,10 @@ static void test_every_refusal(void)
      * tests, where the write it performs lives.
      */
     expect_death_saying(
-        "station head (seven)\n"
+        "station head (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - 0$\n"
         "  out 0 - eater.0\n"
-        "station eater (double_it)\n"
+        "station eater (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n"
         "  in 0 - head.0\n"
         "  in 0 -\n",
         "that port is a port with no source yet",
@@ -689,9 +706,9 @@ static void test_every_refusal(void)
      * meant something real, and reading it as anything else would run
      * a program nobody wrote. */
     expect_death_saying(
-        "station puller (add)\n"
+        "station puller (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  in 1 fed\n"
-        "station fed (double_it)\n",
+        "station fed (" CERA_ROOT "/src/boxes/029-demo-boxes.c:double_it)\n",
         "there is no pull path any more",
         "a gather line from an old map was accepted");
 
@@ -700,7 +717,7 @@ static void test_every_refusal(void)
      * having said where its results come from, and the refusal under
      * test never runs. */
     expect_death_saying(
-        "station lonely (add)\n"
+        "station lonely (" CERA_ROOT "/src/boxes/029-demo-boxes.c:add)\n"
         "  out 0 - 0$\n",
         "nothing to seed",
         "a map that can never start was accepted");
@@ -718,13 +735,13 @@ static void test_every_refusal(void)
      * the order stations happened to sit in the table.
      */
     expect_death_saying(
-        "station head (seven)\n"
+        "station head (" CERA_ROOT "/src/boxes/029-demo-boxes.c:seven)\n"
         "  out 0 - 1$\n",
         "nothing is result 0",
         "a result numbered past a gap was accepted");
 
     expect_death_saying(
-        "comparator silent (swallow)\n",
+        "comparator silent (" CERA_ROOT "/src/boxes/029-demo-boxes.c:swallow)\n",
         "cannot be a comparator",
         "a void comparator was accepted");
 

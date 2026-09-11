@@ -1,5 +1,11 @@
 # 008 — Map file format
 
+**A description and a map file are the same thing.** The word
+*description* is used here for the content — what the text says — and
+*map file* for where it is kept. Both are defined with the rest of the
+vocabulary in [001](001-overview.md).
+
+
 A map is a text file. It names stations, says which box function each one
 places, and draws the arrows between them. It carries no types and no
 code — only names, numbers, and connections.
@@ -9,6 +15,70 @@ structure in memory when the program starts. Nothing in the engine writes
 back to it. A running map can be dumped to a new file on demand, and the
 result is another schematic, describing whatever shape the map had grown
 into by then.
+
+
+## Where to look
+
+**Every path in a description is relative to the description itself**,
+and a block before the stations gives short names to the places it
+looks.
+
+```
+math   = /home/ritz/soramech/libs/math/
+curves = libs/curves.c
+
+station add  (math/arithmetic.c:add)
+station turn (curves:rotate)
+```
+
+| written | used as | means |
+|---|---|---|
+| `math = libs/math/` | `math/arithmetic.c:add` | a **directory** — the rest of the path goes inside it |
+| `curves = libs/curves.c` | `curves:rotate` | a **file** — the function follows the colon |
+
+**A trailing slash is what makes it a directory**, and that is written
+rather than worked out: asking the filesystem would make a description
+read differently depending on what happens to be on disk.
+
+A shortcut needs no keyword of its own. It is recognised by the second
+word being `=`, which no station line can have — a station's second word
+is its name — so it costs nothing from the namespace station names live
+in.
+
+**Nothing is searched for.** A shortcut is one place, named. A path that
+does not resolve is refused naming the line and saying what it resolved
+to, which is a more useful sentence than a list of places something was
+not.
+
+An absolute path stays absolute, which is what lets a description reach
+somewhere outside its own tree.
+
+**Two descriptions in different directories resolve the same relative
+path to two different files**, and that is the point: a description
+travels with the sources it names.
+
+### A description handed to a running program
+
+**It is relative to somewhere it has never been**, and this is the one
+case where "relative to the description" needs saying out loud.
+
+A description given to a program while it runs does not stay where it
+was written. The program copies it into a scratch directory, writes out
+every box source it carries in beside it, and compiles it there — so its
+paths resolve against *that* directory. A station line names its box by
+the path the program's own sources were filed under:
+`src/boxes/math.c:add`.
+
+The rule has not changed; the description simply moved to where its
+sources are. What it means is that text written by hand for a running
+program is written against **that program's source layout**, which is
+something the program can say and a person has to be told.
+
+**An absolute path does not help.** Naming the real file on disk
+compiles against the real file, and the symbol that comes out carries
+the absolute path rather than the short one the running program
+published — so the result loads and then fails to resolve, naming a
+symbol two hundred characters long.
 
 ## A complete example
 
@@ -106,8 +176,8 @@ indices — as comments beside the lines that parse.
 **The kind, the name, and the box in brackets.**
 
 ```
-station    feed      (cycle_thirty)
-comparator under_ten (keep)
+station feed (125-mechanism-boxes.c:cycle_thirty)
+comparator under_ten (029-demo-boxes.c:keep)
 iterator   split     (route.c:spread) @2
 ```
 
@@ -131,7 +201,7 @@ a whole description before emitting its first line.
 ### Which box, and three ways to say it
 
 ```
-station adder (add)
+station adder (029-demo-boxes.c:add)
 station adder (math.c:add)
 station adder (src/boxes/math.c:add)
 ```
@@ -190,7 +260,7 @@ carrying one.
 one memory a station keeps**:
 
 ```
-iterator spread (split) @2      the next value takes exit 2
+iterator split (route.c:spread) @2   the next value takes exit 2
 ```
 
 Written only when it says something: zero is where an iterator starts,

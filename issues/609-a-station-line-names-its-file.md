@@ -11,6 +11,15 @@ station doubler (shapes.c:twice)     the only form
 
 ## Current behavior
 
+**Built.** The reader refuses an address with no file, the resolver has
+one form, the writers emit it, a migration tool rewrote every
+description, document and test, and the compiler takes its source list
+from the description rather than from a command line. What a file name
+*means* turned out to be a second question, and it is
+[610](610-a-map-says-where-to-look.md).
+
+## How it stood before
+
 **Three forms, and two of them can be ambiguous.** A station line
 addresses its box as a bare function name, a basename and a function, or
 a path and a function. The last is exact; the first two are searched
@@ -111,7 +120,7 @@ the resolution of it.
 - [608 — The station line reads at a glance](completed/608-the-station-line-reads-at-a-glance.md),
   the same shape of change to the same line, with the migration tool and
   the two-writers lesson it turned up
-- [311a](completed/311a-a-box-carries-its-path.md), where the path form
+- [311a](completed/311a-boxes-addressed-by-file.md), where the path form
   and its suffix-matching rule came from
 - [910 — The engine ships as a compiler](910-the-engine-ships-as-a-compiler.md),
   whose compiler is the thing that would stop needing sources on its
@@ -119,14 +128,75 @@ the resolution of it.
 
 ## Open questions
 
-**Should the compiler then take its sources from the description?** It
-could, once every station line names a file. The argument for: nobody
-types the same filename twice, and the description is the single
-statement of what the program is made of. The argument against: the
-command line is where a person says what this particular build is made
-of, and a description that reaches out and names files is a description
-that can name files that are not there. Undecided, and deliberately not
-part of this issue.
+**Answered: the compiler takes its sources from the description.** Every
+station line names its file, so the command line stops carrying the same
+fact a second time. Each file the description names is checked to exist
+before anything is parsed, and a description naming a file that is not
+there is refused saying which — the worry that a description could reach
+for something absent is answered by looking rather than by not reaching.
+
+**Still open, and it is the one thing this blueprint did not see
+coming: what address does a box compiled at run time carry?**
+
+A box compiled while a program runs is written to a serial-numbered file
+in a scratch directory belonging to *that* process — `box-4127-3.c` —
+and its address is built from that path. The dump therefore shortens
+such an address back to the bare function name on the way out, on
+purpose, because a later process reading the dump would otherwise be
+told to look in a file that no longer exists.
+
+That shortening is now writing a form the reader refuses. So the dump of
+a grown program cannot be read back, and the choice is:
+
+- **Give a late box the address its source is actually filed under.**
+  Every late box already has its source copied to `<name>.c` in the
+  scratch directory precisely so a later process can find it, so
+  `<name>.c:<name>` is both a legal address and the true one. What it
+  costs is that box matching has to recognise it, since the row's
+  recorded address is still the serial path.
+- **Let the dump keep writing a bare name for a late box**, as a
+  documented exception. Cheapest, and it reintroduces the second form
+  this issue exists to remove.
+- **Have the late-compile path file the source under the box's name
+  before compiling it**, so the address is right from the start. Cleanest
+  reading, but one source may define several boxes and then there is no
+  single name to file it under.
+- **Name the file after the source itself** — a digest of its text, so
+  `late-a91f3c2e.c`. This is the option the other three were groping
+  toward, and it came out of building them:
+
+  - The address is right from the start, because the file it names is
+    the file that was compiled. No rewriting, no special case in the
+    dump, no extra rule in box matching.
+  - **One source is one file**, however many boxes it defines. The
+    copy-per-box that exists today — and that made the compiler read the
+    same structs several times and refuse them — stops being needed at
+    all.
+  - The same source compiled twice is the same file, so nothing
+    accumulates.
+  - A fresh process reading a dump finds `late-a91f3c2e.c` because that
+    is where the previous process put it.
+
+  What it costs is that a person reading a dump sees a digest where they
+  used to see a name. That is a real loss and it is the only argument
+  against.
+
+**Why this is now blocking rather than theoretical.** The published
+symbol carries the file the box was compiled from, and a description
+naming a different file compiles to a different symbol. So the dump and
+the binary disagree, and the shared object loads and fails to resolve:
+
+```
+undefined symbol: cera_box_triple_und_it_dot_c__triple_und_it__place
+```
+
+The host published the serial-file symbol; the description asked for the
+filed-under-its-name one. **Whatever a late box's file is called, the
+compile and the description have to agree about it**, which is the thing
+none of the first three options quite delivered.
+
+Nothing here is decided, and the first looks right without being
+obviously right.
 
 **Does a station line naming a file it shares with nothing gain
 anything?** A project with one box source writes that filename on every

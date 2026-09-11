@@ -26,14 +26,31 @@
 #include "099-mapparse.h"
 
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* {{{ die_parse() */
-static void die_parse(const char *path, int line, const char *what)
+/*
+ * Every refusal in here leaves through one door, so they all read the
+ * same way and a person looking for what this reader can decline has
+ * one place to look.
+ *
+ * It takes a format rather than a finished string because the most
+ * useful refusals quote the thing they are refusing — a message that
+ * says which word on the line is wrong saves the reader counting
+ * words, and building that string at each call site would put the
+ * buffer and its length in thirty places.
+ */
+static void die_parse(const char *path, int line, const char *fmt, ...)
 {
-    fprintf(stderr, "map %s:%d: %s\n", path, line, what);
+    va_list ap;
+    fprintf(stderr, "map %s:%d: ", path, line);
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fputc('\n', stderr);
     abort();
 }
 /* }}} */
@@ -390,6 +407,70 @@ static void handle_out(parse_state_t *st, const char *rest)
 /* }}} */
 
 /* {{{ handle_station() */
+/* {{{ static void handle_shortcut() */
+/*
+ * **`name = path`**, a short name for somewhere to look (issue 610).
+ *
+ * The path is kept exactly as written and resolved only when something
+ * needs to open a file, because that is the one moment the answer
+ * depends on where the description lives. Storing a resolved path here
+ * would make a description mean different things depending on which
+ * process read it.
+ *
+ * **A trailing slash means nothing**, the way it means nothing in a
+ * shell. A shortcut is a piece of path standing in for the first
+ * segment of an address, and whether the author wrote `libs` or `libs/`
+ * is a habit rather than a distinction. Doubled slashes are collapsed
+ * where the path is assembled.
+ */
+static void handle_shortcut(parse_state_t *st, const char *name,
+                            const char *rest)
+{
+    char path[512];
+    rest = next_word(rest, path, sizeof path);
+    if (!path[0])
+        die_parse(st->path, st->line,
+                  "'%s' says where to look and then does not say where",
+                  name);
+
+    char extra[8];
+    next_word(rest, extra, sizeof extra);
+    if (extra[0])
+        die_parse(st->path, st->line,
+                  "'%s' says where to look, and that is one path — '%s' "
+                  "follows it and means nothing", name, extra);
+
+    /* A colon would make the shortcut's own name unreadable in a box
+     * address, because that is where the file ends and the function
+     * begins. A slash would make a directory shortcut ambiguous with
+     * the path inside it. */
+    if (strchr(name, ':') || strchr(name, '/'))
+        die_parse(st->path, st->line,
+                  "'%s' cannot be a shortcut name — a name with ':' or '/' "
+                  "in it could not be told from the path it stands for",
+                  name);
+
+    for (desc_shortcut_t *sc = st->d->shortcuts; sc; sc = sc->next)
+        if (strcmp(sc->name, name) == 0)
+            die_parse(st->path, st->line,
+                      "'%s' already says where to look, on line %d — a "
+                      "second answer would make the description depend on "
+                      "which one anybody read first", name, sc->line);
+
+    desc_shortcut_t *sc = need(calloc(1, sizeof *sc), st->path, st->line);
+    sc->name = copy_string(name, st->path, st->line);
+    sc->path = copy_string(path, st->path, st->line);
+    sc->line = st->line;
+
+    /* Appended rather than pushed, so the order they are reported in is
+     * the order somebody wrote them. */
+    desc_shortcut_t **tail = &st->d->shortcuts;
+    while (*tail)
+        tail = &(*tail)->next;
+    *tail = sc;
+}
+/* }}} */
+
 /*
  * The kind arrives already decided, because the *keyword* carried it
  * (issue 608). What is left on the line is a name, a box function in
@@ -455,6 +536,45 @@ static void handle_station(parse_state_t *st, int kind, const char *name,
                       "function should be");
         memmove(box, box + 1, blen - 2);
         box[blen - 2] = 0;
+    }
+
+    /*
+     * **A box address says which file the function is in** (issue 609),
+     * and there is one form rather than three.
+     *
+     * A bare function name used to be legal and was searched for among
+     * whatever sources a build happened to be handed. It resolved when
+     * the name was unique there, and was refused when two files
+     * answered to it — so nothing was ever silently wrong on the
+     * machine that compiled it. What was wrong was the description: it
+     * did not say what it meant, so the same file compiled next year
+     * against a different set of sources could mean a different
+     * function and nobody would be told.
+     *
+     * Saying the file also makes a description the only statement of
+     * what a program is made of, which is what lets the compiler stop
+     * being handed the same filenames a second time on its command
+     * line.
+     *
+     * The colon must have something on both sides. A trailing colon is
+     * a name with the file left off and a leading one is a file with
+     * the name left off, and both are likelier to be a slip than a
+     * thing anybody meant.
+     */
+    {
+        const char *colon = strchr(box, ':');
+        if (!colon)
+            die_parse(st->path, st->line,
+                      "'%s' does not say which file it is in — write it as "
+                      "'somefile.c:%s'", box, box);
+        if (colon == box)
+            die_parse(st->path, st->line,
+                      "'%s' has nothing before the colon, where the file "
+                      "goes", box);
+        if (!colon[1])
+            die_parse(st->path, st->line,
+                      "'%s' has nothing after the colon, where the function "
+                      "goes", box);
     }
 
     /*
@@ -692,6 +812,30 @@ map_description_t *mapfile_parse(const char *path)
          * map has more input and output lines than station lines, so
          * the marker lands on the cheaper half.
          */
+        /*
+         * **A shortcut, before any station** (issue 610).
+         *
+         * Recognised by the second word being `=`, which no station
+         * line can have: a station's second word is its name, and a
+         * name is an identifier. So this needs no keyword of its own
+         * and costs no word from the namespace station names live in —
+         * which is the rule issue 607 set down and the reason every
+         * other line kind announces itself.
+         */
+        const char *after_first = rest;
+        while (after_first && (*after_first == ' ' || *after_first == '\t'))
+            after_first++;
+        if (after_first && after_first[0] == '=' &&
+            (after_first[1] == ' ' || after_first[1] == '\t')) {
+            if (d->n_stations > 0)
+                die_parse(path, st.line,
+                          "'%s' says where to look, and that block comes "
+                          "before the stations — a description says where "
+                          "it looks before it looks", first);
+            handle_shortcut(&st, first, after_first + 1);
+            continue;
+        }
+
         if (strcmp(first, "in") == 0) {
             handle_in(&st, rest);
         } else if (strcmp(first, "out") == 0) {
@@ -764,9 +908,133 @@ map_description_t *mapfile_parse(const char *path)
 }
 /* }}} */
 
+/* {{{ collapse_slashes() */
+/*
+ * **A run of slashes is one slash**, which is the rule a shell uses and
+ * the reason a trailing slash on a shortcut can mean nothing.
+ *
+ * `libs/` joined to `math.c` is `libs//math.c`, and that names the same
+ * file as `libs/math.c` to the operating system already — but not to
+ * `strcmp`, and two callers comparing paths as strings is exactly what
+ * this file exists to keep in agreement. So the doubling is removed
+ * where the path is assembled rather than left for everybody who looks
+ * at one.
+ *
+ * A leading pair is left alone, because on some systems `//` at the
+ * start of a path means something and nothing here is worth breaking it
+ * over.
+ */
+static char *collapse_slashes(const char *path)
+{
+    size_t n = strlen(path);
+    char *out = malloc(n + 1);
+    if (!out)
+        return NULL;
+
+    size_t w = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (path[i] == '/' && w > 0 && out[w - 1] == '/')
+            continue;
+        out[w++] = path[i];
+    }
+    /* A trailing slash says nothing about a file either. */
+    if (w > 1 && out[w - 1] == '/')
+        w--;
+    out[w] = '\0';
+    return out;
+}
+/* }}} */
+
+/* {{{ mapfile_source_of() */
+/*
+ * **Which file holds the box a station line names** (issue 610).
+ *
+ * Three steps, in this order, and each is a rule rather than an
+ * attempt:
+ *
+ * 1. **The address splits at its last colon.** What is left is a file,
+ *    what is right is a function, and this only cares about the left.
+ * 2. **A shortcut stands in for the first segment.** `math` in
+ *    `math/arithmetic.c` and `curves` in `curves` are the same
+ *    substitution — the first segment of a path with no slash in it is
+ *    the whole of it — so there is one rule rather than one per shape
+ *    of shortcut.
+ * 3. **What is left is resolved against the description's own
+ *    directory**, unless it is already absolute, and doubled slashes
+ *    are collapsed the way a shell collapses them.
+ *
+ * Nothing is searched for at any step. The answer is one path, and if
+ * there is nothing there the caller says so naming the line — which is
+ * a better message than a list of places something was not.
+ */
+char *mapfile_source_of(const map_description_t *d, const char *box_address)
+{
+    if (!d || !box_address)
+        return NULL;
+    const char *colon = strrchr(box_address, ':');
+    if (!colon)
+        return NULL;
+
+    char file[512];
+    size_t flen = (size_t)(colon - box_address);
+    if (flen >= sizeof file)
+        return NULL;
+    memcpy(file, box_address, flen);
+    file[flen] = '\0';
+
+    /* **A shortcut stands in for the first segment**, and the first
+     * segment of a path with no slash in it is the whole path. One
+     * rule, which is why there is no such thing as a directory
+     * shortcut or a file shortcut. */
+    char expanded[1024];
+    int used_shortcut = 0;
+    for (desc_shortcut_t *sc = d->shortcuts; sc && !used_shortcut;
+         sc = sc->next) {
+        size_t n = strlen(sc->name);
+        if (strncmp(file, sc->name, n) != 0)
+            continue;
+        if (file[n] == '\0')
+            snprintf(expanded, sizeof expanded, "%s", sc->path);
+        else if (file[n] == '/')
+            snprintf(expanded, sizeof expanded, "%s/%s", sc->path, file + n);
+        else
+            continue;
+        used_shortcut = 1;
+    }
+    if (!used_shortcut)
+        snprintf(expanded, sizeof expanded, "%s", file);
+
+    char joined[2048];
+    if (expanded[0] == '/') {
+        /* Absolute stays absolute — which is what makes a shortcut to
+         * somewhere outside the project possible at all. */
+        snprintf(joined, sizeof joined, "%s", expanded);
+    } else {
+        /* And everything else hangs off the description's own
+         * directory, which is the whole of what "relative" means
+         * here. */
+        const char *slash = strrchr(d->path, '/');
+        size_t dirlen = slash ? (size_t)(slash - d->path) : 1;
+        const char *dir = slash ? d->path : ".";
+        snprintf(joined, sizeof joined, "%.*s/%s", (int)dirlen, dir, expanded);
+    }
+
+    return collapse_slashes(joined);
+}
+/* }}} */
+
 /* {{{ mapfile_free() */
 void mapfile_free(map_description_t *d)
 {
+    desc_shortcut_t *sc = d->shortcuts;
+    while (sc) {
+        desc_shortcut_t *next = sc->next;
+        free(sc->name);
+        free(sc->path);
+        free(sc);
+        sc = next;
+    }
+
     desc_station_t *s = d->stations;
     while (s) {
         desc_input_t *in = s->inputs;

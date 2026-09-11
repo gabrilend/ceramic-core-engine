@@ -144,10 +144,44 @@ typedef struct desc_station {
 } desc_station_t;
 
 
+/* {{{ desc_shortcut_t — issue 610 */
+/*
+ * **A short name standing for a path**, declared before any station as
+ * `name = path`, so a line does not spell out a long path every time.
+ *
+ * | field | type | what it holds |
+ * |---|---|---|
+ * | `name` | `char *` | the short name, as written |
+ * | `path` | `char *` | what it stands for, as written — relative to the description, or absolute |
+ * | `line` | `int` | where it was declared, for refusing a duplicate |
+ *
+ * **There is no such thing as a directory shortcut or a file
+ * shortcut.** A shortcut is a piece of path, and it stands in for the
+ * first segment of an address wherever one is used — so `math` in
+ * `math/arithmetic.c` and `curves` in `curves:rotate` are the same
+ * substitution, differing only in whether anything followed.
+ *
+ * A trailing slash on the path is therefore optional and means
+ * nothing, the way it means nothing in a shell: `libs/` and `libs`
+ * name one directory, and `libs//math.c` and `libs/math.c` name one
+ * file. Doubled slashes are collapsed on the way out.
+ */
+typedef struct desc_shortcut {
+    char *name;
+    char *path;
+    int   line;
+    struct desc_shortcut *next;
+} desc_shortcut_t;
+/* }}} */
+
 typedef struct map_description {
     char           *path;
     desc_station_t *stations;   /* in file order */
     int             n_stations;
+    /* Where this description says to look (issue 610). Empty on a
+     * description that names every path in full, which is every
+     * description that was written before shortcuts existed. */
+    desc_shortcut_t *shortcuts;
 } map_description_t;
 /* }}} */
 
@@ -176,6 +210,29 @@ void mapfile_free(map_description_t *d);
  * produce from a drawing.
  */
 char *mapfile_write(const map_description_t *d);
+/* }}} */
+
+/* {{{ mapfile_source_of() — issue 610 */
+/*
+ * **Which file holds the box a station line names**, as a path anybody
+ * can open.
+ *
+ * Given a description and a box address — `math/arithmetic.c:add`,
+ * `curves:rotate`, `boxes/shapes.c:twice` — this applies the
+ * description's shortcuts and resolves what is left against the
+ * directory the description lives in. An absolute path is returned
+ * unchanged.
+ *
+ * There is one of these because there are two callers who must agree:
+ * the compiler, finding the sources to parse, and the emitter,
+ * deciding which parsed box a line means. They disagreed once, and the
+ * symptom was a description that built under one and was refused by
+ * the other naming a file it could not find.
+ *
+ * The caller frees what comes back. Null when the address has no colon,
+ * which the reader has already refused.
+ */
+char *mapfile_source_of(const map_description_t *d, const char *box_address);
 /* }}} */
 
 

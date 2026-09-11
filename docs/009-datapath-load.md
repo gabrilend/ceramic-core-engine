@@ -29,8 +29,25 @@ the `main` — with nothing written to disk except the program itself. See
 
 ## From a file to a running program
 
+**A map file is compiled where it sits, and whole** (issue 611). Every
+path in it is relative to itself, so the files it names are found by
+looking rather than by copying anything anywhere; and what comes out
+defines every box the map names rather than binding to boxes some
+program already holds. Nothing binds, so nothing can fail to bind.
+
+That is what lets a dump be resumed by `serac` and nothing else, and it
+costs a second copy of any box the loading program already had — which
+is free, because a box may not remember anything between calls and two
+copies of one are indistinguishable.
+
+## From text handed to a running program
+
 Four movements, and only the last one is the engine's. This is the other
-case: a description arriving at a program that is already running.
+case, and it differs in one fact that decides the rest: **text has no
+home.** There is nothing for its paths to be relative to, so it is
+written into a scratch directory with the program's own box sources
+beside it, and what gets compiled binds to the boxes that program has
+already published.
 
 **One — the compiler is asked what the description references.** A
 program that grew and then wrote itself down names boxes that arrived

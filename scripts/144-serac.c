@@ -43,11 +43,9 @@
  *   serac --unpack DIR                       cera.c, cera.h, the syms file
  *
  *   -o PATH        where the result lands, instead of beside the map
- *   --main=FILE    a C file carrying its own main, instead of the emitted one
  *   --root=DIR     what box paths are shortened against in generated symbols
  *   --cc=NAME      the C compiler to invoke
  *   --keep-c=PATH  also write out the text handed to the compiler
- *   --results=N    how many values of each result the program can hold
  */
 #include "067-genparse.h"
 #include "099-mapparse.h"
@@ -320,13 +318,76 @@ static char *stem_of(arena_t *a, const char *path)
 }
 /* }}} */
 
+/* {{{ static int sources_from_map() */
+/*
+ * **The C files a description names**, gathered from the description
+ * itself (issue 609).
+ *
+ * Every station line says which file its box lives in, so the
+ * description is the complete statement of what the program is made of
+ * and there is nothing left for a command line to add. Typing the same
+ * filenames a second time was the thing that could disagree with the
+ * description and be believed anyway.
+ *
+ * Each path is taken relative to the directory holding the description,
+ * because that is the self-contained thing somebody hands to somebody
+ * else — the same rule that decides where the program lands.
+ *
+ * **Each one is checked to exist before anything is parsed**, and a
+ * description naming a file that is not there is refused saying which
+ * file and which line asked for it. The worry that a description could
+ * reach out and name something absent is answered by looking, which is
+ * cheap, rather than by refusing to let it name anything.
+ *
+ * Named twice is named once. A description with four stations in one
+ * file must not hand that file to the parser four times, which would
+ * define every box in it four times over.
+ */
+static int sources_from_map(arena_t *a, const char *map_path,
+                            const char **out, int room)
+{
+    map_description_t *md = mapfile_parse(map_path);
+    int n = 0;
+
+    for (desc_station_t *st = md->stations; st; st = st->next) {
+        /* The description's own rules for where to look — its shortcuts
+         * and its directory — applied by the one function that knows
+         * them, so this and the emitter cannot come to different
+         * conclusions about the same line (issue 610). */
+        char *found = mapfile_source_of(md, st->box);
+        if (!found)
+            fail("%s:%d: '%s' does not say which file it is in",
+                 map_path, st->line, st->box);
+
+        int already = 0;
+        for (int i = 0; i < n && !already; i++)
+            already = strcmp(out[i], found) == 0;
+        if (already) {
+            free(found);
+            continue;
+        }
+
+        if (access(found, R_OK) != 0)
+            fail("%s:%d names %s, and there is nothing at %s",
+                 map_path, st->line, st->box, found);
+
+        if (n >= room)
+            fail("%s names more source files than this can hold", map_path);
+        out[n++] = arena_strdup(a, found);
+        free(found);
+    }
+
+    mapfile_free(md);
+    return n;
+}
+/* }}} */
+
 /* {{{ main */
 int main(int argc, char **argv)
 {
     arena_t *a = arena_new();
 
     const char  *out_path   = NULL;
-    const char  *main_file  = NULL;
     const char  *root       = NULL;
     const char  *cc         = SERAC_CC;
     const char  *keep_c     = NULL;
@@ -334,14 +395,38 @@ int main(int argc, char **argv)
     int          shared     = 0;
     int          emit_c     = 0;
     /*
-     * How many values of each result the program will have somewhere to
-     * put. A bound has to exist, because the array a result lands in is
-     * the caller's memory and the engine never grows it — that is what
-     * lets a worker write into it without a lock. Going past it is a
-     * refusal naming how many there were, never a quiet truncation, so
-     * this number being wrong is something a person finds out about.
+     * **The boxes are already in the process that will load this.**
+     * Set when a map is being compiled for a program that is already
+     * running: that program was built with these boxes, published the
+     * functions that build stations from them, and can bind what is
+     * emitted here to what it already holds. So the emitted file
+     * declares those functions rather than defining them.
+     *
+     * Asked for rather than assumed, because the other case is the one
+     * that matters now: a map file that names its own sources is a
+     * whole program and compiles into one, which is what lets a dump be
+     * built by this compiler and nothing else (issue 611).
      */
-    int          results_room = 1024;
+    int          external   = 0;
+    /*
+     * **How many values of each result the program can hold.** A bound
+     * has to exist: the array a result lands in is the caller's memory
+     * and the engine never grows it, which is what lets a worker claim
+     * a slot with one atomic add and write into it without taking a
+     * lock. Fixing it before any worker runs is the whole reason that
+     * works.
+     *
+     * It is a constant rather than an option. There was briefly a flag,
+     * and it was the wrong shape: how many values a program produces is
+     * a fact about that program, and a program whose author cares about
+     * it should take it as one of its own arguments and build what they
+     * need. An engine that grew a knob for it would be answering a
+     * question nobody asked it.
+     *
+     * Going past it is a refusal naming how many there were, never a
+     * quiet truncation, so a program that outgrows this says so.
+     */
+    const int    results_room = 1024;
 
     const char **sources  = arena_alloc(a, (size_t)(argc + 1) * sizeof *sources);
     int          n_sources = 0;
@@ -378,6 +463,7 @@ int main(int argc, char **argv)
             return 0;
         }
         if (strcmp(arg, "--shared") == 0)          { shared = 1; continue; }
+        if (strcmp(arg, "--external-boxes") == 0)  { external = 1; continue; }
         if (strcmp(arg, "--emit-c") == 0)          { emit_c = 1; continue; }
         if (strcmp(arg, "-o") == 0) {
             if (i + 1 >= argc)
@@ -385,17 +471,9 @@ int main(int argc, char **argv)
             out_path = argv[++i];
             continue;
         }
-        if (strncmp(arg, "--main=", 7)   == 0) { main_file = arg + 7;  continue; }
         if (strncmp(arg, "--root=", 7)   == 0) { root      = arg + 7;  continue; }
         if (strncmp(arg, "--cc=", 5)     == 0) { cc        = arg + 5;  continue; }
         if (strncmp(arg, "--keep-c=", 9) == 0) { keep_c    = arg + 9;  continue; }
-        if (strncmp(arg, "--results=", 10) == 0) {
-            results_room = atoi(arg + 10);
-            if (results_room <= 0)
-                fail("--results wants a count of values greater than zero, "
-                     "not '%s'", arg + 10);
-            continue;
-        }
         if (arg[0] == '-')
             fail("no such option: %s", arg);
 
@@ -424,9 +502,19 @@ int main(int argc, char **argv)
     if (!map_path && !shared)
         fail("no description named — a program is a map file and the C "
              "functions it names");
+
+    /*
+     * **A description says what it is made of, so nothing else has to**
+     * (issue 609). Sources named on the command line are still accepted
+     * — the box-only form has no description to read them from — but a
+     * description is asked first and is the whole answer when there is
+     * one.
+     */
+    if (map_path && n_sources <= 0)
+        n_sources = sources_from_map(a, map_path, sources, argc);
+
     if (n_sources <= 0)
-        fail("no C sources named — %s names boxes that have to be somewhere",
-             map_path ? map_path : "a shared object");
+        fail("no C sources named, and no description to take them from");
 
     /* The thing this run is named after: the description when there is
      * one, and otherwise the first source, which is the only other
@@ -489,22 +577,26 @@ int main(int argc, char **argv)
     int         n_maps  = map_path ? 1 : 0;
 
     /*
-     * **A description compiled for a program that already holds the
-     * boxes carries nothing but build functions.** That is what
-     * `--shared` with a description means, and it is why the same flag
-     * both makes a shared object and changes what goes in it: a late
-     * description binds to the placement functions the running program
-     * already published, and a second copy of a box would be a second
-     * copy of something a wire is already pointing at.
+     * **What goes in a shared object is a separate question from
+     * whether to make one.**
      *
-     * `--shared` with no description is the other half of the same
-     * story — boxes arriving before anything names them — and those do
-     * have to be defined, because nothing else holds them yet.
+     * `--shared` alone compiles everything: the boxes, their shims,
+     * their placement functions, and the build function for any map.
+     * That is what a map file naming its own sources wants, because
+     * such a map is a whole program and nothing needs to be waiting
+     * for it.
+     *
+     * `--external-boxes` says the boxes are already in the process that
+     * will load this, so only the build functions are emitted and they
+     * bind to what that program published. That is the other story —
+     * text handed to a program while it runs — and it is now asked for
+     * rather than inferred from `--shared`, because inferring it made a
+     * self-contained map impossible to compile.
      */
     buf_t construction;
     buf_init(&construction);
     ge_build(&d, sources, n_sources, maps, n_maps, root,
-             shared && n_maps > 0, &construction);
+             external && n_maps > 0, &construction);
 
     /*
      * **A main, unless this is a part of a program rather than one.** A
@@ -515,19 +607,18 @@ int main(int argc, char **argv)
      * buffer holding everything except the engine, which is exactly
      * what `--emit-c` hands over.
      */
-    if (!shared) {
-        if (main_file) {
-            size_t n = 0;
-            char  *text = gp_read_file(a, main_file, &n);
-            /* Theirs may or may not include the header — either is a
-             * perfectly ordinary thing to have written — so unlike the
-             * two texts this program generates, the count is not
-             * checked. */
-            append_without_engine_include(&construction, text);
-        } else {
-            ge_main(&d, map_path, root, results_room, &construction);
-        }
-    }
+    /*
+     * **A main, unless this is a part of a program rather than one.** A
+     * shared object is loaded into something that already has one.
+     *
+     * There was briefly a way to hand over a `main` of your own here.
+     * It did nothing `--emit-c` and `--unpack` do not already do
+     * between them — take the C and build it yourself, or take the
+     * engine and build everything yourself — and a third route to one
+     * place is how a tool starts being hard to describe.
+     */
+    if (!shared)
+        ge_main(&d, map_path, root, results_room, &construction);
 
     /*
      * **What a person gets when they ask for the C**: everything except

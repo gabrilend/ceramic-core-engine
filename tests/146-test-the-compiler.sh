@@ -69,19 +69,19 @@ spot place(int v)
 BOX
 
 cat > "${WORK}/shapes.map" <<'MAP'
-station doubler (twice)
+station doubler (shapes.c:twice)
   in 0 - 0$
   out 0 - 0$
 
-station halver (halve)
+station halver (shapes.c:halve)
   in 0 - 1$
   out 0 - 1$
 
-station sizer (size_of)
+station sizer (shapes.c:size_of)
   in 0 - 2$
   out 0 - 2$
 
-station placer (place)
+station placer (shapes.c:place)
   in 0 - 3$
   out 0 - 3$
 MAP
@@ -118,7 +118,7 @@ spot nudge(spot s)
 BOX
 
 cat > "${WORK}/nudge.map" <<'MAP'
-station mover (nudge)
+station mover (029-demo-boxes.c:nudge)
   in 0 - 0$
   out 0 - 0$
 MAP
@@ -142,7 +142,7 @@ int shout(int v)
 BOX
 
 cat > "${WORK}/quiet.map" <<'MAP'
-station voice (shout)
+station voice (quiet.c:shout)
   in 0 - 0$
 MAP
 
@@ -206,7 +206,7 @@ void swallow(int v)
 }
 BOX
 cat > "${WORK}/void.map" <<'MAP'
-station sink (swallow)
+station sink (void.c:swallow)
   in 0 - 0$
   out 0 - 0$
 MAP
@@ -237,6 +237,118 @@ grep -q "spot place" "${WORK}/shapes.c" \
 
 echo "  a wrong argument count, a void result, two descriptions and an"
 echo "  output landing on an input are each refused"
+
+# --- a description says where to look --------------------------------
+#
+# Every path in a description is relative to the description, and a block
+# before the stations gives short names to places (issue 610). Both kinds
+# of shortcut are exercised here, and so is the thing they are for: no C
+# file is named on the command line at all, because the description
+# already said which files it uses.
+mkdir -p "${WORK}/away/libs/math" "${WORK}/away/libs"
+
+cat > "${WORK}/away/libs/math/arithmetic.c" <<'BOX'
+int add(int a, int b)
+{
+    return a + b;
+}
+BOX
+
+cat > "${WORK}/away/libs/curves.c" <<'BOX'
+int rotate(int v)
+{
+    return v * 90;
+}
+BOX
+
+cat > "${WORK}/away/turn.map" <<'MAP'
+math   = libs/math/
+curves = libs/curves.c
+
+station turn (curves:rotate)
+  in 0 - 0$
+  out 0 - sum.0
+
+station sum (math/arithmetic.c:add)
+  in 0 - turn.0
+  in 1 = 7
+  out 0 - 0$
+MAP
+
+"${SERAC}" "${WORK}/away/turn.map" >/dev/null \
+    || fail "serac refused a description that says where to look"
+got="$("${WORK}/away/turn" 2)"
+[[ "${got}" == "187" ]] \
+    || fail "a directory shortcut and a file shortcut gave '${got}', not 187"
+echo "  a directory shortcut and a file shortcut both resolve, and no C"
+echo "  file was named on the command line"
+
+# The same relative path in two places is two different files, which is
+# what "relative to the description" has to mean to be worth anything.
+mkdir -p "${WORK}/one" "${WORK}/two"
+for n in one two; do
+    cat > "${WORK}/${n}/lib.c" <<BOX
+int answer(int v)
+{
+    return v + $([[ ${n} == one ]] && echo 1 || echo 2);
+}
+BOX
+    cat > "${WORK}/${n}/p.map" <<'MAP'
+station only (lib.c:answer)
+  in 0 - 0$
+  out 0 - 0$
+MAP
+    "${SERAC}" "${WORK}/${n}/p.map" >/dev/null \
+        || fail "serac refused ${n}/p.map"
+done
+a="$("${WORK}/one/p" 10)"
+b="$("${WORK}/two/p" 10)"
+[[ "${a}" == "11" && "${b}" == "12" ]] \
+    || fail "one relative path in two directories gave '${a}' and '${b}'"
+echo "  and the same relative path in two directories is two different files"
+
+# What it refuses about shortcuts.
+cat > "${WORK}/away/twice.map" <<'MAP'
+math = libs/math/
+math = libs/curves.c
+
+station sum (math/arithmetic.c:add)
+  in 0 - 0$
+  out 0 - 0$
+MAP
+if "${SERAC}" "${WORK}/away/twice.map" >/dev/null 2>"${WORK}/twice.txt"; then
+    fail "a shortcut declared twice was accepted"
+fi
+grep -q "already says where to look" "${WORK}/twice.txt" \
+    || fail "the refusal did not say it was a duplicate: $(cat "${WORK}/twice.txt")"
+
+cat > "${WORK}/away/late.map" <<'MAP'
+station sum (math/arithmetic.c:add)
+  in 0 - 0$
+  out 0 - 0$
+
+math = libs/math/
+MAP
+if "${SERAC}" "${WORK}/away/late.map" >/dev/null 2>"${WORK}/late.txt"; then
+    fail "a shortcut declared after the stations was accepted"
+fi
+grep -q "before the stations" "${WORK}/late.txt" \
+    || fail "the refusal did not say where the block goes: $(cat "${WORK}/late.txt")"
+
+# And a path that resolves to nothing says what it resolved to, which is
+# the sentence somebody needs to see what they got wrong.
+cat > "${WORK}/away/missing.map" <<'MAP'
+station sum (nowhere/arithmetic.c:add)
+  in 0 - 0$
+  out 0 - 0$
+MAP
+if "${SERAC}" "${WORK}/away/missing.map" >/dev/null 2>"${WORK}/missing.txt"; then
+    fail "a description naming a file that is not there was accepted"
+fi
+grep -q "nowhere/arithmetic.c" "${WORK}/missing.txt" \
+    || fail "the refusal did not name the path: $(cat "${WORK}/missing.txt")"
+echo "  a shortcut declared twice, declared late, or resolving to nothing"
+echo "  is refused, and the last one says what it resolved to"
 
 # --- and it relocates ------------------------------------------------
 #

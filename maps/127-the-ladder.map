@@ -27,27 +27,29 @@
 # Ten of every thirty go to each port. `collect` needs all three before
 # it runs, which is the readiness rule and the whole reason it waits.
 
-station feed (cycle_thirty)
+boxes = ../src/boxes/
+
+station feed (boxes/125-mechanism-boxes.c:cycle_thirty)
   in 0 - 0$
   out 0 - double.0
 
-station double (double_it)
+station double (boxes/029-demo-boxes.c:double_it)
   in 0 - feed.0
   out 0 - under_ten.0
 
-comparator under_ten (keep)
+comparator under_ten (boxes/029-demo-boxes.c:keep)
   in 0 - double.0
   in 1 = 19
   out 0 - collect.0
   out 2 - under_twenty.0
 
-comparator under_twenty (keep)
+comparator under_twenty (boxes/029-demo-boxes.c:keep)
   in 0 - under_ten.2
   in 1 = 39
   out 0 - collect.1
   out 2 - collect.2
 
-station collect (three_way)
+station collect (boxes/125-mechanism-boxes.c:three_way)
   out 0 - 0$
   in 0 - under_ten.0
   in 1 - under_twenty.0

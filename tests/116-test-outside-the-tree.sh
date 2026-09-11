@@ -66,11 +66,11 @@ int add_up(int a, int b)
 BOX
 
 cat > "${AWAY}/away.map" <<'MAP'
-station feed (carry)
+station feed (arithmetic.c:carry)
   in 0 - 0$
   out 0 - total.0
 
-station total (add_up)
+station total (arithmetic.c:add_up)
   out 0 - 0$
   in 0 - feed.0
   in 1 = 30
