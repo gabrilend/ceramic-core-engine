@@ -454,11 +454,11 @@ static void a_dump_reloads_in_a_fresh_process(const char *self)
      * because only a loaded map carries the station names a dump
      * needs to speak. */
     snprintf(text, sizeof text,
-        "station grower triple_it p\n"
+        "station grower (triple_it)\n"
         "  in 0 = 4\n"
         "  out 0 - keeper.0\n"
         "\n"
-        "station keeper keep p\n"
+        "station keeper (keep)\n"
         "  out 0 - 0$\n"
         "  in 0 - grower.0\n");
     FILE *w = fopen(map_path, "w");

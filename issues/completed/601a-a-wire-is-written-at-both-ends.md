@@ -107,10 +107,10 @@ is unchanged.
 
 ## Related
 
-- [601 — Map file parser](completed/601-map-file-parser.md)
-- [603 — Loader second pass](completed/603-loader-second-pass.md), where
+- [601 — Map file parser](601-map-file-parser.md)
+- [603 — Loader second pass](603-loader-second-pass.md), where
   wires are drawn and where the comparison belongs
-- [604 — Load-time validation](completed/604-load-time-validation.md),
+- [604 — Load-time validation](604-load-time-validation.md),
   whose fault-collecting this joins
-- [703 — Map dump](completed/703-map-dump.md), which must write both ends
-- [008 — Map file format](../docs/008-map-file-format.md)
+- [703 — Map dump](703-map-dump.md), which must write both ends
+- [008 — Map file format](../../docs/008-map-file-format.md)

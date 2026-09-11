@@ -169,7 +169,7 @@ computes a server set from a description of hardware, and that is a
 *way of naming a destination* rather than a different concept.
 
 ```
-station churn math.c:grind p
+station churn (math.c:grind)
   to slow-lane
   in 1 $0
   out 0 - printer.0

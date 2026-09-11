@@ -390,75 +390,90 @@ static void handle_out(parse_state_t *st, const char *rest)
 /* }}} */
 
 /* {{{ handle_station() */
-static void handle_station(parse_state_t *st, const char *name,
+/*
+ * The kind arrives already decided, because the *keyword* carried it
+ * (issue 608). What is left on the line is a name, a box function in
+ * brackets, and at most an iterator's position.
+ */
+static void handle_station(parse_state_t *st, int kind, const char *name,
                            const char *rest)
 {
-    char box[128], kind_word[8], door_word[16], extra[16], beyond[8];
+    char box[160], extra[16], beyond[8];
     rest = next_word(rest, box, sizeof box);
-    rest = next_word(rest, kind_word, sizeof kind_word);
-    rest = next_word(rest, door_word, sizeof door_word);
     rest = next_word(rest, extra, sizeof extra);
     next_word(rest, beyond, sizeof beyond);
 
-    if (!box[0] || !kind_word[0])
+    if (!box[0])
         die_parse(st->path, st->line,
-                  "a station line is three words: name, box function, kind (p/c/i)");
-    /* Two optional words may follow the kind — a door and an
-     * iterator's position — so a third is one too many. */
+                  "a station line is two words after its keyword: a name and "
+                  "a box function in brackets, as 'station adder (math.c:add)'");
+    /* One optional word may follow the box — an iterator's position —
+     * so a second is one too many. */
     if (beyond[0])
         die_parse(st->path, st->line, "unexpected trailing words on a station line");
 
-    /* The kind is written rather than inferred: forgetting a
-     * threshold line must be an error, never a silent demotion to a
-     * plain box that routes everything one way (issue 601). One
-     * letter, dispatched. */
-    int kind;
-    if (strcmp(kind_word, "p") == 0)      kind = CERA_STATION_PLAIN;
-    else if (strcmp(kind_word, "c") == 0) kind = CERA_STATION_COMPARATOR;
-    else if (strcmp(kind_word, "i") == 0) kind = CERA_STATION_ITERATOR;
-    else {
-        die_parse(st->path, st->line,
-                  "the kind must be p (plain), c (comparator), or i (iterator)");
-        return;
+    /*
+     * **The brackets delimit both ends of the box address**, which is
+     * what a space cannot do: a space says where one word stopped and
+     * never says which word matters. Every other field on this line is
+     * a name somebody chose; this one is code that exists on disk.
+     *
+     * A trailing `p`, `c` or `i` is named in the refusal rather than
+     * reported as an unexpected word, because every map written before
+     * issue 608 has one on every station line and its author wants to
+     * be told what replaced it.
+     */
+    {
+        size_t blen = strlen(box);
+        if (box[0] != '(') {
+            /*
+             * A line written the old way is wrong in two places at
+             * once — a bare box *and* a trailing letter — and the
+             * bare box is what the reader meets first. Looking one
+             * word ahead is what lets the refusal describe the shape
+             * somebody actually wrote instead of the first half of it.
+             */
+            const char *word = extra[0] ? extra : box;
+            if (strcmp(word, "p") == 0 || strcmp(word, "c") == 0 ||
+                strcmp(word, "i") == 0)
+                die_parse(st->path, st->line,
+                          "a station's kind is the first word of its line now "
+                          "— write 'station', 'comparator' or 'iterator' in "
+                          "place of the trailing letter, and put brackets "
+                          "around the box function");
+            die_parse(st->path, st->line,
+                      "a box function is written in brackets — '(math.c:add)', "
+                      "not a bare word");
+        }
+        if (box[blen - 1] != ')')
+            die_parse(st->path, st->line,
+                      "the bracket around this box function does not close on "
+                      "this line, and a station line is one line");
+        if (blen == 2)
+            die_parse(st->path, st->line,
+                      "there is nothing between the brackets where the box "
+                      "function should be");
+        memmove(box, box + 1, blen - 2);
+        box[blen - 2] = 0;
     }
 
-    /*
-     * **No fourth word says this station is part of the map's
-     * interface.** There used to be one — `entry` for where the
-     * outside delivers, `result` for where results come from (issues
-     * 209, 213) — and it is refused below rather than ignored,
-     * because the mark moved to the **port** and a file written the
-     * old way describes a different program from the one it looks
-     * like. A station carries one value inward, so a mark on the
-     * station meant every argument cost a station running the
-     * identity function; a mark on a port costs nothing.
-     */
     /*
      * **An optional `@N` says where an iterator is pointing**
      * (issue 712) — the one memory a station keeps. Every other word
      * on this line says what the station *is*; this says where it had
      * got to, which is what makes a written-down program an image
      * rather than only a schematic.
-     *
-     * Either order, because there is no reading of `result @2` that
-     * differs from `@2 result` and making somebody remember which
-     * comes first buys nothing.
      */
     int cursor = 0;
-    const char *trailing[2] = { door_word, extra };
-    for (int t = 0; t < 2; t++) {
-        const char *word = trailing[t];
+    {
+        const char *word = extra;
         if (!word[0])
-            continue;
+            goto placed;
         if (word[0] == '@') {
-            if (cursor)
-                die_parse(st->path, st->line,
-                          "a station line says '@' twice, and a station has "
-                          "one place it had got to");
             if (kind != CERA_STATION_ITERATOR)
                 die_parse(st->path, st->line,
                           "'@' says where an iterator is pointing, and this "
-                          "station is not one — only kind 'i' takes its "
+                          "station is not one — only an 'iterator' takes its "
                           "exits in turn");
             if (!parse_number(word + 1, &cursor) || cursor < 0)
                 die_parse(st->path, st->line,
@@ -467,8 +482,14 @@ static void handle_station(parse_state_t *st, const char *name,
              * dump never writes it and a file saying so has said
              * nothing. Recorded as one anyway rather than refused:
              * writing it down is not wrong, only redundant. */
-            continue;
+            goto placed;
         }
+        if (strcmp(word, "p") == 0 || strcmp(word, "c") == 0 ||
+            strcmp(word, "i") == 0)
+            die_parse(st->path, st->line,
+                      "a station's kind is the first word of its line now — "
+                      "write 'station', 'comparator' or 'iterator' in place "
+                      "of the trailing letter");
         /*
          * **A door is a port now** (issues 213a, 601b), so a station
          * line no longer carries one. The two words that used to sit
@@ -482,9 +503,9 @@ static void handle_station(parse_state_t *st, const char *name,
                       "door is a port now — write '$0' on the port itself, "
                       "as 'in 0 $0' or 'out 0 $0'");
         die_parse(st->path, st->line,
-                  "after the kind, only '@N' (where an iterator had got "
-                  "to)");
+                  "after the box, only '@N' (where an iterator had got to)");
     }
+placed:
 
     for (desc_station_t *s = st->d->stations; s; s = s->next)
         if (strcmp(s->name, name) == 0)
@@ -691,19 +712,47 @@ map_description_t *mapfile_parse(const char *path)
             die_parse(path, st.line,
                       "the 'statics' section is gone — write each value on "
                       "the port that reads it, as 'in 1 = 5'");
-        } else if (strcmp(first, "station") == 0) {
+        } else {
+            /*
+             * **The kind is the keyword** (issue 608). A word-to-kind
+             * table rather than a chain of comparisons, so a fourth
+             * kind is a row rather than another branch — and so the
+             * kind reaches the handler already decided, leaving a
+             * station line to be a name and a box and nothing else.
+             *
+             * The short spellings parse and the dump never writes one:
+             * a person typing a map by hand types the kind on every
+             * station line, which is where the saving is, and a program
+             * reading one back never sees a short form, which is where
+             * one spelling matters.
+             */
+            static const struct { const char *word; int kind; } KINDS[] = {
+                { "station",    CERA_STATION_PLAIN },
+                { "comparator", CERA_STATION_COMPARATOR },
+                { "comp",       CERA_STATION_COMPARATOR },
+                { "iterator",   CERA_STATION_ITERATOR },
+                { "iter",       CERA_STATION_ITERATOR },
+            };
+            int kind = -1;
+            for (size_t k = 0; k < sizeof KINDS / sizeof KINDS[0]; k++)
+                if (strcmp(first, KINDS[k].word) == 0) {
+                    kind = KINDS[k].kind;
+                    break;
+                }
+            if (kind < 0)
+                /* Names them all rather than saying what this is not,
+                 * because a reader who wrote something wrong wants the
+                 * list of what is right. */
+                die_parse(path, st.line,
+                          "a line starts with 'station', 'comparator', "
+                          "'iterator' (or 'comp', 'iter'), 'in' or 'out'");
+
             char name[128];
             rest = next_word(rest, name, sizeof name);
             if (!name[0])
                 die_parse(path, st.line,
-                          "a station line needs a name after 'station'");
-            handle_station(&st, name, rest);
-        } else {
-            /* Names all four rather than saying what this is not,
-             * because a reader who wrote something wrong wants the
-             * list of what is right. */
-            die_parse(path, st.line,
-                      "a line starts with 'station', 'in' or 'out'");
+                          "a station line needs a name after its keyword");
+            handle_station(&st, kind, name, rest);
         }
     }
     fclose(f);

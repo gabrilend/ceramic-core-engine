@@ -59,9 +59,9 @@ Removal is rare. One sweep of a table is the right price.
 
 ## Related
 
-- [216 — Removing a station](completed/216-removing-a-station.md), whose
+- [216 — Removing a station](216-removing-a-station.md), whose
   walk this widens
-- [214 — Destinations without a lock](completed/214-destinations-without-a-lock.md),
+- [214 — Destinations without a lock](214-destinations-without-a-lock.md),
   the immutable-and-swapped discipline this must keep
 - [212a — One table, and a program is a receipt](212a-one-table-and-a-program-is-a-receipt.md),
   which is the caller this exists for

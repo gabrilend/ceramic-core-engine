@@ -108,24 +108,32 @@ below.
 runs:
 
 ```
-station in keep p entry
+station in (keep)
+  in 0 - 0$
   out 0 - twice.0
   out 0 - plus.0
 
-station twice double_it p
+station twice (double_it)
+  in 0 - in.0
   out 0 - total.0
 
-station plus add p
+station plus (add)
+  in 0 - in.0
   in 1 = 10
   out 0 - total.1
 
-station total add p result
+station total (add)
+  out 0 - 0$
+  in 0 - twice.0
+  in 1 - plus.0
 ```
 
-A station line is a name, the box it places, and a kind — `p` plain,
-`c` comparator, `i` iterator. `out 0 - twice.0` runs a wire from this
-station's exit 0 into `twice`'s input 0. `in 1 = 10` parks a constant
-on input 1.
+A station line is its kind, a name, and the box it places in brackets —
+`station` plain, `comparator`, `iterator`. `out 0 - twice.0` runs a wire
+from this station's exit 0 into `twice`'s input 0, and `twice` says the
+same thing from its own side, so reading one station tells you everything
+it takes and gives. `in 1 = 10` parks a constant on input 1, and `0$`
+marks the port as the map's argument zero.
 
 **Then build.** The generator reads the C, asks the compiler for every
 size, and turns the map into the construction calls it describes.

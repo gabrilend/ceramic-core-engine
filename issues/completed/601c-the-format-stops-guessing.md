@@ -51,7 +51,7 @@ ends with braces still open is refused, naming the line where they
 opened.
 
 This does not weaken *the first word of a line is always a keyword*
-(issue [607](completed/607-no-reserved-words.md)). A continuation is not
+(issue [607](607-no-reserved-words.md)). A continuation is not
 a new line — it is the same logical line, still being assembled, and the
 keyword rule was always about logical lines.
 
@@ -80,11 +80,11 @@ buffer, which is a file nobody meant to write.
 
 ## Related
 
-- [601 — Map file parser](completed/601-map-file-parser.md), whose read
+- [601 — Map file parser](601-map-file-parser.md), whose read
   loop this tightens
-- [607 — No reserved words](completed/607-no-reserved-words.md), whose
+- [607 — No reserved words](607-no-reserved-words.md), whose
   keyword rule the continuation must not weaken
-- [703 — Map dump](completed/703-map-dump.md), which already writes the
+- [703 — Map dump](703-map-dump.md), which already writes the
   strict form of all three
-- [008 — Map file format](../docs/008-map-file-format.md), which
+- [008 — Map file format](../../docs/008-map-file-format.md), which
   documents the loose forms and has to stop

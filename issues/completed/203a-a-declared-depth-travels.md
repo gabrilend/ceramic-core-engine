@@ -85,12 +85,12 @@ is for. Carrying the backlog on the wire covers both with one rule.
 
 ## Related
 
-- [203 — Port buffer growth](completed/203-port-buffer-growth.md), whose
+- [203 — Port buffer growth](203-port-buffer-growth.md), whose
   page-adding growth this reduces the frequency of
-- [210b — The port record](completed/210b-the-port-record.md), where the
+- [210b — The port record](210b-the-port-record.md), where the
   starting depth and its `x64` spelling came from
-- [502 — Comparator](completed/502-comparator.md) and
-  [504 — Iterator](completed/504-iterator.md), the two kinds that route
+- [502 — Comparator](502-comparator.md) and
+  [504 — Iterator](504-iterator.md), the two kinds that route
   rather than pass through
-- [008 — Map file format](../docs/008-map-file-format.md), which
+- [008 — Map file format](../../docs/008-map-file-format.md), which
   documents the depth an author writes

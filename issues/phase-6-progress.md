@@ -25,6 +25,7 @@ editing a running one stopped being two things.
 | [601a — a wire is written at both ends](completed/601a-a-wire-is-written-at-both-ends.md) | complete | Every wire appears twice in a file, once on each end, and loading refuses when the two disagree — four distinguishable mistakes, all of them collected before any is reported. Reading one station now tells the whole truth about it, where before that meant scanning the file for arrows that named it. Nothing changed at run time: the second declaration is checked and dropped, because delivery only ever asks where a value goes. The dump derives the receiving ends rather than remembering them, so they cannot drift; a tool migrates old maps, including the ones written as C string literals inside tests. |
 | [601b — the dollar sign means the boundary](completed/601b-the-dollar-sign-means-the-boundary.md) | complete | `$N` means one thing now: this port crosses the map's boundary, at this position, with the `in` or `out` keyword carrying the direction. It used to point into a `statics` section — a second spelling of a constant the dump never wrote — while reading exactly like a shell positional. That section is gone, and so are `entry` and `result` on the station line; all three are refused by name, because a file written before the change has them and its author wants to be told what replaced them. |
 | [601c — the format stops guessing](completed/601c-the-format-stops-guessing.md) | complete | Strings are quoted, braced values continue across lines, an over-long line is refused rather than split, and a `#` inside a string is a character. Four places where the reader decided for itself what somebody probably meant. |
+| [608 — the station line reads at a glance](completed/608-the-station-line-reads-at-a-glance.md) | complete | The kind is the first word of the line and spelled out; the box function is in brackets. Five kind words parse and the writers emit the three long ones. This is the change that collected on 607's promise — the format gained four keywords and took no name away from any map, which the reserved-word test now demonstrates rather than asserts. Two writers turned out to exist where the plan assumed one. |
 
 ## What the phase established, and what survived being widened
 
@@ -87,3 +88,23 @@ without ever being looked at, like the station number and the exit number
 beside it — was the whole change, and it is what lets one pool serve
 several programs at once. That is how a program can set another going
 beside itself.
+
+### The format had two writers, and only one of them was in the plan
+
+The generator's map writer and the engine's own dump each held a copy of
+the kind letter and a copy of the station-line format, tied together by
+nothing. Changing the format in one left the other emitting the old
+shape, which surfaced in the worst way available: a map the engine had
+just written, refused by the reader that had just loaded it. Both were
+corrected and the duplication was left standing, so this is a thing that
+will bite again — the two are not derived from each other and nothing
+compares them.
+
+The other half of the same lesson is about tools rather than writers. A
+tool that recognises a station line in order to do something else — the
+one that writes the receiving end of every wire — matched only the word
+`station`. Left alone it would have gone on finding plain stations and
+silently skipping every comparator and iterator, with its `--check` mode
+reporting the file clean. A pattern that has to be updated alongside a
+format is a second definition of that format, wherever it happens to
+live.

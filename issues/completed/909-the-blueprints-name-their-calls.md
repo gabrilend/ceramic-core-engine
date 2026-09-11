@@ -88,8 +88,8 @@ renamed, and none of them produced any of those calls.
 
 ## Related
 
-- [902](completed/902-the-header-says-what-is-public.md), which promised
+- [902](902-the-header-says-what-is-public.md), which promised
   this and settled the surface it needs
-- [905](completed/905-the-prefix.md), which fixed the names, so the
+- [905](905-the-prefix.md), which fixed the names, so the
   tables can be written once rather than twice
 - `src/cera.info.md`, the derived list this has to be reconciled with

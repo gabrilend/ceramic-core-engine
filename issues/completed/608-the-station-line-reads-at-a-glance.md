@@ -16,54 +16,43 @@ iterator     station split route.c:spread i @2  iterator   split     (route.c:sp
 
 ## Current behavior
 
-A station line is the keyword `station`, then three words and up to
-one more:
+**Built.** The kind is the first word of a station line, spelled out, and
+the box function is bracketed. Five kind words parse — `station`,
+`comparator`, `comp`, `iterator`, `iter` — and the two writers emit only
+the three long ones.
 
-```
-station under_ten keep c
-station split route.c:spread i @2
-station adder src/boxes/math.c:add p
-```
+**There turned out to be two writers, not one.** The generator's map
+writer and the engine's own dump each had a copy of the kind letter and a
+copy of the station-line format. Nothing tied them together, so changing
+one left the other emitting the old shape — which surfaced as a map the
+engine had just written being refused by the reader that had just loaded
+it. Both carry the new form now; the duplication itself is untouched, and
+is the sort of thing that will bite again.
 
-### The kind is a letter, at the end, at a distance that moves
+**The old form is refused, and one refusal covers the whole shape.** A
+line written the old way is wrong in two places at once — a bare box and
+a trailing letter — and the bare box is what the reader meets first. The
+box check looks one word ahead, so `station a keep p` is told its kind
+moved to the front rather than being told about brackets and then about
+the letter on a second attempt.
 
-`p` is plain, `c` is comparator, `i` is iterator. The map writer emits
-the same letter.
+**A tool migrates a file wherever its map text lives**
+(`scripts/141-station-lines.lua`): a `.map` file, a fenced example in a
+markdown document, and a C string literal inside a test are all the same
+rewrite, because the tool unwraps a literal before migrating and wraps it
+again afterwards. One pass, no state between lines, and a line already in
+the current form does not match the old shape at all — which is what
+makes it safe to run twice. It has a `--check` mode.
 
-**The letter lands in a column that varies.** A box may be addressed
-three ways — bare name, basename and function, or path and function —
-so where the kind appears depends on how the author chose to write the
-address. The one character on the line that decides whether this
-station runs a box or routes around one is the easiest thing on the
-line to miss, and it is the first thing a reader wants to know.
+Four places the tool could not reach were done by hand: map text built
+mid-expression inside `fputs` and `printf` calls, and one assertion
+comparing against dumped output.
 
-**The letters need a legend.** The format's page carries the sentence
-"`p`, `c`, or `i` is plain, comparator, or iterator" because the file
-cannot carry it. A notation that only works next to its own key is a
-notation a person has to have read the documentation to read at all,
-and a map is the file in this project a person actually reads.
-
-**The kind is part of what the line is, and it is written where the
-arguments are.** The first word announces *a placement*; three words
-later a second field says *which sort of placement*. Those are one
-fact split across a line.
-
-### The box function is a word among words
-
-```
-station adder math.c:add p
-```
-
-Four things in a row, delimited by nothing but spaces, and only one of
-them is code that exists somewhere on disk. A reader scanning a map
-has to know the positional rule — second word names this placement,
-third word is the C function — to tell `adder` from `math.c:add`, and
-the two are the same shape. The space between them is doing all the
-work and it looks like every other space on the line.
-
-This gets worse with the bare-name form, which is the one the dump
-prefers: `station adder add p` is a name, a name, and a letter, and
-nothing on the line says which name is the code.
+**The wire-migration tool learned the new shape too.** It recognises a
+station line in order to know where to insert the `in` lines a station is
+owed, and it matched only the word `station`. Left alone it would have
+gone on finding plain stations and silently skipping every comparator and
+iterator — with `--check` reporting the file clean.
 
 ## Intended behavior
 
@@ -87,7 +76,7 @@ iterator   split     (route.c:spread) @2
 | `out` | where one of its output ports sends one |
 
 **This spends the rule from
-[607](completed/607-no-reserved-words.md) rather than weakening it.**
+[607](607-no-reserved-words.md) rather than weakening it.**
 That issue made the first word of a line always a keyword and the
 second always a name, and the reason it gave for paying a word on
 every station line was that a grammar where names never live where
@@ -101,9 +90,9 @@ station names does not shrink by one.
 
 **The trailing letter is refused, not accepted alongside.** Keeping
 both would leave two spellings of one fact, which is what
-[601b](completed/601b-the-dollar-sign-means-the-boundary.md) removed
+[601b](601b-the-dollar-sign-means-the-boundary.md) removed
 when it deleted the `statics` section and
-[601c](completed/601c-the-format-stops-guessing.md) removed when it
+[601c](601c-the-format-stops-guessing.md) removed when it
 made strings always quoted. The refusal names the replacement —
 *a station's kind is the first word of its line now; write
 `comparator` in place of the trailing `c`* — because every map written
@@ -121,7 +110,7 @@ of thirty stations, even when the box is addressed by bare name.
 
 They also make the line survive a change it cannot survive now. The
 box address is the one field on the line whose spelling is open —
-[108](108-choosing-where-a-box-runs.md) contemplates saying more about
+[108](../108-choosing-where-a-box-runs.md) contemplates saying more about
 where a box runs — and a bracketed field can grow without the line
 becoming ambiguous, where a bare positional field cannot.
 
@@ -138,7 +127,7 @@ the line, not a new notation for what is inside them.
 
 **An unclosed bracket is refused, on its line, by position.** This is
 the rule braced values already have
-([601c](completed/601c-the-format-stops-guessing.md)) with one
+([601c](601c-the-format-stops-guessing.md)) with one
 difference worth stating: a braced value may continue across lines and
 a bracketed box may not. A station line is one line. There is no
 station whose box address is long enough to want wrapping, and
@@ -149,7 +138,7 @@ gain.
 
 **The columns go ragged.** The three kind words are seven, ten and
 eight characters, so a file mixing kinds no longer has its names
-starting in one place. [607](completed/607-no-reserved-words.md)
+starting in one place. [607](607-no-reserved-words.md)
 argued that the `station` keyword aligned the columns after it for
 free; it did that by being one word, and it is three now. The writer
 emits one space and does not pad — see the open questions. A person
@@ -237,21 +226,21 @@ where it means something else.
 
 ## Related documents and tools
 
-- [008 — Map file format](../docs/008-map-file-format.md) — the
+- [008 — Map file format](../../docs/008-map-file-format.md) — the
   station line section and the line-kind table both change
-- [607 — No reserved words](completed/607-no-reserved-words.md) — the
+- [607 — No reserved words](607-no-reserved-words.md) — the
   rule this spends
-- [601 — Map file parser](completed/601-map-file-parser.md) — the line
+- [601 — Map file parser](601-map-file-parser.md) — the line
   dispatch and the station-line handler
-- [601b](completed/601b-the-dollar-sign-means-the-boundary.md),
-  [601c](completed/601c-the-format-stops-guessing.md) — the precedent
+- [601b](601b-the-dollar-sign-means-the-boundary.md),
+  [601c](601c-the-format-stops-guessing.md) — the precedent
   for refusing an old form by name, and the brace rules the bracket
   rules answer to
-- [502 — Comparator](completed/502-comparator.md),
-  [504 — Iterator](completed/504-iterator.md) — what the two words
+- [502 — Comparator](502-comparator.md),
+  [504 — Iterator](504-iterator.md) — what the two words
   mean at run time; neither changes
-- [703 — Map dump](completed/703-map-dump.md) — writes the other half
-- [108 — Choosing where a box runs](108-choosing-where-a-box-runs.md) —
+- [703 — Map dump](703-map-dump.md) — writes the other half
+- [108 — Choosing where a box runs](../108-choosing-where-a-box-runs.md) —
   open, and the reason the box field is worth bracketing before it
   grows
 - The wire-migration script under `scripts/` (the "both ends" tool) —

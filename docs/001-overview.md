@@ -128,17 +128,17 @@ int add(int a, int b)   { return a + b; }    /* the arithmetic */
 and the map is [`maps/132-the-accumulator.map`](../maps/132-the-accumulator.map):
 
 ```
-station feed src/boxes/029-demo-boxes.c:keep p
+station feed (src/boxes/029-demo-boxes.c:keep)
   in 0 - 0$
   out 0 - total.0
 
-station total src/boxes/029-demo-boxes.c:add p
+station total (src/boxes/029-demo-boxes.c:add)
   in 0 - feed.0
   in 1 - total.0
   out 0 - total.1     # back into itself: the running total
   out 0 - seen.0      # and out to be collected
 
-station seen src/boxes/029-demo-boxes.c:keep p
+station seen (src/boxes/029-demo-boxes.c:keep)
   out 0 - 0$
   in 0 - total.0
 ```
@@ -161,7 +161,7 @@ are a convenience rather than a requirement.** The marks sit on ports, so
 whole program:
 
 ```
-station total src/boxes/029-demo-boxes.c:add p
+station total (src/boxes/029-demo-boxes.c:add)
   in 0 - 0$
   in 1 - total.0
   out 0 - total.1

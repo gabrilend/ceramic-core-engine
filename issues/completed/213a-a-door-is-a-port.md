@@ -91,7 +91,7 @@ is an ordinary station, not a mistake.
 
 ## Related
 
-- [213 — The input station](completed/213-the-input-station.md), which
+- [213 — The input station](213-the-input-station.md), which
   this replaces the mechanism of
 - [209a — Results go where the caller says](209a-results-go-where-the-caller-says.md),
   the other half
@@ -99,4 +99,4 @@ is an ordinary station, not a mistake.
   which spells this in the map file
 - [217a — One receipt for a box and a map](217a-one-receipt-for-a-box-and-a-map.md),
   which addresses doors by number against a receipt
-- [002 — Stations and ports](../docs/002-stations-and-ports.md)
+- [002 — Stations and ports](../../docs/002-stations-and-ports.md)

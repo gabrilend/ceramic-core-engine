@@ -84,7 +84,7 @@ engine emits an event at each thing worth seeing. Without it, the
 emitting compiles out entirely — not a branch that is usually false, an
 absence.
 
-This is the shape [702](completed/702-station-statistics.md) already
+This is the shape [702](702-station-statistics.md) already
 chose for timing, and the reasoning is quoted rather than re-derived:
 *a measurement apparatus whose cost is unmeasured is a rumour, and one
 that cannot be removed is a tax.* A watched program is allowed to be
@@ -96,7 +96,7 @@ is a branch on the delivery path, taken on every value that moves, to
 answer a question whose answer never changes during a run. The engine's
 standing habit is to resolve such a question while somebody can still
 read an error message about it — the same reasoning that turned box
-records into placement functions ([311b](completed/311b-placement-instead-of-records.md)).
+records into placement functions ([311b](311b-placement-instead-of-records.md)).
 
 ### Watching must never change what is watched
 
@@ -116,7 +116,7 @@ below follows from it.
   that any of it happened. Two readers do not interfere with each
   other, because neither has anything the other needs.
 - **A reader cannot write.** Nothing it does can reach the program.
-  This is a window, not a door; [801](801-browser-workbench.md) is the
+  This is a window, not a door; [801](../801-browser-workbench.md) is the
   door and shares nothing with this.
 
 ### Where the trail lives
@@ -137,7 +137,7 @@ it missed.
 **Multiple writers, because every worker emits.** What is written is
 small and fixed-size, so a slot is claimed with one atomic step and
 filled afterwards — the same shape a port's slot state already has
-([210c](completed/210c-a-state-on-every-slot.md)), for the same reason.
+([210c](210c-a-state-on-every-slot.md)), for the same reason.
 
 ### What counts as an event
 
@@ -158,7 +158,7 @@ omission.** A value is any size at all, including sizes that would not
 fit in a fixed-size slot, and copying one onto the trail is a cost paid
 on the delivery path for something a watcher usually does not need — it
 wants to see *that* the graph is moving and *where* it is stuck.
-Somebody who wants values has [712](completed/712-capturing-a-running-program.md),
+Somebody who wants values has [712](712-capturing-a-running-program.md),
 which writes them all, at a moment nothing is running.
 
 **The station's name is not carried either**, because a name is a
@@ -227,14 +227,14 @@ format are two things that must agree.
 
 - [803 — The viewer](803-the-viewer.md), which reads this and does
   nothing else
-- [702 — Station statistics](completed/702-station-statistics.md), whose
+- [702 — Station statistics](702-station-statistics.md), whose
   build-time switch this copies and whose counters a reader checks
   itself against
-- [701 — Buffer growth reporting](completed/701-buffer-growth-reporting.md),
+- [701 — Buffer growth reporting](701-buffer-growth-reporting.md),
   which already notices the one thing most worth watching for
-- [106 — Stopping on purpose](completed/106-stopping-on-purpose.md),
+- [106 — Stopping on purpose](106-stopping-on-purpose.md),
   whose report is what this replaces for the living case
-- [712 — Capturing a running program](completed/712-capturing-a-running-program.md),
+- [712 — Capturing a running program](712-capturing-a-running-program.md),
   which is the same question asked of a program standing still
-- [801 — The workbench in the browser](801-browser-workbench.md), which
+- [801 — The workbench in the browser](../801-browser-workbench.md), which
   is a door where this is a window, and shares nothing with it

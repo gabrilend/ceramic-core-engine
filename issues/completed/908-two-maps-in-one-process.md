@@ -56,6 +56,6 @@ lie.
 
 ## Related
 
-- [057 — Packaging](../docs/implementation-notes/057-packaging.md),
+- [057 — Packaging](../../docs/implementation-notes/057-packaging.md),
   decision 2 and step 7 of its rough order
 - `notes/first-pass-report.md`, where this is already named as a debt

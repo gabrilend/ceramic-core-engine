@@ -82,11 +82,11 @@ falls out of counting stations rather than out of any rule about kinds.
 
 ## Related
 
-- [217 — A program inside another](completed/217-a-program-inside-another.md),
+- [217 — A program inside another](217-a-program-inside-another.md),
   whose receipt this makes universal
-- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md)
+- [212 — One way to build a program](212-one-way-to-build-a-program.md)
 - [212a — One table, and a program is a receipt](212a-one-table-and-a-program-is-a-receipt.md)
 - [213a](213a-a-door-is-a-port.md) and
   [209a](209a-results-go-where-the-caller-says.md), which give doors the
   numbers this addresses them by
-- [135 — A box and a map are one thing](../docs/implementation-notes/135-a-box-and-a-map-are-one-thing.md)
+- [135 — A box and a map are one thing](../../docs/implementation-notes/135-a-box-and-a-map-are-one-thing.md)

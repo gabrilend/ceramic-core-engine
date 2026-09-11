@@ -27,27 +27,27 @@
 # Ten of every thirty go to each port. `collect` needs all three before
 # it runs, which is the readiness rule and the whole reason it waits.
 
-station feed cycle_thirty p
+station feed (cycle_thirty)
   in 0 - 0$
   out 0 - double.0
 
-station double double_it p
+station double (double_it)
   in 0 - feed.0
   out 0 - under_ten.0
 
-station under_ten keep c
+comparator under_ten (keep)
   in 0 - double.0
   in 1 = 19
   out 0 - collect.0
   out 2 - under_twenty.0
 
-station under_twenty keep c
+comparator under_twenty (keep)
   in 0 - under_ten.2
   in 1 = 39
   out 0 - collect.1
   out 2 - collect.2
 
-station collect three_way p
+station collect (three_way)
   out 0 - 0$
   in 0 - under_ten.0
   in 1 - under_twenty.0

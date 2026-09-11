@@ -51,7 +51,7 @@ what pruning a receipt now offers, without the restriction.
 **Two programs in one process is untouched.** Nothing here re-introduces
 a process-wide pointer to an active map, and the proof that two
 independently-built programs on separate pools do not interfere stays
-exactly as it is ([908](completed/908-two-maps-in-one-process.md)). What
+exactly as it is ([908](908-two-maps-in-one-process.md)). What
 goes is the *restriction*, not the coexistence.
 
 ## Suggested implementation steps
@@ -71,13 +71,13 @@ goes is the *restriction*, not the coexistence.
 
 ## Related
 
-- [212 — One way to build a program](completed/212-one-way-to-build-a-program.md),
+- [212 — One way to build a program](212-one-way-to-build-a-program.md),
   whose starting-beside half this retires
 - [216a — Removing several stations at once](216a-removing-several-stations-at-once.md),
   the sweep this needs
 - [217a — One receipt for a box and a map](217a-one-receipt-for-a-box-and-a-map.md),
   which makes the receipt universal
-- [908 — Two maps in one process](completed/908-two-maps-in-one-process.md),
+- [908 — Two maps in one process](908-two-maps-in-one-process.md),
   which stays true and is not what this changes
-- [090 — One station table per processor](../docs/implementation-notes/090-one-table-per-processor.md),
+- [090 — One station table per processor](../../docs/implementation-notes/090-one-table-per-processor.md),
   which this note has to answer to

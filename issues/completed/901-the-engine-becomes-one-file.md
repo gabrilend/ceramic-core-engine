@@ -206,7 +206,7 @@ would have to be written twice.
 
 ## Related
 
-- [057 — Packaging the engine as a library](../docs/implementation-notes/057-packaging.md),
+- [057 — Packaging the engine as a library](../../docs/implementation-notes/057-packaging.md),
   the survey this phase executes. Its recommendation was a script that
   derives an amalgamation from the numbered files; this phase instead
   makes the amalgamation the source and deletes the numbered files,

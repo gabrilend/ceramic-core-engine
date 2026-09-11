@@ -45,9 +45,21 @@ Usage:
 local DIR = "/mnt/mtwo/programming/ai-playground/minimal-soramech"
 
 -- {{{ local function station_of()
--- The station name on a `station` line, or nil for any other line.
+-- The station name on a station line, or nil for any other line.
+--
+-- Every kind keyword has to be listed, because the kind is the first
+-- word of the line now (issue 608). Matching only `station` here would
+-- make this tool quietly stop seeing comparators and iterators — and
+-- quietly is the worst of it, since --check would then report a file
+-- clean for having no stations it could find in it.
+local KIND_WORDS = { "station", "comparator", "comp", "iterator", "iter" }
+
 local function station_of(line)
-    return line:match("^%s*station%s+([^%s]+)")
+    for _, word in ipairs(KIND_WORDS) do
+        local name = line:match("^%s*" .. word .. "%s+([^%s]+)")
+        if name then return name end
+    end
+    return nil
 end
 -- }}}
 

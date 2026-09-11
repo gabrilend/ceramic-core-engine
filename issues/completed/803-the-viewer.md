@@ -293,7 +293,7 @@ from changing it.
 **Decided rather than drifted into**, and the same decision the phase
 already made about the demo panels.
 
-The workbench ([801](801-browser-workbench.md)) is a canvas for
+The workbench ([801](../801-browser-workbench.md)) is a canvas for
 composing a map that does not exist yet: every station is alike,
 nothing is running, and the page's whole job is to let somebody make
 changes. This is the opposite on all three counts. A shared drawing
@@ -405,9 +405,9 @@ itself under a hand is worse than a picture in the wrong order.
 
 - [802 — A program you can watch](802-a-program-you-can-watch.md), the
   trail this reads and the only thing it depends on
-- [801 — The workbench in the browser](801-browser-workbench.md), which
+- [801 — The workbench in the browser](../801-browser-workbench.md), which
   it shares nothing with, deliberately
-- [703 — The map dump](completed/703-map-dump.md), where the graph
+- [703 — The map dump](703-map-dump.md), where the graph
   comes from
-- [701 — Buffer growth reporting](completed/701-buffer-growth-reporting.md),
+- [701 — Buffer growth reporting](701-buffer-growth-reporting.md),
   which is the thing most worth drawing

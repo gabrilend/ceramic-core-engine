@@ -72,13 +72,13 @@ static void write_the_part(void)
      */
     static const char text[] =
         "# a part, meant to be used inside something else\n"
-        "station way_in keep p\n"
+        "station way_in (keep)\n"
         "  in 0 - 0$\n"
         "  out 0 - middle.0\n"
-        "station middle double_it p\n"
+        "station middle (double_it)\n"
         "  in 0 - way_in.0\n"
         "  out 0 - way_out.0\n"
-        "station way_out keep p\n"
+        "station way_out (keep)\n"
         "  out 0 - 0$\n"
         "  in 0 - middle.0\n";
 

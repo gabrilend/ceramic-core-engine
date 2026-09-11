@@ -102,12 +102,12 @@ which is a complete statement and needs no separate declaration.
 
 ## Related
 
-- [209 — Map output collection](completed/209-map-output-collection.md),
+- [209 — Map output collection](209-map-output-collection.md),
   which this replaces the mechanism of
 - [213a — A door is a port](213a-a-door-is-a-port.md), the other half
 - [601b — The dollar sign means the boundary](601b-the-dollar-sign-means-the-boundary.md),
   which spells this in the map file
-- [135 — A box and a map are one thing](../docs/implementation-notes/135-a-box-and-a-map-are-one-thing.md),
+- [135 — A box and a map are one thing](../../docs/implementation-notes/135-a-box-and-a-map-are-one-thing.md),
   which states the non-synchronisation as a design property
-- [058 — Guarantees](../docs/058-guarantees.md), which gains the bound
+- [058 — Guarantees](../../docs/058-guarantees.md), which gains the bound
   and the non-synchronisation

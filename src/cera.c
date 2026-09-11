@@ -6871,11 +6871,20 @@ void cera_map_report_shutdown(cera_map_t *m)
 #include <stdlib.h>
 #include <string.h>
 
-/* {{{ kind_letter() */
-static char kind_letter(unsigned char kind)
+/* {{{ kind_keyword() */
+/*
+ * The kind *is* the first word of a station line (issue 608), so this
+ * is what the dump opens every one of them with.
+ *
+ * The long spellings only. `comp` and `iter` parse, and nothing writes
+ * one, so a dumped file carries one spelling per kind.
+ */
+static const char *kind_keyword(unsigned char kind)
 {
-    static const char letters[CERA_STATION_KIND_COUNT] = { 'p', 'c', 'i' };
-    return kind < CERA_STATION_KIND_COUNT ? letters[kind] : '?';
+    static const char *const words[CERA_STATION_KIND_COUNT] = {
+        "station", "comparator", "iterator",
+    };
+    return kind < CERA_STATION_KIND_COUNT ? words[kind] : "?kind?";
 }
 /* }}} */
 
@@ -7070,7 +7079,7 @@ void cera_map_dump(cera_map_t *m, FILE *out)
         /* Announced like every other line kind, so that a
          * station's name never sits where a keyword sits and no word
          * is ever both. */
-        fprintf(out, "\nstation %s ", written[i]);
+        fprintf(out, "\n%s %s ", kind_keyword(s->kind), written[i]);
         /*
          * The station knows its own name: the generated placement
          * function wrote it as a literal.
@@ -7126,9 +7135,11 @@ void cera_map_dump(cera_map_t *m, FILE *out)
         if (s->kind == CERA_STATION_ITERATOR && s->cursor != 0)
             snprintf(at, sizeof at, " @%d", s->cursor);
 
-        fprintf(out, "%s %c%s%s   # station %d\n",
+        /* The brackets say *this is the code*, which is the one field
+         * on the line a space could not distinguish from a name. */
+        fprintf(out, "(%s)%s%s   # station %d\n",
                 written_as ? written_as : "?placed-by-hand?",
-                kind_letter(s->kind), door, at, i);
+                door, at, i);
 
         for (int j = 0; j < s->n_in_ports; j++) {
             cera_in_port_t *sl = &s->in_ports[j];

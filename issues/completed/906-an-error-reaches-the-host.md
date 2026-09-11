@@ -92,7 +92,7 @@ large one in decision. Handler absent, the behaviour is exactly today's.
 
 ## Related
 
-- [106 — Stopping on purpose](completed/106-stopping-on-purpose.md), the
+- [106 — Stopping on purpose](106-stopping-on-purpose.md), the
   existing exit codes and the report a dying program writes
-- [057 — Packaging](../docs/implementation-notes/057-packaging.md),
+- [057 — Packaging](../../docs/implementation-notes/057-packaging.md),
   where this was settled as a decision before being written as an issue

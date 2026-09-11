@@ -104,5 +104,5 @@ that the existing one has been repaired.
 
 - [901](901-the-engine-becomes-one-file.md) through
   [906](906-an-error-reaches-the-host.md), all of which this checks
-- [057 — Packaging](../docs/implementation-notes/057-packaging.md), step
+- [057 — Packaging](../../docs/implementation-notes/057-packaging.md), step
   6 of its rough order of work

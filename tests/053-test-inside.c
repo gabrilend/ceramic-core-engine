@@ -75,16 +75,16 @@ static void test_buffer_report_names_the_right_slot(void)
     snprintf(map_path, sizeof map_path, "%s/report.map", work_dir);
     snprintf(report_path, sizeof report_path, "%s/report.txt", work_dir);
     snprintf(map_text, sizeof map_text,
-        "station feeder seven p\n"
+        "station feeder (seven)\n"
         "  out 0 - pairer.0\n"
         /* Somewhere for results to come from, which every program has
          * to declare (issue 209). The pairer is the station whose
          * value is the point of the graph. */
-        "station pairer add p\n"
+        "station pairer (add)\n"
         "  out 0 - 0$\n"
         "  in 0 - feeder.0\n"
         "  out 0 - drain.0\n"
-        "station drain swallow p\n"
+        "station drain (swallow)\n"
         "  in 0 - pairer.0\n");
     write_text(map_path, map_text);
 
@@ -124,13 +124,13 @@ static void test_station_counts(void)
     snprintf(report_path, sizeof report_path, "%s/counts.txt", work_dir);
     snprintf(out_path, sizeof out_path, "%s/counts-out.txt", work_dir);
     snprintf(map_text, sizeof map_text,
-        "station head seven p\n"
+        "station head (seven)\n"
         "  out 0 - mid.0\n"
-        "station mid double_it p\n"
+        "station mid (double_it)\n"
         "  out 0 - 0$\n"
         "  in 0 - head.0\n"
         "  out 0 - sink.1\n"
-        "station sink write_int_file p\n"
+        "station sink (write_int_file)\n"
         "  in 1 - mid.0\n"
         "  in 0 = \"%s\"\n", out_path);
     write_text(map_path, map_text);
@@ -171,21 +171,21 @@ static void test_round_trip(void)
      * input is a static now, which lands the same 14 and exercises
      * the same round trip. */
     snprintf(map_text, sizeof map_text,
-        "station first seven p\n"
+        "station first (seven)\n"
         "  out 0 - judge.0\n"
-        "station judge keep c\n"
+        "comparator judge (keep)\n"
         "  in 0 - first.0\n"
         "  in 1 = 5\n"
         "  out 2 - boost.0\n"
-        "station boost add p\n"
+        "station boost (add)\n"
         "  out 0 - 0$\n"
         "  in 0 - judge.2\n"
         "  in 1 = 7\n"
         "  out 0 - deal.0\n"
-        "station deal keep i\n"
+        "iterator deal (keep)\n"
         "  in 0 - boost.0\n"
         "  out 0 - sink.1\n"
-        "station sink write_int_file p\n"
+        "station sink (write_int_file)\n"
         "  in 1 - deal.0\n"
         "  in 0 = \"%s\"\n", out_path);
     write_text(map_path, map_text);
@@ -232,16 +232,16 @@ static void test_rewire_mid_run(void)
      * between issues 605 and 604's own warning, recorded in the
      * first-pass report. */
     snprintf(map_text, sizeof map_text,
-        "station head seven p\n"
+        "station head (seven)\n"
         "  out 0 - hold.0\n"
-        "station hold keep p\n"
+        "station hold (keep)\n"
         "  out 0 - 0$\n"
         "  in 0 - head.0\n"
         "  out 0 - writer_a.1\n"
-        "station writer_a write_int_file p\n"
+        "station writer_a (write_int_file)\n"
         "  in 1 - hold.0\n"
         "  in 0 = \"%s\"\n"
-        "station writer_b write_int_file p\n"
+        "station writer_b (write_int_file)\n"
         "  in 0 = \"%s\"\n", a_path, b_path);
     write_text(map_path, map_text);
 

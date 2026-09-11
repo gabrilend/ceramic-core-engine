@@ -82,12 +82,23 @@ static void add(out_t *o, const char *fmt, ...)
 }
 /* }}} */
 
-/* {{{ static char kind_letter() */
-static char kind_letter(int kind)
+/* {{{ static const char *kind_keyword() */
+/*
+ * The kind *is* the keyword (issue 608), so this is the first word of
+ * every station line. The long spellings only: `comp` and `iter` parse
+ * but nothing writes one, so a dumped file has one form per kind.
+ *
+ * No padding. A file mixing kinds comes out with a ragged name column,
+ * which a person may tidy by hand because indentation and spacing mean
+ * nothing here — and which the writer will not do for them, because
+ * aligning would mean measuring a whole description before emitting
+ * its first line.
+ */
+static const char *kind_keyword(int kind)
 {
-    if (kind == CERA_STATION_COMPARATOR) return 'c';
-    if (kind == CERA_STATION_ITERATOR)   return 'i';
-    return 'p';
+    if (kind == CERA_STATION_COMPARATOR) return "comparator";
+    if (kind == CERA_STATION_ITERATOR)   return "iterator";
+    return "station";
 }
 /* }}} */
 
@@ -106,7 +117,7 @@ char *mapfile_write(const map_description_t *d)
      * port that reads it, so the file is stations all the way down.
      */
     for (desc_station_t *s = d->stations; s; s = s->next) {
-        add(&o, "station %s %s %c", s->name, s->box, kind_letter(s->kind));
+        add(&o, "%s %s (%s)", kind_keyword(s->kind), s->name, s->box);
         /* A door is a port now (issues 213a, 209a), so a station
          * line carries no door word and the port lines carry it all. */
         /* Where an iterator had got to, written only when it says

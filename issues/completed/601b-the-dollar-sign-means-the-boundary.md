@@ -79,12 +79,12 @@ naming a path as an ordinary constant.
 
 ## Related
 
-- [601 — Map file parser](completed/601-map-file-parser.md)
-- [607 — No reserved words](completed/607-no-reserved-words.md), which
+- [601 — Map file parser](601-map-file-parser.md)
+- [607 — No reserved words](607-no-reserved-words.md), which
   loses two of the words a station line could carry
-- [401 — Static ports](completed/401-static-ports.md) and
-  [402 — Struct constants](completed/402-struct-constants.md) — the
+- [401 — Static ports](401-static-ports.md) and
+  [402 — Struct constants](402-struct-constants.md) — the
   *port* kind stays exactly as it is; only the file notation goes
 - [213a](213a-a-door-is-a-port.md) and
   [209a](209a-results-go-where-the-caller-says.md), which this spells
-- [008 — Map file format](../docs/008-map-file-format.md)
+- [008 — Map file format](../../docs/008-map-file-format.md)

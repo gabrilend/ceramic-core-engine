@@ -13,30 +13,30 @@ into by then.
 ## A complete example
 
 ```
-station reader io.c:read_config p
+station reader (io.c:read_config)
   in 0 x64 - 0$
   out 0 - config.0
 
-station config io.c:load p
+station config (io.c:load)
   in 0 - reader.0
   in 1 -
   in 2 = { 5, 2.0, { 0, 0, 0 }, "hey there", 2 }
   out 0 - adder.0
 
-station adder math.c:add p
+station adder (math.c:add)
   in 0 - config.0
   in 1 = 5
   out 0 - printer.0
   out 0 - logger.0
 
-station depth compare.c:measure c
+comparator depth (compare.c:measure)
   in 0 - adder.0
   in 1 = 100
   out 0 - shallow.0
   out 1 - exact.0
   out 2 - deep.0
 
-station split route.c:spread i
+iterator split (route.c:spread)
   in 0 - depth.0
   out 0 - 0$
   out 1 - mailer.0
@@ -57,14 +57,18 @@ program that would load.
 
 | first word | the line is |
 |---|---|
-| `station` | a placement: a name, a box, and a kind |
+| `station` | a plain placement — runs its box, sends the result to every wired exit |
+| `comparator`, `comp` | a placement that asks less / equal / greater against its last port and takes exit 0, 1 or 2 |
+| `iterator`, `iter` | a placement that takes its wired exits in turn |
 | `in` | where one of that station's input ports gets its value |
 | `out` | where one of its output ports sends one |
 
 The first word is always a keyword and the second is always a name, so
 **no word is reserved**. A station called `in` is written
-`station in keep p`; one called `station` is written
-`station station keep p`.
+`station in (keep)`; one called `comparator` is written
+`comparator comparator (keep)`; neither is a special case. The format has
+gained four keywords since that rule was made and took no name away from
+any map when it did.
 
 Indentation means nothing. A file that has been reflowed or pasted still
 parses.
@@ -99,23 +103,37 @@ indices — as comments beside the lines that parse.
 
 ## The station line
 
-The keyword, then three words: the station's name, the box function it
-places, and its kind.
+**The kind, the name, and the box in brackets.**
 
 ```
-station adder math.c:add p
+station    feed      (cycle_thirty)
+comparator under_ten (keep)
+iterator   split     (route.c:spread) @2
 ```
 
-`adder` is this placement. `math.c:add` is the C function — the file it
-lives in, a colon, and its name. `p`, `c`, or `i` is plain, comparator,
-or iterator.
+`under_ten` is this placement. `(keep)` is the C function it runs, and
+`(route.c:spread)` is one named in full — the file it lives in, a colon,
+and the function within it.
+
+**The brackets are required**, and they say *this is the code*. Every
+other field on the line is a name somebody chose; this one exists on
+disk. A space marks where one word stops and cannot mark which word
+matters, which is why the delimiter is at both ends. An unbracketed word
+where the box belongs is refused, and so is a bracket that does not close
+— a station line is one line, and unlike a braced value it does not
+continue onto the next.
+
+**Spacing means nothing**, here as everywhere in this format. The columns
+above are one author's taste; the dump writes one space between fields
+and lets the name column go ragged, because aligning would mean measuring
+a whole description before emitting its first line.
 
 ### Which box, and three ways to say it
 
 ```
-station adder add p
-station adder math.c:add p
-station adder src/boxes/math.c:add p
+station adder (add)
+station adder (math.c:add)
+station adder (src/boxes/math.c:add)
 ```
 
 **A bare name is not an address** — it is a name in a namespace nobody
@@ -151,14 +169,28 @@ anyway.
 The kind is written rather than inferred. A comparator *is* inferable —
 it is the station with one more input port than its function has
 parameters — but then forgetting the threshold line silently demotes it
-to a plain box that routes everything one way. One letter of redundancy
-buys an error instead of a wrong answer.
+to a plain box that routes everything one way. Saying it outright buys an
+error instead of a wrong answer.
+
+**Two spellings for each of the two routing kinds**, because a person
+writing a map by hand types the kind on every station line:
+
+| you may write | the dump writes |
+|---|---|
+| `station` | `station` |
+| `comparator` or `comp` | `comparator` |
+| `iterator` or `iter` | `iterator` |
+
+The short forms are read and never written, so a file a program produced
+has one spelling per kind while a file a person typed may have either.
+They are not a second *notation* — no map means anything different for
+carrying one.
 
 **An optional `@N` says where an iterator had got to**, which is **the
 one memory a station keeps**:
 
 ```
-station spread split i @2      the next value takes exit 2
+iterator spread (split) @2      the next value takes exit 2
 ```
 
 Written only when it says something: zero is where an iterator starts,
@@ -377,10 +409,10 @@ line to fan out; one port may carry any number of destinations.
 **And the station at the other end says the same thing:**
 
 ```
-station adder math.c:add p
+station adder (math.c:add)
   out 0 - printer.0
 
-station printer io.c:show p
+station printer (io.c:show)
   in 0 - adder.0
 ```
 

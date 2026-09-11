@@ -76,7 +76,7 @@ a reused number makes two things claim one position; the gap is the
 record that something stood there. See
 [711](711-the-index-means-reading-order.md).
 
-**Errors still end the program.** [906](906-an-error-reaches-the-host.md)
+**Errors still end the program.** [906](completed/906-an-error-reaches-the-host.md)
 adds a way for a host to *hear* about a refusal, and deliberately no way
 to survive one. An error code a caller may ignore is a fallback wearing
 a return type.
@@ -152,7 +152,7 @@ a consumer holds `cera.h`, writes `#include "cera.h"`, and should not
 then have to call something spelled `cera_`. The include and the call
 agree, or the consumer's first line hands them a puzzle.
 
-[905](905-the-prefix.md) is unblocked and its cost is unchanged — it was
+[905](completed/905-the-prefix.md) is unblocked and its cost is unchanged — it was
 never the price of deciding, it was the price of the respelling having
 been half-done for months.
 

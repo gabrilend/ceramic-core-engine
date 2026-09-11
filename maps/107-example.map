@@ -8,21 +8,21 @@
 # says "wait for both": the station has two input ports, so it runs
 # when both hold a value, and not before.
 
-station in keep p
+station in (keep)
   in 0 - 0$
   out 0 - twice.0
   out 0 - plus.0
 
-station twice double_it p
+station twice (double_it)
   in 0 - in.0
   out 0 - total.0
 
-station plus add p
+station plus (add)
   in 0 - in.0
   in 1 = 10
   out 0 - total.1
 
-station total add p
+station total (add)
   out 0 - 0$
   in 0 - twice.0
   in 1 - plus.0

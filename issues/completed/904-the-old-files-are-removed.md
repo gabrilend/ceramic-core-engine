@@ -89,7 +89,7 @@ the tool and the whole tree is the target:
 1. **Capture the output of every test twice** — once from the numbered
    build, once from the `cera` build — and diff, with
    `scripts/111-capture-test-output.sh`, which
-   [901](completed/901-the-engine-becomes-one-file.md) built for exactly
+   [901](901-the-engine-becomes-one-file.md) built for exactly
    this and which knows which four tests report a race and must be
    compared by shape. Do not proceed on a difference; understand it.
    901 did this once already and found one, explained by the emitted
@@ -100,7 +100,7 @@ the tool and the whole tree is the target:
    record rather than scattered.
 3. **Delete the eighteen interface files.** Their replacements —
    `cera.info.md` and `cera.info.md` — were written alongside the
-   sources in [901](completed/901-the-engine-becomes-one-file.md),
+   sources in [901](901-the-engine-becomes-one-file.md),
    because a source file without one is a file a reader has to open.
    The header's is the important one: it is the document a consumer
    reads instead of the source, and it grows a real function list when
@@ -116,5 +116,5 @@ the tool and the whole tree is the target:
 
 - [901](901-the-engine-becomes-one-file.md), which created the duplicate
   this removes
-- [711 — An index is a position in the reading order](711-the-index-means-reading-order.md),
+- [711 — An index is a position in the reading order](../711-the-index-means-reading-order.md),
   whose rule decides that the freed numbers stay free

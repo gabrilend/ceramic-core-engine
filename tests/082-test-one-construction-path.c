@@ -281,9 +281,9 @@ int main(void)
      * something one path could get right and the other wrong.
      */
     static const char *const text =
-        "station source seven p\n"
+        "station source (seven)\n"
         "  out 0 - adder.0\n"
-        "station adder add p\n"
+        "station adder (add)\n"
         "  in 0 - source.0\n"
         "  in 1 = 1000\n"
         "  out 0 - twice.0\n"
@@ -292,11 +292,11 @@ int main(void)
          * this is another thing the two paths have to agree about:
          * the file says it in a fourth word, the surface says it in a
          * call, and the dumps have to come out the same. */
-        "station twice double_it p\n"
+        "station twice (double_it)\n"
         "  out 0 - 0$\n"
         "  in 0 - adder.0\n"
         "  in 0 x64\n"
-        "station waiting add p\n"
+        "station waiting (add)\n"
         "  in 0 - adder.0\n"
         "  in 1 -\n";
     FILE *f = fopen(map_path, "w");

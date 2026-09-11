@@ -287,7 +287,7 @@ int main(void)
      * Its doors are marked, because a map's ports are scattered and
      * nothing about their position says which argument is which. */
     write_text(path,
-        "station twice double_it p\n"
+        "station twice (double_it)\n"
         "  in 0 - 0$\n"
         "  out 0 - 0$\n");
 

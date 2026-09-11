@@ -83,7 +83,7 @@ short section naming the calls it produced and their signatures, so that
 working through `issues/completed/` in order is enough to rebuild the
 project.
 
-**It is [909](../909-the-blueprints-name-their-calls.md) instead**, and
+**It is [909](909-the-blueprints-name-their-calls.md) instead**, and
 the reason is worth keeping. Crediting an issue with the calls it names
 returns six issues out of seventy-four, because the house style
 describes a function in English rather than by its name — which is the
@@ -113,7 +113,7 @@ is the thing 909 has to reconcile blueprints against.
 5. **Generate the full list of calls and signatures** from the header
    into the interface document, so it is derived rather than typed.
    Writing them back into the individual blueprints is
-   [909](../909-the-blueprints-name-their-calls.md).
+   [909](909-the-blueprints-name-their-calls.md).
 
 ## Open questions
 
@@ -127,4 +127,4 @@ is the thing 909 has to reconcile blueprints against.
 
 - [901](901-the-engine-becomes-one-file.md), which this narrows
 - [903](903-everything-else-goes-private.md), which enforces it
-- [057 — Packaging](../docs/implementation-notes/057-packaging.md)
+- [057 — Packaging](../../docs/implementation-notes/057-packaging.md)

@@ -179,7 +179,7 @@ intersecting first fails at the parse, early and by name.
 A fourth attribute line under a station, alongside `in` and `out`:
 
 ```
-station churn math.c:grind p
+station churn (math.c:grind)
   on package 0 and not core 0
   in 1 $0
   out 0 - printer.0

@@ -115,5 +115,5 @@ the list it has to rename is the header rather than the engine.
 
 - [902](902-the-header-says-what-is-public.md), which decides the list
 - [905](905-the-prefix.md), which renames what is left
-- [098-engine-surface.syms](../src/098-engine-surface.syms.info.md), the
+- [098-engine-surface.syms](../../src/098-engine-surface.syms.info.md), the
   linker's view of the same boundary
