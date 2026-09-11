@@ -19,12 +19,18 @@
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
+<a href="doc-140-a-map-inside-a-map.html">140 — A map inside a map</a>
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
+<h2>The maps</h2>
+<a href="map-095-doubling.html">095-doubling.map</a>
+<a href="map-107-example.html">107-example.map</a>
+<a href="map-127-the-ladder.html">127-the-ladder.map</a>
+<a href="map-132-the-accumulator.html">132-the-accumulator.map</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
@@ -32,11 +38,13 @@
 <h2>Issues, open</h2>
 <a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
 <a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
+<a href="issue-608-the-station-line-reads-at-a-glance.html">608 — The station line reads at a glance</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-TEMPORARY-the-dollar-sign-points-one-level-up.html">TEMPORARY — the dollar sign points one level up</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -56,12 +64,14 @@
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-203a-a-declared-depth-travels.html">203a — A declared depth travels downstream</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-209a-results-go-where-the-caller-says.html">209a — Results go where the caller says</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -73,11 +83,15 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — One table, and a program is a receipt</a>
 <a href="done-213-the-input-station.html">213 — The input station</a>
+<a href="done-213a-a-door-is-a-port.html">213a — A door is a port, not a station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-216a-removing-several-stations-at-once.html">216a — Removing several stations at once</a>
 <a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — One receipt for a box and a map</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -108,6 +122,9 @@
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-601a-a-wire-is-written-at-both-ends.html">601a — A wire is written at both ends</a>
+<a href="done-601b-the-dollar-sign-means-the-boundary.html">601b — The dollar sign means the boundary</a>
+<a href="done-601c-the-format-stops-guessing.html">601c — The format stops guessing</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -168,28 +185,28 @@ its table are deleted, and the word that named them is gone from the
 source and the documents.</p>
 <p>What stands:</p>
 <ul>
-<li><strong>A placement function per box</strong>, emitted by the generator, writing</li>
-<p>  the shim, the slot sizes, the return size, the type names, the box's
-  own name, the comparator's extra port and the comparison — with every number a
-  <code>sizeof</code> the compiler folds into an immediate. Nothing is stored;
-  the numbers were computed while the box was compiled.</p>
-<li><strong>The two comparator refusals are inside it</strong>, so a box that returns</li>
-<p>  nothing or has no comparison is refused wherever it is placed from,
-  not only through the by-name door.</p>
-<li><strong>Placing by name is a lookup that finds one and calls it</strong>, which</li>
-<p>  is what makes hand placement the primitive rather than the
-  alternative. A box compiled while the program runs carries its own
-  placement rows and is found the same way.</p>
-<li><strong>A test places every box both ways and compares field for field</strong>,</li>
-<p>  including as a comparator wherever a box can be one. Sixteen boxes,
-  twelve of them comparators, identical.</p>
-<li><strong>A struct port is handed its field table</strong>, so reading a written-out</li>
-<p>  constant follows a pointer rather than searching every emitted table
-  for a matching name.</p>
+<li><strong>A placement function per box</strong>, emitted by the generator, writing
+the shim, the slot sizes, the return size, the type names, the box's
+own name, the comparator's extra port and the comparison — with every number a
+<code>sizeof</code> the compiler folds into an immediate. Nothing is stored;
+the numbers were computed while the box was compiled.</li>
+<li><strong>The two comparator refusals are inside it</strong>, so a box that returns
+nothing or has no comparison is refused wherever it is placed from,
+not only through the by-name door.</li>
+<li><strong>Placing by name is a lookup that finds one and calls it</strong>, which
+is what makes hand placement the primitive rather than the
+alternative. A box compiled while the program runs carries its own
+placement rows and is found the same way.</li>
+<li><strong>A test places every box both ways and compares field for field</strong>,
+including as a comparator wherever a box can be one. Sixteen boxes,
+twelve of them comparators, identical.</li>
+<li><strong>A struct port is handed its field table</strong>, so reading a written-out
+constant follows a pointer rather than searching every emitted table
+for a matching name.</li>
 </ul>
 <p><strong>Two things the plan did not see</strong>, both found by building it:</p>
-<p>**Generated code that builds stations needs the engine's symbols to be
-exported.** A box compiled while the program runs arrives as a shared
+<p><strong>Generated code that builds stations needs the engine's symbols to be
+exported.</strong> A box compiled while the program runs arrives as a shared
 object and is opened at run time; its placement function calls
 straight into the station layer, and a shared object cannot see a
 symbol the host executable did not publish. This never came up while
@@ -198,8 +215,8 @@ box is inside the object with it. It appeared the moment generated
 code started <em>building stations</em>, which is the whole point of a
 placement function. Anyone linking a program with this engine inherits
 the requirement, and it belongs with the packaging story.</p>
-<p>**A symbol built from a path has to be built from a path that means
-the same thing everywhere.** The generator is handed absolute paths by
+<p><strong>A symbol built from a path has to be built from a path that means
+the same thing everywhere.</strong> The generator is handed absolute paths by
 the build, so the first symbols it emitted carried the whole location
 of the machine that built them — enormous, and different on every
 machine, which makes two generated files impossible to compare. The
@@ -213,22 +230,22 @@ emits it and nothing reads it.</p>
 <p>The three things that still did went one at a time, and each one is
 worth naming because each was a different kind of dependency:</p>
 <ul>
-<li><strong>The two comparator refusals</strong> moved into the placement function,</li>
-<p>  where they were already duplicated. A box that returns nothing
-  cannot be a comparator; a box whose return type has no comparison
-  cannot be one, because routing on raw bytes would produce an answer
-  and it would be wrong. Both are now refused wherever a box is placed
-  from rather than only through the by-name door — and the generated
-  version says <em>more</em>, naming the box by its full address rather than
-  by whatever bare word a map happened to use.</p>
-<li><strong>The wire refusal</strong> stopped fetching a return type's spelling, once</li>
-<p>  a refused wire began naming both ends by position and by size. A
-  name is not what makes a wire legal; the width is.</p>
-<li><strong>The tests that asked the record what it held</strong> now ask a</li>
-<p>  <em>station</em> what it got, which is the thing that is actually used. The
-  numbers are identical — they are the same <code>sizeof</code> expressions — but
-  the question is now put to the thing the engine runs on rather than
-  to a copy kept beside it.</p>
+<li><strong>The two comparator refusals</strong> moved into the placement function,
+where they were already duplicated. A box that returns nothing
+cannot be a comparator; a box whose return type has no comparison
+cannot be one, because routing on raw bytes would produce an answer
+and it would be wrong. Both are now refused wherever a box is placed
+from rather than only through the by-name door — and the generated
+version says <em>more</em>, naming the box by its full address rather than
+by whatever bare word a map happened to use.</li>
+<li><strong>The wire refusal</strong> stopped fetching a return type's spelling, once
+a refused wire began naming both ends by position and by size. A
+name is not what makes a wire legal; the width is.</li>
+<li><strong>The tests that asked the record what it held</strong> now ask a
+<em>station</em> what it got, which is the thing that is actually used. The
+numbers are identical — they are the same <code>sizeof</code> expressions — but
+the question is now put to the thing the engine runs on rather than
+to a copy kept beside it.</li>
 </ul>
 <p><strong>The late-box path lost a symbol pair.</strong> A box compiled while the
 program runs used to have its record and its placements fetched
@@ -278,8 +295,8 @@ its own slot sizes, its own return size, and its own comparison
 function, and the station header is deliberately kept free of any
 registry reference so that resolving a comparison happens at placement
 rather than on the delivery path.</p>
-<p>**So the record exists only to be read at the one moment generated code
-could just as well do the writing.** That is the whole observation this
+<p><strong>So the record exists only to be read at the one moment generated code
+could just as well do the writing.</strong> That is the whole observation this
 issue rests on.</p>
 <h2>Intended behavior</h2>
 <p><strong>One placement function per box, emitted by the generator.</strong></p>
@@ -293,8 +310,8 @@ issue rests on.</p>
     s-&gt;compare  = int__compare_g;
 }
 </pre>
-<p>Every number is a <code>sizeof</code> expression, so **guarantee
-<a href="doc-058-guarantees.html">C1</a> is untouched** — the compiler still
+<p>Every number is a <code>sizeof</code> expression, so <strong>guarantee
+<a href="doc-058-guarantees.html">C1</a> is untouched</strong> — the compiler still
 computes every size and the generator still never guesses. The numbers
 move from a table into a function and the compiler folds them into
 immediates. They are not stored anywhere at all.</p>
@@ -303,8 +320,8 @@ one — a name and a placement pointer — for resolving text at run time.
 <a href="done-311d-the-map-becomes-code.html">311d</a> removes the need by having the
 generator emit the calls, so a placement function is reached by *being
 called*, never by being found.</p>
-<p>**A station carries the name it was placed as, and that is not a
-lookup.** The literal is written by the placement function itself, so
+<p><strong>A station carries the name it was placed as, and that is not a
+lookup.</strong> The literal is written by the placement function itself, so
 the dump reads a field rather than searching anything. It costs a
 pointer per station; the string is read-only data the compiler was
 going to emit either way, nothing is allocated, and nothing is freed.</p>
@@ -336,8 +353,8 @@ which generated hand-placement to call — a way that
 <p>That means phase 2's station-table tests keep placing stations without
 constructing any table, which is what they were always doing, and a
 test of the station table stays a test of only the station table.</p>
-<p>**A station placed directly, with no name given, has nothing for the
-dump to write on its station line.** The placement functions the
+<p><strong>A station placed directly, with no name given, has nothing for the
+dump to write on its station line.</strong> The placement functions the
 generator emits always write one. A test that places by hand and gives
 none is a program that cannot be dumped faithfully — which is honest,
 since nothing on disk describes it either.</p>
@@ -354,15 +371,15 @@ since nothing on disk describes it either.</p>
 4. <strong>Done.</strong> The name literal is written onto the station and the
    backwards shim-to-name lookup is deleted, both halves of it —
    compiled-in and late.</p>
-<p>   It had a second caller the plan did not mention: **the wire check
-   on a live rewire**, which reached through it to a box record for
+<p>   It had a second caller the plan did not mention: <strong>the wire check
+   on a live rewire</strong>, which reached through it to a box record for
    the return size and the return type's spelling. The size was
-   already on the station. The spelling is fetched **on the refusal
-   path only**, so a refused wire still says *"box returns int (4
+   already on the station. The spelling is fetched <strong>on the refusal
+   path only</strong>, so a refused wire still says *"box returns int (4
    bytes), port takes double (8 bytes)"* rather than four bytes
    against eight, which names no fix.</p>
-<p>   **The first attempt stored the spelling on every station, and that
-   was wrong.** This issue says plainly that type names are not
+<p>   <strong>The first attempt stored the spelling on every station, and that
+   was wrong.</strong> This issue says plainly that type names are not
    carried, and 309 is why: two boxes may spell one shape differently
    and mean the same data, so a wire is legal when both sides count
    the same bytes. A name kept on a station is a name the engine
@@ -380,8 +397,8 @@ since nothing on disk describes it either.</p>
 6. <strong>Done.</strong> The record type, the table, the parameter arrays, the
    record's type-name strings, the stored task size and the comparison
    pointer are deleted, and the generator no longer emits any of it.</p>
-<p>   **This did not have to wait on
-   <a href="done-311d-the-map-becomes-code.html">311d</a> after all**, and seeing why is
+<p>   <strong>This did not have to wait on
+   <a href="done-311d-the-map-becomes-code.html">311d</a> after all</strong>, and seeing why is
    the useful part. The step was written as though <em>one</em> table had to
    survive until nothing resolved a name — and there were two. The
    <strong>record</strong> answered <em>what is this box</em>, and the <strong>placement table</strong>
@@ -397,20 +414,20 @@ since nothing on disk describes it either.</p>
    own piece of work.
 7. <strong>Done, and it did not wait after all.</strong> The step was written as
    though the word could only go once every table wearing it had gone.
-   Reading the uses showed something else: **one word was doing three
-   unrelated jobs**, and only one of them was the deleted record.</p>
+   Reading the uses showed something else: <strong>one word was doing three
+   unrelated jobs</strong>, and only one of them was the deleted record.</p>
 <ul>
-<li>The <strong>file the generator writes</strong> and the header describing its</li>
-<p>     shapes — never a registry, just emitted material. Now named for
-     what they are.</p>
-<li>The <strong>table of placements</strong> — box name, full address, the function</li>
-<p>     that writes a station. This one does still exist and is
-     <a href="done-311d-the-map-becomes-code.html">311d</a>'s to remove, but it is not a
-     record of what a box <em>is</em>, so it does not need the old word while
-     it waits.</p>
-<li>The <strong>late-box loader's own machinery</strong> — compiling a source,</li>
-<p>     counting what arrived, unloading it again. That never had anything
-     to do with records at all; it had simply inherited the prefix.</p>
+<li>The <strong>file the generator writes</strong> and the header describing its
+shapes — never a registry, just emitted material. Now named for
+what they are.</li>
+<li>The <strong>table of placements</strong> — box name, full address, the function
+that writes a station. This one does still exist and is
+<a href="done-311d-the-map-becomes-code.html">311d</a>'s to remove, but it is not a
+record of what a box <em>is</em>, so it does not need the old word while
+it waits.</li>
+<li>The <strong>late-box loader's own machinery</strong> — compiling a source,
+counting what arrived, unloading it again. That never had anything
+to do with records at all; it had simply inherited the prefix.</li>
 </ul>
 <p>   Separating them is the whole change. Sixty-odd sentences of prose
    were rewritten to say which of the three they meant, and each one
@@ -427,21 +444,21 @@ remember its box by row number, by name string, or by a backwards scan
 to scan; the placement function writes the name and the dump reads it.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
-<p>  parent</p>
-<li><a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,</li>
-<p>  which is where type and argument names go once the engine stops
-  carrying them</p>
-<li><a href="done-311d-the-map-becomes-code.html">311d — The map becomes code</a>, which</li>
-<p>  calls these functions and is why no table is needed to find them</p>
-<li><a href="done-303-registry-emission.html">303 — Registry emission</a>, the</li>
-<p>  emission this replaces</p>
-<li><a href="done-304-struct-field-tables.html">304 — Struct field tables</a>,</li>
-<p>  which stop being searched and start being pointed at</p>
-<li><a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>,</li>
-<p>  whose open question about hand placement this answers</p>
-<li><a href="done-308-generator-in-c.html">308 — The generator, in C</a>, which does the</li>
-<p>  emitting</p>
+<li><a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the
+parent</li>
+<li><a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,
+which is where type and argument names go once the engine stops
+carrying them</li>
+<li><a href="done-311d-the-map-becomes-code.html">311d — The map becomes code</a>, which
+calls these functions and is why no table is needed to find them</li>
+<li><a href="done-303-registry-emission.html">303 — Registry emission</a>, the
+emission this replaces</li>
+<li><a href="done-304-struct-field-tables.html">304 — Struct field tables</a>,
+which stop being searched and start being pointed at</li>
+<li><a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>,
+whose open question about hand placement this answers</li>
+<li><a href="done-308-generator-in-c.html">308 — The generator, in C</a>, which does the
+emitting</li>
 </ul>
 
 </main>

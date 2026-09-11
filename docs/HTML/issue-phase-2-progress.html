@@ -19,12 +19,18 @@
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
+<a href="doc-140-a-map-inside-a-map.html">140 — A map inside a map</a>
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
+<h2>The maps</h2>
+<a href="map-095-doubling.html">095-doubling.map</a>
+<a href="map-107-example.html">107-example.map</a>
+<a href="map-127-the-ladder.html">127-the-ladder.map</a>
+<a href="map-132-the-accumulator.html">132-the-accumulator.map</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
@@ -32,11 +38,13 @@
 <h2>Issues, open</h2>
 <a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
 <a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
+<a href="issue-608-the-station-line-reads-at-a-glance.html">608 — The station line reads at a glance</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-TEMPORARY-the-dollar-sign-points-one-level-up.html">TEMPORARY — the dollar sign points one level up</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html" class="here">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -56,12 +64,14 @@
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-203a-a-declared-depth-travels.html">203a — A declared depth travels downstream</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-209a-results-go-where-the-caller-says.html">209a — Results go where the caller says</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -73,11 +83,15 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — One table, and a program is a receipt</a>
 <a href="done-213-the-input-station.html">213 — The input station</a>
+<a href="done-213a-a-door-is-a-port.html">213a — A door is a port, not a station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-216a-removing-several-stations-at-once.html">216a — Removing several stations at once</a>
 <a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — One receipt for a box and a map</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -108,6 +122,9 @@
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-601a-a-wire-is-written-at-both-ends.html">601a — A wire is written at both ends</a>
+<a href="done-601b-the-dollar-sign-means-the-boundary.html">601b — The dollar sign means the boundary</a>
+<a href="done-601c-the-format-stops-guessing.html">601c — The format stops guessing</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -194,11 +211,17 @@ its own.</p>
 <tr><td><a href="done-214-destinations-without-a-lock.html">214 — destinations without a lock</a></td><td><strong>complete</strong></td><td>An immutable array published by one atomic write, so a delivery walk takes no lock and copies nothing — the last thing holding a station's mutex on the hot path. The scrapyard reclaims what a rewire replaced, using a per-worker counter that is odd inside a task and even outside it, and that same counter is what issues 310 and 216 need.</td></tr>
 <tr><td><a href="done-215-ports-and-slots.html">215 — ports and slots</a></td><td><strong>complete</strong></td><td>The source called an input port a slot and called a slot a cell, backwards from what the documents said. Now a port is the standing interface, a slot is one place one value sits, and the word <em>cell</em> is gone from the project — source, documents, interface files, issue files and the project's own statement of the one rule. Taken ahead of the rest of this family so the work still to come is written in the words its own blueprints use.</td></tr>
 <tr><td><a href="done-216-removing-a-station.html">216 — removing a station</a></td><td><strong>complete</strong></td><td>A station comes out and its place is reused. Cutting the wires that name it <em>first</em> is what makes a version tag on every wire unnecessary — the walk is paid once, rarely, instead of on every delivery. A removed place comes free when the sweep says nobody can still be inside a task built from it.</td></tr>
+<tr><td><a href="done-203a-a-declared-depth-travels.html">203a — a declared depth travels</a></td><td><strong>complete</strong></td><td>Saying how deep one port should be says it for the chain below it, carried by two moments: declaring a depth, and drawing a wire. The second is what makes a file size itself — loading draws every wire — and what makes a station added at minute ten as deep as one added at minute zero. Each kind passes it on the way its own routing works: a plain station gives the whole backlog to every wire, an iterator divides it among its exits, a comparator stops because any of its three could take everything, and the minimum across gating ports is what a station can produce. The fixed point is "already deep enough", which is also what makes a cycle safe.</td></tr>
+<tr><td><a href="done-209a-results-go-where-the-caller-says.html">209a — results go where the caller says</a></td><td><strong>complete</strong></td><td>The result mark moved onto a port, and the unbounded holding array went with the warning it used to shout. Nothing is held unless a caller registers an address and a count; a marked output with nowhere registered discards like any other unwired value, so the state the warning described cannot happen. The caller owns the memory, the bound is one atomic add at the reservation rather than the winding down, and there is no slot state machine because a collection slot is written once. The requirement that a program declare a result was retired: an interface made of numbered ports is total by being read.</td></tr>
+<tr><td><a href="done-213a-a-door-is-a-port.html">213a — a door is a port</a></td><td><strong>complete</strong></td><td>The entry mark moved off the station and onto a port, and an argument stopped costing a station running the identity function — a mutex, a ring buffer, and per value a task, a dispatch, a call returning its argument, a readiness check and a second delivery, all of it the mark having nowhere smaller to live. The number is stated rather than derived from line position, so reordering a sub-map no longer swaps the parent's arguments; gaps and repeats are refused, neither of which was detectable before. Being an argv slot is derived from what feeds the port, which is what makes composition need no bookkeeping.</td></tr>
+<tr><td><a href="done-216a-removing-several-stations-at-once.html">216a — removing several stations at once</a></td><td><strong>complete</strong></td><td>One call takes a set and sweeps the table once, instead of once per member; removing a single station became the set-of-one case. Every member is marked before any wire is cut, and every index is checked before anything is marked, so a bad member refuses the whole set rather than leaving half a program. The back-reference that would avoid the sweep was weighed and refused: delivery only ever asks where a value goes, and paying for the other direction on every wire operation to speed up a rare one is the wrong trade.</td></tr>
+<tr><td><a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — one table, and a program is a receipt</a></td><td><strong>complete</strong></td><td>One station table; everything is wirable to everything. Starting a program beside another is retired — the restriction was real and its reason sound, a wire being an index that only means something inside one table, but what a programmer met was an engine refusing to connect two boxes for a reason living in its memory layout. What it offered is what pruning a receipt now offers: a program is the list of stations one placing created, kept rather than discarded, and ending it is one sweep that cuts every wire naming any member. Two maps in one process is untouched; only the restriction went. Surfaced a double free reachable the moment a program could end by pruning — destroy walked stations before sweeping the scrapyard, and a removed station's shim is not cleared until the sweep runs.</td></tr>
+<tr><td><a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — one receipt for a box and a map</a></td><td><strong>complete</strong></td><td>Placing a box and placing a map both hand back a part number, and the caller cannot tell which it placed. A box's doors are its ports and a map's are its marks — one rule, <em>the doors are wherever the description put them</em>, and a description of one station puts them on that station. A number rather than the list because a part travels on a wire when a map builds a map. Left standing: placing a map brings its door marks with it, so an unwired one becomes a way out of the program that placed it, which is right and is also a door nobody asked for.</td></tr>
 <tr><td><a href="done-217-a-program-inside-another.html">217 — a program inside another</a></td><td><strong>complete</strong></td><td><strong>Adding a box and adding a map are one operation</strong>: a map is a list of boxes and the wiring between them, a box is a list of one. What comes back is a <em>part</em> — where values go in and where they come out — and for a single box those are the same station, because a box's own ports are its own doors. A part is never taken apart; everything that consumes one takes it whole, so no accessor boxes exist. The offset the issue described turned out to be a translation <em>table</em>, because a freed place is handed back before the table grows. The dump makes names unique on the way out, which is what lets a program holding two copies of one description still be written down.</td></tr>
 </table>
 <h2>What the phase established</h2>
-<p>**A station never moves, and a wire is an index rather than a
-pointer.** Both were chosen for reasons that only paid off phases
+<p><strong>A station never moves, and a wire is an index rather than a
+pointer.</strong> Both were chosen for reasons that only paid off phases
 later: runtime rewiring, and then a table that can grow. The invariant
 is load-bearing in a way its issue could only half-see at the time —
 a station holds its own mutex, and a mutex is identified by where it
@@ -213,8 +236,8 @@ preferred: a worker copying a value out of a slot it has claimed holds
 no lock, because a claimed slot belongs to it alone, and moving that
 slot underneath it is the one thing that ownership does not protect
 against. Reallocation was safe only while the station's mutex covered
-the whole copy. **The copy could not be given a correct ordering; it
-had to stop existing.**</p>
+the whole copy. <strong>The copy could not be given a correct ordering; it
+had to stop existing.</strong></p>
 <p><strong>User code must never run under a station's mutex.</strong> One slow box
 would freeze every thread delivering into that station. This is why the
 claim dispatch table had rows it deliberately left empty, and the
@@ -232,18 +255,18 @@ before the lock released, and that the copying was what made two
 invocations of one station safe. It was not: the exclusive claim was.
 Once that was seen, the copy could move outside and the guarantee did
 not change, because it had never rested on the copy.</p>
-<p>**A static is the exception, and it is the exception for the same
-reason the rule works.** Ownership is a claim about slots. A static is
+<p><strong>A static is the exception, and it is the exception for the same
+reason the rule works.</strong> Ownership is a claim about slots. A static is
 peeked rather than taken, so nothing owns it, and the mutex is the only
 thing between a claim reading that constant and somebody writing it —
 so that one copy stays inside the hold.</p>
-<p>**And now no user code runs anywhere but on a worker that picked up a
-task.** 210a removed the pull path, which was the engine's one named
+<p><strong>And now no user code runs anywhere but on a worker that picked up a
+task.</strong> 210a removed the pull path, which was the engine's one named
 exception — a box run inline, on the thread of whoever was assembling
 somebody else's work. The rule above was always the interesting half;
 this is the other half arriving late.</p>
-<p>**A second check is not redundancy, and 210g is where the phase found
-out what it is instead.**</p>
+<p><strong>A second check is not redundancy, and 210g is where the phase found
+out what it is instead.</strong></p>
 <p>Reading a file kept a width check of its own, beside the one the
 wiring operation applies. Taking it away — which is what "reading a
 file has no privileges" means in practice — uncovered a hole in the
@@ -252,21 +275,21 @@ station had input ports, and a box that takes nothing and returns a
 value has none. Every program in this project begins with one of
 those. No program read from a file could ever have shown it, because
 the loader's copy ran first.</p>
-<p>So the second check was not a belt beside a brace. **It was a curtain
-in front of a gap**, and the gap was only reachable by the newer of
+<p>So the second check was not a belt beside a brace. <strong>It was a curtain
+in front of a gap</strong>, and the gap was only reachable by the newer of
 the two paths — the one built precisely so that a program could be
 assembled without a file. That is worth more than the fix: it is the
 argument for one path, stated as something that happened rather than
 as something preferred.</p>
-<p>**A guarantee can be lost rather than moved, and 210a is where the
-phase learned to say so.** Rewiring holds one lock across checking an
+<p><strong>A guarantee can be lost rather than moved, and 210a is where the
+phase learned to say so.</strong> Rewiring holds one lock across checking an
 edge and installing it, because two threads adding separately-legal
 edges could produce an illegal pair. After the pull path went, no two
 legal edges can — every surviving rule concerns one edge and one
 station's fixed shape. The test that proved it is retired with a note
-saying why, rather than deleted quietly. **A property that stops being
+saying why, rather than deleted quietly. <strong>A property that stops being
 true is worth a paragraph; a test that stops existing without one is
-how a project forgets what it used to guarantee.**</p>
+how a project forgets what it used to guarantee.</strong></p>
 <p><strong>Slots are exactly the size of the parameter they feed</strong>, so a write
 is a memory copy into a fixed offset with no allocation on the hot
 path. Everything since has been arranged to keep that true.</p>

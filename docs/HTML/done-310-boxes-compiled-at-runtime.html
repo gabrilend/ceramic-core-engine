@@ -19,12 +19,18 @@
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
+<a href="doc-140-a-map-inside-a-map.html">140 — A map inside a map</a>
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
+<h2>The maps</h2>
+<a href="map-095-doubling.html">095-doubling.map</a>
+<a href="map-107-example.html">107-example.map</a>
+<a href="map-127-the-ladder.html">127-the-ladder.map</a>
+<a href="map-132-the-accumulator.html">132-the-accumulator.map</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
@@ -32,11 +38,13 @@
 <h2>Issues, open</h2>
 <a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
 <a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
+<a href="issue-608-the-station-line-reads-at-a-glance.html">608 — The station line reads at a glance</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-TEMPORARY-the-dollar-sign-points-one-level-up.html">TEMPORARY — the dollar sign points one level up</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -56,12 +64,14 @@
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-203a-a-declared-depth-travels.html">203a — A declared depth travels downstream</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-209a-results-go-where-the-caller-says.html">209a — Results go where the caller says</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -73,11 +83,15 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — One table, and a program is a receipt</a>
 <a href="done-213-the-input-station.html">213 — The input station</a>
+<a href="done-213a-a-door-is-a-port.html">213a — A door is a port, not a station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-216a-removing-several-stations-at-once.html">216a — Removing several stations at once</a>
 <a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — One receipt for a box and a map</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -108,6 +122,9 @@
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-601a-a-wire-is-written-at-both-ends.html">601a — A wire is written at both ends</a>
+<a href="done-601b-the-dollar-sign-means-the-boundary.html">601b — The dollar sign means the boundary</a>
+<a href="done-601c-the-format-stops-guessing.html">601c — The format stops guessing</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -178,17 +195,17 @@ all. Generated rows are searched first, deliberately: bringing in new
 code can never shadow a box a map already depends on.</p>
 <p><strong>Seven things are proven</strong>, in <code>tests/075-test-latebox.c</code>:</p>
 <ul>
-<li>a box written after the program started is placed, wired to a box</li>
-<p>  the binary was built with, and delivers</p>
+<li>a box written after the program started is placed, wired to a box
+the binary was built with, and delivers</li>
 <li>its widths came from a compiler rather than from its signature</li>
-<li>a struct it defines, laid out like one the program already knows and</li>
-<p>  named something the program has never heard, wires and arrives intact</p>
-<li>a late box of the wrong width is refused by the same rule and the</li>
-<p>  same message a build-time box gets</p>
-<li>*<em>a late box whose struct disagrees in </em>layout* at the same width is</li>
-<p>  accepted**, which is written deliberately — see below</p>
-<li>a source the generator refuses and a source the compiler refuses are</li>
-<p>  both refused here, and neither leaves a row behind</p>
+<li>a struct it defines, laid out like one the program already knows and
+named something the program has never heard, wires and arrives intact</li>
+<li>a late box of the wrong width is refused by the same rule and the
+same message a build-time box gets</li>
+<li><strong>a late box whose struct disagrees in <em>layout</em> at the same width is
+accepted</strong>, which is written deliberately — see below</li>
+<li>a source the generator refuses and a source the compiler refuses are
+both refused here, and neither leaves a row behind</li>
 <li>a dump taken after a box was added <strong>reloads in a fresh process</strong></li>
 </ul>
 <p><strong>That fifth one asserts a wrong answer on purpose.</strong> Two structs of
@@ -201,8 +218,8 @@ fails, and its failure is the good news.</p>
 <p><strong>The source is filed twice.</strong> Once under a serial number, which is
 what was handed over, and once per box under that box's own name,
 which is how a <strong>later</strong> process finds it. When a name is not found,
-recovery compiles it back from the saved source — and **says out loud
-that it did**, because a fallback nobody was told about is the shape
+recovery compiles it back from the saved source — and <strong>says out loud
+that it did</strong>, because a fallback nobody was told about is the shape
 this project treats as an error. That is what makes the dump of a
 grown program a real record rather than a description of something
 unreproducible.</p>
@@ -229,16 +246,16 @@ list of running maps to consult. Unloading a box another map places is
 the caller's to avoid — stated rather than defended, on the same
 footing as reaching into a program by anything other than its input
 and output stations.</p>
-<p>**And <a href="done-216-removing-a-station.html">216</a> made this worth much more than
-it looked.** The original reasoning was that a station's box cannot
+<p><strong>And <a href="done-216-removing-a-station.html">216</a> made this worth much more than
+it looked.</strong> The original reasoning was that a station's box cannot
 change and a station cannot be removed, so unloading served only a box
 compiled and then never placed. Stations can be removed now, so a box
 really can stop being used, and unloading reclaims code from programs
 that reshape themselves rather than only from ones that guessed wrong
 at startup.</p>
 <h2>Intended behavior</h2>
-<p>**A box's C source can be handed to a running program, and a station
-can place it.**</p>
+<p><strong>A box's C source can be handed to a running program, and a station
+can place it.</strong></p>
 <p>The path is not exotic and each step already exists somewhere:</p>
 <p>1. Take the C source for one or more boxes.
 2. Run the generator over it, producing the shim, the box record, any
@@ -246,8 +263,8 @@ can place it.**</p>
 3. Compile that to a shared library, by invoking a compiler.
 4. Load it and look up the shim.
 5. Add the row to the registry.</p>
-<p>**A function signature is not enough on its own, and it is worth being
-precise about why.** A signature gives you names: the box's name, its
+<p><strong>A function signature is not enough on its own, and it is worth being
+precise about why.</strong> A signature gives you names: the box's name, its
 parameter type names, its return type name. What it cannot give you is
 <strong>sizes and offsets</strong> — how many bytes a slot holds, how far into a
 struct a field sits, how large a task must be. Those are what the
@@ -265,8 +282,8 @@ it should be a shared piece rather than a fifth hand-rolled one.</p>
 — a name and a placement function — which makes growing it cheaper than
 this issue assumed and changes nothing about the shape.</p>
 <h3>Which compiler, and at what setting</h3>
-<p>**One compiler per program, and it is the compiler that built the
-binary.** The build records which one; every runtime compile invokes
+<p><strong>One compiler per program, and it is the compiler that built the
+binary.</strong> The build records which one; every runtime compile invokes
 that same one. So there is exactly one answer to <code>sizeof</code> in a given
 program <strong>by construction</strong> — not checked, not mitigated, structurally
 impossible to violate.</p>
@@ -283,8 +300,8 @@ platform ABI, and <code>-O0</code> and <code>-O2</code> are the same compiler em
 same offsets — so this varies compile speed freely with no risk at all
 to the sizes. Build time is allowed to be slow. Runtime compilation is
 not.</p>
-<p>**A second compiler was considered and refused, and the refusal is
-worth keeping.** TinyCC, as <code>libtcc</code>, compiles C in-process — no
+<p><strong>A second compiler was considered and refused, and the refusal is
+worth keeping.</strong> TinyCC, as <code>libtcc</code>, compiles C in-process — no
 subprocess, no shared object, no <code>dlopen</code>, roughly an order of
 magnitude faster on small inputs — and it is built for exactly this.
 What it costs is a second answer to <code>sizeof</code>. For standard types there
@@ -295,14 +312,14 @@ outcome is a refusal to compile rather than a wrong number. The width
 check would catch the remainder. It was still refused, because *one
 answer by construction* is a better property than *two answers and a
 net*, and because <code>-O0</code> recovers most of the speed for free.</p>
-<p>**If runtime latency still hurts, the move that keeps this decision is
-to take the compile off the critical path** — hand the source over,
+<p><strong>If runtime latency still hurts, the move that keeps this decision is
+to take the compile off the critical path</strong> — hand the source over,
 return immediately, let the station go live when the compile finishes.
 The engine is already asynchronous by construction: a box that is not
 ready yet is a station that is not ready yet, which is a state it
 already has a word for.</p>
-<p>**A box arriving late needs to report the width of each input and of
-its output, and that is the whole of what the type system asks of it.**
+<p><strong>A box arriving late needs to report the width of each input and of
+its output, and that is the whole of what the type system asks of it.</strong>
 Under <a href="done-309-types-by-width.html">309</a> a wire is legal when the two sides
 count the same number of bytes, and those numbers come from the same
 place they always came from: a <code>sizeof</code> the compiler computed while
@@ -345,8 +362,8 @@ would eventually disagree with the first about what a box is.</p>
    feeds it is refused, naming both types and both widths — the same
    refusal a build-time box gets, arriving by the same path.
 6. A test that a box whose struct disagrees in <em>layout</em> with one
-   already loaded, at the same width, **is accepted and delivers
-   scrambled fields.** Written deliberately, because this is the
+   already loaded, at the same width, <strong>is accepted and delivers
+   scrambled fields.</strong> Written deliberately, because this is the
    accepted cost of comparing widths and a test that pins it is how
    somebody later discovers it was a decision rather than an oversight.
 7. The source saved to the RAM-backed directory at the moment the box
@@ -361,12 +378,12 @@ would eventually disagree with the first about what a box is.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>
-<li><em>Where does the compiler come from?</em> **Assume it is there — but only</li>
-<p>  when it is actually needed, which is rarer than this issue first
-  assumed.** The engine calls a C compiler at runtime and does not
-  negotiate about it. What answers the packaging concern is an install
-  script that builds the dependencies from source into a local place,
-  written once the system is finished rather than designed around now.</p>
+<li><em>Where does the compiler come from?</em> <strong>Assume it is there — but only
+when it is actually needed, which is rarer than this issue first
+assumed.</strong> The engine calls a C compiler at runtime and does not
+negotiate about it. What answers the packaging concern is an install
+script that builds the dependencies from source into a local place,
+written once the system is finished rather than designed around now.</li>
 </ul>
 <p>  <strong><a href="done-311d-the-map-becomes-code.html">311d</a> narrows when that bites.</strong> A
   program whose map names only boxes the binary already carries never
@@ -376,24 +393,24 @@ would eventually disagree with the first about what a box is.</p>
   stopped being a tax on every program and became the price of one
   capability.</p>
 <ul>
-<li>*Which compiler, and is a fast in-process one worth a second answer</li>
-<p>  to <code>sizeof</code>?* **GCC, the same one that built the binary, at low
-  optimization; and no.** Written up under *Which compiler, and at what
-  setting* above, including why TinyCC was refused despite being built
-  for exactly this, and why varying the optimization level is free
-  where varying the compiler is not.</p>
+<li>*Which compiler, and is a fast in-process one worth a second answer
+to <code>sizeof</code>?* <strong>GCC, the same one that built the binary, at low
+optimization; and no.</strong> Written up under *Which compiler, and at what
+setting* above, including why TinyCC was refused despite being built
+for exactly this, and why varying the optimization level is free
+where varying the compiler is not.</li>
 </ul>
 <p>  Discovery, if the engine ever has to find a compiler rather than
   being told, must <strong>say what it picked</strong> — *no compiler recorded;
   using <code>/usr/bin/gcc</code>* — because silently falling through a list is
   the shape of fallback this project treats as an error.</p>
 <ul>
-<li><em>Can a loaded box ever be unloaded?</em> **Yes, by retire, sweep, free —</li>
-<p>  the mechanism <a href="done-214-destinations-without-a-lock.html">214</a> builds for
-  destination arrays**, including the scrapyard's own lock and the rule
-  that nothing is acquired while holding it. Unloading a shared library
-  out from under a worker running its code is the same lifetime problem
-  wearing different clothes.</p>
+<li><em>Can a loaded box ever be unloaded?</em> <strong>Yes, by retire, sweep, free —
+the mechanism <a href="done-214-destinations-without-a-lock.html">214</a> builds for
+destination arrays</strong>, including the scrapyard's own lock and the rule
+that nothing is acquired while holding it. Unloading a shared library
+out from under a worker running its code is the same lifetime problem
+wearing different clothes.</li>
 </ul>
 <p>  <strong>Two things about it are not the same, and both matter.</strong></p>
 <p>  The liveness test is a different window. The destination sweep asks
@@ -405,8 +422,8 @@ would eventually disagree with the first about what a box is.</p>
   destinations, since an array becomes freeable slightly later than it
   strictly must; one mechanism instead of two, on a path nothing
   measures.</p>
-<p>  **And unloading turned out to be worth much more than this issue
-  first thought.** The original reasoning ran: a station's box cannot be
+<p>  <strong>And unloading turned out to be worth much more than this issue
+  first thought.</strong> The original reasoning ran: a station's box cannot be
   changed and a station cannot be removed, so unloading serves only the
   box that was compiled and then never placed — narrow, but worth
   building anyway, since the alternative is code accumulating forever
@@ -414,19 +431,19 @@ would eventually disagree with the first about what a box is.</p>
 <p>  <a href="done-216-removing-a-station.html">216</a> removes that limit. A station can be
   taken out, so a box really can stop being used, so unloading reclaims
   code from programs that reconfigure rather than only from programs
-  that guessed wrong once at startup. **The two share their hardest
-  step**: waiting until no worker is inside the thing being freed,
+  that guessed wrong once at startup. <strong>The two share their hardest
+  step</strong>: waiting until no worker is inside the thing being freed,
   which is one per-worker counter answering the same question about a
   box and about a station. Build it once.</p>
 <ul>
-<li><em>Does a runtime-added box survive a dump and reload?</em> **Yes, because</li>
-<p>  its source is written down when the box is created, not when a dump
-  asks for it.** Every box compiled at runtime has its source saved to
-  the RAM-backed directory the moment it comes into existence, treated
-  exactly like a log: written as it happens, ephemeral, gone at reboot.</p>
+<li><em>Does a runtime-added box survive a dump and reload?</em> <strong>Yes, because
+its source is written down when the box is created, not when a dump
+asks for it.</strong> Every box compiled at runtime has its source saved to
+the RAM-backed directory the moment it comes into existence, treated
+exactly like a log: written as it happens, ephemeral, gone at reboot.</li>
 </ul>
-<p>  **Writing it at creation rather than at dump time is the whole
-  decision**, and it is the same one <a href="done-106-stopping-on-purpose.html">106</a>
+<p>  <strong>Writing it at creation rather than at dump time is the whole
+  decision</strong>, and it is the same one <a href="done-106-stopping-on-purpose.html">106</a>
   makes about opening the report's destination during startup. A dump
   may be taken while the program is dying, and a failure path is the
   worst possible moment to discover that something needs saving. The
@@ -437,24 +454,24 @@ would eventually disagree with the first about what a box is.</p>
   rather than implied.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="done-308-generator-in-c.html">308 — The generator, in C</a>, which is what</li>
-<p>  makes the parser callable at runtime rather than only at build time</p>
-<li><a href="done-309-types-by-width.html">309 — Types compared by width</a>, a hard</li>
-<p>  prerequisite — by-name comparison makes this corrupt silently</p>
-<li><a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>, which</li>
-<p>  shrinks the table this makes growable to a name and a pointer, and
-  narrows when a toolchain is needed at all</p>
-<li><a href="done-303-registry-emission.html">303 — The registry</a>, the table</li>
-<p>  this makes growable</p>
-<li><a href="done-306-build-integration.html">306 — Build integration</a>, whose</li>
-<p>  no-partial-output guarantee applies here too: a failed generation
-  must leave nothing loadable</p>
-<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
-<p>  which made the frozen registry a visible limit</p>
-<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which</li>
-<p>  reads C files the running program never compiled</p>
-<li><a href="impl-057-packaging.html">057 — Packaging</a>,</li>
-<p>  where a runtime dependency on a compiler has to be weighed</p>
+<li><a href="done-308-generator-in-c.html">308 — The generator, in C</a>, which is what
+makes the parser callable at runtime rather than only at build time</li>
+<li><a href="done-309-types-by-width.html">309 — Types compared by width</a>, a hard
+prerequisite — by-name comparison makes this corrupt silently</li>
+<li><a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>, which
+shrinks the table this makes growable to a name and a pointer, and
+narrows when a toolchain is needed at all</li>
+<li><a href="done-303-registry-emission.html">303 — The registry</a>, the table
+this makes growable</li>
+<li><a href="done-306-build-integration.html">306 — Build integration</a>, whose
+no-partial-output guarantee applies here too: a failed generation
+must leave nothing loadable</li>
+<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,
+which made the frozen registry a visible limit</li>
+<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which
+reads C files the running program never compiled</li>
+<li><a href="impl-057-packaging.html">057 — Packaging</a>,
+where a runtime dependency on a compiler has to be weighed</li>
 </ul>
 
 </main>

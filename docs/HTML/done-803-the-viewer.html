@@ -19,12 +19,18 @@
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
+<a href="doc-140-a-map-inside-a-map.html">140 — A map inside a map</a>
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
+<h2>The maps</h2>
+<a href="map-095-doubling.html">095-doubling.map</a>
+<a href="map-107-example.html">107-example.map</a>
+<a href="map-127-the-ladder.html">127-the-ladder.map</a>
+<a href="map-132-the-accumulator.html">132-the-accumulator.map</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
@@ -32,11 +38,13 @@
 <h2>Issues, open</h2>
 <a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
 <a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
+<a href="issue-608-the-station-line-reads-at-a-glance.html">608 — The station line reads at a glance</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-TEMPORARY-the-dollar-sign-points-one-level-up.html">TEMPORARY — the dollar sign points one level up</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -56,12 +64,14 @@
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-203a-a-declared-depth-travels.html">203a — A declared depth travels downstream</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-209a-results-go-where-the-caller-says.html">209a — Results go where the caller says</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -73,11 +83,15 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — One table, and a program is a receipt</a>
 <a href="done-213-the-input-station.html">213 — The input station</a>
+<a href="done-213a-a-door-is-a-port.html">213a — A door is a port, not a station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-216a-removing-several-stations-at-once.html">216a — Removing several stations at once</a>
 <a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — One receipt for a box and a map</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -108,6 +122,9 @@
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-601a-a-wire-is-written-at-both-ends.html">601a — A wire is written at both ends</a>
+<a href="done-601b-the-dollar-sign-means-the-boundary.html">601b — The dollar sign means the boundary</a>
+<a href="done-601c-the-format-stops-guessing.html">601c — The format stops guessing</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -165,19 +182,19 @@ does nothing else.</p>
 <h2>Current behaviour</h2>
 <p><strong>Built, and running.</strong> Three files and a program:</p>
 <ul>
-<li><strong><code>viewer/119-viewer.c</code></strong> — the forwarding reader. It maps a watched</li>
-<p>  program's ring with the engine's own reader, serves the page and the
-  map over HTTP, and pushes events down a server-sent event stream. One
-  thread, one poll loop, a reader per connected page — which is why two
-  people watching do not interfere.</p>
-<li><strong><code>viewer/120-viewer.html</code>, <code>121-viewer.css</code>, <code>122-viewer.js</code></strong> — the</li>
-<p>  page. It reads the map file, lays the stations out on a near-square
-  grid, draws the wires, lights each station as it runs, fills a pip per
-  input port as its backlog deepens, and says so when the trail reports
-  loss.</p>
-<li><strong><code>viewer/123-a-program-to-watch.c</code></strong> — the engine's example graph fed</li>
-<p>  at a human pace and left running until interrupted, because a program
-  that finishes in four milliseconds is correct and useless to watch.</p>
+<li><strong><code>viewer/119-viewer.c</code></strong> — the forwarding reader. It maps a watched
+program's ring with the engine's own reader, serves the page and the
+map over HTTP, and pushes events down a server-sent event stream. One
+thread, one poll loop, a reader per connected page — which is why two
+people watching do not interfere.</li>
+<li><strong><code>viewer/120-viewer.html</code>, <code>121-viewer.css</code>, <code>122-viewer.js</code></strong> — the
+page. It reads the map file, lays the stations out on a near-square
+grid, draws the wires, lights each station as it runs, fills a pip per
+input port as its backlog deepens, and says so when the trail reports
+loss.</li>
+<li><strong><code>viewer/123-a-program-to-watch.c</code></strong> — the engine's example graph fed
+at a human pace and left running until interrupted, because a program
+that finishes in four milliseconds is correct and useless to watch.</li>
 </ul>
 <p><code>make viewer</code> prints the two commands.</p>
 <h3>It only forwards, and the test says so</h3>
@@ -250,8 +267,8 @@ feed ──&gt; gate ─┬─ less    ─────────────�
 </pre>
 <p><code>feed</code> counts, so <code>gate</code> sees 0 to 29 over and over. A comparator routes
 by its box's result against the threshold on its last port — ten here —
-so of every thirty values **ten go left, exactly one goes down the
-middle, and nineteen go right**, and the iterator halves the right-hand
+so of every thirty values <strong>ten go left, exactly one goes down the
+middle, and nineteen go right</strong>, and the iterator halves the right-hand
 stream again by dealing alternate values to a drain.</p>
 <p><code>collect</code> takes three inputs and cannot run until all three hold a
 value, so it runs at the rate of its slowest feed while the other two
@@ -275,8 +292,8 @@ threshold and handing the rest down.</p>
 <p><code>maps/127-the-ladder.map</code> is that, and <code>viewer/128-watch-a-map.c</code> runs
 any map the binary was built with, so a shape can be watched without a
 program written for it.</p>
-<p>**Every comparator in it has an unwired equal exit that can never
-fire**, which is what the doubling at the front is for. A threshold of
+<p><strong>Every comparator in it has an unwired equal exit that can never
+fire</strong>, which is what the doubling at the front is for. A threshold of
 nineteen against values that are always even puts the boundary at
 nine-and-a-half: between the integers rather than on one. Compare
 against ten with the values undoubled and the number ten itself lands on
@@ -355,8 +372,8 @@ told you missed something because the buffer was small rather than
 because you were slow.</p>
 <h3>Somebody else's screen</h3>
 <p>The viewer listens on the loopback address, so the machine running a
-program is the only machine that can watch it. **Watching should not be
-the act that puts a program on a network**, so opening that door is a
+program is the only machine that can watch it. <strong>Watching should not be
+the act that puts a program on a network</strong>, so opening that door is a
 thing somebody types rather than a default.</p>
 <p><code>--listen=all</code> opens it, and the viewer then prints every address
 another computer could use — because telling somebody "open the viewer"
@@ -403,24 +420,24 @@ that must agree.</p>
 <h3>What it shows</h3>
 <ul>
 <li><strong>The graph</strong>, laid out, from a dump the program was asked for once.</li>
-<li><strong>Each station lighting as it runs</strong>, and dimming as it goes quiet,</li>
-<p>  so a bottleneck is the station that never dims and a dead branch is
-  the one that never lights.</p>
-<li><strong>Each buffer's depth</strong>, because a buffer filling is the single most</li>
-<p>  useful thing to see: it says one input side is outrunning another,
-  which is the fault this engine makes easiest to create and hardest to
-  notice.</p>
-<li><strong>What it missed.</strong> When the trail says events were lost, the page</li>
-<p>  says so, in the picture rather than in a corner. A view quietly
-  missing events is a view somebody will trust.</p>
+<li><strong>Each station lighting as it runs</strong>, and dimming as it goes quiet,
+so a bottleneck is the station that never dims and a dead branch is
+the one that never lights.</li>
+<li><strong>Each buffer's depth</strong>, because a buffer filling is the single most
+useful thing to see: it says one input side is outrunning another,
+which is the fault this engine makes easiest to create and hardest to
+notice.</li>
+<li><strong>What it missed.</strong> When the trail says events were lost, the page
+says so, in the picture rather than in a corner. A view quietly
+missing events is a view somebody will trust.</li>
 </ul>
 <h3>What stands between the ring and the page — decided</h3>
 <p><strong>A forwarding reader.</strong> A separate program maps the ring and pushes
 events down a socket the page opens. It does nothing else, which is what
 keeps <em>cannot touch</em> true by construction rather than by discipline: a
 program that can only forward cannot be talked into writing.</p>
-<p>The cost is stated rather than hidden — **this project gains its first
-long-running program**, and a port to pick. The two alternatives were a
+<p>The cost is stated rather than hidden — <strong>this project gains its first
+long-running program</strong>, and a port to pick. The two alternatives were a
 file something has to keep handing the page, which needs a server
 anyway and adds the poll interval as latency, and a regenerated static
 page, which is a photograph rather than a view and makes lighting and
@@ -434,8 +451,8 @@ time and the page would have no way to know which parts it had not seen.</p>
 <p>Rewiring events from the trail keep it current afterwards, so a program
 edited while it runs stays drawn correctly.</p>
 <h3>The layout</h3>
-<p>**A grid, as close to square as the station count allows, preferring an
-extra column to an extra row.** Boxes are placed in it with padding
+<p><strong>A grid, as close to square as the station count allows, preferring an
+extra column to an extra row.</strong> Boxes are placed in it with padding
 between them and the wires drawn as lines. That is the whole of the
 automatic layout: no force simulation, no ranking, nothing that moves
 under you while you are looking at it.</p>
@@ -449,8 +466,8 @@ is describing any more than it writes to the program.</p>
 <h3>A box that appears while you are watching</h3>
 <p>A station added to a running program has to go somewhere, and the
 obvious answer — put it near the ones it is wired to — does not work at
-the moment it is needed. **Creating a station and wiring it are separate
-events**, so when the box first appears it has no wires at all.</p>
+the moment it is needed. <strong>Creating a station and wiring it are separate
+events</strong>, so when the box first appears it has no wires at all.</p>
 <p>So placement happens in two stages:</p>
 <p>1. <strong>On creation</strong>, the box is appended to the grid, in the next free
    cell. This is always possible and never wrong, only uninformative.
@@ -474,20 +491,20 @@ itself under a hand is worse than a picture in the wrong order.</p>
    example, whatever phase 8's panel turns out to be.</p>
 <h2>Open questions</h2>
 <ul>
-<li><strong>How much history does it hold?</strong> A view of <em>now</em> needs none. A view</li>
-<p>  that answers "what happened just before it wedged" needs some, and the
-  amount is the difference between a dashboard and a recorder.</p>
+<li><strong>How much history does it hold?</strong> A view of <em>now</em> needs none. A view
+that answers "what happened just before it wedged" needs some, and the
+amount is the difference between a dashboard and a recorder.</li>
 </ul>
 <h2>Related</h2>
 <ul>
-<li><a href="done-802-a-program-you-can-watch.html">802 — A program you can watch</a>, the</li>
-<p>  trail this reads and the only thing it depends on</p>
-<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which</li>
-<p>  it shares nothing with, deliberately</p>
-<li><a href="done-703-map-dump.html">703 — The map dump</a>, where the graph</li>
-<p>  comes from</p>
-<li><a href="done-701-buffer-growth-reporting.html">701 — Buffer growth reporting</a>,</li>
-<p>  which is the thing most worth drawing</p>
+<li><a href="done-802-a-program-you-can-watch.html">802 — A program you can watch</a>, the
+trail this reads and the only thing it depends on</li>
+<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which
+it shares nothing with, deliberately</li>
+<li><a href="done-703-map-dump.html">703 — The map dump</a>, where the graph
+comes from</li>
+<li><a href="done-701-buffer-growth-reporting.html">701 — Buffer growth reporting</a>,
+which is the thing most worth drawing</li>
 </ul>
 
 </main>

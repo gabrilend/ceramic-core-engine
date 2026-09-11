@@ -19,12 +19,18 @@
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
+<a href="doc-140-a-map-inside-a-map.html">140 — A map inside a map</a>
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
+<h2>The maps</h2>
+<a href="map-095-doubling.html">095-doubling.map</a>
+<a href="map-107-example.html">107-example.map</a>
+<a href="map-127-the-ladder.html">127-the-ladder.map</a>
+<a href="map-132-the-accumulator.html">132-the-accumulator.map</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
@@ -32,11 +38,13 @@
 <h2>Issues, open</h2>
 <a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
 <a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
+<a href="issue-608-the-station-line-reads-at-a-glance.html">608 — The station line reads at a glance</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-TEMPORARY-the-dollar-sign-points-one-level-up.html">TEMPORARY — the dollar sign points one level up</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -56,12 +64,14 @@
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-203a-a-declared-depth-travels.html">203a — A declared depth travels downstream</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-209a-results-go-where-the-caller-says.html">209a — Results go where the caller says</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -73,11 +83,15 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — One table, and a program is a receipt</a>
 <a href="done-213-the-input-station.html">213 — The input station</a>
+<a href="done-213a-a-door-is-a-port.html">213a — A door is a port, not a station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-216a-removing-several-stations-at-once.html">216a — Removing several stations at once</a>
 <a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — One receipt for a box and a map</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -108,6 +122,9 @@
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-601a-a-wire-is-written-at-both-ends.html">601a — A wire is written at both ends</a>
+<a href="done-601b-the-dollar-sign-means-the-boundary.html">601b — The dollar sign means the boundary</a>
+<a href="done-601c-the-format-stops-guessing.html">601c — The format stops guessing</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -165,8 +182,8 @@ its shape is worth knowing exactly.</p>
 of pointers, each to a fixed run of station records. Station number
 <em>n</em> sits at position <em>n</em> within shelf <em>n</em> divided by the shelf size —
 one shift and one mask, because the shelf size is a power of two. A
-station is addressed by its number forever after, and **nothing
-already placed ever moves**.</p>
+station is addressed by its number forever after, and <strong>nothing
+already placed ever moves</strong>.</p>
 <p>That shape exists for one reason: a station holds its own mutex, and a
 mutex is identified by where it lives. A flat array grows by
 reallocating, which would move every record and leave any thread
@@ -238,17 +255,17 @@ from it.</p>
 pulled from. It is gone from the record rather than left sitting
 unused, because a field nobody writes is a question every reader has
 to answer for themselves.</p>
-<p>**Head and tail are gone, and what replaced them is the interesting
-part.** They were exact positions: the head said where the oldest value
+<p><strong>Head and tail are gone, and what replaced them is the interesting
+part.</strong> They were exact positions: the head said where the oldest value
 sat, and it had to be right, because it was also what said which slots
 were occupied at all. A number that must be right has to be maintained
 under exclusion, and that is why the station's mutex had to be held
 across the copying — the indices called a slot occupied the moment it
 was spoken for, which is before its bytes had landed.</p>
 <p>Each slot now carries its own state, and a reader looks for a usable
-one instead of calculating where it must be. **A position must be
+one instead of calculating where it must be. <strong>A position must be
 exact and is therefore computed; a hint may be wrong and therefore is
-not.** That one sentence is what lets the lock come off the copying,
+not.</strong> That one sentence is what lets the lock come off the copying,
 and it is also what will let a buffer grow by adding a page instead of
 copying, since nothing computes a location from the capacity any more.
 Issues 210c and 210d carry it between them; 210e collects.</p>
@@ -290,8 +307,8 @@ entry and read the same bytes each their own way, which stopped being
 a rule to document and became a thing that cannot be said.</p>
 <p>Reading one is a <strong>peek</strong>: the value is not consumed, so a station
 driven by its ring side reads the same static on every one of its runs.
-That is what makes a threshold a threshold. And **writing one is an
-event** — it runs the ordinary readiness check on the station holding
+That is what makes a threshold a threshold. And <strong>writing one is an
+event</strong> — it runs the ordinary readiness check on the station holding
 it, which is how a chain of stations wired through statics recalculates
 and how a program starts at all. <a href="doc-004-datapath-statics.html">004</a>.</p>
 <p><strong>None.</strong> The port has been given no source yet. It can never hold a
@@ -343,18 +360,111 @@ backs up the pool's task ring instead. Port growth is specifically the
 signature of a multi-input station fed unevenly; queue growth is the
 signature of consumers slower than producers overall. Phase 7 reports
 both, and reading them together is what locates a bottleneck.</p>
+<h2>A depth travels downstream</h2>
+<p>Growing a buffer is cheap — one allocation, nothing copied — but it
+happens <strong>on the delivery path, holding the station's own mutex</strong>,
+which is the same lock the readiness check wants. A burst of a hundred
+values into a ten-slot buffer takes that lock about nine extra times
+for no reason a reader of the map could have predicted.</p>
+<p>So when the engine already knows a backlog is coming, it makes the
+buffers below deep enough up front instead.</p>
+<p><strong>Two moments know it</strong>, and they are the only two:</p>
+<ul>
+<li><strong>A depth is declared on a port.</strong> Writing <code>in 0 x64</code> says this
+buffer starts sixty-four deep, which says something about every
+station downstream of it too.</li>
+<li><strong>A wire is drawn.</strong> The new destination inherits whatever backlog
+the source can already hold.</li>
+</ul>
+<p>Both are construction-time operations under the rewiring lock. Nothing
+about this ever runs while values are being delivered.</p>
+<h3>How far a station can fall behind</h3>
+<p>The answer is the <strong>minimum</strong> over the ports that gate it, because a
+station runs when <em>every</em> input port holds a value. Fed a hundred from
+one side and ten from the other, it runs ten times and produces ten.
+Taking the maximum would size everything below an uneven join for a
+backlog that cannot arrive.</p>
+<p>Static ports are skipped rather than counted, because a static is
+always full and gates nothing. A port with <strong>no source at all</strong> gates
+everything — the station never runs — so the answer is zero and the
+walk stops. A station with no gating ports at all is a station of
+constants, seeded once, and answers one.</p>
+<h3>What each kind passes on</h3>
+<p>The three station kinds differ in exactly one way — where a returned
+value goes — so this is the one place that has to know about them:</p>
+<table>
+<tr><td>kind</td><td>what it passes down</td></tr>
+<tr><td><strong>plain</strong></td><td>the whole backlog to every wire on port zero, because fan-out duplicates a value rather than dividing it</td></tr>
+<tr><td><strong>iterator</strong></td><td>each exit gets its share, since the exits are taken in turn; the remainder rides on the ones the cursor reaches first</td></tr>
+<tr><td><strong>comparator</strong></td><td><strong>nothing. The walk stops here.</strong></td></tr>
+<tr><td><strong>void</strong></td><td>nothing to send</td></tr>
+</table>
+<p><strong>The comparator is exempt on purpose.</strong> One of three exits fires per
+run and the data chooses which, so any one of them could take
+everything. Sizing all three for the whole backlog is defensible and
+costs three times the memory for a guess; sizing none of them costs a
+page-at-a-time growth on whichever exit turns out to be the busy one.
+<strong>The cheaper mistake is the one that only costs time</strong>, so the walk
+stops at a comparator and lets the ordinary growth handle it.</p>
+<h3>Why a cycle is safe without a visited set</h3>
+<p>The walk's stopping condition is <strong>"already deep enough"</strong>, checked at
+each port before touching it.</p>
+<p>An accumulator wires its own output back into its own input, so this
+walk arrives back where it started. The second visit finds the port at
+the size the first visit gave it and stops. That is a fixed point, and
+it means there is no visited set to allocate, no depth limit to pick,
+and nothing that has to be kept in step as the graph changes — which
+matters, because the graph changes while the program runs.</p>
+<h3>Reading a port's depth</h3>
+<p>Two different questions, and the calls answer different ones. <strong>How
+many values are waiting in a port</strong> is what the depth call reports.
+<strong>How many slots the port has room for</strong> is its capacity, which is the
+number this walk raises. A buffer sized sixty-four deep and holding
+three answers sixty-four for one question and three for the other.</p>
 <h2>Output ports</h2>
-<p>A port is one exit from a station. It holds a linked list of
-destinations, each a pair of 32-bit numbers: which station, and which
-port on it.</p>
+<p>A port is one exit from a station. The ports of a station are a linked
+list; each port holds a pointer to its <strong>destinations</strong>, which are an
+array of pairs of 32-bit numbers: which station, and which port on it.</p>
 <p>Both numbers are needed. The delivery path takes the destination
 station's mutex and then examines <em>all</em> of its ports to decide
 readiness, so it has to be able to name the station, not merely land
 somewhere inside it.</p>
+<p><strong>The destination array is immutable and is swapped whole.</strong> Nothing
+ever edits one. Drawing or cutting a wire builds a whole new array and
+swaps the port's pointer in a single atomic write, so a walker reads
+the pointer once and then walks something nobody will ever modify.
+That is what takes the station's mutex off the delivery walk
+altogether: no lock, no copy onto the walker's stack, and no way to see
+a half-edited set. The array it replaced is filed in the scrapyard and
+freed when nothing can still be walking it.</p>
+<p>A null pointer means a port wired nowhere, and delivering to it
+<strong>discards</strong> — which is exactly what an unwired comparator branch
+should do.</p>
 <p>A plain box has one port, which may fan out to any number of
 destinations. A comparator has exactly three. An iterator has as many
 as the map gives it. What the ports mean and how one is chosen is
 <a href="doc-005-routing.html">005</a>.</p>
+<h3>An output port may be one of the map's results</h3>
+<p>A port carries the number of the result it is, or a sentinel saying it
+is neither — which is the case for most ports.</p>
+<p><strong>A mark is not a bucket.</strong> A marked port with nowhere to put its
+values discards them like any other unwired output, so a program nobody
+is collecting from grows nothing. What makes the values arrive
+somewhere is a caller <strong>registering an array to put them in</strong>: a
+pointer, how many fit, and how wide one is. The memory belongs to the
+caller.</p>
+<p>Slots are claimed with one atomic add on a counter. <strong>The bound is the
+reservation, never the winding down</strong> — a worker handed a slot at or
+past the end writes nothing, because workers are still inside boxes at
+the moment the array fills and there is no way to ask them to stop
+having started.</p>
+<p>There is no per-slot state machine here, and that is the difference
+from a ring buffer's slots. A ring slot needs one because it is reused
+and a reader must know what it is looking at; one of these is written
+once and read by nobody until the caller comes to look.</p>
+<p>This replaced a pile of results kept on the station against the chance
+somebody would come to collect them. That pile was memory the program
+grew whether or not anyone ever wanted it.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="doc-003-datapath-delivery.html">003 — Delivery</a>, the path that writes into these ports.</li>

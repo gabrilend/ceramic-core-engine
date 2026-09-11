@@ -19,12 +19,18 @@
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
+<a href="doc-140-a-map-inside-a-map.html">140 — A map inside a map</a>
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
+<h2>The maps</h2>
+<a href="map-095-doubling.html">095-doubling.map</a>
+<a href="map-107-example.html">107-example.map</a>
+<a href="map-127-the-ladder.html">127-the-ladder.map</a>
+<a href="map-132-the-accumulator.html">132-the-accumulator.map</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
@@ -32,11 +38,13 @@
 <h2>Issues, open</h2>
 <a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
 <a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
+<a href="issue-608-the-station-line-reads-at-a-glance.html">608 — The station line reads at a glance</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-TEMPORARY-the-dollar-sign-points-one-level-up.html">TEMPORARY — the dollar sign points one level up</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -56,12 +64,14 @@
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-203a-a-declared-depth-travels.html">203a — A declared depth travels downstream</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-209a-results-go-where-the-caller-says.html">209a — Results go where the caller says</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -73,11 +83,15 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — One table, and a program is a receipt</a>
 <a href="done-213-the-input-station.html">213 — The input station</a>
+<a href="done-213a-a-door-is-a-port.html">213a — A door is a port, not a station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-216a-removing-several-stations-at-once.html">216a — Removing several stations at once</a>
 <a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — One receipt for a box and a map</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -108,6 +122,9 @@
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-601a-a-wire-is-written-at-both-ends.html">601a — A wire is written at both ends</a>
+<a href="done-601b-the-dollar-sign-means-the-boundary.html">601b — The dollar sign means the boundary</a>
+<a href="done-601c-the-format-stops-guessing.html">601c — The format stops guessing</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -169,27 +186,27 @@ different programs — and reading a file is now a caller of the
 configuration surface rather than a builder beside it.</p>
 <p>What now stands:</p>
 <ul>
-<li><strong>One operation says where a port's values come from</strong>: a station, a</li>
-<p>  port, a source, and — when the source is a value — the value itself
-  as text. Binding a constant, taking a source away, and giving a port
-  back to the arrows were three calls with three shapes; they are
-  cases of this one. Text is what distinguishes the two ways to become
-  a constant: given some, the port takes that value; given none, it
-  returns to the value it held before.</p>
-<li><strong>It returns a refusal rather than stopping</strong>, so a caller reading a</li>
-<p>  file can collect every mistake and present them together. One thing
-  still stops the program — text that does not parse — and moving that
-  onto the return path belongs with the refusal policy rather than
-  being half done here.</p>
-<li><strong>The completeness report.</strong> Every parameter that has nowhere to get</li>
-<p>  a value is named and they are counted, so a long list never reads as
-  a short one. It names the station by the name a map file gave it, or
-  by its index when nothing did — a program built by calling this
-  surface has no names, and a complaint saying "?" is one nobody can
-  act on.</p>
+<li><strong>One operation says where a port's values come from</strong>: a station, a
+port, a source, and — when the source is a value — the value itself
+as text. Binding a constant, taking a source away, and giving a port
+back to the arrows were three calls with three shapes; they are
+cases of this one. Text is what distinguishes the two ways to become
+a constant: given some, the port takes that value; given none, it
+returns to the value it held before.</li>
+<li><strong>It returns a refusal rather than stopping</strong>, so a caller reading a
+file can collect every mistake and present them together. One thing
+still stops the program — text that does not parse — and moving that
+onto the return path belongs with the refusal policy rather than
+being half done here.</li>
+<li><strong>The completeness report.</strong> Every parameter that has nowhere to get
+a value is named and they are counted, so a long list never reads as
+a short one. It names the station by the name a map file gave it, or
+by its index when nothing did — a program built by calling this
+surface has no names, and a complaint saying "?" is one nobody can
+act on.</li>
 </ul>
-<p>**It is a report and not a refusal, and this issue asked for the
-opposite.** Step 5 below wanted a port with no source to be a
+<p><strong>It is a report and not a refusal, and this issue asked for the
+opposite.</strong> Step 5 below wanted a port with no source to be a
 configuration error, full stop. Two later decisions overturned that
 and they are right.
 <a href="done-210b-the-port-record.html">210b</a> taught the map file to
@@ -211,32 +228,32 @@ configuration operation for a bare dash or a constant. Live editing
 reaches the same operation through the construction boxes, so a
 program editing another program and a person reading a file are doing
 the same thing to the same surface.</p>
-<p>**Three things the loader used to keep were not redundancy — two of
-them were concealment.**</p>
+<p><strong>Three things the loader used to keep were not redundancy — two of
+them were concealment.</strong></p>
 <ul>
-<li><em>Its own port-range check</em>, whose wording was the better of the two:</li>
-<p>  it named the box, counted its ports, and remembered that a
-  comparator carries one more than its parameter list shows. That
-  wording moved down into the surface, where every caller reaches it,
-  and the loader kept nothing but the file and the line it prefixes.</p>
-<li><em>Its own width check.</em> Removing it uncovered a real hole. The</li>
-<p>  wiring operation asked the width question only when <strong>both</strong>
-  stations had input port arrays — and a box that takes nothing and
-  returns a value has none, which is how most programs begin. Every
-  such station could be wired into a port of any width at all with
-  nothing said. No program read from a file ever showed it, because
-  the loader's copy ran first; a program built by calling the surface
-  would have gone straight through. That is the fault two paths
-  produce, found by taking one of them away, and there is a test for
-  it now beside the other width scenes.</p>
-<li><em>Its own name table.</em> Names are copied onto the program as each</li>
-<p>  station is created rather than in a sweep at the end, so arrows
-  resolve against the program itself. What that buys beyond one fewer
-  allocation: every refusal raised while wiring can say which station
-  it is about in the word the file's author typed.</p>
+<li><em>Its own port-range check</em>, whose wording was the better of the two:
+it named the box, counted its ports, and remembered that a
+comparator carries one more than its parameter list shows. That
+wording moved down into the surface, where every caller reaches it,
+and the loader kept nothing but the file and the line it prefixes.</li>
+<li><em>Its own width check.</em> Removing it uncovered a real hole. The
+wiring operation asked the width question only when <strong>both</strong>
+stations had input port arrays — and a box that takes nothing and
+returns a value has none, which is how most programs begin. Every
+such station could be wired into a port of any width at all with
+nothing said. No program read from a file ever showed it, because
+the loader's copy ran first; a program built by calling the surface
+would have gone straight through. That is the fault two paths
+produce, found by taking one of them away, and there is a test for
+it now beside the other width scenes.</li>
+<li><em>Its own name table.</em> Names are copied onto the program as each
+station is created rather than in a sweep at the end, so arrows
+resolve against the program itself. What that buys beyond one fewer
+allocation: every refusal raised while wiring can say which station
+it is about in the word the file's author typed.</li>
 </ul>
-<p>**The last operation that stopped the program instead of refusing was
-the starting depth**, and it does not any more. A caller collecting
+<p><strong>The last operation that stopped the program instead of refusing was
+the starting depth</strong>, and it does not any more. A caller collecting
 every mistake in a file cannot collect the one that killed it, so a
 bad depth was the single fault in a map file capable of hiding every
 fault after it.</p>
@@ -263,15 +280,15 @@ tests, where it was written alongside the <em>none</em> tag.</p>
 file, then placement functions, then this, then
 <a href="done-212-one-way-to-build-a-program.html">212</a>.</p>
 <h3>What stands today</h3>
-<p>**Two ways exist to create a station, and they can bind different
-things.**</p>
+<p><strong>Two ways exist to create a station, and they can bind different
+things.</strong></p>
 <p>Placement by name looks the box up in the registry and copies each
 parameter's type name onto the corresponding port. Hand placement
 takes an array of element sizes and no type names at all.</p>
 <p>Binding a static needs the type, because a static in a map file is
 <em>text</em> and turning <code>{ 5, 2.0, { 0, 0, 0 }, "hey there", 2 }</code> into
-bytes means knowing the field layout. So **a hand-placed station
-cannot bind a static** — and the reason is not a design limit. It is
+bytes means knowing the field layout. So <strong>a hand-placed station
+cannot bind a static</strong> — and the reason is not a design limit. It is
 that phase 2's scaffolding was written before the registry existed and
 was never given the argument afterwards.</p>
 <p>The result is two contracts where there should be one, differing in
@@ -281,19 +298,19 @@ discovered by trying.</p>
 wire, and converting a tag are separate calls with separate shapes,
 some of which die on refusal and some of which return a code.</p>
 <h2>Intended behavior</h2>
-<p>**Configuring a port is a single operation naming a station, a port, a
-source, and a value.** The loader calls it while reading a file; a
+<p><strong>Configuring a port is a single operation naming a station, a port, a
+source, and a value.</strong> The loader calls it while reading a file; a
 debugger, a control socket, or a workbench calls the same one on a
 running program. There is one description of what it means to give a
 port a source, and it is executable.</p>
-<p>**Hand placement stops being a second contract that can bind fewer
-things than the first.** It takes the type names the registry already
+<p><strong>Hand placement stops being a second contract that can bind fewer
+things than the first.</strong> It takes the type names the registry already
 has, or it stops existing. The second option is worth weighing
 seriously: the tests that use it predate the registry, and if every
 one of them can place by name instead, then keeping a weaker door open
 is keeping a way to build a program that the loader cannot.</p>
-<p>**A program built by calling the surface directly and one read from a
-file are the same program.** Not equivalent — the same, provably, by
+<p><strong>A program built by calling the surface directly and one read from a
+file are the same program.</strong> Not equivalent — the same, provably, by
 dumping both and comparing bytes. That is the test that makes the
 claim mean something, and it is the reason this issue exists as more
 than tidying: it is what lets <a href="done-212-one-way-to-build-a-program.html">212</a>
@@ -352,9 +369,9 @@ unqualified: a port with no source is an error, full stop.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>
-<li>*Does hand placement survive at all, or does everything place by</li>
-<p>  name?* **It survives, and it turns out to be the primitive rather
-  than the alternative.**</p>
+<li>*Does hand placement survive at all, or does everything place by
+name?* <strong>It survives, and it turns out to be the primitive rather
+than the alternative.</strong></li>
 </ul>
 <p>  The question looked like a choice between two doors into the engine
   and it is not.
@@ -377,18 +394,18 @@ unqualified: a port with no source is an error, full stop.</p>
 <h2>Related</h2>
 <ul>
 <li><a href="done-210-input-port-record.html">210 — What an input port is</a>, the parent</li>
-<li><a href="done-210b-the-port-record.html">210b — The port record</a>, whose <em>none</em> tag</li>
-<p>  this checks for</p>
-<li><a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>,</li>
-<p>  whose conversion becomes a case of this surface</p>
-<li><a href="done-210h-optional-parameters.html">210h — Optional parameters</a>,</li>
-<p>  refused, which is what leaves the check added here unqualified</p>
-<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
-<p>  which stands on this and owns the refusal policy</p>
-<li><a href="done-207-hand-built-maps.html">207 — Hand-built maps</a>, the second</li>
-<p>  contract in question</p>
-<li><a href="done-602-loader-first-pass.html">602 — The loader's first pass</a>,</li>
-<p>  which becomes a caller rather than a builder</p>
+<li><a href="done-210b-the-port-record.html">210b — The port record</a>, whose <em>none</em> tag
+this checks for</li>
+<li><a href="done-210f-changing-what-a-port-is.html">210f — Changing what a port is</a>,
+whose conversion becomes a case of this surface</li>
+<li><a href="done-210h-optional-parameters.html">210h — Optional parameters</a>,
+refused, which is what leaves the check added here unqualified</li>
+<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,
+which stands on this and owns the refusal policy</li>
+<li><a href="done-207-hand-built-maps.html">207 — Hand-built maps</a>, the second
+contract in question</li>
+<li><a href="done-602-loader-first-pass.html">602 — The loader's first pass</a>,
+which becomes a caller rather than a builder</li>
 </ul>
 
 </main>

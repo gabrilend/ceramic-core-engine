@@ -19,12 +19,18 @@
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
+<a href="doc-140-a-map-inside-a-map.html">140 — A map inside a map</a>
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
+<h2>The maps</h2>
+<a href="map-095-doubling.html">095-doubling.map</a>
+<a href="map-107-example.html">107-example.map</a>
+<a href="map-127-the-ladder.html">127-the-ladder.map</a>
+<a href="map-132-the-accumulator.html">132-the-accumulator.map</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
@@ -32,11 +38,13 @@
 <h2>Issues, open</h2>
 <a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
 <a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
+<a href="issue-608-the-station-line-reads-at-a-glance.html">608 — The station line reads at a glance</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-TEMPORARY-the-dollar-sign-points-one-level-up.html">TEMPORARY — the dollar sign points one level up</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -56,12 +64,14 @@
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-203a-a-declared-depth-travels.html">203a — A declared depth travels downstream</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-209a-results-go-where-the-caller-says.html">209a — Results go where the caller says</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -73,11 +83,15 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — One table, and a program is a receipt</a>
 <a href="done-213-the-input-station.html">213 — The input station</a>
+<a href="done-213a-a-door-is-a-port.html">213a — A door is a port, not a station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-216a-removing-several-stations-at-once.html">216a — Removing several stations at once</a>
 <a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — One receipt for a box and a map</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -108,6 +122,9 @@
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-601a-a-wire-is-written-at-both-ends.html">601a — A wire is written at both ends</a>
+<a href="done-601b-the-dollar-sign-means-the-boundary.html">601b — The dollar sign means the boundary</a>
+<a href="done-601c-the-format-stops-guessing.html">601c — The format stops guessing</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -162,8 +179,8 @@ removes the last name from a running program. The generator reads a map
 and emits the construction calls it describes, so a map file is a
 <strong>blueprint for the compilation</strong> rather than something a program parses
 while it runs.</p>
-<p>**This waits for <a href="done-212-one-way-to-build-a-program.html">212</a>, and the
-dependency is deliberately kept hard.** What the generator emits <em>is</em>
+<p><strong>This waits for <a href="done-212-one-way-to-build-a-program.html">212</a>, and the
+dependency is deliberately kept hard.</strong> What the generator emits <em>is</em>
 construction calls, so writing it against the placement and wiring
 functions that exist today would mean writing generated code that
 calls things scheduled for deletion, and then retargeting the emitter
@@ -185,14 +202,14 @@ way of reading one is deleted.</p>
 <p>The generator is told which descriptions the build should compile —
 discovered from a directory, never listed, the same rule box sources
 have always had. For each one it emits a function that builds it:
-create a station, name it, call that box's **placement function
-directly**, mark a door, set depths and sources, and then draw every
+create a station, name it, call that box's <strong>placement function
+directly</strong>, mark a door, set depths and sources, and then draw every
 wire once every station exists.</p>
 <p><strong>No box name survives into the running program.</strong> The text <code>seven</code>
 was resolved on the author's machine and became a call to that box's
 placement function. A name that matches nothing, or matches boxes in
-two sources with no path given, **fails the build naming the map
-line** — none of which was checkable before, because the build had
+two sources with no path given, <strong>fails the build naming the map
+line</strong> — none of which was checkable before, because the build had
 never seen a map.</p>
 <p><strong>Station names do survive, and that is not an inconsistency.</strong> A box
 name was a question the engine had to answer at run time and no longer
@@ -240,7 +257,7 @@ all until that loader ran, on somebody else's machine.</p>
 generator and became a pointer. The station names, the box names, the
 port numbers, the constants — all of it resolved while somebody could
 still read an error message about it.</p>
-<p>*<em>This does not weaken </em>one way to build a program*.** The generated
+<p><strong>This does not weaken <em>one way to build a program</em>.</strong> The generated
 function calls the same construction surface a person calling C would,
 so loading a map and building one by hand stop being two paths that
 must agree and become one path with two authors. The loader stops being
@@ -251,19 +268,19 @@ still what the dump produces. What changes is only what consumes it.</p>
 <h3>Editing, which is where the distinction earns itself</h3>
 <p>Two acts that look similar and are not:</p>
 <ul>
-<li><strong>Editing the map file</strong> → an incremental rebuild of the parts that</li>
-<p>  changed. Splitting the generated material per box source is what
-  makes it incremental rather than whole.</p>
-<li><strong>Editing the running program's structures</strong> — adding a station that</li>
-<p>  places a box already present, moving a wire, writing a constant —
-  → <strong>no compilation at all.</strong> These are pointers and indices in RAM,
-  and no name was ever involved.</p>
+<li><strong>Editing the map file</strong> → an incremental rebuild of the parts that
+changed. Splitting the generated material per box source is what
+makes it incremental rather than whole.</li>
+<li><strong>Editing the running program's structures</strong> — adding a station that
+places a box already present, moving a wire, writing a constant —
+→ <strong>no compilation at all.</strong> These are pointers and indices in RAM,
+and no name was ever involved.</li>
 </ul>
 <p>So the compiler enters only when new <em>code</em> appears, which is the rule
 everywhere else in this engine.</p>
 <h3>One pipe, and the binary is iteration zero</h3>
-<p>**A program is compiled iteratively, and the build is only the first
-iteration.** The loader for a box arriving mid-run already writes the
+<p><strong>A program is compiled iteratively, and the build is only the first
+iteration.</strong> The loader for a box arriving mid-run already writes the
 source out, runs the generator, runs the same compiler that built the
 binary, and opens the result. That is a compiler with a C compiler as
 its back end, and nothing about it is specific to a single function.</p>
@@ -276,8 +293,8 @@ the same at every scale:</p>
 <tr><td>a box function nobody has compiled</td><td>generator, compiler, load</td></tr>
 <tr><td>a whole map</td><td>generator, compiler, load</td></tr>
 </table>
-<p>**Somebody adding a box does not need to know whether it is a map of
-boxes.** They hand over source; a station appears running it. Whether
+<p><strong>Somebody adding a box does not need to know whether it is a map of
+boxes.</strong> They hand over source; a station appears running it. Whether
 that source was one function or a description of fifty stations wired
 together changes nothing they can observe, which is the same claim
 <a href="done-217-a-program-inside-another.html">217</a> makes from the other
@@ -299,18 +316,18 @@ reaches — computing exact reachability through includes, through
 hand-written <code>extern</code> declarations, and through function pointers taken
 by name. That is every case a source parser would get wrong, and it
 costs nothing but build time.</p>
-<p>**Following <code>#include</code> directives instead would be a heuristic with a
-hole in it**, worth naming so nobody re-proposes it: linking resolves
+<p><strong>Following <code>#include</code> directives instead would be a heuristic with a
+hole in it</strong>, worth naming so nobody re-proposes it: linking resolves
 <em>symbols</em>, not includes, so a file may call a function it never
 included a header for by declaring it by hand.</p>
-<p>**What it does not discard is the boxes, and that is a choice rather
-than a limit.** Publishing a station-builder so that code compiled
+<p><strong>What it does not discard is the boxes, and that is a choice rather
+than a limit.</strong> Publishing a station-builder so that code compiled
 later can bind to it also makes it a root the collector may not touch.
 So a program keeps the boxes it was built with, and shedding the unused
 ones is given up — measured at 21,658 bytes of code on one test
 binary.</p>
-<p>It is given up because **extendable at run time is a requirement of
-this system and small was never one.** A program that could only be
+<p>It is given up because <strong>extendable at run time is a requirement of
+this system and small was never one.</strong> A program that could only be
 extended by boxes it already happened to contain would be extendable in
 name only, and the engine is supposed to be incurious about what runs
 inside it.</p>
@@ -327,8 +344,8 @@ won. Naming the families that are genuinely public —
 <a href="info-098-engine-surface-syms.html">src/098-engine-surface.syms</a>, handed
 to the linker as <code>--dynamic-list</code> — exports the engine and lets
 everything else be thrown away.</p>
-<p>**But a table of every box is also a root, and that is the real
-holdfast.** The linker discards what nothing points at; a table naming
+<p><strong>But a table of every box is also a root, and that is the real
+holdfast.</strong> The linker discards what nothing points at; a table naming
 every placement function points at all of them, and through them at
 every shim. So no amount of linker configuration shrinks a program
 while the engine still carries a list of everything it could place.</p>
@@ -340,8 +357,8 @@ which half of the problem is which:</p>
 <tr><td>the surface, and the station-builders</td><td>117,400</td><td>146,520</td><td>engine internals collected</td></tr>
 <tr><td>the surface only</td><td>95,742</td><td>129,832</td><td>the boxes collected too</td></tr>
 </table>
-<p>Read the last two rows as the choice rather than as a loss. **21,658
-bytes of code is what a program pays to stay extendable** — for
+<p>Read the last two rows as the choice rather than as a loss. <strong>21,658
+bytes of code is what a program pays to stay extendable</strong> — for
 publishing the station-builders, so that a map compiled later can bind
 to a box compiled now. A program that published only the construction
 surface would be smaller and could be extended only by boxes carrying
@@ -350,8 +367,8 @@ their own copy of everything they touch.</p>
 table of box names is still holding those same functions reachable. So
 publishing them costs nothing yet; what it does is keep them held after
 the table goes.</p>
-<p>**And this is why trimming what the generator emits was the wrong
-lever.** It would have shrunk the table as a side effect, which is a
+<p><strong>And this is why trimming what the generator emits was the wrong
+lever.</strong> It would have shrunk the table as a side effect, which is a
 roundabout way of doing what deleting the table does directly — and
 without the generator having to guess which boxes a program will want.</p>
 <h3>The build checks every box reference</h3>
@@ -362,16 +379,16 @@ the map line. None of that was checkable before, because the build had
 never seen a map.</p>
 <h3>When the toolchain is needed, which now follows rather than being stipulated</h3>
 <ul>
-<li><strong>A shipped program</strong> compiled from its own map → **no compiler at</li>
-<p>  run time, ever.** One file, source text included, runs on a machine
-  with no toolchain on it.</p>
-<li><strong>A map the binary was not built for</strong> → compiled when it arrives, by</li>
-<p>  a program that runs other programs. That is not a tool and not a mode:
-  it is a map whose boxes read a description, compile what it names,
-  start a fresh map, and feed it through its input station. See
-  <a href="done-212-one-way-to-build-a-program.html">212</a>.</p>
-<li><strong>A box arriving mid-run</strong> → compiled when the source arrives, which</li>
-<p>  is <a href="done-310-boxes-compiled-at-runtime.html">310</a>'s path.</p>
+<li><strong>A shipped program</strong> compiled from its own map → <strong>no compiler at
+run time, ever.</strong> One file, source text included, runs on a machine
+with no toolchain on it.</li>
+<li><strong>A map the binary was not built for</strong> → compiled when it arrives, by
+a program that runs other programs. That is not a tool and not a mode:
+it is a map whose boxes read a description, compile what it names,
+start a fresh map, and feed it through its input station. See
+<a href="done-212-one-way-to-build-a-program.html">212</a>.</li>
+<li><strong>A box arriving mid-run</strong> → compiled when the source arrives, which
+is <a href="done-310-boxes-compiled-at-runtime.html">310</a>'s path.</li>
 </ul>
 <p>The last two are the same mechanism at different scale, and both are
 the compiler being needed exactly when new code genuinely arrives.</p>
@@ -416,13 +433,13 @@ the compiler being needed exactly when new code genuinely arrives.</p>
    (<a href="info-098-engine-surface-syms.html">src/098-engine-surface.syms</a>) and
    every function is in its own section, so the linker collects what
    nothing reaches — 8.6% of one test binary, all of it engine
-   internals. **It cannot reach the boxes while the places table
-   exists**, because that table points at every placement function and
+   internals. <strong>It cannot reach the boxes while the places table
+   exists</strong>, because that table points at every placement function and
    a pointed-at function is reachable. The remaining 12.6% arrives when
    step 7 removes the last reader of that table, and the table with it.
    The measurements are in <em>What the build includes</em> above.
-7. **Done. Station-builders stop being private, and late arrivals open
-   globally.** A generated station-builder is <code>static</code> today, which is
+7. <strong>Done. Station-builders stop being private, and late arrivals open
+   globally.</strong> A generated station-builder is <code>static</code> today, which is
    what makes it invisible from outside and therefore un-bindable by
    anything compiled later. It joins the published list, one symbol per
    box — and that one symbol holds its shim and the box body behind it,
@@ -434,8 +451,8 @@ the compiler being needed exactly when new code genuinely arrives.</p>
    with the host uninvolved. A shared object naming a function that
    lives in the executable binds only if the executable published it,
    and fails at load naming the symbol otherwise.</p>
-<p>8. **Done. One question, asked over everything the program is made
-   of.** The sources the build compiled in (<a href="done-311c-source-rides-in-the-binary.html">311c</a>)
+<p>8. <strong>Done. One question, asked over everything the program is made
+   of.</strong> The sources the build compiled in (<a href="done-311c-source-rides-in-the-binary.html">311c</a>)
    and every source that has arrived since, together, keyed by the path
    the box was addressed as. It is what lets a running program be
    written out as a complete map file, and it is what the identity
@@ -449,8 +466,8 @@ the compiler being needed exactly when new code genuinely arrives.</p>
    brings the text with it and the lookup points into the object rather
    than copying anything. What was added is the second half of one
    question, not a second table.</p>
-<p>9. **Done. A map compiles at run time, through the pipe that already
-   exists, and the engine's own walk is deleted.**</p>
+<p>9. <strong>Done. A map compiles at run time, through the pipe that already
+   exists, and the engine's own walk is deleted.</strong></p>
 <p>   Built and proven: a description handed to a running program is
    written out, turned into the calls it describes by the generator,
    compiled by the compiler that built the binary, and loaded. The
@@ -472,28 +489,28 @@ the compiler being needed exactly when new code genuinely arrives.</p>
    the two passes and the search that translated a description's
    station names into places.</p>
 <p>   The linker noticed immediately: <code>mapfile_parse</code> is absent from every
-   test binary, because nothing in the engine reaches it any more. **No
-   program built with this engine carries a map parser**, and that
+   test binary, because nothing in the engine reaches it any more. <strong>No
+   program built with this engine carries a map parser</strong>, and that
    became true by deleting callers rather than by moving files.</p>
 <p>   Three things changed shape and each is worth knowing:</p>
 <ul>
-<li><strong>Two refusals moved into the compiler and gained a line number.</strong></li>
-<p>     A box name that answers to nothing, and an arrow pointing at a
-     station nobody declared, are caught while the description is still
-     text — so the complaint can say <em>which line</em>, which the engine
-     never could, because by the time it looked there were no lines
-     left.</p>
-<li>**A refusal from a built description is a malformed input, not a</li>
-<p>     bad call.** It said bad-call while the hand-written reader said
-     bad-file for the same fault, so one description gave two different
-     exit codes depending on which route had read it. There is one
-     route now.</p>
-<li>**Fetching a box the program does not hold is ordinary, not a</li>
-<p>     rescue.** A program that grew and wrote itself down names boxes
-     that arrived after it started; whoever reads that back has to
-     compile them first. The compiler is asked what a description
-     references — reading text being its job — and anything missing is
-     recovered and compiled before the description is.</p>
+<li><strong>Two refusals moved into the compiler and gained a line number.</strong>
+A box name that answers to nothing, and an arrow pointing at a
+station nobody declared, are caught while the description is still
+text — so the complaint can say <em>which line</em>, which the engine
+never could, because by the time it looked there were no lines
+left.</li>
+<li><strong>A refusal from a built description is a malformed input, not a
+bad call.</strong> It said bad-call while the hand-written reader said
+bad-file for the same fault, so one description gave two different
+exit codes depending on which route had read it. There is one
+route now.</li>
+<li><strong>Fetching a box the program does not hold is ordinary, not a
+rescue.</strong> A program that grew and wrote itself down names boxes
+that arrived after it started; whoever reads that back has to
+compile them first. The compiler is asked what a description
+references — reading text being its job — and anything missing is
+recovered and compiled before the description is.</li>
 </ul>
 <p>   <strong>What it costs, measured rather than estimated.</strong> Each description
    read at run time now spends two compiler invocations, one to ask
@@ -506,8 +523,8 @@ the compiler being needed exactly when new code genuinely arrives.</p>
    binary, and opens the result. A map goes through the same pipe: the
    generator turns it into a station-building function exactly as it
    does at build time, and the result is opened and called.</p>
-<p>   **The engine's own walk from description to program is deleted, not
-   moved.** Two implementations of one job existed — resolve each name
+<p>   <strong>The engine's own walk from description to program is deleted, not
+   moved.</strong> Two implementations of one job existed — resolve each name
    against a table and call the construction functions, or emit those
    same calls and compile them — and only the second survives. That is
    the mechanism this whole family is removing, and relocating it into
@@ -527,17 +544,17 @@ the compiler being needed exactly when new code genuinely arrives.</p>
     named separately because it lived in the engine's directory and had
     two callers, and beside the generator it is picked up like any
     other generator source.</p>
-<p>11. **Dropped, like step 5, and for the same kind of reason: the work
-    below it moved the ground.**</p>
+<p>11. <strong>Dropped, like step 5, and for the same kind of reason: the work
+    below it moved the ground.</strong></p>
 <p>    The step existed to serve the parent's claim that a running program
-    holds no name and no lookup. **That claim was spent before this
-    step was reached.** Extendability requires publishing the functions
+    holds no name and no lookup. <strong>That claim was spent before this
+    step was reached.</strong> Extendability requires publishing the functions
     that build stations, so that a description compiled next year can
     bind to a box compiled today — and a program that publishes
     twenty-two symbol names does hold names. The dynamic symbol table
     <em>is</em> a lookup, maintained by the operating system.</p>
-<p>    **So the question became what the table still does that the
-    published names do not**, and the answer is: it maps a <em>short name</em>
+<p>    <strong>So the question became what the table still does that the
+    published names do not</strong>, and the answer is: it maps a <em>short name</em>
     to an <em>address</em>. It is the namespace <a href="done-311a-boxes-addressed-by-file.html">311a</a>
     said existed but that nobody had written down. The dynamic linker
     cannot do that job — it resolves an exact symbol or nothing.</p>
@@ -572,8 +589,8 @@ the compiler being needed exactly when new code genuinely arrives.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>
-<li><em>Should the export list name families or functions?</em> **Families, and</li>
-<p>  there turned out to be a third one nobody had counted.**</p>
+<li><em>Should the export list name families or functions?</em> <strong>Families, and
+there turned out to be a third one nobody had counted.</strong></li>
 </ul>
 <p>  It named two: the construction surface, and how a box ends the
   program it is inside. Those are what the box sources reach for,
@@ -591,10 +608,10 @@ the compiler being needed exactly when new code genuinely arrives.</p>
 <p>  The failure mode stays mild either way: a shared object needing an
   unpublished symbol fails at <code>dlopen</code>, naming the symbol it wanted.</p>
 <ul>
-<li><em>Can the build now check wires, and should it?</em> **It could, and it</li>
-<p>  does not. Wires are a run-time concern, checked when a wire is drawn
-  — at startup for the ones a map wrote, and at the moment of the edit
-  for the ones a running program draws.**</p>
+<li><em>Can the build now check wires, and should it?</em> <strong>It could, and it
+does not. Wires are a run-time concern, checked when a wire is drawn
+— at startup for the ones a map wrote, and at the moment of the edit
+for the ones a running program draws.</strong></li>
 </ul>
 <p>  The generator sees both ends of every wire in a file and could emit a
   <code>_Static_assert</code> comparing the two <code>sizeof</code> expressions, failing the
@@ -605,8 +622,8 @@ the compiler being needed exactly when new code genuinely arrives.</p>
   build reads a map to learn <strong>which functions to compile in</strong>. That is
   its whole business with the file. Whether the shape those functions
   are wired into is complete, or correct, or finished at all is not a
-  build-time question — and it must not become one, because **a map
-  with incomplete wiring is a legitimate map.** A port with no source
+  build-time question — and it must not become one, because <strong>a map
+  with incomplete wiring is a legitimate map.</strong> A port with no source
   yet is written <code>in 2 -</code> and is an ordinary state; a station that can
   never become ready is not an error; a program assembled from nothing
   and wired one arrow at a time is the thing
@@ -618,25 +635,25 @@ the compiler being needed exactly when new code genuinely arrives.</p>
   moment the graph is actually built.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the</li>
-<p>  parent</p>
-<li><a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>,</li>
-<p>  whose resolution rules this applies</p>
-<li><a href="done-311b-placement-instead-of-records.html">311b — Placement instead of records</a>,</li>
-<p>  whose functions this calls</p>
-<li><a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,</li>
-<p>  whose embedded text shrinks to what a map actually needs</p>
-<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
-<p>  where composing and starting are separated, and where a program that
-  runs other programs turns out to be a map rather than a tool</p>
-<li><a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>,</li>
-<p>  the same path at the scale of one function</p>
-<li><a href="done-602-loader-first-pass.html">602 — The loader, first pass</a></li>
-<p>  and <a href="done-603-loader-second-pass.html">603 — The loader, second pass</a>,
-  which move into the generator</p>
-<li><a href="doc-007-datapath-build.html">007 — The build path</a> and</li>
-<p>  <a href="doc-009-datapath-load.html">009 — Loading</a>, both of which this
-  rewrites</p>
+<li><a href="done-311-the-registry-dissolved.html">311 — The registry dissolved</a>, the
+parent</li>
+<li><a href="done-311a-boxes-addressed-by-file.html">311a — Boxes addressed by file</a>,
+whose resolution rules this applies</li>
+<li><a href="done-311b-placement-instead-of-records.html">311b — Placement instead of records</a>,
+whose functions this calls</li>
+<li><a href="done-311c-source-rides-in-the-binary.html">311c — Source rides in the binary</a>,
+whose embedded text shrinks to what a map actually needs</li>
+<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,
+where composing and starting are separated, and where a program that
+runs other programs turns out to be a map rather than a tool</li>
+<li><a href="done-310-boxes-compiled-at-runtime.html">310 — Boxes compiled while the program runs</a>,
+the same path at the scale of one function</li>
+<li><a href="done-602-loader-first-pass.html">602 — The loader, first pass</a>
+and <a href="done-603-loader-second-pass.html">603 — The loader, second pass</a>,
+which move into the generator</li>
+<li><a href="doc-007-datapath-build.html">007 — The build path</a> and
+<a href="doc-009-datapath-load.html">009 — Loading</a>, both of which this
+rewrites</li>
 </ul>
 
 </main>

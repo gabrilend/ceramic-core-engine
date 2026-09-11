@@ -19,12 +19,18 @@
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
+<a href="doc-140-a-map-inside-a-map.html">140 — A map inside a map</a>
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
+<h2>The maps</h2>
+<a href="map-095-doubling.html">095-doubling.map</a>
+<a href="map-107-example.html">107-example.map</a>
+<a href="map-127-the-ladder.html">127-the-ladder.map</a>
+<a href="map-132-the-accumulator.html">132-the-accumulator.map</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
@@ -32,11 +38,13 @@
 <h2>Issues, open</h2>
 <a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
 <a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
+<a href="issue-608-the-station-line-reads-at-a-glance.html">608 — The station line reads at a glance</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html" class="here">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-TEMPORARY-the-dollar-sign-points-one-level-up.html">TEMPORARY — the dollar sign points one level up</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -56,12 +64,14 @@
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-203a-a-declared-depth-travels.html">203a — A declared depth travels downstream</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-209a-results-go-where-the-caller-says.html">209a — Results go where the caller says</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -73,11 +83,15 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — One table, and a program is a receipt</a>
 <a href="done-213-the-input-station.html">213 — The input station</a>
+<a href="done-213a-a-door-is-a-port.html">213a — A door is a port, not a station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-216a-removing-several-stations-at-once.html">216a — Removing several stations at once</a>
 <a href="done-217-a-program-inside-another.html">217 — A program inside another</a>
+<a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — One receipt for a box and a map</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -108,6 +122,9 @@
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-601a-a-wire-is-written-at-both-ends.html">601a — A wire is written at both ends</a>
+<a href="done-601b-the-dollar-sign-means-the-boundary.html">601b — The dollar sign means the boundary</a>
+<a href="done-601c-the-format-stops-guessing.html">601c — The format stops guessing</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -223,8 +240,8 @@ on one site. The gif generator at
 <code>/mnt/mtwo/programming/ai-stuff/gif-generator/</code> remains available for
 any still or decorative piece that is genuinely an illustration rather
 than a mechanism.</p>
-<p>**The honesty rule is kept by hand here, so it has to be kept
-deliberately.** Nothing about a hand-drawn screen prevents it from
+<p><strong>The honesty rule is kept by hand here, so it has to be kept
+deliberately.</strong> Nothing about a hand-drawn screen prevents it from
 showing a machine that does not exist. Every screen's drawing owes a
 reading of the mechanism it depicts, and a screen whose drawing and
 whose engine disagree is a bug in the screen.</p>
@@ -286,8 +303,8 @@ the generator was not told about was missing from the site <em>silently</em>
 root downward, every subdirectory becomes its own section named from
 the directory itself, and the output is swept of pages no source
 produces. Nothing about the generator stands in the way any more.</p>
-<p>**What keeps the transcripts off the site is now one deliberate
-line**: the generator's file search carries an explicit exclusion for
+<p><strong>What keeps the transcripts off the site is now one deliberate
+line</strong>: the generator's file search carries an explicit exclusion for
 the transcript directory. That is a better state than the one this
 paragraph originally described, because an exclusion is a decision
 somebody can find and reverse, where a directory nobody listed was an
@@ -318,36 +335,36 @@ a shape like before rather than refusing the build.</p>
 <h2>Open questions</h2>
 <p><strong>Answered:</strong></p>
 <ul>
-<li><em>Generated frames or live drawing?</em> <strong>Live, hand-drawn per screen.</strong></li>
-<p>  The deciding fact is not which is better in isolation but that the
-  site already has live, steerable pieces on it: flat images placed
-  beside them are not merely less capable, they announce themselves as
-  a lesser grade of thing, and a front door is the worst page to say
-  that on. The cost is real and is accepted — this is the most
-  expensive way to build the slideshow, and it buys a site with one
-  texture instead of two.</p>
+<li><em>Generated frames or live drawing?</em> <strong>Live, hand-drawn per screen.</strong>
+The deciding fact is not which is better in isolation but that the
+site already has live, steerable pieces on it: flat images placed
+beside them are not merely less capable, they announce themselves as
+a lesser grade of thing, and a front door is the worst page to say
+that on. The cost is real and is accepted — this is the most
+expensive way to build the slideshow, and it buys a site with one
+texture instead of two.</li>
 </ul>
 <ul>
-<li><em>Does the slideshow narrate the engine or the project?</em> **The</li>
-<p>  engine.** Both sequences are worth telling, and only one of them
-  answers the question this issue exists to answer. A reader who does
-  not know what a station is cannot be told what phase 3 added; a
-  reader who does know will find the project's story in the first-pass
-  report and the completed issues, which already tell it well.</p>
+<li><em>Does the slideshow narrate the engine or the project?</em> <strong>The
+engine.</strong> Both sequences are worth telling, and only one of them
+answers the question this issue exists to answer. A reader who does
+not know what a station is cannot be told what phase 3 added; a
+reader who does know will find the project's story in the first-pass
+report and the completed issues, which already tell it well.</li>
 </ul>
 <ul>
-<li><em>Whole transcripts or an edited log?</em> <strong>Whole and unedited</strong>, with a</li>
-<p>  recurring decorating pass that only ever adds. Written up above.</p>
+<li><em>Whole transcripts or an edited log?</em> <strong>Whole and unedited</strong>, with a
+recurring decorating pass that only ever adds. Written up above.</li>
 </ul>
 <ul>
-<li>*Does a new transcript reach the site automatically, or by a</li>
-<p>  deliberate act?* <strong>Automatically, on the next build.</strong> The generator
-  walks the directory and renders what it finds, so a session becomes
-  a page the next time the site is built. This is the unedited
-  decision carried one level outward: if nobody selects which passages
-  are worth keeping, nobody selects which sessions are either, and a
-  list of approved transcripts would be that selection wearing a
-  different hat.</p>
+<li>*Does a new transcript reach the site automatically, or by a
+deliberate act?* <strong>Automatically, on the next build.</strong> The generator
+walks the directory and renders what it finds, so a session becomes
+a page the next time the site is built. This is the unedited
+decision carried one level outward: if nobody selects which passages
+are worth keeping, nobody selects which sessions are either, and a
+list of approved transcripts would be that selection wearing a
+different hat.</li>
 </ul>
 <p>  <strong>The consequence is accepted: building the site is publishing it.</strong>
   Someone who builds to check a broken link puts that day's
@@ -360,29 +377,29 @@ a shape like before rather than refusing the build.</p>
   nobody remembered to name it, with no complaint from the build.</p>
 <h2>The note that started this</h2>
 <p>Kept verbatim:</p>
-<blockquote>we should add to the HTML documentation a slideshow that goes through</blockquote>
-<blockquote>the most crucial aspects of the system, and shows it working using</blockquote>
-<blockquote>visuals over text.</blockquote>
-<blockquote></blockquote>
-<blockquote>feel free to use /mnt/mtwo/programming/ai-stuff/gif-generator/ to</blockquote>
-<blockquote>create the artwork if you please.</blockquote>
-<blockquote></blockquote>
-<blockquote>the HTML documentation should also include the llm-transcripts,</blockquote>
-<blockquote>viewable like a book.</blockquote>
+<blockquote>we should add to the HTML documentation a slideshow that goes through
+the most crucial aspects of the system, and shows it working using
+visuals over text.
+
+feel free to use /mnt/mtwo/programming/ai-stuff/gif-generator/ to
+create the artwork if you please.
+
+the HTML documentation should also include the llm-transcripts,
+viewable like a book.</blockquote>
 <h2>Related</h2>
 <ul>
-<li><a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>, whose</li>
-<p>  generator, aesthetic, and directory-walk fix this builds on</p>
-<li><a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>,</li>
-<p>  the other half of making this project legible to someone who did not
-  build it, and the source of the rule about honest mechanics</p>
-<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which</li>
-<p>  is the third thing that lives on a page and will want the same
-  aesthetic</p>
-<li><code>../notes/first-pass-report.md</code>, the prose the project-shaped</li>
-<p>  slideshow would be drawn from</p>
-<li><a href="doc-000-table-of-contents.html">000 — Table of contents</a>, the</li>
-<p>  structure the site mirrors</p>
+<li><a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>, whose
+generator, aesthetic, and directory-walk fix this builds on</li>
+<li><a href="done-707-demos-as-word-problems.html">707 — The demos told as word problems</a>,
+the other half of making this project legible to someone who did not
+build it, and the source of the rule about honest mechanics</li>
+<li><a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>, which
+is the third thing that lives on a page and will want the same
+aesthetic</li>
+<li><code>../notes/first-pass-report.md</code>, the prose the project-shaped
+slideshow would be drawn from</li>
+<li><a href="doc-000-table-of-contents.html">000 — Table of contents</a>, the
+structure the site mirrors</li>
 </ul>
 
 </main>

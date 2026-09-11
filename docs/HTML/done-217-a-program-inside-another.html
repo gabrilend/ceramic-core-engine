@@ -19,12 +19,18 @@
 <a href="doc-009-datapath-load.html">009 — Datapath: loading and starting</a>
 <a href="doc-010-roadmap.html">010 — Roadmap</a>
 <a href="doc-058-guarantees.html">058 — Guarantees</a>
+<a href="doc-140-a-map-inside-a-map.html">140 — A map inside a map</a>
 <h2>Implementation notes</h2>
 <a href="impl-056-no-pull-path.html">056 — Why there is no pull path</a>
 <a href="impl-057-packaging.html">057 — Packaging the engine as a library</a>
 <a href="impl-090-one-table-per-processor.html">090 — One station table per processor</a>
 <a href="impl-135-a-box-and-a-map-are-one-thing.html">135 — A box and a map are one thing</a>
 <a href="impl-README.html">Implementation notes</a>
+<h2>The maps</h2>
+<a href="map-095-doubling.html">095-doubling.map</a>
+<a href="map-107-example.html">107-example.map</a>
+<a href="map-127-the-ladder.html">127-the-ladder.map</a>
+<a href="map-132-the-accumulator.html">132-the-accumulator.map</a>
 <h2>The beginning</h2>
 <a href="vision.html">vision (sealed)</a>
 <h2>Notes</h2>
@@ -32,11 +38,13 @@
 <h2>Issues, open</h2>
 <a href="issue-107-several-queues-a-station-may-name.html">107 — Several queues, and a station may name one</a>
 <a href="issue-108-choosing-where-a-box-runs.html">108 — Choosing where a box runs</a>
+<a href="issue-608-the-station-line-reads-at-a-glance.html">608 — The station line reads at a glance</a>
 <a href="issue-705-html-documentation.html">705 — The HTML documentation set</a>
 <a href="issue-709-slideshow-and-transcripts.html">709 — The slideshow and the transcript library</a>
 <a href="issue-711-the-index-means-reading-order.html">711 — An index is a position in the reading order</a>
 <a href="issue-713-demos-you-can-steer.html">713 — The demos you can steer</a>
 <a href="issue-801-browser-workbench.html">801 — The workbench in the browser</a>
+<a href="issue-TEMPORARY-the-dollar-sign-points-one-level-up.html">TEMPORARY — the dollar sign points one level up</a>
 <a href="issue-phase-1-progress.html">Phase 1 progress — the pool</a>
 <a href="issue-phase-2-progress.html">Phase 2 progress — stations and the push path</a>
 <a href="issue-phase-3-progress.html">Phase 3 progress — the build path</a>
@@ -56,12 +64,14 @@
 <a href="done-201-station-table.html">201 — The station table</a>
 <a href="done-202-ring-buffer-ports.html">202 — Ring-buffer input ports</a>
 <a href="done-203-port-buffer-growth.html">203 — Port buffer growth</a>
+<a href="done-203a-a-declared-depth-travels.html">203a — A declared depth travels downstream</a>
 <a href="done-204-readiness-check.html">204 — The readiness check and claiming values</a>
 <a href="done-205-delivery-walk.html">205 — The delivery walk</a>
 <a href="done-206-task-struct.html">206 — The task struct</a>
 <a href="done-207-hand-built-maps.html">207 — Hand-built maps and hand-written shims</a>
 <a href="done-208-phase-2-demo.html">208 — Phase 2 demo: a graph that runs itself</a>
 <a href="done-209-map-output-collection.html">209 — The output station</a>
+<a href="done-209a-results-go-where-the-caller-says.html">209a — Results go where the caller says</a>
 <a href="done-210-input-port-record.html">210 — What an input port is</a>
 <a href="done-210a-the-pull-path-removed.html">210a — The pull path removed</a>
 <a href="done-210b-the-port-record.html">210b — The port record</a>
@@ -73,11 +83,15 @@
 <a href="done-210h-optional-parameters.html">210h — Optional parameters</a>
 <a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>
 <a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>
+<a href="done-212a-one-table-and-a-program-is-a-receipt.html">212a — One table, and a program is a receipt</a>
 <a href="done-213-the-input-station.html">213 — The input station</a>
+<a href="done-213a-a-door-is-a-port.html">213a — A door is a port, not a station</a>
 <a href="done-214-destinations-without-a-lock.html">214 — Destinations without a lock</a>
 <a href="done-215-ports-and-slots.html">215 — Ports and slots, named correctly</a>
 <a href="done-216-removing-a-station.html">216 — Removing a station</a>
+<a href="done-216a-removing-several-stations-at-once.html">216a — Removing several stations at once</a>
 <a href="done-217-a-program-inside-another.html" class="here">217 — A program inside another</a>
+<a href="done-217a-one-receipt-for-a-box-and-a-map.html">217a — One receipt for a box and a map</a>
 <a href="done-301-box-source-parser.html">301 — The box-source parser</a>
 <a href="done-302-shim-emission.html">302 — Shim emission</a>
 <a href="done-303-registry-emission.html">303 — The registry</a>
@@ -108,6 +122,9 @@
 <a href="done-505-phase-5-demo.html">505 — Phase 5 demo: a map that decides</a>
 <a href="done-506-multi-output-boxes.html">506 — Boxes with several output ports</a>
 <a href="done-601-map-file-parser.html">601 — The map file parser</a>
+<a href="done-601a-a-wire-is-written-at-both-ends.html">601a — A wire is written at both ends</a>
+<a href="done-601b-the-dollar-sign-means-the-boundary.html">601b — The dollar sign means the boundary</a>
+<a href="done-601c-the-format-stops-guessing.html">601c — The format stops guessing</a>
 <a href="done-602-loader-first-pass.html">602 — The loader, first pass: stations</a>
 <a href="done-603-loader-second-pass.html">603 — The loader, second pass: arrows and types</a>
 <a href="done-604-load-time-validation.html">604 — Validation that needs the whole map</a>
@@ -179,8 +196,8 @@ on is never approached.</p>
 <p><strong>The offset was wrong, and the correction is the interesting part.</strong>
 This issue said a description's numbers are translated by an offset:
 its third station becomes <em>base plus three</em>. That is true only while
-nothing has ever been removed. Adding a station hands back a **freed
-place** before it grows the table, so a program that has had removals
+nothing has ever been removed. Adding a station hands back a <strong>freed
+place</strong> before it grows the table, so a program that has had removals
 gets whatever holes exist, in whatever order — and the offset story
 reads perfectly right up until it does not. What the reader keeps is a
 small <strong>translation table</strong> saying where each of the description's
@@ -224,8 +241,8 @@ dispatches on the first word of a line and those three already mean
 something there. Found by naming a door <code>in</code> and being told there was
 an input line before any station.</p>
 <h3>What stood before</h3>
-<p>**A program can be started beside another, and cannot be brought
-inside one.**</p>
+<p><strong>A program can be started beside another, and cannot be brought
+inside one.</strong></p>
 <p>Starting beside works and is proven: a fresh program with its own
 station table, its own rewiring lock, its own everything except the
 workers, reached only through its doors. A test starts one, feeds it,
@@ -246,8 +263,8 @@ arrive and where its results come from
 nothing but a sequence of those calls
 (<a href="done-210g-one-way-to-build-a-station.html">210g</a>).</p>
 <h2>Intended behavior</h2>
-<p>**Bringing a program inside another is instantiating a template, not
-merging two programs.**</p>
+<p><strong>Bringing a program inside another is instantiating a template, not
+merging two programs.</strong></p>
 <p>This is the correction that makes the whole thing small, and getting
 it the other way round is what made it look large. Nothing running is
 being joined to anything else running. There is no second live program
@@ -282,10 +299,10 @@ declared. Instantiating one asks the table for a place per station,
 and the first place it is given is the <strong>base</strong>. From there:</p>
 <ul>
 <li>station <em>n</em> of the description is station <em>base + n</em> of the program</li>
-<li>every arrow inside the description is drawn from <em>base + from</em> to</li>
-<p>  <em>base + to</em></p>
-<li>every arrow <em>into</em> or <em>out of</em> the instance is drawn by the parent,</li>
-<p>  in the parent's own numbers, to the instance's doors</p>
+<li>every arrow inside the description is drawn from <em>base + from</em> to
+<em>base + to</em></li>
+<li>every arrow <em>into</em> or <em>out of</em> the instance is drawn by the parent,
+in the parent's own numbers, to the instance's doors</li>
 </ul>
 <p>The reader is already written this way, which was not true a moment
 ago and is the step this issue stands on. Its two passes take a base
@@ -297,8 +314,8 @@ only two things a parent has any business naming. A parent wiring into
 an interior station of an instance is reaching inside, and the point
 of the declaration is that reaching inside stops happening by
 accident.</p>
-<p>**And the choice has a second axis, which is where the hardware
-comes in.** A station table belongs to one processor, and so does the
+<p><strong>And the choice has a second axis, which is where the hardware
+comes in.</strong> A station table belongs to one processor, and so does the
 pool that runs it
 (<a href="impl-090-one-table-per-processor.html">090</a>).
 So things composed into one table run on one processor: composing is
@@ -309,9 +326,9 @@ choice was about isolation, that a composed program shares a fate; it
 is also about locality, that a composed program shares a processor's
 memory.</p>
 <p>That is the difference between this and starting beside, and it is
-worth stating as one sentence: **an instance shares the parent's
+worth stating as one sentence: <strong>an instance shares the parent's
 station table, so it can be wired to; a program started beside has its
-own, so it cannot.** Which one somebody wants follows from whether
+own, so it cannot.</strong> Which one somebody wants follows from whether
 they want isolation. A program that runs <em>other people's</em> programs
 wants the second, and can be as broken as it likes. A program that
 uses a subgraph it wrote wants the first, and pays nothing at run time
@@ -379,19 +396,19 @@ change — an arrow destination is split on its <em>last</em> dot, so
 refused for making a name mechanical again, which is the thing this
 issue says it is not. Dropping names from arrows altogether would
 throw away the reason a map file is readable by a person.</p>
-<p>**Answered: a part with several entrances or several ways out, from a
-box — by making adding a box and adding a map one operation.**</p>
+<p><strong>Answered: a part with several entrances or several ways out, from a
+box — by making adding a box and adding a map one operation.</strong></p>
 <p>The question assumed two different acts that had to be reconciled.
-They are not two acts. **A map is a list of boxes and the wiring
-between them; a box is a list of one.** Adding a map walks its list,
+They are not two acts. <strong>A map is a list of boxes and the wiring
+between them; a box is a list of one.</strong> Adding a map walks its list,
 instantiates each of its boxes, and connects them the way it says.
 Adding a box walks a list of length one and connects nothing. That is
 the whole difference, and it is a difference in the length of a list
 rather than in what is happening.</p>
-<p>So what comes back is the same kind of thing either way: **a part,
-which is where values go in and where they come out.** For a map those
-are the stations it declared as doors. **For a single box they are the
-same station**, because a box's own input ports are its way in and its
+<p>So what comes back is the same kind of thing either way: <strong>a part,
+which is where values go in and where they come out.</strong> For a map those
+are the stations it declared as doors. <strong>For a single box they are the
+same station</strong>, because a box's own input ports are its way in and its
 own output port is its way out — a box is a map of one station whose
 doors are itself.</p>
 <p><strong>And that dissolves the objection rather than settling it.</strong> The
@@ -409,8 +426,8 @@ which is state it does not keep. A wiring list given as text would put
 a second little language inside a string. Accepting the struct with
 unpackers is the one this replaces: the struct is accepted, and the
 unpackers turned out to be unnecessary.</p>
-<p>*<em>Answered: what does a description arrive as? As a </em>name that
-resolves*, and the set of things a name can resolve to is open.**</p>
+<p><strong>Answered: what does a description arrive as? As a *name that
+resolves*, and the set of things a name can resolve to is open.</strong></p>
 <p>The operation takes a name and looks for it in two places: a box
 compiled into the binary, and a description on disk. Finding both is
 refused as ambiguous rather than settled by an order nobody can see;
@@ -419,37 +436,37 @@ finding neither is refused naming both places that were searched.</p>
 because each of them is one more place to look rather than a different
 operation:</p>
 <ul>
-<li><strong>A description parsed from text held in memory</strong> is a third place,</li>
-<p>  and the reader already separates parsing from building — the two
-  passes take a parsed description and a translation table, not a
-  path.</p>
-<li><strong>A description produced by another program</strong> is that same case</li>
-<p>  arriving from somewhere else.</p>
-<li><strong>A description the generator has already turned into code</strong></li>
-<p>  (<a href="done-311d-the-map-becomes-code.html">311d</a>) is the interesting one: the
-  name resolves to a generated function rather than to a parse tree,
-  and instantiating means calling it. The caller cannot tell, which is
-  the point — and it is why the operation takes a <em>name</em> rather than a
-  path or a parsed structure.</p>
+<li><strong>A description parsed from text held in memory</strong> is a third place,
+and the reader already separates parsing from building — the two
+passes take a parsed description and a translation table, not a
+path.</li>
+<li><strong>A description produced by another program</strong> is that same case
+arriving from somewhere else.</li>
+<li><strong>A description the generator has already turned into code</strong>
+(<a href="done-311d-the-map-becomes-code.html">311d</a>) is the interesting one: the
+name resolves to a generated function rather than to a parse tree,
+and instantiating means calling it. The caller cannot tell, which is
+the point — and it is why the operation takes a <em>name</em> rather than a
+path or a parsed structure.</li>
 </ul>
 <p>So nothing here waits on 311d. What 311d changes is what a name may
 find, not what the operation is.</p>
 <h2>Related</h2>
 <ul>
-<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,</li>
-<p>  where this was described and from which it is split</p>
-<li><a href="done-209-map-output-collection.html">209 — The output station</a>, whose last</li>
-<p>  step is a program used as a box</p>
-<li><a href="done-213-the-input-station.html">213 — The input station</a>, whose last step</li>
-<p>  is the same thing from the other side</p>
-<li><a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>,</li>
-<p>  which makes adding a run of stations ordinary</p>
-<li><a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>,</li>
-<p>  which made reading a file a sequence of ordinary calls</p>
-<li><a href="done-311d-the-map-becomes-code.html">311d — The map becomes code</a>, where a</li>
-<p>  description stops being parsed at run time</p>
-<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, which gains</li>
-<p>  whatever answers the dump question</p>
+<li><a href="done-212-one-way-to-build-a-program.html">212 — One way to build a program</a>,
+where this was described and from which it is split</li>
+<li><a href="done-209-map-output-collection.html">209 — The output station</a>, whose last
+step is a program used as a box</li>
+<li><a href="done-213-the-input-station.html">213 — The input station</a>, whose last step
+is the same thing from the other side</li>
+<li><a href="done-211-growing-the-station-table.html">211 — Growing the station table</a>,
+which makes adding a run of stations ordinary</li>
+<li><a href="done-210g-one-way-to-build-a-station.html">210g — One way to build a station</a>,
+which made reading a file a sequence of ordinary calls</li>
+<li><a href="done-311d-the-map-becomes-code.html">311d — The map becomes code</a>, where a
+description stops being parsed at run time</li>
+<li><a href="doc-008-map-file-format.html">008 — Map file format</a>, which gains
+whatever answers the dump question</li>
 </ul>
 
 </main>
