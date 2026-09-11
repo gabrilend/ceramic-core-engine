@@ -190,6 +190,16 @@ for _, sub in ipairs(list_subdirs(DIR .. "/docs")) do
         end
     end
 end
+-- The maps themselves. A map file is part of the deliverable rather
+-- than an example — the build reads the same files — and the documents
+-- link to them by path, so a site that cannot reach one has a dead
+-- link in it. Rendered whole, the way the sealed note is, because a
+-- map is already written to be read.
+for _, name in ipairs(list_dir(DIR .. "/maps", "%.map$")) do
+    add_page(DIR .. "/maps/" .. name,
+             "map-" .. name:gsub("%.map$", ".html"),
+             name, "The maps")
+end
 -- The sealed vision.
 add_page(DIR .. "/vision", "vision.html", "vision (sealed)", "The beginning")
 -- Notes.
@@ -313,19 +323,8 @@ local function markdown_to_html(text, page)
     local in_table = false
     local in_list = false
     local paragraph = {}
-
-    local function flush_paragraph()
-        if #paragraph > 0 then
-            out[#out + 1] = "<p>" .. table.concat(paragraph, "\n") .. "</p>"
-            paragraph = {}
-        end
-    end
-    local function close_list()
-        if in_list then out[#out + 1] = "</ul>"; in_list = false end
-    end
-    local function close_table()
-        if in_table then out[#out + 1] = "</table>"; in_table = false end
-    end
+    local list_item = {}
+    local quote = {}
 
     local function inline(s)
         s = escape_html(s)
@@ -335,10 +334,68 @@ local function markdown_to_html(text, page)
             saved[#saved + 1] = "<code>" .. code .. "</code>"
             return "\1" .. #saved .. "\1"
         end)
-        s = s:gsub("%*%*([^%*]+)%*%*", "<strong>%1</strong>")
+        -- Shortest run to the next closing pair, rather than "as many
+        -- characters as are not an asterisk". The strict form cannot
+        -- match a bolded phrase with an italicised word inside it —
+        -- and worse than not matching, it leaves the two outer
+        -- asterisk pairs behind for the emphasis rule below, which
+        -- then pairs them with the inner ones and emphasises exactly
+        -- the wrong half of the sentence.
+        s = s:gsub("%*%*(.-)%*%*", "<strong>%1</strong>")
         s = s:gsub("%*([%w][^%*\n]-)%*", "<em>%1</em>")
         s = s:gsub("\1(%d+)\1", function(i) return saved[tonumber(i)] end)
         return s
+    end
+
+    -- The markdown here is hard-wrapped at about seventy columns, so a
+    -- bolded sentence routinely opens on one physical line and closes
+    -- on the next. Emphasis is therefore found on the *assembled*
+    -- paragraph rather than on each line as it arrives — matching per
+    -- line leaves the asterisks sitting in the page as literal text
+    -- for every span that happens to cross a wrap, which is most of
+    -- the long ones. Single-asterisk emphasis still refuses to cross a
+    -- newline: it is the pattern that would otherwise pair up stray
+    -- asterisks from unrelated sentences.
+    local function flush_paragraph()
+        if #paragraph > 0 then
+            out[#out + 1] =
+                "<p>" .. inline(table.concat(paragraph, "\n")) .. "</p>"
+            paragraph = {}
+        end
+    end
+    -- A list item is buffered for the same reason a paragraph is: it
+    -- is wrapped across physical lines, and its continuation lines are
+    -- indented rather than marked. Emitting each line as its own
+    -- <li> put the tail of every wrapped item outside the item it
+    -- belonged to, and split any emphasis that crossed the wrap.
+    local function flush_list_item()
+        if #list_item > 0 then
+            out[#out + 1] =
+                "<li>" .. inline(table.concat(list_item, "\n")) .. "</li>"
+            list_item = {}
+        end
+    end
+    local function close_list()
+        if in_list then
+            flush_list_item()
+            out[#out + 1] = "</ul>"
+            in_list = false
+        end
+    end
+    -- A run of quoted lines is one quotation, for the third time the
+    -- same reason: the run is wrapped, and one <blockquote> per
+    -- physical line both boxes each line separately and cuts every
+    -- emphasis that spans the wrap.
+    local function close_quote()
+        if #quote > 0 then
+            out[#out + 1] =
+                "<blockquote>" .. inline(table.concat(quote, "\n"))
+                .. "</blockquote>"
+            quote = {}
+        end
+    end
+    local function close_table()
+        if in_table then out[#out + 1] = "</table>"; in_table = false end
     end
 
     for line in (text .. "\n"):gmatch("([^\n]*)\n") do
@@ -350,16 +407,16 @@ local function markdown_to_html(text, page)
                 out[#out + 1] = highlight_c(escape_html(line))
             end
         elseif line:match("^```") then
-            flush_paragraph(); close_list(); close_table()
+            flush_paragraph(); close_quote(); close_list(); close_table()
             out[#out + 1] = '<pre class="code">'
             in_code = true
         elseif line:match("^#") then
-            flush_paragraph(); close_list(); close_table()
+            flush_paragraph(); close_quote(); close_list(); close_table()
             local hashes, title = line:match("^(#+)%s*(.*)")
             local level = math.min(#hashes, 4)
             out[#out + 1] = ("<h%d>%s</h%d>"):format(level, inline(title), level)
         elseif line:match("^%s*|") then
-            flush_paragraph(); close_list()
+            flush_paragraph(); close_quote(); close_list()
             if line:match("^%s*|[%s%-|]*$") then
                 -- the separator row; nothing to emit
             else
@@ -377,22 +434,27 @@ local function markdown_to_html(text, page)
                 out[#out + 1] = "<tr>" .. table.concat(cells) .. "</tr>"
             end
         elseif line:match("^%s*[-*]%s+") then
-            flush_paragraph(); close_table()
+            flush_paragraph(); close_quote(); close_table()
             if not in_list then
                 out[#out + 1] = "<ul>"
                 in_list = true
             end
-            out[#out + 1] = "<li>" .. inline(line:gsub("^%s*[-*]%s+", "")) .. "</li>"
+            flush_list_item()
+            list_item[1] = line:gsub("^%s*[-*]%s+", "")
+        elseif in_list and #list_item > 0 and line:match("^%s+%S") then
+            -- An indented line under an open item is that item still
+            -- going, not a new one and not a paragraph.
+            list_item[#list_item + 1] = line:match("^%s*(.-)%s*$")
         elseif line:match("^%s*$") then
-            flush_paragraph(); close_list(); close_table()
+            flush_paragraph(); close_quote(); close_list(); close_table()
         elseif line:match("^>%s?") then
             flush_paragraph(); close_list(); close_table()
-            out[#out + 1] = "<blockquote>" .. inline(line:gsub("^>%s?", "")) .. "</blockquote>"
+            quote[#quote + 1] = line:gsub("^>%s?", "")
         else
-            paragraph[#paragraph + 1] = inline(line)
+            paragraph[#paragraph + 1] = line
         end
     end
-    flush_paragraph(); close_list(); close_table()
+    flush_paragraph(); close_quote(); close_list(); close_table()
     return linkify(table.concat(out, "\n"), page)
 end
 -- }}}
@@ -668,6 +730,13 @@ for _, page in ipairs(pages) do
     if page.src:match("/vision$") then
         -- The sealed note, rendered as it stands, untouched.
         body = "<h1>the vision, sealed</h1><pre class=\"code\">"
+             .. escape_html(text) .. "</pre>"
+    elseif page.src:match("%.map$") then
+        -- A map is not markdown. Its '#' lines are its own comments,
+        -- not headings, so converting it would turn a comment into a
+        -- title and lose the indentation that says which lines belong
+        -- to which station.
+        body = "<h1>" .. escape_html(page.title) .. "</h1><pre class=\"code\">"
              .. escape_html(text) .. "</pre>"
     else
         body = markdown_to_html(text, page)
