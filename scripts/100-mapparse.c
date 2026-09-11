@@ -133,7 +133,9 @@ static void handle_in(parse_state_t *st, const char *rest)
         die_parse(st->path, st->line, "expected a port number after 'in'");
     if (!ref[0])
         die_parse(st->path, st->line,
-                  "expected '$entry', '= value', or '-' after the port number");
+                  "expected '- station.port', '- 0$', '= value', "
+                  "'[values]', '-', or a depth like 'x64' after the "
+                  "port number");
 
     desc_input_t *in = need(calloc(1, sizeof *in), st->path, st->line);
     in->port = port;
@@ -159,17 +161,20 @@ static void handle_in(parse_state_t *st, const char *rest)
          * source, so the program could not be reloaded. */
     }
 
-    /* Three forms, and the first character tells them apart.
+    /* Four forms, and the first character tells them apart.
      *
-     * '= value' carries the value on this line. It is what the dump
-     * writes, because a dump has values on ports and no entry numbers
-     * to point at; the '=' matches the statics section's own 'N =
-     * value', so the two places a value can be written spell it the
-     * same way. The text runs to the end of the line, because a struct
-     * value has spaces in it.
+     * '= value' carries the value on this line, and it is the only way
+     * a constant is written. There used to be a 'statics' section — a
+     * numbered list at the top of the file with input lines pointing
+     * into it — and it was a second spelling of a value, so it went.
+     * The text runs to the end of the line, because a struct value has
+     * spaces in it.
      *
-     * '$entry' points at the statics section, which is notation
-     * resolved while the file is read (issue 401).
+     * '[values]' is what the buffer is *holding*, which is the one
+     * form describing contents rather than shape.
+     *
+     * A depth alone ('x64') is a buffer that starts that deep, fed the
+     * ordinary way.
      *
      * '-' is a port with no source at all: a state rather than a
      * value, in which the station simply never becomes ready. No
@@ -297,8 +302,8 @@ static void handle_in(parse_state_t *st, const char *rest)
         in->text = NULL;
     } else {
         die_parse(st->path, st->line,
-                  "expected '$entry', '= value', '[values]', '-', or a "
-                  "depth alone; a "
+                  "expected '- station.port', '- 0$', '= value', "
+                  "'[values]', '-', or a depth alone; a "
                   "bare station name here meant 'gather from that station', "
                   "and there is no pull path any more");
     }
@@ -418,17 +423,18 @@ static void handle_station(parse_state_t *st, const char *name,
     }
 
     /*
-     * An optional fourth word says this station is one of the
-     * program's doors (issues 209, 213): `entry` for where the
-     * outside delivers, `result` for where results come from.
-     *
-     * Words rather than `in` and `out`, which already mean a port on
-     * the lines beneath a station. A file where one word means a port
-     * in one place and a whole station in another is the kind of
-     * ambiguity that reads fine and round-trips wrong.
+     * **No fourth word says this station is part of the map's
+     * interface.** There used to be one — `entry` for where the
+     * outside delivers, `result` for where results come from (issues
+     * 209, 213) — and it is refused below rather than ignored,
+     * because the mark moved to the **port** and a file written the
+     * old way describes a different program from the one it looks
+     * like. A station carries one value inward, so a mark on the
+     * station meant every argument cost a station running the
+     * identity function; a mark on a port costs nothing.
      */
     /*
-     * **And an optional `@N`, which is where an iterator is pointing**
+     * **An optional `@N` says where an iterator is pointing**
      * (issue 712) — the one memory a station keeps. Every other word
      * on this line says what the station *is*; this says where it had
      * got to, which is what makes a written-down program an image

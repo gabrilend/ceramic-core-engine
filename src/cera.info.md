@@ -551,7 +551,7 @@ freshly empty run of slots.
 #define CERA_NOT_A_DOOR (-1)
 ```
 
-**A door is a port, not a station** (issues 213a, 209a). A port carries
+**The mark is on a port, not a station** (issues 213a, 209a). A port carries
 the number of the argument or result it is, or this when it is neither,
 which is most of them.
 
@@ -602,6 +602,7 @@ typedef struct in_port {
     const struct struct_text *text;
     int growths;
     int high_water;
+    int   argument;
 } cera_in_port_t;
 ```
 
@@ -668,6 +669,7 @@ that repeats.
 | `type_name` | The type this port feeds, as text — what lets a static's text become bytes of the right *shape*. Null on hand-placed stations, which therefore cannot bind statics. This is not a precedent for carrying type names. A wire is checked by width and never by name: two boxes may spell one shape differently and mean the same data, so comparing names would refuse a sound connection. Nothing here is ever compared against anything — it names a layout, because turning `{ 5, 2.0, "hey" }` into bytes needs more than a byte count. Messages and the dump read the spelling. |
 | `text` | How a value of this port's type is written down and read back — the address of a generated pair, written by the placement function because it knows the type concretely. Null unless the type is a struct, and null on a hand-placed station, so the reader checks before following it. Two functions rather than a table of fields. The pair reaches each field by name, so there is no offset stored anywhere and none computed — a stronger form of guarantee C1 than a correct number carried around. Declared as an incomplete type because the pair belongs to the build path and this header must not depend on it — the dependency runs the other way. |
 | `growths` | How many times this buffer has doubled, and the deepest the backlog ever got; the reports read both. A growing port is one input side outpacing its siblings, with memory absorbing the imbalance. |
+| `argument` | Which of the map's arguments this port is, or `CERA_NOT_A_DOOR`, which is the usual case. **Being an argument and being fed by a wire are independent**: a port that is both is fed both ways, and simply is not a command-line slot. The number is chosen by the author rather than derived from where the line sits, so reordering a file changes nothing; a gap or a repeat is refused at bring-up, and neither mistake was detectable when the mark lived on the station and the order was whatever order the stations happened to sit in. |
 
 ### struct destination / struct out_port
 
@@ -683,6 +685,11 @@ typedef struct dest_set {
 typedef struct out_port {
     _Atomic(cera_dest_set_t *) dests;
     struct out_port      *next;
+    int    result;
+    void  *into;
+    int    room;
+    int    elem_size;
+    _Atomic int taken;
 } cera_out_port_t;
 ```
 
@@ -707,6 +714,11 @@ run of pairs is what a processor wants for that.
 | field | meaning |
 |---|---|
 | `dests` | Read without any lock on the hot path, written only while the rewiring lock is held. Atomic because a reader and a writer genuinely race here, and because the release on the write is what makes the set's contents visible to whoever reads the pointer afterwards. Null means a port wired nowhere, which discards — exactly what an unwired comparator outcome should do. |
+| `result` | Which of the map's results this port is, or `CERA_NOT_A_DOOR`, which is the usual case. The number is a name the author chose that happens to sort: reordering every line in a file changes nothing, and a gap or a repeat is refused when the program is brought up. It means the same thing whoever collects the value — a shell, a C caller, or an enclosing map — the way a C function's return value does not care who called it. |
+| `into` | **Where an embedding caller wants these values put**, and nothing until it says so. A marked port with no receptacle discards exactly like any other unwired output, so a program nobody is collecting from grows nothing — this is the arrow that used to be missing, and it replaces a pile of results kept on the station against the chance somebody would come for them. The memory belongs to the caller. |
+| `room` | How many values fit in it. **The bound is the reservation, never the winding down**: a worker handed a slot at or past this writes nothing, because workers are still inside boxes at the moment the array fills and there is no way to ask them to stop having started. |
+| `elem_size` | Bytes per value, so the writer can find the slot without knowing the type. |
+| `taken` | The next free slot, claimed with one atomic add. **There is no slot state machine here.** A ring slot needs one because it is reused and a reader must know what it is looking at; one of these is written once and read by nobody until the caller comes to look. |
 
 ### cera_station_compare_t
 
@@ -734,11 +746,6 @@ typedef struct station {
     int             out_size;
     const char     *box_name;
     unsigned char   seeded;
-    unsigned char   door;
-    void           *held;
-    int             n_held;
-    int             held_room;
-    int             held_growths;
     cera_station_compare_t compare;
     _Atomic long runs;
     _Atomic long produced;
@@ -749,6 +756,18 @@ typedef struct station {
 
 Fixed-size on purpose: the array of these must stay indexable, and
 growing a buffer must never move a station.
+
+**Nothing here says whether the station is part of the map's
+interface.** It used to: there was a mark on the station saying it was
+a way in or a way out, and a pile of results held on the station for
+whenever somebody came to collect them. Both are gone. The mark is on
+the **port** now — an input port carries which of the map's arguments
+it is, an output port carries which result — and the results go
+wherever the collecting caller said to put them rather than piling up
+here. A station carries one value inward, so a mark on the station
+meant a map taking three arguments needed three stations running the
+identity function; that cost was the mark having nowhere smaller to
+live.
 
 | field | meaning |
 |---|---|
@@ -761,8 +780,6 @@ growing a buffer must never move a station.
 | `out_size` | bytes of the box's return value; 0 means sink |
 | `box_name` | The name this station was placed as, written by the generated placement function as a literal. Not a lookup. The literal costs one pointer per station, the string is read-only data the compiler emits anyway, and nothing is allocated or freed. Null for a station placed by hand with no name given, which is honest rather than awkward: nothing on disk describes such a program either, so there is nothing for a station line to say. The dump says so plainly instead of inventing something. It carries the bare function name, which is what a map file says. |
 | `seeded` | Whether this station has already been set going by a bring-up. The pass that starts a program is repeatable: a station added to a running program is checked and started by the next call, and one that was started before is not started twice. Without the mark, bringing a grown program up again would give every no-input station a second run for no reason anybody asked for — which is the sort of thing that looks like a scheduling bug for a week. |
-| `door` | Whether this station is a door, and which way it faces. One mark rather than two flags, because the two are one design seen from either side: a program's inputs are the ports the outside is allowed to deliver to, and its outputs are the ports a parent may wire from. A station is neither, or one, and being both would mean a program whose entrance is its exit. A door is an ordinary station and runs whatever box it was placed with — same shape, same readiness check. The mark adds one rule on each side. Facing out: when its output port is wired nowhere, values are held instead of discarded. Discarding is right for every other port and wrong for this one — an unwired comparator branch is the ordinary case, but a program that computed its results and dropped them did nothing. Facing in: it is the only station the outside may deliver to. That is what gives a program a surface rather than internals that happen to be reachable, and it is why a parent can wire to a sub-program without knowing what anything inside it is called. |
-| `held` | The results waiting to be taken, when nobody is wired to this station's output port. Guarded by the station's own mutex — the one the claim already takes — because a worker finishing a box and somebody outside draining results genuinely meet here. Grown by doubling. A pile-up here is a third diagnosis and not either of the other two: a port backing up means uneven inputs, the task ring backing up means consumers slower than producers, and this backing up means *nobody is collecting the program's results at all*. It is the loudest of the three by design, because the other two are performance signals and this one means the program is computing into somewhere nobody is looking. |
 | `compare` | Comparator only: the three-way compare for the box's return type, resolved by the placement function so the delivery path does a call rather than a lookup. |
 | `runs` | The counters. The counts are atomics updated where the work already is, costing nearly nothing, and are always on. The times are only ever written when CERA_STATS is compiled in — the fields stay so the struct never changes shape, but every clock read compiles out. |
 | `produced` | tasks its outputs made due elsewhere |
@@ -784,14 +801,16 @@ typedef struct map {
     char **station_names;
     int    n_named;
     _Atomic int closing;
-    int    pool_is_borrowed;
     pthread_mutex_t rewire_mutex;
     pthread_mutex_t   scrap_mutex;
     struct scrap_item *scrap_head;
+    cera_map_instance_t *parts;
+    int                  n_parts;
     pthread_t observer;
     int       observer_running;
     char     *observer_path;
     int       observer_interval_ms;
+    struct cera_watch *watch;
 } cera_map_t;
 ```
 
@@ -810,14 +829,16 @@ allocation on a particular node. What is written down is the intent,
 because the one thing that would make it impossible later is a wire
 that crosses tables, and there is now a standing reason not to have
 one beyond the software reason there always was. A program spanning
-two processors is two programs talking through their doors, not one
-program with a long wire. See
+two processors is two programs talking through their marked ports,
+not one program with a long wire. See
 docs/implementation-notes/090-one-table-per-processor.md.
 
-The `statics` section of a map file is notation and nothing else: a
-way to write a value down once while describing the map. Reading it
-copies the value into each port that names it, and from that moment
-the entry has done its job — there is no table, and nothing is
+**A constant is written on the input line that holds it**, with `=`.
+There used to be a `statics` section — a numbered list at the top of a
+map file, with input lines pointing at entries in it — and it was a
+second spelling of a value, so it is gone. The text on the line is
+parsed into that port's own storage, at that port's own type, and
+nothing is retained afterwards: there is no table, and nothing is
 shared between ports.
 
 Sharing, when it is wanted, is drawn: one station holds the value
@@ -844,11 +865,13 @@ ever moves either way.
 | `seeded` | How many stations the seed sweep enqueued. Zero on hand-built maps that seed by delivering. |
 | `station_names` | Station names, retained from the map file (null on hand-built maps). The engine itself never reads them — every wire is an index — but the dump must write a file that reads back, and a person watching a live view deserves names. The loader's throwaway lookup table and this are different things: that one resolved arrows and died; this one is for speaking. |
 | `n_named` | How many of them the array has room for, which is not always the station count: stations are added one at a time now, so the names grow behind them. |
-| `closing` | The outside door is shut. Set when a supervisor has politely asked the program to wind down. Delivering an argument from outside is refused from that moment, which is the whole of what "stop accepting new work" can mean here — the entrance is the only way anything outside puts work into a program, so closing it is what lets the queue actually drain and the last-sleeper rule fire. Nothing else changes. No worker is told anything, no task is discarded, no clock starts. The program ends exactly the way it would have ended on its own, which is the argument for this path: it adds no mechanism, only an early trigger for the one that already exists. |
-| `pool_is_borrowed` | True when this program was started beside another and shares its workers. It borrows the pool and must not destroy it — the program that made it owns it, and tearing down a pool other programs are still running on would take them with it. |
+| `closing` | The way in is shut. Set when a supervisor has politely asked the program to wind down. Delivering an argument from outside is refused from that moment, which is the whole of what "stop accepting new work" can mean here — the entrance is the only way anything outside puts work into a program, so closing it is what lets the queue actually drain and the last-sleeper rule fire. Nothing else changes. No worker is told anything, no task is discarded, no clock starts. The program ends exactly the way it would have ended on its own, which is the argument for this path: it adds no mechanism, only an early trigger for the one that already exists. |
 | `rewire_mutex` | The rewiring lock: edge validation and list mutation are one operation under it, never two. |
 | `scrap_mutex` | The scrapyard: destination sets a rewire replaced, kept until nothing can still be walking them. It owns a lock, and not against tearing. Nothing ever reads a filed set's contents. The lock is against two hands freeing the same set, and there are two touchers where only one is obvious: rewiring sweeps, and teardown empties. Anything that touches this takes the lock, confirms the set is still filed, unfiles it, and frees it under that same hold — so a second arrival simply does not find it. The lock is a leaf: nothing is acquired while it is held. Said as a rule rather than left to be inferred, because a lock-ordering cycle is exactly what somebody builds later having had no way to know. It costs nothing this issue is trying to save. The lock being removed is the one on the delivery walk; this one is touched when wiring changes and when the program ends, never between. |
 | `observer` | The observer: a small reporting thread, not a worker, pushing nothing. |
+| `parts` | **The receipts this map has handed out** — one entry per placing, each holding the list of station numbers that placing created, in the order the description declared them. Placing a box and placing a map both produce one of these, which is what makes them one operation rather than two that resemble each other. It is kept rather than handed over and forgotten because *a program is one of these*: ending a program is pruning the stations its receipt names. Entries are never moved, so an index into this table means what it meant; an ended one is left empty rather than removed, because a part travels on a wire when a map builds a map and a wire carries a number rather than a pointer. |
+| `n_parts` | How many receipts have been issued, including the emptied ones. |
+| `watch` | The shared-memory event ring, when one has been opened; null otherwise, which is the ordinary case. Emitting compiles out entirely without `CERA_WATCH`. |
 
 ### static inline cera_station_t *cera_map_s
 
@@ -1124,7 +1147,7 @@ const char *cera_map_designate_argument(cera_map_t *m, int station, int port,
                                         int nth);
 ```
 
-The other door: **this port is one of the program's arguments.**
+The other mark: **this port is one of the program's arguments.**
 
 Without a mark somewhere, a caller reaches a program by naming one
 of its interior stations, which means knowing what they are called —
@@ -1136,7 +1159,7 @@ wire to a sub-program without knowing anything inside it.
 is legal: being an argument is a fact about who *may* deliver here,
 being wired is a fact about what already does. A station may hold
 ports of both kinds — the old refusal, that a station could not be
-both doors, existed because the mark was on the station and a
+both an entrance and an exit, existed because the mark was on the station and a
 station is one thing.
 
 ### cera_map_argument_at() / cera_map_result_at()
@@ -1146,7 +1169,7 @@ int cera_map_argument_at(cera_map_t *m, int nth, int *station, int *port);
 int cera_map_result_at(cera_map_t *m, int nth, int *station, int *port);
 ```
 
-Where the nth door is, or zero when the program has no such door.
+Where the nth marked port is, or zero when the program has no such argument or result.
 
 Walked rather than indexed, because the numbers are the author's and
 need not be dense or in table order — a map may write its arguments
@@ -1403,7 +1426,7 @@ directly — the shim, the slot sizes, the return size, the type
 names, the comparison — with every number a `sizeof` the compiler
 folds into an immediate. A placement function *is* hand placement,
 written by the generator instead of by a person, which is why there
-are not two doors into the engine: placing by name is only a way of
+are not two ways into the engine: placing by name is only a way of
 finding which generated hand-placement to call.
 
 **This table is temporary and says so.** Once the generator reads
@@ -1732,7 +1755,7 @@ commas inside it.
 
 Each goes in through the ordinary delivery, so the readiness check
 runs and the tasks that form are the tasks that would have formed.
-Nothing is reconstructed; the same door is used.
+Nothing is reconstructed; the same path is used.
 
 Returns NULL, or a refusal naming what went wrong.
 
@@ -1810,11 +1833,9 @@ Legal at any moment, because every operation it is made of is.
 
 | field | meaning |
 |---|---|
-| `station` | Where each of the description's stations landed, in the order the description declared them. The engine needs it; a parent should want the doors instead. |
+| `station` | Where each of the description's stations landed, in the order the description declared them. The engine needs it; a parent should want the marked ports instead. |
+| `count` | How many stations the description declared, and so how many entries `station` has. |
 
-| field | meaning |
-|---|---|
-| `station` | Where each of the description's stations landed, in the order the description declared them. The engine needs it; a parent should want the doors instead. |
 
 ### A part is a number
 
@@ -1868,7 +1889,7 @@ cera_map_t *cera_map_load_salvage(const char *path, int n_workers);
 ```
 
 The same, for an artifact that says at the top that it lost work.
-Reading one through the ordinary door is refused,
+Reading one through the ordinary path is refused,
 because a program quietly missing results somebody computed is the
 failure this engine refuses everywhere. Salvaging is a different
 act and has a different name so that whoever does it has said out
@@ -1880,15 +1901,40 @@ loud that they know what is missing.
 cera_map_instance_t cera_map_instantiate_file(cera_map_t *m, const char *path);
 ```
 
+**A description brought inside a program that already exists.** New
+stations are built for the description's stations and wired the way it
+says, so one description can be instantiated as many times into one
+program as anybody likes with nothing shared between the copies —
+separate stations, separate buffers, separate constants.
+
+**So no wire is rewritten.** The description says its third station
+feeds its fifth; that becomes wherever the third landed feeding
+wherever the fifth landed.
+
+**Legal at any moment**, because every operation it is made of is:
+adding a station, naming one, placing a box, configuring a port,
+drawing a wire. A program with workers in flight gains a subgraph the
+same way it gains a station.
+
+Where the stations landed comes back **from the built function itself**,
+because nothing else can know. The caller gets a handle it can find the
+instance's marked ports through, and **those are all it should want** —
+a parent wiring into an interior station of an instance is reaching
+inside, which is the thing the marks exist to stop happening by
+accident.
+
+Instantiating records a receipt in the map, so the stations it created
+are known to have arrived together.
+
 ### cera_map_instance_entrance()
 
 ```c
 int  cera_map_instance_entrance(cera_map_t *m, const cera_map_instance_t *in, int nth);
 ```
 
-**The nth door of an instance facing that way**, or -1. This is the
+**The nth marked port of an instance facing that way**, or -1. This is the
 whole of what a parent is entitled to know about something it
-brought inside itself: everything that is not a door belongs to the
+brought inside itself: everything that is not marked belongs to the
 description's author to rename or restructure.
 
 ### cera_map_instance_result()
@@ -1897,11 +1943,20 @@ description's author to rename or restructure.
 int  cera_map_instance_result(cera_map_t *m, const cera_map_instance_t *in, int nth);
 ```
 
+The same question about the other direction: **where this instance's
+nth result is**, or -1. It walks the instance's stations looking for an
+output port carrying that number.
+
 ### cera_map_instance_free()
 
 ```c
 void cera_map_instance_free(cera_map_instance_t *in);
 ```
+
+**The handle goes; the stations stay.** Nothing in the running program
+refers to it — it was the reader's note to itself about where things
+landed, and a parent keeps it only for as long as it is still deciding
+what to wire.
 
 ### cera_map_join()
 
@@ -1913,7 +1968,7 @@ const char *cera_map_join(cera_map_t *m, int from, int result,
 **A wire from one part's nth result to another part's nth argument**,
 which is the only wire a composing caller ever needs to draw.
 
-For two boxes this is the ordinary wire, because a box's doors are its
+For two boxes this is the ordinary wire, because a box's interface is its
 ports. For two maps there is no seam to cross: after placing, both are
 stations with indices like any others. The caller cannot tell which
 kind it is holding, and does not need to.
@@ -1926,19 +1981,19 @@ int cera_map_part_door(cera_map_t *m, int part, int nth, int facing_in,
 ```
 
 Where a part's nth argument or result is, as a station and a port, or
-zero when it has no such door.
+zero when it has no such argument or result.
 
-**A box's doors are its ports.** A part naming one station whose ports
+**A box's interface is its ports.** A part naming one station whose ports
 carry no marks is a box: its argument N is input port N and its result
 N is output port N, because a box's ports are already numbered and
 marking them would be writing down what counting already says.
 
-**A map's doors are its marks**, because a map's ports are scattered
+**A map's interface is its marks**, because a map's ports are scattered
 across several stations and nothing about their position says which
 argument is which.
 
 Those are not two rules with a fallback between them. They are one —
-*the doors are wherever the description put them* — and a description
+*the interface is wherever the description put it* — and a description
 of one station puts them on that station.
 
 ### cera_map_end_part()
@@ -2432,7 +2487,7 @@ program in worse condition than the last.
 | how it ends | zero, by the existing rule | 130, explicitly | aborts, leaving a core |
 
 **The polite path adds no mechanism at all**, which is the argument
-for it: it shuts the one door the outside can push work through and
+for it: it shuts the one way the outside can push work through and
 then goes back to waiting, so the program ends exactly the way it
 would have ended on its own. It writes no diagnostics, because
 nobody asked for any and a supervisor stopping a healthy program
@@ -2544,6 +2599,190 @@ refused instruction leaves a program running that somebody believes
 they just edited successfully.
 
 `m` may be NULL when there is no program to describe yet.
+
+## 118 — watching a running program
+
+A ring of fixed-size events in shared memory, written by every worker
+and read by anybody who opens the file.
+
+**The program never waits for a reader, never learns one is there, and
+cannot be slowed by one.** A writer that catches up with a reader
+overwrites it, and the reader works out from the sequence numbers
+exactly how much it missed. That is the trade the whole component is
+built on: a watcher can be told it fell behind, but it can never make
+the program it is watching go slower.
+
+Emitting is compiled in only under `CERA_WATCH`. **Reading is always
+compiled**, because a watcher is a different program from the one being
+watched and has no reason to have been built with watching turned on.
+Both halves live here so the ring's shape is written down once rather
+than twice in two programs that must agree.
+
+### The file
+
+A header followed by a power-of-two array of slots.
+
+| field | meaning |
+|---|---|
+| `magic`, `version` | Refused on attach if either is wrong, so a reader never walks a file that merely happens to be there. |
+| `slots` | Always a power of two, so a sequence number becomes a slot index with a mask rather than a division. |
+| `slot_size` | Checked against the size of an event on attach: two binaries that disagree about the event's shape must not read each other's rings. |
+| `writer_pid` | The process doing the writing. Cleared on close, which is both how a viewer knows the program ended and how a program reuses its own path. |
+| `next` | **The only thing writers contend on.** Claiming a slot is one atomic increment; the slot claimed is that sequence modulo the slot count. |
+
+Ring size is roughly four thousand events per station, rounded up to a
+power of two, floored at 65536 slots and capped at about four million.
+Generous on purpose: a slot is thirty-two bytes, so even the floor is
+about two megabytes of shared memory — nothing against the cost of a
+watcher being told it missed something because the ring was small
+rather than because the watcher was slow.
+
+### struct cera_watch_event
+
+```c
+typedef struct cera_watch_event {
+    uint64_t seq;
+    uint64_t ns;
+    uint32_t kind;
+    uint32_t a, b, c, d;
+    uint32_t pad;
+} cera_watch_event_t;
+```
+
+Thirty-two bytes, fixed, with four unnamed number fields whose meaning
+depends on the kind. There is no string anywhere in an event and no
+pointer: everything is a number a reader can resolve against the map it
+already knows about.
+
+| kind | what happened | a | b | c | d |
+|---|---|---|---|---|---|
+| `CERA_WATCH_UP` | the program came up | stations | workers | | |
+| `CERA_WATCH_DUE` | a task became due | station | | | |
+| `CERA_WATCH_RAN` | a station ran | station | | | (`ns` is how long) |
+| `CERA_WATCH_MOVED` | a value was delivered | from station | from port | to station | to port |
+| `CERA_WATCH_GREW` | a buffer grew | station | port | slots now | |
+| `CERA_WATCH_ADDED` | a station was placed | station | | | |
+| `CERA_WATCH_REMOVED` | a station was removed | station | | | |
+| `CERA_WATCH_WIRED` | a wire was drawn | from station | from port | to station | to port |
+| `CERA_WATCH_UNWIRED` | a wire was cut | from station | from port | to station | to port |
+| `CERA_WATCH_DONE` | the program finished | tasks in total | | | |
+
+### cera_watch_compiled_in()
+
+```c
+int cera_watch_compiled_in(void);
+```
+
+Whether this binary can be watched at all. A watcher pointed at a
+program built without the flag would otherwise wait forever for events
+that were never going to arrive, so this exists to turn silence into a
+sentence.
+
+### cera_watch_kind_name()
+
+```c
+const char *cera_watch_kind_name(int kind);
+```
+
+The kind as a word — `came up`, `due`, `ran`, `moved`, `grew`, `added`,
+`removed`, `wired`, `unwired`, `finished` — or `?` for a number outside
+the range. The dispatch is a table rather than a chain of comparisons.
+
+### cera_watch_open()
+
+```c
+const char *cera_watch_open(cera_map_t *m, const char *path);
+```
+
+Create the ring and start emitting into it. Returns NULL, or a sentence
+saying why not.
+
+**The path is the caller's.** Passing the same one every run overwrites
+the same ring and accumulates nothing; passing a fresh one each time
+keeps a dead program's last moments to be read afterwards.
+
+**Two programs may not write one ring.** They would interleave two
+graphs into one stream with nothing saying which was which. Refusing
+costs one check at open; allowing would cost a field on every event
+forever. **The same process is not exempt**: two maps in one process
+are two programs — that separability is the whole point — so a second
+one seizing the first's ring would truncate it under a reader that had
+been following it.
+
+### cera_watch_close()
+
+```c
+void cera_watch_close(cera_map_t *m);
+```
+
+Stops the emitting and unmaps. **The file stays**, because a reader
+attaching afterwards is the entire reason to keep it. Clearing the
+writer's process id is what tells a later viewer the program has ended
+rather than stalled.
+
+### cera_watch_attach()
+
+```c
+cera_watch_reader_t *cera_watch_attach(const char *path);
+```
+
+Open somebody else's ring for reading. Read-only, and **the reader is
+invisible to the program**: nothing here writes, locks, or announces
+itself. Returns null if the file is absent, too short, or fails the
+magic, version, slot-size and power-of-two checks.
+
+### cera_watch_next()
+
+```c
+int cera_watch_next(cera_watch_reader_t *r, cera_watch_event_t *into,
+                    uint64_t *lost);
+```
+
+The next event, or 0 when there is nothing new yet.
+
+`lost` comes back with how many events were overwritten before this one
+could be read. **A reader too slow for the ring is told exactly how far
+behind it fell** rather than quietly shown an incomplete picture — the
+difference between a view that is wrong and a view that says so.
+
+A slot whose sequence number does not match the cursor has been claimed
+but not yet published, or has already been lapped; either way the
+answer is "nothing yet" rather than a half-written event.
+
+### cera_watch_joined_at()
+
+```c
+void cera_watch_joined_at(cera_watch_reader_t *r, uint64_t *first,
+                          uint64_t *before);
+```
+
+Which event this reader started from, and how many the program had
+already written by then.
+
+**A reader that arrives late has not lost anything** — it was not there
+— and a view that says otherwise makes every page reload look like a
+fault. Loss is what the read call reports: events overwritten *while
+this reader was already attached*. The two numbers are different
+questions and are answered by different calls for that reason.
+
+### cera_watch_writer_alive()
+
+```c
+int cera_watch_writer_alive(cera_watch_reader_t *r);
+```
+
+Whether the program that wrote this ring is still running, by asking
+the operating system about the recorded process id. A viewer uses it to
+say "this program has ended" rather than sitting forever on a stream
+that will never move again.
+
+### cera_watch_detach()
+
+```c
+void cera_watch_detach(cera_watch_reader_t *r);
+```
+
+Unmaps and frees the reader. The ring file is untouched.
 
 ## Related
 

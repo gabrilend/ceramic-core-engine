@@ -1,6 +1,6 @@
 # Conversation Summary: aee72b0d-cb15-44fd-b161-ed51af0dc6e2
 
-Generated on: 2026-08-20 11:57:00
+Generated on: 2026-09-08 10:59:08
 
 --------------------------------------------------------------------------------
 
@@ -8,39 +8,28 @@ Generated on: 2026-08-20 11:57:00
 
 hi! can we work on the open questions? Ask me them two at a time.
 
-
 --------------------------------------------------------------------------------
 
 ### Assistant Response 1
 
 I'll find the open questions first.
 
-
 I found the open questions. They live in four issue files, thirteen questions
 total:
 
-
 | file | count | what it's about |
-
 |---|---|---|
-
 | **Values back into text** (408) | 2 | turning bytes into the brace text the reader accepts |
-
 | **Slideshow and transcripts** (709) | 4 | the documentation site's front door |
-
 | **Demos after the pull path** (710) | 2 | renaming and rediscovering the phase demos |
-
 | **The browser workbench** (801) | 5 | phase 8, drawing programs in a web page |
-
 
 Everything else marked "Open questions" in this project is already answered —
 those sections are kept as reasoning, not as pending work.
 
-
 Starting with the two in **Values back into text**, since they block the most
 (the map dump, the output station, and any debugger display all wait on one
 routine).
-
 
 **Context for the first one.** A field table is the compiler-generated
 description of a struct: for each field, its name, its byte offset, its kind
@@ -56,77 +45,62 @@ byte, or a byte with the high bit set, or a NUL followed by more data, cannot be
 written as text that reads back identically. The formatter is where this becomes
 visible, because it has to emit *something* for those bytes.
 
-
 **Context for the second one.** Every offset in this engine comes from the
 compiler rather than from arithmetic the engine performs — the generator emits
 `offsetof` for each field so a struct with padding holes is read correctly
 without the engine ever knowing the holes exist. The question is whether the new
 formatter follows that same instinct.
 
-
 **[Asked the user]**
-
 
 *Q1 — Odd bytes:* A fixed character array holds bytes that are not printable
 text — a double quote, a high-bit byte, a NUL in the middle. What should the
 formatter emit for them?
-
 - Escape codes, both ways — The formatter emits a backslash form for anything
   outside plain printable ASCII (and for the quote and backslash themselves),
   and the reader gains the matching decoder. Every possible byte round-trips
   exactly, which is the property 408 says is worth testing hardest. Cost: the
   reader grows an unescape step, and any existing map file containing a literal
   backslash quietly changes meaning, so those would need finding.
-
 - Refuse to format them — The formatter dies, naming the entry and the field,
   when a character array holds a byte it cannot write as plain text. Keeps the
   text format as small as it is now and matches the project's preference for a
   loud error over a quiet fallback. Cost: a value that is perfectly legal in
   memory becomes undumpable, so a program that ran cannot always be written back
   out.
-
 - A second, numeric form — Character arrays stay quoted when every byte is
   printable, and switch to a brace list of byte numbers when they are not. The
   reader learns to accept both forms for the same field kind. No escape grammar
   at all, and the numeric form is unambiguous. Cost: one field kind with two
   spellings, and the formatter has to decide which — a decision that changes
   as the data changes.
-
 → *(no answer recorded)*
-
 
 *Q2 — Formatter:* Where does the formatter live — beside the reader as one
 generic walk, or emitted per-type by the generator?
-
 - Beside the reader — One routine in one file, walking the same field table
   structure the reader walks, switching on field kind at runtime. The two
   directions sit next to each other and can be read side by side to confirm they
   agree on the grammar. The reader already proves a generic walk over the field
   table is sufficient — nothing about writing needs more type knowledge than
   reading did.
-
 - Generated per type — The generator emits a format function for each
   registered struct, with each field's offset and kind resolved at compile time
   rather than dispatched on at runtime. This is how the rest of the engine
   avoids guessing. Cost: the text grammar now exists in two places that must
   stay in agreement — the generator's emitter and the reader — and a grammar
   change means regenerating.
-
 - Generate both directions — Move reading into generated code too, so each
   struct's text grammar is defined exactly once, per type, by the compiler that
   knows the type. Nothing at runtime dispatches on field kind in either
   direction. Cost: the largest change here by far — it rewrites working,
   thorough reader code that 402 already finished, in service of symmetry.
-
 → *(no answer recorded)*
-
 
 Both are good questions, and the second one changes how the first should be
 asked. Let me answer them.
 
-
 ## Why a struct has holes in it
-
 
 Because the CPU reads memory in aligned chunks, and the C compiler arranges
 fields so every field lands on an address the hardware likes. A 4-byte integer
@@ -137,38 +111,26 @@ everywhere, it faults outright. So the compiler walks your fields in declaration
 order, and whenever the running offset isn't already a multiple of the next
 field's alignment, it inserts unused bytes until it is.
 
-
 ```c
-
 struct thing {
-
     char   tag;      /* offset 0,  1 byte                              */
-
                      /* offsets 1–7:  7 unused bytes                   */
-
     double value;    /* offset 8,  8 bytes — needs a multiple of 8     */
-
     int    count;    /* offset 16, 4 bytes                             */
-
                      /* offsets 20–23: 4 unused bytes                  */
-
 };                   /* sizeof is 24, though the fields use 13         */
-
 ```
-
 
 Two kinds of hole. The one between `tag` and `value` exists to align `value`.
 The one at the end exists so `sizeof` is a multiple of 8, which means that in an
 array of these, the *second* element's `value` is also aligned — the compiler
 can't fix that later, so it pays for it once in the size.
 
-
 **You can't turn this off, and you wouldn't want to.** `__attribute__((packed))`
 removes the holes, but then the author's own C code doing `t.value` performs an
 unaligned load — slower everywhere, illegal on some targets. Reordering fields
 largest-first shrinks the holes, but that's the author's declaration to write,
 not ours to rewrite.
-
 
 **This is why every offset in the engine is a compiler-computed one.** The
 generator is a Lua script that reads your C source, finds the registered
@@ -180,29 +142,23 @@ read garbage. That's what 408 means by "padding is not printed": the text names
 fields, both directions look up offsets in the same generated table, and the
 hole is never mentioned because neither side ever needs to know it's there.
 
-
 ## On lengths for strings
-
 
 Two different things are called "the compiler" here, and only one of them is out
 of reach.
-
 
 The **generator** decides what fields exist and how they're classified. It sees
 `char name[32]` in your struct and records: kind is string, array length 32.
 That's a rule we wrote in a Lua script and can change freely — today it
 refuses any array that isn't `char`.
 
-
 The **C compiler** decides where those fields sit. That we can't change, and
 never need to, because we ask it rather than guess.
-
 
 **The NUL-termination is ours, not C's.** The reader zeroes the whole field,
 then copies the text in, and refuses text longer than `array_len - 1` so a
 terminator always fits. Nothing forced that convention — we chose it, so we
 can choose differently. Your preference is available.
-
 
 The catch is what a length costs the author. If the length lives inside the
 array's own bytes — first byte is the count, remaining 31 are characters —
@@ -212,13 +168,10 @@ the engine*, which the input-station issue names as the one cost this design
 refuses to impose. So the length wants to be a field the author declares and can
 read themselves.
 
-
 **[Asked the user]**
-
 
 *Q1 — String len:* How should a string carry its length — what does the
 author write in their C struct, and what does the generator do with it?
-
 - A paired field, linked by name — The author declares both a count and an
   array. The generator, which already reads the struct's field list, sees a
   field named for another plus a suffix and links them — recording on the
@@ -227,80 +180,61 @@ author write in their C struct, and what does the generator do with it?
   integer. Cost: a convention the generator enforces by spelling, and structs
   that don't follow it keep the terminator behavior — two rules where there is
   one.
-
 - A marker in the registration — The author declares both fields and states
   the pairing explicitly where the struct is registered, rather than relying on
   how the fields are spelled. The generator never guesses. Cost: one more thing
   to write per string field, and the registration line grows a vocabulary of its
   own.
-
 - Every char array gets one — The generator refuses a bare char array outright
   and requires a length field for all of them, so there is exactly one rule and
   no terminator convention anywhere. Cost: existing structs stop compiling until
   they are changed, and a genuinely fixed-size text field — a four-character
   code — is made to carry a count it never varies.
-
 → *(no answer recorded)*
-
 
 *Q2 — Formatter:* Where does the routine that turns bytes into text live —
 beside the reader as one generic walk over the field table, or emitted per-type
 by the generator?
-
 - Beside the reader — One routine in the same file as the reader, walking the
   same field table, switching on field kind at runtime. Both directions sit side
   by side and can be read together to confirm they agree on the grammar —
   which matters, because the test that they agree is the whole point of the
   issue. The reader already proves a generic walk over the table is enough;
   writing needs no more type knowledge than reading did.
-
 - Generated per type — The generator emits a format routine for each
   registered struct, with every offset and kind resolved when the engine is
   built rather than dispatched on while it runs. This matches how the rest of
   the engine avoids guessing. Cost: the text grammar then exists in two places
   that must agree — the Lua that emits it and the C that reads it — and
   changing the grammar means changing both and regenerating.
-
 - Generate both directions — Move reading into generated code too, so each
   struct's text grammar is written exactly once, by the generator that knows the
   type concretely, and nothing walks a field table at runtime in either
   direction. Cost: much the largest change — it discards a finished, thorough
   reader in service of symmetry, and the field table stops earning its keep.
-
 → **Answered:** Generate both directions" selected preview:
-
 src/generated/text.c
 
-
   read_thing(text, bytes)
-
   format_thing(bytes, text)
 
-
 field table survives only for
-
 sizes and names; nothing walks
-
 it to read or write a value. Read the answers carefully — they may request
 clarification, changes, or that you not proceed — and follow what they
 actually say.
 
-
 Yes — and the answer changes it usefully rather than reopening it wide.
-
 
 ## My recommendation: keep the terminator
 
-
 Three reasons, the third being the one that actually decides it.
-
 
 **It keeps the author's C unchanged.** `char body[256]` in someone's existing
 struct is a NUL-terminated string, because that's what C means by it. The
 input-station issue names exactly one cost this design refuses to impose — a
 function written to fit the engine — and requiring a companion count field is
 that cost, paid on every struct with text in it.
-
 
 **The durability worry is real but is a formatter bug, not a data structure
 problem.** What you're protecting against is bytes arriving with no terminator
@@ -309,7 +243,6 @@ the struct into whatever follows. The fix is that the formatter never trusts the
 terminator: it scans at most `array_len` bytes and stops there whether or not it
 found a NUL. That's a bound the field table already carries, and it's a loop
 condition, not a schema change.
-
 
 **And a length field is not actually safer — it's one more thing that can be
 wrong.** A missing terminator costs you a scan bounded by the array. A corrupt
@@ -320,26 +253,21 @@ and end up exactly where the terminator already puts you. The array's declared
 length was always the real bound; the terminator only ever says where the text
 stops *within* it.
 
-
 What a length genuinely buys is a NUL byte in the middle of the text, and length
 in one step instead of a scan. Neither earns its keep here: a middle NUL is
 invisible to the author's own C too, and the scan is at most a couple hundred
 bytes at dump time.
 
-
 **So: NUL-terminated, and the formatter stops at the first NUL or at the array's
 length, whichever comes first.** If you'd rather have the lengths anyway, say so
 and I'll take it — the reasoning above is what I'd overrule.
-
 
 That collapses the escaping question. A middle NUL stops being a case at all,
 because the formatter correctly stops there and so does every reader of that
 field. What's left needing a spelling is narrower: the double quote (it ends the
 string), and bytes that aren't printable text.
 
-
 ## Where the demo naming stands
-
 
 Concretely: the demo *sources* carry indexes — `037-phase-4-pull-demo.c` —
 and the launcher-discovered *entry points* don't — `phase-4-pull`, a shell
@@ -349,13 +277,10 @@ first-pass report wrote down and told the second pass to settle in writing.
 Meanwhile the roadmap already renamed the phase itself: it reads **Phase 4 —
 Configuration**. Only the demo still says "pull".
 
-
 **[Asked the user]**
-
 
 *Q1 — Escapes:* Which bytes get an escape spelling in the text format, now
 that the string ends at the first NUL?
-
 - Quote, backslash, control bytes — Escape the double quote (it would end the
   string), the backslash (it introduces an escape), and bytes below 0x20 (tab,
   newline, and the rest, which have no visible shape). Everything from 0x20 up
@@ -363,90 +288,64 @@ that the string ends at the first NUL?
   the file, since those are ordinary UTF-8 bytes with the high bit set. Cost:
   existing map files containing a literal backslash change meaning, so those
   need finding first.
-
 - Everything outside plain ASCII — Also escape bytes from 0x80 to 0xFF, so a
   map file is pure 7-bit ASCII and survives any editor, terminal, or transport
   that mangles high bytes. Cost: text in any language but English becomes
   unreadable in the file — four escape codes where there were two characters
   — and the author cannot edit it by typing.
-
 - No escapes — refuse instead — The grammar stays exactly as it is: a quote,
   bytes, a quote. The formatter dies naming the entry and the field when a
   string holds a quote or a control byte. Nothing in the reader changes and no
   existing file changes meaning. Cost: a legal in-memory value becomes
   undumpable, so a program that ran cannot always be written back out.
-
 → **Answered:** Everything outside plain ASCII" selected preview:
-
   name = "caf\xc3\xa9"
-
   greet = "\xe3\x81\x93\xe3\x82\x93"
 
-
 file is pure ASCII; non-English
-
 text is no longer typable or
-
 readable in place, "The phase 4 demo is effectively rewritten rather than
 edited, and the phase is now called Configuration. What happens to its name and
 its index?"="Rename, keep its index" selected preview:
-
 was  037-phase-4-pull-demo.c
-
 now  037-phase-4-config-demo.c
 
-
 was  phase-4-pull
-
 now  phase-4-config
 
-
 reading order unchanged. You can now continue with these answers in mind.
-
 
 *Q2 — Demo name:* The phase 4 demo is effectively rewritten rather than
 edited, and the phase is now called Configuration. What happens to its name and
 its index?
-
 - Rename, keep its index — The source becomes 037-phase-4-config-demo.c and
   the entry point becomes phase-4-config. The index stays 037 because an index
   is a position in the project's reading order — where this work sits in the
   story — and the demo still sits exactly where it sat, between the generator
   and routing. What changed is what it demonstrates, not when it arrived.
-
 - Rename and re-index to the end — The demo takes a fresh index from the
   counter, landing after everything written so far, because it is new work
   rather than a revision — and the reading order should show that this scene
   was conceived after the pull path was removed. Cost: phase 4's demo now reads
   in a position far from phase 4's other files, so the story order and the phase
   order disagree.
-
 - Keep the name pull — The file keeps its name as a record that this phase was
   once about pulling, and the demo's own text explains what replaced it. Nothing
   is renamed and no reference anywhere needs chasing. Cost: the front door of
   the project offers a menu entry naming a mechanism the engine does not have.
-
 → **Answered:** Rename, keep its index" selected preview:
-
 was  037-phase-4-pull-demo.c
-
 now  037-phase-4-config-demo.c
 
-
 was  phase-4-pull
-
 now  phase-4-config
-
 
 reading order unchanged. You can now continue with these answers in mind.
 
-
 Recording those in the issue before moving on.
-
 
 Two more. The first finishes the demos issue; the second opens the
 documentation-site one.
-
 
 **On the launcher.** Its own header says it "discovers demos rather than knowing
 about them, so a new phase becomes available the moment its demo is dropped in
@@ -458,7 +357,6 @@ the word `phase`. The first-pass report flagged this and explicitly deferred it
 to a second pass "in writing" — so whatever you pick here goes into the
 conventions, not just into the launcher.
 
-
 **On the slideshow's artwork.** The site already has three live interactive
 pieces built by 705 — drawn in the browser, steerable by the reader. The
 slideshow needs screens showing values moving through stations. The issue notes
@@ -467,13 +365,10 @@ different, lesser thing." There's a third possibility neither the issue nor that
 worry considers: the engine already has an observation interface, so a screen
 could replay an actual recorded run rather than an animator's idea of one.
 
-
 **[Asked the user]**
-
 
 *Q1 — Demo naming:* The launcher finds demos by the name they start with; the
 project wants every file to start with its index. Which rule gives way?
-
 - Teach the launcher to read indexes — Entry points get indexes like every
   other file — 037-phase-4-config — and the launcher's pattern loosens to
   find the word phase anywhere in the name. One indexing rule with no
@@ -482,50 +377,34 @@ project wants every file to start with its index. Which rule gives way?
   phase order and a rewritten demo keeps its slot. Cost: one line of the
   launcher changes, and the pattern gets slightly looser about what it will pick
   up.
-
 - Exempt entry points, in writing — The convention gains a stated exception: a
   file whose name is a contract with a tool that finds it is exempt from
   indexing, because the name is an interface rather than a position in the
   reading order. Nothing changes on disk. Cost: a rule that had no exceptions
   now has one, and a reader meeting an unindexed file has to know why.
-
 - The launcher reads a list — Discovery by filename is dropped; a small file
   names the demos in order and the launcher reads it. Filenames become free to
   carry indexes and nothing depends on how they are spelled. Cost: a list to
   keep in step with the directory, and the launcher stops being the thing its
   own header describes — a new demo no longer appears just by being dropped in
   place.
-
 → **Answered:** The launcher reads a list" selected preview:
-
 demos/order
-
   037-phase-4-config-demo
-
   039-phase-5-decide-demo
-
   ...
 
-
 launcher reads the list; adding
-
 a demo means editing it, "How are the slideshow's moving pictures made?"="Live,
 hand-animated" selected preview:
-
 one script per screen, drawing
-
 stations and values directly
 
-
 full freedom; correctness is
-
 the author's responsibility on
-
 every screen. You can now continue with these answers in mind.
 
-
 *Q2 — Slideshow:* How are the slideshow's moving pictures made?
-
 - Live, replaying a recorded run — The engine records what actually happened
   during a real run — which station ran, what value went down which wire, when
   a port filled — and the page replays that trace as motion the reader can
@@ -534,36 +413,26 @@ every screen. You can now continue with these answers in mind.
   screen cannot show a machine that does not exist, because the machine produced
   the screen. Cost: a recording format and a player, and screens are limited to
   what a run can be made to do.
-
 - Live, hand-animated — Each screen is drawn in the browser by script written
   for that screen, like the three interactive pieces already live on the site.
   Full freedom over what is shown and how it is paced, no seam against the rest
   of the site, and the reader can steer. Cost: a great deal of work per screen,
   and the honesty rule is kept by the author remembering to keep it rather than
   by construction.
-
 - Generated image frames — The gif generator produces animated pieces ahead of
   time and the page shows them. Much the easiest to make beautiful, and the
   artwork can be as elaborate as wanted. Cost: they are dead on the page — no
   pausing, no stepping, no steering — sitting beside live pieces that offer
   all three, which the issue warns will read as a lesser thing on the same site.
-
 → **Answered:** Live, hand-animated" selected preview:
-
 one script per screen, drawing
-
 stations and values directly
 
-
 full freedom; correctness is
-
 the author's responsibility on
-
 every screen. You can now continue with these answers in mind.
 
-
 Recording those. Two more, both from the documentation-site issue.
-
 
 **One fact worth having first:** this repository has no git remote, and the site
 is HTML files in `docs/HTML/`. Nothing here is published anywhere today. So the
@@ -571,7 +440,6 @@ transcript question is about what happens *if* the project ever goes out, not
 about undoing something already done — which is the good time to decide it,
 since the issue itself notes this is the one part that isn't reversible the way
 an unpublished file is.
-
 
 **On the two possible narratives.** The engine's sequence is the datapath: what
 a station is, how a value gets from one box to the next, what happens when a
@@ -581,18 +449,14 @@ sequence is the phases — pool, stations, generator, configuration, routing,
 map files, introspection — and would double as an answer to what building this
 taught, which the first-pass report already answers at length in prose.
 
-
 **On the transcripts.** They're five logs in `llm-transcripts/`, several hundred
 kilobytes, and they contain your own words at length — including asides that
 were never written as documentation and some that are personal rather than
 technical. That's the part worth deciding deliberately rather than by default.
 
-
 **[Asked the user]**
 
-
 *Q1 — Narrative:* Does the slideshow narrate the engine or the project?
-
 - The engine — how a value moves — Screens follow one value through the
   machine, each answering a question that makes the next one askable. This is
   what the site is missing: the stated problem is that a newcomer arriving with
@@ -600,99 +464,72 @@ technical. That's the part worth deciding deliberately rather than by default.
   know what the thing in front of them is. The project's story is what someone
   wants after they already care. Cost: the lessons of building it stay in prose,
   reachable only by someone who goes looking.
-
 - The project — how it was built — Screens follow the phases in order, each
   showing what the engine could do at that point and what the next phase had to
   add. It doubles as the argument for the whole approach — issue files as
   blueprints, demos as evidence, mistakes recorded rather than smoothed over —
   which is the part of this project that is unusual. Cost: a reader still does
   not know what a station is when the tour ends.
-
 - Both, two sequences — Two slideshows from one front door — what the
   machine is, and how it came to be — with the reader choosing. Neither is
   compromised to serve the other, and someone can take the second after the
   first. Cost: twice the screens to build by hand, which is the expensive path
   already chosen, and a front door that asks a question before it has earned
   one.
-
 → **Answered:** The engine — how a value moves" selected preview:
-
 1. What is a station
-
 2. How a value reaches the next box
-
 3. What happens when it is full
-
 4. Why a comparator has three exits
-
 5. Text file to running graph
-
 6. What the pool is doing meanwhile, "If the transcripts go on the site, do they
    go whole?"="Whole and unedited" selected preview:
-
 the five logs, rendered as they
-
 are, nothing withheld
 
-
 including every aside, every
-
 wrong turn, and everything said
-
 that was not about the engine notes: every once in a while we should go through
 and edit them to add cute emojis and ms.paint style pictures of flowers, hearts,
 smiling sunshine, carrots, horses, stick figure people, and other similar
 things.. Read the answers carefully — they may request clarification, changes,
 or that you not proceed — and follow what they actually say.
 
-
 *Q2 — Transcripts:* If the transcripts go on the site, do they go whole?
-
 - Whole, with omissions marked — Passages you take out leave a visible marker
   saying something was removed here. The result is still honestly a record — a
   reader can see where the gaps are and that nothing was quietly rewritten
   around them — while personal asides that were never meant as documentation
   stay out. Cost: someone reads all of it and makes a judgment on every passage,
   and each judgment is a small act of curation even when it leaves a mark.
-
 - Whole and unedited — The complete logs, exactly as they happened, false
   starts and asides included. This is the strongest version of what the issue
   argues for — the completed issues are blueprints that deliberately drop the
   arguments, and the transcripts are where the arguments live, which only holds
   if nothing was chosen for them. Cost: everything said is on the page, and the
   personal material goes out with the technical.
-
 - Only the linked passages — The logs stay whole on disk and unpublished; the
   site shows only the passages a completed issue points at, in enough
   surrounding context to make sense. The convention that asks issues to carry
   transcript line numbers is what selects them, so the selection is already made
   by work rather than by editing. Cost: no browsing and no book — the reading
   library the issue describes does not get built.
-
 → **Answered:** Whole and unedited" selected preview:
-
 the five logs, rendered as they
-
 are, nothing withheld
 
-
 including every aside, every
-
 wrong turn, and everything said
-
 that was not about the engine notes: every once in a while we should go through
 and edit them to add cute emojis and ms.paint style pictures of flowers, hearts,
 smiling sunshine, carrots, horses, stick figure people, and other similar
 things.. Read the answers carefully — they may request clarification, changes,
 or that you not proceed — and follow what they actually say.
 
-
 That decoration idea is a real feature rather than a footnote — let me write
 it into the issue as one.
 
-
 Two more.
-
 
 **On transcript freshness.** The site's generator is a Lua script that reads
 markdown sources and emits a page each. 705 already owes it a fix — it
@@ -702,7 +539,6 @@ transcript directory is walked, the question is whether walking it is the whole
 policy: run the build, and whatever conversation happened that day is on the
 site.
 
-
 **On where the workbench lives.** The documentation site is generated prose with
 a sidebar and a numbered reading order. The workbench is an application — a
 canvas you draw on, a file the page reads locally, and a button that hands back
@@ -711,13 +547,10 @@ workbench is *an entry in* the documentation or *a peer of* it — and the
 slideshow decision just made this sharper, because the site now has a front door
 that isn't the reference.
 
-
 **[Asked the user]**
-
 
 *Q1 — Transcripts:* The transcripts grow every session. When does a new one
 reach the site?
-
 - Automatically, on the next build — The generator walks the transcript
   directory and renders whatever is in it, so a session becomes a page the next
   time the site is built. This is the same reasoning that decided the logs go up
@@ -725,7 +558,6 @@ reach the site?
   keeping, nobody chooses which sessions are either. Cost: a build is now also a
   publication, so building the site to check a link puts that day's conversation
   up with it.
-
 - Deliberately, by being listed — A transcript joins the site when it is named
   in a list the generator reads, so building and publishing stay two separate
   acts and a build never surprises anyone. It also gives a natural place for the
@@ -733,43 +565,30 @@ reach the site?
   filename. Cost: a list to keep in step with a directory that grows on its own,
   and a transcript that was simply forgotten is missing from the site silently
   — the exact failure 705 is being fixed to stop making.
-
 - Automatically, after it cools — The generator walks the directory but skips
   anything modified in the last stretch of days, so a session reaches the site
   on its own without any session reaching it the same afternoon. No list to
   maintain, no act to remember, and a window in which something said in the
   moment can be reconsidered. Cost: a rule with a number in it, and the number
   is arbitrary; and a build's output now depends on what day it runs.
-
 → **Answered:** Automatically, on the next build" selected preview:
-
 scripts/054-docs-html.lua
-
   walks llm-transcripts/
 
-
 run the build -> today's log is
-
 on the site, whatever it says, "Is the browser workbench part of the
 documentation site, or its own thing beside it?"="A third front door" selected
 preview:
-
 index
-
   Watch    -> the slideshow
-
   Read     -> the reference
-
   Build    -> the workbench
-
 
 one site, three doors, one look. You can now continue with these answers in
 mind.
 
-
 *Q2 — Workbench:* Is the browser workbench part of the documentation site, or
 its own thing beside it?
-
 - A third front door — The site's entrance offers three ways in — watch how
   the machine works, read the reference, or build a program — with the
   workbench a peer of the slideshow rather than an entry in the sidebar's
@@ -777,41 +596,30 @@ its own thing beside it?
   it is unmistakably the same site, but it is not pretending to be a document
   with a number. Cost: the front page now carries a choice, and the workbench
   has to be good enough to deserve equal billing.
-
 - One more page in the sidebar — The workbench takes its place in the numbered
   reading order like every other page, so someone reading about stations reaches
   a canvas for drawing one by scrolling the same sidebar they were already
   using. Nothing new is invented; the site has one shape. Cost: an application
   sits in a list of documents, and a reader working down the reading order meets
   a tool where they expected a chapter.
-
 - Its own page, linked across — A separate artifact that shares the stylesheet
   and links back and forth, but is generated on its own terms and is not part of
   the documentation set at all. The freest option — the workbench can
   restructure its whole layout without answering to how a document page is
   built. Cost: two things that must be kept looking alike by hand, and a shared
   stylesheet is exactly the kind of coupling that quietly drifts.
-
 → **Answered:** A third front door" selected preview:
-
 index
-
   Watch    -> the slideshow
-
   Read     -> the reference
-
   Build    -> the workbench
-
 
 one site, three doors, one look. You can now continue with these answers in
 mind.
 
-
 709 is fully answered now. Recording it.
 
-
 Two more from the workbench issue.
-
 
 **On layout.** A map file is a list of lines naming stations and wires; the
 picture is not in it. The format does already carry `#` comments, and the dump
@@ -820,7 +628,6 @@ uses them for derived facts — resolved types, element sizes, station indices
 different animal: nothing can recompute where you dragged a box. So putting them
 in comments would be the first time that comment channel carried something that
 could not be thrown away and regenerated.
-
 
 **On WebAssembly.** The issue already commits to compiling the *generator* to
 wasm, so the page parses C with the build's own parser rather than a second
@@ -831,13 +638,10 @@ the page is served with cross-origin isolation headers. That's not storage, so
 it doesn't break "nothing on the server," but it does mean the page stops
 working when opened as a plain local file.
 
-
 **[Asked the user]**
-
 
 *Q1 — Layout:* A map file read back into the canvas has no positions. Where
 does the picture come from?
-
 - Laid out automatically, never stored — The canvas arranges the graph itself
   on read, and a map saved from the canvas is exactly the program with nothing
   about the drawing in it. The format keeps meaning only what it meant before,
@@ -846,7 +650,6 @@ does the picture come from?
   same map see the same picture — which is arguably better than one of them
   seeing the other's. Cost: an arrangement you made by hand does not survive the
   round trip.
-
 - Positions as comments in the map — The canvas writes each box's position as
   a comment beside its station line, joining the resolved types and element
   sizes the dump already puts there. The loader ignores it as it ignores those.
@@ -854,25 +657,18 @@ does the picture come from?
   authored rather than derived — the first thing in a map file that cannot be
   regenerated — so stripping comments becomes a lossy act, and a map edited by
   hand carries positions that quietly no longer fit.
-
 - A companion file beside the map — The map stays exactly what it is and the
   canvas writes a second file holding the drawing. Nothing authored ever enters
   the program's description, and the layout file can hold as much as it likes
   — colours, notes, groupings — without the map format growing a vocabulary
   for any of it. Cost: two files that must travel together, and the one nobody
   thinks is important is the one that gets left behind.
-
 → **Answered:** A companion file beside the map" selected preview:
-
 everything.map
-
 everything.map.layout
 
-
 map unchanged forever; layout
-
 free to hold anything; both
-
 must be kept together, "Does phase 8 include running maps in the browser, or
 only writing them?"=(no option selected) notes: we will never implement running
 in the browser. Not for minimal-soramech. We can simulate in the browser if we
@@ -884,10 +680,8 @@ there's definitely some data here" even though there's not.. Read the answers
 carefully — they may request clarification, changes, or that you not proceed
 — and follow what they actually say.
 
-
 *Q2 — Wasm scope:* Does phase 8 include running maps in the browser, or only
 writing them?
-
 - Writing only — running is later — The canvas composes and hands back
   files, exactly as the intended behavior already argues: a page that ran maps
   would need the pool, the delivery walk and the loader in the browser, and
@@ -895,7 +689,6 @@ writing them?
   and one failure mode. Running in the browser becomes its own phase, decided on
   its own merits. Cost: someone draws a program and must leave the page to watch
   it work — which is the whole distance this phase exists to shorten.
-
 - Running too, single-threaded — The real engine compiled to wasm with the
   pool reduced to one worker, so a drawn map can be run on the page without
   shared-memory threading and without the headers that would stop the page
@@ -904,7 +697,6 @@ writing them?
   cannot disagree with the build about what a program means. Cost: the one thing
   it cannot show is the thing the engine is actually about — work happening at
   once.
-
 - Running too, fully threaded — The engine compiled to wasm with Web Workers
   sharing memory, so the page runs programs the way the machine does,
   parallelism included. The most complete answer to the distance this phase is
@@ -912,16 +704,12 @@ writing them?
   it stops being a file you can open — it needs a host, which is a strange
   thing for a project whose principle is that there is nowhere to keep your
   work.
-
 → *(no answer recorded)*
-
 
 That simulation idea is better than any of the three I offered, and it connects
 to something else that was just decided. Recording both.
 
-
 Two left in the workbench issue.
-
 
 **On the drawer.** The workbench reads C files you hand it, and beside that
 ships a set of functions bundled with the page. The note describing this phase
@@ -931,43 +719,35 @@ their own version opens one and sees what a box looks like. Which particular
 ones is genuinely a list only you can write, and its length decides whether
 phase 8 is one issue or several.
 
-
 **On keeping work.** The page has no server by design — the issue's words are
 "a map is theirs, and the honest way to mean that is to have nowhere to keep
 it." Browser storage sits in an odd spot relative to that: it's still nothing on
 the server, and it's still the author's own machine, but it does mean the page
 keeps something after you leave.
 
-
 **[Asked the user]**
-
 
 *Q1 — The drawer:* What kinds of function belong in the bundled drawer? Pick
 any that fit, and write in the specific ones you have in mind.
-
 - Arithmetic and comparison — The small operations every map needs: add,
   multiply, clamp, compare two of a type, pick the larger. Nobody wants to write
   these and every example uses them. They also make the best reading material,
   because a box that adds two integers is the shortest complete answer to "what
   does a box look like".
-
 - Files and text — Reading a file into a value, writing one out, splitting
   text on a separator, parsing a number from a string. The operations that
   connect a map to a machine's existing data rather than to a device — the
   ones that make a drawn program able to do something to something that already
   exists.
-
 - Hardware interfaces — The half of the note about hardware: a serial port,
   GPIO pins, MIDI in and out, a joystick, a sound device. These are the ones
   with real value as reading material, because the shape of a box that talks to
   a device is not obvious and an example answers questions a document would not
   think to raise.
-
 - Networking — Sockets, an HTTP request, sending and receiving a datagram. The
   operations that make a map reach past the machine it runs on — and the ones
   most likely to raise questions the engine has not answered yet, since a box
   that waits on a network is a box that holds a worker for a long time.
-
 → **Answered:** the workbench is just for layout. You can write a function
 name and it can build out a map file for you, but no C functions are actually
 run. If you want a specific function from a specific file, you can write the
@@ -980,10 +760,8 @@ them switch to a new map or an old one or whatever.. Read the answers carefully
 — they may request clarification, changes, or that you not proceed — and
 follow what they actually say.
 
-
 *Q2 — Keeping work:* The page has no server. What happens to a map you were
 drawing when the tab closes?
-
 - Kept automatically, restored on return — The page writes the map you are
   drawing into the browser's own storage as you work, and offers it back when
   you return. It addresses the failure the question actually names — a tab
@@ -991,34 +769,27 @@ drawing when the tab closes?
   nothing on the server stays literally true. Cost: the page now has memory you
   did not ask it to have, and a map you thought you had walked away from is
   waiting when you come back.
-
 - A local shelf you save onto — Storage exists but is never automatic: you put
   a map on a shelf the page keeps on your machine, you see the shelf listed, and
   you take things off it. Every act of keeping is one you performed, which is
   the same relationship the download button already has, just without leaving
   the page. Cost: work between saves is still lost, which is the failure that
   was being asked about.
-
 - Nothing is kept — download or lose it — The only way a map survives the
   tab is the file you saved. This is the strictest reading of the principle the
   issue states — the honest way to mean a map is yours is to have nowhere to
   keep it — and it makes the page genuinely stateless, with no storage to
   explain, clear, or migrate. Cost: it teaches that lesson by taking someone's
   work, and the person it takes it from is usually a first-time visitor.
-
 → *(no answer recorded)*
-
 
 That substantially narrows the phase — no C is uploaded, bundled, or
 downloaded. Let me rewrite the affected sections rather than patch around them.
 
-
 Now the implementation steps and open questions in that issue.
-
 
 Two questions left — one I created along the way, one the narrowed scope just
 raised.
-
 
 **On the runner scripts' indexes.** With the launcher reading a list instead of
 globbing, the seven demo runners are free to carry index prefixes like every
@@ -1028,7 +799,6 @@ Worth noting the project already has a sub-index idea in its issue naming: a
 large issue splits into sub-issues with a letter appended, so `522` becomes
 `522a`, `522b`. The same shape is available to file indexes.
 
-
 **On the type checks the page can't do.** Now that the workbench holds no C, it
 can check everything about the drawing — cycles, port limits, fan-out to
 incompatible slot kinds — and nothing about types. A map can draw perfectly
@@ -1037,13 +807,10 @@ destination slot doesn't take. The author finds out when they run it, which is
 exactly the distance this phase exists to shorten, so it matters how the page
 admits it.
 
-
 **[Asked the user]**
-
 
 *Q1 — Runner index:* The demo runner scripts can carry file indexes now. Which
 numbers do they get?
-
 - A letter after their source's index — Each runner takes its C source's
   number with a letter appended, so it reads immediately after the thing it
   runs. It reuses a pattern the project already has — an issue that splits
@@ -1051,7 +818,6 @@ numbers do they get?
   here: a runner is not a separate step in the story, it is the second half of
   the step its source is. Cost: the index space grows a second dimension, and a
   rule that was purely numeric now has letters in it.
-
 - Fresh numbers from the counter — The seven runners take 063 through 069 and
   sit together at the end of the reading order. They are all the same kind of
   thing — build-this, then run-it wrappers — so reading them as a block
@@ -1059,33 +825,27 @@ numbers do they get?
   purely numeric with no exceptions. Cost: phase 1's runner reads after phase
   7's engine work, so the runners are the one group whose position says nothing
   about when they belong.
-
 - Leave them unindexed — The list already freed the launcher from caring what
   the files are called, so nothing forces the question — and the runners could
   stay plainly named. Cost: it re-creates the exemption the list was chosen to
   avoid needing, and the reading order once again has holes in it that a reader
   has to be told about.
-
 → *(no answer recorded)*
-
 
 *Q2 — Type checks:* How does the page admit that it cannot check a wire's
 types?
-
 - Said once, plainly, where you download — A line beside the download button:
   this page checks the shape of your graph, not the types of your values — the
   loader checks those the first time you run it. One honest sentence at the
   moment the author is about to leave with the file, which is when the
   limitation becomes relevant. Cost: a sentence on a page is a sentence people
   stop reading after the second visit.
-
 - Every wire drawn unverified — Wires are drawn in a way that shows they have
   not been type-checked — a distinct style that means "this connection is
   assumed, not confirmed" — so the fact sits where the decision is made rather
   than in a paragraph elsewhere. Nothing can be mistaken for a checked
   connection because nothing on the page is one. Cost: when every wire carries
   the same mark, the mark stops carrying information and becomes texture.
-
 - Let the author declare the types — The page cannot read C, but the author
   knows what their function returns and can type it in. With declared types on
   both ends of a wire, the page checks them against each other — catching the
@@ -1093,22 +853,15 @@ types?
   holding any C. Cost: it checks the author's intent against itself rather than
   against reality, so a wrongly-declared type passes; and it adds typing to a
   tool just narrowed to layout.
-
 → **Answered:** Said once, plainly, where you download" selected preview:
-
 [ Download map ]
 
-
   This checks your graph's shape.
-
   Types are checked when the map
-
   is loaded — a clean drawing is
-
   well-formed, not well-typed.. Read the answers carefully — they may request
   clarification, changes, or that you not proceed — and follow what they
   actually say.
-
 
 The observation about indexes is fair — nothing in the project actually
 surfaces the reading order they're supposed to encode; you'd have to already
@@ -1116,84 +869,62 @@ know that's what the numbers mean. I'll take the runner numbering myself since
 you don't mind either way, and write your observation down as its own open
 question rather than lose it.
 
-
 All thirteen open questions are answered and written into the four issue files.
 Nothing is committed — the transcript files in your working tree aren't mine,
 so I left the staging area alone.
 
-
 ## What got decided
 
-
 **Values back into text**
-
 - Character arrays stay NUL-terminated C strings; no companion length field. The
   formatter never trusts the terminator — it stops at the array's declared
   length regardless, which is the same bound a length field would have needed
   validating against anyway.
-
 - The text is pure seven-bit ASCII. Quote, backslash, everything below 0x20 and
   everything from 0x80 up get escaped. Non-English text stops being readable in
   the file; that cost is written down as taken deliberately.
-
 - Both directions are generated per type. Reading moves out of the hand-written
   walk and into generated code alongside writing, so each type's grammar exists
   once. This retires the reader that 402 finished — the field table keeps
   names and sizes for the registry's description routine and for width-based
   type comparison, and nothing walks it to read or write a value.
 
-
 **Demos after the pull path**
-
 - Phase 4's demo is renamed to config and keeps index 037. An index is a
   position in the reading order, and the demo hasn't moved — only what it
   demonstrates has.
-
 - The launcher stops globbing and reads a list. That's what dissolves the naming
   collision: run order and reading order stop sharing a channel, so neither has
   to bend to the other.
-
 - Runner scripts take their source's index plus a letter —
   `037a-phase-4-config` — reusing the sub-issue pattern. I made that call
   myself since you didn't mind either way.
 
-
 **Slideshow and transcripts**
-
 - Live hand-drawn screens, narrating the engine rather than the project.
-
 - Transcripts go up whole and unedited, automatically on the next build — so
   building the site *is* publishing it, which is only tolerable because nothing
   is being held back for review. Plus the decorating pass: emoji, flowers,
   hearts, horses, stick figures. Written up as a real feature with the reasoning
   that decoration adds and never removes, so the record stays whole underneath.
 
-
 **Browser workbench**
-
 - Third front door: *watch, read, build*.
-
 - Layout only. No C uploaded, bundled, or handed back — a box is a name you
   type, and the download assembles the map file. This retired the issue's own
   strongest argument (the page's parser must be the build's parser) by removing
   the parser instead of sharing it.
-
 - Never runs in the browser. Instead the simulation: a duration per box that
   ticks down, and a token that says "something arrived" carrying nothing. I
   noted that this is the same machinery the slideshow's live screens need, so it
   should be built once rather than twice.
-
 - Layout in a companion file. Positions were wrong for comments because every
   comment in a map file today is a *derived* fact — which is what makes
   comments safely strippable — and a position can't be recomputed.
-
 - Browser-cached shelf of maps, restored on restart.
-
 - One sentence beside the download button admits the page can't check types.
 
-
 ## One question still open
-
 
 Your remark about the index numbers wasn't a throwaway, so I wrote it down
 rather than let it pass. The numbers are meant to encode a project-wide reading
@@ -1204,13 +935,11 @@ communicates nothing to anyone who wasn't told. Whether the fix is a stated
 rule, a generated reading index, or something the docs site renders is
 undecided; it's filed in the demos issue as the one thing still open.
 
-
 --------------------------------------------------------------------------------
 
 ### User Request 2
 
 okay what's next
-
 
 --------------------------------------------------------------------------------
 
@@ -1218,12 +947,9 @@ okay what's next
 
 Let me look at what's actually blocking what, rather than guess.
 
-
 Here's the state, from the issue files themselves rather than from memory.
 
-
 ## The critical path is one issue deep
-
 
 **210 — what an input port is** is the keystone, and it's bigger than its
 title suggests. It supersedes the port half of three earlier issues that each
@@ -1233,27 +959,18 @@ where the pull path actually dies**, not just where it's described as dead. I
 went looking for a separate removal issue and there isn't one; 210 owns it.
 That's correct rather than a gap.
 
-
 Everything downstream is stacked behind it:
 
-
 | order | issue | why it waits |
-
 |---|---|---|
-
 | 1 | **210** — the input port record | removes gathering; redefines what a port is |
-
 | 2 | **401 / 405** — statics onto ports | a static becomes a value the port owns, which needs 210's record |
-
 | 3 | **408** — values back into text | 401 deletes the retained string the dump prints today |
-
 | 4 | **710** — the demos | its own step 1 is the single word "Wait" |
-
 
 Three of the seven demos currently demonstrate a capability that step 1 deletes,
 so the project is in a state where the front door shows a machine that's about
 to stop existing. That resolves only at the end of this chain.
-
 
 **Not blocked by any of it:** the phase 2 rework cluster (output station, input
 station, growing the station table, destinations without a lock, one way to
@@ -1263,17 +980,13 @@ generator-in-C one is worth noting separately — it's what removes LuaJIT from
 anyone else's build, which is the packaging distance the workbench issue opens
 by complaining about.
 
-
 ## One thing I found that's wrong now
-
 
 **The statics issue still describes gathering as a live mechanism**, in two
 places, and it's the issue immediately behind 210 in the chain:
 
-
 - Its list of what a port can be says "a third may pull from a gatherer" —
   that port kind is exactly what 210 step 1 deletes.
-
 - Its answer to how a shared constant works says "one station holds the value;
   everyone who needs it gathers from it" — which was the whole justification
   for retiring the statics table, and it's written on top of a mechanism that
@@ -1281,14 +994,11 @@ places, and it's the issue immediately behind 210 in the chain:
   destinations) rather than five stations gathering from one, and those are
   different pictures with different timing.
 
-
 Its formatter paragraph is also now stale in a smaller way — it describes "a
 formatter that walks a field table," which is what we just decided against.
 
-
 I haven't touched it. Want me to fix those three, or is there something else
 you'd rather start on?
-
 
 --------------------------------------------------------------------------------
 
@@ -1298,7 +1008,6 @@ let's do 210, then after that's done and we committed then we can go look at the
 statics issue, update the issue, complete it (if possible) and then combine the
 update to the issue and the implementation into the issue commit.
 
-
 --------------------------------------------------------------------------------
 
 ### Assistant Response 3
@@ -1307,129 +1016,94 @@ Reading the issue — it's thirteen steps deep, from removing the pull path
 through to optional parameters. Before I touch code, let me settle the working
 tree.
 
-
 The transcript changes aren't mine — they're regenerated timestamps plus a
 re-consolidation of the August logs by your transcript tooling, and today's
 session log growing live. I'll leave all of those alone and stage only my four
 issue files.
 
-
 Now 210. Starting with step 1 — removing the pull path, which the issue puts
 first because everything after it shrinks once it's gone.
 
-
 Understood — committing the transcripts now so they land as live as possible.
-
 
 Tree is clean. Now into the removal.
 
-
 Full inventory in hand. Let me check the build and the map-file syntax before
 cutting.
-
 
 The map format's `in` line takes either `$entry` (a static) or a station name (a
 gather source) — so removing the pull path narrows that line to statics only.
 Let me see the tests and boxes that ride on it.
 
-
 Baseline is green. Starting the cut at the core.
-
 
 Now the edits. Starting with the header.
 
-
 Header done. Now the gather module itself and the delivery path.
 
-
 Now the map file format and loader.
-
 
 Now the loader — both the second-pass resolution and the validation rules
 built around gathering.
 
-
 Now the loader's whole-map validation, which is built substantially around
 gathering.
 
-
 Now the runtime rewiring surface, the dump, and the observation report.
-
 
 Now the dump and the observation report.
 
-
 Now the tests that ride on gathering, then a build.
-
 
 Eleven refusals — the count holds if I swap the gather case for the one that
 now replaces it.
 
-
 Now the introspection test, which races gather edges.
-
 
 Every remaining check in the rewiring path is a property of one edge. The
 joint-cycle test proved something that no longer exists — worth recording
 rather than quietly deleting.
 
-
 All tests pass without the pull path. Now the leftover references.
-
 
 Now the interface files and the docs that describe what just changed.
 
-
 Interface files done. Now the docs.
-
 
 The docs were already written ahead of the code — they describe the pull path
 as gone. Only the parts that describe fields still existing need correcting.
 
-
 Now a full verification sweep before I touch the issue file.
-
 
 Now let me confirm exactly which demos this breaks, since 710 planned for that
 window.
 
-
 Exactly the three demos 710 predicted, failing with clean compile errors that
 name the missing call. Now updating the issue's current behavior.
 
-
 Step 1 of 210 is in. Here's where that leaves things.
-
 
 ## What landed
 
-
 The pull path is gone from the engine. That's more than deleting a tag — what
 came out with it:
-
 
 - **The pull module itself** (`034-gather.c`), which ran a box on the stack of
   whatever thread happened to be assembling someone else's task. That was the
   engine's one documented exception to "a box only runs on a worker that picked
   up a task for it," and the exception is now gone rather than documented.
-
 - **The cycle walk**, which refused a gather loop at the moment the wire was
   drawn, because a gather loop was a call that never returned and would have
   surfaced as a bare stack overflow with no message.
-
 - **The runtime gather-repoint operation** and its test.
-
 - **The gather timing** charged to the puller rather than the runner — it
   existed because that genuinely is where the cost landed, which was one of the
   phase 4 demo's better findings.
-
 - **Three of the loader's whole-map refusals**, each describing a situation that
   can no longer be described: a gathered-from station with ring inputs, a
   station both pushed into and gathered from, and gather cycles.
-
 - **The `source` field** on every input port, removed from the record rather
   than left sitting unread.
-
 
 An `in` line in a map file had two spellings one character apart — `in 0 $3`
 bound a static, `in 0 reader` gathered. An old file is now **refused and told
@@ -1437,12 +1111,9 @@ what its spelling used to mean**, rather than read as the other form and run as
 a program nobody wrote. That's a new test in the refusal gallery, replacing the
 one that proved the pull path worked.
 
-
 Clean build, all tests pass.
 
-
 ## The one thing I'd flag
-
 
 **A guarantee was lost rather than relocated, and I wrote it into the issue so
 nobody hunts for it later.** Runtime rewiring holds a single lock across
@@ -1450,7 +1121,6 @@ nobody hunts for it later.** Runtime rewiring holds a single lock across
 separately-legal edges could produce an illegal pair — two gather edges each
 fine alone and jointly a cycle. There was a test racing 50 rounds of exactly
 that, demanding exactly one refusal every round.
-
 
 Nothing can produce such a pair now. Every surviving rewiring rule is a property
 of one edge plus the fixed shape of one station — type match, port limits,
@@ -1460,9 +1130,7 @@ because there isn't one. The test is deleted and the reason is in both the issue
 and the test file's header, with a note that it returns if such a rule ever
 does.
 
-
 ## Demos
-
 
 Three break, exactly as 710 predicted: phases 4, 6, and 7. Phases 1, 2, 3, and 5
 still compile — phase 5 only mentions gathering in a printed sentence. The
@@ -1470,27 +1138,22 @@ failures are clean compile errors naming the missing call (`map_slot_gather`,
 `SLOT_GATHER`, `map_rewire_gather`), which is the honest failure mode rather
 than something subtle.
 
-
 So `./run-demo` — the project's front door — currently offers three entries
 that won't build. That window was planned, but it's open now and it closes only
 when 710 runs.
 
-
 ## What's left in 210
-
 
 Twelve steps. Step 2 is the port record proper: both storages, the three-value
 tag with *none*, ring cells allocated at instantiation ten deep. After that it
 climbs into the genuinely hard part — per-cell atomic states, moving the
 copies out of the lock, the lock-free claim with rollback, paged growth.
 
-
 That's a lot to carry in one commit. Want me to continue straight through 210,
 or break the remaining steps into sub-issues first? My read is that steps 4–7
 (the per-cell state machine through paged growth) are one coherent unit that
 shouldn't be split, but steps 9–10 (the single construction surface, optional
 parameters) are separable work that could stand as their own sub-issue.
-
 
 --------------------------------------------------------------------------------
 
@@ -1499,62 +1162,46 @@ parameters) are separable work that could stand as their own sub-issue.
 Sounds like we need to break issue 210 into sub-issues. Can you do that, and
 make the first 210a issue the stuff you just did, and complete it with a commit?
 
-
 --------------------------------------------------------------------------------
 
 ### Assistant Response 4
 
 Breaking it up. Let me match the house style for a completed issue first.
 
-
 No sub-issue precedent yet — 210a will be the first. Let me see what points at
 210 before I restructure it.
-
 
 Sixteen references point at `210-input-port-record.md`, so the parent keeps that
 path and the children hang off it. Rewriting it as the umbrella now.
 
-
 Now the parent.
-
 
 Now 210a — the one that's done.
 
-
 Now the remaining seven children.
 
-
 Now moving 210a to completed and updating the phase progress.
-
 
 The links in 210a were written for `issues/`; now that it's in `completed/` they
 need re-basing. Let me check the convention.
 
-
 Pre-existing link rot in `completed/` — some files use `../docs/`, which
 resolves wrong from there. Fixing 210a's links correctly.
 
-
 Every link resolves. Now the phase progress file.
-
 
 Now re-pointing references that name a specific mechanism at the child that owns
 it — starting with 710, whose blocker just changed.
 
-
 Now verifying every link in the new files resolves before committing.
-
 
 The docs generator makes a page per issue — let me make sure it handles the
 letter-suffixed names.
 
-
 All 106 pages regenerated — and this also catches up HTML that my previous
 commit left stale. Verifying the code is still green before committing.
 
-
 Transcripts regenerated again — folding them in as you asked.
-
 
 --------------------------------------------------------------------------------
 
@@ -1567,13 +1214,11 @@ Transcripts regenerated again — folding them in as you asked.
 
 No response requested.
 
-
 --------------------------------------------------------------------------------
 
 ### User Request 6
 
 please continue
-
 
 --------------------------------------------------------------------------------
 
@@ -1581,9 +1226,7 @@ please continue
 
 Done — working tree clean, tests green.
 
-
 ## The split
-
 
 Issue 210 stays where it was as a **parent**, which matters practically: sixteen
 documents across `docs/` and `issues/` link to it, and all of those stay true.
@@ -1591,30 +1234,18 @@ It now holds only what no single child owns — the vocabulary (port versus
 slot), the shared design, and the two open questions that were answered once for
 the whole family.
 
-
 Eight children, along seams that were already in the thirteen steps:
 
-
 | child | what it builds | state |
-
 |---|---|---|
-
 | **210a** the pull path removed | the gatherer kind and everything reading it | **complete** |
-
 | **210b** the port record | both storages, three-value tag, cells for every port at instantiation | open |
-
 | **210c** a state on every cell | four states, one atomic swap each; then copies leave the lock | open |
-
 | **210d** the claim takes no lock | ascending order, roll back on first empty, scan from a hint | open |
-
 | **210e** growth adds a page | append rather than copy | open |
-
 | **210f** changing what a port is | a field write, waiting values left where they sit | open |
-
 | **210g** one way to build a station | one configuration surface | open |
-
 | **210h** optional parameters | a parameter a box can do without | open |
-
 
 **The order is real rather than tidy.** 210c→d→e must go in sequence because
 each removes the reason the next was hard: per-cell states are what make a
@@ -1622,15 +1253,12 @@ lockless claim *expressible*, and a claim that scans instead of computing a
 position is what makes append-growth safe. 210f and 210g branch off 210b and can
 run alongside.
 
-
 One thing worth flagging from writing 210e: **the existing growth doesn't merely
 get better, it stops being correct** once the claim goes lockless. What made
 copy-and-unwrap safe was the mutex covering the whole copy, and 210d removes
 that mutex from the path. So d and e can't be separated by long.
 
-
 ## On 210a's provenance
-
 
 Convention here is to write the ticket before the work. This one was written
 after, because you asked for 210 and we split it retroactively. I wrote it as a
@@ -1639,36 +1267,26 @@ alone would arrive at the same absence, including the one judgment actually made
 during the work (refusing old map files rather than reinterpreting them). But
 it's a deviation and you should know it happened.
 
-
 ## New open questions
-
 
 Writing the children surfaced five that weren't in the original:
 
-
 - **210b, 210h** — how an unconfigured port is spelled in a map file. Every
   natural spelling reads like a value rather than an absence.
-
 - **210c** — the baseline measurement for the delivery path under wide fan-in
   has to be taken *before* the work, not at the end, or the improvement is a
   claim rather than a finding. Phase 4 already learned once that a cost measured
   in the wrong place measures nothing.
-
 - **210d** — a livelock test that passes proves nothing; it has to be run once
   with the ordering rule deliberately broken and seen to fail.
-
 - **210e** — equal pages or growing pages. The old buffer doubled, so deep
   backlogs cost few allocations, and that's worth not losing by accident.
-
 - **210f** — whether a port that was static, became a ring, and became static
   again still holds its old value.
-
 - **210g** — whether hand placement survives at all, which depends on whether
   its callers (phase 2's tests) can place by name instead.
 
-
 ## Two things I noticed but didn't fix
-
 
 **Link rot in `completed/`.** Some completed issues use `../docs/…` where they
 need `../../docs/…` — 407 and 203 have it, 604 gets it right in one place
@@ -1677,32 +1295,26 @@ but the pre-existing rot spans many files and would have swamped this commit.
 The HTML generator reports zero unresolved references, so it's resolving those
 differently than the filesystem does — worth a look on its own.
 
-
 **710 is partly unblocked.** Its phase 7 scene needs only 309 (types by width),
 not the statics work, so one of the three broken demos could be restored now
 rather than waiting. I updated its steps to say so.
-
 
 --------------------------------------------------------------------------------
 
 ### User Request 7
 
-  Convention here is to write the ticket before the work. This one was written
-  after, because you asked for 210 and we split it retroactively. I wrote it as
-  a
-
-  blueprint rather than a log — someone rebuilding from the completed tickets
-  alone would arrive at the same absence, including the one judgment actually
-  made
-
-  during the work (refusing old map files rather than reinterpreting them). But
-  it's a deviation and you should know it happened.
-
+> Convention here is to write the ticket before the work. This one was written
+> after, because you asked for 210 and we split it retroactively. I wrote it as
+> a
+> blueprint rather than a log — someone rebuilding from the completed tickets
+> alone would arrive at the same absence, including the one judgment actually
+> made
+> during the work (refusing old map files rather than reinterpreting them). But
+> it's a deviation and you should know it happened.
 
 
 issue files are actually intended to be blueprints rather than logs, and I'm
 pretty sure the claude.md file says so.
-
 
 --------------------------------------------------------------------------------
 
@@ -1710,14 +1322,12 @@ pretty sure the claude.md file says so.
 
 You're right, and the correction lands on both halves of what I said.
 
-
 Blueprint-not-log is the standing rule for every issue file — `CLAUDE.md` says
 it three ways ("not intended to record work," "not meant to be a record of
 completed work," "blueprints for creating the software, not work logs"). So
 writing 210a as a blueprint wasn't an accommodation I made for an awkward
 situation. It's just what an issue file is. Presenting it as a mitigating choice
 implied the default was otherwise.
-
 
 And the deviation I flagged was smaller than I made it sound, close to
 nonexistent. The rule is that work needs a blueprint before it starts — and it
@@ -1728,24 +1338,19 @@ done against. Splitting 210 afterwards changed which file holds that step; it
 didn't create work that was unspecified when it happened. Nothing was built
 without a plan.
 
-
 Let me confirm I didn't write that muddle into the files themselves.
-
 
 The only hit is inside 210d's open question about whether an inverted livelock
 test stays in the tree or survives as a note — about a test, not about
 provenance. The files themselves read as blueprints throughout, with no log
 framing to strip out.
 
-
 Where that leaves the plan you set: 210 was going to be one commit and then
 statics. It became eight children with one done, so "after 210 is done" is
 further off than when you said it. But 401 doesn't need all of 210 — it needs
 **210b**, the port record, for the port's own storage to bind a static into.
 
-
 Two things are true about 401 independently of that:
-
 
 - **It has stale content right now**, which I found earlier and haven't touched:
   it still lists "a third may pull from a gatherer" as a port kind, still
@@ -1753,15 +1358,12 @@ Two things are true about 401 independently of that:
   describes the formatter as walking a field table, which we replaced with
   per-type generated code when we answered 408's questions. All three describe
   machinery that no longer exists or was never going to.
-
 - **It can't be completed yet**, since the storage it spends is what 210b
   builds.
-
 
 So the honest options are to fix 401's staleness now as a documentation
 correction — no issue file needed for that, by your own rule — and leave
 completion until 210b lands; or to build 210b first so 401 becomes completable
 and the two land together the way you originally wanted. Which would you rather?
-
 
 --------------------------------------------------------------------------------

@@ -86,7 +86,7 @@ because it is derived from source the library author has never seen. The
 consumer must run the generator over their own code, every build.
 
 **The runtime half.** The pool, the station table, delivery, gathering,
-statics, routing, the door a description comes in through, the
+statics, routing, the way a description comes in, the
 observer. **Not the map file parser** — that belongs to the compiler
 now and is not linked into anything anybody runs (issue 311d). About
 4,300 lines including headers today — run `wc -l libs/*.c libs/*.h

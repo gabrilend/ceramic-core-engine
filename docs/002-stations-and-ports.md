@@ -217,21 +217,137 @@ signature of a multi-input station fed unevenly; queue growth is the
 signature of consumers slower than producers overall. Phase 7 reports
 both, and reading them together is what locates a bottleneck.
 
+## A depth travels downstream
+
+Growing a buffer is cheap — one allocation, nothing copied — but it
+happens **on the delivery path, holding the station's own mutex**,
+which is the same lock the readiness check wants. A burst of a hundred
+values into a ten-slot buffer takes that lock about nine extra times
+for no reason a reader of the map could have predicted.
+
+So when the engine already knows a backlog is coming, it makes the
+buffers below deep enough up front instead.
+
+**Two moments know it**, and they are the only two:
+
+- **A depth is declared on a port.** Writing `in 0 x64` says this
+  buffer starts sixty-four deep, which says something about every
+  station downstream of it too.
+- **A wire is drawn.** The new destination inherits whatever backlog
+  the source can already hold.
+
+Both are construction-time operations under the rewiring lock. Nothing
+about this ever runs while values are being delivered.
+
+### How far a station can fall behind
+
+The answer is the **minimum** over the ports that gate it, because a
+station runs when *every* input port holds a value. Fed a hundred from
+one side and ten from the other, it runs ten times and produces ten.
+Taking the maximum would size everything below an uneven join for a
+backlog that cannot arrive.
+
+Static ports are skipped rather than counted, because a static is
+always full and gates nothing. A port with **no source at all** gates
+everything — the station never runs — so the answer is zero and the
+walk stops. A station with no gating ports at all is a station of
+constants, seeded once, and answers one.
+
+### What each kind passes on
+
+The three station kinds differ in exactly one way — where a returned
+value goes — so this is the one place that has to know about them:
+
+| kind | what it passes down |
+|---|---|
+| **plain** | the whole backlog to every wire on port zero, because fan-out duplicates a value rather than dividing it |
+| **iterator** | each exit gets its share, since the exits are taken in turn; the remainder rides on the ones the cursor reaches first |
+| **comparator** | **nothing. The walk stops here.** |
+| **void** | nothing to send |
+
+**The comparator is exempt on purpose.** One of three exits fires per
+run and the data chooses which, so any one of them could take
+everything. Sizing all three for the whole backlog is defensible and
+costs three times the memory for a guess; sizing none of them costs a
+page-at-a-time growth on whichever exit turns out to be the busy one.
+**The cheaper mistake is the one that only costs time**, so the walk
+stops at a comparator and lets the ordinary growth handle it.
+
+### Why a cycle is safe without a visited set
+
+The walk's stopping condition is **"already deep enough"**, checked at
+each port before touching it.
+
+An accumulator wires its own output back into its own input, so this
+walk arrives back where it started. The second visit finds the port at
+the size the first visit gave it and stops. That is a fixed point, and
+it means there is no visited set to allocate, no depth limit to pick,
+and nothing that has to be kept in step as the graph changes — which
+matters, because the graph changes while the program runs.
+
+### Reading a port's depth
+
+Two different questions, and the calls answer different ones. **How
+many values are waiting in a port** is what the depth call reports.
+**How many slots the port has room for** is its capacity, which is the
+number this walk raises. A buffer sized sixty-four deep and holding
+three answers sixty-four for one question and three for the other.
+
 ## Output ports
 
-A port is one exit from a station. It holds a linked list of
-destinations, each a pair of 32-bit numbers: which station, and which
-port on it.
+A port is one exit from a station. The ports of a station are a linked
+list; each port holds a pointer to its **destinations**, which are an
+array of pairs of 32-bit numbers: which station, and which port on it.
 
 Both numbers are needed. The delivery path takes the destination
 station's mutex and then examines *all* of its ports to decide
 readiness, so it has to be able to name the station, not merely land
 somewhere inside it.
 
+**The destination array is immutable and is swapped whole.** Nothing
+ever edits one. Drawing or cutting a wire builds a whole new array and
+swaps the port's pointer in a single atomic write, so a walker reads
+the pointer once and then walks something nobody will ever modify.
+That is what takes the station's mutex off the delivery walk
+altogether: no lock, no copy onto the walker's stack, and no way to see
+a half-edited set. The array it replaced is filed in the scrapyard and
+freed when nothing can still be walking it.
+
+A null pointer means a port wired nowhere, and delivering to it
+**discards** — which is exactly what an unwired comparator branch
+should do.
+
 A plain box has one port, which may fan out to any number of
 destinations. A comparator has exactly three. An iterator has as many
 as the map gives it. What the ports mean and how one is chosen is
 [005](005-routing.md).
+
+### An output port may be one of the map's results
+
+A port carries the number of the result it is, or a sentinel saying it
+is neither — which is the case for most ports.
+
+**A mark is not a bucket.** A marked port with nowhere to put its
+values discards them like any other unwired output, so a program nobody
+is collecting from grows nothing. What makes the values arrive
+somewhere is a caller **registering an array to put them in**: a
+pointer, how many fit, and how wide one is. The memory belongs to the
+caller.
+
+Slots are claimed with one atomic add on a counter. **The bound is the
+reservation, never the winding down** — a worker handed a slot at or
+past the end writes nothing, because workers are still inside boxes at
+the moment the array fills and there is no way to ask them to stop
+having started.
+
+There is no per-slot state machine here, and that is the difference
+from a ring buffer's slots. A ring slot needs one because it is reused
+and a reader must know what it is looking at; one of these is written
+once and read by nobody until the caller comes to look.
+
+This replaced a pile of results kept on the station against the chance
+somebody would come to collect them. That pile was memory the program
+grew whether or not anyone ever wanted it.
 
 ## Related
 

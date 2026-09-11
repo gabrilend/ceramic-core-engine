@@ -21,6 +21,8 @@ minimal-soramech/
 │   ├── 009-datapath-load.md        map file to running program
 │   ├── 010-roadmap.md              the phases
 │   ├── 058-guarantees.md          what is always true, and its price
+│   ├── 140-a-map-inside-a-map.md   composing programs: receipts, parts,
+│   │                               and one flat table
 │   ├── implementation-notes/       decisions where more than one answer
 │   │   │                           was defensible — what the options
 │   │   │                           were, and what each one costs
@@ -90,6 +92,7 @@ memory so that path can start.
 | What happens between the file and the first task | [009 — Loading](009-datapath-load.md) |
 | What order to build it in | [010 — Roadmap](010-roadmap.md) |
 | What you may rely on without measuring | [058 — Guarantees](058-guarantees.md) |
+| How one program is placed inside another | [140 — A map inside a map](140-a-map-inside-a-map.md) |
 | Why nothing is ever pulled, and what that cost | [056 — Why there is no pull path](implementation-notes/056-no-pull-path.md) |
 | What it would take to use this from another project | [057 — Packaging](implementation-notes/057-packaging.md) |
 | Which processor a station table belongs to | [090 — One station table per processor](implementation-notes/090-one-table-per-processor.md) |

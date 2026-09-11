@@ -235,40 +235,59 @@ worst way for a written-down program to be wrong, because nothing
 about the file looks incorrect.
 
 **A port is a ring buffer unless a line says otherwise.** There are
-four ways for a line to say otherwise, and all carry the port index:
+five ways for a line to say otherwise, and all carry the port index:
 
 ```
-in 1 - 0$        port 1 holds the value written at statics entry 0
-in 1 = 5       port 1 holds 5
-in 2 = { 1.5, 2.5, 3.5 }       and a struct is written the same way
-in 3 -         port 3 has no source yet
-in 4 x64 - 1$    port 4 reads statics entry 1, starting 64 slots deep
-in 5 [7, 9]    port 5 is a buffer with two values waiting in it
+in 0 - feed.0        port 0 is fed by feed's output port 0
+in 1 - 0$            port 1 is the map's argument 0
+in 2 = 5             port 2 holds 5
+in 3 = { 1.5, 2.5 }  and a struct is written the same way
+in 4 -               port 4 has no source yet
+in 5 x64             port 5 is a buffer starting 64 slots deep
+in 5 x64 - feed.0    a depth and a source on one line
+in 6 [7, 9]          port 6 is a buffer with two values waiting in it
 ```
-
-So `split` above has no input lines at all — every port is an ordinary
-ring buffer and there is nothing to say about them.
 
 Port indices match the box function's parameter order, so the loader
 can check that no line names a port the function does not have.
 
-**The first two forms differ only in where the text comes from.** `$0`
-fetches it from the statics section, which is notation for writing a
-value once and pointing several ports at it; `=` carries it on the
-line. Either way the text is parsed into that port's own storage, at
-that port's own type, and nothing is retained afterwards.
+**Everything after the dash is where this port's values come from.**
+A station and a port name a wire; a number with a `$` says they come
+from outside; nothing at all says they come from nowhere yet. The dash
+is one form with and without its far end, which is why a bare dash
+cannot be misread — no value in this format is ever a lone dash.
 
-The `=` matches the statics section's own `N = value`, so a value is
-spelled the same way wherever it is written. It is the form **the dump
-writes**, because a dump has values sitting on ports and no entry
-numbers to point back at — inventing a numbered section to refer to
-would be notation the engine made up rather than something a person
-wrote.
+**A starting depth comes first**, because the `=` form runs to the end
+of the line and nothing can follow it. One rule for all the source
+forms is worth more than a rule with an exception in it. A depth with
+nothing after it means a buffer that deep, fed the ordinary way; a
+depth used to be refusable on its own, which left a dump with no way to
+write a deepened buffer except `x64 -` — and that reads back as a port
+with *no source*, so the program could be written down and not read
+back.
 
-The `$` is there because `in 1 0` reading as "static entry zero" is not
-something anyone will guess a year from now.
+Only the letter `x` is accepted, and it reads as "sixty-four of them",
+the way a parts list writes a quantity. A star was briefly a second
+spelling and was withdrawn, because one way to say a thing is the habit
+everywhere else in this engine.
 
-**The fourth form says what the port is *holding*, not what it is.**
+**A constant is written on the line that holds it, with `=`.** The text
+runs to the end of the line, because a struct value has spaces in it,
+and it is parsed into that port's own storage at that port's own type
+with nothing retained afterwards.
+
+There used to be a **`statics` section**: a numbered list at the top of
+a map file, with input lines pointing at entries in it by number. It
+was a second spelling of a value — a way to write one down once and
+point several ports at it — and it is gone. Sharing, when it is wanted,
+is drawn instead: one station holds the value and everyone who needs it
+has an arrow from it, which costs a station and gains a wire somebody
+can see in the picture. The `$` outliving that section is not an
+accident of naming; it always read like a shell positional while being
+nothing of the sort, and it now means the one thing everybody guesses
+it means.
+
+**The bracket form says what the port is *holding*, not what it is.**
 Every other line here describes the program's shape; this one describes
 its contents, which is the difference between a schematic and an image
 of a running program (issue 712). A buffer with work waiting in it
@@ -349,7 +368,7 @@ written with a suffix; nothing is lost, because a label carrying no
 meaning can be spelled differently without the program changing. The
 names on the running program are untouched.
 
-### A port may be one of the program's doors
+### A port may be part of the map's interface
 
 ```
 in 0 - 0$        this port is the map's argument 0
@@ -358,47 +377,64 @@ out 0 - 1$       this port is the map's result 1
 
 **`$` means: this crosses the map's boundary, at this position.** The
 `in` or `out` keyword says which direction, so one notation covers both
-ends and there is no second form to learn.
+ends and there is no second form to learn. An input port marked this
+way is one the outside may deliver to; an output port marked this way
+is one whose values a caller may collect.
 
-It used to point at a numbered entry in a `statics` section, which was
-a second spelling of a constant. That section is gone, and the sigil
-now means the one thing everybody guesses it means — it always read
-like a shell positional while being nothing of the sort.
+There is no separate word for a marked port. There used to be — the
+project called them *doors* for a while, back when the mark sat on a
+whole station — and the word was retired because a port with a mark on
+it is still a port, and a second name for it only made two vocabularies
+where one was needed. They are **input ports and output ports**, and
+the ones on the map's edge say so with a `$`.
 
-**A door is a port, not a station.** The mark used to sit on the
+**The mark is on the port, not the station.** It used to sit on the
 station line as `entry` or `result`, and because a station carries one
 value inward — a C function returns one thing — a map taking three
 arguments needed three stations running the identity function. Each of
 those cost a station, a mutex, a ring buffer, and per value a task, a
 dispatch, a call that returns its argument, a readiness check and a
 second delivery. All of it was the mark having nowhere smaller to live.
+Those two words are now **refused** rather than ignored, naming what
+replaced them, because a file written the old way describes a different
+program from the one it looks like.
 
-**The number is the door's identity**, chosen by the author rather than
+**The number is the port's identity**, chosen by the author rather than
 derived from where the line sits. Reorder every line in the file and
 nothing changes; delete one and that argument is gone rather than
 silently becoming what the next one was. Under the old scheme the order
 was the order stations happened to sit in the table, so moving two lines
 in a sub-map silently swapped two of the parent's arguments.
 
-**A gap or a repeat is refused** when the program is brought up —
-neither was detectable at all before. A station may hold ports of both
-kinds: the old refusal, that a station could not be both doors, existed
-because the mark was on the station and a station is one thing.
+Each station names the argument it wants, the way two functions in one
+shell script each reach for whichever positional they need. Two stations
+in one map taking `0$` and `1$` is ordinary and needs no coordination
+between them.
+
+**Being an argument and being fed by a wire are independent.** A port
+that is both is fed both ways, and simply is not a command-line slot.
+The old refusal — that a station could not be both an entrance and an
+exit — existed because the mark was on the station and a station is one
+thing.
+
+**A gap or a repeat is refused** when the program is brought up. Two
+ports both claiming to be argument one is refused, and so is argument
+two with no argument one; neither mistake was detectable at all under
+the old scheme.
 
 **A placed map's marks are its own, not the enclosing program's.** They
 say *this port is a useful place to put values in or take them out of
 this description*, and nothing about the program that placed it — which
 is why placing one description twice does not give the parent two
 argument zeros, and why ignoring a placed map's result costs nothing.
-A part's doors are reached through the part.
+A part's marked ports are reached through the part.
 
-**The dump renumbers them on the way out**, the way it makes station
-names unique, and for the same reason: a file is one flat description
-with no parts in it, so two placed copies would write two argument
-zeros and the reader would refuse. The numbers are labels their author
-chose, and a program with different labels is the same program by every
-measure this project has.
-
+**The dump renumbers them on the way out** when two collide, the way it
+makes station names unique, and for the same reason: a file is one flat
+description with no parts in it, so two placed copies would otherwise
+write two argument zeros and the reader would refuse. The author's own
+number is kept wherever it is still free, so a map that was never
+composed round-trips with the numbers it was written with.
 **The number means the same to whoever supplies the value** — a shell,
 a C caller, or an enclosing map — the way a C function's first
 parameter does not care who called it. That is what lets a map stand

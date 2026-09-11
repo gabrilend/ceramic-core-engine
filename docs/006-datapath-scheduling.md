@@ -115,7 +115,7 @@ apart by which number came back.
 | how it ends | zero, by the rule above | 130, explicitly | aborts, leaving a core |
 
 **The polite path adds no mechanism.** It shuts the entrance — the one
-door the outside can push work through — and the ordinary ending does
+way the outside can push work through — and the ordinary ending does
 the rest. It writes nothing, because a supervisor stopping a healthy
 program did not ask for a report.
 

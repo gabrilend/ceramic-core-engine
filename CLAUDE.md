@@ -14,7 +14,8 @@ bridge is what buys focus on the runtime underneath it.
 
 - **A box** is a plain C function. Takes its arguments by value,
   returns one value, and is not permitted to remember anything
-  between calls.
+  between calls. The **station** remembers instead, by holding a
+  value the box's output is wired back into.
 - **A station** is one placement of a box in a map. It owns the
   buffers holding values waiting to be fed to that box, the mutex
   guarding them, and the list of places its output goes. The same

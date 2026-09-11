@@ -1,54 +1,48 @@
 # 001 — Overview
 
 **The ceramic core engine is a C library, in one source file, that runs
-your program on every core of the machine without you writing a single
-thread.**
+your program on every core of the machine automatically.**
 
 You write ordinary C functions. You write a second file saying which
-function feeds which. That is the whole of it — the engine turns the
-shape you drew into work spread across every core, and there is no main
-loop, no thread, and no scheduler anywhere in what you wrote.
+function feeds which, and the engine figures out how to most efficiently
+parallelize your program according to your design.
 
 It is two files to add to a project (`cera.c` and `cera.h`), it needs a
 C compiler and nothing else, and it is licensed AGPLv3.
 
 ---
 
+Here's an example. These are all simple C functions, you can probably guess
+what they do. It's not important.
+
 ```
-   in ─┬─ twice ──┐
-       │          ├─ total
-       └─ plus ───┘
+   input() ─┬─ twice() ──┐
+            │            ├─ total() ── print()
+            └─ plus() ───┘
 ```
 
-`twice` and `plus` run at the same time. `total` waits until both have
-arrived. **Nobody wrote either of those facts down** — there is no line
-of code anywhere saying "run these two together" or "wait for both".
-They are what the picture *is*.
+`twice` and `plus` run at the same time. `total` waits until the results
+from both have arrived before `print`ing.
 
-That is the whole idea. You write small C functions, you say what feeds
-what, and the shape executes itself across every core on the machine.
-There is no main loop and no scheduler you write.
+That's the whole idea. You write C functions, you say what feeds what, and the
+shape executes itself across every core on the machine.
 
 ## The pieces
 
-**A box function** is a plain C function you write. No registration, no
-macro, no header to edit:
+**A box** is a template of a box station.
+
+**A box station** is a placement of a box. It has its own **input ports**,
+its own **output ports**, and its own **wiring** saying where each output
+goes and where it's inputs come from.
+
+**A box function** is a plain C function you write:
 
 ```c
 int add(int a, int b) { return a + b; }
 ```
 
 It takes its arguments by value, returns one value, and **may not
-remember anything between calls** — no statics, no globals.
-
-**A box** is that function as the engine knows it: a template, not yet
-anywhere in particular.
-
-**A station** is one placement of a box. It has its own **input ports**,
-its own **output ports**, and its own **wiring** saying where each output
-goes. The ports and the wiring are what make a shape out of a pile of
-functions — the topology of the program is nothing but stations and the
-lines between them.
+remember anything between calls** — no statics, no globals, no pointers. (CONFIRM??)
 
 **Two stations placing the same box are two independent things.** Same
 compiled code, different ports, different neighbours. That is why the
@@ -62,6 +56,8 @@ a pointer to the function to run, and somewhere to put what it returns.
 do asks the pool for one, takes ownership of it, runs the function
 inside it, and delivers the returned value into whichever input ports
 the wiring names.
+
+`return values from functions can only be placed into input ports`
 
 **A readiness check** happens at the instant a value is delivered — by
 the worker that just delivered it, before it goes back to its own
@@ -84,8 +80,7 @@ function call and always will.
 
 ## The one rule
 
-> A station runs when, and only when, every one of its input ports
-> holds a value.
+> A station only can run when each of its input ports holds a value.
 
 Everything else follows from that sentence, including things that look
 unrelated to it. **A box may not remember anything** because two
@@ -115,9 +110,13 @@ anything, and the answer surprises everybody.
 Send two values into a graph that splits and rejoins:
 
 ```
-             ┌─ slow() ──┐
-   input() ──┤           ├─ meet()
-             └─ fast() ──┘
+                slow()
+   input()   ┌─ 0    0 ──┐
+         0 ──┘           ├─ meet()
+         1      fast()   |                                                      
+            ─── 0    0 ──┘
+
+## FIXME: should be box drawing vertical lines, not pipes like this |
 ```
 
 The two paths run on different threads at different speeds. `meet` takes
@@ -147,29 +146,64 @@ int keep(int x)         { return x; }        /* hands a value on unchanged */
 int add(int a, int b)   { return a + b; }    /* the arithmetic */
 ```
 
-`keep` looks pointless and is not: a station has to place *some*
-function, and a station whose job is to be a door — the way in, the
-place results collect — wants one that changes nothing.
-
 Here is the map, which is
 [`maps/132-the-accumulator.map`](../maps/132-the-accumulator.map) and
 runs:
 
 ```
-station feed src/boxes/029-demo-boxes.c:keep p entry
+station feed src/boxes/029-demo-boxes.c:keep p
+  in 0 - 0$
   out 0 - total.0
 
 station total src/boxes/029-demo-boxes.c:add p
+  in 0 - feed.0
+  in 1 - total.0
   out 0 - total.1     # back into itself: the running total
   out 0 - seen.0      # and out to be collected
 
-station seen src/boxes/029-demo-boxes.c:keep p result
+station seen src/boxes/029-demo-boxes.c:keep p
+  out 0 - 0$
+  in 0 - total.0
 ```
 
 Each station names **a file and a function inside it**. The bare form —
 `keep` — means the same thing when only one file defines that name.
 Note that `feed` and `seen` place the *same function* and are still two
 entirely separate stations, which is the point made further up.
+
+**Every wire is written at both ends.** `feed` says its output port 0
+feeds `total`'s input port 0, and `total` says the same thing from its
+side. Nothing is inferred from one end, so reading one station tells you
+everything that station takes and everything it gives without looking
+anywhere else in the file.
+
+**The `$` marks say where the map's edge is.** `feed`'s input port 0 is
+argument 0 — the way a value gets in from outside — and `seen`'s output
+port 0 is result 0, the place a caller collects from. The `-` separates
+the port being configured from what is attached to it.
+
+`feed` and `seen` place `keep`, a function that does nothing, and **they
+are a convenience rather than a requirement.** The marks sit on ports,
+so `total`'s own ports can carry them and the middle station can be the
+whole program:
+
+```
+station total src/boxes/029-demo-boxes.c:add p
+  in 0 - 0$
+  in 1 - total.0
+  out 0 - total.1
+  out 0 - 0$
+```
+
+That is the same accumulator in one station instead of three, and it is
+worth seeing because the longer form used to be forced. The mark once
+sat on a whole *station*, and a station carries one value inward, so
+every argument and every result cost a station running the identity
+function — a mutex, a ring buffer, and per value a task, a dispatch, a
+call that returns its argument, a readiness check and a second delivery.
+All of it was the mark having nowhere smaller to live. The file keeps
+the three-station version because the walk-through below is easier to
+follow with the way in and the way out having names.
 
 ### Following one value through
 
@@ -186,8 +220,12 @@ Deliver a `0` to `total.1` to prime the loop, then send in a `1`:
 4. A worker runs `add(1, 0)` and gets `1`. That exit is wired to two
    places, so the value goes to both: back into `total.1`, and out to
    `seen`.
-5. `seen` runs `keep(1)` and, being a result station with nothing wired
-   after it, holds the value instead of discarding it.
+5. `seen` runs `keep(1)`. Its output port 0 is marked as the map's
+   result 0, so if a caller has said where to put results, the value is
+   written into the next free slot of that array. If nobody has said,
+   the value is discarded exactly like any other output wired nowhere —
+   a marked port is not a bucket, and a program nobody collects from
+   grows nothing.
 
 Now `total.1` holds `1` and `total.0` is empty, so nothing runs until
 the next input arrives. Send `2` and the same walk produces `3`.

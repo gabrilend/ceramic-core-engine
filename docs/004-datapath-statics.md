@@ -35,10 +35,19 @@ a threshold, and a read box's file path a file path.
 Three places, and they are the same operation arriving from different
 directions.
 
-**From the box file, at construction.** The `statics` section names
-values, and binding one copies it into the port that reads it. The text
-becomes bytes by walking the field table the generator emitted for that
-type, so the compiler decides every offset and nothing is guessed.
+**From the map file, at construction.** An input line carrying `= value`
+gives that port its constant, and binding it copies the value into the
+port that reads it. The text becomes bytes by walking the field table
+the generator emitted for that type, so the compiler decides every
+offset and nothing is guessed.
+
+There used to be a separate `statics` section — a numbered list at the
+top of a map file with input lines pointing into it by number — so that
+one value could be written down once and several ports could name it.
+It is gone, because it was a second spelling of a constant. Sharing is
+drawn now instead: one station holds the value and everyone who needs
+it has an arrow from it, which costs a station and gains a wire
+somebody can see in the picture.
 
 **From outside the graph, while it runs.** A debugger, a control
 socket, a person turning a knob, or a parent program configuring a

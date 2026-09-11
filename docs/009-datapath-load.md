@@ -35,7 +35,8 @@ running program is the normal kind of description.
 
 **Two — the description is compiled.** Its text goes to the generator,
 which turns each station line into a call that adds a station, names
-it, builds it from its box, marks its door and configures its ports,
+it, builds it from its box, and configures its ports — including
+which of them are the map's arguments and which are its results —
 and turns each arrow into a call that draws a wire. Then the C
 compiler that built this binary compiles that.
 
@@ -115,16 +116,22 @@ What it checks:
   able to sit in it is what lets a program be assembled a piece at a
   time.
 - **Unreachable stations.** A station with buffered inputs that
-  nothing ever writes to will never run. Reported — unless it is a
-  declared entrance, which is precisely a station something outside
-  delivers into.
-- **A program that never says where its results come from.** Fatal.
-  Bringing a program up is a caller declaring it finished, and a
-  finished program that has not said what it produces has not said
-  what it is for. A station marked as the way out **with nothing
-  wired into it** satisfies this completely — the declaration is the
-  interface, and what flows through it is a separate matter. See
-  [008](008-map-file-format.md).
+  nothing ever writes to will never run. Reported — unless one of
+  those ports is marked as an argument, which is precisely a port
+  something outside delivers into.
+- **A gap or a repeat in the numbering.** Fatal. Two ports both
+  claiming to be argument one is refused, and so is argument two with
+  no argument one — on the result side as well. Neither mistake was
+  detectable under the old scheme, where the order was whatever order
+  the stations happened to sit in the table.
+
+A check used to live here and is retired: **a program that never says
+where its results come from** used to be fatal, on the reasoning that a
+finished program which has not said what it produces has not said what
+it is for. An interface made of numbered ports is total by being read —
+a map with no result mark produces nothing outward, and that is a
+complete sentence rather than a silence. See
+[058](058-guarantees.md) and [008](008-map-file-format.md).
 
 Two checks used to live here and can no longer be stated, because
 nothing is pulled: a cycle among gather links, and a port fanning out

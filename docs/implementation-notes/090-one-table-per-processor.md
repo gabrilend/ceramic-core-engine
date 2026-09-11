@@ -41,21 +41,24 @@ simply means something else in a different table, so a request that
 looks like it crosses draws an ordinary wire at home instead. The
 software invariant and the hardware boundary are the same boundary.
 
-**A door can be crossed.** Delivering into a program's entrance from
-outside it is the one way anything reaches a program it is not part
-of. It takes a value and a place to put it and asks nothing about
-where the caller is — the same call whether the caller is on the next
-core or the next socket.
+**A marked port can be crossed.** Delivering into a program's argument
+port from outside it is the one way anything reaches a program it is
+not part of. It takes a value and a place to put it and asks nothing
+about where the caller is — the same call whether the caller is on the
+next core or the next socket.
 
-**A program can be started beside another, sharing the workers.** That
-is the *within* a processor case: several programs, one pool, one
-processor's cores. Its own table, its own everything, reached only
-through its doors.
+**Two programs in one process are two programs.** That is the *within*
+a processor case: several tables, each its own everything, reached only
+through their marked ports. There was briefly a call that started one
+program beside another so they shared a pool of workers, and it is
+gone: sharing a pool made the second program's teardown able to take
+the first one's workers with it, and one program per pool costs
+threads that were mostly idle anyway.
 
 So a program spanning two processors is not one program with a long
 wire. It is **two programs, one per processor, talking through their
-doors** — which is what the engine makes easy and what it would have
-made easy anyway.
+marked ports** — which is what the engine makes easy and what it would
+have made easy anyway.
 
 ---
 
@@ -67,7 +70,7 @@ that is also a statement about placement: **things composed into one
 table run on one processor.** Composing is therefore the right shape
 for a subgraph you want close, and the wrong shape for work you want
 spread across sockets — for which the answer is a second program with
-a second table, fed through its entrance.
+a second table, fed through its argument ports.
 
 That gives the choice between composing and starting beside a second
 axis it did not have. It was about *isolation*: a composed program
