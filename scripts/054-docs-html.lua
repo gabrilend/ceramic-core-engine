@@ -471,21 +471,31 @@ local STYLE = [[
   --code-bg: #101215;
 }
 * { box-sizing: border-box; }
+/* The root carries the size everything else is a multiple of, and it
+ * is the one thing the text-size control can move. Every size below is
+ * in rem for exactly that reason: a pixel is an absolute unit and does
+ * not scale with anything, so a page written in pixels has a control
+ * that updates its own readout and changes nothing on the page. */
+html { font-size: 15px; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
-  font: 15px/1.6 Georgia, 'Times New Roman', serif;
+  font: 1rem/1.6 Georgia, 'Times New Roman', serif;
 }
 .wrap { display: flex; min-height: 100vh; }
 nav {
   width: 280px; flex-shrink: 0; background: var(--panel);
   padding: 18px; overflow-y: auto; height: 100vh; position: sticky; top: 0;
   border-right: 1px solid #2a2e36;
-  font-family: 'DejaVu Sans Mono', Menlo, monospace; font-size: 12px;
+  font-family: 'DejaVu Sans Mono', Menlo, monospace; font-size: 0.8rem;
 }
 .text-size {
   position: fixed; right: 14px; bottom: 12px; z-index: 5;
   display: flex; align-items: center; gap: 2px;
   background: var(--panel); border: 1px solid #2a2e36; border-radius: 6px;
+  /* The one size on the page deliberately left in pixels: this is the
+   * control that changes the others, and a control that shrank itself
+   * along with them would get harder to click the smaller the text got,
+   * which is the direction somebody is most likely to want to undo. */
   padding: 2px 4px; font-size: 12px;
   font-family: 'DejaVu Sans Mono', Menlo, monospace;
 }
@@ -496,7 +506,7 @@ nav {
 .text-size button:hover { color: var(--ink); background: #2a2e36; }
 #text-size-now { color: var(--box); min-width: 40px; text-align: center; }
 
-nav h2 { color: var(--box); font-size: 12px; letter-spacing: 1px;
+nav h2 { color: var(--box); font-size: 0.8rem; letter-spacing: 1px;
   text-transform: uppercase; margin: 18px 0 6px; }
 nav a { display: block; color: var(--dim); text-decoration: none;
   padding: 1px 0; white-space: nowrap; overflow: hidden;
@@ -511,13 +521,14 @@ nav a.elsewhere:hover { color: var(--wire); }
 main { padding: 34px 44px; max-width: 860px; }
 h1, h2, h3, h4 { font-family: 'DejaVu Sans Mono', Menlo, monospace;
   color: var(--box); line-height: 1.3; }
-h1 { font-size: 24px; border-bottom: 1px solid #2a2e36; padding-bottom: 10px; }
-h2 { font-size: 18px; margin-top: 34px; }
+h1 { font-size: 1.6rem; border-bottom: 1px solid #2a2e36; padding-bottom: 10px; }
+h2 { font-size: 1.2rem; margin-top: 34px; }
+h3 { font-size: 1.05rem; }
 a { color: var(--wire); }
 code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px;
-  font: 13px 'DejaVu Sans Mono', Menlo, monospace; color: var(--ok); }
+  font: 0.87rem 'DejaVu Sans Mono', Menlo, monospace; color: var(--ok); }
 pre.code { background: var(--code-bg); padding: 14px; border-radius: 6px;
-  overflow-x: auto; font: 13px/1.5 'DejaVu Sans Mono', Menlo, monospace;
+  overflow-x: auto; font: 0.87rem/1.5 'DejaVu Sans Mono', Menlo, monospace;
   border-left: 3px solid var(--wire); }
 pre.code .kw { color: var(--wire); }
 pre.code .cm { color: var(--dim); font-style: italic; }
@@ -525,12 +536,12 @@ pre.code .st { color: var(--ok); }
 table { border-collapse: collapse; margin: 14px 0; }
 td { border: 1px solid #2a2e36; padding: 5px 12px; }
 tr:first-child td { color: var(--box);
-  font-family: 'DejaVu Sans Mono', Menlo, monospace; font-size: 13px; }
+  font-family: 'DejaVu Sans Mono', Menlo, monospace; font-size: 0.87rem; }
 blockquote { border-left: 3px solid var(--box); margin: 14px 0;
   padding: 4px 18px; color: var(--box); background: var(--panel); }
 .widget { background: var(--panel); border: 1px solid #2a2e36;
   border-radius: 8px; padding: 18px; margin: 26px 0;
-  font-family: 'DejaVu Sans Mono', Menlo, monospace; font-size: 13px; }
+  font-family: 'DejaVu Sans Mono', Menlo, monospace; font-size: 0.87rem; }
 .widget h3 { margin-top: 0; }
 .widget .cells { display: flex; gap: 4px; margin: 10px 0; flex-wrap: wrap; }
 .widget .cell { width: 34px; height: 34px; border: 1px solid #3a3f48;
