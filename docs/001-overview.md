@@ -27,6 +27,25 @@ from both have arrived before `print`ing. That's the whole idea: you
 write C functions, you say what feeds what, and the shape executes itself
 across every core on the machine.
 
+## The words
+
+Seven of them, and the rest of the documentation leans on all seven.
+
+| word | what it means |
+|---|---|
+| **a box** | one plain C function |
+| **a station** | one placement of a box in a map — its own ports, its own wiring |
+| **a task** | one invocation: a copy of each input value and a pointer to the code |
+| **a map file**, or **a description** | the text saying which box feeds which. The two are the same thing; **description** is the word for the content and **map file** for where it is kept |
+| **a soramech** | a compiled map file. Also the shape itself — the boxes, the map and the graph together |
+| **cera**, the **ceramic core engine** | the engine: two files, `cera.c` and `cera.h` |
+| **serac** | the compiler that turns a map file and some C into a program |
+
+The last two are one word twice. Read aloud, *serac* and *cera* say the
+same thing — which is deliberate, and the same observation that settled
+the engine's own spelling when *soramech* and *ceramic* turned out to be
+one word that had been half-respelled with nobody noticing.
+
 ## The pieces
 
 **A box** is a plain C function you write:
