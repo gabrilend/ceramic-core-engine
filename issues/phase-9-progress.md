@@ -21,6 +21,7 @@ translation unit as its callers can be `static`.
 | [906 — an error reaches the host](completed/906-an-error-reaches-the-host.md) | **complete** | An installable handler, called with the message and the exit code immediately before the engine dies. Building it meant building the funnel first: thirty places wrote to stderr and ended the process, each its own little ending. |
 | [907 — built outside the tree](completed/907-built-outside-the-tree.md) | **complete** | The capstone. `make test` builds a program with this engine in a scratch directory that cannot see this repository, runs it, and checks the answer. It caught two real faults on its first run. |
 | [908 — two maps in one process](completed/908-two-maps-in-one-process.md) | **complete**, and it needed no code | There is no process-wide active map — it went with the statics table. What was missing was a test, because a singleton is invisible until two of something exist. |
+| [910 — the engine ships as a compiler](910-the-engine-ships-as-a-compiler.md) | **in progress** | `cerac` builds, carries the engine as text, writes a `main`, and the engine's three baked-in paths collapsed into one name. Open questions remain unworked. |
 
 ## Why the amalgamation is the source rather than a build artifact
 
@@ -81,6 +82,46 @@ adds a way for a host to *hear* about a refusal, and deliberately no way
 to survive one. An error code a caller may ignore is a fallback wearing
 a return type.
 
+## What the compiler turned up
+
+**The scratch directory was never needed, and the question dissolved
+rather than being answered.** The blueprint had one question left: where
+to put the engine when `cerac` writes it out, and whether to keep it
+between runs. Both answers had a real cost — rewriting a megabyte every
+time, or a stale copy that could be compiled against.
+
+Neither was paid, because the premise was wrong. A C compiler will read
+a whole program from a pipe. The only thing forcing a file to exist was
+one `#include` of the engine's header, and an include is a filesystem
+lookup — which concatenation dissolves, by putting the header's text in
+front and deleting the line. That is the same move this engine already
+made when eleven sources became `cera.c`. The linker's export list was
+the other file, and naming the exported family in a flag does what
+handing over the file did.
+
+Measured before it was relied on: the one-translation-unit binary
+exports the identical set of symbols and, stripped, comes to the same
+size as the one the Makefile builds, differing by 412 bytes of text. The
+change is mechanism only; the product is unchanged.
+
+**A compiler that announces where it put things cannot be used by a
+program.** `cerac` printed its output path on success, and the engine
+runs it as a subprocess when a description arrives at run time — so that
+sentence landed in the middle of somebody's results. Silence on success
+is the convention for a reason that is not taste.
+
+**The default output path can land on an input.** `--emit-c` over
+`shapes.map` wants to write `shapes.c`, and a box source of that name
+beside it is an entirely ordinary thing to have. It destroyed the source
+and then failed to compile it, and the message was about a brace on a
+line nobody wrote. Found by a test doing exactly that by accident, which
+is the useful kind.
+
+**A `const char *` result cannot happen, and the branch handling it was
+code nothing could reach.** The parser already refuses a box that returns
+a borrowed pointer — the bytes live wherever it points and a value on a
+wire has no owner. Written before that was checked, removed after.
+
 ## Where the phase stands
 
 **Done. The engine has left.** It is two files. It
@@ -94,10 +135,24 @@ a directory that cannot see this repository, writes a box and a map and
 a program from nothing, builds them the way a consumer would, and checks
 the answer that comes back.
 
-Nothing is left. [909](completed/909-the-blueprints-name-their-calls.md)
-was refused: a blueprint describes what to build, and the name a call
-ends up with is not part of that. The list of calls exists in
-`src/cera.info.md`, derived from the header, which was the useful half.
+[909](completed/909-the-blueprints-name-their-calls.md) was refused: a
+blueprint describes what to build, and the name a call ends up with is
+not part of that. The list of calls exists in `src/cera.info.md`,
+derived from the header, which was the useful half.
+
+**And then the leaving got shorter.**
+[910](910-the-engine-ships-as-a-compiler.md) says the engine is not four
+things a consumer assembles but one command, and most of it stands: a
+description and some C are a program, built by `cerac`, which carries
+the engine inside itself and writes the `main` nobody wanted to write.
+The out-of-tree test now does its work twice — once the old way, four
+files and three compiler invocations, and once in one command — so the
+two claims are checked against each other rather than one replacing the
+other on trust.
+
+It is not finished, because its open questions have not been worked
+through. They are listed at the end of the issue and repeated under
+*What is not decided* below.
 
 ## What the last three turned up
 
@@ -170,4 +225,10 @@ belongs to one processor.
 
 ## What is not decided
 
-Nothing in this phase, currently.
+**Issue 910's open questions**, which are recorded in the issue file and
+have not been worked through: what `cerac` does when the compiler it
+bakes in is absent, whether the result bound is the right shape, whether
+`--main=` earns its place beside `--emit-c` and `--unpack`, what root a
+box source outside the description's directory should be shortened
+against, and the fact that the map format now has two writers and three
+readers with nothing deriving any of them from each other.

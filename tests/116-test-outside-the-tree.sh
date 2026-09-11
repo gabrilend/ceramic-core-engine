@@ -128,8 +128,20 @@ PROG
 
 # --- step one: build the generator, which needs nothing from the engine
 #     but the one header -------------------------------------------------
+#
+# Two programs live in scripts/ and each has a main of its own: the
+# build-time generator, and the compiler that ships (issue 910). The
+# generator is built from everything there except cerac's front door,
+# the way the project's own Makefile builds it, because two mains in one
+# link is an error that names neither of them usefully.
+GEN_SRC=()
+for f in "${AWAY}"/generator/*.c; do
+    [[ "$(basename "${f}")" == "144-cerac.c" ]] && continue
+    GEN_SRC+=("${f}")
+done
+
 "${CC}" -std=gnu11 -O2 -I"${AWAY}/generator" -I"${AWAY}/engine" \
-    -o "${AWAY}/build/generate" "${AWAY}"/generator/*.c \
+    -o "${AWAY}/build/generate" "${GEN_SRC[@]}" \
     || fail "the generator did not compile away from home"
 
 # --- step two: generate, over the consumer's own box and map ----------
@@ -146,10 +158,8 @@ PROG
 # fails at run time when a box arrives, which looks like success.
 "${CC}" -std=gnu11 -O2 -pthread -I"${AWAY}/engine" \
     -ffunction-sections -fdata-sections \
-    -DCERA_CC='"'"${CC}"'"' \
-    -DCERA_GENERATOR='"'"${AWAY}/build/generate"'"' \
+    -DCERA_COMPILER='"'"${AWAY}/build/cerac"'"' \
     -DCERA_ROOT='"'"${AWAY}"'"' \
-    -DCERA_INCLUDE='"'"${AWAY}/engine"'"' \
     -DCERA_RAM_SHARED='"/dev/shm"' -DCERA_RAM_EXEC='"/tmp"' \
     -o "${AWAY}/build/away" \
     "${AWAY}/away.c" "${AWAY}/engine/cera.c" "${AWAY}/build/emitted.c" \
@@ -171,5 +181,75 @@ if grep -rq -- "${DIR}" "${AWAY}/build/emitted.c"; then
     fail "the emitted file names this repository; a consumer's build would not relocate"
 fi
 echo "  and nothing it generated names the repository it came from"
+
+# --- the same work, in one command ------------------------------------
+#
+# Everything above is what a consumer used to assemble: four things
+# travelling, three compiler invocations, two linker settings that are
+# easy to omit, and a main nobody wanted to write. Below is issue 910's
+# claim that all of it collapses into one program handed a description
+# and some C.
+#
+# cerac is built here rather than copied, for the same reason the
+# generator is: a consumer needs a C compiler and nothing else, and a
+# prebuilt binary is a platform, a libc version and a trust decision.
+# The two stages are the ones the project's own Makefile runs — compile
+# the generator, use it to write the engine out as C string literals,
+# compile cerac from the generator's sources plus that file.
+"${AWAY}/build/generate" --embed "${AWAY}/build/145-embedded-engine.c" \
+    "${AWAY}/engine/cera.h" "${AWAY}/engine/cera.c" \
+    "${AWAY}/engine/098-engine-surface.syms" \
+    || fail "the generator could not write the engine out as text"
+
+CERAC_SRC=("${AWAY}/generator/144-cerac.c" "${AWAY}/build/145-embedded-engine.c")
+for f in "${AWAY}"/generator/*.c; do
+    base="$(basename "${f}")"
+    [[ "${base}" == "144-cerac.c"   ]] && continue
+    [[ "${base}" == "070-generate.c" ]] && continue
+    CERAC_SRC+=("${f}")
+done
+
+"${CC}" -std=gnu11 -O2 -I"${AWAY}/generator" -I"${AWAY}/engine" \
+    -DCERAC_CC="\"${CC}\"" \
+    -o "${AWAY}/build/cerac" "${CERAC_SRC[@]}" \
+    || fail "cerac did not compile away from home"
+
+# What it carries has to be what went in, or everything built with it is
+# built against something nobody wrote.
+rm -rf "${AWAY}/unpacked"
+"${AWAY}/build/cerac" --unpack "${AWAY}/unpacked" >/dev/null \
+    || fail "cerac could not write the engine back out"
+for f in cera.c cera.h 098-engine-surface.syms; do
+    cmp -s "${AWAY}/engine/${f}" "${AWAY}/unpacked/${f}" \
+        || fail "the ${f} cerac carries is not the one it was built from"
+done
+echo "  the engine cerac carries comes back out byte for byte"
+
+# One command, and nothing in the directory but a description and a box.
+mkdir -p "${AWAY}/onecommand"
+cp "${AWAY}/away.map" "${AWAY}/onecommand/oneshot.map"
+cp "${AWAY}/boxes/arithmetic.c" "${AWAY}/onecommand/arithmetic.c"
+
+"${AWAY}/build/cerac" "${AWAY}/onecommand/oneshot.map" \
+    "${AWAY}/onecommand/arithmetic.c" >/dev/null \
+    || fail "cerac refused a description and a box it should accept"
+
+# Beside the description, named after it — not wherever the shell was.
+[[ -x "${AWAY}/onecommand/oneshot" ]] \
+    || fail "cerac did not put the program beside the description that made it"
+
+got="$("${AWAY}/onecommand/oneshot" 12 2>"${AWAY}/build/stderr2.txt")"
+status=$?
+[[ ${status} -eq 0 ]] || fail "the one-command program exited ${status}: $(cat "${AWAY}/build/stderr2.txt")"
+[[ "${got}" == "42" ]] || fail "the one-command program printed '${got}', not 42"
+echo "  and one command over the same description and box printed ${got}"
+
+# The count is the program's own, and getting it wrong says so.
+if "${AWAY}/onecommand/oneshot" >/dev/null 2>"${AWAY}/build/stderr3.txt"; then
+    fail "a program given no arguments when it wants one exited zero"
+fi
+grep -q "takes 1 argument" "${AWAY}/build/stderr3.txt" \
+    || fail "the refusal did not say how many arguments were wanted: $(cat "${AWAY}/build/stderr3.txt")"
+echo "  and asking for nothing is refused saying how many it wanted"
 
 rm -rf "${AWAY}"

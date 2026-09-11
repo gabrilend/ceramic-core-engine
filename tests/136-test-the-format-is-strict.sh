@@ -66,10 +66,8 @@ EOF
 
 "${CC}" -std=gnu11 -Wall -g -O2 -pthread \
     -I"${DIR}/src" \
-    -DCERA_CC='"'"${CC}"'"' \
-    -DCERA_GENERATOR='"'"${DIR}"'/tmp/build/generate"' \
+    -DCERA_COMPILER='"'"${DIR}"'/tmp/build/cerac"' \
     -DCERA_ROOT='"'"${DIR}"'"' \
-    -DCERA_INCLUDE='"'"${DIR}"'/src"' \
     -DCERA_RAM_SHARED='"/dev/shm/'"$(basename "${DIR}")"'"' \
     -DCERA_RAM_EXEC='"/tmp/'"$(basename "${DIR}")"'"' \
     -o "${WORK}/reader" "${WORK}/reader.c" \

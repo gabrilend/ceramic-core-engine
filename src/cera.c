@@ -8001,19 +8001,22 @@ const char *cera_map_remove_stations(cera_map_t *m, const int *stations,
 #include <unistd.h>
 
 /*
- * Which compiler built this binary, where the generator is, and where
- * the headers generated code includes live. Defaults exist only so
- * this file compiles outside the project's Makefile; a real build
- * always defines all four.
+ * **What this file needs from outside is the name of one program**
+ * (issue 910). It used to be three absolute paths — the compiler, the
+ * generator, and the directory holding the header generated code
+ * includes — and two of them named places on the machine that ran the
+ * build. A binary copied anywhere else invoked a generator that was
+ * not there and reached for a header at a path that did not exist, and
+ * the failure arrived as a compiler error naming a directory the
+ * person reading it had never heard of.
+ *
+ * `cerac` answers all three at once, because it carries its own
+ * compiler, its own header, and the generator inside it. So the
+ * question stops being three paths and becomes one name, and a name is
+ * something that can be looked for.
  */
-#ifndef CERA_CC
-#define CERA_CC "cc"
-#endif
-#ifndef CERA_GENERATOR
-#define CERA_GENERATOR "generate"
-#endif
-#ifndef CERA_INCLUDE
-#define CERA_INCLUDE "."
+#ifndef CERA_COMPILER
+#define CERA_COMPILER "cerac"
 #endif
 #ifndef CERA_RAM_SHARED
 #define CERA_RAM_SHARED "/dev/shm/minimal-soramech"
@@ -8217,6 +8220,125 @@ static int run(const char *command)
         fprintf(stderr, "latebox: cannot run '%s': %s\n",
                 command, strerror(errno));
     return -1;
+}
+/* }}} */
+
+/* {{{ joined() */
+/*
+ * A directory and the compiler's name written into one buffer, or zero
+ * when the two together will not fit. A path that does not fit is not
+ * a path that nearly fits: the truncated form names a different file,
+ * and looking for it would answer a question nobody asked.
+ */
+static int joined(char *out, size_t room, const char *dir, int dir_len)
+{
+    int wrote = snprintf(out, room, "%.*s/%s", dir_len, dir, CERA_COMPILER);
+    return wrote > 0 && (size_t)wrote < room;
+}
+/* }}} */
+
+/* {{{ find_compiler() */
+/*
+ * **Where `cerac` is**, answered once and remembered, or null with a
+ * refusal already printed.
+ *
+ * Three answers, in order, and the order is the whole design:
+ *
+ * 1. **`CERAMIC_COMPILER` in the environment**, which is somebody
+ *    saying outright where it is. Nothing is searched when this is
+ *    set, because a person who answered the question should not then
+ *    have their answer second-guessed.
+ * 2. **Beside this executable.** For a program `cerac` built, that is
+ *    the directory holding the description it was built from, because
+ *    that is where `cerac` put it — so "beside the map file", which is
+ *    where a programmer who expects to add boxes keeps it, and "beside
+ *    the program" are the same directory reached by the only route a
+ *    running program has to it.
+ * 3. **On the path**, for a machine where it is installed once and
+ *    every program finds the same one.
+ *
+ * Failing all three, the refusal names them, because the alternative
+ * is a compiler error about a file nobody asked for.
+ *
+ * **A program that is never handed a new description never calls
+ * this.** It carries no engine source, invokes no compiler, and runs
+ * on a machine with no toolchain at all. The search happens only when
+ * genuinely new code is arriving.
+ */
+static const char *find_compiler(void)
+{
+    static char found[1024];
+    static int  asked;
+
+    if (asked)
+        return found[0] ? found : NULL;
+    asked = 1;
+
+    const char *said = getenv("CERAMIC_COMPILER");
+    if (said && *said) {
+        snprintf(found, sizeof found, "%s", said);
+        return found;
+    }
+
+    /*
+     * **A slash in the name means it is a path, and nothing is
+     * searched** — the rule a shell has always used for a command, so
+     * there is no second concept to learn.
+     *
+     * It matters because two different builds set this to two different
+     * kinds of thing on purpose. This repository's own build points it
+     * at the copy in the build tree, so a test can compile a late box
+     * with nothing installed. A program `cerac` builds is given no
+     * definition at all and falls to the bare name below, which is what
+     * gets searched for — and what makes that program relocatable,
+     * which is the whole point of the exercise.
+     */
+    if (strchr(CERA_COMPILER, '/')) {
+        snprintf(found, sizeof found, "%s", CERA_COMPILER);
+        if (access(found, X_OK) == 0)
+            return found;
+        found[0] = '\0';
+        fprintf(stderr, "latebox: this program was built naming %s as its "
+                        "compiler, and there is nothing runnable there\n",
+                CERA_COMPILER);
+        return NULL;
+    }
+
+    /* This executable's own directory. `/proc/self/exe` is the only
+     * way a process can be told where it is that does not depend on
+     * how it was invoked — `argv[0]` is whatever the caller felt like
+     * putting there, and the engine never sees it in any case. */
+    char self[1024];
+    ssize_t n = readlink("/proc/self/exe", self, sizeof self - 1);
+    if (n > 0) {
+        self[n] = '\0';
+        char *slash = strrchr(self, '/');
+        if (slash) {
+            *slash = '\0';
+            if (joined(found, sizeof found, self, (int)strlen(self)) &&
+                access(found, X_OK) == 0)
+                return found;
+        }
+    }
+
+    /* And the path, which `execvp` would search anyway — asked here so
+     * that not finding it is a sentence rather than a failed exec. */
+    const char *path = getenv("PATH");
+    for (const char *at = path; at && *at; ) {
+        const char *colon = strchr(at, ':');
+        int len = colon ? (int)(colon - at) : (int)strlen(at);
+        if (len > 0 && joined(found, sizeof found, at, len) &&
+            access(found, X_OK) == 0)
+            return found;
+        at = colon ? colon + 1 : NULL;
+    }
+
+    found[0] = '\0';
+    fprintf(stderr,
+            "latebox: bringing new code into a running program needs %s, "
+            "and it is not beside this program and not on the path. Put it "
+            "in either, or name it in CERAMIC_COMPILER.\n", CERA_COMPILER);
+    return NULL;
 }
 /* }}} */
 
@@ -8517,9 +8639,18 @@ static int spill_sources(const char *dir, const char **paths, int cap)
  */
 static void gather_missing_boxes(const char *map_path, const char *list_path)
 {
-    char cmd[2048];
-    snprintf(cmd, sizeof cmd, "%s --map-boxes %s > %s",
-             CERA_GENERATOR, map_path, list_path);
+    const char *cerac = find_compiler();
+    if (!cerac)
+        return;   /* find_compiler has already said why */
+
+    char cmd[4096];
+    int wrote = snprintf(cmd, sizeof cmd, "%s --map-boxes %s > %s",
+                         cerac, map_path, list_path);
+    if (wrote <= 0 || wrote >= (int)sizeof cmd) {
+        fprintf(stderr, "latebox: the paths involved do not fit on one "
+                        "command line\n");
+        return;
+    }
     if (run(cmd) != 0)
         return;   /* the compiler will say what is wrong with it */
 
@@ -8589,14 +8720,18 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text)
         return NULL;
 
     int serial = late_serial++;
-    char map_path[512], src_root[512], gen_path[512], lib_path[512];
+    char map_path[512], src_root[512], lib_path[512];
     char cmd[8192];
     snprintf(map_path, sizeof map_path, "%s/map-%d-%d.map",
              dir, (int)getpid(), serial);
     snprintf(src_root, sizeof src_root, "%s/sources-%d-%d",
              dir, (int)getpid(), serial);
-    snprintf(gen_path, sizeof gen_path, "%s/built-%d-%d.c",
-             dir, (int)getpid(), serial);
+    /* There is no third path here any more. The emitted C used to be
+     * written out so that a compiler could be pointed at it; the
+     * compiler is handed it down a pipe now and it never becomes a
+     * file. Anybody who wants to read it asks cerac for it with
+     * --keep-c, which is a person deciding rather than every run
+     * leaving litter (issue 910). */
     snprintf(lib_path, sizeof lib_path, "%s/built-%d-%d.so",
              libdir, (int)getpid(), serial);
 
@@ -8629,33 +8764,50 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text)
     }
 
     /*
-     * **--external-boxes is the whole difference from compiling a
-     * box.** It says the boxes are already in the process that will
-     * load this, so the emitted file declares the functions that build
-     * their stations rather than defining them, and carries no second
-     * copy of anything.
+     * **One command where there were two** (issue 910), because the
+     * generator and the compiler are the same program now and it knows
+     * its own header. The root is the directory the sources were just
+     * spilled into, which is what makes the symbols come out the same
+     * as the ones this program already publishes: a box's symbol
+     * carries its path shortened against the root, and the paths the
+     * sources were filed under are the ones they were spilled under.
+     *
+     * **`--shared` with a description says the boxes are already in the
+     * process that will load this**, so what is emitted declares the
+     * functions that build their stations rather than defining them,
+     * and carries no second copy of anything.
      */
+    const char *cerac = find_compiler();
+    if (!cerac)
+        return NULL;
+
     int at = snprintf(cmd, sizeof cmd,
-                      "%s %s --root=%s --map=%s --external-boxes",
-                      CERA_GENERATOR, gen_path, src_root, map_path);
-    for (int i = 0; i < n_spilled && at < (int)sizeof cmd; i++)
-        at += snprintf(cmd + at, sizeof cmd - (size_t)at, " %s", spilled[i]);
-    if (at >= (int)sizeof cmd) {
+                      "%s --shared --root=%s -o %s %s",
+                      cerac, src_root, lib_path, map_path);
+    /* Each source name appended with its length measured first rather
+     * than formatted and checked afterwards. A command line that did
+     * not fit is not one that nearly fitted — the last name would be
+     * cut in half and the compiler asked for a file nobody has — so the
+     * room is established before anything is written into it. */
+    int fits = at > 0 && at < (int)sizeof cmd;
+    for (int i = 0; i < n_spilled && fits; i++) {
+        size_t len = strlen(spilled[i]);
+        if ((size_t)at + len + 2 > sizeof cmd) {
+            fits = 0;
+            break;
+        }
+        cmd[at++] = ' ';
+        memcpy(cmd + at, spilled[i], len);
+        at += (int)len;
+        cmd[at] = '\0';
+    }
+    if (!fits) {
         fprintf(stderr, "latebox: too many sources to name on one command "
                         "line\n");
         return NULL;
     }
     if (run(cmd) != 0) {
-        fprintf(stderr, "latebox: the generator refused %s\n", map_path);
-        return NULL;
-    }
-
-    snprintf(cmd, sizeof cmd,
-             "%s -std=gnu11 -O2 -fPIC -shared -I%s -o %s %s",
-             CERA_CC, CERA_INCLUDE, lib_path, gen_path);
-    if (run(cmd) != 0) {
-        fprintf(stderr, "latebox: the compiler refused the code generated "
-                        "for %s\n", map_path);
+        fprintf(stderr, "latebox: the compiler refused %s\n", map_path);
         return NULL;
     }
 
@@ -8698,10 +8850,8 @@ int cera_late_compile_source(const char *c_source)
         return -1;
 
     int serial = late_serial++;
-    char box_path[512], gen_path[512], lib_path[512], cmd[2048];
+    char box_path[512], lib_path[512], cmd[2048];
     snprintf(box_path, sizeof box_path, "%s/box-%d-%d.c",
-             dir, (int)getpid(), serial);
-    snprintf(gen_path, sizeof gen_path, "%s/emitted-%d-%d.c",
              dir, (int)getpid(), serial);
     snprintf(lib_path, sizeof lib_path, "%s/box-%d-%d.so",
              libdir, (int)getpid(), serial);
@@ -8715,22 +8865,31 @@ int cera_late_compile_source(const char *c_source)
     if (write_text(box_path, c_source) != 0)
         return -1;
 
-    snprintf(cmd, sizeof cmd, "%s %s %s", CERA_GENERATOR, gen_path, box_path);
-    if (run(cmd) != 0) {
-        fprintf(stderr, "latebox: the generator refused %s\n", box_path);
+    /*
+     * **One command where there were two** (issue 910). `--shared` with
+     * boxes and no description is the other half of the late story: a
+     * box arriving before anything names it, so what is emitted defines
+     * the placement functions rather than declaring them, because
+     * nothing else holds this code yet.
+     *
+     * The compiler is cerac's own, which is what makes its answer to
+     * sizeof the same answer as this binary's — the reasoning that used
+     * to bake a compiler path into every build, now written down in
+     * cerac instead of in whoever linked the program.
+     */
+    const char *cerac = find_compiler();
+    if (!cerac)
+        return -1;
+
+    int wrote = snprintf(cmd, sizeof cmd, "%s --shared -o %s %s",
+                         cerac, lib_path, box_path);
+    if (wrote <= 0 || wrote >= (int)sizeof cmd) {
+        fprintf(stderr, "latebox: the paths involved do not fit on one "
+                        "command line\n");
         return -1;
     }
-
-    /* Position-independent and shared, with the engine's headers
-     * reachable because generated code includes them. The compiler is
-     * the one that built this binary, which is what makes its answer
-     * to sizeof the same answer. */
-    snprintf(cmd, sizeof cmd,
-             "%s -std=gnu11 -O2 -fPIC -shared -I%s -o %s %s",
-             CERA_CC, CERA_INCLUDE, lib_path, gen_path);
     if (run(cmd) != 0) {
-        fprintf(stderr, "latebox: the compiler refused the generated "
-                        "generated source for %s\n", box_path);
+        fprintf(stderr, "latebox: the compiler refused %s\n", box_path);
         return -1;
     }
 

@@ -50,20 +50,27 @@ CFLAGS += -I$(DIR)/src
 # larger object file during the build and nothing at all afterwards.
 CFLAGS += -ffunction-sections -fdata-sections
 
-# Three build-time facts a program needs at run time, and only if it
-# ever brings in new code (issue 310): which compiler built it, where
-# the generator is, and where the headers that generated code includes
-# live. Baked in rather than discovered, because **the compiler that
-# built the binary is the one that must compile anything added to it**
-# — that is what gives a program exactly one answer to sizeof by
-# construction rather than by checking.
-CFLAGS += -DCERA_CC='"$(CC)"'
-CFLAGS += -DCERA_GENERATOR='"$(BUILD)/generate"'
+# What a program needs at run time, and only if it ever brings in new
+# code (issue 310). This was three absolute paths — the compiler, the
+# generator, and the directory holding cera.h — and two of them named
+# places on the machine that ran the build, so a binary copied anywhere
+# else could not compile a late box at all (issue 910).
+#
+# It is one name now, because cerac carries its own compiler, its own
+# header and the generator inside it. The engine looks for it beside
+# the program, then on the path, and says so when it finds neither. The
+# reasoning that made the compiler a build-time fact has not changed —
+# whatever compiles code added to a program must agree with it about
+# sizeof — it has moved into cerac, which is built by one compiler and
+# invokes that same one.
+#
+# This build points it at the copy in the build tree so that a test can
+# compile a late box without anything being installed.
+CFLAGS += -DCERA_COMPILER='"$(BUILD)/cerac"'
 # The project root, so a test can find the box sources the generated
 # file names — those paths are shortened against it so that two
 # machines building the same tree emit the same file (issue 311c).
 CFLAGS += -DCERA_ROOT='"$(DIR)"'
-CFLAGS += -DCERA_INCLUDE='"$(DIR)/src"'
 CFLAGS += -DCERA_RAM_SHARED='"$(RAM_SHARED)"'
 CFLAGS += -DCERA_RAM_EXEC='"$(RAM_EXEC)"'
 
@@ -82,8 +89,15 @@ CFLAGS += -DCERA_RAM_EXEC='"$(RAM_EXEC)"'
 # engine inherited an interpreter dependency that nothing at run time
 # ever used.
 BOX_SRC   := $(wildcard $(DIR)/src/boxes/*.c)
-GEN_SRC   := $(wildcard $(DIR)/scripts/*.c)
-GEN_LIB   := $(filter-out $(DIR)/scripts/070-generate.c,$(GEN_SRC))
+
+# Two programs are built from scripts/, and each has a main. The
+# wildcard finds every file there; the two front doors are named so
+# that neither ends up linked into the other, which would be two mains
+# in one binary and a link error naming nothing useful.
+CERAC_SRC := $(DIR)/scripts/144-cerac.c
+GEN_FRONT := $(DIR)/scripts/070-generate.c
+GEN_SRC   := $(filter-out $(CERAC_SRC),$(wildcard $(DIR)/scripts/*.c))
+GEN_LIB   := $(filter-out $(GEN_FRONT),$(GEN_SRC))
 
 # The map reader used to be named here separately, because it lived in
 # src/ and had two callers — the generator and the engine. The engine
@@ -217,6 +231,49 @@ $(BUILD): | ramdirs
 SURFACE := $(DIR)/src/098-engine-surface.syms
 LDFLAGS := -Wl,--dynamic-list=$(SURFACE) -Wl,--gc-sections
 
+# The compiler that ships (issue 910), built in two named stages,
+# because a two-stage build that is not obvious is a build somebody
+# breaks.
+#
+# Stage one is $(GENERATOR) above: the ordinary build-time generator,
+# which knows nothing about any of this.
+#
+# Stage two runs it in --embed mode over the engine's three files,
+# writing one C file that holds them as string literals, and compiles
+# cerac from the generator's own sources plus that file. There is no
+# bootstrap problem, because the program doing the embedding does not
+# itself need to have been embedded.
+#
+# Why the engine's source is in there at all: cerac hands the compiler
+# a whole program on standard input — the header, the engine, the
+# generated construction code, a generated main, concatenated — so that
+# nothing it compiles against has to exist as a file anywhere. That is
+# what removes the three absolute paths a built binary used to carry
+# from the machine that built it.
+#
+# The embedded file takes its index from the project's counter like any
+# other source, even though it is written into the build tree rather
+# than committed: it is a file in the reading order, and a reader who
+# finds nothing at that number has been told something wrong.
+CERAC       := $(BUILD)/cerac
+CERAC_EMBED := $(BUILD)/145-embedded-engine.c
+
+$(CERAC_EMBED): $(GENERATOR) $(CERA_H) $(CERA_C) $(SURFACE) | $(BUILD)
+	$(GENERATOR) --embed $@ $(CERA_H) $(CERA_C) $(SURFACE)
+
+# The compiler cerac was built with is the compiler cerac invokes,
+# because the engine text it carries has to be compiled by something
+# whose idea of sizeof matches the code it will be wired to. That is
+# the same reasoning that baked a compiler into the engine's own
+# runtime path; it is written down in one place now instead of two.
+$(CERAC): $(CERAC_SRC) $(GEN_LIB) $(CERAC_EMBED) $(CERA_H) | $(BUILD)
+	$(CC) $(CFLAGS) -I$(DIR)/scripts -DCERAC_CC='"$(CC)"' \
+	    -o $@ $(CERAC_SRC) $(GEN_LIB) $(CERAC_EMBED)
+
+.PHONY: cerac
+cerac: $(CERAC)
+	@echo "$(CERAC)"
+
 $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
 
@@ -309,7 +366,10 @@ TEST_SCRIPTS := $(wildcard $(DIR)/tests/*.sh)
 
 # Each test is run in order; the first failure stops the run, because
 # later tests build on machinery the earlier ones just proved broken.
-test: $(TEST_BINS) $(VIEWER) $(WATCHED) $(MECHANISM) $(ANYMAP)
+# cerac is a prerequisite of running the tests rather than of building
+# them: nothing links against it, and the tests that bring code into a
+# running program invoke it the way any program would (issue 910).
+test: $(TEST_BINS) $(VIEWER) $(WATCHED) $(MECHANISM) $(ANYMAP) $(CERAC)
 	@for t in $(TEST_BINS); do \
 		echo "== $$(basename $$t)"; \
 		$$t || exit 1; \

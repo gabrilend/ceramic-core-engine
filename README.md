@@ -44,6 +44,21 @@ not write correct threaded C can still build a program that saturates a
 machine, because the part that is hard to get right is not the part
 they are writing.
 
+## One command
+
+```
+cerac accumulate.map arithmetic.c        ->  ./accumulate
+```
+
+A description and the C functions it names are a program. It lands beside
+the description, takes the description's arguments from its command line,
+and prints its results one per line. `cerac` carries the engine inside
+it, so a machine needs a C compiler and nothing else — no copy of the
+engine, no header, no export list, and no `main` anybody had to write.
+
+`make cerac` builds it. `cerac --unpack DIR` writes the engine back out
+for anybody who would rather build against it by hand.
+
 ## The scheduling is free. The tasks are not.
 
 **Finding ready work costs nothing, because nothing finds it.** There
@@ -187,12 +202,11 @@ the runtime underneath.
 
 **And not finished.** Phases 1 through 7 stand. Phase 8, the tools that
 live outside the engine, has started — there is a canvas you can draw a
-map on, and it cannot yet hand you the file. Phase 9, which is the
-engine becoming two files you can take away, is most of the way there:
-`src/cera.c` and `src/cera.h`, everything else private, one prefix on
-everything public. What it has not done is prove it, because nothing has
-yet built a program with this engine from a directory that cannot see
-this repository.
+map on, and it cannot yet hand you the file. Phase 9 is the engine
+leaving home, and it has: `src/cera.c` and `src/cera.h`, everything else
+private, one prefix on everything public, and `make test` builds a
+program with this engine in a directory that cannot see this repository
+and checks the answer that comes back.
 
 ## Where to go from here
 
@@ -203,6 +217,7 @@ this repository.
 | [`docs/058-guarantees.md`](docs/058-guarantees.md) | every promise the runtime makes, numbered, with what each one costs. |
 | [`issues/completed/`](issues/completed/) | **the real documentation.** Blueprints, not work logs: what stood before, what should stand after, why the alternatives were refused. The project is meant to be rebuildable by working through them in order. |
 | [`src/`](src/) | the engine — two files, `cera.c` and `cera.h`, each with a `.info.md` beside it. Read those first unless you are debugging the source itself. |
+| [`scripts/144-cerac.c.info.md`](scripts/144-cerac.c.info.md) | `cerac`, the one command that turns a description and some C functions into a program. `make cerac` builds it; it carries the engine inside it, so nothing else has to be on the machine. |
 | [`example/`](example/) | the program `make example` runs, commented at length. |
 | `workbench/` | a canvas for drawing a map in a browser. Early. |
 

@@ -20,6 +20,15 @@ language does for free, and nothing that knows what a box is.
   next push**, so a caller fills it immediately and re-reads by index.
   That sharp edge is deliberate: the elements are contiguous so the
   emitter can walk them in order.
+- **`gt_add_c_string`** — a span of arbitrary bytes appended as a C
+  string literal broken one piece per line, with the opening quote, the
+  closing quote and the semicolon all written here so a caller cannot
+  get half of it right. One literal per line keeps a generated file
+  readable and never approaches a compiler's limit on how long a single
+  literal may be — a limit the engine's own source would meet. There is
+  one of these rather than two because there were briefly two: the box
+  sources carried their own copy of the loop, and a second copy of an
+  escaping rule is a second definition of the format it produces.
 - **String helpers** — `gt_normalize_type` collapses whitespace and
   settles pointer spelling so `const char*` and `const  char  *` are
   one name, which matters because those strings are the emitted file's

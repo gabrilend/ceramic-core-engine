@@ -427,6 +427,31 @@ char *gt_box_symbol(arena_t *a, const char *file, const char *function)
 }
 /* }}} */
 
+/* {{{ gt_add_c_string() */
+void gt_add_c_string(buf_t *b, const char *text, size_t n)
+{
+    buf_addstr(b, "    \"");
+    for (size_t k = 0; k < n; k++) {
+        char c = text[k];
+        /* Each branch decides how one byte survives being read back by
+         * a C compiler. The backslash and the quote would end or
+         * redirect the literal; the newline ends this piece and opens
+         * the next, which is what keeps one line of the original on one
+         * line of the output; carriage return and tab are written as
+         * escapes so that a file with either in it stays diffable
+         * rather than acquiring invisible bytes. Everything else is
+         * already what it is. */
+        if (c == '\\')      buf_addstr(b, "\\\\");
+        else if (c == '"')  buf_addstr(b, "\\\"");
+        else if (c == '\n') buf_addstr(b, "\\n\"\n    \"");
+        else if (c == '\r') buf_addstr(b, "\\r");
+        else if (c == '\t') buf_addstr(b, "\\t");
+        else                buf_addch(b, c);
+    }
+    buf_addstr(b, "\";\n");
+}
+/* }}} */
+
 /* {{{ gt_line_of() */
 int gt_line_of(const char *text, size_t pos)
 {

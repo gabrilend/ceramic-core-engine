@@ -11,38 +11,24 @@ cerac accumulate.map arithmetic.c        ->  ./accumulate
 
 ## Current behavior
 
-**Four things travel and a consumer assembles them.** The out-of-tree
-test is the honest statement of what it takes today: copy `src/cera.c`,
-`src/cera.h` and `src/098-engine-surface.syms`; copy nine files from
-`scripts/`; compile the generator from those nine; run it over the box
-sources and the map; then compile the emitted file together with the
-engine and a hand-written `main`, remembering two linker settings that
-are easy to omit and one of which fails silently when it is missing.
+**`cerac` exists and does the first form.** `make cerac` builds it in
+two named stages, and one command over a description and a box source
+produces a program that lands beside the description, takes its
+arguments from the command line and prints its results. `--unpack`,
+`--emit-c`, `--shared` and `--map-boxes` all work, and the three compose:
+`--emit-c` plus `--unpack` plus a hand compile reproduces what one
+command does, which is checked rather than asserted.
 
-That is three compiler invocations and a `main` nobody wanted to write,
-to run a description that already says everything about the program
-except how many workers to start.
+**The engine's runtime path goes through it**, and the three baked-in
+paths are gone. What the build defines now is one name. A name with a
+slash in it is a path and is used as it stands, which is how this
+repository's own build points at the copy in its build tree; a bare name
+is looked for beside the program and then on the path, which is what a
+program `cerac` built gets, and what makes it relocatable.
 
-**A consumer must write a `main`.** The one in the out-of-tree test is
-the whole shape: create an empty map, find the build function by the
-map's filename, start the pool, bring the program up, deliver each
-argument, register somewhere for results to land, wait, print. Every
-line of it is mechanical from the description — the map says how many
-arguments it takes and how wide each is, and the same for results — and
-none of it is written down as something the engine will do for you.
-
-**A shipped binary cannot compile a late box anywhere but the machine
-that built it.** This is the defect, and it is not obvious from reading
-the code. The build bakes in three absolute paths as `-D` definitions:
-the compiler, the generator, and the directory holding `cera.h`. Two of
-those name places in the *building* machine's filesystem — the generator
-lands in a scratch directory under `/tmp` and the header include points
-at this repository's `src/`. Copy the resulting binary to another
-machine, hand it a description naming a box it does not carry, and the
-runtime compile path invokes a generator that is not there and, if it
-were, would look for a header at a path that does not exist. The failure
-arrives as a compiler error about a missing file, naming a directory the
-person reading it has never heard of.
+**What is not done:** the `--results` bound is a number chosen at build
+time rather than anything derived, and the open questions below have not
+been worked through.
 
 ## Intended behavior
 
@@ -57,18 +43,45 @@ Carrying source as a string array is not a new trick here: each box
 source is already emitted a second time that way so the binary holds the
 C it was made from. The same mechanism, pointed at the engine instead.
 
-**So `cerac` can write the engine out** to a scratch directory whenever
-it needs to compile against it, which is what removes the baked-in paths.
-The header is wherever `cerac` just put it, which is somewhere `cerac`
-chose, on the machine `cerac` is running on.
+**So `cerac` never needs the engine to exist as a file.** It builds the
+whole program as one piece of text in its own memory — the header, then
+the engine body, then the construction code it just emitted, then the
+`main` — and hands that text to the compiler down a pipe. This is what
+removes the baked-in paths: there is no include directory to name,
+because nothing is included.
+
+**An include is a filesystem lookup, and concatenation dissolves it.**
+`cera.c` carries one `#include "cera.h"`, and the emitted file carries
+another. That line is what would have forced a directory to exist
+somewhere with a file of that name in it. Placing the header's text
+ahead of the body's and dropping the line means the declarations are
+already in scope when the definitions arrive, which is the same thing
+the include was for and the same move the engine already made when
+eleven files became `cera.c`. The compiler is handed a program on
+standard input and never opens a file that `cerac` did not put on the
+command line.
+
+**The export list becomes a flag.** The other file the build needed was
+`098-engine-surface.syms`, handed to the linker as `--dynamic-list`.
+Asking the linker directly to export the one family named in it does the
+same job with nothing on disk, and produces the identical set of exported
+symbols. The file stays in the repository, because what it actually holds
+is the reasoning — what the sweeping form costs, what was measured — and
+a flag with thirty paragraphs of comment around it is that file with
+extra steps.
+
+What this leaves is a compiler that reads box sources and a map the
+caller named, and writes one executable. Nothing else is touched.
 
 ### What it does
 
 ```
 cerac program.map boxes.c [more.c ...]      -> an executable
-cerac --shared program.map boxes.c          -> a shared object
+cerac --shared program.map boxes.c          -> a description, compiled
+cerac --shared boxes.c                      -> boxes alone, compiled
 cerac --emit-c program.map boxes.c          -> the C file, and stop
 cerac --unpack DIR                          -> cera.c, cera.h, the syms file
+cerac --map-boxes program.map               -> which boxes it names
 ```
 
 The first form is the one that matters and the steps behind it are:
@@ -81,21 +94,63 @@ The first form is the one that matters and the steps behind it are:
    each station line into a call and each arrow into a wire. This is what
    the generator already writes.
 3. **Emit a `main`.** New, and described below.
-4. Write `cera.c`, `cera.h` and the export list into a scratch directory
-   under the executable RAM tier.
-5. Invoke the C compiler on the emitted file and `cera.c`, with the
-   include path pointing at step 4's directory and both linker settings
-   supplied, because `cerac` is the thing that knows about them.
+4. Assemble one piece of text: the header, the engine body, the emitted
+   construction code, the `main`. The one include of the header is
+   dropped from each half that carries it, and `cerac` refuses rather
+   than proceeding if that line is not where it expects — a silently
+   missed one is a duplicate declaration hundreds of lines into a file
+   nobody can open.
+5. Invoke the C compiler on that text through a pipe, with the export
+   flag and the section collector supplied, because `cerac` is the thing
+   that knows about them.
 
-`--shared` is steps 1 through 5 with `-fPIC -shared` and no `main`, which
-is what the runtime path needs when a description names a box the running
-program does not carry.
+`--shared` is the same steps with `-fPIC -shared` and no `main`, and with
+the engine body left out — what is loaded binds to the engine already in
+the host process rather than carrying a second copy of it. The header
+still goes in front, because the emitted code calls what it declares.
 
-`--emit-c` stops after step 3, for somebody who wants to compile it into
-a larger program of their own.
+**It takes two forms, and the difference is whether there is a
+description.** With one, the boxes are already in the process that will
+load the result, so what is emitted declares the functions that build
+their stations and defines nothing. Without one, it is boxes arriving
+before anything names them, so those functions are defined here because
+nothing else holds them yet. Both are what a running program asks for,
+in that order.
+
+`--emit-c` stops before the engine goes on the front and writes
+everything else — the construction code and the `main` — as an ordinary
+C file that includes `cera.h`. It is exactly what would have been
+compiled minus the engine, which is the property worth having: `--emit-c`
+plus `--unpack` plus a compiler reproduces what one command does, and
+that is the only way a person can check the claim that it does anything
+ordinary. Somebody who wants their own `main` in it passes `--main=`,
+which replaces the generated one in the same place.
 
 `--unpack` is how a person who has only `cerac` gets the two files, for
 writing a C program against the engine by hand.
+
+`--map-boxes` prints the box names a description references, one per
+line, unresolved. A running program handed a description has to know what
+it asks for before it can compile it.
+
+### Where the program lands
+
+**Beside the map file, named after it.** `cerac accumulate.map
+arithmetic.c` writes `accumulate` into the directory holding
+`accumulate.map`, not into whatever directory the caller happened to be
+standing in. A description and the program built from it belong together
+for the same reason `cerac` itself is looked for beside the description:
+that directory is the self-contained thing somebody hands to somebody
+else, and a build that scatters its output according to where the shell
+was does not produce one.
+
+`-o PATH` says otherwise, and is the only thing that does.
+
+**And never over something it was asked to read.** The default lands
+`--emit-c` over `program.map` on `program.c`, and a box source of that
+name beside it is an entirely ordinary thing to have. Overwriting it
+destroys the source and then fails to compile it, and the message is
+about a brace on a line nobody wrote. Refused, naming the file.
 
 ### The generated `main`
 
@@ -141,7 +196,7 @@ a C file.
 
 **Three baked-in paths become one.** The compiler, the generator and the
 include directory collapse into the path to `cerac`, because `cerac`
-knows its own compiler and writes its own headers. The engine's runtime
+knows its own compiler and carries its own header. The engine's runtime
 compile path invokes `cerac --shared` instead of a generator and a
 compiler in sequence.
 
@@ -218,10 +273,14 @@ the defect stays.
    buys and proves it round-trips. A test compares what comes out against
    the files in `src/` byte for byte, the way the box-source embedding is
    already checked.
-3. **Add the scratch-directory write and the compile invocation**, so
-   `cerac map.c boxes.c` produces an executable with a hand-written
+3. **Add the concatenation and the compile invocation**, so
+   `cerac map.map boxes.c` produces an executable with a hand-written
    `main` supplied on the command line. This is the whole pipeline
-   working before the generated `main` exists.
+   working before the generated `main` exists. Proven in advance on the
+   files as they stand: the header, the engine, an emitted file and the
+   worked example concatenated and piped to the compiler produce a
+   program that runs, exporting the same 142 symbols and, stripped,
+   coming to the same size as the one the Makefile builds.
 4. **Emit the `main`.** Arguments from the command line through the
    existing text-to-value reader, results into registered arrays and out
    through the existing value-to-text writers, worker count from the core
@@ -290,10 +349,65 @@ description carries no engine source and needs neither.
 
 **Answered: the name is `cerac`** — the ceramic compiler.
 
-**Still open: where does the scratch directory go, and is what it holds
-kept between runs?** The project has two RAM tiers and the executable one
-is the right home for something that gets compiled and then run. Keeping
-the written-out engine between invocations saves rewriting close to a
-megabyte every time; throwing it away means no stale copy can ever be
-compiled against. The second is the project's habit, and the first is the
-one that will be noticed on a machine where `cerac` runs often.
+**Dissolved: there is no scratch directory.** The question was where to
+put the engine when it had to be written out, and how long to keep it.
+It never has to be written out. The compiler will read a program from a
+pipe, and the only reason a file seemed necessary was the one include of
+the header, which concatenation removes. The export list was the other
+file and a flag replaces it. So there is nothing to place in either RAM
+tier, nothing to keep between runs, and no stale copy to guard against —
+which is a better answer than either of the two that were on offer,
+because it removes the failure rather than choosing which way to survive
+it.
+
+The engine's own late-box path still writes a shared object and opens
+it, and that still lands in the executable RAM tier, for the reason it
+always did: `/dev/shm` is commonly mounted so that nothing on it may be
+executed. That directory belongs to the engine at run time and is
+untouched by this.
+
+**Still open: what does `cerac` do when the compiler it invokes is not
+there?** It is baked in at `cerac`'s own build, so it names a real
+compiler on the machine that built `cerac` and possibly nothing on the
+machine running it. The failure today is an exec that fails and a
+sentence naming the compiler, which is honest but arrives after the work
+of parsing and emitting has been done for nothing. The engine answers
+the same question about `cerac` before it starts; these should agree.
+
+**Still open: is `--results` the right shape?** A result's values land in
+an array the program holds, and the engine never grows it, because that
+is what lets a worker write into it without a lock. So a bound has to
+exist, and today it is a number chosen when the program is built —
+default a thousand and twenty-four, `--results=N` to change it. Going
+past it is a refusal naming how many there were, never a truncation, so
+nothing is lost silently. But a person who does not know how many values
+their program will produce has to guess, rebuild, and guess again. The
+alternatives worth weighing: a count read from the environment when the
+program starts, which moves the guess to the person running it rather
+than the person building it; or collecting into memory the generated
+`main` grows itself, which means the `main` stops being a thing anybody
+could have written by hand.
+
+**Still open: is `--main=` worth keeping?** It was a scaffold — a way to
+build the whole pipeline and test it before the generated `main` existed
+— and it survived because it composes with `--emit-c` to mean "my main,
+joined to the construction code". That is genuinely useful. But it is
+also a third answer to a question `--emit-c` and `--unpack` already
+answer between them, and three routes to one place is how a tool starts
+being hard to describe.
+
+**Still open: what root should a program built by `cerac` use?** A box's
+generated symbol carries its path shortened against a root, and `cerac`
+uses the description's own directory unless told. A box source outside
+that directory keeps its absolute path, which puts the building machine's
+filesystem back into the binary — the exact thing this issue removes
+elsewhere. Refusing such a source would be consistent and might be too
+strict; nothing yet decides.
+
+**Still open: the format has two writers and this added a third reader.**
+Phase 6 recorded that the generator's map writer and the engine's own
+dump each carry their own copy of the station-line format, tied together
+by nothing. `cerac` now reads descriptions in a third place — its own
+`--map-boxes` — and the `.map` extension is a fourth thing that has to
+agree about what a description is. None of it is derived from anything
+else.

@@ -154,4 +154,41 @@ void  gp_fail(const char *file, int line, const char *fmt, ...);
 char *gp_read_file(arena_t *a, const char *path, size_t *len_out);
 /* }}} */
 
+/* {{{ the emitter's two entry points */
+/*
+ * Declared here rather than in a header of the emitter's own, because
+ * what they take is the parsed description this file defines and
+ * nothing else, and a header holding two lines is a file somebody has
+ * to find before they can read two lines.
+ *
+ * They are two rather than one because there are two callers wanting
+ * two different things. The build-time generator wants a file on disk.
+ * `cerac` wants the text and never writes it anywhere, because it
+ * concatenates the engine in front of it and hands the whole thing to
+ * the compiler down a pipe (issue 910).
+ *
+ * `external_boxes` says the boxes are already in the process that will
+ * load the result, so nothing but the build functions is emitted.
+ * `root` shortens a box's path before it becomes part of a generated
+ * symbol, and may be null when there is no tree to be relative to.
+ */
+void ge_build(const description_t *d, const char **sources, int n_sources,
+              const char **maps, int n_maps, const char *root,
+              int external_boxes, buf_t *w);
+
+void ge_emit(const description_t *d, const char **sources, int n_sources,
+             const char **maps, int n_maps,
+             const char *out_path, const char *root, int external_boxes);
+
+/*
+ * **The main a program made of only a description gets** (issue 910).
+ * Appended after the construction code, which it calls. `results_room`
+ * is how many values of each result the program has somewhere to put;
+ * more than that is a refusal rather than a truncation, so the number
+ * is a bound somebody chose rather than a limit that quietly bites.
+ */
+void ge_main(const description_t *d, const char *map_path, const char *root,
+             int results_room, buf_t *w);
+/* }}} */
+
 #endif

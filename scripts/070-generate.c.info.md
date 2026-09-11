@@ -8,6 +8,19 @@ emission.
 It parses every source, validates once, and then either describes or
 emits. That is the whole of it; the work is next door.
 
+Two modes do something other than read boxes:
+
+- `generate --map-boxes <map>` prints the box names a description
+  references, one per line, unresolved. Whoever asked knows what they
+  hold and this program does not.
+- `generate --embed <output.c> <file>...` turns arbitrary files into a
+  table of C string literals. This is stage two of the build that
+  produces `cerac`, and the files it is pointed at are the engine's own
+  header, body and export list (issue 910). It is a mode here rather
+  than a program of its own because the escaping already lives in this
+  build tool, and a second tool with a second copy of it would be a
+  second definition of the same rule.
+
 **Why it is C rather than a script.** A program built with this engine
 should need a C compiler and nothing else. This was a LuaJIT script,
 which meant every consumer inherited a build dependency on an

@@ -129,12 +129,21 @@ sections take their private macros with them by `#undef`ing at the end —
 the pool's initial queue capacity, delivery's two timing macros, the
 observer's growth threshold.
 
-**The build-time facts are deliberately not undefined.** Which compiler
-built the binary, where the generator is, and the two RAM tiers are used
-by *two* sections — the one that compiles code at run time and the one
-that writes a report on the way out. Undefining them after the first
-would break the second. They arrive from the command line in an ordinary
-build; the `#ifndef` fallbacks in section 074 never fire.
+**The build-time facts are deliberately not undefined.** The name of the
+compiler and the two RAM tiers are used by *two* sections — the one that
+brings code into a running program and the one that writes a report on
+the way out. Undefining them after the first would break the second.
+
+There used to be three facts here where there is now one. The compiler,
+the generator and the directory holding this header were each baked in
+as an absolute path, and two of them named places on the machine that
+ran the build — so a binary copied elsewhere invoked a generator that
+was not there and reached for a header at a path that did not exist
+(issue 910). `cerac` answers all three, because it carries its own
+compiler, its own header and the generator inside it, so the question is
+one name. A name with a slash in it is a path and is used as it stands;
+a bare name is looked for beside this program and then on the path, the
+rule a shell has always used for a command.
 
 ## What is not in here, and never will be
 
@@ -2351,10 +2360,17 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text);
 **A description handed to a running program, compiled into it.**
 
 The text goes through the same pipe a box source does — write it
-out, run the generator, run the compiler that built this binary,
-load the result — and comes back as the function that builds it.
-Call that function on any program to get the stations and wiring the
-description asked for.
+out, hand it to `cerac`, load the result — and comes back as the
+function that builds it. Call that function on any program to get
+the stations and wiring the description asked for.
+
+That used to be two commands, a generator and then a compiler, with
+an emitted C file written to the scratch tier between them so the
+second had something to read. It is one command now and the emitted
+C never becomes a file at all: `cerac` builds the whole text in
+memory and hands it to the compiler down a pipe. Anybody who wants
+to read it asks `cerac` for it, which is a person deciding rather
+than every run leaving litter.
 
 **Nothing is compiled twice.** The boxes the description names are
 already in this process, so what is compiled is the description and

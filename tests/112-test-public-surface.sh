@@ -33,8 +33,8 @@ CC="${CC:-gcc}"
 # build. What matters here is the symbol table, not a runnable object.
 "${CC}" -std=gnu11 -O2 -pthread \
     -I"${DIR}/src" \
-    -DCERA_CC='"cc"' -DCERA_GENERATOR='"generate"' \
-    -DCERA_ROOT='"."' -DCERA_INCLUDE='"."' \
+    -DCERA_COMPILER='"cerac"' \
+    -DCERA_ROOT='"."' \
     -DCERA_RAM_SHARED='"/dev/shm"' -DCERA_RAM_EXEC='"/tmp"' \
     -ffunction-sections -fdata-sections \
     -c "${DIR}/src/cera.c" -o "${WORK}/cera.o" || {

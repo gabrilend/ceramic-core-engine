@@ -149,6 +149,32 @@ char *gt_mangle(arena_t *a, const char *type_name);
 char *gt_box_symbol(arena_t *a, const char *file, const char *function);
 /* }}} */
 
+/* {{{ gt_add_c_string() */
+/*
+ * A span of arbitrary bytes appended as a **C string literal broken
+ * one piece per line** — the form `static const char x[] =` wants,
+ * with the opening quote, the closing quote and the semicolon all
+ * written here so a caller cannot get half of it right.
+ *
+ * One literal per line of the original for two reasons. A generated
+ * file somebody opens is readable, and a compiler's limit on how long
+ * a single string literal may be is never approached — a limit that
+ * exists, is low in the standard, and would be met by the engine's own
+ * source, which is the largest thing this is ever pointed at.
+ *
+ * Escaped by hand rather than by a library because the set of
+ * characters that matter inside a C string literal is small and known:
+ * the backslash, the quote, and the newline that ends each piece.
+ *
+ * There is one of these rather than two because there were briefly two
+ * — the box sources carried their own copy of this loop, and a second
+ * copy of an escaping rule is a second definition of the file format
+ * it produces. That lesson arrived from the map writer in phase six
+ * and applies unchanged here.
+ */
+void gt_add_c_string(buf_t *b, const char *text, size_t n);
+/* }}} */
+
 /* Which line a byte offset falls on, counting from 1. Linear, and
  * called only when something is being reported or recorded, never in
  * a loop over the whole file. */

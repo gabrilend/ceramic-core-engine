@@ -45,8 +45,8 @@ fi
 
 flags=(-std=gnu11 -Wall -Wextra -Werror -O2 -pthread
        "-I${DIR}/src"
-       -DCERA_CC='"cc"' -DCERA_GENERATOR='"generate"'
-       -DCERA_ROOT='"."' -DCERA_INCLUDE='"."'
+       -DCERA_COMPILER='"cerac"'
+       -DCERA_ROOT='"."'
        -DCERA_RAM_SHARED='"/dev/shm"' -DCERA_RAM_EXEC='"/tmp"')
 
 failed=0
