@@ -1,31 +1,27 @@
 # 007 — Datapath: the build
 
 A program made with this engine is two files that never meet until it
-runs. One is C — a list of functions that might be called sometime,
-somewhere. The other is a map — structured data saying which of them
-are placed where and what feeds what.
+runs. One is C — functions that might be called sometime. The other is a
+map — which of them are placed where and what feeds what.
 
-The compiler only ever sees the first. This document is about what has to
-be manufactured at build time so that the second becomes something
+The compiler only ever sees the first. This document is what has to be
+manufactured at build time so that the second becomes something
 executable.
 
 ## The problem the build solves
 
-A worker holds a task and needs to call the box function it names. In
-C, calling a function pointer requires the signature to be written
-literally at the call site — the compiler must know what to place in
-which register and what comes back. The worker cannot learn that at
-runtime.
+A worker holds a task and needs to call the box function it names. In C,
+calling a function pointer requires the signature to be written literally
+at the call site — the compiler must know what to place in which register
+and what comes back. The worker cannot learn that at runtime, and one
+line of source cannot be every signature at once.
 
-Every signature *is* known at compile time. But the worker has one call
-site, and one line of source cannot be every signature at once.
-
-So the call site has to be per-box, generated, with the station holding
-a pointer to the right one.
+So the call site has to be per-box, generated, with the station holding a
+pointer to the right one.
 
 ## The shim
 
-You write an ordinary function. Real types, by value, nothing special:
+You write an ordinary function. Real types, by value:
 
 ```c
 int add(int a, int b) { return a + b; }
@@ -43,14 +39,9 @@ void add__call(cera_task_t *t) {
 }
 ```
 
-Every generated shim has the same shape:
-
-```c
-typedef void (*box_call_t)(cera_task_t *t);
-```
-
-Different insides, identical signature. So a station stores one of these
-pointers, and the whole engine contains exactly one call site:
+Every shim has the same shape — `void (*)(cera_task_t *)` — so a station
+stores one of these pointers and the whole engine contains exactly one
+call site:
 
 ```c
 cera_task_t *t = pop_task();
@@ -58,43 +49,37 @@ t->call(t);
 deliver_output(t);
 ```
 
-That line compiles against one signature, known at compile time, the
-same for every box that will ever exist. The knowledge of what `add`
-looks like was spent inside `add__call`, at a place where it was a
-compile-time constant. By the time the pointer reaches the worker, the
-signature has already been consumed and nobody needs to ask.
+The knowledge of what `add` looks like was spent inside `add__call`, at a
+place where it was a compile-time constant. By the time the pointer
+reaches the worker, the signature has been consumed.
 
-The box function itself is untouched by any of this. It takes real
-types by value and returns one. The byte-poking lives outside it, in
-generated code no human writes, and the compiler will almost certainly
+The box function is untouched by any of this. The byte-poking lives
+outside it, in generated code, and the compiler will almost certainly
 inline `add` into its shim so the wrapper costs nothing.
 
 ## Why not the alternatives
 
-**Every box takes an array of pointers and casts internally.** No shim
-— but every box author then hand-writes casts, which is more unchecked
-code, not less, and it gives up passing by value.
+**Every box takes an array of pointers and casts internally.** No shim,
+but every box author hand-writes casts — more unchecked code, not less —
+and it gives up passing by value.
 
-**Build the call frame at runtime from a type description.** This is
-what libffi does, and it genuinely works. It costs an external
-dependency, roughly fifty times the per-call overhead, and hand-written
-assembly per architecture — because placing an integer in one register
-file and a float in another, and passing a large struct on the stack
-while a large *returned* struct displaces every other argument, cannot
-be expressed in portable C at all. It is also the same machinery this
-project dropped when it dropped the language bridge.
+**Build the call frame at runtime from a type description.** What libffi
+does. It costs an external dependency, roughly fifty times the per-call
+overhead, and hand-written assembly per architecture: placing an integer
+in one register file and a float in another, and passing a large struct
+on the stack while a large *returned* struct displaces every other
+argument, cannot be expressed in portable C. It is also the machinery
+this project dropped when it dropped the language bridge.
 
-**Generate the shims with a macro.** Works, and was the first proposal.
-Rejected in favour of a build-time script, because a generator is one
-generalized program that parses things rather than a macro expanded
+**Generate the shims with a macro.** The first proposal. A build-time
+generator is one program that parses things rather than a macro expanded
 per box, and it leaves no macros in the source to read around later.
 
 ## A map is compiled, not parsed
 
-The map file says `"math.c:add"` as text, and something has to turn that
-into a function pointer. **The generator does, while generating.** A map
-is a blueprint for the compilation rather than something a program parses
-while it runs, so the generator reads it and emits the construction calls
+The map says `"math.c:add"` as text, and the generator turns that into a
+function pointer while generating. A map is a blueprint for the
+compilation, so the generator reads it and emits the construction calls
 it describes:
 
 ```c
@@ -133,28 +118,23 @@ static void cera_box_src_sl_boxes_sl_math_dot_c__add__place(
 ```
 
 **Nothing else needs a lookup either.** A station copies what it needs at
-placement and never consults anything again; the station header is
-deliberately free of any reference to a table, which is why a comparator
-resolves its comparison *at placement* rather than on the delivery path.
-A struct port's field table is written onto the port by the placement
-function, so reading `{ 1.5, 2.5, 3.5 }` out of a map follows a pointer
-rather than searching by type name. And the name a station reports is a
-string literal its own placement function wrote, not an index into
-anything.
+placement and never consults anything again — which is why a comparator
+resolves its comparison *at placement* rather than on the delivery path,
+why a struct port's field table is written onto the port so reading
+`{ 1.5, 2.5, 3.5 }` follows a pointer, and why the name a station reports
+is a string literal rather than an index.
 
 ### Generated symbols escape punctuation, so two files cannot collide
 
-`math.c:add` is not a C identifier. Mangling it naively to `math_c__add`
-would make **`math.c` and `math_c` produce the same symbol**, and the
-linker would fail with a message about a duplicate symbol rather than
-about two files that should have been named differently.
-
-So punctuation is transcribed, and the escape character escapes itself:
+`math.c:add` is not a C identifier. Mangling it to `math_c__add` would
+make **`math.c` and `math_c` produce the same symbol**, and the linker
+would complain about a duplicate symbol rather than about two files that
+should have been named differently.
 
 | in a name | in a symbol | why |
 |---|---|---|
 | `.` | `_dot_` | a filename's extension |
-| `/` | `_sl_` | the path, which is what settles two files sharing a basename |
+| `/` | `_sl_` | the path, which settles two files sharing a basename |
 | `-` | `_dsh_` | this project's own sources are named like `029-demo-boxes.c` |
 | `_` | `_und_` | the escape character, escaping itself |
 | `:` | `__` | the separator between file and function |
@@ -162,137 +142,119 @@ So punctuation is transcribed, and the escape character escapes itself:
 
 `math.c` gives `math_dot_c`; `math_c` gives `math_und_c`. Escaping the
 escape is what makes the scheme injective, for the same reason
-percent-encoding has to write `%` as `%25`. The last row is what makes it
-**total** rather than merely adequate for names anybody has thought of: a
+percent-encoding writes `%` as `%25`. The last row makes it **total**: a
 character with no rule would have to be dropped or flattened, and either
 is how two files quietly become one symbol.
 
 **The symbol comes from the whole path**, settled to one spelling first,
-so that naming a box briefly and naming it in full produce the same
-symbol rather than two definitions of one function.
+so naming a box briefly and naming it in full produce the same symbol.
 
-**Every symbol carries a fixed prefix**, which does two jobs for one
-decision — it keeps generated names clear of anything a box author
-writes, and it means a file whose name *begins with a digit*, as every
-source in this project does, still produces a legal identifier.
+**Every symbol carries a fixed prefix**, which keeps generated names
+clear of anything a box author writes and means a file whose name begins
+with a digit, as every source here does, still produces a legal
+identifier.
 
 Nothing decodes a symbol back into a name — a name a person reads comes
 from the string literal, because these are static functions whose symbol
-names may not survive a stripped binary at all.
+names may not survive a stripped binary.
 
 ### The map file never mentions a type
 
-The generator knows the source box's return type and the destination
-box's parameter type, both derived from the actual C that will actually
-run. If the map also declared types, there would be two sources of truth
-that could disagree, and the map would always be the one that was wrong.
-Naming the *file* beside the function is provenance, not a type
-declaration.
+The generator knows both ends' types from the actual C that will run. If
+the map also declared types there would be two sources of truth that
+could disagree, and the map would always be the wrong one. Naming the
+*file* beside the function is provenance, not a type declaration.
 
 The same numbers size every ring buffer slot, so a port's slots are
 exactly `sizeof` the parameter they feed and a write is a `memcpy` with
 no allocation.
 
-### Sizes cannot be computed at runtime, which is the one irreducible thing
+### Sizes cannot be computed at runtime
 
-`sizeof` is a **compile-time** operator. The compiler evaluates it and
+`sizeof` is a **compile-time** operator: the compiler evaluates it and
 burns a literal into the machine code. A running program has no types at
 all — C erases every bit of type information during compilation — so
-there is nothing left for `sizeof` to be applied to. You cannot hand a
-running program the text `vec3` and get 12 back.
+there is nothing left to apply it to. You cannot hand a running program
+the text `vec3` and get 12 back.
 
-The trick is visible in the generated file's first real line: it
-`#include`s the box source **whole**, so the types become visible to the
-compiler, and only then writes `sizeof a0`.
-
-So every size comes from exactly one of two places: a `sizeof` expression
-compiled in, or a compiler invoked at runtime. There is no third door.
+The trick is in the generated file's first real line: it `#include`s the
+box source **whole**, so the types become visible to the compiler, and
+only then writes `sizeof a0`. Every size therefore comes from one of two
+places — a `sizeof` compiled in, or a compiler invoked at runtime. There
+is no third door.
 
 ## What the build includes
 
-**The linker decides what actually ships.** Built with
+**The linker decides what actually ships.** With
 `-ffunction-sections -fdata-sections -Wl,--gc-sections`, every function
 lands in its own section and the linker discards every section nothing
 reaches — computing exact reachability through includes, through
 hand-written `extern` declarations, and through function pointers taken
-by name. That is every case a source parser would get wrong, and it costs
-nothing but build time.
+by name. That is every case a source parser would get wrong.
 
 **Following `#include` directives instead would be a heuristic with a
 hole in it**, worth naming so nobody re-proposes it: linking resolves
 *symbols*, not includes, so a file may call a function it never included
-a header for by declaring it by hand.
+a header for.
 
-**What the linker is allowed to discard is decided by what the program
-exports**, and the two settings pull against each other. A symbol in the
-executable's dynamic table cannot be collected, because the reason it is
-there is that code compiled later may look it up by name. So `-rdynamic`,
-which exports everything, quietly makes the whole binary a root. The
-engine's public surface is named instead, in
+**What the linker may discard is decided by what the program exports**,
+and the two settings pull against each other. A symbol in the dynamic
+table cannot be collected, because code compiled later may look it up by
+name — so `-rdynamic` quietly makes the whole binary a root. The engine's
+public surface is named instead, in
 [src/098-engine-surface.syms](../src/098-engine-surface.syms.info.md),
 and handed over as `--dynamic-list`.
 
 **The build checks every box reference.** A map naming a function that
 does not exist, a file that does not exist, or a bare basename matching
-two files with no path given — all of it fails at build time, on the
-author's machine, naming the map line. Wire checking does not move; it
-depends on how stations are actually connected and stays at load. What
-the build catches is *"you named a box that isn't there."*
+two files with no path given — all of it fails at build time, naming the
+map line. Wire checking stays at load, because it depends on how stations
+are actually connected.
 
 **Each included source is also emitted as text**, as a C string array, so
 the binary carries the C it was made from. That is where error messages
-and the dump get type and argument names, now that the engine carries
-none — and because the embedded text is by definition the text that was
-compiled, a name reported can never come from a source that has since
-changed on disk.
+and the dump get type and argument names — and because the embedded text
+is by definition the text that was compiled, a name reported can never
+come from a source that has since changed on disk.
 
 ## What the generator parses
 
-It does not need to understand C. It needs to recognize, in files
-designated as box sources:
+It does not need to understand C. In files designated as box sources it
+recognizes:
 
 - **Function declarations** — name, return type, parameter types in
   order. These become shims and placement functions.
 - **Struct definitions** — field names, types, and order. These give
   every value type a size, and a field table that lets a struct constant
   be read out of a map without a parser per type.
-- **Compare functions**, found by the `__compare` suffix. These are what
-  a comparator calls. The primitives get theirs generated; a struct
-  supplies its own.
+- **Compare functions**, found by the `__compare` suffix. The primitives
+  get theirs generated; a struct supplies its own.
 
 ## What the compiler protects, and what it does not
 
-The inside of every box is fully protected. A C function has exactly one
-return type, so a box cannot be sometimes-int-sometimes-float, and the
-compiler enforces every type inside it.
+The inside of every box is fully protected: a C function has exactly one
+return type, so a box cannot be sometimes-int-sometimes-float.
 
 The wiring is protected by nothing, because after compilation there is no
 type information left to check against. That is why the check moves to
-load time: the sizes the compiler folded into the placement functions are
-the last surviving trace of the types, and load is the last place that
-trace still exists.
+load time — the sizes the compiler folded into the placement functions
+are the last surviving trace of the types.
 
 ## Limitations, stated plainly
 
 - **The build checks that a named box exists. It does not check a wire,
-  and deliberately does not.** The generator could — it sees both ends of
-  every wire a map draws, and a `_Static_assert` would make the compiler
-  compare their widths. What decides against it is what a map is for at
-  build time: the build reads a map to learn **which functions to compile
-  in**, and nothing more. Whether the shape they are wired into is
-  complete or correct is a run-time question, and it has to stay one,
-  because **a half-wired map is a legitimate map** — a port with no
-  source is an ordinary state, and a program assembled one arrow at a
-  time is the thing the construction surface exists to allow. A build
-  that refused an unfinished map would refuse exactly the program
-  somebody is in the middle of writing. Wires are checked when drawn: at
-  startup for the ones a map wrote, at the moment of the edit for the
-  rest.
+  and deliberately does not.** The generator could: it sees both ends of
+  every wire a map draws, and a `_Static_assert` would compare their
+  widths. What decides against it is what a map is for at build time —
+  the build reads a map to learn **which functions to compile in**, and
+  nothing more. Whether the shape is complete is a run-time question,
+  because **a half-wired map is a legitimate map**, and a build that
+  refused an unfinished one would refuse exactly the program somebody is
+  in the middle of writing.
 - **Typedefs are transparent.** `typedef int meters` and
   `typedef int seconds` are the same type and will connect happily.
   Distinguishing them means wrapping each in its own struct, which is the
-  beginning of reimplementing a much larger type system, and is
-  deliberately not done.
+  beginning of reimplementing a much larger type system.
 - **Nothing checks a hand-written shim.** Bypassing the generator
   restores every unchecked cast it was there to eliminate.
 

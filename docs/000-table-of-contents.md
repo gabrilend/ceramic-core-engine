@@ -102,39 +102,29 @@ memory so that path can start.
 ## What the numbers on filenames mean
 
 **An index is where a file sits in the order somebody should read the
-project.** Not what it is about, not what it relates to, not when it
-was made. The numbers run across the whole tree rather than per
-directory, so the project sorts into one sequence from end to end.
+project.** Not what it is about, not what it relates to, not when it was
+made. The numbers run across the whole tree rather than per directory, so
+the project sorts into one sequence end to end.
 
-Three things follow, and the third is the one that gets forgotten:
+**Adjacency is a consequence, not a purpose.** Related files often end up
+near each other. What is not fine is *choosing* a number to place a file
+near its relatives — a reader following the order then meets a detour
+nobody signposted, and the index has quietly acquired a second meaning.
 
-**Adjacency is a consequence, not a purpose.** Related files often end
-up near each other, because a thing and its test are usually read
-together. That is fine. What is not fine is *choosing* a number in
-order to place a file near its relatives — a reader following the
-order then meets a detour nobody signposted, and the index has
-quietly acquired a second meaning.
-
-**A companion is not a step.** `066-gentext.c.info.md` takes its
-source's number because it is the same step as `066-gentext.c`, not
-the one after it.
-
-**A letter suffix is the second half of one step.** A demo runner
-takes its source's index with a letter appended — `037a` runs `037` —
-which is the same shape the issues use when one splits into parts.
+**A companion is not a step**, so `066-gentext.c.info.md` takes its
+source's number. **A letter suffix is the second half of one step**, so
+`037a` runs `037`, the same shape the issues use when one splits.
 
 **Renumbering is done by a tool, never by hand**
-(`scripts/097-renumber.lua`), because a filename here is referenced
-from source includes, companion documents, issues and prose, and a
-rename that misses one leaves a broken build or a dead link rather
-than a cosmetic flaw. The same tool answers `--check`, which reports
-every indexed filename mentioned anywhere that is not a file that
-exists.
+(`scripts/097-renumber.lua`), because a filename here is referenced from
+source includes, companion documents, issues and prose, and a rename that
+misses one leaves a broken build rather than a cosmetic flaw. The same
+tool answers `--check`, reporting every indexed filename mentioned
+anywhere that is not a file that exists.
 
-**Issue files are numbered differently and deliberately.** Their
-numbers are a phase and a sequence within it — where a piece of work
-sits in the construction of the software, not where a file sits in the
-reading of it.
+**Issue files are numbered differently**: a phase and a sequence within
+it — where a piece of work sits in the construction of the software, not
+where a file sits in the reading of it.
 
 ## The phases
 

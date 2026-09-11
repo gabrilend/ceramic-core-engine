@@ -1,20 +1,17 @@
 # 005 — Routing
 
-There are three kinds of box. They are identical in every respect
-except one: which output port a returned value goes down.
+There are three kinds of box, identical in every respect except one:
+which output port a returned value goes down.
 
-All three pop their inputs the same way, build the same task struct,
-and call their shim the same way. The kind is consulted at exactly one
-moment — step 1 of delivery — and nowhere else in the engine. It is a
-three-entry dispatch table on the way out, not a property that
-propagates through the system.
+All three pop their inputs the same way, build the same task struct, and
+call their shim the same way. The kind is consulted at exactly one moment
+— step 1 of delivery — and nowhere else. It is a three-entry dispatch
+table on the way out, not a property that propagates.
 
 ## Plain
 
-One output port. The value goes down it. The port may carry any number
-of destinations, and the value is copied to each.
-
-Fan-out is not a kind of box. It is what a single port with several
+One output port. The value goes down it, copied to each destination on
+it. Fan-out is not a kind of box; it is what a single port with several
 destinations already does.
 
 ## Comparator
@@ -22,34 +19,31 @@ destinations already does.
 Three output ports, meaning less, equal, and greater.
 
 A comparator station has one more input port than its box function has
-parameters. That last port holds the value to compare against. It is
+parameters, and that last port holds the value to compare against. It is
 not passed to the box function — the comparison happens after the
 function returns, on the delivery path — but it participates in the
-readiness check like any other port, so the station cannot run until it
-holds something. In practice it is nearly always a static port holding
-a fixed threshold, and a static port is always full, so it usually has
-no effect on readiness at all.
+readiness check like any other port. In practice it is nearly always a
+static port holding a fixed threshold, and a static port is always full,
+so it usually has no effect on readiness at all.
 
-Its type is never declared. It must match the box function's return
-type, because that is what it gets compared against, and the emitted file
-already knows what that is.
+Its type is never declared. It must match the box function's return type,
+which the emitted file already knows.
 
-**Comparison is three-way.** The engine calls a function returning
-`-1`, `0`, or `1`:
+**Comparison is three-way.** The engine calls a function returning `-1`,
+`0`, or `1`:
 
 ```c
 int vec3__compare(vec3 a, vec3 b);
 ```
 
-The generator emits these automatically for the primitive types. A
-struct that wants to be compared supplies its own, found by name. A
-comparator whose box returns a type with no compare function fails at
-build time and names the type — because comparing raw bytes would
-produce an answer, and it would be wrong. Two floats differing only in
-sign compare backwards byte-wise.
+The generator emits these for the primitive types; a struct that wants to
+be compared supplies its own, found by name. A comparator whose box
+returns a type with no compare function fails at build time and names the
+type — because comparing raw bytes would produce an answer and it would
+be wrong. Two floats differing only in sign compare backwards byte-wise.
 
-**There is no operator setting.** Choosing an operator is choosing
-which ports to wire:
+**There is no operator setting.** Choosing an operator is choosing which
+ports to wire:
 
 | Operator | Wire these ports to the same place |
 |---|---|
@@ -60,10 +54,9 @@ which ports to wire:
 | `>=` | equal, greater |
 | `>` | greater |
 
-All six fall out of three ports, along with combinations that have no
-operator name — sending equal one way and greater another, which no
-comparison operator can express. The map says it by where the arrows
-go, and the engine needs no setting to read.
+All six fall out of three ports, along with combinations no operator can
+name — sending equal one way and greater another. The map says it by
+where the arrows go.
 
 ## Iterator
 
@@ -72,29 +65,25 @@ wrapping at the end.
 
 The cursor lives on the station, and it is the one piece of memory a
 station keeps across invocations. It is safe because of *when* it is
-touched: the cursor advances during the readiness check, while the
-station's mutex is held, and the port it landed on is written into the
-task struct. The box function never sees it. Two tasks assembled a
-moment apart therefore get different ports, decided by the enqueuing
-thread under the lock, and no two invocations can ever collide over it.
+touched: it advances during the readiness check, while the station's
+mutex is held, and the port it landed on is written into the task struct.
+The box function never sees it, so two tasks assembled a moment apart get
+different ports and no two invocations can collide over it.
 
-The cursor is the station remembering rather than the box, which is
-how memory works everywhere in this engine — what makes it a special
-case is only *where* it is kept. Ordinary station memory is a value on
-a static port, arrived at by a wire, and a map author draws it. The
-cursor is a field the engine keeps and advances under the station's
+What makes the cursor a special case is only *where* it is kept. Ordinary
+station memory is a value on a static port, arrived at by a wire, and a
+map author draws it. The cursor is a field the engine advances under the
 mutex, because it must be decided at the instant a task is built and
 there is no value for a wire to carry.
 
 **An iterator distributes fairly but does not deliver in order.** The
-port is chosen when the task is created, not when it finishes. If the
+port is chosen when the task is created, not when it finishes, so if the
 task holding port one takes longer than the one holding port two, port
-two receives first. This is correct for what an iterator is for —
-spreading work across several destinations — and wrong for anything
-that wants ordering. It is a spreader, not a funnel.
+two receives first. It is a spreader, not a funnel.
 
 ## Related
 
 - [002 — Stations and ports](002-stations-and-ports.md), where ports live
 - [003 — Delivery](003-datapath-delivery.md), step 1
-- [007 — The build path](007-datapath-build.md), where compare functions are found
+- [007 — The build path](007-datapath-build.md), where compare functions
+  are found

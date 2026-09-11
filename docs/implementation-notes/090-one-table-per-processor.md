@@ -14,90 +14,68 @@ them to.
 
 ## The claim
 
-**A station table belongs to one processor, and so does the thread
-pool that runs it.**
+**A station table belongs to one processor, and so does the thread pool
+that runs it.**
 
-Not to one machine and not to one core. To one physical processor —
-the package, the socket, the thing with its own memory controller.
-Every core inside it shares that processor's fast memory, and a
-station table living there is reachable by all of them at the speed
-the design assumes.
+Not to one machine and not to one core. To one physical processor — the
+package, the socket, the thing with its own memory controller. Every core
+inside it shares that processor's fast memory, and a station table living
+there is reachable by all of them at the speed the design assumes.
 
-Two processors in one machine *can* share a table, if the memory
-holding the stations is reachable from both. That is a slower path and
-it is the exception. The ordinary arrangement is one table per
-processor, and one pool per processor to run it.
-
----
+Two processors in one machine *can* share a table, if the memory holding
+the stations is reachable from both. That is the slower path and the
+exception.
 
 ## What the engine already does about it
 
-**Nothing, and that is the point.** Every mechanism this needs is
-already here, built for other reasons:
+**Nothing, and that is the point.** Every mechanism this needs is already
+here, built for other reasons.
 
-**A wire cannot leave a table.** Not by policy — there is no rule
-about programs to enforce and nothing that would refuse you. An index
-simply means something else in a different table, so a request that
-looks like it crosses draws an ordinary wire at home instead. The
-software invariant and the hardware boundary are the same boundary.
+**A wire cannot leave a table.** Not by policy — there is no rule to
+enforce and nothing that would refuse you. An index simply means
+something else in a different table, so a request that looks like it
+crosses draws an ordinary wire at home instead. The software invariant
+and the hardware boundary are the same boundary.
 
 **A marked port can be crossed.** Delivering into a program's argument
-port from outside it is the one way anything reaches a program it is
-not part of. It takes a value and a place to put it and asks nothing
-about where the caller is — the same call whether the caller is on the
-next core or the next socket.
+port from outside is the one way anything reaches a program it is not
+part of, and it asks nothing about where the caller is — the same call
+whether that is the next core or the next socket.
 
-**Two programs in one process are two programs.** That is the *within*
-a processor case: several tables, each its own everything, reached only
-through their marked ports. There was briefly a call that started one
-program beside another so they shared a pool of workers, and it is
-gone: sharing a pool made the second program's teardown able to take
-the first one's workers with it, and one program per pool costs
-threads that were mostly idle anyway.
+**Two programs in one process are two programs**: several tables, each
+its own everything, reached only through their marked ports. One program
+per pool, too.
 
-So a program spanning two processors is not one program with a long
-wire. It is **two programs, one per processor, talking through their
-marked ports** — which is what the engine makes easy and what it would
-have made easy anyway.
-
----
+So a program spanning two processors is not one program with a long wire.
+It is **two programs, one per processor, talking through their marked
+ports.**
 
 ## What follows for composing
 
-Bringing a program inside another produces one station table
-([217](../../issues/completed/217-a-program-inside-another.md)). Under this note
-that is also a statement about placement: **things composed into one
-table run on one processor.** Composing is therefore the right shape
-for a subgraph you want close, and the wrong shape for work you want
-spread across sockets — for which the answer is a second program with
-a second table, fed through its argument ports.
+Bringing a program inside another produces one station table, so under
+this note that is also a statement about placement: **things composed
+into one table run on one processor.** Composing is the right shape for a
+subgraph you want close and the wrong shape for work you want spread
+across sockets — for which the answer is a second program with a second
+table, fed through its argument ports.
 
 That gives the choice between composing and starting beside a second
-axis it did not have. It was about *isolation*: a composed program
-shares a fate, a started one does not. It is also about *locality*: a
-composed program shares a processor's memory, a started one need not.
-
----
+axis. It was about *isolation*: a composed program shares a fate. It is
+also about *locality*: a composed program shares a processor's memory.
 
 ## What is not decided here
 
-**Nothing pins a table to a processor yet.** There is no affinity
-call, no allocation on a particular node, no placement of workers on
-particular cores. The engine allocates with the ordinary allocator and
-the operating system decides where everything lands.
+**Nothing pins a table to a processor yet.** There is no affinity call,
+no allocation on a particular node, no placement of workers on particular
+cores; the engine allocates with the ordinary allocator and the operating
+system decides where everything lands.
 
-This note is the intent, so that when any of that is built it is built
-toward something rather than invented on the spot — and so that
-nothing is added in the meantime that would make it impossible. The
-thing that would make it impossible is a wire that crosses tables, and
-there is a standing reason not to have one.
-
-**And there is now something being built toward it.**
-[108](../../issues/108-choosing-where-a-box-runs.md) is the affinity
-call and the placement of workers on particular cores, plus the
-vocabulary for a station to say which processors it will run on. It
-takes the intent above as its starting point and answers the question
-below.
+This note is the intent, so that when any of it is built it is built
+toward something — and so nothing is added meanwhile that would make it
+impossible. The thing that would is a wire crossing tables, and there is
+a standing reason not to have one.
+[108](../../issues/108-choosing-where-a-box-runs.md) takes this as its
+starting point and answers the question below.
 
 ---
 
@@ -105,31 +83,27 @@ below.
 
 Two readings were possible, and they asked for different engines.
 
-**One process, several sockets — this is the one meant.** Every core
-is in one address space already; a station table allocated with the
-ordinary allocator is reachable from all of them, and what differs
-between sockets is only how *fast*. Mutexes are ordinary mutexes.
-Pointers are pointers. A box is a function in this binary. Nothing in
-the engine changes shape; what changes is where memory is allocated
-from and which cores the workers run on.
+**One process, several sockets — this is the one meant.** Every core is
+in one address space already; a station table allocated with the ordinary
+allocator is reachable from all of them, and what differs between sockets
+is only how *fast*. Mutexes are ordinary mutexes, pointers are pointers,
+and a box is a function in this binary. Nothing in the engine changes
+shape; what changes is where memory is allocated from and which cores the
+workers run on.
 
-**Several processes, one machine — not this.** Then "the area in
-shared memory where the stations actually live" would be a mapping —
-the project's own `/dev/shm` tier, or something like it — and a
-station table would have to be built inside it rather than on the
-heap. That reaches further than it sounds: a station holds a mutex,
-which would have to be created shareable between processes; it holds
-pointers to its port array and its slot pages, which would all have to
-live in the mapping too and be addressed as offsets rather than as
-addresses, because two processes need not map it at the same place;
-and a box is a function pointer, which means nothing at all in another
+**Several processes, one machine — not this.** Then the stations would
+have to live inside a mapping rather than on the heap, which reaches
+further than it sounds: a station holds a mutex, which would have to be
+created shareable between processes; it holds pointers to its port array
+and its slot pages, which would all have to live in the mapping and be
+addressed as offsets, because two processes need not map it at the same
+place; and a box is a function pointer, which means nothing in another
 process unless both loaded the same binary at the same address.
 
-**And "no main thread" belongs to the first reading too.** It means
-there is no privileged owner among the workers — nobody creates the
-pool, decides its shape, and hands placements to the others. The
-consequence lands in
-[108](../../issues/108-choosing-where-a-box-runs.md): a worker
-announces where it lives rather than being told, and the pool's reach
-is the union of what its members announced. A central placement
-policy would have needed a centre, and there is not one.
+**"No main thread" belongs to the first reading too.** It means there is
+no privileged owner among the workers — nobody creates the pool, decides
+its shape, and hands placements to the others. The consequence lands in
+[108](../../issues/108-choosing-where-a-box-runs.md): a worker announces
+where it lives rather than being told, and the pool's reach is the union
+of what its members announced. A central placement policy would have
+needed a centre, and there is not one.

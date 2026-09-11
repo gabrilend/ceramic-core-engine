@@ -88,103 +88,55 @@ and queues need their depths reconciled. There is no third shape.
 
 ## What replaced it
 
-**A static port is a slot, and writing one is an event.**
+**A static port is a slot, and writing one is an event** — the write
+triggers the ordinary readiness check on the station holding it, which is
+the whole of the replacement. A station whose value was previously
+gathered now *writes* into the static port that reads it.
+[004](../004-datapath-statics.md) is the mechanism.
 
-Two kinds of input port remain:
+**Shared recalculation** is what that gives and pulling did not. A chain
+wired through static ports propagates once, and every consumer reads the
+same result. Under pulling, two consumers of one upstream chain each
+pulled it and it ran twice.
 
-| | how it is read | how it is written | gates readiness |
-|---|---|---|---|
-| **ring** | consumed — one value taken per invocation | queued behind whatever is already there | **yes** — an empty one stops the station running |
-| **static** | peeked — every invocation reads the same value | replaces what was there | no — always full |
+**Seeding stopped being a rule.** Binding a static from the file is a
+write, performed during construction, and its effect lands when
+construction finishes. The writes that built the program are what start
+it.
 
-And **an invocation happens when any input changes and every ring port
-holds a value.** A delivery into a ring port triggers a readiness
-check, as it always has. A write into a static port triggers the same
-check, which is the new part.
-
-That one addition is what makes the pull path unnecessary. A station
-whose value was previously gathered now simply *writes* into the static
-port that reads it, and the write triggers whoever depends on it. What
-was a pull becomes a push arriving at a slot instead of at a queue.
-
-**A static write cannot make something run that could not run anyway.**
-The readiness check it triggers is the ordinary one: if the station has
-a ring port and that port is empty, the answer is no, because there is
-no value there and the engine will not invent one. A station with no
-ring ports at all is always ready, so writing any of its statics runs
-it. The rule needs no special case; it is the same check reached from a
-new direction.
-
-### What this gives that pulling did not
-
-**Shared recalculation.** A chain of stations wired through static
-ports is a recalculation graph — change the value at the top and it
-propagates down once, and every consumer reads the same result. Under
-pulling, two consumers of one upstream chain each pulled it and it ran
-twice. Computing a thing once and reading it twice is the better
-default.
-
-**Seeding stops being a rule.** Binding a static from the file is a
-write, performed while the program is being constructed, and its effect
-lands when construction finishes. There is no sweep to run, no
-condition to evaluate, and no mark to keep — the writes that built the
-program are what start it.
-
-**Nine things stop existing:** the gatherer port kind, the gather
+**Nine things stopped existing:** the gatherer port kind, the gather
 module, the inline chain walk, the gather cycle check, the rule that a
-gathered station may have no ring buffers, the rule that a station
-cannot be both pushed-to and gathered-from, the one exception to *a box
-only runs when a worker picks it up from the pool*, the requirement
-that a gathered box be safe on several threads at once, and every
-version of the question this document was originally written to answer.
-
----
+gathered station may have no ring buffers, the rule that a station cannot
+be both pushed-to and gathered-from, the one exception to *a box only
+runs when a worker picks it up from the pool*, the requirement that a
+gathered box be safe on several threads at once, and every version of the
+question this document was originally written to answer.
 
 ## What it costs
 
-**Fresh-at-use is gone.** Not deferred, not weakened — there is no
-longer any mechanism that produces a value at the instant it is
-consumed. A static holds whatever was last written into it, and every
-invocation between two writes reads the same thing.
+**Fresh-at-use is gone.** Not deferred, not weakened — no mechanism
+produces a value at the instant it is consumed. The replacement is to
+read the world *inside the box that needs it*: a box that wants the
+current time calls for the current time. That is a real loss of
+expressiveness at the graph level, and it is only a good trade because
+**this engine is not for timing-critical work**, which is now explicit.
+Values move through queues, workers take them up as they become free, and
+ordering across stations was never promised, so a value one hop older
+than it might have been is inside the tolerance the rest of the engine
+already asks for.
 
-The replacement is to read the world *inside the box that needs it*. A
-box that wants the current time calls for the current time. This is a
-real loss of expressiveness at the graph level, traded for the removal
-of an entire path through the engine, and it is only a good trade
-because of the next paragraph.
-
-**This engine is not for timing-critical work, and that is now
-explicit.** Values move through queues, workers take them up in
-whatever order they become free, and ordering across stations was never
-promised. A design where a value could be one hop older than it might
-have been is inside the tolerance the rest of the engine already asks
-for. Anything that needs a value to match the instant it is used should
-not have been reaching for a dataflow graph to get it.
-
-**A value recomputes only when something upstream of it changes, never
-because somebody read it.** For a recalculation graph that is exactly
-right. For something that should be re-read per use — a file changing
-underneath you, a counter, a socket — the drawing has to say what makes
-it re-read, and the honest way to say that is a wire back from whatever
-consumes it. That will look like a cycle, because it is one.
-
-**A ring port with a backlog is drained by static writes.** Each write
-runs the readiness check, and if the ring port has values waiting, one
-of them is consumed. That is real work on real values rather than an
-error, but it means a fast writer against a deep backlog accelerates
-consumption, which is a coupling worth knowing about.
-
----
+The two consequences that follow — a value recomputing only when
+something upstream changes, and a ring port's backlog being drained by
+static writes — are recorded in [058](../058-guarantees.md).
 
 ## Related
 
-- [004 — Statics and recalculation](../004-datapath-statics.md), which
-  described the pull path and now describes what replaced it
+- [004 — Statics and recalculation](../004-datapath-statics.md), what
+  replaced this
 - [003 — Delivery](../003-datapath-delivery.md), the claim and the task
   build, which a write into a static port now also reaches
 - [006 — Scheduling](../006-datapath-scheduling.md), the pool's three
-  unconditional steps — which never had to change for any of this, and
-  that is worth noticing
+  unconditional steps — which never had to change for any of this
 - [058 — Guarantees](../058-guarantees.md), where fresh-at-use stops
   being a promise and becomes a stated non-goal
 - Issues 403 and 404 built the pull path; issue 407 designed a better

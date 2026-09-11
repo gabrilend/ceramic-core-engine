@@ -67,13 +67,12 @@ computes it and the generator never guesses. **That output cannot be shipped**,
 because it is derived from source the library author has never seen. The
 consumer must run the generator over their own code, every build.
 
-**The runtime half.** The pool, the station table, delivery, gathering,
-statics, routing, the way a description comes in, the
-observer. **Not the map file parser** — that belongs to the compiler
-now and is not linked into anything anybody runs (issue 311d). About
-4,300 lines including headers today — run `wc -l libs/*.c libs/*.h
-src/*.c src/*.h` for the current figure. This half is ordinary compiled
-code and could be a static archive tomorrow.
+**The runtime half.** The pool, the station table, delivery, statics,
+routing, the way a description comes in, the observer. **Not the map file
+parser** — that belongs to the compiler now and is not linked into
+anything anybody runs. Run `wc -l src/cera.c src/cera.h` for the size.
+This half is ordinary compiled code and could be a static archive
+tomorrow.
 
 So the deliverable is not "a library". It is **a library, a code
 generator, and a build rule that ties them together** — closer in shape
@@ -125,7 +124,6 @@ symbol table of a linked test binary, not by guessing.
 | **Engine symbols are common words.** `cera_map_create`, `cera_map_connect`, `cera_map_start`, `cera_map_destroy`, `cera_pool_create`, `cera_pool_push`, `cera_pool_join` and about thirty more are exported unprefixed. | Any host program with its own notion of a map or a pool fails to link, with a duplicate-symbol error naming a function they never wrote. | Mechanical rename, ~40 symbols, touches source, interface files, docs, and issue text. Half a day, done carefully. |
 | **Internals are exported too.** `task_build`, `station_out_port`, `static_claim`, `gather_claim`, `map_statics_free`, `cera_stats_box_time` are joints between engine files, not API. | They collide like anything else, and they invite a consumer to call them. | Free, if the amalgamation shape below is taken. |
 | **The demo boxes export `add`, `mix`, `keep`, `nudge`, `seven`, `swallow`, `magnitude_squared`.** | These are example code, and `add` is the single most collidable symbol in C. | Exclude `src/boxes/` from the packaged library. Trivial, but it must be deliberate — the build currently wildcards it in. |
-| **One process-wide global.** The active map, so a box can reach the statics table. There were two; the other recorded where the last load's time went, broken into stages that stopped existing, and it went with them. | One map per process, forever, silently. A host that wants two engines gets one, and the second quietly writes into the first. | Medium. Already the first-pass report's second priority: thread the map through the task instead of parking it in a global. |
 | **Every error calls `abort()`.** | A malformed map file, a missing gather source, or an out-of-memory task kills the host application. A library that can end someone else's process on bad input is not embeddable. | Small in code, large in decision. See below. |
 | **Five headers that include each other by numbered filename.** | The consumer needs two include paths and has to know that the entry point is `018-station.h`. | Small — one public header. |
 | **The generator writes absolute paths** into the emitted file, which `#include`s each box source whole. | *Settled, and not a blocker.* A consumer states the directories they build from and recompiles if they move; anyone who wants relocation builds their own configuration around it. The emitted file is already marked do-not-commit, so nothing durable carries a machine's paths. | none — declare it |
@@ -182,206 +180,56 @@ than merely intended.
 
 ---
 
-## Three shapes it could take
+## The decisions the survey turned on
 
-### A. Amalgamation — one `.c` and one `.h`
+**Which compiler, and when one is needed at all — settled.** The engine
+requires **GCC**, and it is the same GCC that built the binary: the build
+records which compiler it used and every runtime compile invokes that
+one. That gives a program exactly one answer to `sizeof` by construction
+rather than by checking, which is what matters when a box compiled later
+wires into a box compiled earlier.
 
-The whole engine concatenated into a single translation unit, plus a
-single public header. The consumer drops two files into their tree.
+Clang and Windows are deliberately deferred. Clang runs on Windows in two
+modes and needs the platform toolchain either way, so choosing it
+relocates the dependency rather than removing it; and loading compiled
+code on Windows is `LoadLibrary` and `GetProcAddress` rather than
+`dlopen`. What is owed to the deferral is one cheap thing: **the compiler
+invocation lives in one place in the source.**
 
-This is the shape I would take, for four reasons, one of which is
-decisive:
+**The toolchain is not a tax on every program.** A map is a build input,
+so a program whose map names only boxes the binary already carries never
+invokes a compiler — it ships as one file, source text included, and runs
+on a machine with no toolchain on it. The compiler is required precisely
+when new code is genuinely arriving.
 
-**It solves the symbol problem almost for free.** One translation unit
-means every function not named in the public header can be marked
-`static`. The internals stop existing as linker symbols entirely — no
-renaming, no discipline required, no way to regress. The renaming job
-shrinks from every symbol to only the genuinely public ones.
-
-**No include paths, no header set.** The awkwardness of installing
-headers named `018-station.h` disappears, because they stop being files.
-
-**It preserves the reading order.** The numbered files are a story meant
-to be read in sequence. An amalgamation is that story in one file, with
-a banner at each seam naming the original. Emitting `#line` directives at
-each seam keeps compiler errors and debugger backtraces pointing at the
-real numbered sources, so nothing is lost by reading the pieces instead.
-
-**One file is one thing to vendor.** No install step, no package
-manager, no version skew between a header and an archive.
-
-The cost is that any change recompiles the whole engine. At this size
-that is a fraction of a second, and it is a cost paid by the consumer's
-build rather than by ours.
-
-### B. Headers plus a static archive
-
-The conventional shape: an `include/` directory and a `libsoramech.a`.
-Familiar to every C programmer, works with every build system, and
-allows partial recompilation.
-
-But it does nothing about symbols — every internal stays exported unless
-each one is individually marked, which is discipline that decays. And it
-needs an install step, an include path, and a story about which header
-is the entry point.
-
-### C. Source drop-in — a submodule or a vendored subtree
-
-Copy the repository in, add its sources to your build. Zero packaging
-work, and the consumer can read and step through everything.
-
-It is the worst of the three for the actual problem: every symbol
-collides, the demo boxes come along, and the consumer inherits the
-project's directory layout and numbering scheme inside their own tree.
-Worth supporting as a fallback, never as the recommendation.
-
-| | **A. amalgamation** | **B. headers + archive** | **C. source drop-in** |
-|---|---|---|---|
-| files the consumer takes | 2 | a directory + an archive | the repository |
-| internal symbols hidden | **free — one TU** | one by one, by hand | not at all |
-| include paths to configure | none | one or two | two |
-| install step | none | yes | none |
-| partial rebuilds | no | yes | yes |
-| reading order preserved | **yes, with banners** | yes | yes |
-| debugger points at real files | with `#line` | yes | yes |
-| demo boxes excluded | by the script | by the script | by the consumer, if they notice |
-
----
-
-## What the packaging script would do
-
-A sibling of the generator, in Lua, taking the project root and an
-output directory — same argument conventions as everything else here.
-
-**1. Emit the public header.** Concatenate the public declarations in
-numbered order under one include guard, dropping the sections the
-headers themselves mark as internal joints between engine files. This is
-not a copy: the header is derived, so it cannot drift from the sources
-it describes.
-
-**2. Emit the amalgamated source.** Concatenate the engine's C files in
-numbered order — `libs/`, then `src/`, excluding `src/boxes/` and
-`src/generated/`. At each seam, a banner naming the original file and a
-`#line` directive so diagnostics point home. Strip the inter-file
-`#include` lines, since the headers are now above in the same file.
-
-**3. Hide the internals.** Read the public header for the names it
-declares; mark every other file-scope definition `static`. The list is
-*derived from the header*, not maintained by hand, so a function added
-to the engine is private by default and becomes public only by being
-declared in the header — which is the correct default and the one that
-cannot rot. The generator already parses C declarations for exactly this
-kind of work, so the machinery has precedent in the project.
-
-**4. Copy the generator** and the map file format document, because the
-consumer needs both at build time.
-
-**5. Emit a worked example** — one box, one map file, one program that
-loads and runs it, and a Makefile fragment showing the three-step build.
-The example is the real documentation of how the two halves fit
-together.
-
-**6. Prove it.** Build the packaged library outside the repository,
-against the example, and run it. Packaging that has not been compiled
-somewhere else is a guess. This wants to be a test script beside the
-others, so a change that breaks the packaged shape fails the ordinary
-test run rather than being discovered by whoever tries to use it.
-
----
-
-## Decisions that have to be made first
-
-**0. Which compiler, and when one is needed at all — settled.** The
-engine requires **GCC**, and it is the same GCC that built the binary:
-the build records which compiler it used and every runtime compile
-invokes that one. That gives a program exactly one answer to `sizeof`
-by construction rather than by checking, which is the property that
-matters when a box compiled later has to wire into a box compiled
-earlier.
-
-Clang and Windows are deliberately deferred. Clang runs on Windows in
-two modes and needs the platform toolchain for headers and libraries
-either way, so choosing it would relocate the dependency rather than
-remove it; and loading compiled code on Windows is `LoadLibrary` and
-`GetProcAddress` rather than `dlopen`, which is work that has nothing
-to do with compiler choice. What is owed to the deferral is one cheap
-thing: **the compiler invocation lives in one place in the source**, so
-adding a second is a local edit.
-
-**And the toolchain is not a tax on every program.** Since
-[311d](../../issues/completed/311d-the-map-becomes-code.md) makes a map a build
-input, a program whose map names only boxes the binary already carries
-never invokes a compiler at all — it ships as one file, source text
-included, and runs on a machine with no toolchain on it. The compiler
-is required precisely when new code is genuinely arriving, which is
-[310](../../issues/completed/310-boxes-compiled-at-runtime.md)'s path and the
-only case where anyone would expect otherwise.
-
-**1. What happens on an error — settled.** An installable handler,
-called with the message immediately before the engine dies. The host
-gets to log it, flush its own state, and know what happened. **The
-engine still stops.** A consumer who wants to handle their own errors
-restarts the engine; that is the entire recovery story, and it is
-deliberate rather than a gap.
+**What happens on an error — settled.** An installable handler, called
+with the message immediately before the engine dies, so a host can log
+it, flush its own state, and know what happened. **The engine still
+stops.** A consumer who wants to handle their own errors restarts it.
 
 What this must never become is an error code returned up a call chain
-that a consumer can ignore — that is a fallback wearing a return type.
-A wrong answer which keeps flowing is worse than no answer, and that
-does not soften because the caller would find it convenient. Breaking
-loudly is the feature: a map that is wrong should stop being a running
-program.
+that a consumer can ignore — a fallback wearing a return type. What the
+handler adds is *legibility*: the message used to go to standard error
+and the process died, so a host with its own log had no way to capture
+it.
 
-What the handler actually adds is *legibility*. Today the message goes
-to standard error and the process dies, so a host with its own log has
-no way to capture what happened or why. The handler closes that gap and
-opens no other one.
+**What the prefix is — settled.** `cera_`, applied to everything public,
+including in the documents and issue files, which name these functions in
+prose.
 
-**2. Can there be two maps in one process?** Today, no, because of two
-globals, and nothing says so. Either fix it — thread the map through the
-task, which the first-pass report already wants for other reasons — or
-state the restriction in the header where someone will read it before
-they build on the assumption. Fixing is better; the packaging is a good
-excuse, since a library with a hidden singleton is a defect that only
-shows up in someone else's program.
+**Whether two maps can run in one process — settled.** They can. Nothing
+in the engine is process-wide, and a test runs two and writes into one.
 
-**3. Does the engine own the process's threads?** Starting a map spawns
-one worker per core by default and the pool ends itself when the queue
-drains. A host application with its own thread budget needs to know
-both. The mechanism for keeping an engine resident already exists in the
-outside-submitter registration; what is missing is naming it as the
-lifecycle question it is.
+**Does the engine own the process's threads?** Open. Starting a map
+spawns one worker per core by default and the pool ends itself when the
+queue drains; a host with its own thread budget needs to know both. The
+mechanism for keeping an engine resident exists in the outside-submitter
+registration; what is missing is naming it as the lifecycle question it
+is.
 
-**4. What is the prefix?** `cera_` is already used by a few symbols and
-by every include guard. Applying it to everything public is the obvious
-choice; it just has to be done once, everywhere, and grepped for
-stragglers — including in the documents and issue files, which name
-these functions in prose.
-
-**5. Does the pool ship separately?** It has no dependency on anything
-above it. Shipping it alone is nearly free and would prove the layering.
-
----
-
-## Rough order of work
-
-Ordered so that each step is useful even if the next never happens.
-
-1. **Exclude the demo boxes and the generated file** from whatever
-   gets packaged. One line of intent, and it stops the worst collisions.
-2. **The single public header**, derived rather than written. Immediately
-   useful inside the project too, since it settles what is API and what
-   is machinery.
-3. **The amalgamation script**, using that header to decide what stays
-   visible. This is where the symbol problem mostly dies.
-4. **The prefix**, applied to what is left visible.
-5. **The error handler hook.**
-6. **The worked example and the out-of-tree build test**, which is what
-   turns all of the above from plausible into demonstrated.
-7. **The one-map-per-process fix**, which is worth doing on its own
-   merits and is not on the critical path for a first package.
-
-Steps 1 through 3 are the ones that change the shape of the thing. The
-rest is finishing.
+**Does the pool ship separately?** Open. It has no dependency on anything
+above it, so shipping it alone is nearly free and would prove the
+layering.
 
 ---
 
