@@ -79,23 +79,23 @@ generator, and a build rule that ties them together** — closer in shape
 to a parser generator than to a math library. Any packaging that ships
 only the compiled half ships something nobody can use.
 
-**Issue 910 made the three one.** `cerac` is a single executable
+**Issue 910 made the three one.** `serac` is a single executable
 carrying the generator and the engine's own source as text, so the three
 things that had to travel together now travel as one that cannot be
-separated. The build rule went with them: `cerac` knows the two linker
+separated. The build rule went with them: `serac` knows the two linker
 settings, because it is the thing that knows about them, and a consumer
 who omits one can no longer exist. The library is still there for
-anybody who wants it — `cerac --unpack` writes out exactly the files
+anybody who wants it — `serac --unpack` writes out exactly the files
 this section describes — but taking it is now a choice rather than the
 only route.
 
 A consequence that used to be stated here plainly, and no longer
 applies: **the consumer's build once depended on LuaJIT**, because the
 generator was a Lua script. Issue 308 rewrote it in C. A consumer's
-build now needs a **C compiler and nothing else** — it compiles `cerac`
+build now needs a **C compiler and nothing else** — it compiles `serac`
 and runs it. The generator depends on nothing the engine provides, so
 there is no bootstrap problem: it can be built before anything else
-exists, and building `cerac` is that generator being used once, on the
+exists, and building `serac` is that generator being used once, on the
 engine's own files, before it is compiled in.
 
 Regenerating **this project's own HTML documentation** still needs

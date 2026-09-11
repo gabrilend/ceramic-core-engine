@@ -56,17 +56,17 @@ CFLAGS += -ffunction-sections -fdata-sections
 # places on the machine that ran the build, so a binary copied anywhere
 # else could not compile a late box at all (issue 910).
 #
-# It is one name now, because cerac carries its own compiler, its own
+# It is one name now, because serac carries its own compiler, its own
 # header and the generator inside it. The engine looks for it beside
 # the program, then on the path, and says so when it finds neither. The
 # reasoning that made the compiler a build-time fact has not changed —
 # whatever compiles code added to a program must agree with it about
-# sizeof — it has moved into cerac, which is built by one compiler and
+# sizeof — it has moved into serac, which is built by one compiler and
 # invokes that same one.
 #
 # This build points it at the copy in the build tree so that a test can
 # compile a late box without anything being installed.
-CFLAGS += -DCERA_COMPILER='"$(BUILD)/cerac"'
+CFLAGS += -DCERA_COMPILER='"$(BUILD)/serac"'
 # The project root, so a test can find the box sources the generated
 # file names — those paths are shortened against it so that two
 # machines building the same tree emit the same file (issue 311c).
@@ -94,9 +94,9 @@ BOX_SRC   := $(wildcard $(DIR)/src/boxes/*.c)
 # wildcard finds every file there; the two front doors are named so
 # that neither ends up linked into the other, which would be two mains
 # in one binary and a link error naming nothing useful.
-CERAC_SRC := $(DIR)/scripts/144-cerac.c
+SERAC_SRC := $(DIR)/scripts/144-serac.c
 GEN_FRONT := $(DIR)/scripts/070-generate.c
-GEN_SRC   := $(filter-out $(CERAC_SRC),$(wildcard $(DIR)/scripts/*.c))
+GEN_SRC   := $(filter-out $(SERAC_SRC),$(wildcard $(DIR)/scripts/*.c))
 GEN_LIB   := $(filter-out $(GEN_FRONT),$(GEN_SRC))
 
 # The map reader used to be named here separately, because it lived in
@@ -240,11 +240,11 @@ LDFLAGS := -Wl,--dynamic-list=$(SURFACE) -Wl,--gc-sections
 #
 # Stage two runs it in --embed mode over the engine's three files,
 # writing one C file that holds them as string literals, and compiles
-# cerac from the generator's own sources plus that file. There is no
+# serac from the generator's own sources plus that file. There is no
 # bootstrap problem, because the program doing the embedding does not
 # itself need to have been embedded.
 #
-# Why the engine's source is in there at all: cerac hands the compiler
+# Why the engine's source is in there at all: serac hands the compiler
 # a whole program on standard input — the header, the engine, the
 # generated construction code, a generated main, concatenated — so that
 # nothing it compiles against has to exist as a file anywhere. That is
@@ -255,24 +255,24 @@ LDFLAGS := -Wl,--dynamic-list=$(SURFACE) -Wl,--gc-sections
 # other source, even though it is written into the build tree rather
 # than committed: it is a file in the reading order, and a reader who
 # finds nothing at that number has been told something wrong.
-CERAC       := $(BUILD)/cerac
-CERAC_EMBED := $(BUILD)/145-embedded-engine.c
+SERAC       := $(BUILD)/serac
+SERAC_EMBED := $(BUILD)/145-embedded-engine.c
 
-$(CERAC_EMBED): $(GENERATOR) $(CERA_H) $(CERA_C) $(SURFACE) | $(BUILD)
+$(SERAC_EMBED): $(GENERATOR) $(CERA_H) $(CERA_C) $(SURFACE) | $(BUILD)
 	$(GENERATOR) --embed $@ $(CERA_H) $(CERA_C) $(SURFACE)
 
-# The compiler cerac was built with is the compiler cerac invokes,
+# The compiler serac was built with is the compiler serac invokes,
 # because the engine text it carries has to be compiled by something
 # whose idea of sizeof matches the code it will be wired to. That is
 # the same reasoning that baked a compiler into the engine's own
 # runtime path; it is written down in one place now instead of two.
-$(CERAC): $(CERAC_SRC) $(GEN_LIB) $(CERAC_EMBED) $(CERA_H) | $(BUILD)
-	$(CC) $(CFLAGS) -I$(DIR)/scripts -DCERAC_CC='"$(CC)"' \
-	    -o $@ $(CERAC_SRC) $(GEN_LIB) $(CERAC_EMBED)
+$(SERAC): $(SERAC_SRC) $(GEN_LIB) $(SERAC_EMBED) $(CERA_H) | $(BUILD)
+	$(CC) $(CFLAGS) -I$(DIR)/scripts -DSERAC_CC='"$(CC)"' \
+	    -o $@ $(SERAC_SRC) $(GEN_LIB) $(SERAC_EMBED)
 
-.PHONY: cerac
-cerac: $(CERAC)
-	@echo "$(CERAC)"
+.PHONY: serac
+serac: $(SERAC)
+	@echo "$(SERAC)"
 
 $(BUILD)/%: $(DIR)/tests/%.c $(ENGINE_SRC) $(CERA_H) $(SURFACE) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(ENGINE_SRC) $(LDFLAGS)
@@ -366,10 +366,10 @@ TEST_SCRIPTS := $(wildcard $(DIR)/tests/*.sh)
 
 # Each test is run in order; the first failure stops the run, because
 # later tests build on machinery the earlier ones just proved broken.
-# cerac is a prerequisite of running the tests rather than of building
+# serac is a prerequisite of running the tests rather than of building
 # them: nothing links against it, and the tests that bring code into a
 # running program invoke it the way any program would (issue 910).
-test: $(TEST_BINS) $(VIEWER) $(WATCHED) $(MECHANISM) $(ANYMAP) $(CERAC)
+test: $(TEST_BINS) $(VIEWER) $(WATCHED) $(MECHANISM) $(ANYMAP) $(SERAC)
 	@for t in $(TEST_BINS); do \
 		echo "== $$(basename $$t)"; \
 		$$t || exit 1; \

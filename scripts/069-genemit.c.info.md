@@ -6,7 +6,7 @@ per box, a field table per struct, and the table of placements itself.
 `ge_emit` calls it and puts the result in a file.
 
 They are two because there are two callers wanting two different things.
-The build-time generator wants a file on disk. `cerac` wants the text and
+The build-time generator wants a file on disk. `serac` wants the text and
 never writes it anywhere, because it concatenates the engine in front of
 it and hands the whole thing to the compiler down a pipe — and a
 generator whose only exit was a filename forced a file to exist, which

@@ -9,11 +9,11 @@ this engine carries a parser.
 
 ## From a description to a program, before anything runs
 
-**One command.** `cerac` takes a description and the C functions it
+**One command.** `serac` takes a description and the C functions it
 names and hands back an executable:
 
 ```
-cerac accumulate.map arithmetic.c        ->  ./accumulate
+serac accumulate.map arithmetic.c        ->  ./accumulate
 ```
 
 The program lands beside the description and is named after it. It takes
@@ -21,11 +21,11 @@ the description's arguments from its command line and prints its results,
 one value per line in port order, so a description that says everything
 about a program is a program.
 
-`cerac` carries the engine's own source inside it, which is why nothing
+`serac` carries the engine's own source inside it, which is why nothing
 else has to be on the machine. What it hands the C compiler is one piece
 of text built in memory — the header, the engine, the construction code,
 the `main` — with nothing written to disk except the program itself. See
-[the compiler](../scripts/144-cerac.c.info.md).
+[the compiler](../scripts/144-serac.c.info.md).
 
 ## From a file to a running program
 
@@ -39,13 +39,13 @@ Anything missing is found and compiled in first. This is the ordinary
 path rather than a rescue, because a description written by a running
 program is the normal kind of description.
 
-**Two — the description is compiled.** Its text goes to `cerac`, which
+**Two — the description is compiled.** Its text goes to `serac`, which
 turns each station line into a call that adds a station, names it, builds
 it from its box, and configures its ports — including which of them are
 the map's arguments and which are its results — and turns each arrow into
 a call that draws a wire, and then compiles that.
 
-**Finding `cerac` is the only question a relocated program has.** It is
+**Finding `serac` is the only question a relocated program has.** It is
 looked for beside the program, then on the path, and `CERAMIC_COMPILER`
 answers outright. A program that is never handed a new description never
 asks: it carries no engine source, invokes no compiler, and runs on a
@@ -72,7 +72,7 @@ and every wire afterwards.
 
 ## What this costs, and who pays
 
-Two `cerac` invocations, about a tenth of a second each: one asking what
+Two `serac` invocations, about a tenth of a second each: one asking what
 the description wants, one building it. It used to be four — a generator
 and a compiler for each half — with an emitted C file written to the
 scratch tier so the compiler had something to read. There is no such

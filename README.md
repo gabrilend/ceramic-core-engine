@@ -47,17 +47,19 @@ they are writing.
 ## One command
 
 ```
-cerac accumulate.map arithmetic.c        ->  ./accumulate
+serac accumulate.map arithmetic.c        ->  ./accumulate
 ```
 
 A description and the C functions it names are a program. It lands beside
 the description, takes the description's arguments from its command line,
-and prints its results one per line. `cerac` carries the engine inside
+and prints its results one per line. `serac` carries the engine inside
 it, so a machine needs a C compiler and nothing else — no copy of the
 engine, no header, no export list, and no `main` anybody had to write.
 
-`make cerac` builds it. `cerac --unpack DIR` writes the engine back out
-for anybody who would rather build against it by hand.
+`make serac` builds it, and `scripts/147-build-serac.sh` builds it from
+a bare directory of sources with no Makefile — which is what a release
+carries. `serac --unpack DIR` writes the engine back out for anybody who
+would rather build against it by hand.
 
 ## The scheduling is free. The tasks are not.
 
@@ -217,7 +219,7 @@ and checks the answer that comes back.
 | [`docs/058-guarantees.md`](docs/058-guarantees.md) | every promise the runtime makes, numbered, with what each one costs. |
 | [`issues/completed/`](issues/completed/) | **the real documentation.** Blueprints, not work logs: what stood before, what should stand after, why the alternatives were refused. The project is meant to be rebuildable by working through them in order. |
 | [`src/`](src/) | the engine — two files, `cera.c` and `cera.h`, each with a `.info.md` beside it. Read those first unless you are debugging the source itself. |
-| [`scripts/144-cerac.c.info.md`](scripts/144-cerac.c.info.md) | `cerac`, the one command that turns a description and some C functions into a program. `make cerac` builds it; it carries the engine inside it, so nothing else has to be on the machine. |
+| [`scripts/144-serac.c.info.md`](scripts/144-serac.c.info.md) | `serac`, the one command that turns a description and some C functions into a program. `make serac` builds it; it carries the engine inside it, so nothing else has to be on the machine. |
 | [`example/`](example/) | the program `make example` runs, commented at length. |
 | `workbench/` | a canvas for drawing a map in a browser. Early. |
 

@@ -1,16 +1,16 @@
-# 144-cerac.c — the ceramic compiler
+# 144-serac.c — the ceramic compiler
 
-`cerac` is the one program somebody needs to build a program with this
+`serac` is the one program somebody needs to build a program with this
 engine. It carries the generator and the engine's own source inside it,
 so the machine it runs on needs a C compiler and nothing else.
 
 ```
-cerac program.map boxes.c [more.c ...]   an executable, beside the map
-cerac --shared program.map boxes.c       a shared object
-cerac --shared boxes.c                   boxes alone, for a running program
-cerac --emit-c program.map boxes.c       the C, and stop
-cerac --unpack DIR                       cera.c, cera.h, the syms file
-cerac --map-boxes program.map            which boxes a description names
+serac program.map boxes.c [more.c ...]   an executable, beside the map
+serac --shared program.map boxes.c       a shared object
+serac --shared boxes.c                   boxes alone, for a running program
+serac --emit-c program.map boxes.c       the C, and stop
+serac --unpack DIR                       cera.c, cera.h, the syms file
+serac --map-boxes program.map            which boxes a description names
 ```
 
 | option | what it changes |
@@ -82,6 +82,6 @@ computes, only how much of the machine it uses.
 Stage one compiles `generate`, the ordinary build-time generator, which
 knows nothing about any of this. Stage two runs `generate --embed` over
 `cera.h`, `cera.c` and the export list to write one C file holding them
-as string literals, then compiles `cerac` from the generator's own
+as string literals, then compiles `serac` from the generator's own
 sources plus that file. Nothing bootstraps: the program doing the
 embedding does not itself need to have been embedded.

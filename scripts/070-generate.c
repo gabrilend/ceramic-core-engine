@@ -64,9 +64,9 @@ static void usage(void)
 /* {{{ static void embed_files() */
 /*
  * **Arbitrary files turned into a table of C string literals**, which
- * is stage two of the build that produces `cerac` (issue 910). The
+ * is stage two of the build that produces `serac` (issue 910). The
  * engine's header, body and export list go in; a C file defining
- * `cerac_embedded` comes out; `cerac` is compiled from the generator's
+ * `serac_embedded` comes out; `serac` is compiled from the generator's
  * own sources plus that file and thereafter holds the engine without
  * needing it to exist anywhere on disk.
  *
@@ -76,7 +76,7 @@ static void usage(void)
  *
  * The name each file is carried under is its basename. The build hands
  * this absolute paths, and an absolute path from the machine that
- * built `cerac` is exactly the kind of thing this issue exists to stop
+ * built `serac` is exactly the kind of thing this issue exists to stop
  * a shipped binary from carrying.
  *
  * Written whole and then moved into place, for the same reason
@@ -93,7 +93,7 @@ static void embed_files(const char *out_path, const char **files, int n_files)
     buf_line(&w, " * do not commit. The engine's own source, carried as text so");
     buf_line(&w, " * that the compiler built from this file needs no copy of it");
     buf_line(&w, " * on disk (issue 910). */");
-    buf_line(&w, "#include \"143-cerac.h\"");
+    buf_line(&w, "#include \"143-serac.h\"");
     buf_line(&w, "");
     buf_line(&w, "#include <string.h>");
     buf_line(&w, "");
@@ -102,26 +102,26 @@ static void embed_files(const char *out_path, const char **files, int n_files)
         size_t n = 0;
         char  *text = gp_read_file(a, files[i], &n);
 
-        buf_line(&w, "static const char cerac_embed_%d[] =", i);
+        buf_line(&w, "static const char serac_embed_%d[] =", i);
         gt_add_c_string(&w, text, n);
         buf_line(&w, "");
     }
 
-    buf_line(&w, "const cerac_embedded_t cerac_embedded[] = {");
+    buf_line(&w, "const serac_embedded_t serac_embedded[] = {");
     for (int i = 0; i < n_files; i++) {
         const char *base = strrchr(files[i], '/');
         base = base ? base + 1 : files[i];
-        buf_line(&w, "    { \"%s\", cerac_embed_%d },", base, i);
+        buf_line(&w, "    { \"%s\", serac_embed_%d },", base, i);
     }
     buf_line(&w, "};");
-    buf_line(&w, "const int cerac_n_embedded = %d;", n_files);
+    buf_line(&w, "const int serac_n_embedded = %d;", n_files);
     buf_line(&w, "");
 
-    buf_line(&w, "const char *cerac_embedded_text(const char *name)");
+    buf_line(&w, "const char *serac_embedded_text(const char *name)");
     buf_line(&w, "{");
-    buf_line(&w, "    for (int i = 0; i < cerac_n_embedded; i++)");
-    buf_line(&w, "        if (strcmp(cerac_embedded[i].name, name) == 0)");
-    buf_line(&w, "            return cerac_embedded[i].text;");
+    buf_line(&w, "    for (int i = 0; i < serac_n_embedded; i++)");
+    buf_line(&w, "        if (strcmp(serac_embedded[i].name, name) == 0)");
+    buf_line(&w, "            return serac_embedded[i].text;");
     buf_line(&w, "    return 0;");
     buf_line(&w, "}");
 
@@ -167,7 +167,7 @@ int main(int argc, char **argv)
      * whoever asked knows how to look a name up and this program does
      * not know what they hold.
      */
-    /* The files that become `cerac`'s own copy of the engine. Handled
+    /* The files that become `serac`'s own copy of the engine. Handled
      * before anything else looks at the arguments, because these are
      * not box sources and must not be parsed as any. */
     if (strcmp(argv[1], "--embed") == 0) {

@@ -163,7 +163,7 @@ char *gp_read_file(arena_t *a, const char *path, size_t *len_out);
  *
  * They are two rather than one because there are two callers wanting
  * two different things. The build-time generator wants a file on disk.
- * `cerac` wants the text and never writes it anywhere, because it
+ * `serac` wants the text and never writes it anywhere, because it
  * concatenates the engine in front of it and hands the whole thing to
  * the compiler down a pipe (issue 910).
  *

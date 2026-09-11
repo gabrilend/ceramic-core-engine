@@ -1,6 +1,6 @@
 # Conversation Summary: 117289dc-ce30-4938-b136-70f1042cab26
 
-Generated on: 2026-09-11 14:22:45
+Generated on: 2026-09-11 14:47:18
 
 --------------------------------------------------------------------------------
 
@@ -544,5 +544,227 @@ route. If that's persuasive, it stays and I'll document it that way.
 sources discoverable from the map's directory? Both are small. Neither is
 committed yet — the tree is green but uncommitted, since 910's questions are
 still live.
+
+--------------------------------------------------------------------------------
+
+### User Request 6
+
+also can we rename cerac to serac? because serac is pronounced the same as cera.
+Meanwhile soramech will continue to refer to a single ceramic program.
+
+yes we should write the release build script. We shouldn't make sources
+discoverable from the map's directory - instead, we should remove that first
+option, and make users ALWAYS type which file they want to pull their functions
+from. We want to remove as much ambiguity and unexpected behavior as we can.
+
+> There are now three ways to build a program with your own main instead of the
+> generated one, and I'm asking whether three is too many.
+
+Are these functionally different at all? For example, 1. seems like the case I
+envisioned. 2. seems like instead of compiling a map to a binary, it "compiles"
+it to a C file maybe? And 3. seems like option 2 with fewer steps, but it
+compiles the whole program, soramechs included alongside the user's other code.
+Is that right? I think we really only need that first option... For option 1,
+the users needs to know "linker settings" - what do you mean by that? Do we
+require them to link things a certain way or something? My understanding was
+that cera.c and cera.h can be included however the user wants. Also, let's say
+they do option 1 and build out their program, embedding a little virtual
+soramech. They'd still need cerac - sorry - serac, the compiler, to compile
+programs at runtime, but that's not required for pre-compiled boxes. Which
+they'd need the compiler for anyway, if they want to compile boxes for their
+architecture. So, why include cera.c and cera.h at all, if they're just going to
+be compiling them on the go anyway?
+
+> The generated main declares static int landing_0[1024]; and registers it
+> before any worker is released. When a station produces a value for that port,
+> the worker does one atomic add on taken, gets back a slot number nobody else
+> will get, and memcpys elem_size bytes to into + slot *
+  elem_size.
+
+> That single atomic increment is the entire synchronisation. No mutex, no
+> growth, no reallocation — which is only possible because the address and the
+> length cannot change while workers are running. A worker handed a slot at or
+> past room writes nothing, and taken keeps climbing
+> anyway, which is how the program can say afterwards exactly how many values it
+> lost rather than guessing.
+>
+> So the bound must be fixed before the first worker is released. That rules out
+> growing it — any growth means either a lock on the hot path or moving the
+> array out from under a worker mid-memcpy.
+>
+> But it does not have to be fixed at build time. The array could be malloced in
+> main with its size read from the environment at startup, still before
+> cera_map_start. That keeps every property above, keeps the main something a
+> person could have hand-written, and moves the guess from
+> whoever builds the program to whoever runs it — which is where the knowledge
+> actually is. There's precedent: the engine already reads CERAMIC_WORKERS the
+> same way.
+
+
+okay, uh, yeah --results seems like a bad idea. The result is what's passed to
+stdout right? Internal maps when their "result" or "input" boxes (with the $
+assignments) are just treated as "unwired" when the internal map is added to an
+external map. Right? And external maps are wired to result when they have dollar
+sign inputs and outputs. Meanwhile, there's a runtime way to mark something as
+being sent to the result or being fed by input, right? If not, there should be.
+Part of the wiring function I think. So, with --results, this is for determining
+behavior that's only used when embedding, right? Or is it used on the cli, to
+determine how many "outputs" we send to stdout? I think we should not have that,
+and just trust that the user will ask for a regular cli argument if they want to
+know "how many" things should be returned. It's just an argument! They can build
+it to their specifications. We don't have to build that sort of thing into the
+engine.
+
+> The cost is that the width is fixed at compile time. A 32-byte word truncates
+> at 31 characters plus a terminator. Writing to a file is the escape hatch for
+> genuinely unbounded text, but for names, labels, and short messages the struct
+> is the answer.
+
+why don't we just have "strings structs" of increasing size? Or maybe a struct
+that has an undefined-at-compile-time number of elements? Is that a thing? I
+think no, in C. Can we have variable sized arrays? I don't think so. So, we need
+to just have as many different sizes as we think is necessary. Or is that
+something the user will have to handle?
+
+so, I heard that if we include one function from for example math.c it'll
+compile in the entire math.c library. Is that true? If so, that's definitely not
+what we want haha
+
+--------------------------------------------------------------------------------
+
+### Assistant Response 6
+
+Several of these need measuring rather than asserting. Let me check the math.c
+question first — it's the most consequential.
+
+Confirmed, and worse than you'd hope: **50 unused boxes cost 30 KB of text and
+all 50 are exported symbols.** Let me find out why, and what it would cost to
+fix.
+
+Everything measured. Let me answer, then do the two things you approved.
+
+The files were never committed, so `git mv` has nothing to move — and your
+rule is that both versions must be tracked. So: commit the work as it stands
+first, then the rename becomes a real, visible move.
+
+Now the rename, as a tracked move.
+
+Now the release build script you approved.
+
+Waiting on the suite. Here are the answers to the rest.
+
+## The `math.c` question — you're right, and it's worse than you'd hope
+
+Measured. One box used, fifty unused sitting in the same file:
+
+```
+                          text
+one box in the file      92,109
+fifty-one in the file   122,134     +30 KB
+unused boxes exported as symbols: 50 of 50
+```
+
+**But the cause isn't textual inclusion.** The build already puts every function
+in its own section and tells the linker to discard unreached ones. What defeats
+that is the *export list*: every box gets a placement function published in the
+dynamic symbol table, and **a published symbol is a collection root the linker
+may never discard** — because the whole reason it's published is that code
+which doesn't exist yet may look it up by name.
+
+I measured the three builds of the identical program:
+
+| build | text | `cera_*` published | can it be extended? |
+|---|---|---|---|
+| exported — what ships today | 122,134 | 169 | yes |
+| `--gc-sections`, nothing exported | **65,284** | 0 | no |
+| no linker settings at all | 114,647 | 0 | no |
+
+**Sealing it halves the binary.** 47% of that program was boxes and engine
+internals nothing reaches, kept alive purely so a description arriving next year
+could bind to them.
+
+Both sealed builds still ran correctly. So the cost is exact and the trade is
+clean: *extendable at run time* costs 57 KB on that program, and a program that
+will never be handed new code shouldn't pay it. That's a real finding and wants
+its own issue — a "this program is finished" flag on `serac` that drops the
+export list.
+
+## The linker settings — I overstated it, and you were right
+
+**`cera.c` and `cera.h` can be included however you want.** I said option 1
+requires knowing the linker settings; that's only true for one case.
+
+- `--gc-sections` is pure optimization. Never required.
+- The export list is required **only** if the program will `dlopen` code
+  compiled while it runs. Without it, a late box loads and then fails to resolve
+  `cera_*`.
+
+I built a program with no linker flags at all and it ran fine. So: if you're
+embedding a soramech inside a larger C program and never compiling at runtime,
+include the two files however you like and ignore all of this.
+
+## The three ways — are they functionally different?
+
+Your reading is almost exactly right. Precisely:
+
+1. **`--unpack`** — you get `cera.c` and `cera.h`. You write everything, build
+   however you want. The engine is a library inside your program.
+2. **`--emit-c`** — `serac` compiles the map to a **C file** instead of a
+   binary, exactly as you guessed. That file contains the construction calls
+   plus a `main`, and `#include`s `cera.h`. You compile it yourself.
+3. **`--main=`** — option 2 with the compile done for you, engine included.
+
+**And you're right that option 1 is the one that matters.** 2 and 3 are
+conveniences that sit between "you do everything" and "serac does everything".
+Given what I just measured — that the linker settings aren't actually required
+for the embedding case — my earlier argument for keeping `--main=` collapses.
+**I'd drop `--main=` and keep `--emit-c`,** which is the genuinely distinct
+thing: "show me the C you would have compiled."
+
+## Why ship `cera.c` and `cera.h` at all?
+
+Because **not everyone needs runtime compilation.** The split:
+
+- *My program **is** a soramech program* → `serac`, one command, nothing else
+  on the machine.
+- *A soramech is a **component** inside my larger C program* → `--unpack`,
+  build it into your own build system, ship a binary to a machine with no
+  toolchain.
+
+The second never invokes a compiler and never needs `serac` at runtime. Boxes
+compiled ahead of time need no compiler present — you're right about that too.
+
+## `--results` — dropping it, and you've named the reason
+
+Your read of the mechanism is correct on every point: an inner map's `$`-marked
+ports stop being argv slots once the outer map wires them (the engine recomputes
+that from the wires rather than storing it), and `cera_map_designate_argument` /
+`cera_map_designate_result` do it at runtime.
+
+And yes — `--results` is *only* the generated `main`'s array size. It's not
+engine behaviour at all. **Dropping the flag.** The generated `main` keeps one
+fixed bound and the loud refusal if a program exceeds it; anyone who needs to
+care builds their own `main`. As you say: it's just an argument, and they can
+build it to their specifications.
+
+## Strings of several sizes
+
+You're right on the C facts. Variable-length arrays exist but can't be struct
+members with a `sizeof` the compiler knows. Flexible array members (`char
+text[];` as a last member) exist but `sizeof` excludes them — the engine would
+copy zero bytes of text, so they're worse than useless here.
+
+**My recommendation: the user declares their own, and the engine ships none.**
+The reason is specific: two structs of different sizes are *different types*,
+and the engine refuses a width mismatch when wiring. So a supplied family of
+`word32`/`word64`/`word256` would fragment the graph — you couldn't wire a 32
+into a 64. One line (`typedef struct { char text[64]; } line;`) at whatever
+width the program needs keeps every station wireable to every other.
+
+---
+
+Three things I'd like to confirm before doing them: dropping `--results`,
+dropping `--main=`, and the "sealed build" flag for programs that will never be
+extended. The last is the 47% one.
 
 --------------------------------------------------------------------------------

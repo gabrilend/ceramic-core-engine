@@ -47,7 +47,7 @@ EOF
 
 "${CC}" -std=gnu11 -Wall -g -O2 -pthread \
     -I"${DIR}/src" \
-    -DCERA_COMPILER='"'"${DIR}"'/tmp/build/cerac"' \
+    -DCERA_COMPILER='"'"${DIR}"'/tmp/build/serac"' \
     -DCERA_ROOT='"'"${DIR}"'"' \
     -DCERA_RAM_SHARED='"/dev/shm/'"$(basename "${DIR}")"'"' \
     -DCERA_RAM_EXEC='"/tmp/'"$(basename "${DIR}")"'"' \

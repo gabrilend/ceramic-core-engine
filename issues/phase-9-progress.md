@@ -21,7 +21,7 @@ translation unit as its callers can be `static`.
 | [906 — an error reaches the host](completed/906-an-error-reaches-the-host.md) | **complete** | An installable handler, called with the message and the exit code immediately before the engine dies. Building it meant building the funnel first: thirty places wrote to stderr and ended the process, each its own little ending. |
 | [907 — built outside the tree](completed/907-built-outside-the-tree.md) | **complete** | The capstone. `make test` builds a program with this engine in a scratch directory that cannot see this repository, runs it, and checks the answer. It caught two real faults on its first run. |
 | [908 — two maps in one process](completed/908-two-maps-in-one-process.md) | **complete**, and it needed no code | There is no process-wide active map — it went with the statics table. What was missing was a test, because a singleton is invisible until two of something exist. |
-| [910 — the engine ships as a compiler](910-the-engine-ships-as-a-compiler.md) | **in progress** | `cerac` builds, carries the engine as text, writes a `main`, and the engine's three baked-in paths collapsed into one name. Open questions remain unworked. |
+| [910 — the engine ships as a compiler](910-the-engine-ships-as-a-compiler.md) | **in progress** | `serac` builds, carries the engine as text, writes a `main`, and the engine's three baked-in paths collapsed into one name. Open questions remain unworked. |
 
 ## Why the amalgamation is the source rather than a build artifact
 
@@ -86,7 +86,7 @@ a return type.
 
 **The scratch directory was never needed, and the question dissolved
 rather than being answered.** The blueprint had one question left: where
-to put the engine when `cerac` writes it out, and whether to keep it
+to put the engine when `serac` writes it out, and whether to keep it
 between runs. Both answers had a real cost — rewriting a megabyte every
 time, or a stale copy that could be compiled against.
 
@@ -105,7 +105,7 @@ size as the one the Makefile builds, differing by 412 bytes of text. The
 change is mechanism only; the product is unchanged.
 
 **A compiler that announces where it put things cannot be used by a
-program.** `cerac` printed its output path on success, and the engine
+program.** `serac` printed its output path on success, and the engine
 runs it as a subprocess when a description arrives at run time — so that
 sentence landed in the middle of somebody's results. Silence on success
 is the convention for a reason that is not taste.
@@ -143,7 +143,7 @@ derived from the header, which was the useful half.
 **And then the leaving got shorter.**
 [910](910-the-engine-ships-as-a-compiler.md) says the engine is not four
 things a consumer assembles but one command, and most of it stands: a
-description and some C are a program, built by `cerac`, which carries
+description and some C are a program, built by `serac`, which carries
 the engine inside itself and writes the `main` nobody wanted to write.
 The out-of-tree test now does its work twice — once the old way, four
 files and three compiler invocations, and once in one command — so the
@@ -226,7 +226,7 @@ belongs to one processor.
 ## What is not decided
 
 **Issue 910's open questions**, which are recorded in the issue file and
-have not been worked through: what `cerac` does when the compiler it
+have not been worked through: what `serac` does when the compiler it
 bakes in is absent, whether the result bound is the right shape, whether
 `--main=` earns its place beside `--emit-c` and `--unpack`, what root a
 box source outside the description's directory should be shortened

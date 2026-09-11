@@ -56,7 +56,7 @@ minimal-soramech/
 │                                   and something worth watching
 ├── tests/
 ├── scripts/                        the build tools, and the compiler that
-│                                   ships: 144-cerac.c carries the engine
+│                                   ships: 144-serac.c carries the engine
 │                                   inside it, so one command turns a
 │                                   description and some C into a program
 ├── strategems/                     data-flow patterns that keep proving useful
@@ -93,8 +93,9 @@ memory so that path can start.
 | How C functions become callable by name | [007 — The build path](007-datapath-build.md) |
 | How to write a map | [008 — Map file format](008-map-file-format.md) |
 | What happens between the file and the first task | [009 — Loading](009-datapath-load.md) |
-| How to turn a description into a program in one command | [144 — The compiler](../scripts/144-cerac.c.info.md) |
-| What the compiler carries inside itself | [143 — What it carries](../scripts/143-cerac.h.info.md) |
+| How to turn a description into a program in one command | [144 — The compiler](../scripts/144-serac.c.info.md) |
+| What the compiler carries inside itself | [143 — What it carries](../scripts/143-serac.h.info.md) |
+| How to build the compiler from source | [147 — Building it](../scripts/147-build-serac.sh.info.md) |
 | What order to build it in | [010 — Roadmap](010-roadmap.md) |
 | What you may rely on without measuring | [058 — Guarantees](058-guarantees.md) |
 | How one program is placed inside another | [140 — A map inside a map](140-a-map-inside-a-map.md) |

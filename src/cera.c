@@ -8010,13 +8010,13 @@ const char *cera_map_remove_stations(cera_map_t *m, const int *stations,
  * the failure arrived as a compiler error naming a directory the
  * person reading it had never heard of.
  *
- * `cerac` answers all three at once, because it carries its own
+ * `serac` answers all three at once, because it carries its own
  * compiler, its own header, and the generator inside it. So the
  * question stops being three paths and becomes one name, and a name is
  * something that can be looked for.
  */
 #ifndef CERA_COMPILER
-#define CERA_COMPILER "cerac"
+#define CERA_COMPILER "serac"
 #endif
 #ifndef CERA_RAM_SHARED
 #define CERA_RAM_SHARED "/dev/shm/minimal-soramech"
@@ -8239,7 +8239,7 @@ static int joined(char *out, size_t room, const char *dir, int dir_len)
 
 /* {{{ find_compiler() */
 /*
- * **Where `cerac` is**, answered once and remembered, or null with a
+ * **Where `serac` is**, answered once and remembered, or null with a
  * refusal already printed.
  *
  * Three answers, in order, and the order is the whole design:
@@ -8248,9 +8248,9 @@ static int joined(char *out, size_t room, const char *dir, int dir_len)
  *    saying outright where it is. Nothing is searched when this is
  *    set, because a person who answered the question should not then
  *    have their answer second-guessed.
- * 2. **Beside this executable.** For a program `cerac` built, that is
+ * 2. **Beside this executable.** For a program `serac` built, that is
  *    the directory holding the description it was built from, because
- *    that is where `cerac` put it — so "beside the map file", which is
+ *    that is where `serac` put it — so "beside the map file", which is
  *    where a programmer who expects to add boxes keeps it, and "beside
  *    the program" are the same directory reached by the only route a
  *    running program has to it.
@@ -8288,7 +8288,7 @@ static const char *find_compiler(void)
      * It matters because two different builds set this to two different
      * kinds of thing on purpose. This repository's own build points it
      * at the copy in the build tree, so a test can compile a late box
-     * with nothing installed. A program `cerac` builds is given no
+     * with nothing installed. A program `serac` builds is given no
      * definition at all and falls to the bare name below, which is what
      * gets searched for — and what makes that program relocatable,
      * which is the whole point of the exercise.
@@ -8639,13 +8639,13 @@ static int spill_sources(const char *dir, const char **paths, int cap)
  */
 static void gather_missing_boxes(const char *map_path, const char *list_path)
 {
-    const char *cerac = find_compiler();
-    if (!cerac)
+    const char *serac = find_compiler();
+    if (!serac)
         return;   /* find_compiler has already said why */
 
     char cmd[4096];
     int wrote = snprintf(cmd, sizeof cmd, "%s --map-boxes %s > %s",
-                         cerac, map_path, list_path);
+                         serac, map_path, list_path);
     if (wrote <= 0 || wrote >= (int)sizeof cmd) {
         fprintf(stderr, "latebox: the paths involved do not fit on one "
                         "command line\n");
@@ -8729,7 +8729,7 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text)
     /* There is no third path here any more. The emitted C used to be
      * written out so that a compiler could be pointed at it; the
      * compiler is handed it down a pipe now and it never becomes a
-     * file. Anybody who wants to read it asks cerac for it with
+     * file. Anybody who wants to read it asks serac for it with
      * --keep-c, which is a person deciding rather than every run
      * leaving litter (issue 910). */
     snprintf(lib_path, sizeof lib_path, "%s/built-%d-%d.so",
@@ -8777,13 +8777,13 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text)
      * functions that build their stations rather than defining them,
      * and carries no second copy of anything.
      */
-    const char *cerac = find_compiler();
-    if (!cerac)
+    const char *serac = find_compiler();
+    if (!serac)
         return NULL;
 
     int at = snprintf(cmd, sizeof cmd,
                       "%s --shared --root=%s -o %s %s",
-                      cerac, src_root, lib_path, map_path);
+                      serac, src_root, lib_path, map_path);
     /* Each source name appended with its length measured first rather
      * than formatted and checked afterwards. A command line that did
      * not fit is not one that nearly fitted — the last name would be
@@ -8872,17 +8872,17 @@ int cera_late_compile_source(const char *c_source)
      * the placement functions rather than declaring them, because
      * nothing else holds this code yet.
      *
-     * The compiler is cerac's own, which is what makes its answer to
+     * The compiler is serac's own, which is what makes its answer to
      * sizeof the same answer as this binary's — the reasoning that used
      * to bake a compiler path into every build, now written down in
-     * cerac instead of in whoever linked the program.
+     * serac instead of in whoever linked the program.
      */
-    const char *cerac = find_compiler();
-    if (!cerac)
+    const char *serac = find_compiler();
+    if (!serac)
         return -1;
 
     int wrote = snprintf(cmd, sizeof cmd, "%s --shared -o %s %s",
-                         cerac, lib_path, box_path);
+                         serac, lib_path, box_path);
     if (wrote <= 0 || wrote >= (int)sizeof cmd) {
         fprintf(stderr, "latebox: the paths involved do not fit on one "
                         "command line\n");

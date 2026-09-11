@@ -1240,7 +1240,7 @@ static void emit_sources(buf_t *w, arena_t *a, const char **sources,
  * of what the generator produces; writing it to a file is a separate
  * act next door.
  *
- * Split out for `cerac` (issue 910), which never writes this text to
+ * Split out for `serac` (issue 910), which never writes this text to
  * disk at all: it concatenates the engine's source in front of it and
  * hands the whole thing to the compiler down a pipe. A generator whose
  * only exit was a filename forced a file to exist, and that file was

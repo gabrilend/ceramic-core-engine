@@ -1,5 +1,5 @@
 /*
- * 144-cerac.c — the ceramic compiler: a map and some C functions in,
+ * 144-serac.c — the ceramic compiler: a map and some C functions in,
  * a program out.
  *
  * What this is: the one executable somebody needs in order to build a
@@ -37,10 +37,10 @@
  * it is not an error worth having.
  *
  * Usage:
- *   cerac program.map boxes.c [more.c ...]   an executable, beside the map
- *   cerac --shared program.map boxes.c       a shared object
- *   cerac --emit-c program.map boxes.c       the C, and stop
- *   cerac --unpack DIR                       cera.c, cera.h, the syms file
+ *   serac program.map boxes.c [more.c ...]   an executable, beside the map
+ *   serac --shared program.map boxes.c       a shared object
+ *   serac --emit-c program.map boxes.c       the C, and stop
+ *   serac --unpack DIR                       cera.c, cera.h, the syms file
  *
  *   -o PATH        where the result lands, instead of beside the map
  *   --main=FILE    a C file carrying its own main, instead of the emitted one
@@ -51,7 +51,7 @@
  */
 #include "067-genparse.h"
 #include "099-mapparse.h"
-#include "143-cerac.h"
+#include "143-serac.h"
 
 #include <errno.h>
 #include <signal.h>
@@ -65,11 +65,11 @@
 #include <unistd.h>
 
 /* Which compiler to invoke when nothing on the command line says. The
- * build defines this as the compiler that built `cerac` itself, which
- * is the one whose idea of sizeof matches the engine text `cerac` is
+ * build defines this as the compiler that built `serac` itself, which
+ * is the one whose idea of sizeof matches the engine text `serac` is
  * carrying. */
-#ifndef CERAC_CC
-#define CERAC_CC "cc"
+#ifndef SERAC_CC
+#define SERAC_CC "cc"
 #endif
 
 /* {{{ static void fail() */
@@ -83,7 +83,7 @@
 static void fail(const char *fmt, ...)
 {
     va_list ap;
-    fprintf(stderr, "cerac: ");
+    fprintf(stderr, "serac: ");
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
@@ -95,9 +95,9 @@ static void fail(const char *fmt, ...)
 /* {{{ static const char *embedded_or_die() */
 static const char *embedded_or_die(const char *name)
 {
-    const char *text = cerac_embedded_text(name);
+    const char *text = serac_embedded_text(name);
     if (!text)
-        fail("this cerac was built without %s inside it, which is a broken "
+        fail("this serac was built without %s inside it, which is a broken "
              "build rather than a missing option", name);
     return text;
 }
@@ -171,7 +171,7 @@ static int append_without_engine_include(buf_t *w, const char *text)
 /*
  * **The engine written back out under the names it had**, for somebody
  * who wants it in a build system of their own. This is not a rescue
- * for people who could not manage `cerac`; it is the same two files a
+ * for people who could not manage `serac`; it is the same two files a
  * consumer has always been able to take, with the taking done for
  * them.
  */
@@ -180,16 +180,16 @@ static void unpack(const char *dir)
     if (mkdir(dir, 0777) != 0 && errno != EEXIST)
         fail("cannot make %s: %s", dir, strerror(errno));
 
-    for (int i = 0; i < cerac_n_embedded; i++) {
+    for (int i = 0; i < serac_n_embedded; i++) {
         char path[4096];
-        snprintf(path, sizeof path, "%s/%s", dir, cerac_embedded[i].name);
+        snprintf(path, sizeof path, "%s/%s", dir, serac_embedded[i].name);
 
         FILE *f = fopen(path, "wb");
         if (!f)
             fail("cannot write %s: %s", path, strerror(errno));
 
-        size_t n = strlen(cerac_embedded[i].text);
-        if (fwrite(cerac_embedded[i].text, 1, n, f) != n) {
+        size_t n = strlen(serac_embedded[i].text);
+        if (fwrite(serac_embedded[i].text, 1, n, f) != n) {
             fclose(f);
             fail("cannot write %s: %s", path, strerror(errno));
         }
@@ -250,7 +250,7 @@ static void run_compiler(char **argv, const char *text, size_t n)
             _exit(70);
         close(fds[0]);
         execvp(argv[0], argv);
-        fprintf(stderr, "cerac: cannot run %s: %s\n", argv[0],
+        fprintf(stderr, "serac: cannot run %s: %s\n", argv[0],
                 strerror(errno));
         _exit(70);
     }
@@ -328,7 +328,7 @@ int main(int argc, char **argv)
     const char  *out_path   = NULL;
     const char  *main_file  = NULL;
     const char  *root       = NULL;
-    const char  *cc         = CERAC_CC;
+    const char  *cc         = SERAC_CC;
     const char  *keep_c     = NULL;
     const char  *map_path   = NULL;
     int          shared     = 0;
@@ -535,7 +535,7 @@ int main(int argc, char **argv)
      * with the engine in front of it. It includes `cera.h` the ordinary
      * way, so it compiles against an unpacked engine with no special
      * knowledge — and running `--emit-c`, `--unpack` and a compiler by
-     * hand reproduces what one `cerac` does, which is the only way a
+     * hand reproduces what one `serac` does, which is the only way a
      * person can check that claim.
      */
     if (emit_c) {
@@ -563,7 +563,7 @@ int main(int argc, char **argv)
         int removed = append_without_engine_include(&whole,
                                                     embedded_or_die("cera.c"));
         if (removed != 1)
-            fail("the engine carried inside this cerac includes its own "
+            fail("the engine carried inside this serac includes its own "
                  "header %d times, not once — the text and the rule for "
                  "joining it have gone out of step", removed);
     }

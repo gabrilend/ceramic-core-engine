@@ -139,7 +139,7 @@ the generator and the directory holding this header were each baked in
 as an absolute path, and two of them named places on the machine that
 ran the build — so a binary copied elsewhere invoked a generator that
 was not there and reached for a header at a path that did not exist
-(issue 910). `cerac` answers all three, because it carries its own
+(issue 910). `serac` answers all three, because it carries its own
 compiler, its own header and the generator inside it, so the question is
 one name. A name with a slash in it is a path and is used as it stands;
 a bare name is looked for beside this program and then on the path, the
@@ -2360,16 +2360,16 @@ const cera_map_build_t *cera_late_compile_map(const char *map_text);
 **A description handed to a running program, compiled into it.**
 
 The text goes through the same pipe a box source does — write it
-out, hand it to `cerac`, load the result — and comes back as the
+out, hand it to `serac`, load the result — and comes back as the
 function that builds it. Call that function on any program to get
 the stations and wiring the description asked for.
 
 That used to be two commands, a generator and then a compiler, with
 an emitted C file written to the scratch tier between them so the
 second had something to read. It is one command now and the emitted
-C never becomes a file at all: `cerac` builds the whole text in
+C never becomes a file at all: `serac` builds the whole text in
 memory and hands it to the compiler down a pipe. Anybody who wants
-to read it asks `cerac` for it, which is a person deciding rather
+to read it asks `serac` for it, which is a person deciding rather
 than every run leaving litter.
 
 **Nothing is compiled twice.** The boxes the description names are

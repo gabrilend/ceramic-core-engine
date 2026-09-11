@@ -15,7 +15,7 @@ Two modes do something other than read boxes:
   hold and this program does not.
 - `generate --embed <output.c> <file>...` turns arbitrary files into a
   table of C string literals. This is stage two of the build that
-  produces `cerac`, and the files it is pointed at are the engine's own
+  produces `serac`, and the files it is pointed at are the engine's own
   header, body and export list (issue 910). It is a mode here rather
   than a program of its own because the escaping already lives in this
   build tool, and a second tool with a second copy of it would be a

@@ -7,11 +7,11 @@ You write ordinary C functions. You write a second file saying which
 function feeds which, and the engine works out how to run your design
 across the cores it finds.
 
-It is **one command** — `cerac accumulate.map arithmetic.c` hands back
+It is **one command** — `serac accumulate.map arithmetic.c` hands back
 `./accumulate` — or **two files to add to a project** (`cera.c` and
 `cera.h`) for anybody who would rather build it themselves. Both
-readings are true at once, because `cerac` carries those two files
-inside it and `cerac --unpack` writes them out. It needs a C compiler
+readings are true at once, because `serac` carries those two files
+inside it and `serac --unpack` writes them out. It needs a C compiler
 and nothing else, and it is licensed AGPLv3.
 
 ---

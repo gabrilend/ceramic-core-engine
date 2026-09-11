@@ -45,7 +45,7 @@ fi
 
 flags=(-std=gnu11 -Wall -Wextra -Werror -O2 -pthread
        "-I${DIR}/src"
-       -DCERA_COMPILER='"cerac"'
+       -DCERA_COMPILER='"serac"'
        -DCERA_ROOT='"."'
        -DCERA_RAM_SHARED='"/dev/shm"' -DCERA_RAM_EXEC='"/tmp"')
 

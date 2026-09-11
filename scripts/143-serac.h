@@ -1,10 +1,10 @@
 /*
- * 143-cerac.h — what the compiler carries inside itself, declared.
+ * 143-serac.h — what the compiler carries inside itself, declared.
  *
- * What this is: the one type and the one table that let `cerac` hold
+ * What this is: the one type and the one table that let `serac` hold
  * the engine's own source as part of its executable. The engine is
  * three files in this repository — the header, the body, and the
- * linker's export list — and `cerac` is built from the generator's
+ * linker's export list — and `serac` is built from the generator's
  * sources plus a generated file defining the table below, whose
  * entries are those three files turned into C string literals.
  *
@@ -12,7 +12,7 @@
  * Stage one compiles `generate`, which is the ordinary build-time
  * generator and knows nothing about any of this. Stage two runs
  * `generate --embed` over the engine's files to write that generated
- * file, then compiles `cerac` from the generator's own sources plus
+ * file, then compiles `serac` from the generator's own sources plus
  * it. There is no bootstrap problem, because the thing doing the
  * embedding does not need to have been embedded.
  *
@@ -21,10 +21,10 @@
  * name beside the bytes so that adding a fourth file is a change to
  * one command line rather than to three declarations and a writer.
  */
-#ifndef CERAC_H
-#define CERAC_H
+#ifndef SERAC_H
+#define SERAC_H
 
-/* {{{ type cerac_embedded_t */
+/* {{{ type serac_embedded_t */
 /*
  * One file carried inside the executable.
  *
@@ -41,20 +41,20 @@
 typedef struct {
     const char *name;
     const char *text;
-} cerac_embedded_t;
+} serac_embedded_t;
 /* }}} */
 
 /* The engine's files, in the order the command line named them, which
  * for the build is the order they have to be concatenated in: the
  * header before the body, because the body's declarations have to be
  * in scope before its definitions arrive. */
-extern const cerac_embedded_t cerac_embedded[];
-extern const int              cerac_n_embedded;
+extern const serac_embedded_t serac_embedded[];
+extern const int              serac_n_embedded;
 
 /* Finds one by name, or null. The caller decides what a missing file
- * means; nothing here substitutes a default for one, because a `cerac`
+ * means; nothing here substitutes a default for one, because a `serac`
  * built without the engine in it is a broken build rather than a
  * degraded one. */
-const char *cerac_embedded_text(const char *name);
+const char *serac_embedded_text(const char *name);
 
 #endif

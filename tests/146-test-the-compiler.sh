@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# 146-test-the-compiler.sh — what cerac does, checked one claim at a time.
+# 146-test-the-compiler.sh — what serac does, checked one claim at a time.
 #
 # What this proves: that a description and some C functions are a whole
-# program. The out-of-tree test proves cerac can be built and used
+# program. The out-of-tree test proves serac can be built and used
 # somewhere that cannot see this repository; this one stays home and
 # asks what it actually produces — every shape of result, a program with
 # no results at all, the three modes composing, and each refusal saying
 # the thing it is supposed to say.
 #
 # Why the two are separate. That one is about packaging and would pass
-# with a cerac that built nonsense, as long as the nonsense compiled.
+# with a serac that built nonsense, as long as the nonsense compiled.
 # This one is about the nonsense.
 #
 # Everything happens in the executable RAM tier under /tmp, because it
@@ -20,12 +20,12 @@
 # Usage: 146-test-the-compiler.sh <project-dir>
 set -u
 DIR="${1:-/mnt/mtwo/programming/ai-playground/minimal-soramech}"
-CERAC="${DIR}/tmp/build/cerac"
+SERAC="${DIR}/tmp/build/serac"
 WORK="/tmp/$(basename "${DIR}")/compiler-test"
 
 fail() { echo "  FAIL: $*"; exit 1; }
 
-[[ -x "${CERAC}" ]] || fail "there is no cerac at ${CERAC}"
+[[ -x "${SERAC}" ]] || fail "there is no serac at ${SERAC}"
 
 rm -rf "${WORK}"
 mkdir -p "${WORK}"
@@ -86,8 +86,8 @@ station placer (place)
   out 0 - 3$
 MAP
 
-"${CERAC}" "${WORK}/shapes.map" "${WORK}/shapes.c" >/dev/null \
-    || fail "cerac refused a description it should accept"
+"${SERAC}" "${WORK}/shapes.map" "${WORK}/shapes.c" >/dev/null \
+    || fail "serac refused a description it should accept"
 
 # Beside the description and named after it, rather than wherever the
 # shell happened to be standing.
@@ -123,8 +123,8 @@ station mover (nudge)
   out 0 - 0$
 MAP
 
-"${CERAC}" "${WORK}/nudge.map" "${WORK}/nudge.c" >/dev/null \
-    || fail "cerac refused a description whose argument is a struct"
+"${SERAC}" "${WORK}/nudge.map" "${WORK}/nudge.c" >/dev/null \
+    || fail "serac refused a description whose argument is a struct"
 
 got="$("${WORK}/nudge" "{ 4, 6 }")"
 [[ "${got}" == "{ 5, 7 }" ]] || fail "a struct argument came back as '${got}'"
@@ -146,8 +146,8 @@ station voice (shout)
   in 0 - 0$
 MAP
 
-"${CERAC}" "${WORK}/quiet.map" "${WORK}/quiet.c" >/dev/null \
-    || fail "cerac refused a description that marks no results"
+"${SERAC}" "${WORK}/quiet.map" "${WORK}/quiet.c" >/dev/null \
+    || fail "serac refused a description that marks no results"
 
 got="$("${WORK}/quiet" 5)"
 status=$?
@@ -160,21 +160,21 @@ echo "  a description marking no results prints nothing of its own and exits zer
 #
 # --emit-c writes what would have been compiled minus the engine, and
 # --unpack writes the engine. Compiling the one against the other by
-# hand has to reproduce what a single cerac does, because that is the
+# hand has to reproduce what a single serac does, because that is the
 # only way a person can check the claim that it does anything ordinary.
 # Named explicitly, because --emit-c over shapes.map would otherwise
 # want to write shapes.c — which is the box source sitting beside it.
 # That collision is refused rather than allowed to destroy the input,
 # and the refusal is checked below.
 rm -rf "${WORK}/engine"
-"${CERAC}" --unpack "${WORK}/engine" >/dev/null || fail "cerac could not unpack the engine"
+"${SERAC}" --unpack "${WORK}/engine" >/dev/null || fail "serac could not unpack the engine"
 for f in cera.c cera.h 098-engine-surface.syms; do
     cmp -s "${DIR}/src/${f}" "${WORK}/engine/${f}" \
-        || fail "the ${f} cerac carries differs from the one in src/"
+        || fail "the ${f} serac carries differs from the one in src/"
 done
 
-"${CERAC}" --emit-c -o "${WORK}/built.c" "${WORK}/shapes.map" "${WORK}/shapes.c" \
-    >/dev/null || fail "cerac refused to emit the C to a named path"
+"${SERAC}" --emit-c -o "${WORK}/built.c" "${WORK}/shapes.map" "${WORK}/shapes.c" \
+    >/dev/null || fail "serac refused to emit the C to a named path"
 [[ -s "${WORK}/built.c" ]] || fail "--emit-c wrote nothing"
 
 "${CC:-cc}" -std=gnu11 -O2 -pthread -I"${WORK}/engine" \
@@ -210,12 +210,12 @@ station sink (swallow)
   in 0 - 0$
   out 0 - 0$
 MAP
-if "${CERAC}" "${WORK}/void.map" "${WORK}/void.c" >/dev/null 2>"${WORK}/void.txt"; then
+if "${SERAC}" "${WORK}/void.map" "${WORK}/void.c" >/dev/null 2>"${WORK}/void.txt"; then
     fail "a result marked on a box returning nothing was accepted"
 fi
 
 # Two descriptions is not a program, and the refusal names both.
-if "${CERAC}" "${WORK}/shapes.map" "${WORK}/quiet.map" "${WORK}/shapes.c" \
+if "${SERAC}" "${WORK}/shapes.map" "${WORK}/quiet.map" "${WORK}/shapes.c" \
         >/dev/null 2>"${WORK}/two.txt"; then
     fail "two descriptions on one command line were accepted"
 fi
@@ -226,9 +226,9 @@ grep -q "from one" "${WORK}/two.txt" \
 # --emit-c over shapes.map wants to write the box source it was asked to
 # read. Destroying an input and then failing to compile it would be a
 # message about a brace on a line nobody wrote.
-if "${CERAC}" --emit-c "${WORK}/shapes.map" "${WORK}/shapes.c" \
+if "${SERAC}" --emit-c "${WORK}/shapes.map" "${WORK}/shapes.c" \
         >/dev/null 2>"${WORK}/over.txt"; then
-    fail "cerac wrote its output over a source it was asked to read"
+    fail "serac wrote its output over a source it was asked to read"
 fi
 grep -q "write over" "${WORK}/over.txt" \
     || fail "the refusal did not say what it would have overwritten: $(cat "${WORK}/over.txt")"
@@ -241,8 +241,8 @@ echo "  output landing on an input are each refused"
 # --- and it relocates ------------------------------------------------
 #
 # The defect this whole thing exists to remove: a program that could
-# only bring in new code on the machine that built it. cerac bakes in no
-# path, so a program it built looks for cerac beside itself — and moving
+# only bring in new code on the machine that built it. serac bakes in no
+# path, so a program it built looks for serac beside itself — and moving
 # the pair somewhere else has to change nothing.
 mkdir -p "${WORK}/elsewhere"
 cp "${WORK}/shapes" "${WORK}/elsewhere/"
