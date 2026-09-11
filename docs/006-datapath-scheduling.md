@@ -161,16 +161,10 @@ the last of those is completion, not a stall.
 opaque task structs between threads. Everything about what a task
 *means* lives on the delivery path.
 
-That ignorance turned out to be worth more than tidiness. A task
-carries a station number, an exit number, and **which program it
-belongs to**, all three ferried without being looked at — and the last
-of those is what lets one pool serve several programs at once, which
-is how a program can set another going beside itself. It could not
-before: finishing a task means resolving a station number, a number
-means nothing without the table it indexes, and while that table came
-from the pool's own context a pool served exactly one program. Making
-the pool carry one more thing it does not understand was the whole
-change ([212](../issues/completed/212-one-way-to-build-a-program.md)).
+A task carries a station number, an exit number, and **which program it
+belongs to**, all three ferried without being looked at. The last of
+those is what lets one pool serve several programs at once, which is how
+a program can set another going beside itself.
 
 ## Related
 

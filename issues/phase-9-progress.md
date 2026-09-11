@@ -156,6 +156,18 @@ agree, or the consumer's first line hands them a puzzle.
 never the price of deciding, it was the price of the respelling having
 been half-done for months.
 
+## How it came to be this way
+
+### Two programs stopped sharing a pool of workers
+
+There was briefly a call that started one program beside another so the
+two shared a pool. Workers are mostly idle, so sharing them looks like
+the thrifty arrangement — until the second program's teardown takes the
+first one's workers with it. One program per pool costs threads that were
+not doing anything anyway, and it is the arrangement the rest of the
+design already assumed: a station table belongs to one pool the way it
+belongs to one processor.
+
 ## What is not decided
 
 Nothing in this phase, currently.

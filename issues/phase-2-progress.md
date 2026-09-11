@@ -181,3 +181,15 @@ the program on refusal, which made a bad depth the one fault in a map
 file capable of hiding every fault after it: a caller collecting
 mistakes cannot collect the one that killed it. It returns a sentence
 now, like every other port operation.
+
+### The wire check stopped being kept in two places
+
+Reading a map file performed a width check of its own before connecting,
+on the grounds that reading is the first moment both ends of a wire are
+known. That was true, and the wiring operation is reached at exactly that
+moment, so the second copy bought nothing and cost something: while it
+existed, the first could carry a hole that no program read from a file
+would ever meet. It had one. A station with no input ports at all — a box
+that takes nothing and returns a value — skipped the width question
+entirely, and only a program built by calling the surface could have
+found out.

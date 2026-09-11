@@ -67,11 +67,13 @@ Described by [002 — Stations and ports](002-stations-and-ports.md) and
 
 The generator, and the end of hand-written glue.
 
-Built here: a parser that reads designated box source files and pulls
-out function declarations, struct definitions, and compare functions;
-emission of one shim per box; emission of the table that maps a name
-to a shim pointer and full type information; emission of a field table
-per struct; emission of compare functions for the primitives.
+Built here: a parser that reads designated box source files and pulls out
+function declarations, struct definitions, and compare functions;
+emission of one shim per box; emission of a placement function per box,
+carrying every size the C compiler folded; emission of a field table per
+struct; emission of compare functions for the primitives; and the step
+that turns a map description into the construction calls it names, so
+nothing parses a map while it runs.
 
 The generator runs as part of the build. Adding a box becomes writing a
 function.
@@ -86,31 +88,27 @@ The input that is not a buffer.
 
 Built here: static values, held by the port that reads them, including
 reading a struct constant by walking the field table from phase 3;
-peeking rather than consuming, so a static is always full and never
-gates readiness; and writing one — from the file at construction, from
-outside the graph while it runs, or down a wire whose destination
-happens to be a static port.
+peeking rather than consuming, so a static is always full and never gates
+readiness; and writing one — from the file at construction, from outside
+the graph while it runs, or down a wire whose destination happens to be a
+static port.
 
 The addition that carries the most weight is the smallest: **a write is
 an event.** Writing a static runs the ordinary readiness check on the
-station holding it, which is what lets a chain of stations wired
-through statics behave like a recalculation graph, and what makes
-construction itself the thing that starts a program.
+station holding it, which is what lets a chain of stations wired through
+statics behave like a recalculation graph, and what makes construction
+itself the thing that starts a program.
 
-This phase originally built a pull path as well — gatherer ports,
-inline gathering, chains, and a cycle check. All of it is being
-removed; [056](implementation-notes/056-no-pull-path.md) records what
-it was for, the three timings considered for it, and the accounting
-problem that ended it.
-
-Described by [004 — Statics and recalculation](004-datapath-statics.md).
+Described by [004 — Statics and recalculation](004-datapath-statics.md),
+with [056](implementation-notes/056-no-pull-path.md) for the pull path
+this phase once carried.
 
 ---
 
 ## Phase 5 — Routing kinds
 
-Comparators and iterators, which are variations on one step of
-delivery and nothing else.
+Comparators and iterators, which are variations on one step of delivery
+and nothing else.
 
 Built here: the three-entry dispatch on the way out; the comparator's
 extra threshold port and its three ports; three-way comparison through
@@ -118,8 +116,8 @@ the generated compare functions; the iterator's cursor, advanced under
 the station mutex at enqueue time with the chosen port recorded in the
 task struct.
 
-Depends on phase 3 for compare functions and phase 4 for the static
-ports that thresholds almost always use.
+Depends on phase 3 for compare functions and phase 4 for the static ports
+that thresholds almost always use.
 
 Described by [005 — Routing](005-routing.md).
 
@@ -129,30 +127,15 @@ Described by [005 — Routing](005-routing.md).
 
 The capstone. The two halves of a program meet for the first time.
 
-Built here: the line-oriented parser; the two-pass loader; the
-name lookup table; type checking of every wire against the emitted sizes;
-every load-time validation rule; the seed sweep.
+Built here: the line-oriented format and its reader; every wire written
+at both ends and refused when the two disagree; type checking of every
+wire against the emitted sizes; the whole-program checks and the seed,
+gathered into one repeatable act a caller performs when it says a program
+is finished.
 
 At the end of this phase, a program is a directory of C functions and a
 text file, and changing the shape of the program does not require
 touching the C.
-
-**And then most of it stopped belonging to loading.** The validation
-and the seed became one pass a caller invokes, repeatable, and the
-loader became a reader whose every line is a call anybody could make
-— so *still loading* is no longer a state anything can be in. What
-survives of the two-pass structure is one sentence: resolve names
-after every station exists. See
-[212](../issues/completed/212-one-way-to-build-a-program.md).
-
-**The name lookup table went with it**, and so did the loader's own
-copies of the port-range check and the wire check. Stations are named
-as they are created, so arrows resolve against the program rather than
-against a table this phase kept — and every refusal raised while
-wiring can name the station in the word the file's author typed. The
-wire check was the interesting removal: keeping a second one meant the
-first could have a hole nobody would ever meet from a file, and it
-did. See [210g](../issues/completed/210g-one-way-to-build-a-station.md).
 
 Described by [008 — Map file format](008-map-file-format.md) and
 [009 — Loading](009-datapath-load.md).
@@ -164,12 +147,12 @@ Described by [008 — Map file format](008-map-file-format.md) and
 Everything that makes the engine legible while it runs. None of it is
 required for correctness, all of it is required for confidence.
 
-Candidates: reporting when a ring buffer grows, since that means a
-consumer is slower than its producer and memory is quietly absorbing
-the difference; per-station counts of runs and time spent; a dump of
-the loaded map that reads back as a map file; the worst-case gather
-chain depth recorded during the load-time walk; runtime rewiring, with
-the same cycle check applied at connection time.
+Built here: reporting when a ring buffer grows, since that means one
+input side of a station is being fed faster than its siblings and memory
+is quietly absorbing the difference; per-station counts of runs and time
+spent; a dump of the loaded map that reads back as a map file; runtime
+rewiring, with every rule applied at connection time; and a capture that
+writes down a running program including the values waiting on its ports.
 
 Also the HTML documentation set at `docs/HTML/`, cross-linked and
 navigable, which is deliberately deferred to here rather than built
@@ -182,60 +165,55 @@ describing it, and the conversation logs rendered as a book.
 
 ## Phase 8 — The workbench
 
-Tools that stand outside the engine and help somebody write a program
-for it. Everything up to here makes maps run; nothing yet helps anyone
+Tools that stand outside the engine and help somebody write a program for
+it. Everything up to here makes maps run; nothing yet helps anyone
 compose one except a text editor.
 
 Built here: a canvas in the browser where stations are placed, named,
 given a kind and a box function, and wired; static values filled in;
-every load-time rule applied as a wire is drawn rather than at startup;
-and a download of the map file together with the C source for the
-functions it used. Boxes come from a bundled drawer or from a C file
-the page reads locally, parsed by the build's own generator compiled to
-WebAssembly so the page and the build cannot disagree about what a box
-is. Nothing is stored on a server.
+every rule applied as a wire is drawn rather than at startup; and a
+download of the map file together with the C source for the functions it
+used. Boxes come from a bundled drawer or from a C file the page reads
+locally, parsed by the build's own generator compiled to WebAssembly so
+the page and the build cannot disagree about what a box is. Nothing is
+stored on a server.
 
-Depends on phase 6 for the format it emits and phase 3 for the parser
-it borrows — which is now a standalone C program, so the page and the
-build can share one implementation rather than two that must agree.
+Depends on phase 6 for the format it emits and phase 3 for the parser it
+borrows — a standalone C program, so the page and the build share one
+implementation rather than two that must agree.
 
-The constraint the whole phase is held to: you can also write a map in
-a text editor. The canvas is an alternative to writing the file by
-hand, never a prerequisite for it. If the canvas can ever express
-something the format cannot, the format is what needs fixing.
+The constraint the whole phase is held to: you can also write a map in a
+text editor. The canvas is an alternative to writing the file by hand,
+never a prerequisite for it. If the canvas can ever express something the
+format cannot, the format is what needs fixing.
 
 ---
 
 ## Phase 9 — The engine leaves home
 
-Everything above makes programs run inside this repository. This phase
-is the engine becoming something somebody else can take away.
+Everything above makes programs run inside this repository. This phase is
+the engine becoming something somebody else can take away.
 
 Built here: the whole engine as one translation unit and one header —
-`src/cera.c` and `src/cera.h` — with the numbered sources deleted once
-the output has been compared byte for byte; a header narrowed to what
-generated code binds to and what a consumer calls; every remaining
-definition marked `static`, which is the step the rest exists for,
-because a function in the same translation unit as its callers is not a
-linker symbol at all; one prefix on what is left visible; an installable
-handler that lets a host hear about a refusal without letting it survive
-one; and a test that builds a program with this engine in a directory
-that cannot see this repository.
+`src/cera.c` and `src/cera.h`; a header narrowed to what generated code
+binds to and what a consumer calls; every remaining definition marked
+`static`, which is the step the rest exists for, because a function in
+the same translation unit as its callers is not a linker symbol at all;
+one prefix on what is left visible; an installable handler that lets a
+host hear about a refusal without letting it survive one; and a test that
+builds a program with this engine in a directory that cannot see this
+repository.
 
 The two names carry no index, which is the project's one deliberate
 exception to the numbering. They are the deliverable, and an entry point
 called `018-station.h` announcing the eighteenth thing to read in
-somebody else's tree is precisely the awkwardness this phase removes.
-The reading order moves inside `cera.c`, held by a banner at each seam.
+somebody else's tree is precisely the awkwardness this phase removes. The
+reading order moves inside `cera.c`, held by a banner at each seam.
 
 Depends on everything, which is what makes it last: the surface it
 publishes is only knowable once there is nothing further to add to it.
 
-Described by [057 — Packaging the engine as a library](implementation-notes/057-packaging.md),
-whose survey this phase executes with one change — the amalgamation
-becomes the source rather than something a script derives from the
-numbered files, so there is one copy of the engine rather than one copy
-and a derivation that can drift from it.
+Described by [057 — Packaging the engine as a library](implementation-notes/057-packaging.md).
 
 ---
 

@@ -97,3 +97,16 @@ every emitted struct for one whose name matched. The generated pair now
 reaches each field by name, so no offset is stored or computed anywhere,
 and the placement function hands the pair over directly instead of
 leaving a search to answer a question it already knew.
+
+### The symbol escape had to be made injective, not merely tidy
+
+The first mangling rule replaced punctuation with underscores and had no
+entry for the separator between a file and a function, nor for the
+underscore itself. That makes `math.c` and `math_c` produce one symbol,
+and the linker's complaint is then about a duplicate symbol rather than
+about two files that should have been named differently. Worse, the
+design leans on paths to tell two files with one basename apart — so a
+symbol built from the short name alone would make writing the path settle
+nothing. Every punctuation mark now transcribes to a distinct spelling,
+the escape character escapes itself, and anything with no rule becomes
+hex: the same reason percent-encoding has to write `%` as `%25`.

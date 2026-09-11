@@ -157,13 +157,12 @@ schedule. Detail in [010 — Roadmap](010-roadmap.md).
 
 **`vision`**, in the project root, is the original design note, written
 before any of this existed. It sits at the root rather than in `notes/`
-because moving it would mean touching it, and it is sealed. It is sealed. Several things in it are now wrong — it
-still describes hooks for input-less boxes, blocking reads and writes,
-a dedicated thread that fills inputs, and a comparator whose threshold
-comes from inside the box. All of those were resolved differently and
-the resolutions are in the documents above. The note is kept unedited
-anyway, including a sentence that breaks off mid-word, because it is a
-record of the moment the design got unstuck.
+because moving it would mean touching it, and it is sealed. Several
+things in it are now wrong — it still describes hooks for input-less
+boxes, blocking reads and writes, a dedicated thread that fills inputs,
+and a comparator whose threshold comes from inside the box. The note is
+kept unedited anyway, including a sentence that breaks off mid-word,
+because it is a record of the moment the design got unstuck.
 
 Where the note and these documents disagree, these documents are
 correct.

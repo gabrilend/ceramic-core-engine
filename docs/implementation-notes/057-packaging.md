@@ -1,32 +1,14 @@
 # 057 — Packaging the engine as a library
 
-> **Most of this has since been built, and one of its recommendations
-> was overturned.** Phase 9 executed the survey below: the engine is
-> now one translation unit and one header, `src/cera.c` and
-> `src/cera.h`, with the eighteen numbered sources deleted; everything
-> not declared in the header is `static` and a test checks it on every
-> run; and every public name carries one prefix.
->
-> **What changed from the recommendation:** this note proposed a
-> packaging *script* that would derive an amalgamation from the
-> numbered files on the way out. That was not done. The amalgamation
-> became the source and the numbered files were deleted, so there is
-> one copy of the engine rather than one copy plus a derivation that
-> could drift from it. What the script version was protecting — two
-> consumer-facing files nobody hand-maintains — turned out not to be
-> worth a second copy of the engine.
->
-> The survey is kept as written because its reasoning is what the phase
-> was built on, and because the parts still undone are still described
-> correctly here: the error handler, the out-of-tree build test, and the
-> one-map-per-process fix. See
-> [phase 9's progress page](../../issues/phase-9-progress.md) for what
-> stands today.
+> **Phase 9 executed this survey**, and the parts still undone are still
+> described correctly below: the error handler, the out-of-tree build
+> test, and the one-map-per-process fix.
+> [Phase 9's progress page](../../issues/phase-9-progress.md) says what
+> stands today and where the survey's recommendation was overturned.
 
-What it would take to hand this to another project. Nothing here is
-built; this is a survey of the distance between where the code is and
-where it would have to be, with the decisions that have to be made
-before any of it can start.
+What it would take to hand this to another project: a survey of the
+distance between where the code was and where it would have to be, with
+the decisions that had to be made before any of it could start.
 
 The short answer: **the engine is close, and the obstacles are almost
 entirely about names and about who owns the process.** No architecture

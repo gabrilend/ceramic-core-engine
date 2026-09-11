@@ -28,11 +28,10 @@ and whether either one is a single C function or a fifty-station
 pipeline never comes up.
 
 **Reading a file into a fresh program is this with the program fixed at
-"a new empty one"**, which is what it always was. What changed is that
-the program may already have stations in it, so a description is a
-**template being instantiated** rather than a program being merged. One
-description can be instantiated as many times into one program as
-anybody likes, with nothing shared between the copies.
+"a new empty one."** The program may already have stations in it, so a
+description is a **template being instantiated** rather than a program
+being merged. One description can be instantiated as many times into one
+program as anybody likes, with nothing shared between the copies.
 
 ## Nothing that already exists is renumbered
 
@@ -133,9 +132,9 @@ copies of one description from fighting over argument zero.
 const char *cera_map_end_part(cera_map_t *m, int part);
 ```
 
-**This is what the receipt was kept for.** Ending a program used to be
-a separate idea; it turned out to be exactly "remove the stations this
-receipt names", which the receipt already lists.
+**This is what the receipt was kept for.** Ending a part is exactly
+"remove the stations this receipt names", which the receipt already
+lists.
 
 One sweep of the table cuts every wire naming any of them, **interior
 wires included** — a wire from one member to another is named by a

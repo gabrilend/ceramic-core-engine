@@ -76,3 +76,14 @@ was a state called *still loading* that only the loader could be in. A
 station added any other way had no route through those checks. Both
 became one repeatable call a caller makes after assembling a program by
 whatever route, and the privileged state stopped existing.
+
+### The pool learned to carry one more thing it does not understand
+
+A pool served exactly one program, and the reason was mechanical:
+finishing a task means resolving a station number, a number means nothing
+without the table it indexes, and that table came from the pool's own
+context. Making a task carry which program it belongs to — ferried
+without ever being looked at, like the station number and the exit number
+beside it — was the whole change, and it is what lets one pool serve
+several programs at once. That is how a program can set another going
+beside itself.
